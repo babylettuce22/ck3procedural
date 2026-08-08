@@ -1,5 +1,6 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Drawing.Imaging;
+using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 using Ck3MapGen.Io;
 
@@ -26,6 +27,10 @@ public sealed class MainForm : Form
     private readonly NumericUpDown _seed = new() { Minimum = 0, Maximum = int.MaxValue, Width = 90 };
     private readonly Button _generate = new() { Text = "Generate", Width = 90 };
     private readonly Button _writeMod = new() { Text = "Write mod", Width = 90 };
+    private readonly Button _openHeightmap = new() { Text = "Heightmap…", Width = 96 };
+    private readonly Button _clearHeightmap = new() { Text = "Clear", Width = 52, Visible = false };
+    private readonly Label _heightmapName =
+        new() { AutoSize = true, Padding = new Padding(6, 7, 0, 0), ForeColor = Color.DimGray };
     private readonly TabControl _views = new() { Dock = DockStyle.Fill };
     private readonly TextBox _log =
         new() { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical };
@@ -67,6 +72,18 @@ public sealed class MainForm : Form
         bar.Controls.Add(_seed);
         bar.Controls.Add(_generate);
         bar.Controls.Add(_writeMod);
+        bar.Controls.Add(_openHeightmap);
+        bar.Controls.Add(_clearHeightmap);
+        bar.Controls.Add(_heightmapName);
+
+        _openHeightmap.Click += (_, _) => PickHeightmap();
+        _clearHeightmap.Click += (_, _) =>
+        {
+            _options.HeightmapPath = null;
+            ApplyMode();
+        };
+
+        ApplyMode();
 
         var left = new Panel { Dock = DockStyle.Fill };
         left.Controls.Add(_grid);
@@ -94,6 +111,50 @@ public sealed class MainForm : Form
         // Everything in the generator reports progress with Console.WriteLine. Redirecting the
         // console is what lets all of that reach the log pane without touching a single call site.
         Console.SetOut(new TextBoxWriter(_log));
+    }
+
+    private void PickHeightmap()
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Emit the mod around an existing heightmap",
+            Filter = "Heightmap PNG (*.png)|*.png|All files (*.*)|*.*",
+        };
+
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        _options.HeightmapPath = dialog.FileName;
+        ApplyMode();
+    }
+
+    /// <summary>
+    /// Switches the window between generating terrain and emitting around an imported one.
+    ///
+    /// The property grid is *filtered*, not disabled. Importing a heightmap leaves far more live
+    /// than it retires — the whole of Provinces, all of Rivers and lakes (they are re-derived from
+    /// the imported field), and the parts of Coast and Height scale the 16-bit write and its
+    /// inverse read — so blanking the panel would take away exactly the knobs worth touching on an
+    /// imported map. See <see cref="SettingRoleAttribute"/>.
+    /// </summary>
+    private void ApplyMode()
+    {
+        bool importing = _options.HeightmapPath is not null;
+
+        _grid.BrowsableAttributes = importing
+            ? new AttributeCollection(new SettingRoleAttribute(SettingRole.Always))
+            : new AttributeCollection(BrowsableAttribute.Yes);
+        _grid.Refresh();
+
+        // The image is authoritative about map size, so the preset would be a lie.
+        _preset.Enabled = !importing;
+        _clearHeightmap.Visible = importing;
+        _heightmapName.Text = importing
+            ? Path.GetFileName(_options.HeightmapPath)
+            : string.Empty;
+
+        _status.Text = importing
+            ? "Heightmap loaded — terrain settings hidden; provinces, rivers and height scale still apply"
+            : "Ready";
     }
 
     private async Task RunAsync(string? modDir)
@@ -140,7 +201,7 @@ public sealed class MainForm : Form
         _generate.Enabled = enabled;
         _writeMod.Enabled = enabled;
         _grid.Enabled = enabled;
-        _preset.Enabled = enabled;
+        _preset.Enabled = enabled && _options.HeightmapPath is null;
         _seed.Enabled = enabled;
     }
 
