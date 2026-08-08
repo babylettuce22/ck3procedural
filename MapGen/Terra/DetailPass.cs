@@ -1,4 +1,4 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 
 namespace Ck3MapGen.MapGen.Terra;
@@ -59,7 +59,7 @@ public static class DetailPass
                 float slope = MathF.Sqrt((right - left) * (right - left)
                                          + (dn - up) * (dn - up)) * 0.5f;
 
-                float rugged = MathF.Min(1f, slope / cfg.TerraDetailSlopeRef);
+                float rugged = MathF.Min(1f, slope / cfg.TerraDetailSlopeRefScaled);
 
                 // Fade to nothing at the waterline, or the detail cuts holes in the coast that
                 // the province partition then has to disagree with.

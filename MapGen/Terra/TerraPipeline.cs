@@ -1,4 +1,4 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 
 namespace Ck3MapGen.MapGen.Terra;
@@ -51,10 +51,12 @@ public static class TerraPipeline
         var options = new LandscapeEvolution.Options
         {
             Iterations = cfg.TerraErosionIterations,
-            Erodibility = cfg.TerraErodibility,
+            Erodibility = cfg.TerraErodibilityScaled,
             UpliftPerStep = cfg.TerraUpliftPerStep,
             Deposition = cfg.TerraDeposition,
-            Talus = cfg.TerraTalus,
+            Talus = cfg.TerraTalusScaled,
+            DepositionSlope = cfg.TerraDepositionSlopeScaled,
+            MaxIncisionPerStep = cfg.TerraMaxIncisionScaled,
         };
         var baseFlow = LandscapeEvolution.Run(baseHeight, bw, bh, sea, plates.Uplift, plates.Rift,
             options);
@@ -94,7 +96,7 @@ public static class TerraPipeline
         // --- 6. Erosion, the short pass, at full resolution ---
         sw.Restart();
         DetailPass.Incise(full, fw, fh, flowField, pw, ph, landCells, baseHeight, bw, bh, sea, cfg);
-        DetailPass.Relax(full, fw, fh, sea, cfg.TerraDetailTalus, 0.5f);
+        DetailPass.Relax(full, fw, fh, sea, cfg.TerraDetailTalusScaled, 0.5f);
         DetailPass.CarveChannels(full, fw, fh, courses, pw, ph, sea, cfg);
         Console.WriteLine($"  full-resolution incision, relax and channels ({sw.ElapsedMilliseconds} ms)");
 

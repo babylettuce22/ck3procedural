@@ -144,6 +144,61 @@ public sealed class MapConfig
     /// <summary>Steepest slope the coarse terrain will hold, in height per base cell.</summary>
     public float TerraTalus = 0.045f;
 
+    // --- Slope scale ---
+    //
+    // Every parameter above that is a *slope* is expressed as height per grid cell, and a grid cell
+    // is a different fraction of the world at every map size: the base grid is Width/4, so a cell
+    // at `vanilla` spans 1/4608 of the map where one at `small` spans 1/1024. A talus angle of
+    // 0.045 per cell therefore permits a map-relative slope 4.5x steeper at `vanilla` than at
+    // `small`, and the stream power law's S term is correspondingly smaller, so valleys are carved
+    // 4.5x more weakly against the same uplift. Both push the same way: taller, steeper, less
+    // dissected ranges the larger the map. That is the "mountains are much steeper on vanilla than
+    // on small" symptom, and it is why tuning at one size did not carry to another.
+    //
+    // Slopes are converted to the reference size below so a value tuned once holds everywhere.
+
+    /// <summary>
+    /// Heightmap width the slope parameters are authored against — the <c>small</c> preset, which
+    /// is the size they were tuned at.
+    /// </summary>
+    public int TerraSlopeReferenceWidth = 4096;
+
+    /// <summary>Cell size at the reference width relative to this map's. 1 at <c>small</c>.</summary>
+    public double TerraSlopeScale => TerraSlopeReferenceWidth / (double)Width;
+
+    /// <summary>Talus angle converted to this map's cell spacing.</summary>
+    public float TerraTalusScaled => (float)(TerraTalus * TerraSlopeScale);
+
+    /// <summary>Full-resolution relaxation limit, converted the same way.</summary>
+    public float TerraDetailTalusScaled => (float)(TerraDetailTalus * TerraSlopeScale);
+
+    /// <summary>Detail slope reference, converted the same way.</summary>
+    public float TerraDetailSlopeRefScaled => (float)(TerraDetailSlopeRef * TerraSlopeScale);
+
+    /// <summary>
+    /// Deposition cut-off slope, converted the same way. Authored at the reference width.
+    /// </summary>
+    public float TerraDepositionSlopeScaled => (float)(0.03 * TerraSlopeScale);
+
+    /// <summary>
+    /// Erodibility, compensated for the slope term shrinking with cell size. The stream power law
+    /// uses S^n, so holding incision constant across map sizes means dividing K by the same factor
+    /// the slope was multiplied by, raised to n.
+    /// </summary>
+    public float TerraErodibilityScaled
+        => (float)(TerraErodibility / Math.Pow(Math.Max(1e-6, TerraSlopeScale), 1.0));
+
+    /// <summary>
+    /// Per-iteration incision cap, scaled the same way erodibility is.
+    ///
+    /// Left absolute it silently undoes the erodibility scaling exactly where it matters most: at
+    /// `vanilla` K is 4.5x larger, so the cap is reached 4.5x more readily, and the cells that
+    /// reach it are the steep high-drainage ones on a range's flanks — the ones whose erosion is
+    /// what stops a mountain reading as a cliff.
+    /// </summary>
+    public float TerraMaxIncisionScaled
+        => (float)(0.02 / Math.Max(1e-6, TerraSlopeScale));
+
     /// <summary>Cycles across the map width of the finest detail added at heightmap resolution.</summary>
     public double TerraDetailScale = 900.0;
 
