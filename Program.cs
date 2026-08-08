@@ -1,4 +1,4 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 
 namespace Ck3MapGen;
@@ -115,6 +115,11 @@ public static class Program
                 // generator that replaced it.
                 case "--legacy-terrain":
                     cfg.UseTerra = false;
+                    break;
+
+                // Emit the whole mod around an existing heightmap.png instead of generating one.
+                case "--heightmap" when i + 1 < args.Length:
+                    options.HeightmapPath = args[++i];
                     break;
 
                 case "--erosion":

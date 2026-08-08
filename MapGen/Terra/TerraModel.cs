@@ -1,4 +1,4 @@
-namespace Ck3MapGen.MapGen.Terra;
+﻿namespace Ck3MapGen.MapGen.Terra;
 
 /// <summary>
 /// The coarse "base" world the tectonics and the main erosion run on — a quarter of the exported
@@ -54,33 +54,4 @@ public sealed class RiverCourse
 
     /// <summary>True when this course ends by joining another river rather than reaching the sea.</summary>
     public bool IsTributary;
-}
-
-/// <summary>
-/// Everything the emitters need from the terrain generator. Handing one object around keeps the
-/// heightmap, the province partition, rivers.png and the terrain classifier reading the same
-/// arrays — the class of bug where two of them disagreed about where the coast is has cost this
-/// project several debugging sessions.
-/// </summary>
-public sealed class TerraResult
-{
-    /// <summary>Full heightmap resolution, converted to the simulation's integer elevation scale.</summary>
-    public required float[] Elevation;
-
-    /// <summary>Province resolution, the same array downsampled 2:1. Drives the province partition.</summary>
-    public required float[] ProvinceElevation;
-
-    /// <summary>Province resolution, CK3 rivers.png palette index; 255 where there is no river.</summary>
-    public required byte[] RiverPixels;
-
-    /// <summary>Province resolution, 1 on any river pixel. Input to the terrain classifier.</summary>
-    public required byte[] RiverMask;
-
-    /// <summary>Province resolution, 1 on an inland lake.</summary>
-    public required byte[] LakeMask;
-
-    public required List<RiverCourse> Courses;
-
-    /// <summary>The coarse world, kept for debug renders.</summary>
-    public required TerraWorld Preview;
 }

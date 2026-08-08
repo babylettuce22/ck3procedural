@@ -22,7 +22,7 @@ namespace Ck3MapGen.MapGen.Terra;
 /// </summary>
 public static class TerraPipeline
 {
-    public static TerraResult Generate(MapConfig cfg, Rng rng)
+    public static TerrainData Generate(MapConfig cfg, Rng rng)
     {
         int fw = cfg.Width, fh = cfg.Height;
         int pw = cfg.ProvinceWidth, ph = cfg.ProvinceHeight;
@@ -134,7 +134,7 @@ public static class TerraPipeline
         sw.Restart();
         var courses = RiverNetwork.Extract(provinceFlow, province, pw, ph, sea, cfg, rng);
         var rivers = RiverRaster.Draw(courses, pw, ph, cfg);
-        var lakes = LakeMask(provinceFlow, province, pw, ph, sea, cfg, out int lakeCells);
+        var lakes = TerrainData.BuildLakeMask(provinceFlow, province, pw, ph, sea, cfg, out int lakeCells);
         Console.WriteLine($"  {courses.Count} rivers over {rivers.RiverPixelCount:N0} pixels, " +
                           $"{lakeCells:N0} lake cells ({sw.ElapsedMilliseconds} ms)");
 
@@ -160,7 +160,7 @@ public static class TerraPipeline
         Console.WriteLine($"  height scale: {scale} ({sw.ElapsedMilliseconds} ms)");
         Console.WriteLine($"Terra complete in {total.ElapsedMilliseconds} ms");
 
-        return new TerraResult
+        return new TerrainData
         {
             Elevation = full,
             ProvinceElevation = provinceElevation,
@@ -207,67 +207,6 @@ public static class TerraPipeline
                 height[i] += (float)((v * 0.5 + 0.5) * amplitude * shore);
             }
         });
-    }
-
-    /// <summary>
-    /// Depressions the fill had to raise are lakes. Only the ones big enough to read as water at
-    /// map scale are kept — the rest are single-cell artefacts of the D8 network.
-    ///
-    /// The mask feeds terrain classification only. It deliberately does not become water in
-    /// rivers.png or a sea zone in provinces.png: those two and the heightmap have to agree pixel
-    /// for pixel, and adding a third source of "this is water" is exactly the disagreement that
-    /// produced sea provinces rendering as dry ground.
-    /// </summary>
-    private static byte[] LakeMask(FlowField.Result flow, float[] height, int width, int hgt,
-        float sea, MapConfig cfg, out int cells)
-    {
-        int n = width * hgt;
-        var candidate = new bool[n];
-        float tolerance = cfg.TerraLakeDepth;
-
-        Parallel.For(0, n, i =>
-        {
-            candidate[i] = height[i] > sea && flow.Filled[i] - height[i] > tolerance;
-        });
-
-        var mask = new byte[n];
-        var stack = new Stack<int>();
-        var component = new List<int>();
-        int minCells = cfg.TerraMinLakeCells;
-        cells = 0;
-
-        for (int start = 0; start < n; start++)
-        {
-            if (!candidate[start]) continue;
-
-            component.Clear();
-            stack.Push(start);
-            candidate[start] = false;
-
-            while (stack.Count > 0)
-            {
-                int c = stack.Pop();
-                component.Add(c);
-
-                int cx = c % width, cy = c / width;
-                Push(cx - 1, cy); Push(cx + 1, cy); Push(cx, cy - 1); Push(cx, cy + 1);
-            }
-
-            if (component.Count < minCells) continue;
-            foreach (int c in component) mask[c] = 1;
-            cells += component.Count;
-        }
-
-        return mask;
-
-        void Push(int x, int y)
-        {
-            if (x < 0 || y < 0 || x >= width || y >= hgt) return;
-            int i = y * width + x;
-            if (!candidate[i]) return;
-            candidate[i] = false;
-            stack.Push(i);
-        }
     }
 
     private static TerraWorld BuildPreview(float[] height, FlowField.Result flow,

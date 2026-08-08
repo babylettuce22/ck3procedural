@@ -17,7 +17,7 @@ public static class ContentWriter
     public static void WriteAll(string modDir, string gameDir, WorldGrid world, MapConfig cfg,
         ProvinceMap provinces, int[] order, int landCount, List<Title> empires,
         float[] provinceElevation, Rng rng, bool writeHistory = true,
-        MapGen.Terra.TerraResult? terra = null)
+        MapGen.TerrainData? terra = null)
     {
         // Blanking runs FIRST so the generated files below always win: several of them share a
         // filename with a vanilla file they are replacing.

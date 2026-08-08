@@ -1,4 +1,4 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
 using Ck3MapGen.World;
@@ -71,7 +71,7 @@ public static class MapDataWriter
     /// <summary>Returns the label -&gt; province id mapping and the land province count.</summary>
     public static (int[] Order, int LandCount) WriteAll(string modDir, WorldGrid world, MapConfig cfg,
         ProvinceMap provinces, float[] provinceElevation, bool writePacked = true,
-        MapGen.Terra.TerraResult? terra = null)
+        MapGen.TerrainData? terra = null)
     {
         string dir = Path.Combine(modDir, "map_data");
         Directory.CreateDirectory(dir);
@@ -176,7 +176,7 @@ public static class MapDataWriter
     /// fixed width index with a green source and red joins, which is the minimum CK3 accepts.
     /// </summary>
     private static void WriteRiversPng(string path, WorldGrid world, MapConfig cfg,
-        ProvinceMap provinces, MapGen.Terra.TerraResult? terra)
+        ProvinceMap provinces, MapGen.TerrainData? terra)
     {
         int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
         var indices = new byte[width * height];
@@ -569,7 +569,7 @@ public static class MapDataWriter
     /// to ship a bare heightmap.png and repack in -mapeditor instead.
     /// </summary>
     private static void WriteHeightmap(string dir, WorldGrid world, MapConfig cfg, bool writePacked,
-        ProvinceMap provinces, int[] order, int landCount, MapGen.Terra.TerraResult? terra)
+        ProvinceMap provinces, int[] order, int landCount, MapGen.TerrainData? terra)
     {
         float[] elevation;
 

@@ -1,4 +1,4 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 using Ck3MapGen.World;
 
@@ -17,7 +17,7 @@ namespace Ck3MapGen.MapGen.Terra;
 /// </summary>
 public static class WorldBridge
 {
-    public static WorldGrid Populate(TerraResult terra, MapConfig cfg, Rng rng)
+    public static WorldGrid Populate(TerrainData terra, MapConfig cfg, Rng rng)
     {
         var world = WorldGrid.CreateBlank(cfg, rng);
         int pw = cfg.ProvinceWidth, ph = cfg.ProvinceHeight;
@@ -69,7 +69,7 @@ public static class WorldBridge
         return world;
     }
 
-    private static void Report(WorldGrid w, MapConfig cfg, TerraResult terra)
+    private static void Report(WorldGrid w, MapConfig cfg, TerrainData terra)
     {
         int sea = cfg.Limits.SeaLevelUpper;
         int mountainLine = cfg.Limits.Mountains.Lower;

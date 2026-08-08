@@ -1,4 +1,4 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.MapGen;
 using Ck3MapGen.MapGen.Terra;
 using Ck3MapGen.World;
@@ -29,6 +29,12 @@ public sealed class GenerationOptions
     /// <summary>Hand-build the packed/indirection pair rather than leaving them to the editor.</summary>
     public bool WritePacked { get; set; } = true;
 
+    /// <summary>
+    /// Emit the mod around this heightmap instead of generating terrain. The image is
+    /// authoritative about map size, so the size preset is ignored when it is set.
+    /// </summary>
+    public string? HeightmapPath { get; set; }
+
     public static string DefaultModDir => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
         "Paradox Interactive", "Crusader Kings III", "mod", "proceduralmap");
@@ -41,7 +47,7 @@ public sealed class GenerationResult
     public required float[] ProvinceElevation { get; init; }
     public required byte[] LandMask { get; init; }
     public required ProvinceMap Provinces { get; init; }
-    public TerraResult? Terra { get; init; }
+    public TerrainData? Terra { get; init; }
     public long ElapsedMs { get; init; }
 }
 
@@ -58,9 +64,17 @@ public static class Generator
 
         WorldGrid world;
         float[] provinceElevation;
-        TerraResult? terra = null;
+        TerrainData? terra = null;
 
-        if (cfg.UseTerra)
+        if (options.HeightmapPath is not null)
+        {
+            // Everything downstream reads TerrainData and nothing else, so an imported heightmap
+            // travels the same path as a generated one from here on.
+            terra = HeightmapSource.Load(options.HeightmapPath, cfg, rng);
+            world = WorldBridge.Populate(terra, cfg, rng);
+            provinceElevation = terra.ProvinceElevation;
+        }
+        else if (cfg.UseTerra)
         {
             // Terrain is generated at heightmap resolution and summarised down onto the coarse
             // grid, rather than simulated coarse and stretched up. The province map is derived from
