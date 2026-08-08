@@ -233,8 +233,7 @@ public static class TerraPipeline
         });
 
         // Base-resolution courses, for the rivers preview only.
-        float channel = Field.Quantile(flow.Flow, i => height[i] > sea,
-            1.0 - Math.Clamp(cfg.TerraRiverDensity, 0.0002, 0.1));
+        float channel = (float)Math.Max(4.0, cfg.RiverMinCatchmentCells);
         var course = new List<int>();
         for (int i = 0; i < height.Length; i++)
             if (height[i] > sea && flow.Flow[i] >= channel) course.Add(i);

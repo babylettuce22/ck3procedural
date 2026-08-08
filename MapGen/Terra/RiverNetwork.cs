@@ -1,4 +1,4 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 
 namespace Ck3MapGen.MapGen.Terra;
@@ -29,7 +29,7 @@ public static class RiverNetwork
 
         // The channel threshold as a quantile of drainage area over land, so river density is the
         // same on every seed rather than depending on the absolute scale of the flow field.
-        float threshold = ChannelThreshold(flow, height, seaLevel, cfg.TerraRiverDensity);
+        float threshold = ChannelThreshold(cfg);
 
         var channel = new bool[n];
         Parallel.For(0, n, i =>
@@ -153,12 +153,17 @@ public static class RiverNetwork
         return course;
     }
 
-    private static float ChannelThreshold(FlowField.Result flow, float[] height, float seaLevel,
-        double density)
-    {
-        var land = new Func<int, bool>(i => height[i] > seaLevel);
-        return Field.Quantile(flow.Flow, land, 1.0 - Math.Clamp(density, 0.0002, 0.1));
-    }
+    /// <summary>
+    /// A cell carries a river once its catchment exceeds a fixed number of cells.
+    ///
+    /// Absolute, not a quantile. Taking the top N% of land cells by drainage makes what counts as
+    /// a river depend on how much land is on the map: the same stream is a river on a small map and
+    /// a trickle on a large one. A cell is the same physical area at every map size, so a fixed
+    /// catchment in cells is a fixed catchment in square kilometres — which is what actually
+    /// decides whether a watercourse is worth drawing.
+    /// </summary>
+    private static float ChannelThreshold(MapConfig cfg)
+        => (float)Math.Max(4.0, cfg.RiverMinCatchmentCells);
 
     // --- smoothing ---
 

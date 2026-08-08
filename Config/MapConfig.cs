@@ -419,10 +419,15 @@ public sealed class MapConfig
     public float TerraDetailTalus { get; set; } = 0.012f;
 
     /// <summary>Fraction of land cells that carry enough drainage to be drawn as a river.</summary>
+    /// <summary>
+    /// Catchment, in province cells, above which a watercourse is drawn as a river. Absolute
+    /// rather than a share of the map: a cell is the same area at every map size, so this is a
+    /// fixed catchment in square kilometres.
+    /// </summary>
     [SettingRole(SettingRole.Always)]
     [Category("10 Rivers and lakes")]
-    [Description("Fraction of land cells that carry enough drainage to be drawn as a river.")]
-    public double TerraRiverDensity { get; set; } = 0.006;
+    [Description("Catchment, in province cells, above which a watercourse is drawn as a river. Absolute rather than a share of the map, so the same stream is a river on any size map.")]
+    public double RiverMinCatchmentCells { get; set; } = 900;
 
     // River geometry is authored in vanilla province pixels and scaled by MapScale, so a river is
     // the same fraction of a continent at every map size rather than nine times wider at `tiny`.
@@ -629,7 +634,11 @@ public sealed class MapConfig
     /// </summary>
     public void ResetClimateLimits(Core.Rng rng)
     {
-        double mod = Width / 8192.0;
+        // Referenced to vanilla, not to this map. The bands are authored against an 8192-wide
+        // raster, so this is the constant that puts them where vanilla has them — and a smaller map,
+        // being a smaller *region*, then spans fewer of them rather than compressing all of them
+        // into its height. A `tiny` map sits within one or two bands, which is the point.
+        double mod = ReferenceHeightmapWidth / 8192.0;
         Limits.Tropical.Rescale(mod);
         Limits.SubTropical.Rescale(mod);
         Limits.Temperate.Rescale(mod);
