@@ -36,19 +36,21 @@ public static class CompatibilityWriter
         // last one loaded wins, so a baseline file like ck2rpg's 01_gen_defines.txt would
         // otherwise silently override our world size with the template map's.
 
-        // WORLD_EXTENTS_Y is the *vertical* extent the heightmap's 0-255 maps onto, and it has to
-        // shrink with the map exactly like X and Z do. Left at vanilla's 50 on a smaller map, the
-        // same height field is stretched over a proportionally smaller footprint, so relief is
-        // exaggerated by 1/MapScale — 9x at `tiny`. That is the whole explanation for terrain
-        // looking more violent the smaller the map, and it is a rendering scale, not the terrain:
-        // the emitted heightmap's percentiles are identical at every size.
+        // WORLD_EXTENTS_Y and WATERLEVEL stay at vanilla's values on every map size.
         //
-        // WATERLEVEL is in the same units, and vanilla's own comment pins the relationship:
-        // `WATERLEVEL = 3 ### 0.06 in 0-1, 19 in 0-255`, and 3/50 is exactly 0.06. So the two must
-        // scale together or the waterline stops landing on 19/255, which is the value
-        // MapDataWriter.WaterLevel16 and both hypsometric curves are built around.
-        string extentY = (50.0 * cfg.MapScale).ToString("0.####", Invariant);
-        string waterLevel = (3.0 * cfg.MapScale).ToString("0.####", Invariant);
+        // A heightmap value has to mean the same height everywhere: a smaller map is a smaller
+        // *region* at the same scale, not the same world shrunk, so one pixel is the same distance
+        // and one height step is the same height. These were briefly scaled by map size, which was
+        // an attempt to cancel out terrain that generated too steep on small maps — two errors
+        // pointing opposite ways rather than one fix. The terrain side is corrected in
+        // MapConfig.SlopeScaleFor; this side goes back to being constant.
+        //
+        // The ratio is load-bearing either way: vanilla's own comment pins it, `WATERLEVEL = 3 ###
+        // 0.06 in 0-1, 19 in 0-255`, and 3/50 is exactly 0.06. Move one without the other and the
+        // waterline stops landing on 19/255, which MapDataWriter.WaterLevel16 and both hypsometric
+        // curves are built around.
+        const string extentY = "50";
+        const string waterLevel = "3";
 
         ParadoxText.WriteBom(Path.Combine(dir, "zz_generated_defines.txt"),
             $$"""
