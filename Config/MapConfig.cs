@@ -568,6 +568,21 @@ public sealed class MapConfig
 
 
     /// <summary>
+    /// Fewest children a duchy, kingdom or empire may have and still stand as its own title.
+    /// Anything below this is folded into a neighbour, across a strait if need be.
+    ///
+    /// Deliberately far below the per-tier minimums, which are growth *targets* rather than floors.
+    /// Clustering leaves undersized scraps all over a map, not only on islands, so absorbing
+    /// everything under the target cascades — measured at 2, a 370-county map keeps 59 duchies and
+    /// 12 kingdoms; at the duchy target of 4 the same map collapses to a single empire holding
+    /// seven kingdoms. This is a floor for absurdity, not a lever for realm size.
+    /// </summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("04 Titles")]
+    [Description("Fewest children a duchy, kingdom or empire may have and still exist. 2 stops one-province islands from founding a duchy, a kingdom and an empire on the way up. Raising it much past 2 cascades and collapses the hierarchy.")]
+    public int MinChildrenPerTitle { get; set; } = 2;
+
+    /// <summary>
     /// Largest a fused impassable mountain range may get, in baronies' worth of area. 0 disables
     /// fusing and leaves every impassable province separate, as vanilla does.
     /// </summary>

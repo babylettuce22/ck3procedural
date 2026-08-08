@@ -268,6 +268,152 @@ public static class Titles
         return clusters;
     }
 
+    /// <summary>
+    /// Folds undersized clusters into a neighbour, so a scrap of land does not get a title of its
+    /// own at every tier above it.
+    ///
+    /// <see cref="Cluster"/> grows toward a target size but stops when it runs out of neighbours,
+    /// and then gives whatever is left its own cluster. On an island that means a lone county
+    /// becomes a duchy, the only duchy in a kingdom, and the only kingdom in an empire — three
+    /// titles conjured out of one province, none of which a player would ever draw that way.
+    /// Absorption is the counterpart to growth: growth decides who joins whom while there is room,
+    /// this decides where the leftovers go.
+    ///
+    /// The adjacency passed in should include sea links at every tier. Being *built* across water
+    /// is a privilege of the top tiers — see <see cref="BuildSeaAdjacency"/> — but being *absorbed*
+    /// across water is how a small island ends up inside a mainland duchy, which is exactly where
+    /// small islands are.
+    ///
+    /// Merging into the smallest available neighbour rather than the nearest keeps the tier even;
+    /// merging into the nearest lets one cluster snowball by being adjacent to a lot of coastline.
+    /// </summary>
+    /// <param name="positions">
+    /// Member positions, enabling a last-resort merge into the nearest cluster when an island lies
+    /// beyond every sea link. Supplied for kingdoms and empires, where CK3 expects de jure cover
+    /// over the whole map and a remote island belonging to a distant crown is normal. Left null for
+    /// duchies, where the same fallback would draw a duchy across an ocean — a lone island duchy is
+    /// a real thing (Iceland is one) and is where the stack should stop.
+    /// </param>
+    private static List<List<int>> AbsorbUndersized(List<List<int>> clusters,
+        Dictionary<int, HashSet<int>> adjacency, int minSize, int maxSize,
+        (double X, double Y)[]? positions = null)
+    {
+        var owner = new Dictionary<int, int>();
+        for (int i = 0; i < clusters.Count; i++)
+            foreach (int member in clusters[i]) owner[member] = i;
+
+        // Clusters with nothing to join — an island beyond every sea link. They keep their own
+        // title because there is genuinely nowhere else to put them, and they are set aside so one
+        // of them cannot stall the pass for everyone else.
+        var stranded = new HashSet<int>();
+
+        while (true)
+        {
+            // Smallest undersized cluster first, so the most obviously wrong ones are resolved
+            // while there is still the widest choice of host.
+            int source = -1;
+            for (int i = 0; i < clusters.Count; i++)
+            {
+                if (clusters[i].Count == 0 || clusters[i].Count >= minSize || stranded.Contains(i))
+                    continue;
+                if (source < 0 || clusters[i].Count < clusters[source].Count) source = i;
+            }
+
+            if (source < 0) break;
+
+            var neighbours = new HashSet<int>();
+            foreach (int member in clusters[source])
+            {
+                if (!adjacency.TryGetValue(member, out var links)) continue;
+                foreach (int link in links)
+                    if (owner.TryGetValue(link, out int other) && other != source) neighbours.Add(other);
+            }
+
+            if (neighbours.Count == 0)
+            {
+                int nearest = positions is null ? -1 : Nearest(clusters, positions, source);
+                if (nearest < 0) { stranded.Add(source); continue; }
+                neighbours.Add(nearest);
+            }
+
+            // Prefer a host that still has room. If every neighbour is already at its maximum the
+            // merge happens anyway: an oversized duchy is a lesser evil than a one-province one.
+            int target = -1;
+            foreach (int candidate in neighbours.OrderBy(n => n))
+            {
+                if (clusters[candidate].Count == 0) continue;
+                bool roomy = clusters[candidate].Count + clusters[source].Count <= maxSize;
+                bool targetRoomy = target >= 0
+                    && clusters[target].Count + clusters[source].Count <= maxSize;
+
+                if (target < 0
+                    || (roomy && !targetRoomy)
+                    || (roomy == targetRoomy && clusters[candidate].Count < clusters[target].Count))
+                    target = candidate;
+            }
+
+            if (target < 0) { stranded.Add(source); continue; }
+
+            foreach (int member in clusters[source])
+            {
+                clusters[target].Add(member);
+                owner[member] = target;
+            }
+
+            clusters[source].Clear();
+        }
+
+        return [.. clusters.Where(c => c.Count > 0)];
+    }
+
+    /// <summary>
+    /// The cluster whose members' mean position is closest to this one's. Only reached when a
+    /// cluster touches nothing at all, so the answer is "which crown is this island nearest to".
+    /// </summary>
+    private static int Nearest(List<List<int>> clusters, (double X, double Y)[] positions, int source)
+    {
+        var (x, y) = Centre(clusters[source], positions);
+
+        int best = -1;
+        double bestDistance = double.PositiveInfinity;
+
+        for (int i = 0; i < clusters.Count; i++)
+        {
+            if (i == source || clusters[i].Count == 0) continue;
+
+            var (ox, oy) = Centre(clusters[i], positions);
+            double dx = ox - x, dy = oy - y;
+            double distance = dx * dx + dy * dy;
+
+            if (distance >= bestDistance) continue;
+            bestDistance = distance;
+            best = i;
+        }
+
+        return best;
+    }
+
+    private static (double X, double Y) Centre(List<int> cluster, (double X, double Y)[] positions)
+    {
+        double x = 0, y = 0;
+        int counted = 0;
+
+        foreach (int member in cluster)
+        {
+            if (member < 0 || member >= positions.Length) continue;
+            x += positions[member].X;
+            y += positions[member].Y;
+            counted++;
+        }
+
+        return counted == 0 ? (0, 0) : (x / counted, y / counted);
+    }
+
+    /// <summary>Mean position of each cluster, in the index space of the tier above it.</summary>
+    private static (double X, double Y)[] Roll(List<List<int>> clusters,
+        (double X, double Y)[] positions)
+        => [.. clusters.Select(c => Centre(c, positions))];
+
     private static void Shuffle<T>(List<T> list, Rng rng)
     {
         for (int i = list.Count - 1; i > 0; i--)
@@ -321,20 +467,45 @@ public static class Titles
         var countyClusters = Cluster(provinceIds, adjacency, MinBaroniesPerCounty, MaxBaroniesPerCounty, rng);
         var counties = Wrap("c", countyClusters, c => c.Select(p => byProvince[p]));
 
+        // Where each province sits, rolled up a tier at a time, so a stranded island can be given
+        // to the nearest crown when no adjacency reaches it.
+        var provincePosition = new (double X, double Y)[landCount + 1];
+        for (int label = 0; label < order.Length; label++)
+        {
+            int id = order[label];
+            if (id >= 1 && id <= landCount)
+                provincePosition[id] = (map.Seeds[label].X, map.Seeds[label].Y);
+        }
+
+        var countyPosition = Roll(countyClusters, provincePosition);
+
+        // Every tier above the county absorbs its leftovers before the next tier is lifted off it,
+        // so an island scrap joins a real duchy instead of founding a duchy, a kingdom and an
+        // empire on the way up. Counties are left alone: a one-province county is ordinary.
         var duchyAdjacency = LiftAdjacency(countyClusters, adjacency);
         var duchySea = LiftAdjacency(countyClusters, seaAdjacency);
-        var duchyClusters = Cluster(Enumerable.Range(0, counties.Count).ToList(), duchyAdjacency, MinCountiesPerDuchy, MaxCountiesPerDuchy, rng);
+        var duchyClusters = AbsorbUndersized(
+            Cluster(Enumerable.Range(0, counties.Count).ToList(), duchyAdjacency, MinCountiesPerDuchy, MaxCountiesPerDuchy, rng),
+            Union(duchyAdjacency, duchySea), cfg.MinChildrenPerTitle, MaxCountiesPerDuchy);
         var duchies = Wrap("d", duchyClusters, c => c.Select(i => counties[i]));
+        var duchyPosition = Roll(duchyClusters, countyPosition);
 
-        // From here up, water is a road rather than a wall.
+        // From here up, water is a road rather than a wall for growth too, not only for absorption.
         var kingdomAdjacency = LiftAdjacency(duchyClusters, duchyAdjacency);
         var kingdomSea = LiftAdjacency(duchyClusters, duchySea);
-        var kingdomClusters = Cluster(Enumerable.Range(0, duchies.Count).ToList(), Union(kingdomAdjacency, kingdomSea), MinDuchiesPerKingdom, MaxDuchiesPerKingdom, rng);
+        var kingdomClusters = AbsorbUndersized(
+            Cluster(Enumerable.Range(0, duchies.Count).ToList(), Union(kingdomAdjacency, kingdomSea), MinDuchiesPerKingdom, MaxDuchiesPerKingdom, rng),
+            Union(kingdomAdjacency, kingdomSea), cfg.MinChildrenPerTitle, MaxDuchiesPerKingdom,
+            duchyPosition);
         var kingdoms = Wrap("k", kingdomClusters, c => c.Select(i => duchies[i]));
+        var kingdomPosition = Roll(kingdomClusters, duchyPosition);
 
         var empireAdjacency = LiftAdjacency(kingdomClusters, kingdomAdjacency);
         var empireSea = LiftAdjacency(kingdomClusters, kingdomSea);
-        var empireClusters = Cluster(Enumerable.Range(0, kingdoms.Count).ToList(), Union(empireAdjacency, empireSea), MinKingdomsPerEmpire, MaxKingdomsPerEmpire, rng);
+        var empireClusters = AbsorbUndersized(
+            Cluster(Enumerable.Range(0, kingdoms.Count).ToList(), Union(empireAdjacency, empireSea), MinKingdomsPerEmpire, MaxKingdomsPerEmpire, rng),
+            Union(empireAdjacency, empireSea), cfg.MinChildrenPerTitle, MaxKingdomsPerEmpire,
+            kingdomPosition);
         var empires = Wrap("e", empireClusters, c => c.Select(i => kingdoms[i]));
 
         AssignColors(empires, rng);
@@ -347,6 +518,13 @@ public static class Titles
                           $"{Overseas(kingdomClusters, duchyAdjacency)} of {kingdoms.Count} kingdoms and " +
                           $"{Overseas(empireClusters, kingdomAdjacency)} of {empires.Count} empires " +
                           $"span more than one landmass");
+
+        // Whatever is left here is genuinely unreachable rather than merely small, so it is worth
+        // seeing: a stubborn count means the sea-crossing limit is too tight for this map's islands.
+        Console.WriteLine($"  singleton titles left stranded: " +
+                          $"{duchyClusters.Count(c => c.Count == 1)} duchies, " +
+                          $"{kingdomClusters.Count(c => c.Count == 1)} kingdoms, " +
+                          $"{empireClusters.Count(c => c.Count == 1)} empires");
         return empires;
 
         static List<Title> Wrap(string tier, List<List<int>> clusters, Func<List<int>, IEnumerable<Title>> resolve)
