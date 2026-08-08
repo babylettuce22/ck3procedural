@@ -45,11 +45,15 @@ public enum TerrainClass : byte
 /// </summary>
 public static class TerrainClassifier
 {
-    /// <summary>How far inland, in province pixels, a beach may reach.</summary>
-    private const int BeachReach = 5;
+    /// <summary>
+    /// How far inland a beach may reach, and how far from a river course floodplains may, both in
+    /// *vanilla* province pixels. Scaled to the map being generated via
+    /// <see cref="MapConfig.Scaled"/> — left absolute, a beach at <c>tiny</c> would be nine times
+    /// wider relative to the continent it is on than the same beach at <c>vanilla</c>.
+    /// </summary>
+    private const int BeachReachAtVanilla = 5;
 
-    /// <summary>How far from a river course, in province pixels, floodplains may reach.</summary>
-    private const int FloodplainReach = 1;
+    private const int FloodplainReachAtVanilla = 1;
 
     /// <summary>
     /// Share of land above the hill and mountain lines, measured off vanilla's own heightmap:
@@ -94,6 +98,9 @@ public static class TerrainClassifier
 
         Console.WriteLine($"  terrain thresholds: hills {hills:F0}, mountains {mountains:F0}, " +
                           $"moisture arid {arid} / semi-arid {semiArid} / wet {wet}");
+        int BeachReach = Math.Max(1, (int)Math.Round(cfg.Scaled(BeachReachAtVanilla)));
+        int FloodplainReach = Math.Max(1, (int)Math.Round(cfg.Scaled(FloodplainReachAtVanilla)));
+
         var coastDistance = DistanceToWater(landMask, width, height, BeachReach);
 
         // Distance from each pixel to the nearest river, so a floodplain can be a valley rather

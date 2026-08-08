@@ -1,4 +1,4 @@
-namespace Ck3MapGen.Config;
+﻿namespace Ck3MapGen.Config;
 
 /// <summary>
 /// Port of the <c>settings</c> and <c>limits</c> globals in js/all/initialState.js.
@@ -70,6 +70,113 @@ public sealed class MapConfig
     /// </summary>
     public bool EnableRainErosion = false;
 
+    // --- Terra: the terrain generator (MapGen/Terra) ---
+    //
+    // Heights inside Terra are normalised to roughly [0, 1] with sea level at TerraSeaLevel, and
+    // only converted to the integer scale above on the way out. Lengths are given as a fraction of
+    // the map width or as cycles across it, never in pixels, so changing map size resamples the
+    // same world instead of generating a different one.
+
+    /// <summary>
+    /// Use the tectonics-and-erosion generator instead of the ck2rpg magma simulation. The old
+    /// path is kept behind <c>--legacy-terrain</c> for comparison.
+    /// </summary>
+    public bool UseTerra = true;
+
+    /// <summary>How much coarser the tectonics and the main erosion run than the heightmap.</summary>
+    public int TerraBaseDivisor = 4;
+
+    public float TerraSeaLevel = 0.30f;
+
+    /// <summary>How far a continent interior rises above the waterline before any uplift.</summary>
+    public float TerraContinentRise = 0.075f;
+
+    /// <summary>Depth of the abyssal plain below sea level.</summary>
+    public float TerraOceanDepth = 0.26f;
+
+    /// <summary>Continent-sized features across the map width. Lower means fewer, bigger landmasses.</summary>
+    public double TerraContinentScale = 3.1;
+
+    /// <summary>Amplitude of the broad relief that makes continent interiors hilly rather than flat.</summary>
+    public float TerraInteriorRelief = 0.035f;
+
+    public int TerraPlateCount = 26;
+
+    /// <summary>
+    /// Width of the uplift belt at a converging plate boundary, as a fraction of map width. This is
+    /// the single number that decides whether mountains read as strips or as regions — vanilla's
+    /// ranges are a couple of hundred pixels wide on an 18k-wide map.
+    /// </summary>
+    public double TerraRangeWidth = 0.0065;
+
+    /// <summary>Cycles across the map width of the along-belt modulation that gives ranges passes.</summary>
+    public double TerraRangeRoughness = 26.0;
+
+    public int TerraErosionIterations = 34;
+
+    /// <summary>K in the stream power law, against drainage area normalised by land area.</summary>
+    public float TerraErodibility = 3.2f;
+
+    public float TerraUpliftPerStep = 0.026f;
+    public float TerraDeposition = 0.35f;
+
+    /// <summary>Steepest slope the coarse terrain will hold, in height per base cell.</summary>
+    public float TerraTalus = 0.045f;
+
+    /// <summary>Cycles across the map width of the finest detail added at heightmap resolution.</summary>
+    public double TerraDetailScale = 900.0;
+
+    public float TerraDetailAmplitude = 0.045f;
+
+    /// <summary>Coarse slope at which detail is at full strength.</summary>
+    public float TerraDetailSlopeRef = 0.022f;
+
+    /// <summary>Strength of the second, full-resolution incision pass.</summary>
+    public float TerraDetailIncision = 0.035f;
+
+    /// <summary>Slope limit for the full-resolution relaxation, in height per heightmap pixel.</summary>
+    public float TerraDetailTalus = 0.012f;
+
+    /// <summary>Fraction of land cells that carry enough drainage to be drawn as a river.</summary>
+    public double TerraRiverDensity = 0.006;
+
+    // River geometry is authored in vanilla province pixels and scaled by MapScale, so a river is
+    // the same fraction of a continent at every map size rather than nine times wider at `tiny`.
+
+    /// <summary>Shortest course kept.</summary>
+    public double MinRiverPixelsAtVanilla = 30;
+
+    /// <summary>Douglas-Peucker tolerance. This is what removes the D8 staircase.</summary>
+    public double RiverSimplifyAtVanilla = 1.6;
+
+    /// <summary>Largest perpendicular meander offset.</summary>
+    public double MeanderPixelsAtVanilla = 2.5;
+
+    /// <summary>Half-width of the channel cut into the heightmap.</summary>
+    public double ChannelRadiusAtVanilla = 3.0;
+
+    public int TerraMinRiverCells => Math.Max(8, (int)Scaled(MinRiverPixelsAtVanilla));
+    public double TerraRiverSimplify => Math.Max(0.6, Scaled(RiverSimplifyAtVanilla));
+    public double TerraMeanderPixels => Math.Max(0.5, Scaled(MeanderPixelsAtVanilla));
+    public float TerraChannelRadius => (float)Math.Max(1.0, Scaled(ChannelRadiusAtVanilla));
+
+    /// <summary>Depth of the channel cut into the heightmap under a river, in normalised height.</summary>
+    public float TerraChannelDepth = 0.010f;
+
+    /// <summary>How deep a filled depression must be to count as a lake.</summary>
+    public float TerraLakeDepth = 0.0015f;
+
+    public int TerraMinLakeCells = 400;
+
+    /// <summary>
+    /// Share of land put above the mountain line. Vanilla's own heightmap has 3.3% of its land in
+    /// the 121-170 band, and that is the number this reproduces.
+    /// </summary>
+    public double TerraMountainShare = 0.035;
+
+    public int TerraTopElevation = 520;
+    public int TerraFloorElevation = -250;
+
     /// <summary>settings.equator — in raster space, deliberately off-centre.</summary>
     public double Equator => Height - Height / 10.0;
 
@@ -81,11 +188,52 @@ public sealed class MapConfig
     public int ProvinceWidth => Width / 2;
     public int ProvinceHeight => Height / 2;
 
-    /// <summary>Roughly settings.landProvinceLimit; actual counts vary with coastline shape.</summary>
-    public int TargetLandProvinces = 5000;
+    // --- Map scale ---
+    //
+    // Everything measured in pixels is authored against vanilla's province map and scaled from
+    // there, so changing map size resamples the same world rather than changing what is on it.
 
-    /// <summary>Sea zones. Vanilla has a few hundred; ck2rpg's cap is 10000.</summary>
-    public int TargetSeaProvinces = 760;
+    /// <summary>Vanilla's province-map width. The scale everything pixel-denominated is authored at.</summary>
+    public const int ReferenceProvinceWidth = 9216;
+
+    /// <summary>This map's province raster relative to vanilla's, linearly.</summary>
+    public double MapScale => (double)ProvinceWidth / ReferenceProvinceWidth;
+
+    /// <summary>Scales a length authored in vanilla province pixels onto this map.</summary>
+    public double Scaled(double vanillaPixels) => vanillaPixels * MapScale;
+
+    /// <summary>
+    /// How large a barony is, relative to vanilla's. 2 makes each one twice as wide and therefore
+    /// a quarter as numerous; the whole title hierarchy follows, because <see cref="MapGen.Titles"/>
+    /// clusters by counts rather than by area.
+    ///
+    /// This is the only knob for map granularity. Province counts used to be given directly, which
+    /// meant a map kept the same number of provinces at every resolution and so a barony at
+    /// <c>tiny</c> covered 1/81 of the pixels it covered at <c>vanilla</c> — below
+    /// <see cref="MinProvincePixels"/>, where CK3 cannot derive a centroid and crashes without
+    /// logging. Fixing the *area* instead makes the count fall out of the map size.
+    /// </summary>
+    public double CountyScale = 1.0;
+
+    /// <summary>
+    /// Average land province area in province-map pixels, at <see cref="CountyScale"/> 1.
+    ///
+    /// Vanilla: 10,966 baronies over roughly 22.4M land pixels of its 9216x4608 province map.
+    /// A barony is one province here, so this reproduces vanilla's barony density.
+    /// </summary>
+    public double BaronyPixelsAtVanilla = 2043;
+
+    /// <summary>
+    /// Average sea zone area, same basis. Vanilla's sea zones are an order of magnitude larger
+    /// than its baronies — roughly 800 of them over 20M water pixels.
+    /// </summary>
+    public double SeaZonePixelsAtVanilla = 25000;
+
+    /// <summary>Target area of one land province on *this* map, in province pixels.</summary>
+    public double BaronyPixels => BaronyPixelsAtVanilla * CountyScale * CountyScale;
+
+    /// <summary>Target area of one sea zone on this map, in province pixels.</summary>
+    public double SeaZonePixels => SeaZonePixelsAtVanilla * CountyScale * CountyScale;
 
     /// <summary>
     /// Smallest allowed province in pixels. Below this CK3 cannot derive borders, a centroid or

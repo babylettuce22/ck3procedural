@@ -64,7 +64,8 @@ public static class MapDataWriter
 
     /// <summary>Returns the label -&gt; province id mapping and the land province count.</summary>
     public static (int[] Order, int LandCount) WriteAll(string modDir, WorldGrid world, MapConfig cfg,
-        ProvinceMap provinces, float[] provinceElevation, bool writePacked = true)
+        ProvinceMap provinces, float[] provinceElevation, bool writePacked = true,
+        MapGen.Terra.TerraResult? terra = null)
     {
         string dir = Path.Combine(modDir, "map_data");
         Directory.CreateDirectory(dir);
@@ -75,8 +76,8 @@ public static class MapDataWriter
 
         WriteProvincesPng(Path.Combine(dir, "provinces.png"), provinces, order);
         WriteDefinitionCsv(Path.Combine(dir, "definition.csv"), provinces, order);
-        WriteRiversPng(Path.Combine(dir, "rivers.png"), world, cfg, provinces);
-        WriteHeightmap(dir, world, cfg, writePacked, provinces, order, landCount);
+        WriteRiversPng(Path.Combine(dir, "rivers.png"), world, cfg, provinces, terra);
+        WriteHeightmap(dir, world, cfg, writePacked, provinces, order, landCount, terra);
         WriteDefaultMap(Path.Combine(dir, "default.map"), provinces.Count, landCount);
         WriteStubs(dir);
 
@@ -169,7 +170,7 @@ public static class MapDataWriter
     /// fixed width index with a green source and red joins, which is the minimum CK3 accepts.
     /// </summary>
     private static void WriteRiversPng(string path, WorldGrid world, MapConfig cfg,
-        ProvinceMap provinces)
+        ProvinceMap provinces, MapGen.Terra.TerraResult? terra)
     {
         int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
         var indices = new byte[width * height];
@@ -182,18 +183,36 @@ public static class MapDataWriter
             if (!provinces.Seeds[provinces.Label[i]].IsLand) indices[i] = RiverIndexWater;
         });
 
-        var mask = Raster.RiverMask(world, width, height);
-        for (int i = 0; i < mask.Length; i++)
-            if (mask[i] == 1) indices[i] = RiverIndexDefaultWidth;
-
-        // Mark sources and confluences, which CK3 uses to work out flow direction.
-        double sx = (double)width / world.Width;
-        double sy = (double)height / world.Height;
-        foreach (var river in world.Rivers)
+        if (terra is not null)
         {
-            if (river.Cells.Count == 0) continue;
-            Stamp(river.Cells[0], RiverIndexSource);
-            if (river.IsTributary) Stamp(river.Cells[^1], RiverIndexJoin);
+            // Terra already rasterised its courses at exactly this resolution, with the source
+            // and confluence markers and a per-segment width index in place.
+            for (int i = 0; i < indices.Length; i++)
+                if (terra.RiverPixels[i] != MapGen.Terra.RiverRaster.None)
+                    indices[i] = terra.RiverPixels[i];
+        }
+        else
+        {
+            var mask = Raster.RiverMask(world, width, height);
+            for (int i = 0; i < mask.Length; i++)
+                if (mask[i] == 1) indices[i] = RiverIndexDefaultWidth;
+
+            // Mark sources and confluences, which CK3 uses to work out flow direction.
+            double sx = (double)width / world.Width;
+            double sy = (double)height / world.Height;
+            foreach (var river in world.Rivers)
+            {
+                if (river.Cells.Count == 0) continue;
+                Stamp(river.Cells[0], RiverIndexSource);
+                if (river.IsTributary) Stamp(river.Cells[^1], RiverIndexJoin);
+            }
+
+            void Stamp(int cell, byte index)
+            {
+                int px = (int)((world.X(cell) + 0.5) * sx);
+                int py = (int)((world.Y(cell) + 0.5) * sy);
+                if (px >= 0 && py >= 0 && px < width && py < height) indices[py * width + px] = index;
+            }
         }
 
         var palette = new byte[256 * 3];
@@ -209,14 +228,6 @@ public static class MapDataWriter
         }
 
         PngWriter.WriteIndexed8(path, width, height, indices, palette);
-        return;
-
-        void Stamp(int cell, byte index)
-        {
-            int px = (int)((world.X(cell) + 0.5) * sx);
-            int py = (int)((world.Y(cell) + 0.5) * sy);
-            if (px >= 0 && py >= 0 && px < width && py < height) indices[py * width + px] = index;
-        }
     }
 
     /// <summary>
@@ -304,6 +315,29 @@ public static class MapDataWriter
     ];
 
     /// <summary>
+    /// Vanilla's water hypsometry, measured off its own heightmap.png on 2026-08-07 the same way
+    /// <see cref="VanillaLandCurve"/> was: the raw 16-bit height at each percentile of *water*
+    /// pixels, deepest first.
+    ///
+    /// The shape is the point. **85.08% of vanilla's water is exactly raw 0** — 40.14% of the whole
+    /// map — and only the shallowest 15% carries any gradient at all, ramping 0 to 4883 over what
+    /// is visibly a continental shelf hugging the coast. Open ocean is not dark, it is black.
+    ///
+    /// Stretching a simulated sea floor linearly onto 0..<see cref="WaterLevel16"/>, which is what
+    /// this used to do and what <c>HeightDetail.ShapeSeafloor</c> was shaped for, spreads that
+    /// gradient across the entire ocean instead. The percentile remap reproduces the real
+    /// distribution regardless of what the terrain generator handed over, and it is monotonic, so
+    /// the sea floor keeps its shape and only its depth scale changes.
+    /// </summary>
+    private static readonly (double Percent, double Raw)[] VanillaWaterCurve =
+    [
+        (0, 0), (85, 0), (85.5, 14), (86, 86), (86.5, 270), (87, 526), (87.5, 816),
+        (88, 1108), (89, 1634), (90, 2162), (91, 2634), (92, 2908), (93, 3616),
+        (94, 4088), (95, 4128), (96, 4214), (97, 4378), (98, 4558), (99, 4726),
+        (99.5, 4806), (100, WaterLevel16),
+    ];
+
+    /// <summary>
     /// Converts simulation elevation to CK3's height scale at full 16-bit precision, with sea
     /// level landing exactly on <see cref="WaterLevel16"/>.
     ///
@@ -341,8 +375,8 @@ public static class MapDataWriter
 
         var result = new ushort[elevation.Length];
 
-        // Water is a straight stretch of min..sea onto 0..WaterLevel16 either way: the seafloor
-        // has already been shaped by HeightDetail.ShapeSeafloor and is never drawn as terrain.
+        // The linear fallback, kept for bisecting. Note it stretches the sea floor smoothly across
+        // 0..WaterLevel16, which is exactly the thing the water curve above exists to stop.
         if (!cfg.MatchVanillaHypsometry)
         {
             Parallel.For(0, elevation.Length, i =>
@@ -356,68 +390,122 @@ public static class MapDataWriter
             return result;
         }
 
-        // Our own land distribution, as a cumulative histogram fine enough that its resolution is
-        // never the limiting factor on a 16-bit output.
+        // Our own distributions, as cumulative histograms fine enough that their resolution is
+        // never the limiting factor on a 16-bit output. Land and water are ranked separately,
+        // because they are remapped onto separate measured curves.
         const int Bins = 1 << 16;
-        var histogram = new long[Bins];
-        object gate = new();
 
-        Parallel.For(0, Environment.ProcessorCount, () => new long[Bins], (worker, _, local) =>
-        {
-            int lo = (int)((long)elevation.Length * worker / Environment.ProcessorCount);
-            int hi = (int)((long)elevation.Length * (worker + 1) / Environment.ProcessorCount);
-            for (int i = lo; i < hi; i++)
-            {
-                float e = elevation[i];
-                if (e <= sea) continue;
-                local[BinOf(e)]++;
-            }
-            return local;
-        }, local => { lock (gate) for (int b = 0; b < Bins; b++) histogram[b] += local[b]; });
-
-        long landTotal = 0;
-        foreach (long n in histogram) landTotal += n;
+        var landCdf = BuildCdf(e => e > sea, sea, aboveRange, out long landTotal);
+        var waterCdf = BuildCdf(e => e <= sea, min, belowRange, out long waterTotal);
         if (landTotal == 0) return result;
-
-        // Exclusive prefix sum as a fraction, so cdf[b] is the percentile at the *start* of bin b
-        // and interpolating between neighbours gives a smooth, strictly monotonic mapping rather
-        // than a staircase with one plateau per bin.
-        var cdf = new float[Bins + 1];
-        long running = 0;
-        for (int b = 0; b < Bins; b++)
-        {
-            cdf[b] = (float)(100.0 * running / landTotal);
-            running += histogram[b];
-        }
-        cdf[Bins] = 100f;
 
         Parallel.For(0, elevation.Length, i =>
         {
             float e = elevation[i];
+
             if (e <= sea)
             {
-                result[i] = (ushort)Math.Clamp((e - min) / belowRange * WaterLevel16, 0, 65535);
+                if (waterTotal == 0) { result[i] = 0; return; }
+                double wp = Percentile(waterCdf, e, min, belowRange);
+                result[i] = (ushort)Math.Clamp(SampleCurve(VanillaWaterCurve, wp), 0, WaterLevel16);
                 return;
             }
 
-            double exact = (double)(e - sea) / aboveRange * (Bins - 1);
-            int b = Math.Clamp((int)exact, 0, Bins - 1);
-            double frac = Math.Clamp(exact - b, 0, 1);
-
-            double percentile = cdf[b] + frac * (cdf[b + 1] - cdf[b]);
-            result[i] = (ushort)Math.Clamp(SampleCurve(percentile), WaterLevel16 + 1, 65535);
+            double lp = Percentile(landCdf, e, sea, aboveRange);
+            result[i] = (ushort)Math.Clamp(SampleCurve(VanillaLandCurve, lp), WaterLevel16 + 1, 65535);
         });
 
         return result;
 
-        int BinOf(float e)
-            => Math.Clamp((int)((double)(e - sea) / aboveRange * (Bins - 1)), 0, Bins - 1);
+        float[] BuildCdf(Func<float, bool> select, float origin, float range, out long total)
+        {
+            var histogram = new long[Bins];
+            object gate = new();
+
+            Parallel.For(0, Environment.ProcessorCount, () => new long[Bins], (worker, _, local) =>
+            {
+                int lo = (int)((long)elevation.Length * worker / Environment.ProcessorCount);
+                int hi = (int)((long)elevation.Length * (worker + 1) / Environment.ProcessorCount);
+                for (int i = lo; i < hi; i++)
+                {
+                    float e = elevation[i];
+                    if (!select(e)) continue;
+                    local[Math.Clamp((int)((double)(e - origin) / range * (Bins - 1)), 0, Bins - 1)]++;
+                }
+                return local;
+            }, local => { lock (gate) for (int b = 0; b < Bins; b++) histogram[b] += local[b]; });
+
+            long sum = 0;
+            foreach (long c in histogram) sum += c;
+            total = sum;
+
+            // Exclusive prefix sum as a fraction, so cdf[b] is the percentile at the *start* of bin
+            // b and interpolating between neighbours gives a smooth, strictly monotonic mapping
+            // rather than a staircase with one plateau per bin.
+            var cdf = new float[Bins + 1];
+            if (sum == 0) return cdf;
+
+            long running = 0;
+            for (int b = 0; b < Bins; b++)
+            {
+                cdf[b] = (float)(100.0 * running / sum);
+                running += histogram[b];
+            }
+            cdf[Bins] = 100f;
+            return cdf;
+        }
+
+        static double Percentile(float[] cdf, float e, float origin, float range)
+        {
+            double exact = (double)(e - origin) / range * (Bins - 1);
+            int b = Math.Clamp((int)exact, 0, Bins - 1);
+            double frac = Math.Clamp(exact - b, 0, 1);
+            return cdf[b] + frac * (cdf[b + 1] - cdf[b]);
+        }
     }
 
-    /// <summary>Linear interpolation along <see cref="VanillaLandCurve"/>.</summary>
-    private static double SampleCurve(double percent)
+    /// <summary>
+    /// Prints the emitted heightmap's distribution against the vanilla numbers it is meant to
+    /// reproduce, so a regression here shows up in the build log rather than only in game.
+    /// Vanilla 1.19: 40.14% of the map exactly 0, 47.18% at or below the water level, land
+    /// p50 36.33/255 and p100 191.46/255.
+    /// </summary>
+    private static void ReportHypsometry(ushort[] height)
     {
-        var curve = VanillaLandCurve;
+        long zero = 0, water = 0;
+        var landHistogram = new int[256];
+
+        foreach (ushort v in height)
+        {
+            if (v == 0) zero++;
+            if (v <= WaterLevel16) { water++; continue; }
+            landHistogram[v / Step255]++;
+        }
+
+        long land = height.LongLength - water;
+        Console.WriteLine($"  hypsometry: {100.0 * zero / height.LongLength:F2}% exactly 0 " +
+                          $"(vanilla 40.14), {100.0 * water / height.LongLength:F2}% water " +
+                          $"(vanilla 47.18)");
+
+        Console.WriteLine($"  land 0-255 percentiles: p50 {Percentile(50)}, p75 {Percentile(75)}, " +
+                          $"p90 {Percentile(90)}, p99 {Percentile(99)}, max {Percentile(100)} " +
+                          $"(vanilla 36 / 57 / 87 / 143 / 191)");
+
+        int Percentile(double q)
+        {
+            long want = (long)(land * q / 100.0), running = 0;
+            for (int b = 0; b < 256; b++)
+            {
+                running += landHistogram[b];
+                if (running >= want) return b;
+            }
+            return 255;
+        }
+    }
+
+    /// <summary>Linear interpolation along one of the measured vanilla hypsometric curves.</summary>
+    private static double SampleCurve((double Percent, double Raw)[] curve, double percent)
+    {
         if (percent <= curve[0].Percent) return curve[0].Raw;
 
         for (int i = 1; i < curve.Length; i++)
@@ -447,26 +535,39 @@ public static class MapDataWriter
     /// to ship a bare heightmap.png and repack in -mapeditor instead.
     /// </summary>
     private static void WriteHeightmap(string dir, WorldGrid world, MapConfig cfg, bool writePacked,
-        ProvinceMap provinces, int[] order, int landCount)
+        ProvinceMap provinces, int[] order, int landCount, MapGen.Terra.TerraResult? terra)
     {
-        var elevation = Raster.UpsampleElevation(world, cfg.Width, cfg.Height);
+        float[] elevation;
 
-        // The upsample only carries continent and mountain-range *placement*; detail is generated
-        // at full resolution here, and the seafloor is shaped into a shelf rather than left as
-        // stretched simulation output.
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-        HeightDetail.Apply(elevation, cfg, new Core.Rng(cfg.Seed ^ 0x5EED));
-        HeightDetail.ShapeSeafloor(elevation, cfg, shelfPixels: cfg.Width / 96);
+        if (terra is not null)
+        {
+            // Terra generated at this resolution to begin with: the seafloor shelf, the fine
+            // relief and the river channels are already in the field, cut by the same erosion and
+            // the same drainage network that produced rivers.png.
+            elevation = terra.Elevation;
+        }
+        else
+        {
+            elevation = Raster.UpsampleElevation(world, cfg.Width, cfg.Height);
 
-        // Rivers are rasterised separately into rivers.png, so without this the ground under a
-        // river is no lower than its banks and the water appears to float on the terrain.
-        var riverMask = Raster.RiverMask(world, cfg.ProvinceWidth, cfg.ProvinceHeight);
-        HeightDetail.CarveRivers(elevation, cfg, riverMask, cfg.ProvinceWidth, cfg.ProvinceHeight);
-        Console.WriteLine($"  heightmap detail: generated at {cfg.Width}x{cfg.Height} " +
-                          $"({sw.ElapsedMilliseconds} ms)");
+            // The upsample only carries continent and mountain-range *placement*; detail is
+            // generated at full resolution here, and the seafloor is shaped into a shelf rather
+            // than left as stretched simulation output.
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            HeightDetail.Apply(elevation, cfg, new Core.Rng(cfg.Seed ^ 0x5EED));
+            HeightDetail.ShapeSeafloor(elevation, cfg, shelfPixels: cfg.Width / 96);
+
+            // Rivers are rasterised separately into rivers.png, so without this the ground under a
+            // river is no lower than its banks and the water appears to float on the terrain.
+            var riverMask = Raster.RiverMask(world, cfg.ProvinceWidth, cfg.ProvinceHeight);
+            HeightDetail.CarveRivers(elevation, cfg, riverMask, cfg.ProvinceWidth, cfg.ProvinceHeight);
+            Console.WriteLine($"  heightmap detail: generated at {cfg.Width}x{cfg.Height} " +
+                              $"({sw.ElapsedMilliseconds} ms)");
+        }
 
         var full = ElevationTo16(elevation, cfg);
         ForceCoastlineToMatchProvinces(full, cfg, provinces, order, landCount);
+        ReportHypsometry(full);
         PngWriter.WriteGray16(Path.Combine(dir, "heightmap.png"), cfg.Width, cfg.Height, full);
 
         const int tileSize = 65;   // 64 pixels plus one overlapping edge sample

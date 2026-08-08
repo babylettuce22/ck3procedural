@@ -2,6 +2,7 @@ using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
+using Ck3MapGen.MapGen.Terra;
 
 var cfg = new MapConfig();
 string outDir = Path.Combine(AppContext.BaseDirectory, "out");
@@ -51,10 +52,24 @@ for (int i = 0; i < args.Length; i++)
         // The noise/hotspot terrain path (randomMap) instead of the tectonic simulation.
         case "--noise":
             useNoise = true;
+            cfg.UseTerra = false;
+            break;
+
+        // The ck2rpg magma simulation, for comparison against the tectonics-and-erosion
+        // generator that replaced it.
+        case "--legacy-terrain":
+            cfg.UseTerra = false;
             break;
 
         case "--erosion":
             cfg.EnableRainErosion = true;
+            break;
+
+        // How big a barony is relative to vanilla's. 2 makes each one twice as wide and a
+        // quarter as numerous; the rest of the title hierarchy follows.
+        case "--county-scale" when i + 1 < args.Length:
+            cfg.CountyScale = double.Parse(args[++i],
+                System.Globalization.CultureInfo.InvariantCulture);
             break;
 
         case "--no-history":
@@ -72,7 +87,6 @@ for (int i = 0; i < args.Length; i++)
         case "tiny":
             (cfg.WorldWidth, cfg.WorldHeight) = (256, 128);
             (cfg.Width, cfg.Height) = (2048, 1024);
-            (cfg.TargetLandProvinces, cfg.TargetSeaProvinces) = (1200, 200);
             break;
 
         case "small":
@@ -100,15 +114,32 @@ for (int i = 0; i < args.Length; i++)
 }
 
 var rng = new Rng(cfg.Seed);
-var world = useNoise
-    ? Pipeline.GenerateWorldFromNoise(cfg, rng)
-    : Pipeline.GenerateWorld(cfg, rng);
 
-// Upsample the coarse simulation to the export rasters, then partition provinces on the
-// half-resolution province map, as CK3 expects.
-Console.WriteLine($"Rasterising heightmap {cfg.Width}x{cfg.Height}, " +
-                  $"provinces {cfg.ProvinceWidth}x{cfg.ProvinceHeight}");
-var provinceElevation = Raster.UpsampleElevation(world, cfg.ProvinceWidth, cfg.ProvinceHeight);
+Ck3MapGen.World.WorldGrid world;
+float[] provinceElevation;
+TerraResult? terra = null;
+
+if (cfg.UseTerra)
+{
+    // Terrain is generated at heightmap resolution and summarised down onto the coarse grid,
+    // rather than simulated on the coarse grid and stretched up. The province map is derived
+    // from the same field the heightmap is written from, so the coastline in provinces.png is
+    // the coastline in heightmap.png by construction.
+    terra = TerraPipeline.Generate(cfg, rng);
+    world = WorldBridge.Populate(terra, cfg, rng);
+    provinceElevation = terra.ProvinceElevation;
+}
+else
+{
+    world = useNoise
+        ? Pipeline.GenerateWorldFromNoise(cfg, rng)
+        : Pipeline.GenerateWorld(cfg, rng);
+
+    Console.WriteLine($"Rasterising heightmap {cfg.Width}x{cfg.Height}, " +
+                      $"provinces {cfg.ProvinceWidth}x{cfg.ProvinceHeight}");
+    provinceElevation = Raster.UpsampleElevation(world, cfg.ProvinceWidth, cfg.ProvinceHeight);
+}
+
 var landMask = Raster.LandMask(provinceElevation, cfg);
 var provinces = Provinces.Build(landMask, cfg.ProvinceWidth, cfg.ProvinceHeight, cfg, rng);
 Console.WriteLine($"  {provinces.Count} provinces total");
@@ -122,12 +153,12 @@ if (modDir is not null)
     Ck3MapGen.Emit.ModWriter.WriteDescriptors(modDir);
 
     var (order, landCount) = Ck3MapGen.Emit.MapDataWriter.WriteAll(
-        modDir, world, cfg, provinces, provinceElevation, writePacked);
+        modDir, world, cfg, provinces, provinceElevation, writePacked, terra);
 
     var empires = Titles.Build(provinces, landCount, order, rng);
     Ck3MapGen.Emit.ContentWriter.WriteAll(
         modDir, gameDir, world, cfg, provinces, order, landCount, empires,
-        provinceElevation, rng, writeHistory);
+        provinceElevation, rng, writeHistory, terra);
 
     Console.WriteLine($"  done in {sw.ElapsedMilliseconds} ms");
 }
@@ -136,6 +167,12 @@ Directory.CreateDirectory(outDir);
 DebugRender.WriteElevation(Path.Combine(outDir, "debug_elevation.png"), world, scale);
 DebugRender.WriteTerrain(Path.Combine(outDir, "debug_terrain.png"), world, cfg, scale);
 DebugRender.WriteProvinces(Path.Combine(outDir, "debug_provinces.png"), provinces, rng);
+
+// Hillshaded relief at the resolution the erosion ran at. Worth more than the greyscale dumps:
+// flat grey hides whether erosion produced valley networks, shading shows them the way the
+// game's lighting will.
+if (terra is not null) TerraPreview.WriteAll(outDir, terra.Preview);
+
 Console.WriteLine($"Wrote debug images to {outDir}");
 
 return 0;

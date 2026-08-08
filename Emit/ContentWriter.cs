@@ -16,7 +16,8 @@ public static class ContentWriter
 {
     public static void WriteAll(string modDir, string gameDir, WorldGrid world, MapConfig cfg,
         ProvinceMap provinces, int[] order, int landCount, List<Title> empires,
-        float[] provinceElevation, Rng rng, bool writeHistory = true)
+        float[] provinceElevation, Rng rng, bool writeHistory = true,
+        MapGen.Terra.TerraResult? terra = null)
     {
         // Blanking runs FIRST so the generated files below always win: several of them share a
         // filename with a vanilla file they are replacing.
@@ -26,7 +27,8 @@ public static class ContentWriter
         // paints the ground — the detail textures, the masks, the colormap and
         // common/province_terrain — is derived from this one array, so none of them can disagree.
         var landMask = LandMaskFromProvinces(cfg, provinces, order, landCount);
-        var riverMask = Raster.RiverMask(world, cfg.ProvinceWidth, cfg.ProvinceHeight);
+        var riverMask = terra?.RiverMask
+                        ?? Raster.RiverMask(world, cfg.ProvinceWidth, cfg.ProvinceHeight);
         var terrain = TerrainClassifier.Classify(world, cfg, provinceElevation, landMask,
             riverMask, rng);
         var provinceTerrain = ProvinceTerrain(cfg, provinces, order, terrain, landCount);

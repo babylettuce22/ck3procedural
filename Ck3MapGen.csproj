@@ -14,13 +14,4 @@
     <PackageReference Include="SixLabors.ImageSharp" Version="4.0.0" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!--
-      Orphaned: TerraPreview imports Ck3MapGen.MapGen.Terra, which is not in the tree, and nothing
-      references TerraPreview itself. It broke the build outright. Excluded rather than deleted so
-      the renderers survive if the Terra generator is revived; drop this line once it is back.
-    -->
-    <Compile Remove="Io/TerraPreview.cs" />
-  </ItemGroup>
-
 </Project>

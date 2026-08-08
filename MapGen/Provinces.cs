@@ -185,26 +185,32 @@ public static class Provinces
     }
 
     /// <summary>
-    /// Jittered-grid seeding. Spacing is derived from the actual land and sea pixel counts so a
-    /// map keeps roughly the same province count at any resolution — ck2rpg instead exposes raw
-    /// seed counts and a cell size in the UI.
+    /// Jittered-grid seeding. Spacing comes from the target province *area*, so the province count
+    /// falls out of how much land there is rather than being fixed in advance.
+    ///
+    /// It used to work the other way round — spacing was solved from a target count — which meant
+    /// a map kept the same number of provinces at every resolution, and a barony at <c>tiny</c>
+    /// covered 1/81 of the pixels one at <c>vanilla</c> did. See <see cref="MapConfig.CountyScale"/>.
     /// </summary>
     private static List<ProvinceSeed> PlaceSeeds(byte[] mask, int width, int height, MapConfig cfg, Rng rng)
     {
+        int landSpacing = Spacing(cfg.BaronyPixels);
+        int seaSpacing = Spacing(cfg.SeaZonePixels);
+
         long landPixels = 0;
         for (int i = 0; i < mask.Length; i++) if (mask[i] == 1) landPixels++;
-        long seaPixels = (long)width * height - landPixels;
 
-        int landSpacing = Spacing(landPixels, cfg.TargetLandProvinces);
-        int seaSpacing = Spacing(seaPixels, cfg.TargetSeaProvinces);
+        Console.WriteLine($"  province grid: land every {landSpacing} px " +
+                          $"({cfg.BaronyPixels:F0} px each, ~{landPixels / Math.Max(1, cfg.BaronyPixels):F0} " +
+                          $"expected), sea every {seaSpacing} px");
 
         var seeds = new List<ProvinceSeed>();
         Scatter(landSpacing, isLand: true);
         Scatter(seaSpacing, isLand: false);
         return seeds;
 
-        static int Spacing(long pixels, int target)
-            => Math.Max(2, (int)Math.Round(Math.Sqrt((double)pixels / Math.Max(1, target))));
+        static int Spacing(double targetArea)
+            => Math.Max(2, (int)Math.Round(Math.Sqrt(Math.Max(4.0, targetArea))));
 
         void Scatter(int spacing, bool isLand)
         {
