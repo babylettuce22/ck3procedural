@@ -183,9 +183,10 @@ public static class TerraPipeline
         var relief = new SimplexNoise(rng);
         var warp = new SimplexNoise(rng);
 
-        double freq = 9.0 / width;
-        double warpFreq = 3.0 / width;
-        double warpAmp = width * 0.05;
+        int reference = cfg.ReferenceBaseWidth;
+        double freq = 9.0 / reference;
+        double warpFreq = 3.0 / reference;
+        double warpAmp = reference * 0.05;
         float amplitude = cfg.TerraInteriorRelief;
 
         Parallel.For(0, hgt, y =>

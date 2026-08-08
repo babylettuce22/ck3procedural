@@ -66,6 +66,14 @@ public static class PlateTectonics
     /// </summary>
     public static PlateField BuildField(int width, int height, MapConfig cfg, Rng rng)
     {
+        // Plate count stays constant rather than scaling with area, and this is a deliberate
+        // departure from treating a small map as a window onto a vanilla-sized world.
+        //
+        // Scaling it was tried: at `full` correct density is 5 plates, and 5 plates supply so
+        // little uplift that land eroded from a 40% target down to 16%. Plate boundaries are where
+        // relief comes from, so starving a map of them drowns it. A constant count means small maps
+        // run at a higher plate density than vanilla — their ranges are closer together than a
+        // strict reading of the island model would give — which is the better trade.
         int count = Math.Max(2, cfg.TerraPlateCount);
         var seeds = new (float X, float Y, double Drift, double Speed)[count];
 
@@ -85,7 +93,8 @@ public static class PlateTectonics
         // or plate boundary, so nothing gives it relief and depression filling turns it into one
         // enormous lake. Measured at 1.35 cycles: 151k lake cells against 9k before.
         var cratonNoise = new SimplexNoise(rng);
-        double cratonFreq = (double)cfg.TerraCratonClustering / width;
+        int reference = cfg.ReferenceBaseWidth;
+        double cratonFreq = (double)cfg.TerraCratonClustering / reference;
 
         var ranked = new (int Index, double Score)[count];
         for (int i = 0; i < count; i++)
@@ -107,8 +116,8 @@ public static class PlateTectonics
         }
 
         var warp = new SimplexNoise(rng);
-        double warpFreq = 6.0 / width;
-        double warpAmp = width * 0.060;
+        double warpFreq = 6.0 / reference;
+        double warpAmp = reference * 0.060;
 
         var nearest = new byte[width * height];
         var second = new byte[width * height];
@@ -118,7 +127,7 @@ public static class PlateTectonics
         // How far either side of a boundary continentality takes to reach its plate's own value.
         // Wide on purpose: this feather is the only thing standing between plate-derived continents
         // and visibly polygonal coastlines.
-        float feather = (float)(width * Math.Max(0.005, cfg.TerraCratonFeather));
+        float feather = (float)(reference * Math.Max(0.005, cfg.TerraCratonFeather));
 
         Parallel.For(0, height, y =>
         {
@@ -167,7 +176,7 @@ public static class PlateTectonics
         // which then fill with lakes because there is no gradient for water to run down. A 2D blur
         // rounds the corners off and turns the tessellation into continental *mass*, which is what
         // it should be contributing.
-        int blurRadius = (int)Math.Max(1, width * Math.Max(0.0, cfg.TerraCratonBlur));
+        int blurRadius = (int)Math.Max(1, reference * Math.Max(0.0, cfg.TerraCratonBlur));
         var continentality = blurRadius > 1
             ? Field.Blur(continentality0, width, height, blurRadius, 3)
             : continentality0;
@@ -200,10 +209,11 @@ public static class PlateTectonics
         var plates = field.Plates;
 
         var belt = new SimplexNoise(rng);
-        double beltFreq = cfg.TerraRangeRoughness / width;
+        int reference = cfg.ReferenceBaseWidth;
+        double beltFreq = cfg.TerraRangeRoughness / reference;
 
         // The narrow belt is what reads as a mountain *range*; the wide one is its foothills.
-        float coreWidth = (float)(width * cfg.TerraRangeWidth);
+        float coreWidth = (float)(reference * cfg.TerraRangeWidth);
         float flankWidth = coreWidth * 4.0f;
 
         // Hard cutoff on how far from a boundary uplift can reach.

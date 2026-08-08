@@ -1,4 +1,4 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 
 namespace Ck3MapGen.MapGen.Terra;
@@ -48,16 +48,19 @@ public static class ContinentBuilder
 
         // Frequencies as "cycles across the map width", so a change of map size does not change
         // the shape of the world — only how finely it is sampled.
-        double shapeFreq = cfg.TerraContinentScale / width;
+        // Referenced to vanilla's base grid, not this map's, so a continent is a fixed number
+        // of pixels across and a small map shows a fragment of one rather than three miniatures.
+        int reference = cfg.ReferenceBaseWidth;
+        double shapeFreq = cfg.TerraContinentScale / reference;
         double detailFreq = shapeFreq * 5.5;
-        double warpCoarseFreq = 1.7 / width;
-        double warpFineFreq = 6.5 / width;
+        double warpCoarseFreq = 1.7 / reference;
+        double warpFineFreq = 6.5 / reference;
 
         // Amplitudes are a fraction of map width. These are small on purpose: at 0.20 the coarse
         // warp shears the shape field so far that continents come out as long thin filaments
         // rather than landmasses, because the warp displaces by more than the feature size.
-        double warpCoarseAmp = width * 0.075;
-        double warpFineAmp = width * 0.022;
+        double warpCoarseAmp = reference * 0.075;
+        double warpFineAmp = reference * 0.022;
 
         var mask = new float[width * height];
         double halfHeight = (height - 1) / 2.0;

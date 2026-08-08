@@ -154,13 +154,15 @@ public static class TerrainTextureWriter
         var warpXField = new SimplexNoise(rng);
         var warpYField = new SimplexNoise(rng);
 
-        double fA = 55.0 / width, fB = 130.0 / width, fC = 300.0 / width;
+        // Referenced to vanilla's province map, so material patches are a fixed pixel size.
+        const int reference = MapConfig.ReferenceProvinceWidth;
+        double fA = 55.0 / reference, fB = 130.0 / reference, fC = 300.0 / reference;
 
         // The transition band, and the scale at which its edge wanders. Deliberately much coarser
         // than the material noise: it decides where one biome fingers into the next, which happens
         // over kilometres, not metres.
-        float blendReach = (float)Math.Max(2.0, cfg.Scaled(BlendReachAtVanilla));
-        double bandFrequency = 170.0 / width;
+        float blendReach = BlendReachAtVanilla;
+        double bandFrequency = 170.0 / reference;
 
         var (boundaryDistance, boundaryOther) = BoundaryField(terrain, width, height);
 

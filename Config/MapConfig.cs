@@ -451,10 +451,12 @@ public sealed class MapConfig
     [Description("Half-width of the channel cut into the heightmap.")]
     public double ChannelRadiusAtVanilla { get; set; } = 3.0;
 
-    public int TerraMinRiverCells => Math.Max(8, (int)Scaled(MinRiverPixelsAtVanilla));
-    public double TerraRiverSimplify => Math.Max(0.6, Scaled(RiverSimplifyAtVanilla));
-    public double TerraMeanderPixels => Math.Max(0.5, Scaled(MeanderPixelsAtVanilla));
-    public float TerraChannelRadius => (float)Math.Max(1.0, Scaled(ChannelRadiusAtVanilla));
+    // No longer scaled by map size: a river is the same width and wanders the same distance
+    // whatever size map it is on, because a pixel is the same distance on all of them.
+    public int TerraMinRiverCells => Math.Max(8, (int)MinRiverPixelsAtVanilla);
+    public double TerraRiverSimplify => Math.Max(0.6, RiverSimplifyAtVanilla);
+    public double TerraMeanderPixels => Math.Max(0.5, MeanderPixelsAtVanilla);
+    public float TerraChannelRadius => (float)Math.Max(1.0, ChannelRadiusAtVanilla);
 
     /// <summary>Depth of the channel cut into the heightmap under a river, in normalised height.</summary>
     [SettingRole(SettingRole.GenerationOnly)]
@@ -506,6 +508,19 @@ public sealed class MapConfig
 
     /// <summary>Vanilla's province-map width. The scale everything pixel-denominated is authored at.</summary>
     public const int ReferenceProvinceWidth = 9216;
+
+    /// <summary>Vanilla's heightmap width.</summary>
+    public const int ReferenceHeightmapWidth = 18432;
+
+    /// <summary>
+    /// Vanilla's base grid width. Terrain feature wavelengths and amplitudes are authored
+    /// against these three constants rather than against this map's own width, so a feature is
+    /// the same number of pixels — and therefore the same physical size — at every map size.
+    /// Dividing by the live width instead made a small map a shrunken world: the same three
+    /// continents and the same mountain ranges squeezed into a quarter of the pixels, four times
+    /// steeper per cell. A smaller map should be a smaller region at full detail.
+    /// </summary>
+    public int ReferenceBaseWidth => ReferenceHeightmapWidth / Math.Max(1, TerraBaseDivisor);
 
     /// <summary>This map's province raster relative to vanilla's, linearly.</summary>
     public double MapScale => (double)ProvinceWidth / ReferenceProvinceWidth;

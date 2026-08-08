@@ -1,4 +1,4 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 using Ck3MapGen.World;
 
@@ -96,7 +96,7 @@ public static class TerrainClassifier
 
         Console.WriteLine($"  terrain thresholds: hills {hills:F0}, mountains {mountains:F0}, " +
                           $"moisture arid {arid} / semi-arid {semiArid} / wet {wet}");
-        int BeachReach = Math.Max(1, (int)Math.Round(cfg.Scaled(BeachReachAtVanilla)));
+        int BeachReach = BeachReachAtVanilla;
 
         var coastDistance = DistanceToWater(landMask, width, height, BeachReach);
 
@@ -107,8 +107,10 @@ public static class TerrainClassifier
         var farmNoise = new SimplexNoise(rng);
         var edgeNoise = new SimplexNoise(rng);
 
-        double coarse = 16.0 / width;    // biome-sized patches
-        double fine = 90.0 / width;      // ragged edges between them
+        // Referenced to vanilla's province map, so a biome patch is a fixed pixel size.
+        int reference = MapConfig.ReferenceProvinceWidth;
+        double coarse = 16.0 / reference; // biome-sized patches
+        double fine = 90.0 / reference;   // ragged edges between them
 
         // Patch shape comes from warped fBm rather than a single simplex octave. One octave
         // thresholded at a fixed level gives round, evenly-sized blobs of one characteristic
@@ -116,8 +118,8 @@ public static class TerrainClassifier
         // splotchiness. Warping the sample position and summing octaves gives regions with
         // arms, inlets and a range of sizes, which is what a real biome boundary looks like.
         var warpField = new SimplexNoise(rng);
-        double warpFrequency = 11.0 / width;
-        double warpAmplitude = width * 0.014;
+        double warpFrequency = 11.0 / reference;
+        double warpAmplitude = reference * 0.014;
 
         double Patch(SimplexNoise noise, double px, double py, double frequency)
         {

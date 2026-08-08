@@ -32,10 +32,12 @@ public static class DetailPass
         var ridge = new SimplexNoise(rng);
         var rolling = new SimplexNoise(rng);
 
-        double ridgeFreq = cfg.TerraDetailScale / fw;
+        // Referenced to vanilla's heightmap width: detail is a fixed pixel size everywhere.
+        int reference = MapConfig.ReferenceHeightmapWidth;
+        double ridgeFreq = cfg.TerraDetailScale / reference;
         double rollFreq = ridgeFreq * 0.42;
         double warpFreq = ridgeFreq * 0.28;
-        double warpAmp = fw / cfg.TerraDetailScale * 2.4;
+        double warpAmp = reference / cfg.TerraDetailScale * 2.4;
 
         float sx = (float)cw / fw, sy = (float)ch / fh;
 
