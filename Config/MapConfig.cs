@@ -552,6 +552,21 @@ public sealed class MapConfig
     public double DevelopmentCoastBonus { get; set; } = 0.12;
 
 
+    /// <summary>
+    /// How wide a stretch of water a kingdom or empire may still reach across, in *vanilla*
+    /// province pixels. Counties and duchies ignore this and stay on one landmass.
+    ///
+    /// Measured against vanilla's 9216x4608 province map: the Strait of Dover is about 30 px, the
+    /// Irish Sea about 90, the Sicilian narrows about 25, and the Aegean crossings 40-120. The
+    /// default therefore reaches the seas real medieval realms actually spanned without letting a
+    /// kingdom claim another continent.
+    /// </summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("04 Titles")]
+    [Description("How wide a stretch of water a kingdom or empire may reach across, in vanilla province pixels. Counties and duchies always stay on one landmass. Vanilla reference: Dover about 30 px, the Irish Sea about 90.")]
+    public double SeaBridgePixelsAtVanilla { get; set; } = 110;
+
+
     // --- Cultures and faiths ---
     //
     // Vanilla's own proportions, for calibration: ~193 cultures in ~40 heritages, and ~120 faiths

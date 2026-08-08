@@ -127,7 +127,7 @@ public static class Generator
             modDir, cfg, result.Provinces, options.WritePacked, result.Terra);
 
         // Titles get the narrower count: an impassable province has no barony.
-        var empires = Titles.Build(result.Provinces, baronyCount, order, rng);
+        var empires = Titles.Build(result.Provinces, baronyCount, order, cfg, rng);
         Emit.ContentWriter.WriteAll(
             modDir, options.GameDir, result.World, cfg, result.Provinces, order, landCount,
             empires, result.ProvinceElevation, rng, options.WriteHistory, result.Terra);

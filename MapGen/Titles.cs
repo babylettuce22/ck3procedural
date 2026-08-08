@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 
 namespace Ck3MapGen.MapGen;
@@ -58,6 +59,167 @@ public static class Titles
             sa.Add(b);
             sb.Add(a);
         }
+    }
+
+    /// <summary>
+    /// Province pairs that face each other across a short stretch of water.
+    ///
+    /// Without this every title is landlocked by construction: <see cref="BuildAdjacency"/> links
+    /// provinces only where their pixels touch, so no kingdom can hold both sides of a strait and
+    /// no empire can be a thalassocracy. That is wrong at the top of the hierarchy specifically —
+    /// Britannia, Sicily, Denmark and Byzantium are all one realm across water — while remaining
+    /// right at the bottom, which is why the two adjacencies are kept apart and only merged for the
+    /// kingdom and empire tiers.
+    ///
+    /// Found by flooding outward from every coast at once and noting where two different provinces'
+    /// fronts meet: the meeting cost is how far apart the two coastlines are. Flooding stops at
+    /// <paramref name="maxDistance"/>, so the open ocean is never visited and the cost is
+    /// proportional to coastline rather than to sea area.
+    ///
+    /// Impassable provinces are not sources and not traversable — they are land, so a mountain wall
+    /// blocks a sea link exactly as it blocks a land one.
+    /// </summary>
+    /// <summary>8-neighbour offsets. Diagonals count as one step, which slightly understates a
+    /// diagonal crossing — immaterial against a threshold measured in tens of pixels.</summary>
+    private static readonly (int Dx, int Dy)[] Neighbourhood =
+        [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, -1), (-1, 1), (1, 1)];
+
+    public static Dictionary<int, HashSet<int>> BuildSeaAdjacency(ProvinceMap map, int baronyCount,
+        int[] order, int maxDistance)
+    {
+        var links = new Dictionary<int, HashSet<int>>();
+        if (maxDistance <= 0) return links;
+
+        int width = map.Width, height = map.Height;
+        var owner = new int[width * height];
+        var dist = new int[width * height];
+        var frontier = new Queue<int>();
+
+        bool IsOpenWater(int cell) => !map.Seeds[map.Label[cell]].IsLand;
+        int BaroniedLand(int cell)
+        {
+            int id = order[map.Label[cell]];
+            return map.Seeds[map.Label[cell]].IsLand && id <= baronyCount ? id : 0;
+        }
+
+        // Every water pixel touching a coast starts the flood, carrying the province behind it.
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int cell = y * width + x;
+                if (!IsOpenWater(cell)) continue;
+
+                foreach (var (dx, dy) in Neighbourhood)
+                {
+                    int nx = x + dx, ny = y + dy;
+                    if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+
+                    int id = BaroniedLand(ny * width + nx);
+                    if (id == 0) continue;
+
+                    owner[cell] = id;
+                    dist[cell] = 1;
+                    frontier.Enqueue(cell);
+                    break;
+                }
+            }
+        }
+
+        while (frontier.Count > 0)
+        {
+            int cell = frontier.Dequeue();
+            if (dist[cell] >= maxDistance) continue;
+
+            int x = cell % width, y = cell / width;
+            foreach (var (dx, dy) in Neighbourhood)
+            {
+                int nx = x + dx, ny = y + dy;
+                if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+
+                int next = ny * width + nx;
+                if (owner[next] != 0 || !IsOpenWater(next)) continue;
+
+                owner[next] = owner[cell];
+                dist[next] = dist[cell] + 1;
+                frontier.Enqueue(next);
+            }
+        }
+
+        // Where two fronts meet, the water between their coasts is as wide as the two distances
+        // added together.
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int cell = y * width + x;
+                int a = owner[cell];
+                if (a == 0) continue;
+
+                if (x + 1 < width) Meet(cell, cell + 1);
+                if (y + 1 < height) Meet(cell, cell + width);
+            }
+        }
+
+        return links;
+
+        void Meet(int cell, int other)
+        {
+            int a = owner[cell], b = owner[other];
+            if (b == 0 || a == b) return;
+            if (dist[cell] + dist[other] > maxDistance) return;
+
+            if (!links.TryGetValue(a, out var sa)) links[a] = sa = [];
+            if (!links.TryGetValue(b, out var sb)) links[b] = sb = [];
+            sa.Add(b);
+            sb.Add(a);
+        }
+    }
+
+    /// <summary>
+    /// How many clusters are in more than one piece when only land links count — that is, how many
+    /// realms actually used a sea link. Reported rather than asserted, because the right number
+    /// depends on the map: a single-continent world should show zero and an archipelago most of them.
+    /// </summary>
+    private static int Overseas(List<List<int>> clusters, Dictionary<int, HashSet<int>> landAdjacency)
+    {
+        int split = 0;
+
+        foreach (var cluster in clusters)
+        {
+            if (cluster.Count <= 1) continue;
+
+            var members = cluster.ToHashSet();
+            var seen = new HashSet<int> { cluster[0] };
+            var stack = new Stack<int>([cluster[0]]);
+
+            while (stack.Count > 0)
+            {
+                if (!landAdjacency.TryGetValue(stack.Pop(), out var neighbours)) continue;
+                foreach (int next in neighbours)
+                    if (members.Contains(next) && seen.Add(next)) stack.Push(next);
+            }
+
+            if (seen.Count < cluster.Count) split++;
+        }
+
+        return split;
+    }
+
+    /// <summary>Land and sea links together, for the tiers allowed to cross water.</summary>
+    private static Dictionary<int, HashSet<int>> Union(
+        Dictionary<int, HashSet<int>> land, Dictionary<int, HashSet<int>> sea)
+    {
+        var merged = new Dictionary<int, HashSet<int>>(land.Count);
+        foreach (var (key, values) in land) merged[key] = [.. values];
+
+        foreach (var (key, values) in sea)
+        {
+            if (!merged.TryGetValue(key, out var set)) merged[key] = set = [];
+            set.UnionWith(values);
+        }
+
+        return merged;
     }
 
     private static List<List<int>> Cluster(
@@ -139,10 +301,15 @@ public static class Titles
         return lifted;
     }
 
-    public static List<Title> Build(ProvinceMap map, int landCount, int[] order, Rng rng)
+    public static List<Title> Build(ProvinceMap map, int landCount, int[] order, MapConfig cfg, Rng rng)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var adjacency = BuildAdjacency(map, landCount, order);
+
+        // Kept separate from the land adjacency all the way up, and merged in only where a realm is
+        // allowed to cross water — see BuildSeaAdjacency.
+        int bridge = (int)Math.Round(cfg.Scaled(cfg.SeaBridgePixelsAtVanilla));
+        var seaAdjacency = BuildSeaAdjacency(map, landCount, order, bridge);
 
         var provinceIds = Enumerable.Range(1, landCount).ToList();
         var baronies = new List<Title>(landCount);
@@ -155,22 +322,31 @@ public static class Titles
         var counties = Wrap("c", countyClusters, c => c.Select(p => byProvince[p]));
 
         var duchyAdjacency = LiftAdjacency(countyClusters, adjacency);
+        var duchySea = LiftAdjacency(countyClusters, seaAdjacency);
         var duchyClusters = Cluster(Enumerable.Range(0, counties.Count).ToList(), duchyAdjacency, MinCountiesPerDuchy, MaxCountiesPerDuchy, rng);
         var duchies = Wrap("d", duchyClusters, c => c.Select(i => counties[i]));
 
+        // From here up, water is a road rather than a wall.
         var kingdomAdjacency = LiftAdjacency(duchyClusters, duchyAdjacency);
-        var kingdomClusters = Cluster(Enumerable.Range(0, duchies.Count).ToList(), kingdomAdjacency, MinDuchiesPerKingdom, MaxDuchiesPerKingdom, rng);
+        var kingdomSea = LiftAdjacency(duchyClusters, duchySea);
+        var kingdomClusters = Cluster(Enumerable.Range(0, duchies.Count).ToList(), Union(kingdomAdjacency, kingdomSea), MinDuchiesPerKingdom, MaxDuchiesPerKingdom, rng);
         var kingdoms = Wrap("k", kingdomClusters, c => c.Select(i => duchies[i]));
 
         var empireAdjacency = LiftAdjacency(kingdomClusters, kingdomAdjacency);
-        var empireClusters = Cluster(Enumerable.Range(0, kingdoms.Count).ToList(), empireAdjacency, MinKingdomsPerEmpire, MaxKingdomsPerEmpire, rng);
+        var empireSea = LiftAdjacency(kingdomClusters, kingdomSea);
+        var empireClusters = Cluster(Enumerable.Range(0, kingdoms.Count).ToList(), Union(empireAdjacency, empireSea), MinKingdomsPerEmpire, MaxKingdomsPerEmpire, rng);
         var empires = Wrap("e", empireClusters, c => c.Select(i => kingdoms[i]));
 
         AssignColors(empires, rng);
 
+        int seaLinked = seaAdjacency.Values.Sum(s => s.Count) / 2;
         Console.WriteLine($"  titles: {empires.Count} empires, {kingdoms.Count} kingdoms, " +
                           $"{duchies.Count} duchies, {counties.Count} counties, {baronies.Count} baronies " +
                           $"({sw.ElapsedMilliseconds} ms)");
+        Console.WriteLine($"  sea links: {seaLinked} province pairs within {bridge} px of water — " +
+                          $"{Overseas(kingdomClusters, duchyAdjacency)} of {kingdoms.Count} kingdoms and " +
+                          $"{Overseas(empireClusters, kingdomAdjacency)} of {empires.Count} empires " +
+                          $"span more than one landmass");
         return empires;
 
         static List<Title> Wrap(string tier, List<List<int>> clusters, Func<List<int>, IEnumerable<Title>> resolve)
