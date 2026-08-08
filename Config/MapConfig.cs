@@ -551,6 +551,66 @@ public sealed class MapConfig
     [Description("Added to a county's terrain score if any of its baronies reaches the sea, because a coast is a road when roads are bad.")]
     public double DevelopmentCoastBonus { get; set; } = 0.12;
 
+
+    // --- Cultures and faiths ---
+    //
+    // Vanilla's own proportions, for calibration: ~193 cultures in ~40 heritages, and ~120 faiths
+    // in ~48 religions, over 3,827 counties. That is roughly one culture per 20 counties, five
+    // cultures to a heritage, and a religious map a little coarser than the cultural one.
+
+    /// <summary>Counties a generated culture covers on average. Lower makes a more fragmented world.</summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("14 Cultures and faiths")]
+    [Description("Counties per generated culture. Vanilla averages about 20; lower values make a more fragmented, more polyglot world.")]
+    public double CountiesPerCulture { get; set; } = 18;
+
+    /// <summary>
+    /// Cultures sharing one heritage and one language. This is what decides how related neighbours
+    /// are: CK3's acceptance, hybridisation and divergence all key off shared heritage, so a world
+    /// of one-culture heritages is a world where nobody can ever get along with anybody.
+    /// </summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("14 Cultures and faiths")]
+    [Description("Cultures sharing one heritage and language. Higher values give large related families like vanilla's Frankish or North Germanic groups; 1 gives a world where no two cultures are relatives.")]
+    public double CulturesPerHeritage { get; set; } = 4;
+
+    /// <summary>
+    /// How strongly culture borders follow the ground. 0 ignores terrain entirely and gives a plain
+    /// voronoi; 1 uses the authored crossing costs as written.
+    /// </summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("14 Cultures and faiths")]
+    [Description("How strongly culture borders follow terrain. 0 ignores the ground and cuts straight over mountains; 1 makes ranges and deserts into language barriers.")]
+    public double CultureTerrainWeight { get; set; } = 1.0;
+
+    /// <summary>Counties a generated faith covers on average. Coarser than cultures, as in vanilla.</summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("14 Cultures and faiths")]
+    [Description("Counties per generated faith. Deliberately coarser than cultures — vanilla runs about 120 faiths against 193 cultures.")]
+    public double CountiesPerFaith { get; set; } = 26;
+
+    /// <summary>Faiths sharing one religion, and therefore its doctrines and its gods.</summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("14 Cultures and faiths")]
+    [Description("Faiths sharing one religion. Faiths of a religion are heresies of each other: same gods, different doctrine, and a much smaller penalty for converting between them.")]
+    public double FaithsPerReligion { get; set; } = 2.5;
+
+    /// <summary>
+    /// The faith equivalent of <see cref="CultureTerrainWeight"/>, and deliberately lower. If the
+    /// two matched, faith borders would land on culture borders and the map would have only one
+    /// axis of difference on it.
+    /// </summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("14 Cultures and faiths")]
+    [Description("How strongly faith borders follow terrain. Kept below the culture weight on purpose: matching them puts every faith border on a culture border, and the interesting map is the one where they disagree.")]
+    public double FaithTerrainWeight { get; set; } = 0.45;
+
+    /// <summary>Holy sites each faith declares, placed on its highest-development counties.</summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("14 Cultures and faiths")]
+    [Description("Holy sites per generated faith, placed on its richest counties. Vanilla faiths carry five.")]
+    public int HolySitesPerFaith { get; set; } = 5;
+
     /// <summary>
     /// Smallest allowed province in pixels. Below this CK3 cannot derive borders, a centroid or
     /// locator positions and crashes in geometry code without logging anything.

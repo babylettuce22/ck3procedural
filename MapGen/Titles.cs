@@ -32,54 +32,6 @@ public static class Titles
     public const int MinKingdomsPerEmpire = 3;
     public const int MaxKingdomsPerEmpire = 5;
 
-    // --- Handcrafted Names ---
-    private static readonly string[] NamesE = ["Nordriki", "Vestrriki", "Austrriki", "Skandaland", "Midgardr", "Skandinavia", "Gautariki", "Sveariki"];
-    private static readonly string[] NamesK = ["Noregr", "Svitjod", "Danmork", "Island", "Gautland", "Jamtland", "Trondelag", "Halogaland", "Agder", "Rogaland", "Viken"];
-    private static readonly string[] NamesD = ["Hordafylki", "Rogafylki", "Sygnafylki", "Raumariki", "Ranriki", "Alvheimar", "Grenland", "Telemark", "Valdres", "Hadaland"];
-    private static readonly string[] NamesC = ["Oslo", "Bergen", "Nidaros", "Tonsberg", "Stavanger", "Tromso", "Alesund", "Skien", "Hamar", "Sarpsborg", "Geilo", "Flam", "Eidfjord"];
-    private static readonly string[] NamesB = ["Heim", "Vik", "Nes", "Stad", "Dal", "Berg", "Voll", "Haugr", "Bru", "Tun", "Gardr", "Akr", "Sandr", "Myrr", "Skogr"];
-
-    // --- Expanded Procedural Syllable Pools ---
-    private static readonly string[] Prefixes = [
-        "As", "Arn", "Bjorn", "Dag", "Egil", "Fjord", "Gunn", "Hald", "Ing", "Ketil",
-        "Lind", "Mund", "Nord", "Ost", "Sig", "Tor", "Ulf", "Val", "Vest", "Alv",
-        "Brand", "Einar", "Frey", "Grim", "Haakon", "Ivar", "Jarl", "Kare", "Leif", "Magn",
-        "Odd", "Ragn", "Sten", "Tryg", "Vig", "Yng", "Aki", "Bror", "Gud", "Hjalm",
-        "Karl", "Loke", "Orm", "Rune", "Sverr", "Thor", "Vidar", "Sigh", "Kjell", "Bryn"
-    ];
-
-    private static readonly string[] Infixes = [
-        "ar", "en", "is", "al", "or", "un", "in", "at", "um", "ald",
-        "var", "vald", "gard", "fyr", "sjo", "sten", "vold", "dal", "berg"
-    ];
-
-    private static readonly string[] SuffixesB = [
-        "heim", "vik", "nes", "stad", "dal", "berg", "voll", "bru", "tun", "set",
-        "haugr", "akr", "sandr", "myrr", "skogr", "gardr", "torp", "holt", "kilde", "moen"
-    ];
-
-    private static readonly string[] SuffixesC = [
-        "by", "stad", "fjord", "sund", "gard", "nes", "dal", "berg", "vik", "heim",
-        "tun", "hus", "kaupang", "torp", "holt", "vang", "moen", "land", "var", "kile"
-    ];
-
-    private static readonly string[] SuffixesD = ["fylki", "sysla", "mark", "rike", "land", "heimen", "bygd", "fylke"];
-    private static readonly string[] SuffixesK = ["land", "riki", "veldi", "mork", "reich", "velde"];
-
-    // Thematic prefix modifiers to resolve collisions naturally before falling back to numbers
-    private static readonly string[] DescriptivePrefixes = [
-        "Efra",   // Upper
-        "Nedra",  // Lower
-        "Nyr",    // New
-        "Gammel", // Old
-        "Austr",  // East
-        "Vestr",  // West
-        "Sydr",   // South
-        "Nordr",  // North
-        "Stora",  // Great
-        "Lilla"   // Little
-    ];
-
     public static Dictionary<int, HashSet<int>> BuildAdjacency(ProvinceMap map, int landCount, int[] order)
     {
         var adjacency = new Dictionary<int, HashSet<int>>();
@@ -214,7 +166,7 @@ public static class Titles
         var empireClusters = Cluster(Enumerable.Range(0, kingdoms.Count).ToList(), empireAdjacency, MinKingdomsPerEmpire, MaxKingdomsPerEmpire, rng);
         var empires = Wrap("e", empireClusters, c => c.Select(i => kingdoms[i]));
 
-        AssignKeysAndColors(empires, rng);
+        AssignColors(empires, rng);
 
         Console.WriteLine($"  titles: {empires.Count} empires, {kingdoms.Count} kingdoms, " +
                           $"{duchies.Count} duchies, {counties.Count} counties, {baronies.Count} baronies " +
@@ -238,114 +190,77 @@ public static class Titles
         }
     }
 
-    private static void AssignKeysAndColors(List<Title> roots, Rng rng)
+    private static void AssignColors(List<Title> roots, Rng rng)
     {
-        var usedKeys = new HashSet<string>();
-
         foreach (var root in roots) Visit(root);
 
         void Visit(Title title)
         {
-            var (name, key) = GenerateThematicName(title.Tier, rng, usedKeys);
-            title.Name = name;
-            title.Key = key;
-
             title.Color = ((byte)rng.Int(20, 235), (byte)rng.Int(20, 235), (byte)rng.Int(20, 235));
             foreach (var child in title.Children) Visit(child);
         }
     }
 
-    private static (string Name, string Key) GenerateThematicName(string tier, Rng rng, HashSet<string> usedKeys)
+    /// <summary>
+    /// Names every title in the language of whoever lives there.
+    ///
+    /// This is a separate pass from <see cref="Build"/> because it cannot run until cultures exist,
+    /// and cultures cannot be assigned until the county hierarchy does — so the order is structure,
+    /// then culture, then names. Nothing reads a title's name or key in between.
+    ///
+    /// The alternative, which this replaces, was a single hand-written pool of Norse place names
+    /// used everywhere. That is fine on a map with one culture on it and actively misleading on a
+    /// map with forty: a player reads place names as evidence of who settled a place, so a Norse
+    /// county name in the middle of a desert culture's territory is a false statement about the
+    /// world. Drawing from the local culture's own phonology means the map's names carry the same
+    /// information its colours do.
+    /// </summary>
+    public static void AssignNames(List<Title> roots, CultureMap cultures, Rng rng)
     {
-        string baseName = "";
-        string[] pool = tier switch
-        {
-            "e" => NamesE,
-            "k" => NamesK,
-            "d" => NamesD,
-            "c" => NamesC,
-            _ => NamesB
-        };
+        var usedKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var root in roots) Visit(root);
 
-        // Try hand-crafted names first
-        var unusedFromPool = pool.Where(p => !usedKeys.Contains($"{tier}_{CleanKey(p)}")).ToList();
-        if (unusedFromPool.Count > 0)
+        void Visit(Title title)
         {
-            baseName = PickRandom(unusedFromPool, rng);
-        }
-        else
-        {
-            // Grammatical generation with multiple patterns to produce huge variance
-            string prefix = PickRandom(Prefixes, rng);
-            string suffix = tier switch
+            var language = cultures.For(title).Language;
+            var suffixes = title.Tier switch
             {
-                "e" => PickRandom(SuffixesK, rng) + "r",
-                "k" => PickRandom(SuffixesK, rng),
-                "d" => PickRandom(SuffixesD, rng),
-                "c" => PickRandom(SuffixesC, rng),
-                _ => PickRandom(SuffixesB, rng)
+                "e" => language.KingdomSuffixes,
+                "k" => language.KingdomSuffixes,
+                "d" => language.DuchySuffixes,
+                "c" => language.CountySuffixes,
+                _ => language.BaronySuffixes,
             };
 
-            int pattern = rng.Int(0, 3);
-            if (pattern == 0)
+            // A generated language has effectively unlimited names, so a collision is answered by
+            // drawing again rather than by decorating the clashing name. Only if the language is
+            // genuinely too small to produce a fresh one does this fall back to numbering.
+            string name = language.PlaceName(rng, suffixes);
+            string key = $"{title.Tier}_{CleanKey(name)}";
+
+            // The length test is on the *name*, not the key — a one-letter place called O still
+            // makes a perfectly unique key, and "c_o" on the map is what a reader notices.
+            for (int attempt = 0; attempt < 24 && (name.Length < 3 || usedKeys.Contains(key)); attempt++)
             {
-                // Prefix + Infix + Suffix (e.g. As-ar-by)
-                string infix = PickRandom(Infixes, rng);
-                baseName = prefix + infix + suffix;
+                name = language.PlaceName(rng, suffixes);
+                key = $"{title.Tier}_{CleanKey(name)}";
             }
-            else if (pattern == 1)
-            {
-                // Modifier + Prefix + Suffix (e.g. Efra As-by)
-                string modifier = PickRandom(DescriptivePrefixes, rng);
-                baseName = $"{modifier} {prefix}{suffix}";
-            }
-            else
-            {
-                // Standard Prefix + Suffix (e.g. As-by)
-                baseName = prefix + suffix;
-            }
+
+            for (int suffix = 2; usedKeys.Contains(key); suffix++)
+                key = $"{title.Tier}_{CleanKey(name)}_{suffix}";
+
+            usedKeys.Add(key);
+            title.Name = name;
+            title.Key = key;
+
+            foreach (var child in title.Children) Visit(child);
         }
-
-        string cleanKey = $"{tier}_{CleanKey(baseName)}";
-        string finalKey = cleanKey;
-        string finalName = baseName;
-
-        // Smart deduplication: try applying descriptive prefixes first before appending raw numbers
-        int modifierIndex = 0;
-        int numericCounter = 1;
-
-        while (!usedKeys.Add(finalKey))
-        {
-            if (modifierIndex < DescriptivePrefixes.Length)
-            {
-                // Converts "Oslo" -> "Efra Oslo", "Vestr Oslo", etc.
-                string prefix = DescriptivePrefixes[modifierIndex++];
-                finalName = $"{prefix} {baseName}";
-                finalKey = $"{tier}_{CleanKey(finalName)}";
-            }
-            else
-            {
-                // Last resort fallback: "Oslo 2", "Oslo 3"
-                numericCounter++;
-                finalKey = $"{cleanKey}_{numericCounter}";
-                finalName = $"{baseName} {numericCounter}";
-            }
-        }
-
-        return (finalName, finalKey);
     }
 
     private static string CleanKey(string input)
     {
         string cleaned = input.ToLower().Replace(" ", "_");
         return Regex.Replace(cleaned, "[^a-z0-9_]", "");
-    }
-
-    private static T PickRandom<T>(IReadOnlyList<T> list, Rng rng)
-    {
-        if (list.Count == 0) return default!;
-        int idx = Math.Clamp(rng.Int(0, list.Count - 1), 0, list.Count - 1);
-        return list[idx];
     }
 
     public static IEnumerable<Title> Flatten(IEnumerable<Title> roots)

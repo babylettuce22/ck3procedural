@@ -43,7 +43,12 @@ public static class Development
     };
 
     /// <summary>
-    /// Development per county title, keyed by title key.
+    /// Development per county title.
+    ///
+    /// Keyed by the <see cref="Title"/> itself rather than by its key string, because development
+    /// is now computed *before* titles are named — a title is named in the language of whoever
+    /// lives there, cultures are placed partly on how rich a county is, and a dictionary keyed on
+    /// names that do not exist yet cannot express that.
     ///
     /// Counties are ranked against each other and the level comes from the rank, not from the raw
     /// terrain score. That is the same reasoning the terrain classifier uses for its hill, mountain
@@ -57,7 +62,7 @@ public static class Development
     /// that set one: mass between 0 and 16, median near 8, a thin tail to 60 — a handful of
     /// Constantinoples above a great many backwaters.
     /// </summary>
-    public static Dictionary<string, int> ForCounties(List<Title> counties,
+    public static Dictionary<Title, int> ForCounties(List<Title> counties,
         TerrainClass[] provinceTerrain, MapConfig cfg, Rng rng)
     {
         var scored = new List<(Title County, double Score)>(counties.Count);
@@ -90,7 +95,7 @@ public static class Development
         // the score, so counties on identical terrain do not all land on the same number.
         scored.Sort((a, b) => a.Score.CompareTo(b.Score));
 
-        var result = new Dictionary<string, int>(scored.Count);
+        var result = new Dictionary<Title, int>(scored.Count);
         for (int i = 0; i < scored.Count; i++)
         {
             double rank = scored.Count == 1 ? 1.0 : i / (double)(scored.Count - 1);
@@ -98,7 +103,7 @@ public static class Development
             int level = (int)Math.Round(cfg.DevelopmentBase + curved * cfg.DevelopmentSpread
                                         * cfg.DevelopmentScale);
 
-            result[scored[i].County.Key] = Math.Clamp(level, 0, 100);
+            result[scored[i].County] = Math.Clamp(level, 0, 100);
         }
 
         return result;

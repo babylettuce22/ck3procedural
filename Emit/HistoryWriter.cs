@@ -1,5 +1,6 @@
 ﻿using System.Text;
 using Ck3MapGen.Config;
+using Ck3MapGen.Core;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
 
@@ -12,81 +13,45 @@ public static class HistoryWriter
 {
     public const string StartDate = "867.1.1";
     private const string BirthDate = "830.1.1";
-    public const string Culture = "norwegian";
-    public const string Faith = "norse_pagan";
 
     public const string BookmarkCharacter = "bookmark_generated_ruler";
     public const string ChallengeCharacter = "challenge_character_generated";
 
-    // Authentic Norse/Norwegian male first names
-    private static readonly string[] MaleFirstNames = [
-        "Harald", "Bjorn", "Sigurd", "Ragnar", "Ivar", "Halfdan", "Erik", "Hastein",
-        "Guthred", "Knut", "Olaf", "Hakon", "Magnus", "Torstein", "Vidar", "Leif",
-        "Gunnar", "Arvid", "Egil", "Frode", "Gorm", "Halvar", "Orm", "Skarde",
-        "Snorri", "Trygve", "Ulf", "Alfr", "Asgautr", "Asbjorn", "Asmundr", "Birger",
-        "Eysteinn", "Gautr", "Grimr", "Hallvardr", "Helgi", "Ketill", "Runolf",
-        "Sveinn", "Thorir", "Thorgils", "Valdemar", "Yngvar"
-    ];
-
-    // Historical Norse dynasty/clan bases
-    private static readonly string[] DynastyBases = [
-        "Yngling", "Knytling", "Munso", "Skjoldung", "Lodbrok", "Harfagre", "Crovan",
-        "Giske", "Sudreim", "Bolt", "Ramsay", "Somerled", "Orkney", "Hlada", "Skuleson",
-        "Ulfsson", "Sigurdsson", "Ivarsson", "Ragnarsson", "Eiriksson", "Olafsson"
-    ];
-
     /// <summary>
-    /// Generates highly thematic first and dynasty names deterministically for each county.
+    /// The name a ruler and their house carry, drawn from their own culture's stock.
+    ///
+    /// Both come out of the pools <see cref="CultureWriter"/> has already written into the culture's
+    /// name list and localised, so a count is named the same way his culture names anyone else and
+    /// no extra localisation is needed here. Seeded off the county index rather than off a shared
+    /// stream so the same county yields the same ruler between runs.
     /// </summary>
-    private static (string FirstName, string DynastyName) GetRulerNames(Title county)
+    private static (string FirstName, string DynastyName) RulerNames(Title county, Culture culture)
     {
-        // Seeding with the county index ensures name generation is consistent between builds
-        var rand = new Random(county.Index + 505);
+        var rng = new Rng(county.Index ^ 0x5A17);
 
-        string firstName = MaleFirstNames[rand.Next(MaleFirstNames.Length)];
-        string dynastyName;
+        string first = culture.MaleNames.Count > 0
+            ? culture.MaleNames[rng.Int(0, culture.MaleNames.Count - 1)]
+            : culture.Name;
 
-        int style = rand.Next(3);
-        if (style == 0)
-        {
-            // Style 1: Prestigious historical clan name
-            dynastyName = DynastyBases[rand.Next(DynastyBases.Length)];
-        }
-        else if (style == 1)
-        {
-            // Style 2: Patronymic (e.g. "Sigurdsson")
-            string fatherName = MaleFirstNames[rand.Next(MaleFirstNames.Length)];
-            string suffix = fatherName.EndsWith("s") || fatherName.EndsWith("r") ? "son" : "sson";
-            dynastyName = fatherName + suffix;
-        }
-        else
-        {
-            // Style 3: Territorial ("af [County Name]")
-            // Fall back to a normal dynasty name if the county names are still system placeholders
-            if (county.Name.StartsWith("Generated County"))
-            {
-                dynastyName = DynastyBases[rand.Next(DynastyBases.Length)];
-            }
-            else
-            {
-                dynastyName = $"af {county.Name}";
-            }
-        }
+        string dynasty = culture.DynastyNames.Count > 0
+            ? culture.DynastyNames[rng.Int(0, culture.DynastyNames.Count - 1)]
+            : culture.Name;
 
-        return (firstName, dynastyName);
+        return (first, dynasty);
     }
 
     public static void WriteAll(string modDir, MapConfig cfg, List<Title> empires,
-        Dictionary<string, int> development)
+        Dictionary<Title, int> development, CultureMap cultures, FaithMap faiths)
     {
         var counties = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
         if (counties.Count == 0) return;
 
-        WriteDynasties(modDir, counties);
-        WriteCharacters(modDir, counties);
+        WriteDynasties(modDir, counties, cultures);
+        WriteCharacters(modDir, counties, cultures, faiths);
         WriteTitleHistory(modDir, counties, development);
-        WriteBookmark(modDir, cfg, counties);
-        WriteChallengeCharacter(modDir, counties);
+        WriteBookmark(modDir, cfg, counties, cultures, faiths);
+        WriteChallengeCharacter(modDir, counties, cultures, faiths);
+        WriteBookmarkLocalisation(modDir, counties, cultures);
 
         Console.WriteLine($"  history: {counties.Count} rulers holding {counties.Count} counties, " +
                           $"{counties.Count} dynasties, 1 bookmark at {StartDate}");
@@ -96,7 +61,15 @@ public static class HistoryWriter
 
     private static string DynastyId(Title county) => $"gen_dynasty_{county.Index}";
 
-    private static void WriteDynasties(string modDir, List<Title> counties)
+    /// <summary>
+    /// One house per county, named from its culture's dynasty stock.
+    ///
+    /// The `name` is the localisation key `dynn_&lt;Name&gt;`, which <see cref="CultureWriter"/>
+    /// already emits for every dynasty name in every culture's list — so unlike the previous
+    /// scheme there is no per-dynasty localisation to write here, and two counties that draw the
+    /// same house name correctly share one displayed name.
+    /// </summary>
+    private static void WriteDynasties(string modDir, List<Title> counties, CultureMap cultures)
     {
         string dir = Path.Combine(modDir, "common", "dynasties");
         Directory.CreateDirectory(dir);
@@ -104,29 +77,20 @@ public static class HistoryWriter
         var sb = new StringBuilder();
         foreach (var county in counties)
         {
+            var culture = cultures.For(county);
+            var (_, dynastyName) = RulerNames(county, culture);
+
             sb.Append($"{DynastyId(county)} = {{\n");
-            sb.Append($"\tname = \"dynn_{DynastyId(county)}\"\n");
-            sb.Append($"\tculture = \"{Culture}\"\n");
+            sb.Append($"\tname = \"dynn_{dynastyName}\"\n");
+            sb.Append($"\tculture = \"{culture.Key}\"\n");
             sb.Append("}\n");
         }
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_dynasties.txt"), sb.ToString());
-
-        string locDir = Path.Combine(modDir, "localization", "english");
-        Directory.CreateDirectory(locDir);
-
-        var loc = new StringBuilder();
-        loc.Append("l_english:\n");
-        foreach (var county in counties)
-        {
-            var (_, dynastyName) = GetRulerNames(county);
-            loc.Append($" dynn_{DynastyId(county)}: \"{dynastyName}\"\n");
-        }
-
-        ParadoxText.WriteBom(Path.Combine(locDir, "gen_dynasties_l_english.yml"), loc.ToString());
     }
 
-    private static void WriteCharacters(string modDir, List<Title> counties)
+    private static void WriteCharacters(string modDir, List<Title> counties, CultureMap cultures,
+        FaithMap faiths)
     {
         string dir = Path.Combine(modDir, "history", "characters");
         Directory.CreateDirectory(dir);
@@ -134,34 +98,50 @@ public static class HistoryWriter
         var sb = new StringBuilder();
         foreach (var county in counties)
         {
+            var culture = cultures.For(county);
+            var (firstName, _) = RulerNames(county, culture);
+
             sb.Append($"{CharacterId(county)} = {{\n");
-            sb.Append($"\tname = \"{CharacterId(county)}\"\n");
+            sb.Append($"\tname = \"{firstName}\"\n");
             sb.Append($"\tdynasty = {DynastyId(county)}\n");
-            sb.Append($"\treligion = {Faith}\n");
-            sb.Append($"\tculture = {Culture}\n");
+            sb.Append($"\treligion = {faiths.For(county).Key}\n");
+            sb.Append($"\tculture = {culture.Key}\n");
             sb.Append($"\t{BirthDate} = {{ birth = yes }}\n");
             sb.Append("\t900.1.1 = { death = yes }\n");
             sb.Append("}\n");
         }
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_characters.txt"), sb.ToString());
+    }
 
-        string locDir = Path.Combine(modDir, "localization", "english");
-        Directory.CreateDirectory(locDir);
+    /// <summary>
+    /// The two frontend characters keep fixed identifiers because
+    /// <see cref="PortraitWriter"/> names their portrait files after them, so their displayed names
+    /// have to be localised here rather than coming out of a culture's name list.
+    /// </summary>
+    private static void WriteBookmarkLocalisation(string modDir, List<Title> counties,
+        CultureMap cultures)
+    {
+        string dir = Path.Combine(modDir, "localization", "english");
+        Directory.CreateDirectory(dir);
 
-        var loc = new StringBuilder();
-        loc.Append("l_english:\n");
-        foreach (var county in counties)
-        {
-            var (firstName, _) = GetRulerNames(county);
-            loc.Append($" {CharacterId(county)}: \"{firstName}\"\n");
-        }
+        var bookmarkCounty = counties[0];
+        var challengeCounty = counties[counties.Count > 1 ? 1 : 0];
 
-        ParadoxText.WriteBom(Path.Combine(locDir, "gen_characters_l_english.yml"), loc.ToString());
+        var (bookmarkName, _) = RulerNames(bookmarkCounty, cultures.For(bookmarkCounty));
+        var (challengeName, _) = RulerNames(challengeCounty, cultures.For(challengeCounty));
+
+        ParadoxText.WriteBom(Path.Combine(dir, "gen_history_l_english.yml"),
+            $"""
+             l_english:
+              {BookmarkCharacter}:0 "{bookmarkName}"
+              {ChallengeCharacter}:0 "{challengeName}"
+
+             """);
     }
 
     private static void WriteTitleHistory(string modDir, List<Title> counties,
-        Dictionary<string, int> development)
+        Dictionary<Title, int> development)
     {
         string dir = Path.Combine(modDir, "history", "titles");
         Directory.CreateDirectory(dir);
@@ -172,7 +152,7 @@ public static class HistoryWriter
             // Development is a county property and belongs in the same dated block as the holder.
             // CK3 applies change_development_level as a delta from zero at that date, so this is
             // the level the county starts at.
-            int level = development.GetValueOrDefault(county.Key);
+            int level = development.GetValueOrDefault(county);
 
             sb.Append($"{county.Key} = {{\n");
             sb.Append($"\t{StartDate} = {{\n");
@@ -185,12 +165,15 @@ public static class HistoryWriter
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_titles.txt"), sb.ToString());
     }
 
-    private static void WriteChallengeCharacter(string modDir, List<Title> counties)
+    private static void WriteChallengeCharacter(string modDir, List<Title> counties,
+        CultureMap cultures, FaithMap faiths)
     {
         string dir = Path.Combine(modDir, "common", "bookmarks", "challenge_characters");
         Directory.CreateDirectory(dir);
 
         var county = counties[counties.Count > 1 ? 1 : 0];
+        string culture = cultures.For(county).Key;
+        string faith = faiths.For(county).Key;
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_challenge.txt"),
             $$"""
@@ -205,8 +188,8 @@ public static class HistoryWriter
               		birth = {{BirthDate}}
               		title = {{county.Key}}
               		government = feudal_government
-              		culture = {{Culture}}
-              		religion = {{Faith}}
+              		culture = {{culture}}
+              		religion = {{faith}}
               		difficulty = "BOOKMARK_CHARACTER_DIFFICULTY_MEDIUM"
               		history_id = {{CharacterId(county)}}
               	}
@@ -215,12 +198,15 @@ public static class HistoryWriter
               """);
     }
 
-    private static void WriteBookmark(string modDir, MapConfig cfg, List<Title> counties)
+    private static void WriteBookmark(string modDir, MapConfig cfg, List<Title> counties,
+        CultureMap cultures, FaithMap faiths)
     {
         string dir = Path.Combine(modDir, "common", "bookmarks", "bookmarks");
         Directory.CreateDirectory(dir);
 
         var county = counties[0];
+        string culture = cultures.For(county).Key;
+        string faith = faiths.For(county).Key;
         int x = cfg.ProvinceWidth / 2;
         int y = cfg.ProvinceHeight / 2;
 
@@ -243,8 +229,8 @@ public static class HistoryWriter
               		birth = {{BirthDate}}
               		title = {{county.Key}}
               		government = feudal_government
-              		culture = {{Culture}}
-              		religion = {{Faith}}
+              		culture = {{culture}}
+              		religion = {{faith}}
               		difficulty = "BOOKMARK_CHARACTER_DIFFICULTY_MEDIUM"
               		history_id = {{CharacterId(county)}}
               		position = { {{x}} {{y}} }

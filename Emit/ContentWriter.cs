@@ -29,19 +29,50 @@ public static class ContentWriter
         var landMask = LandMaskFromProvinces(cfg, provinces, order, landCount);
         var terrain = TerrainClassifier.Classify(world, cfg, provinceElevation, landMask, rng);
         var provinceTerrain = ProvinceTerrain(cfg, provinces, order, terrain, landCount);
+        ReportTerrain(terrain);
+
+        // --- The order below is forced, and each step needs the one before it ---
+        //
+        // Titles arrive from Titles.Build with a structure and colours but no names, because a
+        // title is named in the language of whoever lives there and nobody lives anywhere until
+        // cultures are assigned. Cultures and faiths in turn read how rich a county is, so
+        // development comes first — which is why it is keyed by Title and not by title key.
+        //
+        // So: development, cultures, names, faiths. Nothing reads a title's name before
+        // AssignNames runs, and everything that writes one runs after it.
+        var vocabulary = MapGen.VanillaVocabulary.Read(gameDir);
+
+        // Fail here rather than three writers later. Without a vocabulary every generated culture
+        // and faith would reference an ethos, a tradition and a doctrine that do not exist, and CK3
+        // reports that as a wall of unrelated script errors with nothing pointing back to the cause.
+        if (!vocabulary.IsUsable)
+            throw new InvalidOperationException(
+                $"Could not read enough of the game's own culture and religion data from '{gameDir}' " +
+                "to generate against. Check that the game directory is correct and uncompressed.");
+
+        var counties = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
 
         // Derived once and shared: the county's development and its baronies' holdings have to
         // agree, and they are written by two different emitters into two different directories.
-        var counties = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
         var development = MapGen.Development.ForCounties(counties, provinceTerrain, cfg,
             new Rng(cfg.Seed ^ 0x0DE7));
         ReportDevelopment(development);
-        ReportTerrain(terrain);
+
+        var cultures = MapGen.Cultures.Build(empires, provinces, order, landCount, provinceTerrain,
+            development, vocabulary, cfg, new Rng(cfg.Seed ^ 0x0C17));
+
+        Titles.AssignNames(empires, cultures, new Rng(cfg.Seed ^ 0x7171));
+
+        var faiths = MapGen.Faiths.Build(empires, provinces, order, landCount, provinceTerrain,
+            development, vocabulary, cfg, new Rng(cfg.Seed ^ 0x0FA1));
 
         WriteLandedTitles(modDir, empires);
         WriteProvinceTerrain(modDir, provinceTerrain, landCount);
-        WriteProvinceHistory(modDir, empires, provinceTerrain, development, cfg.Seed);
+        WriteProvinceHistory(modDir, empires, provinceTerrain, development, cultures, faiths, cfg.Seed);
         WriteLocalisation(modDir, empires);
+
+        // The cultures and faiths themselves. Additive — vanilla's stay declared and unheld.
+        CultureWriter.WriteAll(modDir, cultures, vocabulary, new Rng(cfg.Seed ^ 0x0C1A));
 
         // The engine's world size must match the province map we ship.
         CompatibilityWriter.WriteDefines(modDir, cfg);
@@ -51,6 +82,10 @@ public static class ContentWriter
 
         // Faiths hold their holy sites, so a site with no county leaves a dangling object.
         CompatibilityWriter.WriteHolySites(modDir, gameDir, empires);
+
+        // MUST follow WriteHolySites, which recreates that whole directory and would otherwise
+        // delete the generated faiths' own sites along with it.
+        ReligionWriter.WriteAll(modDir, faiths);
 
         // Vanilla/DLC script hardcodes title keys, and the coat of arms system dereferences
         // whatever it gets back when the lookup fails.
@@ -81,7 +116,7 @@ public static class ContentWriter
         // into "map and titles" versus "characters, dynasties and the bookmark".
         if (writeHistory)
         {
-            HistoryWriter.WriteAll(modDir, cfg, empires, development);
+            HistoryWriter.WriteAll(modDir, cfg, empires, development, cultures, faiths);
 
             // Every bookmark and challenge character needs a portrait entry or the engine holds
             // a null one.
@@ -248,12 +283,7 @@ public static class ContentWriter
         ParadoxText.WriteBom(Path.Combine(dir, "00_province_terrain.txt"), sb.ToString());
     }
 
-    /// <summary>
-    /// Minimal province history. Every county needs a culture and faith or CK3 falls back and
-    /// complains; holdings are what make a barony playable. Reuses vanilla culture/faith ids
-    /// for now — task 7 swaps in generated ones.
-    /// </summary>
-    private static void ReportDevelopment(Dictionary<string, int> development)
+    private static void ReportDevelopment(Dictionary<Title, int> development)
     {
         if (development.Count == 0) return;
         var levels = development.Values.OrderBy(v => v).ToList();
@@ -262,8 +292,17 @@ public static class ContentWriter
                           $"(vanilla 867: median 8, mass 0-16)");
     }
 
+    /// <summary>
+    /// Minimal province history. Every county needs a culture and faith or CK3 falls back and
+    /// complains; holdings are what make a barony playable.
+    ///
+    /// Culture and faith are read per county rather than per barony, so a county is never split
+    /// between two peoples — the partitions are county-grained by construction and this is where
+    /// that shows.
+    /// </summary>
     private static void WriteProvinceHistory(string modDir, List<Title> empires,
-        TerrainClass[] provinceTerrain, Dictionary<string, int> development, int cfgSeed)
+        TerrainClass[] provinceTerrain, Dictionary<Title, int> development, CultureMap cultures,
+        FaithMap faiths, int cfgSeed)
     {
         string dir = Path.Combine(modDir, "history", "provinces");
         Directory.CreateDirectory(dir);
@@ -274,7 +313,9 @@ public static class ContentWriter
         var sb = new StringBuilder();
         foreach (var county in Titles.Flatten(empires).Where(t => t.Tier == "c"))
         {
-            int level = development.GetValueOrDefault(county.Key);
+            int level = development.GetValueOrDefault(county);
+            string culture = cultures.For(county).Key;
+            string faith = faiths.For(county).Key;
 
             for (int i = 0; i < county.Children.Count; i++)
             {
@@ -287,8 +328,8 @@ public static class ContentWriter
                 counts[holding] = counts.GetValueOrDefault(holding) + 1;
 
                 sb.Append($"{barony.ProvinceId} = {{\n");
-                sb.Append($"    culture = {HistoryWriter.Culture}\n");
-                sb.Append($"    religion = {HistoryWriter.Faith}\n");
+                sb.Append($"    culture = {culture}\n");
+                sb.Append($"    religion = {faith}\n");
                 sb.Append($"    holding = {holding}\n");
                 sb.Append("}\n");
             }
