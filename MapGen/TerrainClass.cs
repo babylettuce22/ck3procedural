@@ -46,14 +46,12 @@ public enum TerrainClass : byte
 public static class TerrainClassifier
 {
     /// <summary>
-    /// How far inland a beach may reach, and how far from a river course floodplains may, both in
-    /// *vanilla* province pixels. Scaled to the map being generated via
-    /// <see cref="MapConfig.Scaled"/> — left absolute, a beach at <c>tiny</c> would be nine times
-    /// wider relative to the continent it is on than the same beach at <c>vanilla</c>.
+    /// How far inland a beach may reach, in *vanilla* province pixels. Scaled to the map being
+    /// generated via <see cref="MapConfig.Scaled"/> — left absolute, a beach at <c>tiny</c> would
+    /// be nine times wider relative to the continent it is on than the same beach at
+    /// <c>vanilla</c>.
     /// </summary>
     private const int BeachReachAtVanilla = 5;
-
-    private const int FloodplainReachAtVanilla = 1;
 
     /// <summary>
     /// Share of land above the hill and mountain lines, measured off vanilla's own heightmap:
@@ -82,7 +80,7 @@ public static class TerrainClassifier
     private const double WetShareOfLand = 0.72;
 
     public static TerrainClass[] Classify(WorldGrid world, MapConfig cfg, float[] elevation,
-        byte[] landMask, byte[] riverMask, Rng rng)
+        byte[] landMask, Rng rng)
     {
         int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
         int sea = cfg.Limits.SeaLevelUpper;
@@ -99,16 +97,8 @@ public static class TerrainClassifier
         Console.WriteLine($"  terrain thresholds: hills {hills:F0}, mountains {mountains:F0}, " +
                           $"moisture arid {arid} / semi-arid {semiArid} / wet {wet}");
         int BeachReach = Math.Max(1, (int)Math.Round(cfg.Scaled(BeachReachAtVanilla)));
-        int FloodplainReach = Math.Max(1, (int)Math.Round(cfg.Scaled(FloodplainReachAtVanilla)));
 
         var coastDistance = DistanceToWater(landMask, width, height, BeachReach);
-
-        // Distance from each pixel to the nearest river, so a floodplain can be a valley rather
-        // than a line. Rivers are traced on the coarse simulation grid and drawn with Bresenham at
-        // export resolution, so the raw mask is a one-pixel staircase — painted directly as
-        // floodplains it reads as a thin stepped seam across the terrain, not a river valley.
-        // DistanceToWater measures distance to zeroes, so the mask is inverted first.
-        var riverDistance = DistanceToWater(Invert(riverMask), width, height, FloodplainReach);
 
         // Independent fields so wetlands, forest and the lowland sub-variants do not all switch
         // at the same place. ck2rpg uses five separate simplex instances for exactly this.
@@ -150,16 +140,13 @@ public static class TerrainClassifier
                 double nFarm = farmNoise.Unit(x * coarse * 2.3, y * coarse * 2.3);
                 double nEdge = edgeNoise.Unit(x * fine, y * fine);
 
-                // Water features win over everything: they are the ground being visibly wet. The
-                // valley narrows and widens along its length rather than running at one width,
-                // and the noisy edge hides the staircase the upscaled river course would
-                // otherwise leave.
-                if (riverDistance[i] <= FloodplainReach &&
-                    riverDistance[i] <= 1 + nEdge * FloodplainReach)
-                {
-                    result[i] = TerrainClass.Floodplains;
-                    continue;
-                }
+                // Terrain is deliberately no longer painted along river courses. Floodplains used
+                // to be stamped on every pixel within FloodplainReach of a course, which at map
+                // scale reads as a coloured seam tracing each river rather than as a valley floor.
+                // The heightmap already carves the valley and rivers.png already draws the water,
+                // so the paint added nothing but a stripe. TerrainClass.Floodplains stays in the
+                // vocabulary — CK3 accepts it and it is a valid hand-authored choice — but nothing
+                // assigns it now.
 
                 // Beaches hug the coast, with a noisy inland edge so the shore is not a uniform
                 // ribbon. Only below the hill line — a cliff coast is not a beach.
@@ -432,17 +419,6 @@ public static class TerrainClassifier
         }
 
         return a;
-    }
-
-    /// <summary>
-    /// Flips a 0/1 mask, so <see cref="DistanceToWater"/> — which measures distance to zeroes —
-    /// can be reused to measure distance to a feature.
-    /// </summary>
-    private static byte[] Invert(byte[] mask)
-    {
-        var inverted = new byte[mask.Length];
-        for (int i = 0; i < mask.Length; i++) inverted[i] = mask[i] == 0 ? (byte)1 : (byte)0;
-        return inverted;
     }
 
     /// <summary>

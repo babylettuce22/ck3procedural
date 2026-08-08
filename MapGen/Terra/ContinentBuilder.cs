@@ -92,7 +92,18 @@ public static class ContinentBuilder
         // spread — scaling by the spread keeps the coastal gradient the same on every seed.
         float spread = Math.Max(1e-4f, Field.Quantile(mask, null, 0.98) - threshold);
         float landK = 1.5f / spread;
-        float seaK = 2.2f / Math.Max(1e-4f, threshold - Field.Quantile(mask, null, 0.02));
+
+        // The sea floor has to fall away *fast* just offshore. Measured against vanilla, a gentle
+        // ramp here leaves water 20 px out at 13.8/255 where vanilla is at 4.5 — barely below the
+        // 19/255 water plane, so the sea-floor material shows through the water along every coast,
+        // which is the "ocean above water / mud at coastal province borders" symptom.
+        //
+        // The legacy generator got this right for the wrong reason: HeightDetail.ShapeSeafloor used
+        // (1 - nearness^3), whose cube is what made it drop off sharply. Note this only shapes the
+        // *ranking* of depths; the absolute values still come from MapDataWriter's measured
+        // VanillaWaterCurve, which independently forces 85% of water to pure black.
+        float seaK = (float)cfg.TerraShelfSteepness
+                     / Math.Max(1e-4f, threshold - Field.Quantile(mask, null, 0.02));
 
         Parallel.For(0, result.Length, i =>
         {

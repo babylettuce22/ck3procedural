@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 using Ck3MapGen.Io;
@@ -27,10 +27,7 @@ public static class ContentWriter
         // paints the ground — the detail textures, the masks, the colormap and
         // common/province_terrain — is derived from this one array, so none of them can disagree.
         var landMask = LandMaskFromProvinces(cfg, provinces, order, landCount);
-        var riverMask = terra?.RiverMask
-                        ?? Raster.RiverMask(world, cfg.ProvinceWidth, cfg.ProvinceHeight);
-        var terrain = TerrainClassifier.Classify(world, cfg, provinceElevation, landMask,
-            riverMask, rng);
+        var terrain = TerrainClassifier.Classify(world, cfg, provinceElevation, landMask, rng);
         var provinceTerrain = ProvinceTerrain(cfg, provinces, order, terrain, landCount);
         ReportTerrain(terrain);
 

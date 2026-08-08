@@ -329,6 +329,26 @@ public static class MapDataWriter
     /// distribution regardless of what the terrain generator handed over, and it is monotonic, so
     /// the sea floor keeps its shape and only its depth scale changes.
     /// </summary>
+    /// <remarks>
+    /// **Water cannot be matched by rank the way land is, and this curve is kept only as the
+    /// measurement.** Ranking water percentiles onto it reproduces vanilla's *histogram* exactly —
+    /// 85% of water pure black — while getting the thing that actually matters wrong, because a
+    /// pixel's rank is set by how much water is shallower than it, which is a function of how long
+    /// the coastline is, not of how far offshore the pixel sits. Vanilla's map is far more broken
+    /// up than a generated one, so the same 15% shelf allocation spreads much further out to sea
+    /// on ours: measured at 20 px offshore, vanilla reads 4.5/255 and the ranked version of ours
+    /// read 13.8 — a few units under the 19/255 water plane, which is why the sea-floor material
+    /// showed through the water along every coast.
+    ///
+    /// Steepening the generator's depth field does not help either: the remap is by rank, and a
+    /// monotone change to depth leaves every rank exactly where it was. Verified — it moved the
+    /// 20 px figure from 13.8 to 14.2.
+    ///
+    /// Water is therefore mapped from its actual depth via <see cref="MapConfig.TerraShelfDepth"/>
+    /// and <see cref="MapConfig.TerraShelfCurve"/>, which makes shelf width independent of
+    /// coastline length. Land still uses <see cref="VanillaLandCurve"/>, where ranking is right:
+    /// there the question genuinely is "how high is this relative to the rest of the land".
+    /// </remarks>
     private static readonly (double Percent, double Raw)[] VanillaWaterCurve =
     [
         (0, 0), (85, 0), (85.5, 14), (86, 86), (86.5, 270), (87, 526), (87.5, 816),
@@ -396,8 +416,9 @@ public static class MapDataWriter
         const int Bins = 1 << 16;
 
         var landCdf = BuildCdf(e => e > sea, sea, aboveRange, out long landTotal);
-        var waterCdf = BuildCdf(e => e <= sea, min, belowRange, out long waterTotal);
         if (landTotal == 0) return result;
+
+        double shelfDepth = Math.Max(1e-3, cfg.TerraShelfDepth);
 
         Parallel.For(0, elevation.Length, i =>
         {
@@ -405,9 +426,11 @@ public static class MapDataWriter
 
             if (e <= sea)
             {
-                if (waterTotal == 0) { result[i] = 0; return; }
-                double wp = Percentile(waterCdf, e, min, belowRange);
-                result[i] = (ushort)Math.Clamp(SampleCurve(VanillaWaterCurve, wp), 0, WaterLevel16);
+                // Depth-keyed, not rank-keyed. See VanillaWaterCurve's remarks for why ranking
+                // cannot work here.
+                double t = Math.Clamp((sea - e) / shelfDepth, 0, 1);
+                double raw = WaterLevel16 * Math.Pow(1.0 - t, cfg.TerraShelfCurve);
+                result[i] = (ushort)Math.Clamp(raw, 0, WaterLevel16);
                 return;
             }
 
