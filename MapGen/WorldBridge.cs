@@ -2,15 +2,14 @@
 using Ck3MapGen.Core;
 using Ck3MapGen.World;
 
-namespace Ck3MapGen.MapGen.Terra;
+namespace Ck3MapGen.MapGen;
 
 /// <summary>
-/// Fills the existing coarse <see cref="WorldGrid"/> from a Terra result.
+/// Fills the coarse <see cref="WorldGrid"/> from the heightmap.
 ///
-/// Everything downstream of terrain — <see cref="Climate"/>, <see cref="Biome"/>,
+/// Everything downstream — <see cref="Climate"/>, <see cref="Biome"/>,
 /// <see cref="TerrainClassifier"/>, the province partition, titles and every emitter — reads that
-/// grid, so replacing the terrain generator does not have to mean touching any of them. The grid
-/// stops being where terrain is *made* and becomes a coarse summary of it.
+/// grid. It is a coarse summary of the heightmap, never a source of terrain in its own right.
 ///
 /// Elevations are sampled from the province-resolution field rather than re-derived, so the coarse
 /// grid can never disagree with the heightmap about where the coast is.

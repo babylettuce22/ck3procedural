@@ -1,6 +1,6 @@
 using Ck3MapGen.Config;
 
-namespace Ck3MapGen.MapGen.Terra;
+namespace Ck3MapGen.MapGen;
 
 /// <summary>
 /// Draws the smoothed river courses onto the province-resolution raster CK3 reads as rivers.png.

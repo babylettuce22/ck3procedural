@@ -1,6 +1,6 @@
 using Ck3MapGen.Core;
 
-namespace Ck3MapGen.MapGen.Terra;
+namespace Ck3MapGen.MapGen;
 
 /// <summary>
 /// Scalar-field helpers shared by the terrain stages.

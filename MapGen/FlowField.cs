@@ -1,4 +1,4 @@
-namespace Ck3MapGen.MapGen.Terra;
+namespace Ck3MapGen.MapGen;
 
 /// <summary>
 /// Drainage: depression filling, flow direction and flow accumulation. Every hydraulic thing in

@@ -196,7 +196,7 @@ public static class Provinces
 
         land.Sort();
         float mountainLine = land[(int)Math.Clamp(
-            land.Count * (1.0 - cfg.TerraMountainShare), 0, land.Count - 1)];
+            land.Count * (1.0 - cfg.MountainLineShare), 0, land.Count - 1)];
 
         var total = new int[map.Count];
         var high = new int[map.Count];

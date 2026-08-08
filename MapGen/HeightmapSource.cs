@@ -25,6 +25,12 @@ namespace Ck3MapGen.MapGen;
 public static class HeightmapSource
 {
     /// <summary>
+    /// How much coarser than the heightmap the climate grid is. 16 reproduces what the old size
+    /// presets used: an 8192-wide map got a 512-wide grid, a vanilla-sized one 1024.
+    /// </summary>
+    private const int CoarseGridDivisor = 16;
+
+    /// <summary>
     /// Loads a heightmap and derives everything from it.
     ///
     /// The image is authoritative about map size: <paramref name="cfg"/>'s Width and Height are set
@@ -44,8 +50,17 @@ public static class HeightmapSource
         cfg.Width = image.Width;
         cfg.Height = image.Height;
 
+        // The coarse climate grid follows the image too. It used to come from a size preset, which
+        // no longer exists now that the image is the only source of truth about size — and a fixed
+        // coarse grid against a variable heightmap would mean climate bands sampled at a different
+        // resolution on every map. Clamped at the top because the grid is a summary: past about a
+        // thousand cells across it stops being cheaper than the field it summarises.
+        cfg.WorldWidth = Math.Clamp(cfg.Width / CoarseGridDivisor, 128, 1024);
+        cfg.WorldHeight = Math.Max(64, cfg.WorldWidth / 2);
+
         Console.WriteLine($"Heightmap loaded from {path}: {cfg.Width}x{cfg.Height}, " +
-                          $"provinces {cfg.ProvinceWidth}x{cfg.ProvinceHeight}");
+                          $"provinces {cfg.ProvinceWidth}x{cfg.ProvinceHeight}, " +
+                          $"climate grid {cfg.WorldWidth}x{cfg.WorldHeight}");
 
         var elevation = ToSimulationScale(image, cfg);
         Report(elevation, cfg);
@@ -71,8 +86,8 @@ public static class HeightmapSource
         var elevation = new float[(long)width * height];
 
         float sea = cfg.Limits.SeaLevelUpper;
-        float floor = cfg.TerraFloorElevation;
-        float top = cfg.TerraTopElevation;
+        float floor = cfg.SeaFloorElevation;
+        float top = cfg.PeakElevation;
         const float water = Emit.MapDataWriter.WaterLevel16;
 
         image.ProcessPixelRows(accessor =>

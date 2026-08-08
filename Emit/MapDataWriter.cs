@@ -212,7 +212,7 @@ public static class MapDataWriter
         // emphatically: 98.8% of its drawn blue pixels are inside land provinces. Over water the
         // water index is the whole answer.
         for (int i = 0; i < indices.Length; i++)
-            if (terra.RiverPixels[i] != MapGen.Terra.RiverRaster.None
+            if (terra.RiverPixels[i] != MapGen.RiverRaster.None
                 && provinces.Seeds[provinces.Label[i]].IsLand)
                 indices[i] = terra.RiverPixels[i];
 
@@ -350,8 +350,8 @@ public static class MapDataWriter
     /// monotone change to depth leaves every rank exactly where it was. Verified — it moved the
     /// 20 px figure from 13.8 to 14.2.
     ///
-    /// Water is therefore mapped from its actual depth via <see cref="MapConfig.TerraShelfDepth"/>
-    /// and <see cref="MapConfig.TerraShelfCurve"/>, which makes shelf width independent of
+    /// Water is therefore mapped from its actual depth via <see cref="MapConfig.ShelfDepth"/>
+    /// and <see cref="MapConfig.ShelfCurve"/>, which makes shelf width independent of
     /// coastline length. Land still uses <see cref="VanillaLandCurve"/>, where ranking is right:
     /// there the question genuinely is "how high is this relative to the rest of the land".
     /// </remarks>
@@ -424,7 +424,7 @@ public static class MapDataWriter
         var landCdf = BuildCdf(e => e > sea, sea, aboveRange, out long landTotal);
         if (landTotal == 0) return result;
 
-        double shelfDepth = Math.Max(1e-3, cfg.TerraShelfDepth);
+        double shelfDepth = Math.Max(1e-3, cfg.ShelfDepth);
 
         Parallel.For(0, elevation.Length, i =>
         {
@@ -435,7 +435,7 @@ public static class MapDataWriter
                 // Depth-keyed, not rank-keyed. See VanillaWaterCurve's remarks for why ranking
                 // cannot work here.
                 double t = Math.Clamp((sea - e) / shelfDepth, 0, 1);
-                double raw = WaterLevel16 * Math.Pow(1.0 - t, cfg.TerraShelfCurve);
+                double raw = WaterLevel16 * Math.Pow(1.0 - t, cfg.ShelfCurve);
                 result[i] = (ushort)Math.Clamp(raw, 0, WaterLevel16);
                 return;
             }

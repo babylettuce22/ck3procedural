@@ -1,7 +1,7 @@
 ﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 
-namespace Ck3MapGen.MapGen.Terra;
+namespace Ck3MapGen.MapGen;
 
 /// <summary>
 /// Stage 4. Turns the drainage network into river courses.

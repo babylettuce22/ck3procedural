@@ -144,7 +144,7 @@ public static class TerrainClassifier
             double qx = warpField.Noise2D(px * warpFrequency, py * warpFrequency) * warpAmplitude;
             double qy = warpField.Noise2D(px * warpFrequency + 7.7, py * warpFrequency - 3.3)
                         * warpAmplitude;
-            return Terra.Field.Fbm(noise, (px + qx) * frequency, (py + qy) * frequency, 4,
+            return Field.Fbm(noise, (px + qx) * frequency, (py + qy) * frequency, 4,
                        gain: 0.55) * 0.5 + 0.5;
         }
 
@@ -183,7 +183,7 @@ public static class TerrainClassifier
                 // that has to know climate is a field.
                 double eqDist = Biome.EqDist(cfg, rasterY)
                                 + lapse * Math.Clamp((e - sea) / mountainSpan, 0, 1)
-                                + wander * Terra.Field.Fbm(climateNoise, x * climateFrequency,
+                                + wander * Field.Fbm(climateNoise, x * climateFrequency,
                                     y * climateFrequency, 4, gain: 0.5);
 
                 var zone = Biome.ZoneOf(cfg, eqDist, worldX);
@@ -430,9 +430,9 @@ public static class TerrainClassifier
         {
             for (int x = 0; x < width; x++)
             {
-                double wx = Terra.Field.Fbm(warp, x * warpFrequency, y * warpFrequency, 3)
+                double wx = Field.Fbm(warp, x * warpFrequency, y * warpFrequency, 3)
                             * warpAmplitude;
-                double wy = Terra.Field.Fbm(warp, x * warpFrequency + 31.7,
+                double wy = Field.Fbm(warp, x * warpFrequency + 31.7,
                                 y * warpFrequency - 12.9, 3) * warpAmplitude;
 
                 double gy = (y + 0.5) * sy - 0.5 + wy;

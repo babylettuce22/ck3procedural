@@ -1,17 +1,15 @@
 ﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
-using Ck3MapGen.MapGen.Terra;
 
 namespace Ck3MapGen.MapGen;
 
 /// <summary>
-/// Everything downstream of terrain generation consumes, and the only thing it consumes.
+/// Everything downstream of the heightmap consumes, and the only thing it consumes.
 ///
-/// This is the seam that lets a heightmap come from anywhere. The province partition, the title
-/// hierarchy, rivers.png, the terrain textures and every emitter read this object and nothing
-/// else, so <see cref="TerraPipeline"/> is now one producer of it rather than a hard dependency —
-/// <see cref="HeightmapSource"/> builds the same thing from a PNG on disk, and the ck2rpg path
-/// wraps its own output into it.
+/// The province partition, the title hierarchy, rivers.png, the terrain textures and every emitter
+/// read this object and nothing else, which is what lets the heightmap come from anywhere — any
+/// program that can write a 16-bit greyscale PNG on CK3's height scale is a valid front end for
+/// this one.
 ///
 /// Rivers and lakes are part of the contract rather than something callers derive, because they
 /// have to agree with the heightmap pixel for pixel. Deriving them twice from the same field in
@@ -37,22 +35,13 @@ public sealed class TerrainData
     public required List<RiverCourse> Courses { get; init; }
 
     /// <summary>
-    /// The coarse world the erosion ran on, for debug renders. Null for terrain that did not come
-    /// from <see cref="TerraPipeline"/> — an imported heightmap has no such intermediate.
-    /// </summary>
-    public TerraWorld? Preview { get; init; }
-
-    /// <summary>
     /// Derives everything a full-resolution elevation field implies: the province-resolution copy,
     /// the drainage network, river courses and lakes.
     ///
     /// Deliberately does no erosion and no channel carving. The elevation passed in is taken as
-    /// authoritative, which is the whole point when it came from a file — an imported heightmap
-    /// should come out the other end as the map the author drew, not as the map this generator
-    /// would have drawn.
+    /// authoritative: the heightmap should come out the other end as the map its author drew.
     /// </summary>
-    public static TerrainData FromElevation(float[] elevation, MapConfig cfg, Rng rng,
-        TerraWorld? preview = null)
+    public static TerrainData FromElevation(float[] elevation, MapConfig cfg, Rng rng)
     {
         int pw = cfg.ProvinceWidth, ph = cfg.ProvinceHeight;
         float sea = cfg.Limits.SeaLevelUpper;
@@ -75,7 +64,6 @@ public sealed class TerrainData
             RiverMask = rivers.Mask,
             LakeMask = lakes,
             Courses = courses,
-            Preview = preview,
         };
     }
 
@@ -90,7 +78,7 @@ public sealed class TerrainData
     {
         int n = width * hgt;
         var candidate = new bool[n];
-        float tolerance = cfg.TerraLakeDepth;
+        float tolerance = cfg.LakeDepth;
 
         Parallel.For(0, n, i =>
         {
@@ -100,7 +88,7 @@ public sealed class TerrainData
         var mask = new byte[n];
         var stack = new Stack<int>();
         var component = new List<int>();
-        int minCells = cfg.TerraMinLakeCells;
+        int minCells = cfg.MinLakeCells;
         cells = 0;
 
         for (int start = 0; start < n; start++)

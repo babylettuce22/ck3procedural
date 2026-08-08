@@ -1,20 +1,21 @@
-using Ck3MapGen.Core;
-using Ck3MapGen.Io;
+﻿using Ck3MapGen.Core;
 using Ck3MapGen.MapGen;
 
 namespace Ck3MapGen.Gui;
 
 /// <summary>
-/// Preview views that need the finished province partition rather than just the coarse Terra
-/// world — the terrain classification and the province map itself.
+/// The preview views, all rendered off the finished province partition.
 ///
-/// Both are rendered at province resolution and downsampled by whole pixels on the way out. A
-/// vanilla-size province map is 42 million pixels and no screen is going to show it; point
-/// sampling keeps class boundaries crisp, which is exactly what these views exist to let you
-/// judge.
+/// Everything here is rendered at province resolution and downsampled by whole pixels on the way
+/// out. A vanilla-size province map is 42 million pixels and no screen is going to show it; point
+/// sampling keeps class and border boundaries crisp, which is exactly what these views exist to
+/// let you judge.
 /// </summary>
 public static class PreviewRenderer
 {
+    /// <summary>A rendered view: packed RGB, three bytes per pixel.</summary>
+    public readonly record struct Image(byte[] Rgb, int Width, int Height);
+
     private const int MaxWidth = 2048;
 
     /// <summary>
@@ -22,7 +23,7 @@ public static class PreviewRenderer
     /// view for judging biome blending: it shows the class boundaries the texture writer then has
     /// to blend across.
     /// </summary>
-    public static TerraPreview.Image RenderTerrain(GenerationResult result)
+    public static Image RenderTerrain(GenerationResult result)
     {
         var cfg = result.Config;
         int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
@@ -36,25 +37,24 @@ public static class PreviewRenderer
     /// <summary>
     /// Hillshaded elevation from the province raster.
     ///
-    /// Deliberately built from <see cref="GenerationResult.ProvinceElevation"/> rather than the
-    /// coarse Terra world, so it works whatever produced the terrain. For an imported heightmap it
-    /// is the only relief view there is — that world has no coarse intermediate behind it.
+    /// Built from <see cref="GenerationResult.ProvinceElevation"/>, which is the heightmap as it
+    /// was read, so this shows the relief the mod will actually ship rather than an intermediate.
     /// </summary>
-    public static TerraPreview.Image RenderElevation(GenerationResult result)
+    public static Image RenderElevation(GenerationResult result)
     {
         var cfg = result.Config;
         int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
         var elevation = result.ProvinceElevation;
 
         float sea = cfg.Limits.SeaLevelUpper;
-        float peak = Math.Max(sea + 1f, cfg.TerraTopElevation);
+        float peak = Math.Max(sea + 1f, cfg.PeakElevation);
 
         return Downsample(width, height, i =>
         {
             float e = elevation[i];
             if (e <= sea)
             {
-                float depth = Math.Clamp((sea - e) / Math.Max(1f, sea - cfg.TerraFloorElevation), 0, 1);
+                float depth = Math.Clamp((sea - e) / Math.Max(1f, sea - cfg.SeaFloorElevation), 0, 1);
                 return ((byte)(38 + 26 * (1 - depth)), (byte)(70 + 44 * (1 - depth)),
                         (byte)(104 + 48 * (1 - depth)));
             }
@@ -78,7 +78,7 @@ public static class PreviewRenderer
     }
 
     /// <summary>Province cells in randomised colours, land and sea tinted apart.</summary>
-    public static TerraPreview.Image RenderProvinces(GenerationResult result)
+    public static Image RenderProvinces(GenerationResult result)
     {
         var map = result.Provinces;
         var rng = new Rng(result.Config.Seed ^ 0x9E37);
@@ -98,7 +98,7 @@ public static class PreviewRenderer
     private static (byte R, byte G, byte B) Colour(TerrainClass terrain)
         => Io.DebugRender.TerrainColour(terrain);
 
-    private static TerraPreview.Image Downsample(int width, int height,
+    private static Image Downsample(int width, int height,
         Func<int, (byte R, byte G, byte B)> colour)
     {
         int step = Math.Max(1, (width + MaxWidth - 1) / MaxWidth);
@@ -115,6 +115,6 @@ public static class PreviewRenderer
             }
         });
 
-        return new TerraPreview.Image(rgb, outWidth, outHeight);
+        return new Image(rgb, outWidth, outHeight);
     }
 }

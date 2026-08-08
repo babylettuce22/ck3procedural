@@ -3,60 +3,6 @@ using Ck3MapGen.Core;
 
 namespace Ck3MapGen;
 
-/// <summary>
-/// Map size presets, shared by the CLI and the GUI so they cannot disagree about what "small" is.
-/// </summary>
-public static class MapPreset
-{
-    public static readonly string[] Names = ["tiny", "small", "full", "vanilla"];
-
-    public static bool Apply(string name, MapConfig cfg)
-    {
-        switch (name)
-        {
-            // Bisection size: generates in seconds and loads far faster, so it is the right scale
-            // for chasing load errors. Province counts scale with the map, so they follow.
-            case "tiny":
-                (cfg.WorldWidth, cfg.WorldHeight) = (256, 128);
-                (cfg.Width, cfg.Height) = (2048, 1024);
-                return true;
-
-            case "small":
-                (cfg.WorldWidth, cfg.WorldHeight) = (512, 256);
-                (cfg.Width, cfg.Height) = (4096, 2048);
-                return true;
-
-            case "full":
-                (cfg.WorldWidth, cfg.WorldHeight) = (512, 256);
-                (cfg.Width, cfg.Height) = (8192, 4096);
-                return true;
-
-            // Vanilla's exact dimensions: heightmap 18432x9216, provinces 9216x4608. Using them
-            // removes map resolution as a variable altogether — WORLD_EXTENTS, PANNING_* and every
-            // vanilla-sized terrain texture are then correct without an override.
-            case "vanilla":
-                (cfg.WorldWidth, cfg.WorldHeight) = (1024, 512);
-                (cfg.Width, cfg.Height) = (18432, 9216);
-                return true;
-
-            default:
-                return false;
-        }
-    }
-
-    /// <summary>The preset whose dimensions match this config, or null if it has been customised.</summary>
-    public static string? Match(MapConfig cfg)
-    {
-        var probe = new MapConfig();
-        foreach (string name in Names)
-        {
-            Apply(name, probe);
-            if (probe.Width == cfg.Width && probe.Height == cfg.Height) return name;
-        }
-        return null;
-    }
-}
-
 public static class Program
 {
     // WinForms requires a single-threaded apartment, which cannot be expressed with top-level
@@ -99,13 +45,7 @@ public static class Program
                     scale = int.Parse(args[++i]);
                     break;
 
-                // Target land coverage, 0..1. Pass 0 to stop at ck2rpg's raw startup() output.
-                case "--land" when i + 1 < args.Length:
-                    cfg.TargetLandFraction = double.Parse(args[++i],
-                        System.Globalization.CultureInfo.InvariantCulture);
-                    break;
-
-                // Emit the whole mod around an existing heightmap.png instead of generating one.
+                // The heightmap the whole mod is built around. Required outside the GUI.
                 case "--heightmap" when i + 1 < args.Length:
                     options.HeightmapPath = args[++i];
                     break;
@@ -128,7 +68,6 @@ public static class Program
                     break;
 
                 default:
-                    if (MapPreset.Apply(args[i], cfg)) break;
                     Console.Error.WriteLine($"Unknown argument: {args[i]}");
                     return 1;
             }
@@ -139,6 +78,15 @@ public static class Program
             ApplicationConfiguration.Initialize();
             System.Windows.Forms.Application.Run(new Gui.MainForm(options));
             return 0;
+        }
+
+        if (options.HeightmapPath is null)
+        {
+            Console.Error.WriteLine(
+                "Usage: Ck3MapGen --heightmap <file.png> [--mod [dir]] [--seed n] [--out dir]");
+            Console.Error.WriteLine(
+                "This tool builds a CK3 mod around a heightmap; it does not generate terrain.");
+            return 1;
         }
 
         var result = Generator.Generate(options);
