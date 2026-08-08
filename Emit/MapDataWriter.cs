@@ -29,6 +29,12 @@ public static class MapDataWriter
     /// </summary>
     public const int WaterLevel16 = WaterLevel255 * Step255;
 
+    /// <summary>
+    /// Depth given to a pixel the province map calls sea but the terrain left above water. Set
+    /// well under the plane so the sea floor is actually submerged, not grazing the surface.
+    /// </summary>
+    public const int SnappedWaterDepth = (int)(WaterLevel16 * 0.45);
+
     /// <summary>Vanilla's rivers.png palette. Reproduced exactly; CK3 keys off the indices.</summary>
     private static readonly (byte R, byte G, byte B)[] RiverPaletteHead =
     [
@@ -278,7 +284,12 @@ public static class MapDataWriter
                 // distance from land — flattening everything to one depth instead produced an
                 // awkwardly sharp drop-off right at the waterline. All that is needed here is to
                 // pull down anything the province map drowned but the terrain left standing.
-                if (v > WaterLevel16) { height[i] = WaterLevel16 - Step255; local++; }
+                // Sunk to the near-shore shelf depth rather than one step under the plane. A single
+                // step is ~1/255 of the height range: enough for the pixel to count as water, not
+                // enough for the sea floor material to be hidden by the water above it, and these
+                // pixels come in blobs wherever the province partition drowned something the
+                // terrain left standing.
+                if (v > WaterLevel16) { height[i] = SnappedWaterDepth; local++; }
             }
             return local;
         }, local => Interlocked.Add(ref changed, local));

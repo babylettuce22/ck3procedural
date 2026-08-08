@@ -100,20 +100,20 @@ public sealed class MapConfig
     /// reads 4.5/255, well under the 19/255 water plane. Too low and shallow water hugs every
     /// coastline, letting the sea-floor material show through at coastal province borders.
     /// </summary>
-    public double TerraShelfSteepness = 7.0;
+    public double TerraShelfSteepness = 10.0;
 
     /// <summary>
     /// Depth, in simulation elevation units below sea level, at which the sea floor reaches pure
     /// black. Everything deeper is 0. This is what sets the continental shelf's *width*, since the
     /// generator's depth grows with distance offshore.
     /// </summary>
-    public double TerraShelfDepth = 48.0;
+    public double TerraShelfDepth = 24.0;
 
     /// <summary>
     /// Shape of the shelf falloff. Above 1 it falls away fast just offshore and then flattens,
     /// which is what vanilla's profile does (18.4/255 at 2 px, 4.5 at 20 px, black by 40).
     /// </summary>
-    public double TerraShelfCurve = 1.6;
+    public double TerraShelfCurve = 2.4;
 
     /// <summary>Continent-sized features across the map width. Lower means fewer, bigger landmasses.</summary>
     public double TerraContinentScale = 3.1;
