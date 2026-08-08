@@ -152,7 +152,11 @@ public static class Generator
         // Hillshaded relief at the resolution the erosion ran at. Worth more than the greyscale
         // dumps: flat grey hides whether erosion produced valley networks, shading shows them the
         // way the game's lighting will.
-        if (result.Terra is not null) Io.TerraPreview.WriteAll(outDir, result.Terra.Preview);
+        //
+        // Guarded on Preview, not on Terra. An imported heightmap produces a perfectly good
+        // TerrainData with a null Preview — there is no coarse world behind it — so testing Terra
+        // for null passes and then dereferences nothing.
+        if (result.Terra?.Preview is { } preview) Io.TerraPreview.WriteAll(outDir, preview);
 
         Console.WriteLine($"Wrote debug images to {outDir}");
     }

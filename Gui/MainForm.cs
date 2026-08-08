@@ -210,15 +210,18 @@ public sealed class MainForm : Form
         string? selected = _views.SelectedTab?.Text;
         _views.TabPages.Clear();
 
-        if (result.Terra is not null)
+        // Guarded on Preview, not on Terra: an imported heightmap gives a perfectly good
+        // TerrainData whose Preview is null, because there is no coarse world behind it.
+        if (result.Terra?.Preview is { } preview)
         {
-            var preview = result.Terra.Preview;
             AddView("Relief", TerraPreview.RenderRelief(preview));
-            AddView("Height", TerraPreview.RenderHeight(preview));
             AddView("Rivers", TerraPreview.RenderRivers(preview));
             AddView("Moisture", TerraPreview.RenderMoisture(preview));
         }
 
+        // Built from the province raster, so these work whatever produced the terrain — and they
+        // are the only views an imported heightmap has.
+        AddView("Height", PreviewRenderer.RenderElevation(result));
         AddView("Terrain", PreviewRenderer.RenderTerrain(result));
         AddView("Provinces", PreviewRenderer.RenderProvinces(result));
 
