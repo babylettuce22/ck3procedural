@@ -559,6 +559,34 @@ public sealed class MapConfig
     /// Smallest allowed province in pixels. Below this CK3 cannot derive borders, a centroid or
     /// locator positions and crashes in geometry code without logging anything.
     /// </summary>
+    /// <summary>
+    /// How strongly province growth resists crossing a slope. 0 is a plain geodesic voronoi, whose
+    /// boundaries fall wherever seeds happen to be equidistant and cut straight over mountains.
+    /// Higher makes the frontier stall at ridgelines so two provinces meet there instead.
+    /// </summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("03 Provinces")]
+    [Description("How strongly province growth resists crossing a slope. 0 is a plain geodesic voronoi whose boundaries cut straight over mountains; higher makes provinces meet at ridgelines.")]
+    public double ProvinceTerrainCost { get; set; } = 1.5;
+
+    /// <summary>
+    /// Share of land provinces declared impassable_mountains. Vanilla's ratio is 1,188 impassable
+    /// against 11,301 baronied. Impassable provinces get no barony and no holder.
+    /// </summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("03 Provinces")]
+    [Description("Share of land provinces declared impassable_mountains, which get no barony and no holder. Vanilla runs 1,188 impassable against 11,301 baronied.")]
+    public double ImpassableShareOfLand { get; set; } = 0.095;
+
+    /// <summary>
+    /// How much of a province must stand above the mountain line before it may be impassable. Stops
+    /// a map with little high ground being given impassable provinces just to hit the target count.
+    /// </summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("03 Provinces")]
+    [Description("How much of a province must stand above the mountain line before it may be impassable. Stops a flat map being given impassable provinces just to hit the target count.")]
+    public double ImpassableMinMountainShare { get; set; } = 0.45;
+
     [SettingRole(SettingRole.Always)]
     [Category("03 Provinces")]
     [Description("Smallest allowed province in pixels. Below this CK3 cannot derive borders, a centroid or locator positions and crashes in geometry code without logging anything.")]

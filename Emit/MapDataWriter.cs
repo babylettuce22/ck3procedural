@@ -69,7 +69,7 @@ public static class MapDataWriter
     public const byte RiverIndexWater = 254;
 
     /// <summary>Returns the label -&gt; province id mapping and the land province count.</summary>
-    public static (int[] Order, int LandCount) WriteAll(string modDir, WorldGrid world, MapConfig cfg,
+    public static (int[] Order, int BaronyCount, int LandCount) WriteAll(string modDir, WorldGrid world, MapConfig cfg,
         ProvinceMap provinces, float[] provinceElevation, bool writePacked = true,
         MapGen.TerrainData? terra = null)
     {
@@ -78,20 +78,21 @@ public static class MapDataWriter
 
         // Land provinces get the low ids and sea zones the high ones, so default.map needs a
         // single contiguous sea_zones range instead of vanilla's dozens.
-        var order = BuildProvinceOrder(provinces, out int landCount);
+        var order = BuildProvinceOrder(provinces, out int baronyCount, out int landCount);
 
         WriteProvincesPng(Path.Combine(dir, "provinces.png"), provinces, order);
         WriteDefinitionCsv(Path.Combine(dir, "definition.csv"), provinces, order);
         WriteRiversPng(Path.Combine(dir, "rivers.png"), world, cfg, provinces, terra);
         WriteHeightmap(dir, world, cfg, writePacked, provinces, order, landCount, terra);
-        WriteDefaultMap(Path.Combine(dir, "default.map"), provinces.Count, landCount);
+        WriteDefaultMap(Path.Combine(dir, "default.map"), provinces.Count, baronyCount, landCount);
         WriteStubs(dir);
 
         AssertNoEmptyFiles(dir);
 
-        Console.WriteLine($"  map_data written: {landCount} land provinces, " +
+        Console.WriteLine($"  map_data written: {baronyCount} baronied + " +
+                          $"{landCount - baronyCount} impassable land, " +
                           $"{provinces.Count - landCount} sea zones");
-        return (order, landCount);
+        return (order, baronyCount, landCount);
     }
 
     /// <summary>
@@ -116,16 +117,33 @@ public static class MapDataWriter
             "CK3 spins forever reading a zero-byte map_data file.");
     }
 
-    /// <summary>Returns label -> province id (1-based), land first.</summary>
-    private static int[] BuildProvinceOrder(ProvinceMap provinces, out int landCount)
+    /// <summary>
+    /// Label -> province id (1-based), in three contiguous groups: baronied land, then impassable
+    /// land, then sea.
+    ///
+    /// Impassable provinces sit *inside* the land range on purpose. Every downstream test is
+    /// `id &lt;= landCount` meaning "is land" — the coastline snap, the terrain mask, the locators,
+    /// the water graphics — and an impassable mountain is land. Only the title hierarchy needs the
+    /// narrower number, and it gets baronyCount. default.map then needs one RANGE per group, which
+    /// is why they have to be contiguous.
+    /// </summary>
+    private static int[] BuildProvinceOrder(ProvinceMap provinces, out int baronyCount,
+        out int landCount)
     {
         var order = new int[provinces.Count];
         int next = 1;
+
         for (int i = 0; i < provinces.Count; i++)
-            if (provinces.Seeds[i].IsLand) order[i] = next++;
+            if (provinces.Seeds[i].IsLand && !provinces.Seeds[i].IsImpassable) order[i] = next++;
+        baronyCount = next - 1;
+
+        for (int i = 0; i < provinces.Count; i++)
+            if (provinces.Seeds[i].IsLand && provinces.Seeds[i].IsImpassable) order[i] = next++;
         landCount = next - 1;
+
         for (int i = 0; i < provinces.Count; i++)
             if (!provinces.Seeds[i].IsLand) order[i] = next++;
+
         return order;
     }
 
@@ -739,8 +757,14 @@ public static class MapDataWriter
               """);
     }
 
-    private static void WriteDefaultMap(string path, int provinceCount, int landCount)
+    private static void WriteDefaultMap(string path, int provinceCount, int baronyCount,
+        int landCount)
     {
+        // Impassable provinces are land, so they sit between the baronied land and the sea zones.
+        string impassable = landCount > baronyCount
+            ? $"impassable_mountains = RANGE {{ {baronyCount + 1} {landCount} }}"
+            : "";
+
         ParadoxText.WriteNoBom(path,
             $$"""
               #max_provinces = {{provinceCount + 1}}
@@ -769,6 +793,7 @@ public static class MapDataWriter
               #############
               # IMPASSABLE
               #############
+              {{impassable}}
 
               """);
     }

@@ -1,4 +1,4 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 using Ck3MapGen.World;
 
@@ -9,6 +9,13 @@ public sealed class ProvinceSeed
     public int X;
     public int Y;
     public bool IsLand;
+
+    /// <summary>
+    /// Land, but declared impassable_mountains in default.map: no barony, no holder, armies route
+    /// around it. Vanilla has 1,188 of them against 11,301 baronied provinces, and only 4 of those
+    /// carry a barony — so this is a third class of province rather than a flag on a normal one.
+    /// </summary>
+    public bool IsImpassable;
 }
 
 /// <summary>Pixel-level province assignment at provinces-map resolution.</summary>
@@ -43,7 +50,8 @@ public static class Provinces
         (-1, 1, 1.41421356f, true), (1, 1, 1.41421356f, true),
     ];
 
-    public static ProvinceMap Build(byte[] mask, int width, int height, MapConfig cfg, Rng rng)
+    public static ProvinceMap Build(byte[] mask, float[] elevation, int width, int height,
+        MapConfig cfg, Rng rng)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -54,12 +62,13 @@ public static class Provinces
         sw.Restart();
         EnsureSeedsCoverComponents(mask, width, height, seeds);
 
-        var label = Partition(mask, width, height, seeds);
+        var label = Partition(mask, elevation, width, height, cfg, seeds);
         Console.WriteLine($"  voronoi partition ({sw.ElapsedMilliseconds} ms)");
 
         var map = new ProvinceMap { Width = width, Height = height, Label = label, Seeds = seeds };
         RepairUnlabeled(map, mask);
         DissolveTinyProvinces(map, mask, cfg);
+        MarkImpassable(map, elevation, mask, cfg);
         return map;
     }
 
@@ -160,6 +169,62 @@ public static class Provinces
         if (merged + flipped > 0)
             Console.WriteLine($"  dissolved {merged} tiny provinces, drowned {flipped} tiny islands " +
                               $"(min {cfg.MinProvincePixels} px)");
+    }
+
+    /// <summary>
+    /// Flags the most mountainous land provinces as impassable_mountains.
+    ///
+    /// Ranked by the share of the province standing above the mountain line rather than by mean
+    /// height, so a province is impassable because it is *mostly* mountain, not because it happens
+    /// to contain one peak. A floor on that share stops a map with little high ground from having
+    /// impassable provinces forced on it just to reach the target count.
+    ///
+    /// Vanilla's proportion is the reference: 1,188 impassable against 11,301 baronied provinces.
+    /// </summary>
+    private static void MarkImpassable(ProvinceMap map, float[] elevation, byte[] mask, MapConfig cfg)
+    {
+        double share = Math.Clamp(cfg.ImpassableShareOfLand, 0, 0.5);
+        if (share <= 0) return;
+
+        // The mountain line, as a percentile of this map's own land — the same basis the terrain
+        // classifier and the heightmap's hypsometry use, so "mountain" means one thing throughout.
+        var land = new List<float>();
+        for (int i = 0; i < elevation.Length; i += 7)
+            if (mask[i] != 0) land.Add(elevation[i]);
+        if (land.Count == 0) return;
+
+        land.Sort();
+        float mountainLine = land[(int)Math.Clamp(
+            land.Count * (1.0 - cfg.TerraMountainShare), 0, land.Count - 1)];
+
+        var total = new int[map.Count];
+        var high = new int[map.Count];
+        for (int i = 0; i < map.Label.Length; i++)
+        {
+            int label = map.Label[i];
+            if (!map.Seeds[label].IsLand) continue;
+            total[label]++;
+            if (elevation[i] >= mountainLine) high[label]++;
+        }
+
+        var ranked = new List<(int Label, double Share)>();
+        for (int i = 0; i < map.Count; i++)
+            if (map.Seeds[i].IsLand && total[i] > 0)
+                ranked.Add((i, (double)high[i] / total[i]));
+
+        ranked.Sort((a, b) => b.Share.CompareTo(a.Share));
+
+        int want = (int)Math.Round(ranked.Count * share);
+        int marked = 0;
+        foreach (var (label, mountainous) in ranked)
+        {
+            if (marked >= want || mountainous < cfg.ImpassableMinMountainShare) break;
+            map.Seeds[label].IsImpassable = true;
+            marked++;
+        }
+
+        Console.WriteLine($"  impassable: {marked} of {ranked.Count} land provinces " +
+                          $"(target {want}, mountain line {mountainLine:F0})");
     }
 
     /// <summary>Drops provinces that no longer own any pixel and renumbers the rest densely.</summary>
@@ -298,13 +363,27 @@ public static class Provinces
     /// source and target to be in the same domain, which stops provinces leaking through a
     /// one-pixel diagonal gap in a coastline.
     /// </summary>
-    private static int[] Partition(byte[] mask, int width, int height, List<ProvinceSeed> seeds)
+    private static int[] Partition(byte[] mask, float[] elevation, int width, int height,
+        MapConfig cfg, List<ProvinceSeed> seeds)
     {
         int n = width * height;
         var label = new int[n];
         var dist = new float[n];
         Array.Fill(label, -1);
         Array.Fill(dist, float.MaxValue);
+
+        // Reference slope, so the weight means the same thing on any map. Sampled rather than
+        // measured exactly: this only has to set the scale.
+        float terrainCost = (float)Math.Max(0, cfg.ProvinceTerrainCost);
+        double total = 0;
+        int samples = 0;
+        for (int i = width; i < n - width; i += 97)
+        {
+            if (mask[i] == 0 || mask[i - 1] == 0) continue;
+            total += Math.Abs(elevation[i] - elevation[i - 1]);
+            samples++;
+        }
+        float invRef = samples == 0 || total <= 0 ? 0f : (float)(samples / (total * 3.0));
 
         var heap = new MinHeap(n);
         for (int i = 0; i < seeds.Count; i++)
@@ -337,7 +416,11 @@ public static class Provinces
                     if (mask[ny * width + x] != domain) continue;
                 }
 
-                float nd = d + cost;
+                // Terrain-aware cost: stepping across a slope costs more than stepping along a
+                // flat, so the frontier stalls at ridgelines and two provinces meet there. With a
+                // uniform cost the partition is a plain geodesic voronoi and boundaries fall
+                // wherever the seeds happen to be equidistant, cutting straight over mountains.
+                float nd = d + cost * (1f + terrainCost * MathF.Abs(elevation[nk] - elevation[cell]) * invRef);
                 if (nd >= dist[nk]) continue;
                 dist[nk] = nd;
                 label[nk] = li;

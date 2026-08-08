@@ -96,7 +96,8 @@ public static class Generator
         }
 
         var landMask = Raster.LandMask(provinceElevation, cfg);
-        var provinces = Provinces.Build(landMask, cfg.ProvinceWidth, cfg.ProvinceHeight, cfg, rng);
+        var provinces = Provinces.Build(landMask, provinceElevation, cfg.ProvinceWidth,
+            cfg.ProvinceHeight, cfg, rng);
         Console.WriteLine($"  {provinces.Count} provinces total");
 
         return new GenerationResult
@@ -126,11 +127,12 @@ public static class Generator
 
         Emit.ModWriter.WriteDescriptors(modDir);
 
-        var (order, landCount) = Emit.MapDataWriter.WriteAll(
+        var (order, baronyCount, landCount) = Emit.MapDataWriter.WriteAll(
             modDir, result.World, cfg, result.Provinces, result.ProvinceElevation,
             options.WritePacked, result.Terra);
 
-        var empires = Titles.Build(result.Provinces, landCount, order, rng);
+        // Titles get the narrower count: an impassable province has no barony.
+        var empires = Titles.Build(result.Provinces, baronyCount, order, rng);
         Emit.ContentWriter.WriteAll(
             modDir, options.GameDir, result.World, cfg, result.Provinces, order, landCount,
             empires, result.ProvinceElevation, rng, options.WriteHistory, result.Terra);
