@@ -6,9 +6,7 @@ namespace Ck3MapGen.MapGen;
 
 /// <summary>
 /// The terrain vocabulary the map is painted from, and the set CK3's common/province_terrain
-/// accepts. Deliberately richer than <see cref="BiomeType"/>, which is a port of ck2rpg's
-/// <c>biome()</c> — a function ck2rpg only uses to pick preview colours. Its real terrain
-/// assignment is <c>cell.terrain</c> in createProvinceTerrain.js, which is what this mirrors.
+/// accepts. Mirrors <c>cell.terrain</c> in ck2rpg's createProvinceTerrain.js.
 /// </summary>
 public enum TerrainClass : byte
 {
@@ -33,8 +31,8 @@ public enum TerrainClass : byte
 /// <summary>
 /// Classifies every pixel of the province-resolution raster into a <see cref="TerrainClass"/>.
 ///
-/// The previous scheme sampled <see cref="Biome.Classify"/> once per province, at that province's
-/// seed cell, and painted the whole province with the result. That is why a single river pixel
+/// The previous scheme sampled a biome once per province, at that province's seed cell, and
+/// painted the whole province with the result. That is why a single river pixel
 /// landing on a seed turned an entire county into floodplains — measured at 7% of all land. Terrain
 /// is a property of the ground, not of the administrative unit drawn on top of it, so it is
 /// resolved per pixel here and provinces take a majority vote afterwards.
@@ -85,7 +83,7 @@ public static class TerrainClassifier
         int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
         int sea = cfg.Limits.SeaLevelUpper;
 
-        var moisture = UpsampleMoisture(world, width, height);
+        var moisture = UpsampleMoisture(world, width, height, rng);
 
         // Thresholds derived from this map's own distributions.
         float hills = LandPercentile(elevation, landMask, 1.0 - HillShareOfLand);
@@ -96,6 +94,27 @@ public static class TerrainClassifier
 
         Console.WriteLine($"  terrain thresholds: hills {hills:F0}, mountains {mountains:F0}, " +
                           $"moisture arid {arid} / semi-arid {semiArid} / wet {wet}");
+
+        // Band edges as distance from the equator, next to the range this map actually spans, so
+        // it is obvious when a setting has pushed every band off the map.
+        var limits = cfg.Limits;
+        double nearest = Math.Abs(cfg.Equator - Math.Clamp(cfg.Equator, 0, cfg.Height));
+        double farthest = Math.Max(cfg.Equator, cfg.Height - cfg.Equator);
+        Console.WriteLine($"  climate: equator at y={cfg.Equator:F0}, map spans {nearest:F0}-{farthest:F0} " +
+                          $"from it; tropical <={limits.Tropical.Upper}, " +
+                          $"subtropical <={limits.SubTropical.Upper}, " +
+                          $"temperate <={limits.Temperate.Upper}, cold beyond " +
+                          $"(polar {limits.Cold.Plains})");
+
+        // The bands are authored against vanilla's 18432-wide map, so on anything smaller they can
+        // be wider than the whole map — and then every pixel is one band and no climate setting
+        // appears to do anything, including moving the equator, because there is no boundary on the
+        // map to move. Measured: at `tiny`, EquatorPosition changes 0.00% of pixels; at `full`,
+        // 3.37%. Worth saying out loud rather than leaving as a puzzle.
+        if (farthest <= limits.Tropical.Upper)
+            Console.WriteLine("           NOTE: the whole map is inside the tropical band. Lower " +
+                              "ClimateBandScale (or raise map size) or no climate setting will " +
+                              "change anything.");
         int BeachReach = BeachReachAtVanilla;
 
         var coastDistance = DistanceToWater(landMask, width, height, BeachReach);
@@ -104,7 +123,6 @@ public static class TerrainClassifier
         // at the same place. ck2rpg uses five separate simplex instances for exactly this.
         var wetNoise = new SimplexNoise(rng);
         var forestNoise = new SimplexNoise(rng);
-        var farmNoise = new SimplexNoise(rng);
         var edgeNoise = new SimplexNoise(rng);
 
         // Referenced to vanilla's province map, so a biome patch is a fixed pixel size.
@@ -130,6 +148,15 @@ public static class TerrainClassifier
                        gain: 0.55) * 0.5 + 0.5;
         }
 
+        // The climate boundary's own noise, kept separate from the biome patches and much
+        // longer-wavelength than them. A band edge is a continental-scale feature: it should bulge
+        // and recede over hundreds of pixels, not fray at the same scale as a patch of forest.
+        var climateNoise = new SimplexNoise(rng);
+        double climateFrequency = 14.0 / reference;
+        double wander = cfg.ClimateWanderPixels;
+        double lapse = cfg.ClimateLapsePixels;
+        float mountainSpan = Math.Max(1f, mountains - sea);
+
         var result = new TerrainClass[width * height];
 
         Parallel.For(0, height, y =>
@@ -149,16 +176,33 @@ public static class TerrainClassifier
                 // space, so the province column has to be mapped back onto it.
                 int worldX = (int)((long)x * world.Width / width);
 
-                bool tropical = Biome.IsTropical(cfg, rasterY, worldX);
-                bool subTropical = !tropical && Biome.IsSubTropical(cfg, rasterY, worldX);
-                bool temperate = !tropical && !subTropical && Biome.IsTemperate(cfg, rasterY, worldX);
-                bool cold = !tropical && !subTropical && !temperate;
+                // Effective latitude, not the row's own. Altitude is added to it because cold is
+                // what latitude and altitude both buy, and the noise is added because a real
+                // climate boundary is a frontier with lobes and outliers rather than a parallel.
+                // Everything downstream still asks "which band is this", so this is the only place
+                // that has to know climate is a field.
+                double eqDist = Biome.EqDist(cfg, rasterY)
+                                + lapse * Math.Clamp((e - sea) / mountainSpan, 0, 1)
+                                + wander * Terra.Field.Fbm(climateNoise, x * climateFrequency,
+                                    y * climateFrequency, 4, gain: 0.5);
+
+                var zone = Biome.ZoneOf(cfg, eqDist, worldX);
+                bool tropical = zone == Biome.ClimateZone.Tropical;
+                bool subTropical = zone == Biome.ClimateZone.SubTropical;
+                bool cold = zone == Biome.ClimateZone.Cold;
 
                 int m = moisture[i];
                 double nWet = Patch(wetNoise, x, y, coarse);
                 double nForest = Patch(forestNoise, x, y, coarse * 1.7);
-                double nFarm = Patch(farmNoise, x, y, coarse * 2.3);
                 double nEdge = edgeNoise.Unit(x * fine, y * fine);
+
+                // Nor is farmland painted as a biome any more. It was assigned wherever temperate
+                // ground was moist, low and inside a noise patch, which spreads it across whole
+                // regions — but farmland is not a climate, it is what people have cleared, so it
+                // belongs in a ring around a settlement and should be scarce even there. Drawing it
+                // from moisture put fields across empty countryside. TerrainClass.Farmlands stays
+                // in the vocabulary, like Floodplains below, for whenever it is placed from the
+                // barony layer instead.
 
                 // Terrain is deliberately no longer painted along river courses. Floodplains used
                 // to be stamped on every pixel within FloodplainReach of a course, which at map
@@ -206,7 +250,7 @@ public static class TerrainClassifier
                 if (cold)
                 {
                     // The far polar cut-off: beyond it, tundra rather than forest.
-                    result[i] = Biome.IsBelowPlainsLimit(cfg, rasterY) && nForest > 0.45
+                    result[i] = Biome.IsBelowPlainsLimitAt(cfg, eqDist) && nForest > 0.45
                         ? TerrainClass.Arctic
                         : TerrainClass.Taiga;
                     continue;
@@ -240,8 +284,6 @@ public static class TerrainClassifier
                     result[i] = nForest > 0.62 ? TerrainClass.Forest : TerrainClass.Steppe;
                 else if (m >= wet && nWet > 0.72 && lowness < 0.25)
                     result[i] = TerrainClass.Wetlands;
-                else if (m >= semiArid && nFarm > 0.66 && lowness < 0.45)
-                    result[i] = TerrainClass.Farmlands;
                 else if (nForest > 0.5)
                     result[i] = TerrainClass.Forest;
                 else
@@ -353,8 +395,15 @@ public static class TerrainClassifier
     /// load-bearing. Blurring the copy used for terrain keeps the large-scale structure that
     /// matters (dry continental interiors, wet windward coasts, rain shadows behind ranges) while
     /// removing a row-quantisation artefact that was never physical in the first place.
+    ///
+    /// Blur alone is not enough, and this is the subtle part. Smoothing a step between two rows
+    /// turns it into a *ramp* between two rows — and a percentile threshold applied to a ramp still
+    /// lands on a straight horizontal line. That is why the terrain kept coming out in ruled bands
+    /// even after the blur went in, and why the remaining edges did not line up with any climate
+    /// boundary. The sample position is therefore domain-warped as well: the row structure survives
+    /// as structure but its contours are no longer parallels.
     /// </summary>
-    private static int[] UpsampleMoisture(WorldGrid w, int width, int height)
+    private static int[] UpsampleMoisture(WorldGrid w, int width, int height, Rng rng)
     {
         var smooth = new float[w.Count];
         for (int i = 0; i < w.Count; i++) smooth[i] = w.Moisture[i];
@@ -367,17 +416,32 @@ public static class TerrainClassifier
         double sx = (double)w.Width / width;
         double sy = (double)w.Height / height;
 
+        // Amplitude is set against the artefact, not against the grid: three box-blur passes at
+        // radius 2 smear a row step into a ramp some six or seven cells wide, and a displacement
+        // smaller than that ramp leaves the threshold contour sitting on it, still straight. So the
+        // warp has to be of the same order as the ramp — a couple of cells, which was the first
+        // guess, moved the contour by a fifth of its width and changed nothing visible. Three
+        // octaves: the first swings the contour, the rest fray it.
+        var warp = new SimplexNoise(rng);
+        double warpFrequency = 13.0 / MapConfig.ReferenceProvinceWidth;
+        double warpAmplitude = 6.0;
+
         Parallel.For(0, height, y =>
         {
-            double gy = (y + 0.5) * sy - 0.5;
-            int y0 = (int)Math.Floor(gy);
-            double fy = gy - y0;
-            int y0c = Math.Clamp(y0, 0, w.Height - 1);
-            int y1c = Math.Clamp(y0 + 1, 0, w.Height - 1);
-
             for (int x = 0; x < width; x++)
             {
-                double gx = (x + 0.5) * sx - 0.5;
+                double wx = Terra.Field.Fbm(warp, x * warpFrequency, y * warpFrequency, 3)
+                            * warpAmplitude;
+                double wy = Terra.Field.Fbm(warp, x * warpFrequency + 31.7,
+                                y * warpFrequency - 12.9, 3) * warpAmplitude;
+
+                double gy = (y + 0.5) * sy - 0.5 + wy;
+                int y0 = (int)Math.Floor(gy);
+                double fy = gy - y0;
+                int y0c = Math.Clamp(y0, 0, w.Height - 1);
+                int y1c = Math.Clamp(y0 + 1, 0, w.Height - 1);
+
+                double gx = (x + 0.5) * sx - 0.5 + wx;
                 int x0 = (int)Math.Floor(gx);
                 double fx = gx - x0;
                 int x0w = ((x0 % w.Width) + w.Width) % w.Width;

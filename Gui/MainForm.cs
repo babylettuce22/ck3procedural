@@ -7,35 +7,65 @@ using Ck3MapGen.Io;
 namespace Ck3MapGen.Gui;
 
 /// <summary>
-/// Parameter panel on the left, preview on the right.
+/// Two tabs, because the tool does two separable jobs and conflating them was confusing:
+/// <b>Terrain</b> makes a heightmap, <b>Mod</b> turns a heightmap into a CK3 mod. The second does
+/// not care whether the first produced its input — a heightmap painted in any other program is
+/// just as good, which is the whole point of <see cref="MapGen.TerrainData"/> being the seam.
+///
+/// The tab split is not cosmetic: it is <see cref="SettingRole"/> made visible. Every setting is
+/// already marked as either GenerationOnly (consumed while building terrain, inert once terrain
+/// comes from a file) or Always (applies to any heightmap at all), and that line is exactly the
+/// line between these two tabs. Each grid is filtered to its own half rather than showing all of
+/// them and greying some out.
 ///
 /// The whole reason this is WinForms is <see cref="PropertyGrid"/>: pointing it at
-/// <c>MapConfig</c> yields an editable, categorised editor for all sixty-five settings with no
-/// per-parameter UI code, which is what makes the terrain tunable without an edit-rebuild-run
-/// cycle. That is also why MapConfig's fields became auto-properties — the grid reflects over
-/// properties only and would otherwise show an empty panel.
+/// <c>MapConfig</c> yields an editable, categorised editor for every setting with no per-parameter
+/// UI code, which is what makes the terrain tunable without an edit-rebuild-run cycle. That is
+/// also why MapConfig's fields became auto-properties — the grid reflects over properties only.
 ///
-/// Generation runs on a worker thread. It takes seconds at <c>tiny</c> and minutes at
-/// <c>vanilla</c>, so doing it on the UI thread would freeze the window for the whole run.
+/// Work runs on a worker thread. It takes seconds at <c>tiny</c> and minutes at <c>vanilla</c>, so
+/// doing it on the UI thread would freeze the window for the whole run.
 /// </summary>
 public sealed class MainForm : Form
 {
     private readonly GenerationOptions _options;
 
-    private readonly PropertyGrid _grid = new() { Dock = DockStyle.Fill };
+    // --- Terrain tab ---
+    private readonly PropertyGrid _terrainGrid = new() { Dock = DockStyle.Fill };
     private readonly ComboBox _preset = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 90 };
     private readonly NumericUpDown _seed = new() { Minimum = 0, Maximum = int.MaxValue, Width = 90 };
-    private readonly Button _generate = new() { Text = "Generate", Width = 90 };
-    private readonly Button _writeMod = new() { Text = "Write mod", Width = 90 };
-    private readonly Button _openHeightmap = new() { Text = "Heightmap…", Width = 96 };
-    private readonly Button _clearHeightmap = new() { Text = "Clear", Width = 52, Visible = false };
-    private readonly Label _heightmapName =
+    private readonly Button _generate = new() { Text = "Generate terrain", Width = 130 };
+    private readonly TabControl _terrainViews = new() { Dock = DockStyle.Fill };
+
+    // --- Mod tab ---
+    private readonly PropertyGrid _modGrid = new() { Dock = DockStyle.Fill };
+    private readonly RadioButton _sourceGenerated =
+        new() { Text = "Terrain from the Terrain tab", AutoSize = true, Checked = true, Padding = new Padding(0, 5, 8, 0) };
+    private readonly RadioButton _sourceFile =
+        new() { Text = "Heightmap file:", AutoSize = true, Padding = new Padding(8, 5, 4, 0) };
+    private readonly Button _browse = new() { Text = "Browse…", Width = 80 };
+    private readonly Label _sourceName =
         new() { AutoSize = true, Padding = new Padding(6, 7, 0, 0), ForeColor = Color.DimGray };
-    private readonly TabControl _views = new() { Dock = DockStyle.Fill };
+    private readonly Button _preview = new() { Text = "Preview", Width = 80 };
+    private readonly Button _writeMod = new() { Text = "Write mod", Width = 100 };
+    private readonly TabControl _modViews = new() { Dock = DockStyle.Fill };
+
+    // --- shared ---
+    private readonly TabControl _mode = new() { Dock = DockStyle.Fill };
     private readonly TextBox _log =
         new() { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical };
     private readonly ToolStripStatusLabel _status = new() { Text = "Ready" };
 
+    /// <summary>The last terrain the Terrain tab produced, and the Mod tab's default input.</summary>
+    private GenerationResult? _terrain;
+
+    /// <summary>
+    /// The last heightmap loaded from disk, kept so previewing a settings change does not re-read
+    /// and re-derive the image every time. Cleared whenever the chosen file changes.
+    /// </summary>
+    private MapGen.TerrainData? _loaded;
+    private string? _loadedFrom;
+    private string? _heightmapPath;
     private bool _busy;
 
     public MainForm(GenerationOptions options)
@@ -47,23 +77,64 @@ public sealed class MainForm : Form
         Height = 950;
         StartPosition = FormStartPosition.CenterScreen;
 
-        _grid.SelectedObject = _options.Config;
-        _grid.PropertySort = PropertySort.Categorized;
-        _grid.HelpVisible = true;
+        // Each grid shows only the settings its own tab is about. BrowsableAttributes filters
+        // natively on the marker attribute, so there is no per-property wiring here.
+        Configure(_terrainGrid, SettingRole.GenerationOnly);
+        Configure(_modGrid, SettingRole.Always);
 
         _preset.Items.AddRange(MapPreset.Names);
         _preset.SelectedItem = MapPreset.Match(_options.Config) ?? "small";
         _preset.SelectedIndexChanged += (_, _) =>
         {
             MapPreset.Apply((string)_preset.SelectedItem!, _options.Config);
-            _grid.Refresh();
+            _terrainGrid.Refresh();
         };
 
         _seed.Value = Math.Clamp(_options.Config.Seed, 0, int.MaxValue);
         _seed.ValueChanged += (_, _) => _options.Config.Seed = (int)_seed.Value;
 
-        _generate.Click += async (_, _) => await RunAsync(null);
-        _writeMod.Click += async (_, _) => await RunAsync(GenerationOptions.DefaultModDir);
+        _generate.Click += async (_, _) => await GenerateTerrainAsync();
+        _preview.Click += async (_, _) => await BuildAsync(null);
+        _writeMod.Click += async (_, _) => await BuildAsync(GenerationOptions.DefaultModDir);
+        _browse.Click += (_, _) => PickHeightmap();
+        _sourceGenerated.CheckedChanged += (_, _) => ApplySource();
+        _sourceFile.CheckedChanged += (_, _) => ApplySource();
+
+        _mode.TabPages.Add(BuildTerrainTab());
+        _mode.TabPages.Add(BuildModTab());
+
+        var body = new SplitContainer
+        {
+            Dock = DockStyle.Fill,
+            Orientation = Orientation.Horizontal,
+            SplitterDistance = 660,
+        };
+        body.Panel1.Controls.Add(_mode);
+        body.Panel2.Controls.Add(_log);
+
+        var status = new StatusStrip();
+        status.Items.Add(_status);
+
+        Controls.Add(body);
+        Controls.Add(status);
+
+        ApplySource();
+
+        // Everything in the generator reports progress with Console.WriteLine. Redirecting the
+        // console is what lets all of that reach the log pane without touching a single call site.
+        Console.SetOut(new TextBoxWriter(_log));
+    }
+
+    private static void Configure(PropertyGrid grid, SettingRole role)
+    {
+        grid.PropertySort = PropertySort.Categorized;
+        grid.HelpVisible = true;
+        grid.BrowsableAttributes = new AttributeCollection(new SettingRoleAttribute(role));
+    }
+
+    private TabPage BuildTerrainTab()
+    {
+        _terrainGrid.SelectedObject = _options.Config;
 
         var bar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 34, Padding = new Padding(4) };
         bar.Controls.Add(new Label { Text = "Size", AutoSize = true, Padding = new Padding(0, 7, 0, 0) });
@@ -71,122 +142,158 @@ public sealed class MainForm : Form
         bar.Controls.Add(new Label { Text = "Seed", AutoSize = true, Padding = new Padding(8, 7, 0, 0) });
         bar.Controls.Add(_seed);
         bar.Controls.Add(_generate);
+
+        return BuildTab("1 · Terrain", bar, _terrainGrid, _terrainViews);
+    }
+
+    private TabPage BuildModTab()
+    {
+        _modGrid.SelectedObject = _options.Config;
+
+        var bar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 34, Padding = new Padding(4) };
+        bar.Controls.Add(_sourceGenerated);
+        bar.Controls.Add(_sourceFile);
+        bar.Controls.Add(_browse);
+        bar.Controls.Add(_preview);
         bar.Controls.Add(_writeMod);
-        bar.Controls.Add(_openHeightmap);
-        bar.Controls.Add(_clearHeightmap);
-        bar.Controls.Add(_heightmapName);
+        bar.Controls.Add(_sourceName);
 
-        _openHeightmap.Click += (_, _) => PickHeightmap();
-        _clearHeightmap.Click += (_, _) =>
-        {
-            _options.HeightmapPath = null;
-            ApplyMode();
-        };
+        return BuildTab("2 · Mod", bar, _modGrid, _modViews);
+    }
 
-        ApplyMode();
-
+    /// <summary>Settings on the left with their toolbar above them, previews on the right.</summary>
+    private static TabPage BuildTab(string title, Control bar, Control grid, Control views)
+    {
         var left = new Panel { Dock = DockStyle.Fill };
-        left.Controls.Add(_grid);
+        left.Controls.Add(grid);
         left.Controls.Add(bar);
-
-        var right = new SplitContainer
-        {
-            Dock = DockStyle.Fill,
-            Orientation = Orientation.Horizontal,
-            SplitterDistance = 640,
-        };
-        right.Panel1.Controls.Add(_views);
-        right.Panel2.Controls.Add(_log);
 
         var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 430 };
         split.Panel1.Controls.Add(left);
-        split.Panel2.Controls.Add(right);
+        split.Panel2.Controls.Add(views);
 
-        var status = new StatusStrip();
-        status.Items.Add(_status);
-
-        Controls.Add(split);
-        Controls.Add(status);
-
-        // Everything in the generator reports progress with Console.WriteLine. Redirecting the
-        // console is what lets all of that reach the log pane without touching a single call site.
-        Console.SetOut(new TextBoxWriter(_log));
+        var page = new TabPage(title);
+        page.Controls.Add(split);
+        return page;
     }
 
     private void PickHeightmap()
     {
         using var dialog = new OpenFileDialog
         {
-            Title = "Emit the mod around an existing heightmap",
+            Title = "Build the mod around an existing heightmap",
             Filter = "Heightmap PNG (*.png)|*.png|All files (*.*)|*.*",
         };
 
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
-        _options.HeightmapPath = dialog.FileName;
-        ApplyMode();
+        _heightmapPath = dialog.FileName;
+        if (_heightmapPath != _loadedFrom) { _loaded = null; _loadedFrom = null; }
+        _sourceFile.Checked = true;
+        ApplySource();
+    }
+
+    private void ApplySource()
+    {
+        bool fromFile = _sourceFile.Checked;
+
+        _sourceGenerated.Enabled = true;
+        _browse.Enabled = true;
+        _sourceName.Text = fromFile
+            ? _heightmapPath is null ? "(no file chosen)" : Path.GetFileName(_heightmapPath)
+            : _terrain is null ? "(nothing generated yet)" : $"{_options.Config.Width}x{_options.Config.Height}";
+
+        bool ready = fromFile ? _heightmapPath is not null : _terrain is not null;
+        _writeMod.Enabled = !_busy && ready;
+        _preview.Enabled = !_busy && ready;
+    }
+
+    private async Task GenerateTerrainAsync()
+    {
+        _options.HeightmapPath = null;
+        var result = await RunAsync("Generating terrain…",
+            () => Generator.Generate(_options));
+        if (result is null) return;
+
+        _terrain = result;
+        ShowPreviews(_terrainViews, result, terrainOnly: true);
+        _status.Text = $"Terrain generated — {_options.Config.Width}x{_options.Config.Height}. " +
+                       "Switch to the Mod tab to build the mod from it.";
+        ApplySource();
     }
 
     /// <summary>
-    /// Switches the window between generating terrain and emitting around an imported one.
+    /// Recomputes everything the mod is made of — moisture, the land mask, provinces, the terrain
+    /// classification — and optionally writes it out.
     ///
-    /// The property grid is *filtered*, not disabled. Importing a heightmap leaves far more live
-    /// than it retires — the whole of Provinces, all of Rivers and lakes (they are re-derived from
-    /// the imported field), and the parts of Coast and Height scale the 16-bit write and its
-    /// inverse read — so blanking the panel would take away exactly the knobs worth touching on an
-    /// imported map. See <see cref="SettingRoleAttribute"/>.
+    /// Terrain is never regenerated here, whichever source is selected: the Terrain tab's result is
+    /// already in memory and a file is read once and cached. That is the whole point of the
+    /// preview being useful — none of the settings on this tab affect terrain, so paying for
+    /// terrain again to see them would be paying for the slow half to look at the fast one.
     /// </summary>
-    private void ApplyMode()
+    private async Task BuildAsync(string? modDir)
     {
-        bool importing = _options.HeightmapPath is not null;
+        bool fromFile = _sourceFile.Checked;
 
-        _grid.BrowsableAttributes = importing
-            ? new AttributeCollection(new SettingRoleAttribute(SettingRole.Always))
-            : new AttributeCollection(BrowsableAttribute.Yes);
-        _grid.Refresh();
-
-        // The image is authoritative about map size, so the preset would be a lie.
-        _preset.Enabled = !importing;
-        _clearHeightmap.Visible = importing;
-        _heightmapName.Text = importing
-            ? Path.GetFileName(_options.HeightmapPath)
-            : string.Empty;
-
-        _status.Text = importing
-            ? "Heightmap loaded — terrain settings hidden; provinces, rivers and height scale still apply"
-            : "Ready";
-    }
-
-    private async Task RunAsync(string? modDir)
-    {
-        if (_busy) return;
-        _busy = true;
-        SetEnabled(false);
-        _log.Clear();
-        _status.Text = modDir is null ? "Generating…" : "Generating and writing mod…";
-
-        var clock = System.Diagnostics.Stopwatch.StartNew();
-        try
-        {
-            var result = await Task.Run(() =>
+        var result = await RunAsync(
+            modDir is null ? "Building preview…" : "Writing mod…",
+            () =>
             {
-                var r = Generator.Generate(_options);
+                var cfg = _options.Config;
+
+                MapGen.TerrainData terra;
+                if (fromFile)
+                {
+                    if (_loaded is null || _loadedFrom != _heightmapPath)
+                    {
+                        _loaded = MapGen.HeightmapSource.Load(_heightmapPath!, cfg, new Rng(cfg.Seed));
+                        _loadedFrom = _heightmapPath;
+                    }
+                    terra = _loaded;
+                }
+                else
+                {
+                    terra = _terrain!.Terra;
+                }
+
+                var r = Generator.FromTerrain(terra, cfg);
                 if (modDir is not null) Generator.WriteMod(r, _options, modDir);
                 return r;
             });
 
-            ShowPreviews(result);
-            _status.Text = $"Done in {clock.ElapsedMilliseconds / 1000.0:F1} s — " +
-                           $"{result.Provinces.Count} provinces" +
-                           (modDir is null ? "" : $", mod written to {modDir}");
+        if (result is null) return;
+
+        ShowPreviews(_modViews, result, terrainOnly: false);
+        _status.Text = modDir is null
+            ? $"Preview — {result.Provinces.Count} provinces. Nothing written."
+            : $"Mod written to {modDir} — {result.Provinces.Count} provinces";
+    }
+
+    /// <summary>Runs work off the UI thread, with the buttons locked and failures sent to the log.</summary>
+    private async Task<GenerationResult?> RunAsync(string message, Func<GenerationResult> work)
+    {
+        if (_busy) return null;
+        _busy = true;
+        SetEnabled(false);
+        _log.Clear();
+        _status.Text = message;
+
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            var result = await Task.Run(work);
+            Console.WriteLine();
+            Console.WriteLine($"Finished in {clock.ElapsedMilliseconds / 1000.0:F1} s");
+            return result;
         }
         catch (Exception ex)
         {
-            // A generation failure must not take the window with it; the message is far more
-            // useful sitting in the log next to the parameters that caused it.
+            // A failure must not take the window with it; the message is far more useful sitting
+            // in the log next to the parameters that caused it.
             Console.WriteLine();
             Console.WriteLine(ex);
             _status.Text = "Failed — see log";
+            return null;
         }
         finally
         {
@@ -197,39 +304,59 @@ public sealed class MainForm : Form
 
     private void SetEnabled(bool enabled)
     {
-        // "Write mod" generates first, so it needs no prior result to be useful.
         _generate.Enabled = enabled;
-        _writeMod.Enabled = enabled;
-        _grid.Enabled = enabled;
-        _preset.Enabled = enabled && _options.HeightmapPath is null;
+        _terrainGrid.Enabled = enabled;
+        _modGrid.Enabled = enabled;
+        _preset.Enabled = enabled;
         _seed.Enabled = enabled;
+        _sourceGenerated.Enabled = enabled;
+        _sourceFile.Enabled = enabled;
+        _browse.Enabled = enabled;
+
+        bool ready = _sourceFile.Checked ? _heightmapPath is not null : _terrain is not null;
+        _writeMod.Enabled = enabled && ready;
+        _preview.Enabled = enabled && ready;
     }
 
-    private void ShowPreviews(GenerationResult result)
+    /// <summary>
+    /// Terrain views on the Terrain tab, everything the mod is built from on the Mod tab, so each
+    /// tab shows what it is responsible for rather than both showing all six.
+    /// </summary>
+    private void ShowPreviews(TabControl views, GenerationResult result, bool terrainOnly)
     {
-        string? selected = _views.SelectedTab?.Text;
-        _views.TabPages.Clear();
+        string? selected = views.SelectedTab?.Text;
+
+        // Dispose before dropping the pages. Preview is meant to be clicked repeatedly while a
+        // setting is tuned, and a Bitmap is unmanaged memory the collector is in no hurry about —
+        // leaking one per view per click adds up over a tuning session.
+        foreach (TabPage page in views.TabPages)
+            foreach (Control control in page.Controls)
+                if (control is PictureBox { Image: { } image }) image.Dispose();
+
+        views.TabPages.Clear();
 
         // Guarded on Preview, not on Terra: an imported heightmap gives a perfectly good
         // TerrainData whose Preview is null, because there is no coarse world behind it.
-        if (result.Terra?.Preview is { } preview)
+        if (terrainOnly && result.Terra.Preview is { } preview)
         {
-            AddView("Relief", TerraPreview.RenderRelief(preview));
-            AddView("Rivers", TerraPreview.RenderRivers(preview));
-            AddView("Moisture", TerraPreview.RenderMoisture(preview));
+            AddView(views, "Relief", TerraPreview.RenderRelief(preview));
+            AddView(views, "Rivers", TerraPreview.RenderRivers(preview));
+            AddView(views, "Moisture", TerraPreview.RenderMoisture(preview));
         }
 
-        // Built from the province raster, so these work whatever produced the terrain — and they
-        // are the only views an imported heightmap has.
-        AddView("Height", PreviewRenderer.RenderElevation(result));
-        AddView("Terrain", PreviewRenderer.RenderTerrain(result));
-        AddView("Provinces", PreviewRenderer.RenderProvinces(result));
+        AddView(views, "Height", PreviewRenderer.RenderElevation(result));
 
-        foreach (TabPage page in _views.TabPages)
-            if (page.Text == selected) { _views.SelectedTab = page; break; }
+        if (!terrainOnly)
+        {
+            AddView(views, "Terrain", PreviewRenderer.RenderTerrain(result));
+            AddView(views, "Provinces", PreviewRenderer.RenderProvinces(result));
+        }
+
+        foreach (TabPage page in views.TabPages)
+            if (page.Text == selected) { views.SelectedTab = page; break; }
     }
 
-    private void AddView(string name, TerraPreview.Image image)
+    private static void AddView(TabControl views, string name, TerraPreview.Image image)
     {
         var box = new PictureBox
         {
@@ -240,7 +367,7 @@ public sealed class MainForm : Form
         };
         var page = new TabPage(name);
         page.Controls.Add(box);
-        _views.TabPages.Add(page);
+        views.TabPages.Add(page);
     }
 
     /// <summary>Packed RGB to a 24bpp bitmap, one row at a time to respect the stride.</summary>

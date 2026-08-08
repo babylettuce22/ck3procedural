@@ -1,4 +1,4 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.World;
 
 namespace Ck3MapGen.MapGen;
@@ -14,48 +14,6 @@ namespace Ck3MapGen.MapGen;
 /// </summary>
 public static class Raster
 {
-    /// <summary>
-    /// Bilinearly upsample the simulation elevation to <paramref name="width"/> x
-    /// <paramref name="height"/>. Wraps horizontally (the map is a cylinder) and clamps at the
-    /// poles.
-    /// </summary>
-    public static float[] UpsampleElevation(WorldGrid w, int width, int height)
-    {
-        var result = new float[width * height];
-        double sx = (double)w.Width / width;
-        double sy = (double)w.Height / height;
-
-        Parallel.For(0, height, y =>
-        {
-            // Sample at pixel centres so the result is not shifted by half a cell.
-            double gy = (y + 0.5) * sy - 0.5;
-            int y0 = (int)Math.Floor(gy);
-            double fy = gy - y0;
-            int y0c = Math.Clamp(y0, 0, w.Height - 1);
-            int y1c = Math.Clamp(y0 + 1, 0, w.Height - 1);
-
-            for (int x = 0; x < width; x++)
-            {
-                double gx = (x + 0.5) * sx - 0.5;
-                int x0 = (int)Math.Floor(gx);
-                double fx = gx - x0;
-                int x0w = Wrap(x0, w.Width);
-                int x1w = Wrap(x0 + 1, w.Width);
-
-                float e00 = w.Elevation[y0c * w.Width + x0w];
-                float e10 = w.Elevation[y0c * w.Width + x1w];
-                float e01 = w.Elevation[y1c * w.Width + x0w];
-                float e11 = w.Elevation[y1c * w.Width + x1w];
-
-                float top = (float)(e00 + (e10 - e00) * fx);
-                float bottom = (float)(e01 + (e11 - e01) * fx);
-                result[y * width + x] = (float)(top + (bottom - top) * fy);
-            }
-        });
-
-        return result;
-    }
-
     private static int Wrap(int v, int n) => ((v % n) + n) % n;
 
     /// <summary>

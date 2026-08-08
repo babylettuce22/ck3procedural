@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Ck3MapGen.Config;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
@@ -76,14 +76,15 @@ public static class HistoryWriter
         return (firstName, dynastyName);
     }
 
-    public static void WriteAll(string modDir, MapConfig cfg, List<Title> empires)
+    public static void WriteAll(string modDir, MapConfig cfg, List<Title> empires,
+        Dictionary<string, int> development)
     {
         var counties = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
         if (counties.Count == 0) return;
 
         WriteDynasties(modDir, counties);
         WriteCharacters(modDir, counties);
-        WriteTitleHistory(modDir, counties);
+        WriteTitleHistory(modDir, counties, development);
         WriteBookmark(modDir, cfg, counties);
         WriteChallengeCharacter(modDir, counties);
 
@@ -159,7 +160,8 @@ public static class HistoryWriter
         ParadoxText.WriteBom(Path.Combine(locDir, "gen_characters_l_english.yml"), loc.ToString());
     }
 
-    private static void WriteTitleHistory(string modDir, List<Title> counties)
+    private static void WriteTitleHistory(string modDir, List<Title> counties,
+        Dictionary<string, int> development)
     {
         string dir = Path.Combine(modDir, "history", "titles");
         Directory.CreateDirectory(dir);
@@ -167,8 +169,16 @@ public static class HistoryWriter
         var sb = new StringBuilder();
         foreach (var county in counties)
         {
+            // Development is a county property and belongs in the same dated block as the holder.
+            // CK3 applies change_development_level as a delta from zero at that date, so this is
+            // the level the county starts at.
+            int level = development.GetValueOrDefault(county.Key);
+
             sb.Append($"{county.Key} = {{\n");
-            sb.Append($"\t{StartDate} = {{ holder = {CharacterId(county)} }}\n");
+            sb.Append($"\t{StartDate} = {{\n");
+            sb.Append($"\t\tholder = {CharacterId(county)}\n");
+            if (level > 0) sb.Append($"\t\tchange_development_level = {level}\n");
+            sb.Append("\t}\n");
             sb.Append("}\n");
         }
 

@@ -1,7 +1,9 @@
-TERRA — the terrain generator
+﻿TERRA — the terrain generator
 =============================
 
-Replaces the ck2rpg magma simulation (still reachable via --legacy-terrain).
+The only terrain generator. The ck2rpg magma simulation and its noise/hotspot
+variant have been removed; terrain now comes from here or from an imported
+heightmap, and nothing else.
 Heights are normalised to roughly [0,1] with sea level fixed at TerraSeaLevel
 (0.30) and converted to the project's integer elevation scale only on the way
 out, so a value means the same thing on every seed and at every map size.
@@ -11,7 +13,7 @@ THREE RESOLUTIONS
 -----------------
   base      Width/4    tectonics + the main erosion. Cheap enough for ~34 iterations.
   province  Width/2    drainage, rivers, lakes. The raster CK3 reads rivers.png from.
-  full      Width      detail, channel carving, the exported heightmap.
+  full      Width      detail, relaxation, the exported heightmap.
 
 Nothing wraps in X. CK3's map is a flat rectangle with hard edges and forced
 ocean borders, so wrapping would only cost speed.
@@ -72,9 +74,18 @@ THE STAGES
    Lakes are filled depressions above a minimum size — mask only, they are
    deliberately NOT emitted as water.
 
-6. Relax + CarveChannels       full
-   Slope-limited relaxation (banded with saved seam rows, so the answer does
-   not depend on thread scheduling), then the river channels are cut.
+6. Relax                        full
+   Slope-limited relaxation, banded with saved seam rows so the answer does not
+   depend on thread scheduling.
+
+   NOTHING CARVES THE HEIGHTMAP FOR RIVERS. Rivers are a raster and nothing
+   else: the courses traced in step 5 are drawn into rivers.png and that is the
+   end of them. The valleys they run through are whatever the erosion cut. The
+   carving that used to live here — a V-notch under every course, plus a pass
+   that took the biggest rivers through the water plane into CK3
+   river_provinces — was removed deliberately; rivers are to be redone from
+   scratch. See the ck3-major-rivers note for the vanilla measurements, which
+   are still good reference.
 
 7. TerraScale                  full
    Piecewise-linear onto the integer scale, with the knee on a percentile of

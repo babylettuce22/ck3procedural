@@ -20,9 +20,6 @@ public sealed class GenerationOptions
     public string GameDir { get; set; } =
         @"C:\Program Files (x86)\Steam\steamapps\common\Crusader Kings III\game";
 
-    /// <summary>The ck2rpg noise/hotspot path. Only meaningful when Terra is off.</summary>
-    public bool UseNoise { get; set; }
-
     /// <summary>Skip characters, title history, dynasties and the bookmark.</summary>
     public bool WriteHistory { get; set; } = true;
 
@@ -47,7 +44,7 @@ public sealed class GenerationResult
     public required float[] ProvinceElevation { get; init; }
     public required byte[] LandMask { get; init; }
     public required ProvinceMap Provinces { get; init; }
-    public TerrainData? Terra { get; init; }
+    public required TerrainData Terra { get; init; }
     public long ElapsedMs { get; init; }
 }
 
@@ -59,41 +56,40 @@ public static class Generator
     public static GenerationResult Generate(GenerationOptions options)
     {
         var cfg = options.Config;
+        var rng = new Rng(cfg.Seed);
+
+        // Everything downstream reads TerrainData and nothing else, so an imported heightmap
+        // travels the same path as a generated one from here on.
+        //
+        // Terrain is generated at heightmap resolution and summarised down onto the coarse grid,
+        // rather than simulated coarse and stretched up. The province map is derived from the same
+        // field the heightmap is written from, so the coastline in provinces.png is the coastline
+        // in heightmap.png by construction.
+        var terra = options.HeightmapPath is not null
+            ? HeightmapSource.Load(options.HeightmapPath, cfg, rng)
+            : TerraPipeline.Generate(cfg, rng);
+
+        return FromTerrain(terra, cfg);
+    }
+
+    /// <summary>
+    /// Everything downstream of the heightmap: the coarse world summary, moisture, the land mask
+    /// and the province partition. Terrain in, a full result out.
+    ///
+    /// Split out from <see cref="Generate"/> so it can be re-run against terrain that already
+    /// exists. That is what makes the GUI's Mod tab able to preview a settings change — climate,
+    /// province size, the terrain classifier — in the seconds this takes rather than by
+    /// regenerating terrain, which is the slow half and which none of those settings affect.
+    /// Re-seeded from the config rather than taking a live Rng, so a preview and a later write of
+    /// the same settings agree.
+    /// </summary>
+    public static GenerationResult FromTerrain(TerrainData terra, MapConfig cfg)
+    {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var rng = new Rng(cfg.Seed);
 
-        WorldGrid world;
-        float[] provinceElevation;
-        TerrainData? terra = null;
-
-        if (options.HeightmapPath is not null)
-        {
-            // Everything downstream reads TerrainData and nothing else, so an imported heightmap
-            // travels the same path as a generated one from here on.
-            terra = HeightmapSource.Load(options.HeightmapPath, cfg, rng);
-            world = WorldBridge.Populate(terra, cfg, rng);
-            provinceElevation = terra.ProvinceElevation;
-        }
-        else if (cfg.UseTerra)
-        {
-            // Terrain is generated at heightmap resolution and summarised down onto the coarse
-            // grid, rather than simulated coarse and stretched up. The province map is derived from
-            // the same field the heightmap is written from, so the coastline in provinces.png is
-            // the coastline in heightmap.png by construction.
-            terra = TerraPipeline.Generate(cfg, rng);
-            world = WorldBridge.Populate(terra, cfg, rng);
-            provinceElevation = terra.ProvinceElevation;
-        }
-        else
-        {
-            world = options.UseNoise
-                ? Pipeline.GenerateWorldFromNoise(cfg, rng)
-                : Pipeline.GenerateWorld(cfg, rng);
-
-            Console.WriteLine($"Rasterising heightmap {cfg.Width}x{cfg.Height}, " +
-                              $"provinces {cfg.ProvinceWidth}x{cfg.ProvinceHeight}");
-            provinceElevation = Raster.UpsampleElevation(world, cfg.ProvinceWidth, cfg.ProvinceHeight);
-        }
+        var world = WorldBridge.Populate(terra, cfg, rng);
+        var provinceElevation = terra.ProvinceElevation;
 
         var landMask = Raster.LandMask(provinceElevation, cfg);
         var provinces = Provinces.Build(landMask, provinceElevation, cfg.ProvinceWidth,
@@ -128,8 +124,7 @@ public static class Generator
         Emit.ModWriter.WriteDescriptors(modDir);
 
         var (order, baronyCount, landCount) = Emit.MapDataWriter.WriteAll(
-            modDir, result.World, cfg, result.Provinces, result.ProvinceElevation,
-            options.WritePacked, result.Terra);
+            modDir, cfg, result.Provinces, options.WritePacked, result.Terra);
 
         // Titles get the narrower count: an impassable province has no barony.
         var empires = Titles.Build(result.Provinces, baronyCount, order, rng);
@@ -150,6 +145,13 @@ public static class Generator
         Io.DebugRender.WriteTerrain(Path.Combine(outDir, "debug_terrain.png"), result.World,
             result.Config, scale);
         Io.DebugRender.WriteProvinces(Path.Combine(outDir, "debug_provinces.png"), result.Provinces, rng);
+
+        // The classification the mod is painted from, which debug_terrain.png above is NOT — that
+        // one is ck2rpg's coarse biome() and exists only as a port check.
+        Io.DebugRender.WriteTerrainClasses(Path.Combine(outDir, "debug_classes.png"),
+            MapGen.TerrainClassifier.Classify(result.World, result.Config, result.ProvinceElevation,
+                result.LandMask, new Rng(result.Config.Seed)),
+            result.Config.ProvinceWidth, result.Config.ProvinceHeight);
 
         // Hillshaded relief at the resolution the erosion ran at. Worth more than the greyscale
         // dumps: flat grey hides whether erosion produced valley networks, shading shows them the

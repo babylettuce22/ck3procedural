@@ -58,7 +58,6 @@ public static class MapDataWriter
 
     public const byte RiverIndexSource = 0;
     public const byte RiverIndexJoin = 1;
-    public const byte RiverIndexDefaultWidth = 6;
     public const byte RiverIndexLand = 255;
 
     /// <summary>
@@ -69,9 +68,8 @@ public static class MapDataWriter
     public const byte RiverIndexWater = 254;
 
     /// <summary>Returns the label -&gt; province id mapping and the land province count.</summary>
-    public static (int[] Order, int BaronyCount, int LandCount) WriteAll(string modDir, WorldGrid world, MapConfig cfg,
-        ProvinceMap provinces, float[] provinceElevation, bool writePacked = true,
-        MapGen.TerrainData? terra = null)
+    public static (int[] Order, int BaronyCount, int LandCount) WriteAll(string modDir,
+        MapConfig cfg, ProvinceMap provinces, bool writePacked, MapGen.TerrainData terra)
     {
         string dir = Path.Combine(modDir, "map_data");
         Directory.CreateDirectory(dir);
@@ -82,8 +80,8 @@ public static class MapDataWriter
 
         WriteProvincesPng(Path.Combine(dir, "provinces.png"), provinces, order);
         WriteDefinitionCsv(Path.Combine(dir, "definition.csv"), provinces, order);
-        WriteRiversPng(Path.Combine(dir, "rivers.png"), world, cfg, provinces, terra);
-        WriteHeightmap(dir, world, cfg, writePacked, provinces, order, landCount, terra);
+        WriteRiversPng(Path.Combine(dir, "rivers.png"), cfg, provinces, terra);
+        WriteHeightmap(dir, cfg, writePacked, provinces, order, landCount, terra);
         WriteDefaultMap(Path.Combine(dir, "default.map"), provinces.Count, baronyCount, landCount);
         WriteStubs(dir);
 
@@ -193,8 +191,8 @@ public static class MapDataWriter
     /// Palettised rivers map. Background is index 255 (white = land); courses are drawn at a
     /// fixed width index with a green source and red joins, which is the minimum CK3 accepts.
     /// </summary>
-    private static void WriteRiversPng(string path, WorldGrid world, MapConfig cfg,
-        ProvinceMap provinces, MapGen.TerrainData? terra)
+    private static void WriteRiversPng(string path, MapConfig cfg, ProvinceMap provinces,
+        MapGen.TerrainData terra)
     {
         int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
         var indices = new byte[width * height];
@@ -207,37 +205,16 @@ public static class MapDataWriter
             if (!provinces.Seeds[provinces.Label[i]].IsLand) indices[i] = RiverIndexWater;
         });
 
-        if (terra is not null)
-        {
-            // Terra already rasterised its courses at exactly this resolution, with the source
-            // and confluence markers and a per-segment width index in place.
-            for (int i = 0; i < indices.Length; i++)
-                if (terra.RiverPixels[i] != MapGen.Terra.RiverRaster.None)
-                    indices[i] = terra.RiverPixels[i];
-        }
-        else
-        {
-            var mask = Raster.RiverMask(world, width, height);
-            for (int i = 0; i < mask.Length; i++)
-                if (mask[i] == 1) indices[i] = RiverIndexDefaultWidth;
-
-            // Mark sources and confluences, which CK3 uses to work out flow direction.
-            double sx = (double)width / world.Width;
-            double sy = (double)height / world.Height;
-            foreach (var river in world.Rivers)
-            {
-                if (river.Cells.Count == 0) continue;
-                Stamp(river.Cells[0], RiverIndexSource);
-                if (river.IsTributary) Stamp(river.Cells[^1], RiverIndexJoin);
-            }
-
-            void Stamp(int cell, byte index)
-            {
-                int px = (int)((world.X(cell) + 0.5) * sx);
-                int py = (int)((world.Y(cell) + 0.5) * sy);
-                if (px >= 0 && py >= 0 && px < width && py < height) indices[py * width + px] = index;
-            }
-        }
+        // The courses were rasterised at exactly this resolution already, with the source and
+        // confluence markers and a per-segment width index in place.
+        //
+        // Only over land. A drawn river is a stream running across dry ground, and vanilla agrees
+        // emphatically: 98.8% of its drawn blue pixels are inside land provinces. Over water the
+        // water index is the whole answer.
+        for (int i = 0; i < indices.Length; i++)
+            if (terra.RiverPixels[i] != MapGen.Terra.RiverRaster.None
+                && provinces.Seeds[provinces.Label[i]].IsLand)
+                indices[i] = terra.RiverPixels[i];
 
         var palette = new byte[256 * 3];
         for (int i = 0; i < 256; i++)
@@ -586,38 +563,12 @@ public static class MapDataWriter
     /// log* — which is not the same as the terrain renderer accepting it. Pass writePacked:false
     /// to ship a bare heightmap.png and repack in -mapeditor instead.
     /// </summary>
-    private static void WriteHeightmap(string dir, WorldGrid world, MapConfig cfg, bool writePacked,
-        ProvinceMap provinces, int[] order, int landCount, MapGen.TerrainData? terra)
+    private static void WriteHeightmap(string dir, MapConfig cfg, bool writePacked,
+        ProvinceMap provinces, int[] order, int landCount, MapGen.TerrainData terra)
     {
-        float[] elevation;
-
-        if (terra is not null)
-        {
-            // Terra generated at this resolution to begin with: the seafloor shelf, the fine
-            // relief and the river channels are already in the field, cut by the same erosion and
-            // the same drainage network that produced rivers.png.
-            elevation = terra.Elevation;
-        }
-        else
-        {
-            elevation = Raster.UpsampleElevation(world, cfg.Width, cfg.Height);
-
-            // The upsample only carries continent and mountain-range *placement*; detail is
-            // generated at full resolution here, and the seafloor is shaped into a shelf rather
-            // than left as stretched simulation output.
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            HeightDetail.Apply(elevation, cfg, new Core.Rng(cfg.Seed ^ 0x5EED));
-            HeightDetail.ShapeSeafloor(elevation, cfg, shelfPixels: cfg.Width / 96);
-
-            // Rivers are rasterised separately into rivers.png, so without this the ground under a
-            // river is no lower than its banks and the water appears to float on the terrain.
-            var riverMask = Raster.RiverMask(world, cfg.ProvinceWidth, cfg.ProvinceHeight);
-            HeightDetail.CarveRivers(elevation, cfg, riverMask, cfg.ProvinceWidth, cfg.ProvinceHeight);
-            Console.WriteLine($"  heightmap detail: generated at {cfg.Width}x{cfg.Height} " +
-                              $"({sw.ElapsedMilliseconds} ms)");
-        }
-
-        var full = ElevationTo16(elevation, cfg);
+        // Always the field the terrain was generated at. There is no upsample-and-embellish path
+        // any more: the heightmap is what the erosion produced, at the resolution it produced it.
+        var full = ElevationTo16(terra.Elevation, cfg);
         ForceCoastlineToMatchProvinces(full, cfg, provinces, order, landCount);
         ReportHypsometry(full);
         PngWriter.WriteGray16(Path.Combine(dir, "heightmap.png"), cfg.Width, cfg.Height, full);

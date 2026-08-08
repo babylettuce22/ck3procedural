@@ -95,26 +95,8 @@ public static class PreviewRenderer
         return Downsample(map.Width, map.Height, i => colours[map.Label[i]]);
     }
 
-    private static (byte R, byte G, byte B) Colour(TerrainClass terrain) => terrain switch
-    {
-        TerrainClass.Sea => (38, 62, 96),
-        TerrainClass.Beach => (222, 208, 158),
-        TerrainClass.Plains => (126, 162, 88),
-        TerrainClass.Farmlands => (156, 176, 74),
-        TerrainClass.Steppe => (178, 168, 104),
-        TerrainClass.Drylands => (192, 156, 96),
-        TerrainClass.Desert => (226, 202, 138),
-        TerrainClass.Jungle => (52, 116, 60),
-        TerrainClass.Forest => (66, 110, 62),
-        TerrainClass.Taiga => (84, 118, 100),
-        TerrainClass.Wetlands => (98, 128, 118),
-        TerrainClass.Floodplains => (128, 152, 96),
-        TerrainClass.Hills => (140, 128, 92),
-        TerrainClass.Mountains => (146, 140, 136),
-        TerrainClass.DesertMountains => (176, 148, 118),
-        TerrainClass.Arctic => (238, 240, 244),
-        _ => (0, 0, 0),
-    };
+    private static (byte R, byte G, byte B) Colour(TerrainClass terrain)
+        => Io.DebugRender.TerrainColour(terrain);
 
     private static TerraPreview.Image Downsample(int width, int height,
         Func<int, (byte R, byte G, byte B)> colour)

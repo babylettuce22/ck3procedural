@@ -11,14 +11,17 @@ namespace Ck3MapGen.MapGen.Terra;
 ///                                                                    |
 ///                                             detail  ->  drainage at W/2  ->  rivers
 ///                                                                    |
-///                                        second incision  ->  relax  ->  carve channels
+///                                              second incision  ->  relax
 /// </code>
 ///
 /// Three resolutions, each doing the job it is suited to: continents and tectonics are decided
 /// where a cell is four export pixels across and the erosion can afford to run thirty-odd
 /// iterations; rivers are extracted at the province map's own resolution, because that is the
-/// raster CK3 reads them from; detail and channel carving happen at full resolution, where they
-/// are visible.
+/// raster CK3 reads them from; detail happens at full resolution, where it is visible.
+///
+/// Rivers are a raster and nothing else. Nothing here cuts a channel into the heightmap: the
+/// courses are traced off the drainage the erosion already produced, drawn into rivers.png, and
+/// that is the end of them. The valleys they run in are whatever the erosion carved.
 /// </summary>
 public static class TerraPipeline
 {
@@ -143,11 +146,10 @@ public static class TerraPipeline
         provinceFlow = null!;
         province = null!;
 
-        // --- 6. Full resolution: settle the added detail, then cut the river channels ---
+        // --- 6. Full resolution: settle the added detail ---
         sw.Restart();
         DetailPass.Relax(full, fw, fh, sea, cfg.TerraDetailTalusScaled, 0.5f);
-        DetailPass.CarveChannels(full, fw, fh, courses, pw, ph, sea, cfg);
-        Console.WriteLine($"  full-resolution incision, relax and channels ({sw.ElapsedMilliseconds} ms)");
+        Console.WriteLine($"  full-resolution incision and relax ({sw.ElapsedMilliseconds} ms)");
 
         // --- 7. Onto the simulation's elevation scale ---
         sw.Restart();

@@ -1,4 +1,4 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.World;
 
 namespace Ck3MapGen.Io;
@@ -10,6 +10,61 @@ namespace Ck3MapGen.Io;
 /// </summary>
 public static class DebugRender
 {
+    /// <summary>
+    /// The palette for <see cref="MapGen.TerrainClass"/>, shared with the GUI preview so the two
+    /// views of the same classification cannot drift apart.
+    /// </summary>
+    public static (byte R, byte G, byte B) TerrainColour(MapGen.TerrainClass terrain) => terrain switch
+    {
+        MapGen.TerrainClass.Sea => (38, 62, 96),
+        MapGen.TerrainClass.Beach => (222, 208, 158),
+        MapGen.TerrainClass.Plains => (126, 162, 88),
+        MapGen.TerrainClass.Farmlands => (156, 176, 74),
+        MapGen.TerrainClass.Steppe => (178, 168, 104),
+        MapGen.TerrainClass.Drylands => (192, 156, 96),
+        MapGen.TerrainClass.Desert => (226, 202, 138),
+        MapGen.TerrainClass.Jungle => (52, 116, 60),
+        MapGen.TerrainClass.Forest => (66, 110, 62),
+        MapGen.TerrainClass.Taiga => (84, 118, 100),
+        MapGen.TerrainClass.Wetlands => (98, 128, 118),
+        MapGen.TerrainClass.Floodplains => (128, 152, 96),
+        MapGen.TerrainClass.Hills => (140, 128, 92),
+        MapGen.TerrainClass.Mountains => (146, 140, 136),
+        MapGen.TerrainClass.DesertMountains => (176, 148, 118),
+        MapGen.TerrainClass.Arctic => (238, 240, 244),
+        _ => (0, 0, 0),
+    };
+
+    /// <summary>
+    /// The classifier's own output at province resolution — what the map is actually painted from.
+    ///
+    /// Distinct from <see cref="WriteTerrain"/>, which draws ck2rpg's coarse <c>biome()</c> off the
+    /// simulation grid and is only a port-fidelity check. That one is not what the mod ships, so
+    /// judging climate or biome boundaries by it reads the wrong picture; this is the one to look
+    /// at. Until this existed the classification had no CLI view at all, only the GUI preview.
+    /// </summary>
+    public static void WriteTerrainClasses(string path, MapGen.TerrainClass[] terrain,
+        int width, int height, int maxWidth = 2048)
+    {
+        int step = Math.Max(1, width / maxWidth);
+        int outW = width / step, outH = height / step;
+        var rgb = new byte[outW * outH * 3];
+
+        for (int y = 0; y < outH; y++)
+        {
+            for (int x = 0; x < outW; x++)
+            {
+                var (r, g, b) = TerrainColour(terrain[y * step * width + x * step]);
+                int o = (y * outW + x) * 3;
+                rgb[o] = r;
+                rgb[o + 1] = g;
+                rgb[o + 2] = b;
+            }
+        }
+
+        PngWriter.WriteRgb8(path, outW, outH, rgb);
+    }
+
     /// <summary>Elevation as greyscale, normalised across the actual range so detail is visible.</summary>
     public static void WriteElevation(string path, WorldGrid w, int scale = 1)
     {

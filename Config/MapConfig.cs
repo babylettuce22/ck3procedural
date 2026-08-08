@@ -29,75 +29,11 @@ public sealed class MapConfig
     [Category("02 Map size")]
     public int WorldHeight { get; set; } = 512;
 
-    /// <summary>Seed for every random decision. ck2rpg used unseeded Math.random.</summary>
+    /// <summary>Seed for every random decision.</summary>
     [SettingRole(SettingRole.Always)]
     [Category("01 General")]
-    [Description("Seed for every random decision. ck2rpg used unseeded Math.random.")]
+    [Description("Seed for every random decision.")]
     public int Seed { get; set; } = 1;
-
-    [SettingRole(SettingRole.GenerationOnly)]
-    [Category("99 Legacy (ck2rpg path)")]
-    public int TooSmallProvince { get; set; } = 900;
-    [SettingRole(SettingRole.GenerationOnly)]
-    [Category("99 Legacy (ck2rpg path)")]
-    public bool HorizontalSpread { get; set; } = false;
-    [SettingRole(SettingRole.GenerationOnly)]
-    [Category("99 Legacy (ck2rpg path)")]
-    public bool VerticalSpread { get; set; } = true;
-
-    /// <summary>When true, land provinces may override water during province fill.</summary>
-    [SettingRole(SettingRole.GenerationOnly)]
-    [Category("99 Legacy (ck2rpg path)")]
-    [Description("When true, land provinces may override water during province fill.")]
-    public bool FixBlockiness { get; set; } = false;
-
-    [SettingRole(SettingRole.GenerationOnly)]
-    [Category("99 Legacy (ck2rpg path)")]
-    public int RiversDistance { get; set; } = 10;
-    [SettingRole(SettingRole.GenerationOnly)]
-    [Category("99 Legacy (ck2rpg path)")]
-    public int RiverIntoOcean { get; set; } = 1;
-    [SettingRole(SettingRole.GenerationOnly)]
-    [Category("99 Legacy (ck2rpg path)")]
-    public bool VaryElevation { get; set; } = false;
-    [SettingRole(SettingRole.GenerationOnly)]
-    [Category("99 Legacy (ck2rpg path)")]
-    public int LandProvinceLimit { get; set; } = 6000;
-    [SettingRole(SettingRole.GenerationOnly)]
-    [Category("99 Legacy (ck2rpg path)")]
-    public int WaterProvinceLimit { get; set; } = 10000;
-    [SettingRole(SettingRole.GenerationOnly)]
-    [Category("99 Legacy (ck2rpg path)")]
-    public int FillInLimit { get; set; } = 20;
-    [SettingRole(SettingRole.GenerationOnly)]
-    [Category("99 Legacy (ck2rpg path)")]
-    public int MassBrushAdjuster { get; set; } = 1;
-    [SettingRole(SettingRole.GenerationOnly)]
-    [Category("99 Legacy (ck2rpg path)")]
-    public bool OverrideWithFlatmap { get; set; } = false;
-    [SettingRole(SettingRole.GenerationOnly)]
-    [Category("99 Legacy (ck2rpg path)")]
-    public int ElevationToHeightmap { get; set; } = 2;
-    [SettingRole(SettingRole.GenerationOnly)]
-    [Category("99 Legacy (ck2rpg path)")]
-    public string Ethnicities { get; set; } = "vanilla";
-
-    /// <summary>
-    /// Fraction of the grid that should end up above sea level. ck2rpg has no such setting:
-    /// its startup() sequence leaves an archipelago (~6% land) and the user grows continents by
-    /// clicking the "spread" button, which runs three more emit/spread rounds per press. This
-    /// automates that loop so the tool can run unattended. Set to 0 to stop after startup().
-    /// </summary>
-    [SettingRole(SettingRole.GenerationOnly)]
-    [Category("04 Continents")]
-    [Description("Fraction of the grid that should end up above sea level. ck2rpg has no such setting: its startup() sequence leaves an archipelago (~6% land) and the user grows continents by clicking the \"spread\" button, which runs three more emit/spread rounds per press. This automates that loop so the tool can run unattended. Set to 0 to stop after startup().")]
-    public double TargetLandFraction { get; set; } = 0.40;
-
-    /// <summary>Safety cap on the automated growth loop.</summary>
-    [SettingRole(SettingRole.GenerationOnly)]
-    [Category("99 Legacy (ck2rpg path)")]
-    [Description("Safety cap on the automated growth loop.")]
-    public int MaxExtraSpreadRounds { get; set; } = 400;
 
     /// <summary>
     /// Reshape land heights onto vanilla's measured hypsometric curve instead of stretching them
@@ -111,18 +47,15 @@ public sealed class MapConfig
     /// </summary>
     [SettingRole(SettingRole.Always)]
     [Category("11 Height scale")]
-    [Description("Reshape land heights onto vanilla's measured hypsometric curve instead of stretching them linearly to whatever the tallest simulated peak happens to be. The linear stretch made the map as mountainous as its most extreme accident: measured on 2026-08-07, it put 18x more land in the top elevation band than vanilla has, and always drove the highest pixel to 255 where vanilla's tops out at 192. The...")]
+    [Description("Reshape land heights onto vanilla's measured hypsometric curve instead of stretching them linearly to whatever the tallest simulated peak happens to be, which made the map as mountainous as its most extreme accident. Monotonic: it changes the height scale, never where anything is.")]
     public bool MatchVanillaHypsometry { get; set; } = true;
 
-    /// <summary>
-    /// Run rainErosion() before rivers. It carves valleys and is the only thing in ck2rpg that
-    /// creates lakes, but its UI button is commented out, so a stock ck2rpg run never calls it
-    /// and lakes only ever come from hand-painting. Off by default to match that.
-    /// </summary>
+    /// <summary>Fraction of the map that should end up above sea level.</summary>
     [SettingRole(SettingRole.GenerationOnly)]
-    [Category("99 Legacy (ck2rpg path)")]
-    [Description("Run rainErosion() before rivers. It carves valleys and is the only thing in ck2rpg that creates lakes, but its UI button is commented out, so a stock ck2rpg run never calls it and lakes only ever come from hand-painting. Off by default to match that.")]
-    public bool EnableRainErosion { get; set; } = false;
+    [Category("04 Continents")]
+    [Description("Fraction of the map that should end up above sea level.")]
+    public double TargetLandFraction { get; set; } = 0.40;
+
 
     // --- Terra: the terrain generator (MapGen/Terra) ---
     //
@@ -130,15 +63,6 @@ public sealed class MapConfig
     // only converted to the integer scale above on the way out. Lengths are given as a fraction of
     // the map width or as cycles across it, never in pixels, so changing map size resamples the
     // same world instead of generating a different one.
-
-    /// <summary>
-    /// Use the tectonics-and-erosion generator instead of the ck2rpg magma simulation. The old
-    /// path is kept behind <c>--legacy-terrain</c> for comparison.
-    /// </summary>
-    [SettingRole(SettingRole.GenerationOnly)]
-    [Category("01 General")]
-    [Description("Use the tectonics-and-erosion generator instead of the ck2rpg magma simulation. The old path is kept behind --legacy-terrain for comparison.")]
-    public bool UseTerra { get; set; } = true;
 
     /// <summary>How much coarser the tectonics and the main erosion run than the heightmap.</summary>
     [SettingRole(SettingRole.GenerationOnly)]
@@ -460,24 +384,12 @@ public sealed class MapConfig
     [Description("Largest perpendicular meander offset.")]
     public double MeanderPixelsAtVanilla { get; set; } = 2.5;
 
-    /// <summary>Half-width of the channel cut into the heightmap.</summary>
-    [SettingRole(SettingRole.Always)]
-    [Category("10 Rivers and lakes")]
-    [Description("Half-width of the channel cut into the heightmap.")]
-    public double ChannelRadiusAtVanilla { get; set; } = 3.0;
-
     // No longer scaled by map size: a river is the same width and wanders the same distance
     // whatever size map it is on, because a pixel is the same distance on all of them.
     public int TerraMinRiverCells => Math.Max(8, (int)MinRiverPixelsAtVanilla);
     public double TerraRiverSimplify => Math.Max(0.6, RiverSimplifyAtVanilla);
     public double TerraMeanderPixels => Math.Max(0.5, MeanderPixelsAtVanilla);
-    public float TerraChannelRadius => (float)Math.Max(1.0, ChannelRadiusAtVanilla);
 
-    /// <summary>Depth of the channel cut into the heightmap under a river, in normalised height.</summary>
-    [SettingRole(SettingRole.GenerationOnly)]
-    [Category("10 Rivers and lakes")]
-    [Description("Depth of the channel cut into the heightmap under a river, in normalised height.")]
-    public float TerraChannelDepth { get; set; } = 0.010f;
 
     /// <summary>How deep a filled depression must be to count as a lake.</summary>
     [SettingRole(SettingRole.Always)]
@@ -505,8 +417,21 @@ public sealed class MapConfig
     [Category("11 Height scale")]
     public int TerraFloorElevation { get; set; } = -250;
 
-    /// <summary>settings.equator — in raster space, deliberately off-centre.</summary>
-    public double Equator => Height - Height / 10.0;
+    /// <summary>
+    /// Where the equator line sits, as a fraction of map height. Everything about climate is
+    /// measured as distance from it, so this slides every band up or down the map together.
+    ///
+    /// ck2rpg's 0.9 is deliberately off-centre: it puts the equator near the bottom edge, so a map
+    /// is mostly one hemisphere and the cold band only appears at the top. 0.5 centres it and gives
+    /// a symmetric world with tropics through the middle and cold at both edges.
+    /// </summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("12 Climate")]
+    [Description("Where the equator sits, as a fraction of map height. Slides every climate band up or down together. 0.9 (ck2rpg's) puts it near the bottom edge so the map is mostly one hemisphere; 0.5 centres it and gives cold at both edges.")]
+    public double EquatorPosition { get; set; } = 0.9;
+
+    /// <summary>settings.equator — in raster space.</summary>
+    public double Equator => Height * Math.Clamp(EquatorPosition, 0.0, 1.0);
 
     /// <summary>settings.pixelSize — raster pixels per simulation cell.</summary>
     public double PixelSize => (double)Height / WorldHeight;
@@ -585,6 +510,47 @@ public sealed class MapConfig
     /// <summary>Target area of one sea zone on this map, in province pixels.</summary>
     public double SeaZonePixels => SeaZonePixelsAtVanilla * CountyScale * CountyScale;
 
+
+    // --- Development ---
+    //
+    // Vanilla's own 867 start, measured over the 3,827 counties that set one: mass between 0 and
+    // 16, median near 8, and a thin tail to 60. A handful of Constantinoples above a great many
+    // backwaters. The defaults here aim at that shape rather than at a flat spread.
+
+    /// <summary>Development every county gets before terrain is considered.</summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("13 Development")]
+    [Description("Development every county gets regardless of its terrain — the floor for the poorest backwater.")]
+    public int DevelopmentBase { get; set; } = 0;
+
+    /// <summary>How much development the very best terrain adds on top of the base.</summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("13 Development")]
+    [Description("How much development the best possible terrain adds on top of the base. Vanilla's 867 median is about 8 and its mass runs to 16.")]
+    public int DevelopmentSpread { get; set; } = 22;
+
+    /// <summary>Overall multiplier on the terrain-derived part. The quick 'richer/poorer' dial.</summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("13 Development")]
+    [Description("Overall multiplier on the terrain-derived development. The quick dial for a richer or poorer world without changing how it is distributed.")]
+    public double DevelopmentScale { get; set; } = 1.0;
+
+    /// <summary>
+    /// How sharply development concentrates on the best land. 1 spreads it evenly across the
+    /// ranked counties; higher makes rich counties rarer. 1.5 reproduces vanilla's 867 shape:
+    /// median about 8, p90 about 19.
+    /// </summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("13 Development")]
+    [Description("How sharply development concentrates on the best land. Counties are ranked against each other, so 1 is an even spread and higher makes rich counties rarer. 1.5 reproduces vanilla 867: median about 8, p90 about 19.")]
+    public double DevelopmentSkew { get; set; } = 1.5;
+
+    /// <summary>Added to a county's terrain score if any of its baronies reaches the sea.</summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("13 Development")]
+    [Description("Added to a county's terrain score if any of its baronies reaches the sea, because a coast is a road when roads are bad.")]
+    public double DevelopmentCoastBonus { get; set; } = 0.12;
+
     /// <summary>
     /// Smallest allowed province in pixels. Below this CK3 cannot derive borders, a centroid or
     /// locator positions and crashes in geometry code without logging anything.
@@ -636,25 +602,111 @@ public sealed class MapConfig
     [Description("Rows and columns of forced ocean around the edge of the province map, in province pixels. Vanilla has water along every edge — its top and bottom rows are entirely sea, and its province map has only a handful of large ocean provinces touching them. A generated map happily runs land off the poles instead: on seed 1 at vanilla size, 33 land provinces touched the top edge and 17 the bottom. A prov...")]
     public int OceanBorder { get; set; } = 1;
 
+    // --- Climate ---
+    //
+    // The latitude bands below are a straight port of ck2rpg, and on their own they draw the
+    // climate as a horizontal stripe: a band edge is a single-valued function of x, so however much
+    // it is jittered per column it is still one continuous seam running the width of the map.
+    // ck2rpg's own jitter is a +/-1 random walk indexed by *simulation* column, which wanders
+    // slowly and only ever produces a gently wavy line.
+    //
+    // These two turn the edge into a contour of a 2D field instead, which is what gives it inlets,
+    // peninsulas and outliers. Both are in the same raster units as the band limits themselves —
+    // absolute, referenced to vanilla, not scaled to this map.
+
+    /// <summary>
+    /// How far the climate boundary wanders from its latitude, in raster pixels. Warped fBm, so it
+    /// wanders at several scales at once rather than as one smooth sine.
+    /// </summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("12 Climate")]
+    [Description("How far a climate boundary wanders from its latitude, in raster pixels. 0 restores ck2rpg's straight horizontal bands.")]
+    public double ClimateWanderPixels { get; set; } = 420;
+
+    /// <summary>
+    /// How much altitude counts as latitude, in raster pixels per full mountain height. Without it
+    /// a range crossing a band edge is simply cut in half by it, because ck2rpg's climate is a
+    /// function of y alone — the tropics run straight over a 4,000 m massif. With it the boundary
+    /// bends around terrain and high ground carries its own colder climate, which is both what real
+    /// climate does and what stops the band reading as a ruled line.
+    /// </summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("12 Climate")]
+    [Description("How much altitude counts as latitude, in raster pixels per full mountain height. Makes high ground colder than the lowland at the same latitude, so climate boundaries bend around ranges instead of cutting through them.")]
+    public double ClimateLapsePixels { get; set; } = 900;
+
+    // Band widths, authored as widths rather than as edges. ck2rpg stores each band's inner and
+    // outer edge as a separate constant, which means any change has to update the neighbour too or
+    // the bands stop tiling and leave a gap that classifies as nothing. Scaling widths and
+    // accumulating them, as ResetClimateLimits does, cannot produce a gap.
+    //
+    // The base widths are ck2rpg's, at its 8192-wide authoring scale: tropical 1007, subtropical
+    // 513, temperate 1345, then cold to the pole.
+
+    /// <summary>
+    /// Stretches every climate band at once. Above 1 the bands are wider, so a map of a given size
+    /// spans fewer of them; below 1 it crosses more of them over the same distance.
+    /// </summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("12 Climate")]
+    [Description("Stretches every climate band at once. Above 1 the bands are wider and the map spans fewer of them; below 1 it crosses more of them over the same distance.")]
+    public double ClimateBandScale { get; set; } = 1.0;
+
+    /// <summary>Width of the tropical band, relative to ck2rpg's.</summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("12 Climate")]
+    [Description("Width of the tropical band, relative to ck2rpg's. Bands above it shift outward to keep tiling.")]
+    public double TropicalWidthScale { get; set; } = 1.0;
+
+    /// <summary>Width of the subtropical band, relative to ck2rpg's.</summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("12 Climate")]
+    [Description("Width of the subtropical band, relative to ck2rpg's. Bands above it shift outward to keep tiling.")]
+    public double SubTropicalWidthScale { get; set; } = 1.0;
+
+    /// <summary>Width of the temperate band, relative to ck2rpg's. Cold is whatever is left.</summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("12 Climate")]
+    [Description("Width of the temperate band, relative to ck2rpg's. Cold is simply everything beyond it, so widening this pushes the cold band toward the pole.")]
+    public double TemperateWidthScale { get; set; } = 1.0;
+
     public Limits Limits { get; } = new();
 
     /// <summary>
-    /// Port of resetClimateLimits(). Rescales the climate bands, which are authored against a
-    /// 8192-wide map, to the configured raster width.
+    /// Places the climate bands, in raster pixels of distance from the equator.
+    ///
+    /// Edges are accumulated from widths, so the bands tile by construction however they are
+    /// scaled — there is no way to set a gap between two of them that would classify as nothing.
+    ///
+    /// The base scale is referenced to vanilla, not to this map. The widths are authored against an
+    /// 8192-wide raster, so this constant is what puts them where vanilla has them — and a smaller
+    /// map, being a smaller *region*, then spans fewer of them rather than compressing all of them
+    /// into its height. A `tiny` map sits within one or two bands, which is the point.
     /// </summary>
     public void ResetClimateLimits(Core.Rng rng)
     {
-        // Referenced to vanilla, not to this map. The bands are authored against an 8192-wide
-        // raster, so this is the constant that puts them where vanilla has them — and a smaller map,
-        // being a smaller *region*, then spans fewer of them rather than compressing all of them
-        // into its height. A `tiny` map sits within one or two bands, which is the point.
-        double mod = ReferenceHeightmapWidth / 8192.0;
-        Limits.Tropical.Rescale(mod);
-        Limits.SubTropical.Rescale(mod);
-        Limits.Temperate.Rescale(mod);
-        Limits.Cold.Rescale(mod);
+        double mod = ReferenceHeightmapWidth / 8192.0 * Math.Max(0.01, ClimateBandScale);
+
+        double tropical = TropicalBaseWidth * Math.Max(0, TropicalWidthScale) * mod;
+        double subTropical = tropical + SubTropicalBaseWidth * Math.Max(0, SubTropicalWidthScale) * mod;
+        double temperate = subTropical + TemperateBaseWidth * Math.Max(0, TemperateWidthScale) * mod;
+
+        Limits.Tropical.Upper = (int)Math.Floor(tropical);
+        Limits.SubTropical.Upper = (int)Math.Floor(subTropical);
+        Limits.Temperate.Upper = (int)Math.Floor(temperate);
+
+        // The far-polar cut-off, a fixed distance into the cold band rather than an absolute
+        // latitude, so it follows the bands instead of being overtaken by them.
+        Limits.Cold.Plains = (int)Math.Floor(temperate + PolarBaseDepth * mod);
+
         ResetVaryRanges(rng);
     }
+
+    // ck2rpg's own band widths, at its 8192-wide authoring scale.
+    private const double TropicalBaseWidth = 1007;
+    private const double SubTropicalBaseWidth = 513;
+    private const double TemperateBaseWidth = 1345;
+    private const double PolarBaseDepth = 435;
 
     /// <summary>Port of resetVaryRanges() — per-column jitter so climate bands are not straight lines.</summary>
     public void ResetVaryRanges(Core.Rng rng)
@@ -692,42 +744,34 @@ public sealed class Limits
     /// <summary>Sea level. Note the comment in the JS: elevation is halved when written to the heightmap.</summary>
     public int SeaLevelUpper = 36;
 
-    public ClimateBand Tropical = new(0, 1007);
-    public ClimateBand SubTropical = new(1008, 1520);
-    public ClimateBand Temperate = new(1521, 2865);
-    // cold.upper starts at 4096 but upperBase is 8000, so rescaling at width 8192 lifts it.
-    public ClimateBand Cold = new(2866, 4096, upperBase: 8000, plains: 3300);
+    // Placed by MapConfig.ResetClimateLimits; cold is simply everything past temperate.
+    public ClimateBand Tropical = new();
+    public ClimateBand SubTropical = new();
+    public ClimateBand Temperate = new();
+    public ClimateBand Cold = new();
 
     public readonly record struct Range(int Lower, int Upper);
     public readonly record struct MountainRange(int Lower, int Upper, int SnowLine);
 }
 
-/// <summary>A latitude band measured as distance-from-equator in raster pixels.</summary>
+/// <summary>
+/// A latitude band, as a distance-from-equator in raster pixels.
+///
+/// Only the outer edge is stored. The inner edge is the band below's outer edge by construction —
+/// <see cref="MapConfig.ResetClimateLimits"/> accumulates them — and <c>Biome.ZoneOf</c> tests them
+/// as an ordered cascade, so a band never needs to know where it starts.
+/// </summary>
 public sealed class ClimateBand
 {
-    public int Lower;
+    /// <summary>Outer edge. Set by <see cref="MapConfig.ResetClimateLimits"/>.</summary>
     public int Upper;
-    public readonly int LowerBase;
-    public readonly int UpperBase;
+
+    /// <summary>The far-polar cut-off. Only the cold band has one.</summary>
     public int? Plains;
-    private readonly int? _plainsBase;
 
+    /// <summary>Per-column jitter of this band's outer edge, in simulation columns.</summary>
     public int[] VaryRange = [];
-
-    public ClimateBand(int lower, int upper, int? upperBase = null, int? plains = null)
-    {
-        Lower = LowerBase = lower;
-        Upper = upper;
-        UpperBase = upperBase ?? upper;
-        Plains = plains;
-        _plainsBase = plains;
-    }
-
-    /// <summary>Port of modifyClimate().</summary>
-    public void Rescale(double mod)
-    {
-        Lower = (int)Math.Floor(LowerBase * mod);
-        Upper = (int)Math.Floor(UpperBase * mod);
-        if (_plainsBase.HasValue) Plains = (int)Math.Floor(_plainsBase.Value * mod);
-    }
 }
+
+
+

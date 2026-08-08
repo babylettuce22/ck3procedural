@@ -29,11 +29,18 @@ public static class ContentWriter
         var landMask = LandMaskFromProvinces(cfg, provinces, order, landCount);
         var terrain = TerrainClassifier.Classify(world, cfg, provinceElevation, landMask, rng);
         var provinceTerrain = ProvinceTerrain(cfg, provinces, order, terrain, landCount);
+
+        // Derived once and shared: the county's development and its baronies' holdings have to
+        // agree, and they are written by two different emitters into two different directories.
+        var counties = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
+        var development = MapGen.Development.ForCounties(counties, provinceTerrain, cfg,
+            new Rng(cfg.Seed ^ 0x0DE7));
+        ReportDevelopment(development);
         ReportTerrain(terrain);
 
         WriteLandedTitles(modDir, empires);
         WriteProvinceTerrain(modDir, provinceTerrain, landCount);
-        WriteProvinceHistory(modDir, empires);
+        WriteProvinceHistory(modDir, empires, provinceTerrain, development, cfg.Seed);
         WriteLocalisation(modDir, empires);
 
         // The engine's world size must match the province map we ship.
@@ -74,7 +81,7 @@ public static class ContentWriter
         // into "map and titles" versus "characters, dynasties and the bookmark".
         if (writeHistory)
         {
-            HistoryWriter.WriteAll(modDir, cfg, empires);
+            HistoryWriter.WriteAll(modDir, cfg, empires, development);
 
             // Every bookmark and challenge character needs a portrait entry or the engine holds
             // a null one.
@@ -246,25 +253,49 @@ public static class ContentWriter
     /// complains; holdings are what make a barony playable. Reuses vanilla culture/faith ids
     /// for now — task 7 swaps in generated ones.
     /// </summary>
-    private static void WriteProvinceHistory(string modDir, List<Title> empires)
+    private static void ReportDevelopment(Dictionary<string, int> development)
+    {
+        if (development.Count == 0) return;
+        var levels = development.Values.OrderBy(v => v).ToList();
+        Console.WriteLine($"  development: min {levels[0]}, median {levels[levels.Count / 2]}, " +
+                          $"p90 {levels[(int)(levels.Count * 0.9)]}, max {levels[^1]} " +
+                          $"(vanilla 867: median 8, mass 0-16)");
+    }
+
+    private static void WriteProvinceHistory(string modDir, List<Title> empires,
+        TerrainClass[] provinceTerrain, Dictionary<string, int> development, int cfgSeed)
     {
         string dir = Path.Combine(modDir, "history", "provinces");
         Directory.CreateDirectory(dir);
 
+        var rng = new Rng(cfgSeed ^ 0x8A12);
+        var counts = new Dictionary<string, int>();
+
         var sb = new StringBuilder();
         foreach (var county in Titles.Flatten(empires).Where(t => t.Tier == "c"))
         {
+            int level = development.GetValueOrDefault(county.Key);
+
             for (int i = 0; i < county.Children.Count; i++)
             {
                 var barony = county.Children[i];
+                var terrain = barony.ProvinceId >= 0 && barony.ProvinceId < provinceTerrain.Length
+                    ? provinceTerrain[barony.ProvinceId]
+                    : TerrainClass.Plains;
+
+                string holding = MapGen.Development.Holding(i, terrain, level, rng);
+                counts[holding] = counts.GetValueOrDefault(holding) + 1;
+
                 sb.Append($"{barony.ProvinceId} = {{\n");
                 sb.Append($"    culture = {HistoryWriter.Culture}\n");
                 sb.Append($"    religion = {HistoryWriter.Faith}\n");
-                // The first barony in a county is its capital and must hold a castle.
-                sb.Append($"    holding = {(i == 0 ? "castle_holding" : "none")}\n");
+                sb.Append($"    holding = {holding}\n");
                 sb.Append("}\n");
             }
         }
+
+        Console.WriteLine("  holdings: " + string.Join(", ",
+            counts.OrderByDescending(k => k.Value).Select(k => $"{k.Value} {k.Key}")));
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_provinces.txt"), sb.ToString());
     }

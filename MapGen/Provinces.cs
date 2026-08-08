@@ -299,7 +299,8 @@ public static class Provinces
     /// Port of ensureSeedsCoverComponents(). Any connected land or sea region without a seed
     /// would be left unlabeled by the Dijkstra, so every component gets at least one.
     /// </summary>
-    private static void EnsureSeedsCoverComponents(byte[] mask, int width, int height, List<ProvinceSeed> seeds)
+    private static void EnsureSeedsCoverComponents(byte[] mask, int width, int height,
+        List<ProvinceSeed> seeds)
     {
         var component = new int[mask.Length];
         Array.Fill(component, -1);

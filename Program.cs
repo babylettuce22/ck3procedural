@@ -105,25 +105,9 @@ public static class Program
                         System.Globalization.CultureInfo.InvariantCulture);
                     break;
 
-                // The noise/hotspot terrain path (randomMap) instead of the tectonic simulation.
-                case "--noise":
-                    options.UseNoise = true;
-                    cfg.UseTerra = false;
-                    break;
-
-                // The ck2rpg magma simulation, for comparison against the tectonics-and-erosion
-                // generator that replaced it.
-                case "--legacy-terrain":
-                    cfg.UseTerra = false;
-                    break;
-
                 // Emit the whole mod around an existing heightmap.png instead of generating one.
                 case "--heightmap" when i + 1 < args.Length:
                     options.HeightmapPath = args[++i];
-                    break;
-
-                case "--erosion":
-                    cfg.EnableRainErosion = true;
                     break;
 
                 // How big a barony is relative to vanilla's. 2 makes each one twice as wide and a
