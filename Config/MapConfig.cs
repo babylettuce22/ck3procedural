@@ -568,6 +568,15 @@ public sealed class MapConfig
 
 
     /// <summary>
+    /// Largest a fused impassable mountain range may get, in baronies' worth of area. 0 disables
+    /// fusing and leaves every impassable province separate, as vanilla does.
+    /// </summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("03 Provinces")]
+    [Description("Largest a fused impassable mountain range may get, measured in baronies' worth of area. Touching impassable provinces are merged so a range reads as one wall of rock instead of a scatter of provinces; 0 leaves them separate, as vanilla does.")]
+    public double ImpassableRangeMaxBaronies { get; set; } = 8;
+
+    /// <summary>
     /// How deep inside its province a holding, army or siege model must stand, as a fraction of
     /// the deepest point that province has. 0 lets a model sit on the border; 1 pins it to the
     /// single deepest pixel and leaves flatness no say.

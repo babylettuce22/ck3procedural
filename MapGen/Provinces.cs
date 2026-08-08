@@ -69,6 +69,7 @@ public static class Provinces
         RepairUnlabeled(map, mask);
         DissolveTinyProvinces(map, mask, cfg);
         MarkImpassable(map, elevation, mask, cfg);
+        MergeImpassableRanges(map, cfg);
         return map;
     }
 
@@ -225,6 +226,109 @@ public static class Provinces
 
         Console.WriteLine($"  impassable: {marked} of {ranked.Count} land provinces " +
                           $"(target {want}, mountain line {mountainLine:F0})");
+    }
+
+    /// <summary>
+    /// Fuses touching impassable provinces into whole mountain ranges.
+    ///
+    /// <see cref="MarkImpassable"/> judges each province on its own, so a range comes out as a
+    /// scatter of separate impassable provinces with borders drawn through the middle of it. On the
+    /// map those borders are meaningless — nobody holds either side and nothing can cross — so all
+    /// they do is break up a feature the player reads as one wall of rock.
+    ///
+    /// Contiguity is the whole test for "same range". At province resolution two impassable
+    /// provinces that touch are the same massif by definition; there is no separate range identity
+    /// to consult, and the mountain groups the coarse world model carries are not available here.
+    ///
+    /// Growth is capped, which is the one thing this cannot do without. Following contiguity to its
+    /// conclusion merges an entire continental spine into a single province — on a full-size map
+    /// that is a tenth of all land under one id, with a bounding box spanning the continent, and
+    /// CK3 derives borders and a centroid from it. The cap keeps a merged range to a plausible
+    /// massif and starts a new one beyond that, so a long chain becomes a handful of large
+    /// provinces rather than either a hundred small ones or a single monster.
+    /// </summary>
+    private static void MergeImpassableRanges(ProvinceMap map, MapConfig cfg)
+    {
+        double maxPixels = cfg.ImpassableRangeMaxBaronies * cfg.BaronyPixels;
+        if (maxPixels <= 0) return;
+
+        var area = new int[map.Count];
+        foreach (int label in map.Label) area[label]++;
+
+        var impassable = new bool[map.Count];
+        int before = 0;
+        for (int i = 0; i < map.Count; i++)
+            if (map.Seeds[i].IsLand && map.Seeds[i].IsImpassable) { impassable[i] = true; before++; }
+        if (before == 0) return;
+
+        // Which impassable provinces touch which. Only orthogonal contact counts: two ranges that
+        // meet at a single diagonal corner are not one massif.
+        var touching = new Dictionary<int, HashSet<int>>();
+        for (int y = 0; y < map.Height; y++)
+        {
+            for (int x = 0; x < map.Width; x++)
+            {
+                int a = map.Label[y * map.Width + x];
+                if (!impassable[a]) continue;
+
+                if (x + 1 < map.Width) Link(a, map.Label[y * map.Width + x + 1]);
+                if (y + 1 < map.Height) Link(a, map.Label[(y + 1) * map.Width + x]);
+            }
+        }
+
+        // Grow each range greedily from the lowest-numbered unclaimed province, stopping before the
+        // cap rather than after it, so no merged province ever exceeds the limit.
+        var survivor = new int[map.Count];
+        for (int i = 0; i < map.Count; i++) survivor[i] = i;
+
+        var claimed = new bool[map.Count];
+        int after = 0;
+
+        for (int start = 0; start < map.Count; start++)
+        {
+            if (!impassable[start] || claimed[start]) continue;
+
+            claimed[start] = true;
+            after++;
+
+            long total = area[start];
+            var frontier = new Queue<int>();
+            frontier.Enqueue(start);
+
+            while (frontier.Count > 0)
+            {
+                int current = frontier.Dequeue();
+                if (!touching.TryGetValue(current, out var neighbours)) continue;
+
+                foreach (int next in neighbours.OrderBy(n => n))
+                {
+                    if (claimed[next] || total + area[next] > maxPixels) continue;
+
+                    claimed[next] = true;
+                    survivor[next] = start;
+                    total += area[next];
+                    frontier.Enqueue(next);
+                }
+            }
+        }
+
+        if (after == before) return;
+
+        for (int i = 0; i < map.Label.Length; i++) map.Label[i] = survivor[map.Label[i]];
+        CompactLabels(map);
+
+        Console.WriteLine($"  impassable ranges: {before} provinces fused into {after} " +
+                          $"(cap {maxPixels:F0} px, {cfg.ImpassableRangeMaxBaronies} baronies)");
+        return;
+
+        void Link(int a, int b)
+        {
+            if (a == b || !impassable[b]) return;
+            if (!touching.TryGetValue(a, out var sa)) touching[a] = sa = [];
+            if (!touching.TryGetValue(b, out var sb)) touching[b] = sb = [];
+            sa.Add(b);
+            sb.Add(a);
+        }
     }
 
     /// <summary>Drops provinces that no longer own any pixel and renumbers the rest densely.</summary>
