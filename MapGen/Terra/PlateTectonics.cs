@@ -283,6 +283,34 @@ public static class PlateTectonics
 
         Normalise(uplift);
         Normalise(rift);
+
+        // Broad intraplate uplift on top, over all land.
+        //
+        // Boundary uplift has a hard cutoff, so a continent interior gets none of it and simply
+        // relaxes: the stream power law with deposition is a *smoothing* process once nothing is
+        // rising, which is why interiors came out as smooth domes with no valleys cutting into
+        // them. Measured the wrong way round first — doubling erosion iterations made them smoother
+        // still and raised lake cells from 160k to 304k, because more relaxation is not more
+        // dissection. Real cratons keep rising slowly, and that is what keeps rivers incising.
+        if (cfg.TerraIntraplateUplift > 0)
+        {
+            var broad = new SimplexNoise(rng);
+            double freq = 5.0 / reference;
+            float amount = (float)cfg.TerraIntraplateUplift;
+
+            Parallel.For(0, height, y =>
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    int i = y * width + x;
+                    if (baseHeight[i] <= cfg.TerraSeaLevel) continue;
+
+                    double v = Field.Fbm(broad, x * freq, y * freq, 4, gain: 0.55) * 0.5 + 0.5;
+                    uplift[i] += (float)(amount * v);
+                }
+            });
+        }
+
         return new Result { Uplift = uplift, Rift = rift };
     }
 

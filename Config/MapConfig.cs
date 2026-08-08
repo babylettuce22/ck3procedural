@@ -279,6 +279,16 @@ public sealed class MapConfig
     public int TerraErosionIterations { get; set; } = 34;
 
     /// <summary>K in the stream power law, against drainage area normalised by land area.</summary>
+    /// <summary>
+    /// Broad uplift applied across all land, as a fraction of peak boundary uplift. Without it a
+    /// continent interior receives no uplift at all and relaxes into a smooth dome, because stream
+    /// power plus deposition only smooths once nothing is rising.
+    /// </summary>
+    [SettingRole(SettingRole.GenerationOnly)]
+    [Category("07 Erosion (base pass)")]
+    [Description("Broad uplift across all land, as a fraction of peak boundary uplift. Without it continent interiors get no uplift and relax into smooth domes with no valleys.")]
+    public double TerraIntraplateUplift { get; set; } = 0.14;
+
     [SettingRole(SettingRole.GenerationOnly)]
     [Category("07 Erosion (base pass)")]
     [Description("K in the stream power law, against drainage area normalised by land area.")]
@@ -289,7 +299,7 @@ public sealed class MapConfig
     public float TerraUpliftPerStep { get; set; } = 0.026f;
     [SettingRole(SettingRole.GenerationOnly)]
     [Category("07 Erosion (base pass)")]
-    public float TerraDeposition { get; set; } = 0.35f;
+    public float TerraDeposition { get; set; } = 0.18f;
 
     /// <summary>Steepest slope the coarse terrain will hold, in height per base cell.</summary>
     [SettingRole(SettingRole.GenerationOnly)]
