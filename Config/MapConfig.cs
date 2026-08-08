@@ -612,6 +612,34 @@ public sealed class MapConfig
     public double LocatorCentroidPull { get; set; } = 0.75;
 
 
+    // --- Rulers ---
+    //
+    // The de jure hierarchy exists from the moment the titles are drawn, but that is a map of
+    // claims rather than of power. These decide how much of it anybody is actually wearing in 867,
+    // which is what turns several hundred equal counts into a world with great powers in it.
+
+    /// <summary>Share of duchies whose title is held by somebody at the start date.</summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("15 Rulers")]
+    [Description("Share of duchies actually held by a duke at the start date. The rest of their counties stand as independent counts or answer to a king directly.")]
+    public double DuchyTitleShare { get; set; } = 0.5;
+
+    /// <summary>Share of kingdoms whose title is held by somebody at the start date.</summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("15 Rulers")]
+    [Description("Share of kingdoms actually held by a king at the start date. Realising one also realises its strongest duchy, so a king is always a duke and a count as well.")]
+    public double KingdomTitleShare { get; set; } = 0.25;
+
+    /// <summary>
+    /// Share of empires whose title is held by somebody. Kept low deliberately: an emperor in 867
+    /// should be a rarity the map is built around, not a tier everyone occupies.
+    /// </summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("15 Rulers")]
+    [Description("Share of empires actually held by an emperor at the start date. Kept low on purpose — an emperor should be a rarity the map is built around.")]
+    public double EmpireTitleShare { get; set; } = 0.15;
+
+
     // --- Cultures and faiths ---
     //
     // Vanilla's own proportions, for calibration: ~193 cultures in ~40 heritages, and ~120 faiths
