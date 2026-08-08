@@ -567,6 +567,27 @@ public sealed class MapConfig
     public double SeaBridgePixelsAtVanilla { get; set; } = 110;
 
 
+    /// <summary>
+    /// How deep inside its province a holding, army or siege model must stand, as a fraction of
+    /// the deepest point that province has. 0 lets a model sit on the border; 1 pins it to the
+    /// single deepest pixel and leaves flatness no say.
+    /// </summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("04 Titles")]
+    [Description("How deep inside its province a holding or army model must stand, as a fraction of that province's deepest point. Raising it keeps models further from coastlines; lowering it lets flatness matter more than position.")]
+    public double LocatorInteriorFraction { get; set; } = 0.6;
+
+    /// <summary>
+    /// How much a model prefers the middle of its province over flat ground. Measured against the
+    /// map's median slope, so 1 means being a province-radius off centre costs as much as standing
+    /// on ground one median slope steeper.
+    /// </summary>
+    [SettingRole(SettingRole.Always)]
+    [Category("04 Titles")]
+    [Description("How much a holding prefers the middle of its province over flat ground. 0 puts it on the flattest eligible pixel wherever that is; higher pulls it toward the centre even if the ground there is steeper.")]
+    public double LocatorCentroidPull { get; set; } = 0.75;
+
+
     // --- Cultures and faiths ---
     //
     // Vanilla's own proportions, for calibration: ~193 cultures in ~40 heritages, and ~120 faiths

@@ -47,7 +47,7 @@ public static class LocatorWriter
         ["layers.txt", "game_object_layers.txt", "effect_layers.txt"];
 
     public static void WriteAll(string modDir, string gameDir, ProvinceMap provinces,
-        int[] order, int landCount)
+        int[] order, int landCount, float[] provinceElevation, Config.MapConfig cfg)
     {
         string dir = Path.Combine(modDir, "gfx", "map", "map_object_data");
         Directory.CreateDirectory(dir);
@@ -58,8 +58,12 @@ public static class LocatorWriter
         var byId = new int[provinces.Count + 1];
         for (int label = 0; label < provinces.Count; label++) byId[order[label]] = label;
 
+        // Not the province seed: that is wherever the partitioner started growing, which is as
+        // likely to be a coastline pixel as anything else. See ProvinceAnchor.
+        var anchors = ProvinceAnchor.Compute(provinces, provinceElevation, cfg);
+
         int seaCount = provinces.Count - landCount;
-        foreach (var kind in Kinds) WriteLocators(dir, kind, provinces, byId);
+        foreach (var kind in Kinds) WriteLocators(dir, kind, provinces, byId, anchors);
 
         Console.WriteLine($"  locators: {Kinds.Length} files, {landCount} land " +
                           $"(+{seaCount} sea on combat/stack layers)");
@@ -67,7 +71,7 @@ public static class LocatorWriter
 
     private static void WriteLocators(string dir,
         (string File, string Name, string Layer, bool Clamp, bool Sea) kind,
-        ProvinceMap provinces, int[] byId)
+        ProvinceMap provinces, int[] byId, (double X, double Y)[] anchors)
     {
         var sb = new StringBuilder();
         sb.Append("game_object_locator={\n");
@@ -91,19 +95,21 @@ public static class LocatorWriter
 
         for (int id = 1; id <= provinces.Count; id++)
         {
-            var seed = provinces.Seeds[byId[id]];
+            int label = byId[id];
 
             // Sea zones only carry the locators that can actually happen at sea. Skipping them
             // elsewhere is what vanilla does and keeps the files a third smaller.
-            if (!seed.IsLand && !kind.Sea) continue;
+            if (!provinces.Seeds[label].IsLand && !kind.Sea) continue;
+
+            var (x, y) = anchors[label];
 
             // Image rows run top-down, the map's Z axis runs bottom-up.
-            int z = provinces.Height - seed.Y;
+            double z = provinces.Height - y;
 
             sb.Append("\t\t{\n");
             sb.Append($"\t\t\tid={id}\n");
             sb.Append(string.Create(CultureInfo.InvariantCulture,
-                $"\t\t\tposition={{ {seed.X:F6} 0.000000 {z:F6} }}\n"));
+                $"\t\t\tposition={{ {x:F6} 0.000000 {z:F6} }}\n"));
             sb.Append("\t\t\trotation={ -0.000000 -0.000000 -0.000000 1.000000 }\n");
             sb.Append("\t\t\tscale={ 1.000000 1.000000 1.000000 }\n");
             sb.Append("\t\t}\n");

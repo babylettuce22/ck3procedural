@@ -93,7 +93,7 @@ public static class ContentWriter
 
         // Per-province map anchors. replace_path drops vanilla's, so these must be rebuilt or
         // the map has nowhere to put holdings, armies or sieges.
-        LocatorWriter.WriteAll(modDir, gameDir, provinces, order, landCount);
+        LocatorWriter.WriteAll(modDir, gameDir, provinces, order, landCount, provinceElevation, cfg);
 
         // The main menu renders live 3D portraits, which is the step right after history load.
         FrontendWriter.WriteFrontend(modDir, gameDir);
