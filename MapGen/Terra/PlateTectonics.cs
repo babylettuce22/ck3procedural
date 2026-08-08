@@ -40,16 +40,31 @@ public static class PlateTectonics
 
         for (int i = 0; i < count; i++)
         {
-            float px = (float)(rng.NextDouble() * width);
-            float py = (float)(rng.NextDouble() * height);
+            float px = 0, py = 0;
+            bool oceanic = false;
+
+            // Try finding a seed position that aligns with land/sea distribution
+            // Even indices target land interiors, odd indices target ocean basins
+            bool targetLand = (i % 2 == 0);
+
+            for (int attempt = 0; attempt < 30; attempt++)
+            {
+                px = (float)(rng.NextDouble() * width);
+                py = (float)(rng.NextDouble() * height);
+
+                int sx = Math.Clamp((int)px, 0, width - 1);
+                int sy = Math.Clamp((int)py, 0, height - 1);
+                bool isLand = baseHeight[sy * width + sx] > cfg.TerraSeaLevel;
+
+                if (isLand == targetLand)
+                {
+                    oceanic = !isLand;
+                    break; // Found a good spot aligned with continent layout!
+                }
+            }
+
             double angle = rng.NextDouble() * Math.Tau;
             double speed = 0.35 + rng.NextDouble() * 0.65;
-
-            // A plate is oceanic if the continent stage put it under water. That correlation is
-            // what makes collision belts land on continental margins rather than at random.
-            int sx = Math.Clamp((int)px, 0, width - 1);
-            int sy = Math.Clamp((int)py, 0, height - 1);
-            bool oceanic = baseHeight[sy * width + sx] <= cfg.TerraSeaLevel;
 
             plates[i] = new Plate(px, py,
                 (float)(Math.Cos(angle) * speed), (float)(Math.Sin(angle) * speed), oceanic);
@@ -129,18 +144,17 @@ public static class PlateTectonics
 
                 if (convergence > 0)
                 {
-                    // Continental collision raises the most; an oceanic plate diving under a
-                    // continental one gives a lower volcanic arc; two oceanic plates barely break
-                    // the surface.
                     float style = !a.Oceanic && !b.Oceanic ? 1.0f
                         : a.Oceanic ^ b.Oceanic ? 0.72f
                         : 0.30f;
 
-                    uplift[i] = (float)(convergence * style * along
-                                        * (0.86f * core + 0.14f * flank));
+                    float rawUplift = (float)(convergence * style * along * (0.86f * core + 0.14f * flank));
 
-                    float landFactor = baseHeight[i] > cfg.TerraSeaLevel ? 1.0f : 0.3f;
-                    uplift[i] *= landFactor;
+                    // Ensure mountains primarily build up where land actually exists!
+                    // baseHeight[i] > cfg.TerraSeaLevel checks if pixel is on land
+                    float landFactor = baseHeight[i] > cfg.TerraSeaLevel ? 1.0f : 0.15f;
+
+                    uplift[i] = rawUplift * landFactor;
                 }
                 else
                 {

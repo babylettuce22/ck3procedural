@@ -172,7 +172,7 @@ public sealed class MapConfig
     public float TerraInteriorRelief { get; set; } = 0.035f;
 
     [Category("06 Tectonics")]
-    public int TerraPlateCount { get; set; } = 26;
+    public int TerraPlateCount { get; set; } = 24;
 
     /// <summary>
     /// Width of the uplift belt at a converging plate boundary, as a fraction of map width. This is

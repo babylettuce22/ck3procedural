@@ -24,7 +24,7 @@ public static class LandscapeEvolution
 {
     public sealed class Options
     {
-        public int Iterations = 34;
+        public int Iterations = 40;
 
         /// <summary>K. Drainage area is normalised by land area first, so this is O(1).</summary>
         public float Erodibility = 3.2f;
@@ -36,13 +36,13 @@ public static class LandscapeEvolution
         public float SlopeExponent = 1.0f;
 
         /// <summary>Height added per iteration where uplift is 1.</summary>
-        public float UpliftPerStep = 0.026f;
+        public float UpliftPerStep = 0.03f;
 
         /// <summary>Height removed per iteration where the rift rate is 1.</summary>
         public float RiftPerStep = 0.004f;
 
         /// <summary>Fraction of the sediment passing through a cell that settles there.</summary>
-        public float Deposition = 0.35f;
+        public float Deposition = 0.4f;
 
         /// <summary>Slope above which deposition stops entirely, in height per cell.</summary>
         public float DepositionSlope = 0.03f;

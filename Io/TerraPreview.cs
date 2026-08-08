@@ -5,23 +5,33 @@ namespace Ck3MapGen.Io;
 /// <summary>
 /// Preview renders for the from-scratch generator, so terrain can be judged without building a
 /// mod and repacking a heightmap for every parameter change.
+///
+/// Each view is a <c>Render*</c> returning a packed RGB buffer, with the <c>Write*</c> wrappers
+/// on top. The split exists so the GUI can display a preview without a round trip through the
+/// filesystem — rendering straight to a bitmap is the difference between a responsive parameter
+/// panel and one that writes four PNGs on every slider drag.
 /// </summary>
 public static class TerraPreview
 {
+    public readonly record struct Image(byte[] Rgb, int Width, int Height);
+
     public static void WriteAll(string outDir, TerraWorld world)
     {
-        WriteRelief(Path.Combine(outDir, "terra_relief.png"), world);
-        WriteHeight(Path.Combine(outDir, "terra_height.png"), world);
-        WriteMoisture(Path.Combine(outDir, "terra_moisture.png"), world);
-        WriteRivers(Path.Combine(outDir, "terra_rivers.png"), world);
+        Write(Path.Combine(outDir, "terra_relief.png"), RenderRelief(world));
+        Write(Path.Combine(outDir, "terra_height.png"), RenderHeight(world));
+        Write(Path.Combine(outDir, "terra_moisture.png"), RenderMoisture(world));
+        Write(Path.Combine(outDir, "terra_rivers.png"), RenderRivers(world));
     }
+
+    private static void Write(string path, Image image)
+        => PngWriter.WriteRgb8(path, image.Width, image.Height, image.Rgb);
 
     /// <summary>
     /// Hillshaded colour relief. This is the one worth looking at: flat greyscale hides whether
     /// erosion actually produced valley networks, whereas a shaded render shows ridgelines and
     /// drainage the way the game's lighting will.
     /// </summary>
-    private static void WriteRelief(string path, TerraWorld world)
+    public static Image RenderRelief(TerraWorld world)
     {
         int w = world.Width, h = world.Height;
         var rgb = new byte[w * h * 3];
@@ -65,19 +75,22 @@ public static class TerraPreview
             }
         }
 
-        PngWriter.WriteRgb8(path, w, h, rgb);
+        return new Image(rgb, w, h);
     }
 
-    private static void WriteHeight(string path, TerraWorld world)
+    public static Image RenderHeight(TerraWorld world)
     {
         int w = world.Width, h = world.Height;
-        var grey = new byte[w * h];
-        for (int i = 0; i < grey.Length; i++)
-            grey[i] = Clamp(world.Land[i] * 255.0);
-        PngWriter.WriteGray8(path, w, h, grey);
+        var rgb = new byte[w * h * 3];
+        for (int i = 0; i < w * h; i++)
+        {
+            byte v = Clamp(world.Land[i] * 255.0);
+            rgb[i * 3] = rgb[i * 3 + 1] = rgb[i * 3 + 2] = v;
+        }
+        return new Image(rgb, w, h);
     }
 
-    private static void WriteMoisture(string path, TerraWorld world)
+    public static Image RenderMoisture(TerraWorld world)
     {
         int w = world.Width, h = world.Height;
         var rgb = new byte[w * h * 3];
@@ -96,10 +109,10 @@ public static class TerraPreview
             rgb[i * 3 + 2] = Clamp(110 + 60 * m);
         }
 
-        PngWriter.WriteRgb8(path, w, h, rgb);
+        return new Image(rgb, w, h);
     }
 
-    private static void WriteRivers(string path, TerraWorld world)
+    public static Image RenderRivers(TerraWorld world)
     {
         int w = world.Width, h = world.Height;
         var rgb = new byte[w * h * 3];
@@ -114,10 +127,11 @@ public static class TerraPreview
         foreach (var course in world.Rivers)
             foreach (int i in course)
             {
+                if (i < 0 || i >= w * h) continue;
                 rgb[i * 3] = 30; rgb[i * 3 + 1] = 110; rgb[i * 3 + 2] = 220;
             }
 
-        PngWriter.WriteRgb8(path, w, h, rgb);
+        return new Image(rgb, w, h);
     }
 
     /// <summary>Sea level expressed against the coarse grid, which erosion renormalised.</summary>
