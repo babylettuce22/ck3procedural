@@ -1,4 +1,4 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
 
@@ -49,7 +49,7 @@ public static class TerrainMaskWriter
         }
 
         var used = TerrainTextureWriter.UsedMaterials;
-        int painted = 0, blanked = 0;
+        int painted = 0, blanked = 0, carried = 0;
 
         // Both directories, so neither vanilla set survives.
         foreach (string sub in (string[])["masks", "masks_gen"])
@@ -58,6 +58,18 @@ public static class TerrainMaskWriter
             string destination = Path.Combine(terrainDir, sub);
             if (!Directory.Exists(source)) continue;
             Directory.CreateDirectory(destination);
+
+            // Not everything in these folders is a mask. Vanilla keeps one material *texture*
+            // here — gfx/map/terrain/masks/drylands_01_grassy_diffuse.dds, named by
+            // materials.settings line 182 — and `replace_path="gfx/map/terrain/masks"` deletes
+            // the whole directory, so without this the material loses its diffuse texture. Copy
+            // anything that is not a .png through untouched; masks are always .png.
+            foreach (string path in Directory.GetFiles(source))
+            {
+                if (path.EndsWith(".png", StringComparison.OrdinalIgnoreCase)) continue;
+                File.Copy(path, Path.Combine(destination, Path.GetFileName(path)), overwrite: true);
+                carried++;
+            }
 
             foreach (string path in Directory.GetFiles(source, "*.png"))
             {
@@ -101,7 +113,7 @@ public static class TerrainMaskWriter
         }
 
         Console.WriteLine($"  terrain masks: {painted} painted from the blend, {blanked} blanked " +
-                          $"(masks + masks_gen)");
+                          $"(masks + masks_gen), {carried} non-mask files carried through");
     }
 
     /// <summary>
