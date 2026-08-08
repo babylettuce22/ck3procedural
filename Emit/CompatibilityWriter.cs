@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.RegularExpressions;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
@@ -14,6 +14,9 @@ namespace Ck3MapGen.Emit;
 /// </summary>
 public static class CompatibilityWriter
 {
+    private static readonly System.Globalization.CultureInfo Invariant =
+        System.Globalization.CultureInfo.InvariantCulture;
+
     /// <summary>
     /// Overrides NJominiMap so the engine's world size matches the province map we actually
     /// ship. This is not optional and it is easy to miss.
@@ -32,14 +35,29 @@ public static class CompatibilityWriter
         // Sorts last on purpose. Defines are merged across every file in the directory and the
         // last one loaded wins, so a baseline file like ck2rpg's 01_gen_defines.txt would
         // otherwise silently override our world size with the template map's.
+
+        // WORLD_EXTENTS_Y is the *vertical* extent the heightmap's 0-255 maps onto, and it has to
+        // shrink with the map exactly like X and Z do. Left at vanilla's 50 on a smaller map, the
+        // same height field is stretched over a proportionally smaller footprint, so relief is
+        // exaggerated by 1/MapScale — 9x at `tiny`. That is the whole explanation for terrain
+        // looking more violent the smaller the map, and it is a rendering scale, not the terrain:
+        // the emitted heightmap's percentiles are identical at every size.
+        //
+        // WATERLEVEL is in the same units, and vanilla's own comment pins the relationship:
+        // `WATERLEVEL = 3 ### 0.06 in 0-1, 19 in 0-255`, and 3/50 is exactly 0.06. So the two must
+        // scale together or the waterline stops landing on 19/255, which is the value
+        // MapDataWriter.WaterLevel16 and both hypsometric curves are built around.
+        string extentY = (50.0 * cfg.MapScale).ToString("0.####", Invariant);
+        string waterLevel = (3.0 * cfg.MapScale).ToString("0.####", Invariant);
+
         ParadoxText.WriteBom(Path.Combine(dir, "zz_generated_defines.txt"),
             $$"""
               # World size must match map_data/provinces.png, not vanilla's map.
               NJominiMap = {
               	WORLD_EXTENTS_X = {{cfg.ProvinceWidth - 1}}
-              	WORLD_EXTENTS_Y = 50
+              	WORLD_EXTENTS_Y = {{extentY}}
               	WORLD_EXTENTS_Z = {{cfg.ProvinceHeight - 1}}
-              	WATERLEVEL = 3
+              	WATERLEVEL = {{waterLevel}}
               }
 
               # Camera limits are map-sized too, and live in a different namespace and a
@@ -53,8 +71,8 @@ public static class CompatibilityWriter
 
               """);
 
-        Console.WriteLine($"  defines: WORLD_EXTENTS {cfg.ProvinceWidth - 1} x {cfg.ProvinceHeight - 1} " +
-                          $"(vanilla ships 9215 x 4607)");
+        Console.WriteLine($"  defines: WORLD_EXTENTS {cfg.ProvinceWidth - 1} x {extentY} x {cfg.ProvinceHeight - 1}, " +
+                          $"WATERLEVEL {waterLevel} (vanilla 9215 x 50 x 4607, 3)");
     }
 
     /// <summary>
