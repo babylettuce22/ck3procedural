@@ -1,4 +1,6 @@
-﻿namespace Ck3MapGen.Config;
+﻿using System.ComponentModel;
+
+namespace Ck3MapGen.Config;
 
 /// <summary>
 /// Port of the <c>settings</c> and <c>limits</c> globals in js/all/initialState.js.
@@ -12,33 +14,54 @@
 public sealed class MapConfig
 {
     // --- Export raster (settings.width / settings.height) ---
-    public int Width = 8192;
-    public int Height = 4096;
+    [Category("02 Map size")]
+    public int Width { get; set; } = 8192;
+    [Category("02 Map size")]
+    public int Height { get; set; } = 4096;
 
     // --- Simulation grid (world.width / world.height) ---
-    public int WorldWidth = 1024;
-    public int WorldHeight = 512;
+    [Category("02 Map size")]
+    public int WorldWidth { get; set; } = 1024;
+    [Category("02 Map size")]
+    public int WorldHeight { get; set; } = 512;
 
     /// <summary>Seed for every random decision. ck2rpg used unseeded Math.random.</summary>
-    public int Seed = 1;
+    [Category("01 General")]
+    [Description("Seed for every random decision. ck2rpg used unseeded Math.random.")]
+    public int Seed { get; set; } = 1;
 
-    public int TooSmallProvince = 900;
-    public bool HorizontalSpread = false;
-    public bool VerticalSpread = true;
+    [Category("99 Legacy (ck2rpg path)")]
+    public int TooSmallProvince { get; set; } = 900;
+    [Category("99 Legacy (ck2rpg path)")]
+    public bool HorizontalSpread { get; set; } = false;
+    [Category("99 Legacy (ck2rpg path)")]
+    public bool VerticalSpread { get; set; } = true;
 
     /// <summary>When true, land provinces may override water during province fill.</summary>
-    public bool FixBlockiness = false;
+    [Category("99 Legacy (ck2rpg path)")]
+    [Description("When true, land provinces may override water during province fill.")]
+    public bool FixBlockiness { get; set; } = false;
 
-    public int RiversDistance = 10;
-    public int RiverIntoOcean = 1;
-    public bool VaryElevation = false;
-    public int LandProvinceLimit = 6000;
-    public int WaterProvinceLimit = 10000;
-    public int FillInLimit = 20;
-    public int MassBrushAdjuster = 1;
-    public bool OverrideWithFlatmap = false;
-    public int ElevationToHeightmap = 2;
-    public string Ethnicities = "vanilla";
+    [Category("99 Legacy (ck2rpg path)")]
+    public int RiversDistance { get; set; } = 10;
+    [Category("99 Legacy (ck2rpg path)")]
+    public int RiverIntoOcean { get; set; } = 1;
+    [Category("99 Legacy (ck2rpg path)")]
+    public bool VaryElevation { get; set; } = false;
+    [Category("99 Legacy (ck2rpg path)")]
+    public int LandProvinceLimit { get; set; } = 6000;
+    [Category("99 Legacy (ck2rpg path)")]
+    public int WaterProvinceLimit { get; set; } = 10000;
+    [Category("99 Legacy (ck2rpg path)")]
+    public int FillInLimit { get; set; } = 20;
+    [Category("99 Legacy (ck2rpg path)")]
+    public int MassBrushAdjuster { get; set; } = 1;
+    [Category("99 Legacy (ck2rpg path)")]
+    public bool OverrideWithFlatmap { get; set; } = false;
+    [Category("99 Legacy (ck2rpg path)")]
+    public int ElevationToHeightmap { get; set; } = 2;
+    [Category("99 Legacy (ck2rpg path)")]
+    public string Ethnicities { get; set; } = "vanilla";
 
     /// <summary>
     /// Fraction of the grid that should end up above sea level. ck2rpg has no such setting:
@@ -46,10 +69,14 @@ public sealed class MapConfig
     /// clicking the "spread" button, which runs three more emit/spread rounds per press. This
     /// automates that loop so the tool can run unattended. Set to 0 to stop after startup().
     /// </summary>
-    public double TargetLandFraction = 0.40;
+    [Category("04 Continents")]
+    [Description("Fraction of the grid that should end up above sea level. ck2rpg has no such setting: its startup() sequence leaves an archipelago (~6% land) and the user grows continents by clicking the \"spread\" button, which runs three more emit/spread rounds per press. This automates that loop so the tool can run unattended. Set to 0 to stop after startup().")]
+    public double TargetLandFraction { get; set; } = 0.40;
 
     /// <summary>Safety cap on the automated growth loop.</summary>
-    public int MaxExtraSpreadRounds = 400;
+    [Category("99 Legacy (ck2rpg path)")]
+    [Description("Safety cap on the automated growth loop.")]
+    public int MaxExtraSpreadRounds { get; set; } = 400;
 
     /// <summary>
     /// Reshape land heights onto vanilla's measured hypsometric curve instead of stretching them
@@ -61,14 +88,18 @@ public sealed class MapConfig
     /// it changes only the height scale, never where anything is. Off restores the old behaviour
     /// for bisecting.
     /// </summary>
-    public bool MatchVanillaHypsometry = true;
+    [Category("11 Height scale")]
+    [Description("Reshape land heights onto vanilla's measured hypsometric curve instead of stretching them linearly to whatever the tallest simulated peak happens to be. The linear stretch made the map as mountainous as its most extreme accident: measured on 2026-08-07, it put 18x more land in the top elevation band than vanilla has, and always drove the highest pixel to 255 where vanilla's tops out at 192. The...")]
+    public bool MatchVanillaHypsometry { get; set; } = true;
 
     /// <summary>
     /// Run rainErosion() before rivers. It carves valleys and is the only thing in ck2rpg that
     /// creates lakes, but its UI button is commented out, so a stock ck2rpg run never calls it
     /// and lakes only ever come from hand-painting. Off by default to match that.
     /// </summary>
-    public bool EnableRainErosion = false;
+    [Category("99 Legacy (ck2rpg path)")]
+    [Description("Run rainErosion() before rivers. It carves valleys and is the only thing in ck2rpg that creates lakes, but its UI button is commented out, so a stock ck2rpg run never calls it and lakes only ever come from hand-painting. Off by default to match that.")]
+    public bool EnableRainErosion { get; set; } = false;
 
     // --- Terra: the terrain generator (MapGen/Terra) ---
     //
@@ -81,18 +112,27 @@ public sealed class MapConfig
     /// Use the tectonics-and-erosion generator instead of the ck2rpg magma simulation. The old
     /// path is kept behind <c>--legacy-terrain</c> for comparison.
     /// </summary>
-    public bool UseTerra = true;
+    [Category("01 General")]
+    [Description("Use the tectonics-and-erosion generator instead of the ck2rpg magma simulation. The old path is kept behind --legacy-terrain for comparison.")]
+    public bool UseTerra { get; set; } = true;
 
     /// <summary>How much coarser the tectonics and the main erosion run than the heightmap.</summary>
-    public int TerraBaseDivisor = 4;
+    [Category("02 Map size")]
+    [Description("How much coarser the tectonics and the main erosion run than the heightmap.")]
+    public int TerraBaseDivisor { get; set; } = 4;
 
-    public float TerraSeaLevel = 0.30f;
+    [Category("04 Continents")]
+    public float TerraSeaLevel { get; set; } = 0.30f;
 
     /// <summary>How far a continent interior rises above the waterline before any uplift.</summary>
-    public float TerraContinentRise = 0.075f;
+    [Category("04 Continents")]
+    [Description("How far a continent interior rises above the waterline before any uplift.")]
+    public float TerraContinentRise { get; set; } = 0.075f;
 
     /// <summary>Depth of the abyssal plain below sea level.</summary>
-    public float TerraOceanDepth = 0.26f;
+    [Category("05 Coast and sea floor")]
+    [Description("Depth of the abyssal plain below sea level.")]
+    public float TerraOceanDepth { get; set; } = 0.26f;
 
     /// <summary>
     /// How sharply the sea floor falls away from the coast. Higher is a narrower continental shelf.
@@ -100,49 +140,71 @@ public sealed class MapConfig
     /// reads 4.5/255, well under the 19/255 water plane. Too low and shallow water hugs every
     /// coastline, letting the sea-floor material show through at coastal province borders.
     /// </summary>
-    public double TerraShelfSteepness = 10.0;
+    [Category("05 Coast and sea floor")]
+    [Description("How sharply the sea floor falls away from the coast. Higher is a narrower continental shelf. Tuned against vanilla's measured offshore profile: at 20 px offshore vanilla's heightmap reads 4.5/255, well under the 19/255 water plane. Too low and shallow water hugs every coastline, letting the sea-floor material show through at coastal province borders.")]
+    public double TerraShelfSteepness { get; set; } = 10.0;
 
     /// <summary>
     /// Depth, in simulation elevation units below sea level, at which the sea floor reaches pure
     /// black. Everything deeper is 0. This is what sets the continental shelf's *width*, since the
     /// generator's depth grows with distance offshore.
     /// </summary>
-    public double TerraShelfDepth = 24.0;
+    [Category("05 Coast and sea floor")]
+    [Description("Depth, in simulation elevation units below sea level, at which the sea floor reaches pure black. Everything deeper is 0. This is what sets the continental shelf's *width*, since the generator's depth grows with distance offshore.")]
+    public double TerraShelfDepth { get; set; } = 24.0;
 
     /// <summary>
     /// Shape of the shelf falloff. Above 1 it falls away fast just offshore and then flattens,
     /// which is what vanilla's profile does (18.4/255 at 2 px, 4.5 at 20 px, black by 40).
     /// </summary>
-    public double TerraShelfCurve = 2.4;
+    [Category("05 Coast and sea floor")]
+    [Description("Shape of the shelf falloff. Above 1 it falls away fast just offshore and then flattens, which is what vanilla's profile does (18.4/255 at 2 px, 4.5 at 20 px, black by 40).")]
+    public double TerraShelfCurve { get; set; } = 2.4;
 
     /// <summary>Continent-sized features across the map width. Lower means fewer, bigger landmasses.</summary>
-    public double TerraContinentScale = 3.1;
+    [Category("04 Continents")]
+    [Description("Continent-sized features across the map width. Lower means fewer, bigger landmasses.")]
+    public double TerraContinentScale { get; set; } = 3.1;
 
     /// <summary>Amplitude of the broad relief that makes continent interiors hilly rather than flat.</summary>
-    public float TerraInteriorRelief = 0.035f;
+    [Category("04 Continents")]
+    [Description("Amplitude of the broad relief that makes continent interiors hilly rather than flat.")]
+    public float TerraInteriorRelief { get; set; } = 0.035f;
 
-    public int TerraPlateCount = 26;
+    [Category("06 Tectonics")]
+    public int TerraPlateCount { get; set; } = 26;
 
     /// <summary>
     /// Width of the uplift belt at a converging plate boundary, as a fraction of map width. This is
     /// the single number that decides whether mountains read as strips or as regions — vanilla's
     /// ranges are a couple of hundred pixels wide on an 18k-wide map.
     /// </summary>
-    public double TerraRangeWidth = 0.0065;
+    [Category("06 Tectonics")]
+    [Description("Width of the uplift belt at a converging plate boundary, as a fraction of map width. This is the single number that decides whether mountains read as strips or as regions — vanilla's ranges are a couple of hundred pixels wide on an 18k-wide map.")]
+    public double TerraRangeWidth { get; set; } = 0.0065;
 
     /// <summary>Cycles across the map width of the along-belt modulation that gives ranges passes.</summary>
-    public double TerraRangeRoughness = 26.0;
+    [Category("06 Tectonics")]
+    [Description("Cycles across the map width of the along-belt modulation that gives ranges passes.")]
+    public double TerraRangeRoughness { get; set; } = 26.0;
 
-    public int TerraErosionIterations = 34;
+    [Category("07 Erosion (base pass)")]
+    public int TerraErosionIterations { get; set; } = 34;
 
     /// <summary>K in the stream power law, against drainage area normalised by land area.</summary>
-    public float TerraErodibility = 3.2f;
+    [Category("07 Erosion (base pass)")]
+    [Description("K in the stream power law, against drainage area normalised by land area.")]
+    public float TerraErodibility { get; set; } = 3.2f;
 
-    public float TerraUpliftPerStep = 0.026f;
-    public float TerraDeposition = 0.35f;
+    [Category("07 Erosion (base pass)")]
+    public float TerraUpliftPerStep { get; set; } = 0.026f;
+    [Category("07 Erosion (base pass)")]
+    public float TerraDeposition { get; set; } = 0.35f;
 
     /// <summary>Steepest slope the coarse terrain will hold, in height per base cell.</summary>
-    public float TerraTalus = 0.045f;
+    [Category("07 Erosion (base pass)")]
+    [Description("Steepest slope the coarse terrain will hold, in height per base cell.")]
+    public float TerraTalus { get; set; } = 0.045f;
 
     // --- Slope scale ---
     //
@@ -161,7 +223,9 @@ public sealed class MapConfig
     /// Heightmap width the slope parameters are authored against — the <c>small</c> preset, which
     /// is the size they were tuned at.
     /// </summary>
-    public int TerraSlopeReferenceWidth = 4096;
+    [Category("02 Map size")]
+    [Description("Heightmap width the slope parameters are authored against — the small preset, which is the size they were tuned at.")]
+    public int TerraSlopeReferenceWidth { get; set; } = 4096;
 
     /// <summary>
     /// Per-cell slope conversion for a grid of the given width. The reference is the *base* grid at
@@ -181,17 +245,23 @@ public sealed class MapConfig
     /// are four export pixels across and everything below that came from noise. Zero disables it
     /// and restores the previous behaviour.
     /// </summary>
-    public int TerraRefineIterations = 10;
+    [Category("08 Erosion (refinement pass)")]
+    [Description("Erosion iterations for the refinement pass at province resolution. This is the pass that makes dendritic drainage visible in the exported heightmap. The main erosion runs on the base grid, a quarter of the heightmap's width, so its finest channels are four export pixels across and everything below that came from noise. Zero disables it and restores the previous behaviour.")]
+    public int TerraRefineIterations { get; set; } = 10;
 
     /// <summary>Erodibility for the refinement pass. Independent of the base pass's.</summary>
-    public float TerraRefineErodibility = 3.2f;
+    [Category("08 Erosion (refinement pass)")]
+    [Description("Erodibility for the refinement pass. Independent of the base pass's.")]
+    public float TerraRefineErodibility { get; set; } = 3.2f;
 
     /// <summary>
     /// Drainage-area exponent for the refinement pass. Well below the base pass's 0.5, because
     /// dendritic texture is made by headwater streams and a high exponent puts nearly all the
     /// incision into the handful of largest rivers, leaving the hillsides between them smooth.
     /// </summary>
-    public float TerraRefineAreaExponent = 0.30f;
+    [Category("08 Erosion (refinement pass)")]
+    [Description("Drainage-area exponent for the refinement pass. Well below the base pass's 0.5, because dendritic texture is made by headwater streams and a high exponent puts nearly all the incision into the handful of largest rivers, leaving the hillsides between them smooth.")]
+    public float TerraRefineAreaExponent { get; set; } = 0.30f;
 
     /// <summary>Talus angle converted to this map's cell spacing.</summary>
     public float TerraTalusScaled => (float)(TerraTalus * TerraSlopeScale);
@@ -227,12 +297,17 @@ public sealed class MapConfig
         => (float)(0.02 / Math.Max(1e-6, TerraSlopeScale));
 
     /// <summary>Cycles across the map width of the finest detail added at heightmap resolution.</summary>
-    public double TerraDetailScale = 900.0;
+    [Category("09 Detail")]
+    [Description("Cycles across the map width of the finest detail added at heightmap resolution.")]
+    public double TerraDetailScale { get; set; } = 900.0;
 
-    public float TerraDetailAmplitude = 0.045f;
+    [Category("09 Detail")]
+    public float TerraDetailAmplitude { get; set; } = 0.045f;
 
     /// <summary>Coarse slope at which detail is at full strength.</summary>
-    public float TerraDetailSlopeRef = 0.022f;
+    [Category("09 Detail")]
+    [Description("Coarse slope at which detail is at full strength.")]
+    public float TerraDetailSlopeRef { get; set; } = 0.022f;
 
     // TerraDetailIncision is gone. It scaled each full-resolution pixel by its own drainage area
     // in a single pass, which deepens a valley that already exists but cannot branch — drainage
@@ -240,25 +315,37 @@ public sealed class MapConfig
     // with real erosion iterations at province resolution.
 
     /// <summary>Slope limit for the full-resolution relaxation, in height per heightmap pixel.</summary>
-    public float TerraDetailTalus = 0.012f;
+    [Category("09 Detail")]
+    [Description("Slope limit for the full-resolution relaxation, in height per heightmap pixel.")]
+    public float TerraDetailTalus { get; set; } = 0.012f;
 
     /// <summary>Fraction of land cells that carry enough drainage to be drawn as a river.</summary>
-    public double TerraRiverDensity = 0.006;
+    [Category("10 Rivers and lakes")]
+    [Description("Fraction of land cells that carry enough drainage to be drawn as a river.")]
+    public double TerraRiverDensity { get; set; } = 0.006;
 
     // River geometry is authored in vanilla province pixels and scaled by MapScale, so a river is
     // the same fraction of a continent at every map size rather than nine times wider at `tiny`.
 
     /// <summary>Shortest course kept.</summary>
-    public double MinRiverPixelsAtVanilla = 30;
+    [Category("10 Rivers and lakes")]
+    [Description("Shortest course kept.")]
+    public double MinRiverPixelsAtVanilla { get; set; } = 30;
 
     /// <summary>Douglas-Peucker tolerance. This is what removes the D8 staircase.</summary>
-    public double RiverSimplifyAtVanilla = 1.6;
+    [Category("10 Rivers and lakes")]
+    [Description("Douglas-Peucker tolerance. This is what removes the D8 staircase.")]
+    public double RiverSimplifyAtVanilla { get; set; } = 1.6;
 
     /// <summary>Largest perpendicular meander offset.</summary>
-    public double MeanderPixelsAtVanilla = 2.5;
+    [Category("10 Rivers and lakes")]
+    [Description("Largest perpendicular meander offset.")]
+    public double MeanderPixelsAtVanilla { get; set; } = 2.5;
 
     /// <summary>Half-width of the channel cut into the heightmap.</summary>
-    public double ChannelRadiusAtVanilla = 3.0;
+    [Category("10 Rivers and lakes")]
+    [Description("Half-width of the channel cut into the heightmap.")]
+    public double ChannelRadiusAtVanilla { get; set; } = 3.0;
 
     public int TerraMinRiverCells => Math.Max(8, (int)Scaled(MinRiverPixelsAtVanilla));
     public double TerraRiverSimplify => Math.Max(0.6, Scaled(RiverSimplifyAtVanilla));
@@ -266,21 +353,30 @@ public sealed class MapConfig
     public float TerraChannelRadius => (float)Math.Max(1.0, Scaled(ChannelRadiusAtVanilla));
 
     /// <summary>Depth of the channel cut into the heightmap under a river, in normalised height.</summary>
-    public float TerraChannelDepth = 0.010f;
+    [Category("10 Rivers and lakes")]
+    [Description("Depth of the channel cut into the heightmap under a river, in normalised height.")]
+    public float TerraChannelDepth { get; set; } = 0.010f;
 
     /// <summary>How deep a filled depression must be to count as a lake.</summary>
-    public float TerraLakeDepth = 0.0015f;
+    [Category("10 Rivers and lakes")]
+    [Description("How deep a filled depression must be to count as a lake.")]
+    public float TerraLakeDepth { get; set; } = 0.0015f;
 
-    public int TerraMinLakeCells = 400;
+    [Category("10 Rivers and lakes")]
+    public int TerraMinLakeCells { get; set; } = 400;
 
     /// <summary>
     /// Share of land put above the mountain line. Vanilla's own heightmap has 3.3% of its land in
     /// the 121-170 band, and that is the number this reproduces.
     /// </summary>
-    public double TerraMountainShare = 0.035;
+    [Category("11 Height scale")]
+    [Description("Share of land put above the mountain line. Vanilla's own heightmap has 3.3% of its land in the 121-170 band, and that is the number this reproduces.")]
+    public double TerraMountainShare { get; set; } = 0.035;
 
-    public int TerraTopElevation = 520;
-    public int TerraFloorElevation = -250;
+    [Category("11 Height scale")]
+    public int TerraTopElevation { get; set; } = 520;
+    [Category("11 Height scale")]
+    public int TerraFloorElevation { get; set; } = -250;
 
     /// <summary>settings.equator — in raster space, deliberately off-centre.</summary>
     public double Equator => Height - Height / 10.0;
@@ -318,7 +414,9 @@ public sealed class MapConfig
     /// <see cref="MinProvincePixels"/>, where CK3 cannot derive a centroid and crashes without
     /// logging. Fixing the *area* instead makes the count fall out of the map size.
     /// </summary>
-    public double CountyScale = 1.0;
+    [Category("03 Provinces")]
+    [Description("How large a barony is, relative to vanilla's. 2 makes each one twice as wide and therefore a quarter as numerous; the whole title hierarchy follows, because MapGen.Titles clusters by counts rather than by area. This is the only knob for map granularity. Province counts used to be given directly, which meant a map kept the same number of provinces at every resolution and so a barony at tiny cove...")]
+    public double CountyScale { get; set; } = 1.0;
 
     /// <summary>
     /// Average land province area in province-map pixels, at <see cref="CountyScale"/> 1.
@@ -326,13 +424,17 @@ public sealed class MapConfig
     /// Vanilla: 10,966 baronies over roughly 22.4M land pixels of its 9216x4608 province map.
     /// A barony is one province here, so this reproduces vanilla's barony density.
     /// </summary>
-    public double BaronyPixelsAtVanilla = 2043;
+    [Category("03 Provinces")]
+    [Description("Average land province area in province-map pixels, at CountyScale 1. Vanilla: 10,966 baronies over roughly 22.4M land pixels of its 9216x4608 province map. A barony is one province here, so this reproduces vanilla's barony density.")]
+    public double BaronyPixelsAtVanilla { get; set; } = 2043;
 
     /// <summary>
     /// Average sea zone area, same basis. Vanilla's sea zones are an order of magnitude larger
     /// than its baronies — roughly 800 of them over 20M water pixels.
     /// </summary>
-    public double SeaZonePixelsAtVanilla = 25000;
+    [Category("03 Provinces")]
+    [Description("Average sea zone area, same basis. Vanilla's sea zones are an order of magnitude larger than its baronies — roughly 800 of them over 20M water pixels.")]
+    public double SeaZonePixelsAtVanilla { get; set; } = 25000;
 
     /// <summary>Target area of one land province on *this* map, in province pixels.</summary>
     public double BaronyPixels => BaronyPixelsAtVanilla * CountyScale * CountyScale;
@@ -344,7 +446,9 @@ public sealed class MapConfig
     /// Smallest allowed province in pixels. Below this CK3 cannot derive borders, a centroid or
     /// locator positions and crashes in geometry code without logging anything.
     /// </summary>
-    public int MinProvincePixels = 32;
+    [Category("03 Provinces")]
+    [Description("Smallest allowed province in pixels. Below this CK3 cannot derive borders, a centroid or locator positions and crashes in geometry code without logging anything.")]
+    public int MinProvincePixels { get; set; } = 32;
 
     /// <summary>
     /// Rows and columns of forced ocean around the edge of the province map, in province pixels.
@@ -355,7 +459,9 @@ public sealed class MapConfig
     /// touched the top edge and 17 the bottom. A province clipped by the map boundary has an
     /// open border, which is the sort of thing a boundary-following walk cannot close.
     /// </summary>
-    public int OceanBorder = 1;
+    [Category("03 Provinces")]
+    [Description("Rows and columns of forced ocean around the edge of the province map, in province pixels. Vanilla has water along every edge — its top and bottom rows are entirely sea, and its province map has only a handful of large ocean provinces touching them. A generated map happily runs land off the poles instead: on seed 1 at vanilla size, 33 land provinces touched the top edge and 17 the bottom. A prov...")]
+    public int OceanBorder { get; set; } = 1;
 
     public Limits Limits { get; } = new();
 
