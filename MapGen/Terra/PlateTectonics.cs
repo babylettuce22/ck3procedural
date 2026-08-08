@@ -138,6 +138,9 @@ public static class PlateTectonics
 
                     uplift[i] = (float)(convergence * style * along
                                         * (0.86f * core + 0.14f * flank));
+
+                    float landFactor = baseHeight[i] > cfg.TerraSeaLevel ? 1.0f : 0.3f;
+                    uplift[i] *= landFactor;
                 }
                 else
                 {
