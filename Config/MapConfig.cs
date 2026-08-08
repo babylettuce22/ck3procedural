@@ -175,6 +175,51 @@ public sealed class MapConfig
     public int TerraPlateCount { get; set; } = 24;
 
     /// <summary>
+    /// Share of plates carrying continental crust. Not the same as land fraction — a continental
+    /// plate is mostly land but carries shelf and margin too, and the coastline is still solved to
+    /// hit TargetLandFraction exactly. Raising this makes fewer, larger oceans.
+    /// </summary>
+    [Category("06 Tectonics")]
+    [Description("Share of plates carrying continental crust. Not the same as land fraction - the coastline is still solved to hit TargetLandFraction exactly. Raising this makes fewer, larger oceans.")]
+    public double TerraContinentalPlateFraction { get; set; } = 0.45;
+
+    /// <summary>
+    /// How strongly plate crust type biases where land ends up, against the coastline noise. At 0
+    /// continents ignore the plates entirely, which is how this worked before. Too high and the
+    /// coastline starts tracing plate outlines, which look like polygons.
+    /// </summary>
+    [Category("06 Tectonics")]
+    [Description("How strongly plate crust type biases where land ends up, against the coastline noise. At 0 continents ignore the plates entirely. Too high and coastlines start tracing plate outlines, which look like polygons.")]
+    public double TerraPlateInfluence { get; set; } = 0.35;
+
+    /// <summary>
+    /// How far either side of a plate boundary continentality takes to reach that plate's own
+    /// value, as a fraction of map width. This feather is the main defence against polygonal
+    /// coastlines; narrowing it sharpens continental margins onto the plate outline.
+    /// </summary>
+    [Category("06 Tectonics")]
+    [Description("How far either side of a plate boundary continentality takes to reach that plate's own value, as a fraction of map width. The main defence against polygonal coastlines.")]
+    public double TerraCratonFeather { get; set; } = 0.055;
+
+    /// <summary>
+    /// Radius, as a fraction of map width, of the blur applied to the continentality field. This
+    /// is what dissolves the Voronoi tessellation into continental mass; without it the field is a
+    /// flat plateau per plate whose only gradient is the plate outline, and coastlines trace it.
+    /// </summary>
+    [Category("06 Tectonics")]
+    [Description("Radius, as a fraction of map width, of the blur applied to the continentality field. Dissolves the Voronoi tessellation into continental mass; without it coastlines trace plate outlines.")]
+    public double TerraCratonBlur { get; set; } = 0.030;
+
+    /// <summary>
+    /// Cycles across the map width of the field that decides which plates are continental. Low
+    /// values clump all continental crust into one supercontinent; high values scatter it into
+    /// unconnected one-plate islands.
+    /// </summary>
+    [Category("06 Tectonics")]
+    [Description("Cycles across the map width of the field deciding which plates are continental. Low values clump all continental crust into one supercontinent; high values scatter it into one-plate islands.")]
+    public double TerraCratonClustering { get; set; } = 3.2;
+
+    /// <summary>
     /// Width of the uplift belt at a converging plate boundary, as a fraction of map width. This is
     /// the single number that decides whether mountains read as strips or as regions — vanilla's
     /// ranges are a couple of hundred pixels wide on an 18k-wide map.

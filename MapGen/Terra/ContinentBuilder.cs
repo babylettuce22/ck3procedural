@@ -18,6 +18,13 @@ namespace Ck3MapGen.MapGen.Terra;
 /// threshold gives blobs with a characteristic single scale of wobble; warping the *sample
 /// position* first, with a warp that is itself warped, produces the peninsulas, bays and
 /// long-armed shapes real coastlines have.
+///
+/// Where the land *broadly* sits is no longer that noise's decision. It comes from
+/// <see cref="PlateTectonics.PlateField.Continentality"/>, added as a bias, so continents sit on
+/// continental crust and margins line up with plate boundaries. The noise is still added at full
+/// amplitude on top rather than being cross-faded with the bias — that is what keeps coastlines
+/// organic, and what still produces offshore islands and inland seas instead of a coastline that
+/// traces a Voronoi cell.
 /// </summary>
 public static class ContinentBuilder
 {
@@ -31,7 +38,8 @@ public static class ContinentBuilder
         public required float Threshold;
     }
 
-    public static Result Build(int width, int height, MapConfig cfg, Rng rng)
+    public static Result Build(int width, int height, PlateTectonics.PlateField plates,
+        MapConfig cfg, Rng rng)
     {
         var warpCoarse = new SimplexNoise(rng);
         var warpFine = new SimplexNoise(rng);
@@ -70,6 +78,12 @@ public static class ContinentBuilder
 
                 double v = Field.Fbm(shape, wx * shapeFreq, wy * shapeFreq, 5, gain: 0.55);
                 v += 0.30 * Field.Fbm(detail, wx * detailFreq, wy * detailFreq, 4);
+
+                // Where the continental crust is, as a bias rather than a replacement. Added, not
+                // cross-faded: cross-fading would scale the noise down in step and smooth the
+                // coastline toward the plate outline, which is exactly the polygonal look this is
+                // arranged to avoid.
+                v += (plates.Continentality[y * width + x] - 0.5) * 2.0 * cfg.TerraPlateInfluence;
 
                 // Drown the poles. Vanilla's top and bottom rows are entirely sea, and a province
                 // clipped by the map boundary has an open border the locator pass cannot close.

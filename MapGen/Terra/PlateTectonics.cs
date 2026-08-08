@@ -1,80 +1,205 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 
 namespace Ck3MapGen.MapGen.Terra;
 
 /// <summary>
-/// Stage 2. Voronoi plates with drift vectors, turned into an uplift rate field.
+/// Stage 1. Voronoi plates with drift vectors and a continental/oceanic craton flag — and, from
+/// those, the continentality field the coastline is built on.
 ///
-/// This is the piece that decides mountains are *strips*. Uplift is a narrow exponential falloff
-/// from a plate boundary — the core belt is under one percent of the map width — with a much wider,
-/// much weaker flank for foothills. Feed that to the erosion model as a rate rather than as a
-/// height and the range keeps being rebuilt where the boundary is while rivers cut into it
-/// everywhere else, which is what produces a thin white line with a fan of valleys either side.
+/// **Plates come before continents, not after.** They used to be laid over finished geography and
+/// each plate's type read from a single pixel sample at its seed point, which had two consequences.
+/// A plate straddling a coast got its type from a coin flip, and that flag chooses the convergence
+/// style, so whether a boundary became a continental collision or a barely-emergent island arc was
+/// close to arbitrary. And nothing related coastlines to tectonics at all: a range could run
+/// through open ocean or parallel to a coast purely by accident. Real maps read as legible largely
+/// because margins have structure — mountains along active margins, flat passive margins where a
+/// continent rifted apart.
 ///
-/// The old generator had nothing like this. Its "mountainousness" at export resolution came from
-/// <c>HeightDetail</c>'s <c>belt</c> term, an independent low-frequency noise field multiplied by
-/// local relief — isotropic blobs, so mountains appeared as scattered patches wherever the
-/// simulation happened to be high, never as linear ranges.
+/// What this deliberately does *not* do is let plates be the continents. Voronoi cells are
+/// polygons, and thresholding plate membership directly gives continents with straight edges. This
+/// produces a smooth <see cref="PlateField.Continentality"/> instead, which
+/// <see cref="ContinentBuilder"/> uses as a bias on its noise rather than as the coastline itself.
 ///
-/// Boundaries are sampled through the same style of domain warp as the coastline, so plates are
-/// organic polygons rather than the straight-edged cells raw Voronoi gives.
+/// Uplift is a narrow exponential falloff from a plate boundary — the core belt is under one
+/// percent of the map width — with a much wider, much weaker flank for foothills. Fed to the
+/// erosion model as a rate rather than as a height, the range keeps being rebuilt where the
+/// boundary is while rivers cut into it, which is what produces a thin white line with a fan of
+/// valleys either side rather than a dome.
 /// </summary>
 public static class PlateTectonics
 {
-    private readonly record struct Plate(float X, float Y, float DriftX, float DriftY, bool Oceanic);
+    public readonly record struct Plate(float X, float Y, float DriftX, float DriftY, bool Oceanic);
+
+    public sealed class PlateField
+    {
+        public required int Width { get; init; }
+        public required int Height { get; init; }
+        public required Plate[] Plates { get; init; }
+
+        /// <summary>Nearest plate per cell, sampled through the domain warp.</summary>
+        public required byte[] Nearest { get; init; }
+
+        public required byte[] Second { get; init; }
+
+        /// <summary>Distance to the boundary between those two, in cells.</summary>
+        public required float[] EdgeDistance { get; init; }
+
+        /// <summary>
+        /// 1 deep inside continental crust, 0 deep inside oceanic, feathered across boundaries.
+        /// </summary>
+        public required float[] Continentality { get; init; }
+    }
 
     public sealed class Result
     {
         /// <summary>Uplift rate, 0..1. Multiplied by a per-iteration amount by the erosion model.</summary>
-        public required float[] Uplift;
+        public required float[] Uplift { get; init; }
 
         /// <summary>Rift/trench subsidence rate, 0..1.</summary>
-        public required float[] Rift;
+        public required float[] Rift { get; init; }
     }
 
-    public static Result Build(int width, int height, float[] baseHeight, MapConfig cfg, Rng rng)
+    /// <summary>
+    /// Lays out the plates and rasterises their geometry. Depends on nothing but the seed — this is
+    /// now the first thing the pipeline does.
+    /// </summary>
+    public static PlateField BuildField(int width, int height, MapConfig cfg, Rng rng)
     {
-        int count = cfg.TerraPlateCount;
-        var plates = new Plate[count];
+        int count = Math.Max(2, cfg.TerraPlateCount);
+        var seeds = new (float X, float Y, double Drift, double Speed)[count];
 
         for (int i = 0; i < count; i++)
         {
-            float px = 0, py = 0;
-            bool oceanic = false;
+            seeds[i] = ((float)(rng.NextDouble() * width), (float)(rng.NextDouble() * height),
+                rng.NextDouble() * Math.Tau, 0.35 + rng.NextDouble() * 0.65);
+        }
 
-            // Try finding a seed position that aligns with land/sea distribution
-            // Even indices target land interiors, odd indices target ocean basins
-            bool targetLand = (i % 2 == 0);
+        // Which plates carry continental crust. Chosen by ranking the plates against a
+        // low-frequency field sampled at their seeds, rather than independently at random, so
+        // cratons clump into a few landmasses the way Earth's do instead of scattering into an
+        // archipelago of one-plate continents.
+        //
+        // The frequency matters more than it looks. Too low and every continental plate ends up in
+        // one cluster — a single supercontinent whose interior is hundreds of cells from any coast
+        // or plate boundary, so nothing gives it relief and depression filling turns it into one
+        // enormous lake. Measured at 1.35 cycles: 151k lake cells against 9k before.
+        var cratonNoise = new SimplexNoise(rng);
+        double cratonFreq = (double)cfg.TerraCratonClustering / width;
 
-            for (int attempt = 0; attempt < 30; attempt++)
-            {
-                px = (float)(rng.NextDouble() * width);
-                py = (float)(rng.NextDouble() * height);
+        var ranked = new (int Index, double Score)[count];
+        for (int i = 0; i < count; i++)
+            ranked[i] = (i, Field.Fbm(cratonNoise, seeds[i].X * cratonFreq,
+                seeds[i].Y * cratonFreq, 3));
+        Array.Sort(ranked, (a, b) => b.Score.CompareTo(a.Score));
 
-                int sx = Math.Clamp((int)px, 0, width - 1);
-                int sy = Math.Clamp((int)py, 0, height - 1);
-                bool isLand = baseHeight[sy * width + sx] > cfg.TerraSeaLevel;
+        int continental = (int)Math.Round(count * Math.Clamp(cfg.TerraContinentalPlateFraction, 0.05, 0.95));
+        continental = Math.Clamp(continental, 1, count - 1);
 
-                if (isLand == targetLand)
-                {
-                    oceanic = !isLand;
-                    break; // Found a good spot aligned with continent layout!
-                }
-            }
-
-            double angle = rng.NextDouble() * Math.Tau;
-            double speed = 0.35 + rng.NextDouble() * 0.65;
-
-            plates[i] = new Plate(px, py,
-                (float)(Math.Cos(angle) * speed), (float)(Math.Sin(angle) * speed), oceanic);
+        var plates = new Plate[count];
+        for (int r = 0; r < count; r++)
+        {
+            var (index, _) = ranked[r];
+            var (x, y, angle, speed) = seeds[index];
+            plates[index] = new Plate(x, y,
+                (float)(Math.Cos(angle) * speed), (float)(Math.Sin(angle) * speed),
+                Oceanic: r >= continental);
         }
 
         var warp = new SimplexNoise(rng);
-        var belt = new SimplexNoise(rng);
-
         double warpFreq = 6.0 / width;
         double warpAmp = width * 0.060;
+
+        var nearest = new byte[width * height];
+        var second = new byte[width * height];
+        var edge = new float[width * height];
+        var continentality0 = new float[width * height];
+
+        // How far either side of a boundary continentality takes to reach its plate's own value.
+        // Wide on purpose: this feather is the only thing standing between plate-derived continents
+        // and visibly polygonal coastlines.
+        float feather = (float)(width * Math.Max(0.005, cfg.TerraCratonFeather));
+
+        Parallel.For(0, height, y =>
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int i = y * width + x;
+
+                double wx = x + Field.Fbm(warp, x * warpFreq, y * warpFreq, 3) * warpAmp;
+                double wy = y + Field.Fbm(warp, x * warpFreq + 3.7, y * warpFreq + 8.1, 3) * warpAmp;
+
+                int best = -1, next = -1;
+                float d1 = float.MaxValue, d2 = float.MaxValue;
+                for (int p = 0; p < count; p++)
+                {
+                    float dx = (float)(plates[p].X - wx);
+                    float dy = (float)(plates[p].Y - wy);
+                    float d = dx * dx + dy * dy;
+                    if (d < d1) { d2 = d1; next = best; d1 = d; best = p; }
+                    else if (d < d2) { d2 = d; next = p; }
+                }
+                if (best < 0) continue;
+                if (next < 0) next = best;
+
+                // Distance to the boundary, up to the usual factor of two: (|d2| - |d1|) is zero on
+                // the bisector and grows at roughly twice the rate of true distance away from it.
+                float e = 0.5f * (MathF.Sqrt(d2) - MathF.Sqrt(d1));
+
+                nearest[i] = (byte)best;
+                second[i] = (byte)next;
+                edge[i] = e;
+
+                // Half-and-half exactly on the boundary, all of the nearest plate a feather away.
+                float share = 0.5f * (1f - (float)Field.SmoothStep(0, feather, e));
+                float mine = plates[best].Oceanic ? 0f : 1f;
+                float theirs = plates[next].Oceanic ? 0f : 1f;
+                continentality0[i] = mine * (1f - share) + theirs * share;
+            }
+        });
+
+        // Blur the whole continentality field, hard.
+        //
+        // The per-cell feather above only ramps perpendicular to the nearest boundary, so inside a
+        // plate the field is a flat plateau and its only gradient is the plate outline itself.
+        // Adding that to the coastline noise makes the threshold contour trace Voronoi edges —
+        // straight margins and sharp corners — and leaves continent interiors perfectly flat,
+        // which then fill with lakes because there is no gradient for water to run down. A 2D blur
+        // rounds the corners off and turns the tessellation into continental *mass*, which is what
+        // it should be contributing.
+        int blurRadius = (int)Math.Max(1, width * Math.Max(0.0, cfg.TerraCratonBlur));
+        var continentality = blurRadius > 1
+            ? Field.Blur(continentality0, width, height, blurRadius, 3)
+            : continentality0;
+
+        int continentalCount = 0;
+        foreach (var p in plates) if (!p.Oceanic) continentalCount++;
+        Console.WriteLine($"  {count} plates, {continentalCount} continental / " +
+                          $"{count - continentalCount} oceanic");
+
+        return new PlateField
+        {
+            Width = width,
+            Height = height,
+            Plates = plates,
+            Nearest = nearest,
+            Second = second,
+            EdgeDistance = edge,
+            Continentality = continentality,
+        };
+    }
+
+    /// <summary>
+    /// Turns the plate geometry into uplift and rift rates. Runs after the coastline exists,
+    /// because uplift is damped over deep ocean — but the plate *types* it keys off are a property
+    /// of the plates themselves now, not a sample of the terrain.
+    /// </summary>
+    public static Result BuildUplift(PlateField field, float[] baseHeight, MapConfig cfg, Rng rng)
+    {
+        int width = field.Width, height = field.Height;
+        var plates = field.Plates;
+
+        var belt = new SimplexNoise(rng);
         double beltFreq = cfg.TerraRangeRoughness / width;
 
         // The narrow belt is what reads as a mountain *range*; the wide one is its foothills.
@@ -99,28 +224,11 @@ public static class PlateTectonics
             for (int x = 0; x < width; x++)
             {
                 int i = y * width + x;
+                float e = field.EdgeDistance[i];
+                if (e > reach) continue;
 
-                double wx = x + Field.Fbm(warp, x * warpFreq, y * warpFreq, 3) * warpAmp;
-                double wy = y + Field.Fbm(warp, x * warpFreq + 3.7, y * warpFreq + 8.1, 3) * warpAmp;
-
-                int best = -1, second = -1;
-                float d1 = float.MaxValue, d2 = float.MaxValue;
-                for (int p = 0; p < count; p++)
-                {
-                    float dx = (float)(plates[p].X - wx);
-                    float dy = (float)(plates[p].Y - wy);
-                    float d = dx * dx + dy * dy;
-                    if (d < d1) { d2 = d1; second = best; d1 = d; best = p; }
-                    else if (d < d2) { d2 = d; second = p; }
-                }
-                if (best < 0 || second < 0) continue;
-
-                var a = plates[best];
-                var b = plates[second];
-
-                // Distance to the boundary, up to the usual factor of two: (|d2| - |d1|) is zero on
-                // the bisector and grows at roughly twice the rate of true distance away from it.
-                float edge = 0.5f * (MathF.Sqrt(d2) - MathF.Sqrt(d1));
+                var a = plates[field.Nearest[i]];
+                var b = plates[field.Second[i]];
 
                 // Closing speed along the line between the two plate centres.
                 float nx = b.X - a.X, ny = b.Y - a.Y;
@@ -131,11 +239,9 @@ public static class PlateTectonics
                 float convergence = (a.DriftX * nx + a.DriftY * ny)
                                     - (b.DriftX * nx + b.DriftY * ny);
 
-                if (edge > reach) continue;
-
-                float window = (float)(1.0 - Field.SmoothStep(reach * 0.45, reach, edge));
-                float core = MathF.Exp(-edge / coreWidth) * window;
-                float flank = MathF.Exp(-edge / flankWidth) * window;
+                float window = (float)(1.0 - Field.SmoothStep(reach * 0.45, reach, e));
+                float core = MathF.Exp(-e / coreWidth) * window;
+                float flank = MathF.Exp(-e / flankWidth) * window;
 
                 // Along-belt modulation, so a range has peaks, saddles and passes rather than being
                 // a uniform wall. Clamped low rather than to zero so the belt stays continuous.
@@ -144,17 +250,19 @@ public static class PlateTectonics
 
                 if (convergence > 0)
                 {
+                    // Continental collision raises the most; an oceanic plate diving under a
+                    // continental one gives a lower volcanic arc; two oceanic plates barely break
+                    // the surface. These are now meaningful — the flags describe the whole plate.
                     float style = !a.Oceanic && !b.Oceanic ? 1.0f
                         : a.Oceanic ^ b.Oceanic ? 0.72f
                         : 0.30f;
 
-                    float rawUplift = (float)(convergence * style * along * (0.86f * core + 0.14f * flank));
+                    float raw = (float)(convergence * style * along * (0.86f * core + 0.14f * flank));
 
-                    // Ensure mountains primarily build up where land actually exists!
-                    // baseHeight[i] > cfg.TerraSeaLevel checks if pixel is on land
+                    // Damped over water, so a convergent boundary out in open ocean makes an island
+                    // arc rather than a mountain range standing in the sea.
                     float landFactor = baseHeight[i] > cfg.TerraSeaLevel ? 1.0f : 0.15f;
-
-                    uplift[i] = rawUplift * landFactor;
+                    uplift[i] = raw * landFactor;
                 }
                 else
                 {

@@ -34,17 +34,26 @@ public static class TerraPipeline
 
         Console.WriteLine($"Terra: base {bw}x{bh}, provinces {pw}x{ph}, heightmap {fw}x{fh}");
 
-        // --- 1. Where is land ---
-        var continents = ContinentBuilder.Build(bw, bh, cfg, rng);
+        // --- 1. Which crust is continental ---
+        //
+        // Plates first. Continents are derived from them rather than the other way round, so
+        // coastlines sit on continental crust and margins line up with plate boundaries, and a
+        // plate's type is a property of the plate rather than of whichever pixel its seed landed on.
+        var plateField = PlateTectonics.BuildField(bw, bh, cfg, rng);
+        Console.WriteLine($"  plate field ({sw.ElapsedMilliseconds} ms)");
+
+        // --- 2. Where is land ---
+        sw.Restart();
+        var continents = ContinentBuilder.Build(bw, bh, plateField, cfg, rng);
         var baseHeight = continents.Height;
         AddInteriorRelief(baseHeight, bw, bh, sea, cfg, rng);
         Console.WriteLine($"  continents + warp ({sw.ElapsedMilliseconds} ms), " +
                           $"{LandFraction(baseHeight, sea) * 100:F1}% land");
 
-        // --- 2. Where are mountains ---
+        // --- 3. Where are mountains ---
         sw.Restart();
-        var plates = PlateTectonics.Build(bw, bh, baseHeight, cfg, rng);
-        Console.WriteLine($"  {cfg.TerraPlateCount} plates, uplift belts ({sw.ElapsedMilliseconds} ms)");
+        var plates = PlateTectonics.BuildUplift(plateField, baseHeight, cfg, rng);
+        Console.WriteLine($"  uplift belts ({sw.ElapsedMilliseconds} ms)");
 
         // --- 3. Erosion, the long pass ---
         sw.Restart();
