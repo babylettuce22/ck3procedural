@@ -163,8 +163,35 @@ public sealed class MapConfig
     /// </summary>
     public int TerraSlopeReferenceWidth = 4096;
 
+    /// <summary>
+    /// Per-cell slope conversion for a grid of the given width. The reference is the *base* grid at
+    /// the reference map width, so this is 1 for the base grid at <c>small</c>.
+    /// </summary>
+    public double SlopeScaleFor(int gridWidth)
+        => TerraSlopeReferenceWidth / 4.0 / Math.Max(1, gridWidth);
+
     /// <summary>Cell size at the reference width relative to this map's. 1 at <c>small</c>.</summary>
-    public double TerraSlopeScale => TerraSlopeReferenceWidth / (double)Width;
+    public double TerraSlopeScale => SlopeScaleFor(Width / TerraBaseDivisor);
+
+    /// <summary>
+    /// Erosion iterations for the refinement pass at province resolution.
+    ///
+    /// This is the pass that makes dendritic drainage visible in the exported heightmap. The main
+    /// erosion runs on the base grid, a quarter of the heightmap's width, so its finest channels
+    /// are four export pixels across and everything below that came from noise. Zero disables it
+    /// and restores the previous behaviour.
+    /// </summary>
+    public int TerraRefineIterations = 10;
+
+    /// <summary>Erodibility for the refinement pass. Independent of the base pass's.</summary>
+    public float TerraRefineErodibility = 3.2f;
+
+    /// <summary>
+    /// Drainage-area exponent for the refinement pass. Well below the base pass's 0.5, because
+    /// dendritic texture is made by headwater streams and a high exponent puts nearly all the
+    /// incision into the handful of largest rivers, leaving the hillsides between them smooth.
+    /// </summary>
+    public float TerraRefineAreaExponent = 0.30f;
 
     /// <summary>Talus angle converted to this map's cell spacing.</summary>
     public float TerraTalusScaled => (float)(TerraTalus * TerraSlopeScale);
@@ -207,8 +234,10 @@ public sealed class MapConfig
     /// <summary>Coarse slope at which detail is at full strength.</summary>
     public float TerraDetailSlopeRef = 0.022f;
 
-    /// <summary>Strength of the second, full-resolution incision pass.</summary>
-    public float TerraDetailIncision = 0.035f;
+    // TerraDetailIncision is gone. It scaled each full-resolution pixel by its own drainage area
+    // in a single pass, which deepens a valley that already exists but cannot branch — drainage
+    // networks are emergent from routing and incising repeatedly. TerraRefineIterations replaces it
+    // with real erosion iterations at province resolution.
 
     /// <summary>Slope limit for the full-resolution relaxation, in height per heightmap pixel.</summary>
     public float TerraDetailTalus = 0.012f;

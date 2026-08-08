@@ -1,4 +1,4 @@
-namespace Ck3MapGen.MapGen.Terra;
+﻿namespace Ck3MapGen.MapGen.Terra;
 
 /// <summary>
 /// Stage 3. A landscape evolution model: uplift competing against fluvial incision, run
@@ -69,7 +69,7 @@ public static class LandscapeEvolution
     /// the caller can extract rivers and lakes from exactly the terrain it is handed back.
     /// </summary>
     public static FlowField.Result Run(float[] height, int width, int hgt, float seaLevel,
-        float[] uplift, float[] rift, Options o)
+        float[]? uplift, float[]? rift, Options o)
     {
         int n = width * hgt;
         var incision = new float[n];
@@ -78,10 +78,14 @@ public static class LandscapeEvolution
 
         for (int iteration = 0; iteration < o.Iterations; iteration++)
         {
-            Parallel.For(0, n, i =>
-            {
-                height[i] += uplift[i] * o.UpliftPerStep - rift[i] * o.RiftPerStep;
-            });
+            // The refinement pass at province resolution runs with no tectonics at all: it is
+            // re-eroding terrain the base pass already raised, not building new relief.
+            if (uplift is not null || rift is not null)
+                Parallel.For(0, n, i =>
+                {
+                    if (uplift is not null) height[i] += uplift[i] * o.UpliftPerStep;
+                    if (rift is not null) height[i] -= rift[i] * o.RiftPerStep;
+                });
 
             flow = FlowField.Compute(height, width, hgt, seaLevel);
             float areaScale = 1f / flow.LandCells;

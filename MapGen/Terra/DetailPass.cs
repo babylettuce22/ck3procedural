@@ -72,7 +72,15 @@ public static class DetailPass
                 double sharp = Field.Ridged(ridge, nx, ny, 5);
                 double soft = Field.Fbm(rolling, x * rollFreq, y * rollFreq, 4);
 
-                double value = sharp * rugged + soft * (1.0 - rugged) * 0.7;
+                // fBm dominant, ridged only as a minority term.
+                //
+                // This is a substrate for the refinement erosion to cut, not the final shape.
+                // Leaning on ridged multifractal here — which is what this used to do on any slope
+                // at all — bakes in concentric ring-and-spoke structures that correspond to nothing
+                // hydrological, and at export resolution they read as swirls. Ridges in real
+                // terrain are what is *left standing* after erosion removes the material around
+                // them, so they have to come out of the drainage pass, not out of the noise.
+                double value = soft + sharp * rugged * 0.35;
 
                 // The floor matters as much as the ceiling. Vanilla's heightmap carries visible
                 // ridge-and-valley texture across its *lowlands*, not only on its ranges; gating
@@ -86,52 +94,29 @@ public static class DetailPass
     }
 
     /// <summary>
-    /// The second, shorter erosion pass: incise every pixel in proportion to the drainage passing
-    /// through it.
+    /// Adds a coarse height *delta* onto the full-resolution field, sampled bilinearly.
     ///
-    /// The drainage field comes from the province-resolution <see cref="FlowField"/>, sampled
-    /// bilinearly, so this cuts the same valley network the rivers were extracted from — the
-    /// heightmap valleys and rivers.png cannot drift apart. Reading the coarse field instead of
-    /// full-resolution neighbours again keeps it a per-pixel function.
+    /// This is how the province-resolution refinement erosion reaches the heightmap. Carrying the
+    /// difference rather than the refined surface itself preserves every bit of full-resolution
+    /// detail that was already there and adds only what the erosion changed, and sampling the
+    /// coarse array per pixel avoids allocating a second array the size of the heightmap.
     /// </summary>
-    public static void Incise(float[] full, int fw, int fh, float[] flow, int pw, int ph,
-        long landCells, float[] coarse, int cw, int ch, float seaLevel, MapConfig cfg)
+    public static void ApplyDelta(float[] full, int fw, int fh, float[] delta, int cw, int ch,
+        float seaLevel)
     {
-        float sxP = (float)pw / fw, syP = (float)ph / fh;
-        float sxC = (float)cw / fw, syC = (float)ch / fh;
-        float areaScale = 1f / Math.Max(1, landCells);
+        float sx = (float)cw / fw, sy = (float)ch / fh;
 
         Parallel.For(0, fh, y =>
         {
-            float gyP = (y + 0.5f) * syP - 0.5f;
-            float gyC = (y + 0.5f) * syC - 0.5f;
-
+            float gy = (y + 0.5f) * sy - 0.5f;
             for (int x = 0; x < fw; x++)
             {
                 long i = (long)y * fw + x;
                 float h = full[i];
                 if (h <= seaLevel) continue;
 
-                float gxP = (x + 0.5f) * sxP - 0.5f;
-                float area = Field.Sample(flow, pw, ph, gxP, gyP) * areaScale;
-                if (area <= 0) continue;
-
-                float gxC = (x + 0.5f) * sxC - 0.5f;
-                float left = Field.Sample(coarse, cw, ch, gxC - 1, gyC);
-                float right = Field.Sample(coarse, cw, ch, gxC + 1, gyC);
-                float up = Field.Sample(coarse, cw, ch, gxC, gyC - 1);
-                float dn = Field.Sample(coarse, cw, ch, gxC, gyC + 1);
-                float slope = MathF.Sqrt((right - left) * (right - left)
-                                         + (dn - up) * (dn - up)) * 0.5f;
-
-                // A low area exponent on purpose: the fine dendritic texture is made by headwater
-                // streams, and a literature-standard 0.5 concentrates almost all of the incision
-                // into the few largest rivers, leaving the hillsides between them smooth.
-                float dz = cfg.TerraDetailIncision
-                           * MathF.Pow(area, 0.30f)
-                           * MathF.Pow(MathF.Max(slope, 1e-4f), 0.6f);
-
-                full[i] = MathF.Max(seaLevel + 1e-4f, h - MathF.Min(dz, cfg.TerraDetailAmplitude));
+                float gx = (x + 0.5f) * sx - 0.5f;
+                full[i] = MathF.Max(seaLevel + 1e-4f, h + Field.Sample(delta, cw, ch, gx, gy));
             }
         });
     }

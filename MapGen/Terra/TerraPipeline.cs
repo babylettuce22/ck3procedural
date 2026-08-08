@@ -72,12 +72,55 @@ public static class TerraPipeline
         DetailPass.AddDetail(full, fw, fh, baseHeight, bw, bh, sea, cfg, rng);
         Console.WriteLine($"  upscaled to {fw}x{fh} + detail ({sw.ElapsedMilliseconds} ms)");
 
-        // --- 5. Drainage and rivers, at the province map's resolution ---
+        // --- 5. Refinement erosion, then drainage and rivers, at the province map's resolution ---
+        //
+        // This is where dendritic channels at export resolution come from, and it has to be real
+        // erosion iterations rather than a closed-form approximation of them. Drainage networks are
+        // an emergent property of routing flow and incising repeatedly; scaling each pixel by its
+        // own drainage area in one pass, which is what this used to do, deepens existing valleys
+        // but cannot branch. Below the base grid's four-export-pixel cell everything was therefore
+        // the ridged noise from AddDetail, which reads as concentric swirls because that is what
+        // ridged multifractal looks like.
         sw.Restart();
         var province = Field.Downsample(full, fw, fh, 2);
-        var provinceFlow = FlowField.Compute(province, pw, ph, sea);
-        Console.WriteLine($"  drainage over {provinceFlow.LandCells:N0} land cells " +
-                          $"({sw.ElapsedMilliseconds} ms)");
+        var beforeRefine = (float[])province.Clone();
+
+        var refineOptions = new LandscapeEvolution.Options
+        {
+            Iterations = cfg.TerraRefineIterations,
+            Erodibility = (float)(cfg.TerraRefineErodibility / cfg.SlopeScaleFor(pw)),
+            Deposition = cfg.TerraDeposition,
+            DepositionSlope = (float)(0.03 * cfg.SlopeScaleFor(pw)),
+            MaxIncisionPerStep = (float)(0.02 / cfg.SlopeScaleFor(pw)),
+
+            // Headwaters, not trunk rivers. The base pass uses the literature-standard 0.5, which
+            // puts almost all incision into the few largest catchments; branching texture is made
+            // by the smallest streams, so this pass weights area far more weakly.
+            AreaExponent = cfg.TerraRefineAreaExponent,
+
+            // No thermal erosion here. It runs every iteration and pulls anything steeper than the
+            // talus angle back toward its neighbours, which is precisely the freshly cut channel
+            // walls — it fills in the dissection as fast as the incision creates it. Excessive
+            // steepness is dealt with once at the end by DetailPass.Relax instead.
+            TalusPasses = 0,
+        };
+
+        // No uplift: this is re-eroding relief the base pass already built, not making more.
+        var provinceFlow = cfg.TerraRefineIterations > 0
+            ? LandscapeEvolution.Run(province, pw, ph, sea, null, null, refineOptions)
+            : FlowField.Compute(province, pw, ph, sea);
+
+        // Carry only what the refinement *changed* up to full resolution, so the detail already
+        // there survives and the erosion is added on top of it.
+        if (cfg.TerraRefineIterations > 0)
+        {
+            Parallel.For(0, beforeRefine.Length, i => beforeRefine[i] = province[i] - beforeRefine[i]);
+            DetailPass.ApplyDelta(full, fw, fh, beforeRefine, pw, ph, sea);
+        }
+        beforeRefine = null!;
+
+        Console.WriteLine($"  {cfg.TerraRefineIterations} refinement iterations + drainage over " +
+                          $"{provinceFlow.LandCells:N0} land cells ({sw.ElapsedMilliseconds} ms)");
 
         sw.Restart();
         var courses = RiverNetwork.Extract(provinceFlow, province, pw, ph, sea, cfg, rng);
@@ -86,16 +129,13 @@ public static class TerraPipeline
         Console.WriteLine($"  {courses.Count} rivers over {rivers.RiverPixelCount:N0} pixels, " +
                           $"{lakeCells:N0} lake cells ({sw.ElapsedMilliseconds} ms)");
 
-        // Keep only the drainage field; the fill, the order and the flow directions are each the
-        // size of the province map and are not needed past this point.
-        var flowField = provinceFlow.Flow;
-        long landCells = provinceFlow.LandCells;
+        // Each of the drainage arrays is the size of the province map and none is needed past this
+        // point; dropping the reference lets them be collected before the full-resolution passes.
         provinceFlow = null!;
         province = null!;
 
-        // --- 6. Erosion, the short pass, at full resolution ---
+        // --- 6. Full resolution: settle the added detail, then cut the river channels ---
         sw.Restart();
-        DetailPass.Incise(full, fw, fh, flowField, pw, ph, landCells, baseHeight, bw, bh, sea, cfg);
         DetailPass.Relax(full, fw, fh, sea, cfg.TerraDetailTalusScaled, 0.5f);
         DetailPass.CarveChannels(full, fw, fh, courses, pw, ph, sea, cfg);
         Console.WriteLine($"  full-resolution incision, relax and channels ({sw.ElapsedMilliseconds} ms)");
