@@ -32,8 +32,49 @@ public static class MapGraphicsWriter
         int w = cfg.ProvinceWidth, h = cfg.ProvinceHeight;
 
         WriteWaterMaps(modDir, gameDir, cfg, provinces, order, landCount);
+        WriteSurroundMask(modDir);
 
-        Console.WriteLine("  map gfx: water/foam/snow rebuilt");
+        Console.WriteLine("  map gfx: water/foam/snow rebuilt, surround mask cleared");
+    }
+
+    /// <summary>
+    /// A fully black gfx/map/surround_map/surround_mask.dds, so nothing is drawn over the playable
+    /// map and land running up to the edge is not cut off.
+    ///
+    /// Vanilla's copy is its own landmass silhouette, and it is *not* decoration outside the map —
+    /// three shaders sample it over the map itself:
+    /// <list type="bullet">
+    /// <item>pdxterrain.shader:777 and pdxborder.shader:117 both take the flatmap's alpha as
+    ///   <c>1 - mask.b</c>, so a white pixel makes the flatmap transparent there.</item>
+    /// <item>surroundmap.shader's <c>GetFlatMapSurround</c> returns <c>mask.b</c> as the alpha of a
+    ///   solid black overlay, and PS_surroundmap uses <c>mask.r</c> as the alpha of a shadow.</item>
+    /// </list>
+    /// So white means "outside the playable map, cover this up" and black means "this is map, draw
+    /// it". Left alone, vanilla's Europe-shaped silhouette blanks out whichever of our continents
+    /// happen to fall where its oceans were.
+    ///
+    /// Every sampler declares <c>SampleModeU/V = "Border"</c> with <c>Border_Color = { 1 1 1 1 }</c>,
+    /// so the genuine outside-the-map region beyond UV 0..1 still reads white and still gets its
+    /// surround. Clearing the texture only affects what is inside the map.
+    ///
+    /// The green channel is the cloud mask (surroundmap.shader:230, "don't draw clouds over map"),
+    /// and zero is the over-the-map value there too.
+    ///
+    /// Constant, so the resolution only needs to be large enough that the linear filter's blend
+    /// into the white border stays inside the forced ocean margin.
+    /// </summary>
+    private static void WriteSurroundMask(string modDir)
+    {
+        const int width = 1024, height = 512;
+
+        string dir = Path.Combine(modDir, "gfx", "map", "surround_map");
+        Directory.CreateDirectory(dir);
+
+        // Black with opaque alpha. Only .rgb is ever sampled, but a defined alpha costs nothing.
+        var pixels = new byte[width * height * 4];
+        for (long i = 3; i < pixels.Length; i += 4) pixels[i] = 255;
+
+        DdsWriter.WriteBgra(Path.Combine(dir, "surround_mask.dds"), width, height, pixels);
     }
 
     // gfx/map/terrain/masks and masks_gen are owned by TerrainMaskWriter, which runs after the
