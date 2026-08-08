@@ -107,8 +107,26 @@ public static class TerrainClassifier
         var farmNoise = new SimplexNoise(rng);
         var edgeNoise = new SimplexNoise(rng);
 
-        double coarse = 26.0 / width;    // biome-sized patches
+        double coarse = 16.0 / width;    // biome-sized patches
         double fine = 90.0 / width;      // ragged edges between them
+
+        // Patch shape comes from warped fBm rather than a single simplex octave. One octave
+        // thresholded at a fixed level gives round, evenly-sized blobs of one characteristic
+        // diameter, and three of those at three frequencies interleaving is what reads as
+        // splotchiness. Warping the sample position and summing octaves gives regions with
+        // arms, inlets and a range of sizes, which is what a real biome boundary looks like.
+        var warpField = new SimplexNoise(rng);
+        double warpFrequency = 11.0 / width;
+        double warpAmplitude = width * 0.014;
+
+        double Patch(SimplexNoise noise, double px, double py, double frequency)
+        {
+            double qx = warpField.Noise2D(px * warpFrequency, py * warpFrequency) * warpAmplitude;
+            double qy = warpField.Noise2D(px * warpFrequency + 7.7, py * warpFrequency - 3.3)
+                        * warpAmplitude;
+            return Terra.Field.Fbm(noise, (px + qx) * frequency, (py + qy) * frequency, 4,
+                       gain: 0.55) * 0.5 + 0.5;
+        }
 
         var result = new TerrainClass[width * height];
 
@@ -135,9 +153,9 @@ public static class TerrainClassifier
                 bool cold = !tropical && !subTropical && !temperate;
 
                 int m = moisture[i];
-                double nWet = wetNoise.Unit(x * coarse, y * coarse);
-                double nForest = forestNoise.Unit(x * coarse * 1.7, y * coarse * 1.7);
-                double nFarm = farmNoise.Unit(x * coarse * 2.3, y * coarse * 2.3);
+                double nWet = Patch(wetNoise, x, y, coarse);
+                double nForest = Patch(forestNoise, x, y, coarse * 1.7);
+                double nFarm = Patch(farmNoise, x, y, coarse * 2.3);
                 double nEdge = edgeNoise.Unit(x * fine, y * fine);
 
                 // Terrain is deliberately no longer painted along river courses. Floodplains used

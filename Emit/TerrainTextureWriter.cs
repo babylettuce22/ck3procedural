@@ -1,4 +1,4 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
@@ -29,12 +29,106 @@ namespace Ck3MapGen.Emit;
 public static class TerrainTextureWriter
 {
     /// <summary>
-    /// How far, in province pixels, a biome's materials bleed across its boundary into the next.
-    /// At vanilla resolution one province pixel is two heightmap pixels, so this is a transition
-    /// band tens of pixels wide — wide enough to read as a gradient rather than a dither, narrow
-    /// enough that biomes stay legible.
+    /// How far, in *vanilla* province pixels, a biome's materials bleed across its boundary into
+    /// the next. Scaled by <see cref="MapConfig.Scaled"/>, so the transition is the same fraction
+    /// of a continent at every map size — as a flat pixel count it was a third of a percent of the
+    /// map wide at vanilla and seven times that at tiny.
     /// </summary>
-    private const int WarpPixels = 30;
+    private const int BlendReachAtVanilla = 110;
+
+    /// <summary>Orthogonal step cost in the chamfer distance transform; diagonal is 4.</summary>
+    private const int ChamferOrthogonal = 3;
+    private const int ChamferDiagonal = 4;
+
+    /// <summary>
+    /// For every pixel: the distance to the nearest ground of a *different* terrain class, measured
+    /// without leaving its own class, and which class that is.
+    ///
+    /// A two-pass chamfer transform, so it is linear in the pixel count rather than one dilation
+    /// pass per unit of reach — at a 110-pixel reach over a 42-million-pixel province map, dilation
+    /// would be some ten billion neighbour tests.
+    ///
+    /// Propagation is restricted to same-class neighbours on purpose. Letting it cross a boundary
+    /// would carry a label from the far side back into the region it came from, and a pixel would
+    /// end up blending toward its own class.
+    /// </summary>
+    private static (ushort[] Distance, byte[] Other) BoundaryField(
+        TerrainClass[] terrain, int width, int height)
+    {
+        int n = width * height;
+        var distance = new ushort[n];
+        var other = new byte[n];
+        const ushort Far = ushort.MaxValue;
+
+        Parallel.For(0, height, y =>
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int i = y * width + x;
+                var self = terrain[i];
+                distance[i] = Far;
+                other[i] = (byte)self;
+
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    int yy = y + dy;
+                    if (yy < 0 || yy >= height) continue;
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        int xx = x + dx;
+                        if (xx < 0 || xx >= width || (dx == 0 && dy == 0)) continue;
+
+                        var neighbour = terrain[yy * width + xx];
+                        if (neighbour == self) continue;
+
+                        distance[i] = 0;
+                        other[i] = (byte)neighbour;
+                        dy = 2;
+                        break;
+                    }
+                }
+            }
+        });
+
+        // Forward scan, then backward. Sequential by nature — each pass depends on the one before.
+        for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+            {
+                int i = y * width + x;
+                if (distance[i] == 0) continue;
+                Relax(i, x - 1, y, ChamferOrthogonal);
+                Relax(i, x - 1, y - 1, ChamferDiagonal);
+                Relax(i, x, y - 1, ChamferOrthogonal);
+                Relax(i, x + 1, y - 1, ChamferDiagonal);
+            }
+
+        for (int y = height - 1; y >= 0; y--)
+            for (int x = width - 1; x >= 0; x--)
+            {
+                int i = y * width + x;
+                if (distance[i] == 0) continue;
+                Relax(i, x + 1, y, ChamferOrthogonal);
+                Relax(i, x + 1, y + 1, ChamferDiagonal);
+                Relax(i, x, y + 1, ChamferOrthogonal);
+                Relax(i, x - 1, y + 1, ChamferDiagonal);
+            }
+
+        return (distance, other);
+
+        void Relax(int target, int x, int y, int cost)
+        {
+            if (x < 0 || y < 0 || x >= width || y >= height) return;
+
+            int from = y * width + x;
+            if (terrain[from] != terrain[target] || distance[from] == Far) return;
+
+            int candidate = distance[from] + cost;
+            if (candidate >= distance[target]) return;
+
+            distance[target] = (ushort)candidate;
+            other[target] = other[from];
+        }
+    }
 
     /// <summary>
     /// Which materials the painting actually used. Indexed by material id; the mask writer needs
@@ -62,10 +156,13 @@ public static class TerrainTextureWriter
 
         double fA = 55.0 / width, fB = 130.0 / width, fC = 300.0 / width;
 
-        // How far the boundary-blend samples reach, and at what scale that reach wanders. The
-        // warp is deliberately much coarser than the material noise: it decides where one biome
-        // fingers into the next, which happens over kilometres, not metres.
-        double warpFrequency = 170.0 / width;
+        // The transition band, and the scale at which its edge wanders. Deliberately much coarser
+        // than the material noise: it decides where one biome fingers into the next, which happens
+        // over kilometres, not metres.
+        float blendReach = (float)Math.Max(2.0, cfg.Scaled(BlendReachAtVanilla));
+        double bandFrequency = 170.0 / width;
+
+        var (boundaryDistance, boundaryOther) = BoundaryField(terrain, width, height);
 
         // Each map-sized buffer is 162 MB at vanilla resolution, so they are allocated, written and
         // released one at a time. Holding index, intensity, colormap and flatmap simultaneously —
@@ -177,56 +274,40 @@ public static class TerrainTextureWriter
 
             var home = TerrainPalette.For(terrain[src], relief, nA, nB, nC);
 
-            // Look off through a domain warp and see which biome is there. Deep inside a region
-            // every probe lands on the same class and nothing changes; near a boundary they land
-            // on the neighbour, and the two palettes get mixed.
+            // Distance from this pixel to the nearest ground of a different class, measured inside
+            // its own region, plus which class that is. A smooth function of a real distance is
+            // what makes a transition read as a gradient.
             //
-            // The probes are taken at three *different reaches* along the same warp direction, and
-            // that is what turns the effect from a dither into a gradient. One probe is a binary
-            // test — a pixel either sees the neighbour or it does not — so a single sample scatters
-            // fully-mixed pixels through unmixed ones and reads as noise. Counting how many of the
-            // three reaches find the neighbour measures roughly how deep into the transition the
-            // pixel sits: all three right at the border, only the longest one at the far edge of
-            // the band. The mix strength then ramps with depth instead of flickering.
-            double wx = x * warpFrequency, wy = y * warpFrequency;
-            double dirX = warpXField.Noise2D(wx, wy);
-            double dirY = warpYField.Noise2D(wx + 19.3, wy - 7.1);
+            // This replaced a scheme that probed three fixed reaches along a warp direction and
+            // counted how many landed on a different class. Counting three probes yields four
+            // possible mix strengths, so every transition was a four-step staircase — which is most
+            // of why the boundaries looked splotchy — and the reach was a flat 30 pixels at every
+            // map size, which at vanilla's 9216-wide province map is a transition band three
+            // tenths of one percent of the map wide, i.e. invisible.
+            float edge = boundaryDistance[src] * (1f / ChamferOrthogonal);
+            if (edge >= blendReach) return home;
 
-            var winner = terrain[src];
-            int winnerIndex = src;
-            int hits = 0;
+            // Push the band in and out along its length so it is not a uniform ribbon.
+            double ragged = warpXField.Noise2D(x * bandFrequency, y * bandFrequency);
+            edge += (float)(ragged * blendReach * 0.35);
+            if (edge >= blendReach) return home;
+            if (edge < 0) edge = 0;
 
-            foreach (double reach in (double[])[1.0, 0.55, 0.28])
-            {
-                int nx = Math.Clamp(x + (int)(dirX * WarpPixels * reach), 0, width - 1);
-                int ny = Math.Clamp(y + (int)(dirY * WarpPixels * reach), 0, height - 1);
-                int probe = ny * width + nx;
+            double t = 1.0 - edge / blendReach;
+            t = t * t * (3.0 - 2.0 * t);
 
-                if (terrain[probe] == terrain[src]) continue;
+            // Half at the boundary itself, falling to nothing at the far edge of the band. Half is
+            // the ceiling on purpose: at an even split the two sides are symmetric, so the seam
+            // disappears rather than reversing across one pixel.
+            double share = 0.5 * t * (0.78 + 0.44 * nB);
 
-                hits++;
-                // The nearest differing probe wins, so the material bleeding in is the biome
-                // actually on the other side of this stretch of border.
-                winner = terrain[probe];
-                winnerIndex = probe;
-            }
-
-            if (hits == 0) return home;
-
-            // Never let the neighbour take over outright: the pixel still belongs to its own
-            // biome. Right at the border the split approaches even; at the outer edge of the band
-            // it is a light dusting. The noise term keeps the band's strength varying along its
-            // length so it does not read as a uniform stripe.
-            double depth = hits / 3.0;
-            double share = depth * (0.30 + 0.24 * nCField.Unit(x * fB * 0.6 + 5.1,
-                                                               y * fB * 0.6 + 88.2));
-
-            double otherRelief =
-                (provinceElevation[winnerIndex] - sea) / (double)Math.Max(1, mountains - sea);
+            var winner = (TerrainClass)boundaryOther[src];
+            double otherRelief = relief;
             var neighbour = TerrainPalette.For(winner, otherRelief, nA, nB, nC);
 
             return TerrainPalette.Merge(home, neighbour, share);
         }
+
     }
 
     /// <summary>
