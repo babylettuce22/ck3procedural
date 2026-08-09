@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Ck3MapGen.Config;
 using Ck3MapGen.Core;
+using System.Globalization;
 
 namespace Ck3MapGen.MapGen;
 
@@ -577,26 +578,37 @@ public static class Titles
         void Visit(Title title)
         {
             var language = cultures.For(title).Language;
-            var suffixes = title.Tier switch
-            {
-                "e" => language.KingdomSuffixes,
-                "k" => language.KingdomSuffixes,
-                "d" => language.DuchySuffixes,
-                "c" => language.CountySuffixes,
-                _ => language.BaronySuffixes,
-            };
 
-            // A generated language has effectively unlimited names, so a collision is answered by
-            // drawing again rather than by decorating the clashing name. Only if the language is
-            // genuinely too small to produce a fresh one does this fall back to numbering.
-            string name = language.PlaceName(rng, suffixes);
+            // Local function to generate names dynamically based on tier
+            string GenerateName()
+            {
+                if (title.Tier == "e")
+                    return language.CompoundName(rng); // Empires always get grand compound names
+
+                if (title.Tier == "k")
+                {
+                    // Kingdoms are 50/50: either a compound name or an affixed place name
+                    return rng.Chance(0.5)
+                        ? language.CompoundName(rng)
+                        : language.PlaceName(rng, language.KingdomAffixes);
+                }
+
+                var affixes = title.Tier switch
+                {
+                    "d" => language.DuchyAffixes,
+                    "c" => language.CountyAffixes,
+                    _ => language.BaronyAffixes,
+                };
+
+                return language.PlaceName(rng, affixes);
+            }
+
+            string name = GenerateName();
             string key = $"{title.Tier}_{CleanKey(name)}";
 
-            // The length test is on the *name*, not the key — a one-letter place called O still
-            // makes a perfectly unique key, and "c_o" on the map is what a reader notices.
             for (int attempt = 0; attempt < 24 && (name.Length < 3 || usedKeys.Contains(key)); attempt++)
             {
-                name = language.PlaceName(rng, suffixes);
+                name = GenerateName();
                 key = $"{title.Tier}_{CleanKey(name)}";
             }
 
@@ -613,10 +625,32 @@ public static class Titles
 
     private static string CleanKey(string input)
     {
-        string cleaned = input.ToLower().Replace(" ", "_");
+        // Convert spaces and hyphens to underscores (e.g. Al-Fariq -> al_fariq)
+        string cleaned = input.ToLowerInvariant().Replace(" ", "_").Replace("-", "_");
+
+        // Flatten accents (e.g. ö -> o, á -> a) so keys remain standard a-z ASCII
+        cleaned = RemoveDiacritics(cleaned);
+
+        // Strip out anything else (like apostrophes)
         return Regex.Replace(cleaned, "[^a-z0-9_]", "");
     }
+    private static string RemoveDiacritics(string text)
+    {
+        var normalizedString = text.Normalize(System.Text.NormalizationForm.FormD);
+        var stringBuilder = new System.Text.StringBuilder(capacity: normalizedString.Length);
 
+        for (int i = 0; i < normalizedString.Length; i++)
+        {
+            char c = normalizedString[i];
+            var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(c);
+            if (unicodeCategory != UnicodeCategory.NonSpacingMark)
+            {
+                stringBuilder.Append(c);
+            }
+        }
+
+        return stringBuilder.ToString().Normalize(System.Text.NormalizationForm.FormC);
+    }
     public static IEnumerable<Title> Flatten(IEnumerable<Title> roots)
     {
         foreach (var root in roots)

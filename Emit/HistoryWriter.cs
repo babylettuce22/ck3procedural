@@ -1,8 +1,10 @@
-﻿using System.Text;
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
+using System.Globalization;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Ck3MapGen.Emit;
 
@@ -105,13 +107,45 @@ public static class HistoryWriter
             var culture = cultures.For(county);
             var (_, dynastyName) = RulerNames(county, culture);
 
+            // NEW: Clean the dynasty name for the internal key, but leave the visual one alone.
+            string safeKey = CleanKey(dynastyName);
+
             sb.Append($"{DynastyId(county)} = {{\n");
-            sb.Append($"\tname = \"dynn_{dynastyName}\"\n");
+            sb.Append($"\tname = \"dynn_{safeKey}\"\n");
             sb.Append($"\tculture = \"{culture.Key}\"\n");
             sb.Append("}\n");
         }
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_dynasties.txt"), sb.ToString());
+    }
+
+    private static string CleanKey(string input)
+    {
+        // Convert spaces and hyphens to underscores (e.g. Al-Fariq -> al_fariq)
+        string cleaned = input.ToLowerInvariant().Replace(" ", "_").Replace("-", "_");
+
+        // Flatten accents (e.g. ö -> o, á -> a) so keys remain standard a-z ASCII
+        cleaned = RemoveDiacritics(cleaned);
+
+        // Strip out anything else (like apostrophes)
+        return Regex.Replace(cleaned, "[^a-z0-9_]", "");
+    }
+    private static string RemoveDiacritics(string text)
+    {
+        var normalizedString = text.Normalize(System.Text.NormalizationForm.FormD);
+        var stringBuilder = new System.Text.StringBuilder(capacity: normalizedString.Length);
+
+        for (int i = 0; i < normalizedString.Length; i++)
+        {
+            char c = normalizedString[i];
+            var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(c);
+            if (unicodeCategory != UnicodeCategory.NonSpacingMark)
+            {
+                stringBuilder.Append(c);
+            }
+        }
+
+        return stringBuilder.ToString().Normalize(System.Text.NormalizationForm.FormC);
     }
 
     private static void WriteCharacters(string modDir, List<Title> counties, CultureMap cultures,

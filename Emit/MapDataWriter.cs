@@ -29,12 +29,6 @@ public static class MapDataWriter
     /// </summary>
     public const int WaterLevel16 = WaterLevel255 * Step255;
 
-    /// <summary>
-    /// Depth given to a pixel the province map calls sea but the terrain left above water. Set
-    /// well under the plane so the sea floor is actually submerged, not grazing the surface.
-    /// </summary>
-    public const int SnappedWaterDepth = (int)(WaterLevel16 * 0.45);
-
     /// <summary>Vanilla's rivers.png palette. Reproduced exactly; CK3 keys off the indices.</summary>
     private static readonly (byte R, byte G, byte B)[] RiverPaletteHead =
     [
@@ -267,24 +261,31 @@ public static class MapDataWriter
                 long i = (long)y * cfg.Width + x;
                 ushort v = height[i];
 
-                // Nudged by one whole 0-255 step rather than one raw unit, so the snapped pixels
-                // read the same after CK3 quantises as they did before this became a 16-bit field.
+                // Reflected across the water plane rather than clamped to a constant, and this is
+                // the whole reason the coastline used to read as a staircase in game.
+                //
+                // Clamping put every disagreeing pixel on one of two fixed values — measured at
+                // 2,794 pixels sitting on exactly one such constant, the second commonest value in
+                // the entire heightmap after open ocean. Because provinces.png is half the
+                // heightmap's resolution, those pixels arrive in 2x2 blocks, so the result was flat
+                // square plateaus separated from the land beside them by a cliff of nearly 3,000
+                // raw units. Reflecting instead keeps the pixel's own relief: one unit on the wrong
+                // side of the plane comes back one unit on the right side, so it still meets its
+                // neighbours, and a drowned island becomes a submerged mound rather than a plate.
+                //
+                // The extra whole 0-255 step is the minimum crossing: it guarantees the pixel is on
+                // the correct side after CK3 quantises to 8 bits, which a single raw unit does not.
                 if (isLand)
                 {
-                    if (v <= WaterLevel16) { height[i] = WaterLevel16 + Step255; local++; }
+                    if (v > WaterLevel16) continue;
+                    height[i] = (ushort)Math.Min(65535, WaterLevel16 + Step255 + (WaterLevel16 - v));
+                    local++;
                     continue;
                 }
 
-                // Water. Depth is shaped by HeightDetail.ShapeSeafloor, which ramps it with
-                // distance from land — flattening everything to one depth instead produced an
-                // awkwardly sharp drop-off right at the waterline. All that is needed here is to
-                // pull down anything the province map drowned but the terrain left standing.
-                // Sunk to the near-shore shelf depth rather than one step under the plane. A single
-                // step is ~1/255 of the height range: enough for the pixel to count as water, not
-                // enough for the sea floor material to be hidden by the water above it, and these
-                // pixels come in blobs wherever the province partition drowned something the
-                // terrain left standing.
-                if (v > WaterLevel16) { height[i] = SnappedWaterDepth; local++; }
+                if (v <= WaterLevel16) continue;
+                height[i] = (ushort)Math.Max(0, WaterLevel16 - Step255 - (v - WaterLevel16));
+                local++;
             }
             return local;
         }, local => Interlocked.Add(ref changed, local));
@@ -295,209 +296,61 @@ public static class MapDataWriter
     }
 
     /// <summary>
-    /// Vanilla's land hypsometry, measured off its own heightmap.png on 2026-08-07: the raw
-    /// 16-bit height at each 5th percentile of land pixels, then progressively finer through the
-    /// tail, down to tenths of a percent above p99.
+    /// The float elevation field back to CK3's 16-bit scale — the exact inverse of
+    /// <see cref="MapGen.HeightmapSource"/>'s read, and nothing else.
     ///
-    /// The tail needs that resolution because the curve turns nearly vertical there — vanilla's
-    /// top 0.1% of land spans 158..191 on the 0-255 scale while the 0.9% below it spans only
-    /// 143..158. Anchoring the tail coarsely smears a handful of summits linearly across the whole
-    /// band: with p99 and p100 alone, the highest ground came out at 0.44% of land against
-    /// vanilla's 0.02%, still 22x too much.
+    /// This used to reshape what it converted. Land was ranked and remapped onto vanilla's measured
+    /// hypsometric curve, and the sea floor was re-derived from a shelf profile keyed on depth,
+    /// both because terrain used to be *generated* here and a simulation has no reason to produce a
+    /// realistic height distribution on its own. Neither is defensible now that the heightmap is
+    /// authored elsewhere and handed to us finished: reshaping it means the map that loads is not
+    /// the map its author drew, and the sea floor in particular was thrown away wholesale —
+    /// measured at 56% of the map forced to pure black regardless of what came in.
     ///
-    /// Anchor 0 is the waterline rather than a measurement — by definition the lowest land pixel
-    /// sits just above sea level.
-    /// </summary>
-    private static readonly (double Percent, double Raw)[] VanillaLandCurve =
-    [
-        (0, WaterLevel16 + 1),
-        (5, 5454), (10, 5752), (15, 6012), (20, 6302), (25, 6724),
-        (30, 7234), (35, 7736), (40, 8244), (45, 8776), (50, 9336),
-        (55, 9994), (60, 10796), (65, 11762), (70, 13062), (75, 14708),
-        (80, 16778), (85, 19282), (90, 22286), (95, 26556),
-        (96, 28582), (97, 31716), (98, 34635), (99, 36789),
-        (99.1, 36985), (99.2, 37195), (99.3, 37431), (99.4, 37685), (99.5, 37981),
-        (99.6, 38357), (99.7, 38835), (99.8, 39461), (99.9, 40611), (100, 49205),
-    ];
-
-    /// <summary>
-    /// Vanilla's water hypsometry, measured off its own heightmap.png on 2026-08-07 the same way
-    /// <see cref="VanillaLandCurve"/> was: the raw 16-bit height at each percentile of *water*
-    /// pixels, deepest first.
+    /// So both are gone, along with the two measured curves, the rank machinery and the shelf
+    /// settings. The conversion is now piecewise-linear about the water plane against the same two
+    /// constants the read used, which makes the round trip exact: a pixel that came in at some
+    /// 16-bit value leaves at that value.
     ///
-    /// The shape is the point. **85.08% of vanilla's water is exactly raw 0** — 40.14% of the whole
-    /// map — and only the shallowest 15% carries any gradient at all, ramping 0 to 4883 over what
-    /// is visibly a continental shelf hugging the coast. Open ocean is not dark, it is black.
-    ///
-    /// Stretching a simulated sea floor linearly onto 0..<see cref="WaterLevel16"/>, which is what
-    /// this used to do and what <c>HeightDetail.ShapeSeafloor</c> was shaped for, spreads that
-    /// gradient across the entire ocean instead. The percentile remap reproduces the real
-    /// distribution regardless of what the terrain generator handed over, and it is monotonic, so
-    /// the sea floor keeps its shape and only its depth scale changes.
-    /// </summary>
-    /// <remarks>
-    /// **Water cannot be matched by rank the way land is, and this curve is kept only as the
-    /// measurement.** Ranking water percentiles onto it reproduces vanilla's *histogram* exactly —
-    /// 85% of water pure black — while getting the thing that actually matters wrong, because a
-    /// pixel's rank is set by how much water is shallower than it, which is a function of how long
-    /// the coastline is, not of how far offshore the pixel sits. Vanilla's map is far more broken
-    /// up than a generated one, so the same 15% shelf allocation spreads much further out to sea
-    /// on ours: measured at 20 px offshore, vanilla reads 4.5/255 and the ranked version of ours
-    /// read 13.8 — a few units under the 19/255 water plane, which is why the sea-floor material
-    /// showed through the water along every coast.
-    ///
-    /// Steepening the generator's depth field does not help either: the remap is by rank, and a
-    /// monotone change to depth leaves every rank exactly where it was. Verified — it moved the
-    /// 20 px figure from 13.8 to 14.2.
-    ///
-    /// Water is therefore mapped from its actual depth via <see cref="MapConfig.ShelfDepth"/>
-    /// and <see cref="MapConfig.ShelfCurve"/>, which makes shelf width independent of
-    /// coastline length. Land still uses <see cref="VanillaLandCurve"/>, where ranking is right:
-    /// there the question genuinely is "how high is this relative to the rest of the land".
-    /// </remarks>
-    private static readonly (double Percent, double Raw)[] VanillaWaterCurve =
-    [
-        (0, 0), (85, 0), (85.5, 14), (86, 86), (86.5, 270), (87, 526), (87.5, 816),
-        (88, 1108), (89, 1634), (90, 2162), (91, 2634), (92, 2908), (93, 3616),
-        (94, 4088), (95, 4128), (96, 4214), (97, 4378), (98, 4558), (99, 4726),
-        (99.5, 4806), (100, WaterLevel16),
-    ];
-
-    /// <summary>
-    /// Converts simulation elevation to CK3's height scale at full 16-bit precision, with sea
-    /// level landing exactly on <see cref="WaterLevel16"/>.
-    ///
-    /// This used to produce a <c>byte[]</c> that was then multiplied by 257 to fill 16 bits, which
-    /// meant the whole float elevation field was collapsed to 256 levels and re-expanded. Measured
-    /// against vanilla: our heightmap carried 253 distinct values where vanilla's has 31,516 —
-    /// roughly 124x coarser height steps, which is what read in game as terracing on slopes and
-    /// made the lighting blocky. Nothing about the terrain was wrong, only its quantisation.
-    ///
-    /// Land is additionally reshaped onto <see cref="VanillaLandCurve"/>. The old mapping
-    /// normalised linearly against the *observed maximum*, so whichever peak the simulation
-    /// happened to raise highest always became 255 and every other height scaled to it — the map
-    /// was as mountainous as its most extreme accident. Measured, that put 0.54% of our land in
-    /// the 171-255 band against vanilla's 0.02%, an 18x excess, with our tallest pixel at 255
-    /// where vanilla's is 192.
-    ///
-    /// Matching percentile-for-percentile fixes the scale without touching the terrain: the remap
-    /// is monotonic, so every ridge, valley and coastline stays exactly where the simulation put
-    /// it and only the height *assigned* to it changes. It is also self-calibrating, so it holds
-    /// for any seed or map size rather than needing constants retuned. Set
-    /// <see cref="MapConfig.MatchVanillaHypsometry"/> to false to fall back to the linear stretch.
+    /// It still writes 16 bits rather than 8. That distinction predates the reshaping and is
+    /// separate from it: quantising to 256 levels and re-expanding gave our heightmap 253 distinct
+    /// values where vanilla's has 31,516, which read in game as terracing on every slope.
     /// </summary>
     private static ushort[] ElevationTo16(float[] elevation, MapConfig cfg)
     {
-        int sea = cfg.Limits.SeaLevelUpper;
-        float min = float.MaxValue, max = float.MinValue;
-        foreach (float e in elevation)
-        {
-            if (e < min) min = e;
-            if (e > max) max = e;
-        }
+        float sea = cfg.Limits.SeaLevelUpper;
+        float floor = cfg.SeaFloorElevation;
+        float peak = cfg.PeakElevation;
 
-        float belowRange = Math.Max(1e-3f, sea - min);
-        float aboveRange = Math.Max(1e-3f, max - sea);
+        float belowRange = Math.Max(1e-3f, sea - floor);
+        float aboveRange = Math.Max(1e-3f, peak - sea - 1f);
 
         var result = new ushort[elevation.Length];
-
-        // The linear fallback, kept for bisecting. Note it stretches the sea floor smoothly across
-        // 0..WaterLevel16, which is exactly the thing the water curve above exists to stop.
-        if (!cfg.MatchVanillaHypsometry)
-        {
-            Parallel.For(0, elevation.Length, i =>
-            {
-                float e = elevation[i];
-                double v = e <= sea
-                    ? (e - min) / belowRange * WaterLevel16
-                    : WaterLevel16 + (e - sea) / aboveRange * (65535.0 - WaterLevel16);
-                result[i] = (ushort)Math.Clamp(v, 0, 65535);
-            });
-            return result;
-        }
-
-        // Our own distributions, as cumulative histograms fine enough that their resolution is
-        // never the limiting factor on a 16-bit output. Land and water are ranked separately,
-        // because they are remapped onto separate measured curves.
-        const int Bins = 1 << 16;
-
-        var landCdf = BuildCdf(e => e > sea, sea, aboveRange, out long landTotal);
-        if (landTotal == 0) return result;
-
-        double shelfDepth = Math.Max(1e-3, cfg.ShelfDepth);
 
         Parallel.For(0, elevation.Length, i =>
         {
             float e = elevation[i];
+            double v = e <= sea
+                ? (e - floor) / belowRange * WaterLevel16
+                : WaterLevel16 + (e - sea - 1f) / aboveRange * (65535.0 - WaterLevel16);
 
-            if (e <= sea)
-            {
-                // Depth-keyed, not rank-keyed. See VanillaWaterCurve's remarks for why ranking
-                // cannot work here.
-                double t = Math.Clamp((sea - e) / shelfDepth, 0, 1);
-                double raw = WaterLevel16 * Math.Pow(1.0 - t, cfg.ShelfCurve);
-                result[i] = (ushort)Math.Clamp(raw, 0, WaterLevel16);
-                return;
-            }
-
-            double lp = Percentile(landCdf, e, sea, aboveRange);
-            result[i] = (ushort)Math.Clamp(SampleCurve(VanillaLandCurve, lp), WaterLevel16 + 1, 65535);
+            result[i] = (ushort)Math.Clamp(v, 0, 65535);
         });
 
         return result;
-
-        float[] BuildCdf(Func<float, bool> select, float origin, float range, out long total)
-        {
-            var histogram = new long[Bins];
-            object gate = new();
-
-            Parallel.For(0, Environment.ProcessorCount, () => new long[Bins], (worker, _, local) =>
-            {
-                int lo = (int)((long)elevation.Length * worker / Environment.ProcessorCount);
-                int hi = (int)((long)elevation.Length * (worker + 1) / Environment.ProcessorCount);
-                for (int i = lo; i < hi; i++)
-                {
-                    float e = elevation[i];
-                    if (!select(e)) continue;
-                    local[Math.Clamp((int)((double)(e - origin) / range * (Bins - 1)), 0, Bins - 1)]++;
-                }
-                return local;
-            }, local => { lock (gate) for (int b = 0; b < Bins; b++) histogram[b] += local[b]; });
-
-            long sum = 0;
-            foreach (long c in histogram) sum += c;
-            total = sum;
-
-            // Exclusive prefix sum as a fraction, so cdf[b] is the percentile at the *start* of bin
-            // b and interpolating between neighbours gives a smooth, strictly monotonic mapping
-            // rather than a staircase with one plateau per bin.
-            var cdf = new float[Bins + 1];
-            if (sum == 0) return cdf;
-
-            long running = 0;
-            for (int b = 0; b < Bins; b++)
-            {
-                cdf[b] = (float)(100.0 * running / sum);
-                running += histogram[b];
-            }
-            cdf[Bins] = 100f;
-            return cdf;
-        }
-
-        static double Percentile(float[] cdf, float e, float origin, float range)
-        {
-            double exact = (double)(e - origin) / range * (Bins - 1);
-            int b = Math.Clamp((int)exact, 0, Bins - 1);
-            double frac = Math.Clamp(exact - b, 0, 1);
-            return cdf[b] + frac * (cdf[b + 1] - cdf[b]);
-        }
     }
 
     /// <summary>
-    /// Prints the emitted heightmap's distribution against the vanilla numbers it is meant to
-    /// reproduce, so a regression here shows up in the build log rather than only in game.
-    /// Vanilla 1.19: 40.14% of the map exactly 0, 47.18% at or below the water level, land
-    /// p50 36.33/255 and p100 191.46/255.
+    /// Prints the emitted heightmap's distribution next to vanilla's, as information rather than
+    /// as a target.
+    ///
+    /// It used to be a regression check, back when land was actively reshaped onto vanilla's curve
+    /// and a drift here meant the remap had broken. Nothing is reshaped now, so these numbers are
+    /// simply the *input* heightmap's own distribution surviving the round trip — which makes them
+    /// a reading on whatever drew the heightmap, not on this program. Vanilla's figures are kept
+    /// alongside because they are still the most useful thing to compare a hand-made map against:
+    /// 40.14% of the map exactly 0, 47.18% at or below the water level, land p50 36/255 and a
+    /// highest pixel at 191/255 rather than 255.
     /// </summary>
     private static void ReportHypsometry(ushort[] height)
     {
@@ -512,13 +365,14 @@ public static class MapDataWriter
         }
 
         long land = height.LongLength - water;
-        Console.WriteLine($"  hypsometry: {100.0 * zero / height.LongLength:F2}% exactly 0 " +
+        Console.WriteLine($"  heightmap as shipped: {100.0 * zero / height.LongLength:F2}% exactly 0 " +
                           $"(vanilla 40.14), {100.0 * water / height.LongLength:F2}% water " +
                           $"(vanilla 47.18)");
 
         Console.WriteLine($"  land 0-255 percentiles: p50 {Percentile(50)}, p75 {Percentile(75)}, " +
                           $"p90 {Percentile(90)}, p99 {Percentile(99)}, max {Percentile(100)} " +
-                          $"(vanilla 36 / 57 / 87 / 143 / 191)");
+                          $"(vanilla 36 / 57 / 87 / 143 / 191 — a reading on the source heightmap, " +
+                          $"not a target)");
 
         int Percentile(double q)
         {
@@ -532,23 +386,6 @@ public static class MapDataWriter
         }
     }
 
-    /// <summary>Linear interpolation along one of the measured vanilla hypsometric curves.</summary>
-    private static double SampleCurve((double Percent, double Raw)[] curve, double percent)
-    {
-        if (percent <= curve[0].Percent) return curve[0].Raw;
-
-        for (int i = 1; i < curve.Length; i++)
-        {
-            if (percent > curve[i].Percent) continue;
-
-            var (p0, r0) = curve[i - 1];
-            var (p1, r1) = curve[i];
-            double t = p1 == p0 ? 0 : (percent - p0) / (p1 - p0);
-            return r0 + t * (r1 - r0);
-        }
-
-        return curve[^1].Raw;
-    }
 
     /// <summary>
     /// Emits heightmap.png, and optionally the packed/indirection pair CK3 renders from.

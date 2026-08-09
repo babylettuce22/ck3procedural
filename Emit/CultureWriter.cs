@@ -1,7 +1,9 @@
-using System.Text;
 using Ck3MapGen.Core;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
+using System.Globalization;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Ck3MapGen.Emit;
 
@@ -140,14 +142,15 @@ public static class CultureWriter
 
             sb.Append("\tcadet_dynasty_names = {\n");
             foreach (string name in culture.DynastyNames.Take(12))
-                sb.Append($"\t\t\"dynn_{name}\"\n");
+                sb.Append($"\t\t\"dynn_{CleanKey(name)}\"\n"); // NEW: Apply CleanKey
             sb.Append("\t}\n\n");
 
             Append("male_names", culture.MaleNames);
             Append("female_names", culture.FemaleNames);
 
             sb.Append("\tdynasty_names = {\n");
-            foreach (string name in culture.DynastyNames) sb.Append($"\t\t\"dynn_{name}\"\n");
+            foreach (string name in culture.DynastyNames)
+                sb.Append($"\t\t\"dynn_{CleanKey(name)}\"\n"); // NEW: Apply CleanKey
             sb.Append("\t}\n\n");
 
             sb.Append($"\tdynasty_of_location_prefix = \"dynnp_{culture.Key}\"\n\n");
@@ -156,8 +159,6 @@ public static class CultureWriter
             if (culture.AlwaysUsePatronym) sb.Append("\talways_use_patronym = yes\n");
             sb.Append('\n');
 
-            // Vanilla's own comment on these: the male and the female set must each sum to at most
-            // 100, and what is left over is the chance of an unrelated name.
             sb.Append("\tpat_grf_name_chance = 40\n");
             sb.Append("\tmat_grf_name_chance = 10\n");
             sb.Append("\tfather_name_chance = 5\n\n");
@@ -176,14 +177,41 @@ public static class CultureWriter
             {
                 sb.Append($"\t{field} = {{\n");
                 for (int i = 0; i < names.Count; i += 8)
-                    sb.Append("\t\t").Append(string.Join(' ', names.Skip(i).Take(8))).Append('\n');
+                {
+                    // NEW: Clean the keys before writing them as unquoted tokens so CK3 doesn't crash on apostrophes/hyphens
+                    var cleanNames = names.Skip(i).Take(8).Select(CleanKey);
+                    sb.Append("\t\t").Append(string.Join(' ', cleanNames)).Append('\n');
+                }
                 sb.Append("\t}\n\n");
             }
         }
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_name_lists.txt"), sb.ToString());
     }
+    private static string CleanKey(string input)
+    {
+        string cleaned = input.ToLowerInvariant().Replace(" ", "_").Replace("-", "_");
+        cleaned = RemoveDiacritics(cleaned);
+        return Regex.Replace(cleaned, "[^a-z0-9_]", "");
+    }
 
+    private static string RemoveDiacritics(string text)
+    {
+        var normalizedString = text.Normalize(System.Text.NormalizationForm.FormD);
+        var stringBuilder = new System.Text.StringBuilder(capacity: normalizedString.Length);
+
+        for (int i = 0; i < normalizedString.Length; i++)
+        {
+            char c = normalizedString[i];
+            var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(c);
+            if (unicodeCategory != UnicodeCategory.NonSpacingMark)
+            {
+                stringBuilder.Append(c);
+            }
+        }
+
+        return stringBuilder.ToString().Normalize(System.Text.NormalizationForm.FormC);
+    }
     /// <summary>
     /// What each culture has already worked out by the start date.
     ///
@@ -256,15 +284,14 @@ public static class CultureWriter
             entries[$"{culture.Key}_collective_noun"] = Plural(culture.Name);
             entries[$"mercenary_company_{culture.Key}"] = $"{culture.Name} Company";
 
-            // The trailing space is part of the value: CK3 concatenates the prefix onto the place
-            // name without adding one, so "av" would render "avOslo".
             entries[$"dynnp_{culture.Key}"] = culture.LocationPrefix + " ";
             entries[$"dynnpat_suf_{culture.Key}_male"] = culture.PatronymSuffixMale;
             entries[$"dynnpat_suf_{culture.Key}_female"] = culture.PatronymSuffixFemale;
 
-            foreach (string name in culture.MaleNames) entries[name] = name;
-            foreach (string name in culture.FemaleNames) entries[name] = name;
-            foreach (string name in culture.DynastyNames) entries[$"dynn_{name}"] = name;
+            // NEW: The mapping key is cleaned, but the display value remains the rich, accented string
+            foreach (string name in culture.MaleNames) entries[CleanKey(name)] = name;
+            foreach (string name in culture.FemaleNames) entries[CleanKey(name)] = name;
+            foreach (string name in culture.DynastyNames) entries[$"dynn_{CleanKey(name)}"] = name;
         }
 
         var sb = new StringBuilder();

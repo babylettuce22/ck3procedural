@@ -74,78 +74,122 @@ public static class TerrainPalette
     /// <param name="nA">Noise selecting which lowland variant dominates, 0..1.</param>
     /// <param name="nB">Noise selecting the second variant, 0..1.</param>
     /// <param name="nC">Noise setting how strongly the accents show through, 0..1.</param>
+    /// <summary>
+    /// Build the blend for one pixel.
+    /// </summary>
     public static Blend For(TerrainClass terrain, double relief, double nA, double nB, double nC)
     {
         switch (terrain)
         {
-            // Open water. Deep ocean is a single flat material — it is never visible, and an ocean
-            // of beach sand reads as a kilometres-wide shoreline. The shallows *are* visible
-            // through the water though, so sand and silt are mixed back in as the floor rises
-            // towards the coast. relief is negative below sea level, so -1 is the deep floor and
-            // 0 the waterline.
             case TerrainClass.Sea:
-            {
-                double shallow = Math.Clamp(1.0 + relief * 3.0, 0, 1);
-                if (shallow <= 0.02) return Single(MudWet);
+                {
+                    double shallow = Math.Clamp(1.0 + relief * 3.0, 0, 1);
+                    if (shallow <= 0.02) return Single(MudWet);
 
-                return Mix(MudWet, (byte)(255 - shallow * 110),
-                           Beach, (byte)(shallow * 90),
-                           WetlandsMud, (byte)(shallow * 45 * nC),
-                           Unused, 0);
-            }
+                    return Mix(
+                        MudWet, (byte)(255 - shallow * 110),
+                        Beach, (byte)(shallow * 90),
+                        WetlandsMud, (byte)(shallow * 45 * nC),
+                        Unused, 0
+                    );
+                }
 
-            // Shore. Sand over the local lowland so the beach fades inland rather than ending on
-            // a hard line.
             case TerrainClass.Beach:
-                return Mix(Beach, 180, Pick(Mediterranean.Lowlands, nA), 50,
-                           Pick(Central.Lowlands, nB), 25, Unused, 0);
+                return Mix(
+                    Beach, 160,
+                    Mediterranean.Lowlands[0], (byte)(40 + nA * 30),
+                    Central.Lowlands[0], (byte)(30 + nB * 25),
+                    Unused, 0
+                );
 
             case TerrainClass.Floodplains:
-                return Mix(Floodplains, 165, WetlandsMud, 45,
-                           Pick(Central.Lowlands, nA), 45, Unused, 0);
+                return Mix(
+                    Floodplains, (byte)(110 + nA * 40),
+                    WetlandsMud, (byte)(50 + nB * 30),
+                    Central.Lowlands[1], (byte)(40 + (1.0 - nA) * 30),
+                    Farmland, (byte)(20 + nC * 20)
+                );
 
             case TerrainClass.Wetlands:
-                return Mix(Wetlands, 150, WetlandsMud, 60,
-                           Pick(Central.Lowlands, nA), 45, Unused, 0);
+                return Mix(
+                    Wetlands, (byte)(120 + nA * 40),
+                    WetlandsMud, (byte)(70 + nB * 30),
+                    Central.Lowlands[2], (byte)(40 + (1.0 - nA) * 20),
+                    ForestFloor, (byte)(15 + nC * 15)
+                );
 
             case TerrainClass.Farmlands:
-                return Mix(Farmland, 155, Pick(Central.Lowlands, nA), 60,
-                           Pick(Mediterranean.Lowlands, nB), 40, Unused, 0);
+                return Mix(
+                    Farmland, (byte)(100 + nA * 50),
+                    Central.Lowlands[0], (byte)(60 + (1.0 - nA) * 40),
+                    Mediterranean.Lowlands[0], (byte)(50 + nB * 30),
+                    Central.Hills, (byte)(20 + nC * 20)
+                );
 
             case TerrainClass.Forest:
-                return Mix(ForestFloor, 120, ForestPine, 80,
-                           Pick(Central.Lowlands, nA), 55, Central.Hills, 20);
+                return Mix(
+                    ForestFloor, (byte)(100 + nA * 40),
+                    ForestPine, (byte)(80 + (1.0 - nA) * 40),
+                    Central.Lowlands[0], (byte)(40 + nB * 30),
+                    Central.Hills, (byte)(20 + nC * 20)
+                );
 
             case TerrainClass.Jungle:
-                return Mix(ForestJungle, 125, Pick(Tropical.Lowlands, nA), 75,
-                           Pick(Tropical.Lowlands, nB), 40, Tropical.Hills, 20);
+                return Mix(
+                    ForestJungle, (byte)(100 + nA * 40),
+                    Tropical.Lowlands[0], (byte)(70 + (1.0 - nA) * 40),
+                    Tropical.Lowlands[1], (byte)(50 + nB * 30),
+                    Tropical.Hills, (byte)(20 + nC * 20)
+                );
 
             case TerrainClass.Taiga:
-                return Mix(Pick(Northern.Lowlands, nA), 110, ForestPine, 85,
-                           Pick(Northern.Lowlands, nB), 45, Northern.Hills, 20);
+                return Mix(
+                    Northern.Lowlands[0], (byte)(90 + nA * 40),
+                    ForestPine, (byte)(80 + (1.0 - nA) * 40),
+                    Northern.Hills, (byte)(40 + nB * 30),
+                    Snow, (byte)(15 + nC * 20) // Adds a natural dusting of snow
+                );
 
             case TerrainClass.Arctic:
-                // Snow over northern rock, thinning where the noise says the wind scours it.
-                return Mix(Snow, (byte)(170 + nC * 60), Pick(Northern.Lowlands, nA), 45,
-                           Northern.Hills, 30, Unused, 0);
+                // Heavy snow over northern rock, exposing rock where wind scours it
+                return Mix(
+                    Snow, (byte)(120 + (1.0 - nC) * 80),
+                    Northern.Lowlands[1], (byte)(60 + nA * 40),
+                    Northern.Hills, (byte)(40 + nB * 30),
+                    CentralMountain, (byte)(20 + nC * 30)
+                );
 
             case TerrainClass.Steppe:
-                return Mix(SteppeGrass, 105, Pick(Steppe.Lowlands, nA), 80,
-                           SteppeBushes, (byte)(25 + nC * 45), SteppeRocks, 25);
+                return Mix(
+                    SteppeGrass, (byte)(90 + nA * 40),
+                    Steppe.Lowlands[0], (byte)(80 + (1.0 - nA) * 40),
+                    SteppeBushes, (byte)(40 + nB * 30),
+                    SteppeRocks, (byte)(30 + nC * 20)
+                );
 
             case TerrainClass.Drylands:
-                return Mix(Pick(Drylands.Lowlands, nA), 115, Pick(Drylands.Lowlands, nB), 70,
-                           DesertCracked, (byte)(20 + nC * 40), Drylands.Hills, 25);
+                return Mix(
+                    Drylands.Lowlands[0], (byte)(90 + nA * 40),
+                    Drylands.Lowlands[1], (byte)(80 + (1.0 - nA) * 40),
+                    DesertCracked, (byte)(50 + nB * 30),
+                    Drylands.Hills, (byte)(30 + nC * 20)
+                );
 
             case TerrainClass.Desert:
-                // The one place an extra accent is worth it: flat sand reads as a dead surface.
-                return Mix(Pick(Desert.Lowlands, nA), 120, Pick(Desert.Lowlands, nB), 75,
-                           DesertCracked, (byte)(15 + nC * 35),
-                           nC > 0.93 ? Oasis : Desert.Hills, 20);
+                return Mix(
+                    Desert.Lowlands[0], (byte)(100 + nA * 40), // Flat base sand
+                    Desert.Lowlands[1], (byte)(80 + (1.0 - nA) * 40), // Fades smoothly into wavy sand
+                    DesertCracked, (byte)(40 + nB * 30), // Dry mud accent
+                    Desert.Hills, (byte)(20 + nC * 20)  // Rocky accent
+                );
 
             case TerrainClass.Plains:
-                return Mix(Pick(Central.Lowlands, nA), 115, Pick(Central.Lowlands, nB), 75,
-                           Pick(Mediterranean.Lowlands, nC), 45, Central.Hills, 20);
+                return Mix(
+                    Central.Lowlands[0], (byte)(80 + nA * 40),
+                    Central.Lowlands[1], (byte)(70 + (1.0 - nA) * 40),
+                    Mediterranean.Lowlands[0], (byte)(50 + nB * 30),
+                    Central.Hills, (byte)(30 + nC * 20)
+                );
 
             case TerrainClass.Hills:
                 return HillBlend(Central, relief, nA, nB, nC);
@@ -157,33 +201,37 @@ public static class TerrainPalette
                 return MountainBlend(Desert, relief, nA, nC);
 
             default:
-                return Mix(Pick(Central.Lowlands, nA), 130, Pick(Central.Lowlands, nB), 70,
-                           Central.Hills, 30, Unused, 0);
+                return Mix(
+                    Central.Lowlands[0], (byte)(90 + nA * 50),
+                    Central.Lowlands[1], (byte)(70 + (1.0 - nA) * 40),
+                    Central.Hills, (byte)(50 + nB * 30),
+                    Unused, 0
+                );
         }
     }
 
-    /// <summary>
-    /// Hills sit between the lowland and mountain materials, so both show through — that gradient
-    /// is what stops a hill range from ending on a visible contour line.
-    /// </summary>
     private static Blend HillBlend(Family family, double relief, double nA, double nB, double nC)
     {
         byte toMountain = (byte)(30 + Math.Clamp(relief, 0, 1) * 70);
-        return Mix(family.Hills, 120, Pick(family.Lowlands, nA), (byte)(80 - toMountain / 3),
-                   family.Transition, toMountain, Pick(family.Lowlands, nB), (byte)(20 + nC * 25));
+        return Mix(
+            family.Hills, (byte)(100 + nA * 30),
+            family.Lowlands[0], (byte)(70 - toMountain / 3 + (1.0 - nA) * 20),
+            family.Transition, toMountain,
+            family.Lowlands[1], (byte)(30 + nB * 20)
+        );
     }
 
-    /// <summary>
-    /// Mountains carry rock plus the family's transition material, and gain snow with altitude so
-    /// summits whiten instead of every peak being the same grey.
-    /// </summary>
     private static Blend MountainBlend(Family family, double relief, double nA, double nC)
     {
         double above = Math.Clamp(relief - 1.0, 0, 1);
         byte snow = (byte)Math.Clamp(above * 240 + nC * 50 - 25, 0, 255);
 
-        return Mix(family.Mountain, 140, CentralMountain, 60,
-                   family.Transition, (byte)(45 + nA * 35), Snow, snow);
+        return Mix(
+            family.Mountain, 140,
+            CentralMountain, 60,
+            family.Transition, (byte)(45 + nA * 35),
+            Snow, snow
+        );
     }
 
     /// <summary>
@@ -254,10 +302,6 @@ public static class TerrainPalette
         if (outM[0] == Unused) result.W0 = 0;
         return result;
     }
-
-    /// <summary>Choose a lowland variant from a 0..1 noise value.</summary>
-    private static byte Pick(byte[] variants, double n)
-        => variants[Math.Clamp((int)(n * variants.Length), 0, variants.Length - 1)];
 
     private static Blend Single(byte material) => new()
     {

@@ -37,45 +37,6 @@ public sealed class MapConfig
     [Description("Seed for every random decision.")]
     public int Seed { get; set; } = 1;
 
-    /// <summary>
-    /// Reshape land heights onto vanilla's measured hypsometric curve instead of stretching them
-    /// linearly to whatever the tallest simulated peak happens to be.
-    ///
-    /// The linear stretch made the map as mountainous as its most extreme accident: measured on
-    /// 2026-08-07, it put 18x more land in the top elevation band than vanilla has, and always
-    /// drove the highest pixel to 255 where vanilla's tops out at 192. The remap is monotonic, so
-    /// it changes only the height scale, never where anything is. Off restores the old behaviour
-    /// for bisecting.
-    /// </summary>
-    [Category("11 Height scale")]
-    [Description("Reshape land heights onto vanilla's measured hypsometric curve instead of stretching them linearly to whatever the tallest simulated peak happens to be, which made the map as mountainous as its most extreme accident. Monotonic: it changes the height scale, never where anything is.")]
-    public bool MatchVanillaHypsometry { get; set; } = true;
-
-
-    // --- Coast and sea floor ---
-    //
-    // The heightmap says nothing about what lies below its water plane — everything at or under it
-    // is simply "sea". These shape the sea floor the mod ships, which is what the map's water
-    // shading and the shelf around each coast are drawn from.
-
-
-    /// <summary>
-    /// Depth, in simulation elevation units below sea level, at which the sea floor reaches pure
-    /// black. Everything deeper is 0. This is what sets the continental shelf's *width*, since the
-    /// depth grows with distance offshore.
-    /// </summary>
-    [Category("05 Coast and sea floor")]
-    [Description("Depth, in simulation elevation units below sea level, at which the sea floor reaches pure black. Everything deeper is 0. This is what sets the continental shelf's *width*, since the depth grows with distance offshore.")]
-    public double ShelfDepth { get; set; } = 24.0;
-
-    /// <summary>
-    /// Shape of the shelf falloff. Above 1 it falls away fast just offshore and then flattens,
-    /// which is what vanilla's profile does (18.4/255 at 2 px, 4.5 at 20 px, black by 40).
-    /// </summary>
-    [Category("05 Coast and sea floor")]
-    [Description("Shape of the shelf falloff. Above 1 it falls away fast just offshore and then flattens, which is what vanilla's profile does (18.4/255 at 2 px, 4.5 at 20 px, black by 40).")]
-    public double ShelfCurve { get; set; } = 2.4;
-
 
     /// <summary>
     /// Catchment, in province cells, above which a watercourse is drawn as a river. Absolute

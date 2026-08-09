@@ -1,32 +1,13 @@
 using System.Text;
+using System.Collections.Generic;
+using System.Linq;
+using System;
 using Ck3MapGen.Core;
 
 namespace Ck3MapGen.MapGen;
 
-/// <summary>
-/// A generated sound system, and the only source of invented words in the tool.
-///
-/// Every name the mod ships — people, dynasties, counties, kingdoms, cultures, gods — comes out of
-/// one of these, so that names cluster the way real ones do. A language is owned by a *heritage*,
-/// not by a culture, which is what makes sibling cultures sound related without any extra work:
-/// they draw from the same inventory, so they come out as Norwegian and Swedish rather than as
-/// Norwegian and Tamil. Crossing a heritage border is meant to be audible.
-///
-/// The inventory is a subset of the pools below rather than the whole of them. That is the entire
-/// trick: a language that can use every sound produces mush, because every word is equally likely
-/// and nothing is characteristic. Picking eight onsets out of forty means this language has a /kv/
-/// and no /th/, and after a dozen words a reader can feel it.
-/// </summary>
 public sealed class Language
 {
-    // Deliberately romanised and conservative — these are read by an English-speaking player, and a
-    // name they cannot pronounce reads as noise rather than as foreign.
-    //
-    // Split simple from complex, and drawn mostly-simple, because drawing freely from one combined
-    // pool is what produces Kveikveochky: nothing stops a language taking six consonant clusters
-    // and five diphthongs, and then every syllable it can build is four letters before the coda.
-    // A real language has a handful of marked sounds against a plain background, and it is the
-    // contrast that makes them characteristic.
     private static readonly string[] SimpleOnsets =
         ["b", "d", "f", "g", "h", "j", "k", "l", "m", "n", "p", "r", "s", "t", "v", "w", "z"];
 
@@ -46,40 +27,50 @@ public sealed class Language
     private static readonly string[] ComplexCodas =
         ["th", "sh", "st", "nd", "ng", "nt", "rk", "rn", "rd", "ls", "ft", "sk", "lm", "rg", "ts"];
 
-    public string Key { get; }
+    // Standard CK3-safe Latin-1 diacritics for visual flavor
+    private static readonly Dictionary<char, char[]> DiacriticMap = new()
+    {
+        { 'a', ['á', 'ä', 'â', 'å'] },
+        { 'e', ['é', 'ë', 'ê'] },
+        { 'i', ['í', 'ï', 'î'] },
+        { 'o', ['ó', 'ö', 'ô', 'ø'] },
+        { 'u', ['ú', 'ü', 'û'] }
+    };
 
+    public string Key { get; }
     public string Name { get; private set; } = "";
 
     private readonly string[] _onsets;
     private readonly string[] _vowels;
     private readonly string[] _codas;
 
-    /// <summary>How often a syllable opens with no consonant at all. Low for most languages.</summary>
     private readonly double _bareOnsetChance;
-
-    /// <summary>How often a non-final syllable closes. High values give a consonant-heavy language.</summary>
     private readonly double _medialCodaChance;
-
     private readonly double _finalCodaChance;
 
-    /// <summary>Word-final fragments that mark a name as a man's or a woman's in this language.</summary>
+    // --- NEW: Orthographic and Morphological Flavor Traits ---
+
+    /// <summary>Does this language use prefixes for places (like Caer- or Al-) instead of suffixes?</summary>
+    private readonly bool _usesPlacePrefixes;
+
+    /// <summary>Chance to inject an apostrophe between syllables (e.g., M'baku, K'tah).</summary>
+    private readonly double _apostropheChance;
+
+    /// <summary>A specific accent this language applies to a specific vowel (e.g., all 'o's become 'ö').</summary>
+    private readonly char _targetVowelForAccent;
+    private readonly char _accentCharacter;
+
     public string[] MaleEndings { get; private set; } = [];
-
     public string[] FemaleEndings { get; private set; } = [];
-
-    /// <summary>Title-name suffixes per tier — this language's answers to -by, -mark and -land.</summary>
-    public string[] BaronySuffixes { get; private set; } = [];
-
-    public string[] CountySuffixes { get; private set; } = [];
-    public string[] DuchySuffixes { get; private set; } = [];
-    public string[] KingdomSuffixes { get; private set; } = [];
+    public string[] BaronyAffixes { get; private set; } = [];
+    public string[] CountyAffixes { get; private set; } = [];
+    public string[] DuchyAffixes { get; private set; } = [];
+    public string[] KingdomAffixes { get; private set; } = [];
 
     private Language(string key, Rng rng)
     {
         Key = key;
 
-        // Mostly plain sounds with a few marked ones. The vowel ratio matters most: a language with
-        // more diphthongs than plain vowels has no short words in it at all.
         _onsets = [.. Draw(SimpleOnsets, rng.Int(6, 9), rng), .. Draw(ClusterOnsets, rng.Int(2, 4), rng)];
         _vowels = [.. Draw(SimpleVowels, rng.Int(3, 4), rng), .. Draw(ComplexVowels, rng.Int(0, 2), rng)];
         _codas = [.. Draw(SimpleCodas, rng.Int(3, 5), rng), .. Draw(ComplexCodas, rng.Int(0, 2), rng)];
@@ -87,54 +78,75 @@ public sealed class Language
         _bareOnsetChance = rng.Decimal(0.05, 0.30);
         _medialCodaChance = rng.Decimal(0.10, 0.40);
         _finalCodaChance = rng.Decimal(0.25, 0.70);
+
+        // 1 in 4 languages use place-name prefixes instead of suffixes.
+        _usesPlacePrefixes = rng.Chance(0.25);
+
+        // Very rare chance for apostrophe-heavy languages (alien/ancient feel).
+        _apostropheChance = rng.Chance(0.10) ? rng.Decimal(0.1, 0.3) : 0.0;
+
+        // 30% chance for a language to have a signature diacritic (e.g., Norse 'ø' or German 'ü').
+        if (rng.Chance(0.30))
+        {
+            _targetVowelForAccent = rng.Pick(['a', 'e', 'i', 'o', 'u']);
+            _accentCharacter = rng.Pick(DiacriticMap[_targetVowelForAccent]);
+        }
     }
 
-    /// <summary>
-    /// Builds a language by drawing an inventory out of the pools. Sizes are small on purpose;
-    /// see the class remarks.
-    ///
-    /// Two phases, because the affixes are themselves words in the language and so cannot be
-    /// produced until the inventory they are drawn from exists.
-    /// </summary>
     public static Language Create(string key, Rng rng)
     {
         var language = new Language(key, rng);
 
-        // Endings are one syllable: they must read as an inflection stuck onto a name, not as a
-        // second name.
         language.MaleEndings = language.Fragments(rng, 4, false);
         language.FemaleEndings = language.Fragments(rng, 4, true);
-        language.BaronySuffixes = language.Fragments(rng, 6, false);
-        language.CountySuffixes = language.Fragments(rng, 6, false);
-        language.DuchySuffixes = language.Fragments(rng, 5, false);
-        language.KingdomSuffixes = language.Fragments(rng, 5, false);
+        language.BaronyAffixes = language.Fragments(rng, 6, false);
+        language.CountyAffixes = language.Fragments(rng, 6, false);
+        language.DuchyAffixes = language.Fragments(rng, 5, false);
+        language.KingdomAffixes = language.Fragments(rng, 5, false);
 
         language.Name = Capitalise(language.Root(rng, 2, 3));
         return language;
     }
 
-    /// <summary>
-    /// A word in this language, capitalised and ready to be a name.
-    /// </summary>
     public string Word(Rng rng, int minSyllables = 2, int maxSyllables = 3)
         => Capitalise(Root(rng, minSyllables, maxSyllables));
 
-    /// <summary>A man's name: a root plus, sometimes, a masculine ending.</summary>
     public string MaleName(Rng rng)
         => Capitalise(Join(Root(rng, 1, 2), rng.Chance(0.55) ? rng.Pick(MaleEndings) : ""));
 
-    /// <summary>A woman's name. The feminine ending is applied more often, so the two sets stay
-    /// distinguishable to a player who is skimming rather than reading.</summary>
     public string FemaleName(Rng rng)
         => Capitalise(Join(Root(rng, 1, 2), rng.Chance(0.80) ? rng.Pick(FemaleEndings) : ""));
 
-    /// <summary>A place name: a root plus this language's suffix for the tier.</summary>
-    public string PlaceName(Rng rng, string[] suffixes)
-        => Capitalise(Join(Root(rng, 1, 2), rng.Chance(0.75) ? rng.Pick(suffixes) : ""));
+    /// <summary>A place name that adapts to whether the language favors prefixes or suffixes.</summary>
+    public string PlaceName(Rng rng, string[] affixes)
+    {
+        string root = Root(rng, 1, 2);
+        if (!rng.Chance(0.75)) return Capitalise(root);
+
+        string affix = rng.Pick(affixes);
+
+        // Some languages use a hyphen for affixes (e.g., Al-Karak vs Alkerek)
+        bool useHyphen = rng.Chance(0.20);
+
+        if (_usesPlacePrefixes)
+        {
+            return Capitalise(useHyphen ? $"{affix}-{root}" : Join(affix, root));
+        }
+
+        return Capitalise(useHyphen ? $"{root}-{affix}" : Join(root, affix));
+    }
 
     /// <summary>
-    /// Bare syllable string, uncapitalised. Everything above is a wrapper on this.
+    /// Generates a compound name by merging two distinct roots. Excellent for Dynasties or Major cities.
+    /// (e.g., "Black-wood", "Gond-wana").
     /// </summary>
+    public string CompoundName(Rng rng)
+    {
+        string root1 = Root(rng, 1, 2);
+        string root2 = Root(rng, 1, 2);
+        return Capitalise(rng.Chance(0.3) ? $"{root1}-{root2}" : Join(root1, root2));
+    }
+
     private string Root(Rng rng, int minSyllables, int maxSyllables)
     {
         int count = rng.Int(minSyllables, maxSyllables);
@@ -144,8 +156,17 @@ public sealed class Language
         {
             bool last = i == count - 1;
 
+            // Orthographic flavor: Apostrophes between syllables
+            if (i > 0 && rng.Chance(_apostropheChance)) sb.Append('\'');
+
             if (!rng.Chance(_bareOnsetChance) || i > 0) sb.Append(rng.Pick(_onsets));
-            sb.Append(rng.Pick(_vowels));
+
+            string vowel = rng.Pick(_vowels);
+            // Apply language's signature accent if applicable
+            if (_accentCharacter != '\0')
+                vowel = vowel.Replace(_targetVowelForAccent, _accentCharacter);
+
+            sb.Append(vowel);
 
             double codaChance = last ? _finalCodaChance : _medialCodaChance;
             if (rng.Chance(codaChance)) sb.Append(rng.Pick(_codas));
@@ -154,11 +175,6 @@ public sealed class Language
         return Tidy(sb.ToString());
     }
 
-    /// <summary>
-    /// Short word-final fragments, used for grammatical endings and place-name suffixes. Feminine
-    /// ones are forced to end on a vowel, which is the one sound-symbolic convention worth keeping:
-    /// it is near-universal across the languages a player will have names from.
-    /// </summary>
     private string[] Fragments(Rng rng, int count, bool vowelFinal)
     {
         var result = new HashSet<string>(StringComparer.Ordinal);
@@ -173,30 +189,44 @@ public sealed class Language
             if (fragment.Length is > 0 and <= 5) result.Add(fragment);
         }
 
-        // A language that drew an unlucky inventory still has to return something usable.
         if (result.Count == 0) result.Add(vowelFinal ? "a" : "en");
         return [.. result];
     }
 
-    private static string Join(string stem, string ending)
+    private static string Join(string first, string second)
     {
-        if (ending.Length == 0) return stem;
+        if (second.Length == 0) return first;
+        if (first.Length == 0) return second;
 
-        // Do not let the seam produce a sound the language never uses: a vowel meeting a vowel, or
-        // the same consonant twice. Dropping one character is enough and keeps the ending readable.
-        bool stemVowel = IsVowel(stem[^1]);
-        bool endingVowel = IsVowel(ending[0]);
+        bool firstEndsInVowel = IsVowelOrAccent(first[^1]);
+        bool secondStartsInVowel = IsVowelOrAccent(second[0]);
 
-        if (stemVowel && endingVowel) return Tidy(stem[..^1] + ending);
-        if (stem[^1] == ending[0]) return Tidy(stem + ending[1..]);
-        return Tidy(stem + ending);
+        // Vowel meeting a vowel: drop the first one
+        if (firstEndsInVowel && secondStartsInVowel)
+            return Tidy(first[..^1] + second);
+
+        // Identical letters meeting: drop one
+        if (first[^1] == second[0])
+            return Tidy(first + second[1..]);
+
+        // NEW: Smarter Consonant smoothing. 
+        // If a heavy coda meets a heavy onset, it creates an unpronounceable seam (e.g. "rk" + "st" -> "rkst").
+        // We drop the coda to smooth the transition.
+        if (!firstEndsInVowel && !secondStartsInVowel)
+        {
+            int trailingConsonants = first.Length - Math.Max(0, LastVowelIndex(first) + 1);
+            int leadingConsonants = FirstVowelIndex(second);
+
+            if (trailingConsonants + leadingConsonants > 3)
+            {
+                // Strip the trailing consonants from the first part
+                first = first[..^trailingConsonants];
+            }
+        }
+
+        return Tidy(first + second);
     }
 
-    /// <summary>
-    /// Collapses the runs that syllable concatenation produces and nothing else. Three of the same
-    /// letter is always a mistake, and a four-consonant pile-up is unreadable however plausible the
-    /// pieces were individually.
-    /// </summary>
     private static string Tidy(string word)
     {
         var sb = new StringBuilder(word.Length);
@@ -206,8 +236,12 @@ public sealed class Language
         {
             if (sb.Length > 0 && sb[^1] == c && sb.Length >= 2 && sb[^2] == c) continue;
 
-            if (IsVowel(c)) consonantRun = 0;
-            else if (++consonantRun > 3) { consonantRun--; continue; }
+            if (IsVowelOrAccent(c))
+                consonantRun = 0;
+            else if (c != '\'' && c != '-') // Don't count punctuation as consonants
+            {
+                if (++consonantRun > 3) { consonantRun--; continue; }
+            }
 
             sb.Append(c);
         }
@@ -215,16 +249,53 @@ public sealed class Language
         return sb.ToString();
     }
 
-    private static bool IsVowel(char c) => c is 'a' or 'e' or 'i' or 'o' or 'u' or 'y';
+    private static bool IsVowelOrAccent(char c)
+        => c is 'a' or 'e' or 'i' or 'o' or 'u' or 'y' or 'á' or 'ä' or 'â' or 'å' or 'é' or 'ë' or 'ê' or 'í' or 'ï' or 'î' or 'ó' or 'ö' or 'ô' or 'ø' or 'ú' or 'ü' or 'û';
+
+    private static int LastVowelIndex(string s)
+    {
+        for (int i = s.Length - 1; i >= 0; i--)
+            if (IsVowelOrAccent(s[i])) return i;
+        return -1;
+    }
+
+    private static int FirstVowelIndex(string s)
+    {
+        for (int i = 0; i < s.Length; i++)
+            if (IsVowelOrAccent(s[i])) return i;
+        return s.Length;
+    }
 
     private static string Capitalise(string word)
-        => word.Length == 0 ? word : char.ToUpperInvariant(word[0]) + word[1..];
+    {
+        if (word.Length == 0) return word;
 
-    /// <summary>Distinct draw without replacement, so an inventory never lists a sound twice.</summary>
+        // Handle names that start with an apostrophe or hyphen safely
+        int firstChar = 0;
+        while (firstChar < word.Length && !char.IsLetter(word[firstChar]))
+            firstChar++;
+
+        if (firstChar >= word.Length) return word;
+
+        Span<char> chars = word.ToCharArray();
+        chars[firstChar] = char.ToUpperInvariant(chars[firstChar]);
+
+        // Capitalize after hyphens for compound names (e.g. Al-Fariq)
+        for (int i = firstChar + 1; i < chars.Length - 1; i++)
+        {
+            if (chars[i] == '-' && char.IsLetter(chars[i + 1]))
+                chars[i + 1] = char.ToUpperInvariant(chars[i + 1]);
+        }
+
+        return new string(chars);
+    }
+
     private static string[] Draw(string[] pool, int count, Rng rng)
     {
         var copy = pool.ToList();
         rng.Shuffle(copy);
+        // Note: Distinct() is technically redundant here since your base arrays are already distinct, 
+        // but left it in case you modify the source arrays to add weighted probabilities.
         return [.. copy.Take(Math.Min(count, copy.Count)).Distinct()];
     }
 }
