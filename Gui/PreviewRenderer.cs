@@ -28,8 +28,10 @@ public static class PreviewRenderer
         var cfg = result.Config;
         int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
 
-        var terrain = TerrainClassifier.Classify(result.World, cfg, result.ProvinceElevation,
-            result.LandMask, new Rng(cfg.Seed));
+        // The classification the generation already produced, not a fresh one. Building it here as
+        // well meant every preview ran the climate model twice and showed the second answer, which
+        // is also not quite the one the mod would ship.
+        var terrain = result.Terrain.Terrain;
 
         return Downsample(width, height, i => Colour(terrain[i]));
     }

@@ -65,6 +65,88 @@ public static class DebugRender
         PngWriter.WriteRgb8(path, outW, outH, rgb);
     }
 
+    /// <summary>
+    /// The Koppen classification behind the terrain, in the scheme's own published colours.
+    ///
+    /// This is the view that makes the climate model falsifiable. A terrain map can look perfectly
+    /// plausible while the temperatures and rainfall driving it are nonsense — greens in the right
+    /// places for the wrong reasons — whereas a Koppen map can be laid beside any published one and
+    /// checked feature by feature: deserts on the 30th parallel, oceanic west coasts, subarctic in
+    /// the continental interior, tundra at the pole.
+    /// </summary>
+    public static void WriteKoppen(string path, MapGen.KoppenClass[] climate,
+        int width, int height, int maxWidth = 2048)
+    {
+        int step = Math.Max(1, width / maxWidth);
+        int outW = width / step, outH = height / step;
+        var rgb = new byte[outW * outH * 3];
+
+        for (int y = 0; y < outH; y++)
+        {
+            for (int x = 0; x < outW; x++)
+            {
+                var (r, g, b) = MapGen.Koppen.Colour(climate[y * step * width + x * step]);
+                int o = (y * outW + x) * 3;
+                rgb[o] = r;
+                rgb[o + 1] = g;
+                rgb[o + 2] = b;
+            }
+        }
+
+        PngWriter.WriteRgb8(path, outW, outH, rgb);
+    }
+
+    /// <summary>
+    /// A climate field as a false-colour ramp, normalised across its own range over land.
+    ///
+    /// The Koppen view answers "what class is this" and hides how it got there. When a classified
+    /// map comes out mottled the question is always whether the field underneath is genuinely
+    /// patchy or merely sitting on a threshold, and those two have completely different fixes — one
+    /// is a bug in the model, the other is a bug in the calibration. Only this view separates them.
+    /// </summary>
+    public static void WriteField(string path, float[] field, byte[] landMask,
+        int width, int height, int maxWidth = 2048)
+    {
+        int step = Math.Max(1, width / maxWidth);
+        int outW = width / step, outH = height / step;
+        var rgb = new byte[outW * outH * 3];
+
+        var sample = new List<float>();
+        for (int i = 0; i < field.Length; i += 13)
+            if (landMask[i] != 0) sample.Add(field[i]);
+        if (sample.Count == 0) return;
+
+        sample.Sort();
+        float low = sample[sample.Count / 50];
+        float high = sample[sample.Count - 1 - sample.Count / 50];
+        float span = Math.Max(1e-6f, high - low);
+
+        for (int y = 0; y < outH; y++)
+        {
+            for (int x = 0; x < outW; x++)
+            {
+                int i = y * step * width + x * step;
+                int o = (y * outW + x) * 3;
+
+                if (landMask[i] == 0)
+                {
+                    rgb[o] = 28;
+                    rgb[o + 1] = 42;
+                    rgb[o + 2] = 66;
+                    continue;
+                }
+
+                // Blue through green to red, so bands of equal value read as contours by eye.
+                double t = Math.Clamp((field[i] - low) / span, 0, 1);
+                rgb[o] = (byte)(255 * Math.Clamp(1.5 - Math.Abs(t - 1.0) * 3, 0, 1));
+                rgb[o + 1] = (byte)(255 * Math.Clamp(1.5 - Math.Abs(t - 0.5) * 3, 0, 1));
+                rgb[o + 2] = (byte)(255 * Math.Clamp(1.5 - Math.Abs(t - 0.0) * 3, 0, 1));
+            }
+        }
+
+        PngWriter.WriteRgb8(path, outW, outH, rgb);
+    }
+
     /// <summary>Elevation as greyscale, normalised across the actual range so detail is visible.</summary>
     public static void WriteElevation(string path, WorldGrid w, int scale = 1)
     {

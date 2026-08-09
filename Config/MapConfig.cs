@@ -164,6 +164,30 @@ public sealed class MapConfig
     [Description("Average sea zone area, same basis. Vanilla's sea zones are an order of magnitude larger than its baronies — roughly 800 of them over 20M water pixels.")]
     public double SeaZonePixelsAtVanilla { get; set; } = 25000;
 
+    /// <summary>
+    /// How much larger a province in the map's coarsest region is than one in its finest.
+    ///
+    /// <see cref="BaronyPixelsAtVanilla"/> alone gives every barony on the map the same area, which
+    /// no real map has: vanilla's Russian and Saharan counties dwarf its north Italian ones. This
+    /// scatters that unevenness over the map as low-frequency regions. 1 restores the single
+    /// uniform size.
+    ///
+    /// It does not change how many provinces the map has — see <see cref="MapGen.ProvinceSizeField"/>,
+    /// which normalises the field so the count is untouched and this stays a knob for one thing.
+    /// </summary>
+    [Category("03 Provinces")]
+    [Description("How much larger a province in the map's coarsest region is than one in its finest. 1 gives every barony on the map the same area, which no real map has — vanilla's Russian counties dwarf its north Italian ones. The province count is unaffected either way.")]
+    public double ProvinceSizeVariance { get; set; } = 6.0;
+
+    /// <summary>
+    /// How wide a stretch of map holds provinces of roughly one size, in vanilla province pixels.
+    /// Small values make province size change every few provinces, which reads as noise rather than
+    /// as regions; the default is about the width of European Russia on vanilla's map.
+    /// </summary>
+    [Category("03 Provinces")]
+    [Description("How wide a stretch of map holds provinces of roughly one size, in vanilla province pixels. The default is about the width of European Russia on vanilla's map; much smaller and the size changes every few provinces, which reads as noise rather than as regions.")]
+    public double ProvinceSizeRegionPixels { get; set; } = 2600;
+
     /// <summary>Target area of one land province on *this* map, in province pixels.</summary>
     public double BaronyPixels => BaronyPixelsAtVanilla * CountyScale * CountyScale;
 
@@ -353,6 +377,34 @@ public sealed class MapConfig
     public double ProvinceTerrainCost { get; set; } = 1.5;
 
     /// <summary>
+    /// How far the partition's view of the terrain is blurred before it costs a step against it, in
+    /// vanilla province pixels. The cost is a first difference, so without this it answers to
+    /// pixel-scale roughness and fringes every border at that scale. 0 uses the heightmap as it is.
+    /// </summary>
+    [Category("03 Provinces")]
+    [Description("How far the partition blurs the terrain before growing provinces along it, in vanilla province pixels. Its cost is a first difference, so on an unsmoothed heightmap it answers to every scrap of pixel-scale roughness and frays the border at that scale. 0 uses the heightmap as it is.")]
+    public double ProvinceTerrainSmoothPixels { get; set; } = 8;
+
+    /// <summary>
+    /// Rounds of a majority filter over the finished province borders. Each one hands a border pixel
+    /// to whichever province holds most of the block around it, without moving a coastline or
+    /// cutting a province in two.
+    /// </summary>
+    [Category("03 Provinces")]
+    [Description("Rounds of border smoothing over the finished provinces. Each hands a border pixel to whichever province holds most of the block around it, which rounds the staircase a raster flood leaves. Coastlines never move and a province is never cut in two. 0 leaves borders as grown.")]
+    public int ProvinceBorderSmoothing { get; set; } = 3;
+
+    /// <summary>
+    /// Rounds of Lloyd relaxation on the province seeds: move each to the middle of what it grew,
+    /// then grow everything again. This is what stops a province being squeezed to a waist between
+    /// two lopsided neighbours. Each round costs a whole repartition, which is the slowest step
+    /// here, so this is the setting to drop to 0 when previewing something else.
+    /// </summary>
+    [Category("03 Provinces")]
+    [Description("Rounds of Lloyd relaxation on the province seeds — move each seed to the middle of the province it grew, then grow them all again. Turns a voronoi diagram into a centroidal one, which is what stops provinces being squeezed to a waist between lopsided neighbours. Each round costs a full repartition, the slowest step in the tool.")]
+    public int ProvinceRelaxIterations { get; set; } = 1;
+
+    /// <summary>
     /// Share of land provinces declared impassable_mountains. Vanilla's ratio is 1,188 impassable
     /// against 11,301 baronied. Impassable provinces get no barony and no holder.
     /// </summary>
@@ -386,127 +438,113 @@ public sealed class MapConfig
 
     // --- Climate ---
     //
-    // The latitude bands below are a straight port of ck2rpg, and on their own they draw the
-    // climate as a horizontal stripe: a band edge is a single-valued function of x, so however much
-    // it is jittered per column it is still one continuous seam running the width of the map.
-    // ck2rpg's own jitter is a +/-1 random walk indexed by *simulation* column, which wanders
-    // slowly and only ever produces a gently wavy line.
+    // Climate is a physical model now, not a set of latitude bands: MapGen.ClimateModel advects
+    // moisture along the surface winds of a three-cell circulation and MapGen.Koppen classifies the
+    // temperature and rainfall that come out. The settings below are that model's parameters, and
+    // they are deliberately in real units - degrees Celsius, millimetres of rain, degrees of
+    // latitude - so they can be checked against a real climate atlas rather than tuned blind.
     //
-    // These two turn the edge into a contour of a 2D field instead, which is what gives it inlets,
-    // peninsulas and outliers. Both are in the same raster units as the band limits themselves —
-    // absolute, referenced to vanilla, not scaled to this map.
+    // What went: TropicalWidthScale, SubTropicalWidthScale, TemperateWidthScale, ClimateBandScale,
+    // ClimateWanderPixels and ClimateLapsePixels. All six described a band edge that was a function
+    // of y, which is exactly what made the old maps come out in stripes. ClimateBandScale in
+    // particular had a failure mode worth not repeating: the widths were authored in raster pixels
+    // against vanilla's 18432-wide map, so on any smaller map a single band could be wider than the
+    // whole map, and then no climate setting changed anything at all. MapLatitudeSpan has no such
+    // mode - a map is however much of a world its author says it is, at any resolution.
 
     /// <summary>
-    /// How far the climate boundary wanders from its latitude, in raster pixels. Warped fBm, so it
-    /// wanders at several scales at once rather than as one smooth sine.
+    /// How many degrees of latitude the map covers, top edge to bottom edge. With
+    /// <see cref="EquatorPosition"/> this is the entire mapping from pixels to latitude, and
+    /// therefore the only control over how many climate zones the map crosses.
     /// </summary>
     [Category("12 Climate")]
-    [Description("How far a climate boundary wanders from its latitude, in raster pixels. 0 restores ck2rpg's straight horizontal bands.")]
-    public double ClimateWanderPixels { get; set; } = 420;
+    [Description("How many degrees of latitude the map covers from top edge to bottom edge. With the equator position this is the whole mapping from pixels to latitude, so it decides how many climate zones the map crosses. 80 degrees with the equator near the bottom is roughly the sweep of vanilla's map.")]
+    public double MapLatitudeSpan { get; set; } = 80;
+
+    /// <summary>Annual mean temperature at sea level on the equator. Earth's is about 26.</summary>
+    [Category("12 Climate")]
+    [Description("Annual mean temperature at sea level on the equator, in Celsius. Earth's is about 26. Raising this and the pole figure together is how to make a hotter world.")]
+    public double EquatorTemperatureC { get; set; } = 26;
+
+    /// <summary>Annual mean temperature at sea level at the pole. Earth's northern one is about -20.</summary>
+    [Category("12 Climate")]
+    [Description("Annual mean temperature at sea level at the pole, in Celsius. Earth's northern one is about -20. Bringing it closer to the equator figure gives a flatter, more uniform world with far less tundra and taiga.")]
+    public double PoleTemperatureC { get; set; } = -20;
 
     /// <summary>
-    /// How much altitude counts as latitude, in raster pixels per full mountain height. Without it
-    /// a range crossing a band edge is simply cut in half by it, because ck2rpg's climate is a
-    /// function of y alone — the tropics run straight over a 4,000 m massif. With it the boundary
-    /// bends around terrain and high ground carries its own colder climate, which is both what real
-    /// climate does and what stops the band reading as a ruled line.
+    /// How far the warmest and coldest months sit either side of the annual mean at high latitude.
+    /// This decides where Koppen's C/D boundary falls, and therefore where oceanic forest gives way
+    /// to continental forest and taiga.
     /// </summary>
     [Category("12 Climate")]
-    [Description("How much altitude counts as latitude, in raster pixels per full mountain height. Makes high ground colder than the lowland at the same latitude, so climate boundaries bend around ranges instead of cutting through them.")]
-    public double ClimateLapsePixels { get; set; } = 900;
-
-    // Band widths, authored as widths rather than as edges. ck2rpg stores each band's inner and
-    // outer edge as a separate constant, which means any change has to update the neighbour too or
-    // the bands stop tiling and leave a gap that classifies as nothing. Scaling widths and
-    // accumulating them, as ResetClimateLimits does, cannot produce a gap.
-    //
-    // The base widths are ck2rpg's, at its 8192-wide authoring scale: tropical 1007, subtropical
-    // 513, temperate 1345, then cold to the pole.
+    [Description("How far apart the warmest and coldest months are at high latitude, in Celsius. Decides where temperate gives way to continental and taiga, because Koppen splits those on the coldest month rather than on the average.")]
+    public double SeasonalRangeC { get; set; } = 44;
 
     /// <summary>
-    /// Stretches every climate band at once. Above 1 the bands are wider, so a map of a given size
-    /// spans fewer of them; below 1 it crosses more of them over the same distance.
+    /// How far inland the sea keeps moderating the seasons, in vanilla province pixels. Inside it a
+    /// coast has mild winters; past it a continental interior swings freely.
     /// </summary>
     [Category("12 Climate")]
-    [Description("Stretches every climate band at once. Above 1 the bands are wider and the map spans fewer of them; below 1 it crosses more of them over the same distance.")]
-    public double ClimateBandScale { get; set; } = 1.0;
+    [Description("How far inland the sea goes on moderating the seasons, in vanilla province pixels. Inside it a coast has mild winters and cool summers; past it an interior swings freely. This is what separates an oceanic climate from a continental one at the same latitude.")]
+    public double ContinentalityPixels { get; set; } = 900;
 
-    /// <summary>Width of the tropical band, relative to ck2rpg's.</summary>
+    /// <summary>
+    /// Warmth and cold that latitude does not explain, in degrees. On Earth this is what ocean
+    /// currents do - Norway and Labrador share a latitude and not a climate. Without it every
+    /// isotherm on the map is a parallel.
+    /// </summary>
     [Category("12 Climate")]
-    [Description("Width of the tropical band, relative to ck2rpg's. Bands above it shift outward to keep tiling.")]
-    public double TropicalWidthScale { get; set; } = 1.0;
+    [Description("Warmth and cold that latitude cannot explain, in Celsius - what ocean currents do on Earth, where Norway and Labrador share a latitude and not a climate. 0 makes every isotherm a parallel, which is half of what makes a climate map look ruled.")]
+    public double TemperatureDriftC { get; set; } = 3;
 
-    /// <summary>Width of the subtropical band, relative to ck2rpg's.</summary>
+    /// <summary>
+    /// Height of the map's highest land in metres. A heightmap carries no absolute scale, so this is
+    /// what gives it one - and the lapse rate needs a real one or a mountain cannot be given a real
+    /// temperature.
+    /// </summary>
     [Category("12 Climate")]
-    [Description("Width of the subtropical band, relative to ck2rpg's. Bands above it shift outward to keep tiling.")]
-    public double SubTropicalWidthScale { get; set; } = 1.0;
+    [Description("Height of the map's highest land in metres. A heightmap carries no absolute scale and the lapse rate needs one, so this is what decides how cold the mountains are. 4500 makes the tallest peak roughly alpine.")]
+    public double PeakElevationMetres { get; set; } = 4500;
 
-    /// <summary>Width of the temperate band, relative to ck2rpg's. Cold is whatever is left.</summary>
+    /// <summary>
+    /// Yearly rainfall on the middle of the map's land, in millimetres. The model's own output has
+    /// no units, so this is what puts it on a scale Koppen's thresholds can be tested against.
+    /// Earth's land median is around 650. The median rather than the mean because rainfall is
+    /// heavily right-skewed and the mean sits far above ordinary ground.
+    /// </summary>
     [Category("12 Climate")]
-    [Description("Width of the temperate band, relative to ck2rpg's. Cold is simply everything beyond it, so widening this pushes the cold band toward the pole.")]
-    public double TemperateWidthScale { get; set; } = 1.0;
+    [Description("Yearly rainfall on the middle of the map's land, in millimetres - Earth's is around 650. The circulation model has no units of its own, so this is what puts it on a scale Koppen can test. It scales without flattening the spread, so a dry world stays dry relative to itself.")]
+    public double MedianRainfallMm { get; set; } = 650;
+
+    /// <summary>
+    /// Share of its remaining water an air parcel rains out per 100 vanilla province pixels of land
+    /// it crosses. The continental-interior dial: higher dries the far side of a landmass faster,
+    /// lower carries rain further inland.
+    /// </summary>
+    [Category("12 Climate")]
+    [Description("Share of its water an air parcel rains out per 100 vanilla province pixels of land it crosses. The continental-interior dial: higher leaves the far side of a landmass a desert, lower carries rain all the way across it.")]
+    public double RainoutPer100Pixels { get; set; } = 0.05;
+
+    /// <summary>
+    /// Extra rain a climbing air parcel drops per kilometre it is lifted. The rain shadow behind a
+    /// range exists without this - cooling alone squeezes the water out - but this sharpens the
+    /// contrast between the windward and leeward sides.
+    /// </summary>
+    [Category("12 Climate")]
+    [Description("Extra rain an air parcel drops per kilometre it is lifted over a range. A rain shadow forms without this, because cooling alone squeezes the water out, but raising it sharpens the contrast between a soaking windward slope and a desert behind it.")]
+    public double OrographicRainStrength { get; set; } = 0.8;
+
+    /// <summary>
+    /// How strongly the circulation's rising and sinking branches drive rainfall. This is what puts
+    /// the wet belt on the equator and the great deserts at 30 degrees; at 0 the subtropical deserts
+    /// largely disappear.
+    /// </summary>
+    [Category("12 Climate")]
+    [Description("How strongly the rising and sinking branches of the circulation drive rainfall. This is what puts the wet belt on the equator and the great deserts at 30 degrees; at 0 the subtropical deserts largely disappear.")]
+    public double ConvectiveRainStrength { get; set; } = 1.3;
 
     public Limits Limits { get; } = new();
 
-    /// <summary>
-    /// Places the climate bands, in raster pixels of distance from the equator.
-    ///
-    /// Edges are accumulated from widths, so the bands tile by construction however they are
-    /// scaled — there is no way to set a gap between two of them that would classify as nothing.
-    ///
-    /// The base scale is referenced to vanilla, not to this map. The widths are authored against an
-    /// 8192-wide raster, so this constant is what puts them where vanilla has them — and a smaller
-    /// map, being a smaller *region*, then spans fewer of them rather than compressing all of them
-    /// into its height. A `tiny` map sits within one or two bands, which is the point.
-    /// </summary>
-    public void ResetClimateLimits(Core.Rng rng)
-    {
-        double mod = ReferenceHeightmapWidth / 8192.0 * Math.Max(0.01, ClimateBandScale);
-
-        double tropical = TropicalBaseWidth * Math.Max(0, TropicalWidthScale) * mod;
-        double subTropical = tropical + SubTropicalBaseWidth * Math.Max(0, SubTropicalWidthScale) * mod;
-        double temperate = subTropical + TemperateBaseWidth * Math.Max(0, TemperateWidthScale) * mod;
-
-        Limits.Tropical.Upper = (int)Math.Floor(tropical);
-        Limits.SubTropical.Upper = (int)Math.Floor(subTropical);
-        Limits.Temperate.Upper = (int)Math.Floor(temperate);
-
-        // The far-polar cut-off, a fixed distance into the cold band rather than an absolute
-        // latitude, so it follows the bands instead of being overtaken by them.
-        Limits.Cold.Plains = (int)Math.Floor(temperate + PolarBaseDepth * mod);
-
-        ResetVaryRanges(rng);
-    }
-
-    // ck2rpg's own band widths, at its 8192-wide authoring scale.
-    private const double TropicalBaseWidth = 1007;
-    private const double SubTropicalBaseWidth = 513;
-    private const double TemperateBaseWidth = 1345;
-    private const double PolarBaseDepth = 435;
-
-    /// <summary>Port of resetVaryRanges() — per-column jitter so climate bands are not straight lines.</summary>
-    public void ResetVaryRanges(Core.Rng rng)
-    {
-        Limits.Tropical.VaryRange = CreateVaryRange(rng);
-        Limits.SubTropical.VaryRange = CreateVaryRange(rng);
-        Limits.Temperate.VaryRange = CreateVaryRange(rng);
-        Limits.Cold.VaryRange = CreateVaryRange(rng);
-    }
-
-    /// <summary>Port of createVaryRange() — a bounded random walk of length world.width.</summary>
-    private int[] CreateVaryRange(Core.Rng rng)
-    {
-        var arr = new int[WorldWidth];
-        int last = 0;
-        for (int i = 0; i < WorldWidth; i++)
-        {
-            last += rng.Int(-1, 1);
-            if (last > 15) last = 15;
-            if (last < -15) last = -15;
-            arr[i] = last;
-        }
-        return arr;
-    }
 }
 
 /// <summary>Port of the <c>limits</c> global.</summary>
@@ -520,33 +558,6 @@ public sealed class Limits
     /// <summary>Sea level. Note the comment in the JS: elevation is halved when written to the heightmap.</summary>
     public int SeaLevelUpper = 36;
 
-    // Placed by MapConfig.ResetClimateLimits; cold is simply everything past temperate.
-    public ClimateBand Tropical = new();
-    public ClimateBand SubTropical = new();
-    public ClimateBand Temperate = new();
-    public ClimateBand Cold = new();
-
     public readonly record struct Range(int Lower, int Upper);
     public readonly record struct MountainRange(int Lower, int Upper, int SnowLine);
 }
-
-/// <summary>
-/// A latitude band, as a distance-from-equator in raster pixels.
-///
-/// Only the outer edge is stored. The inner edge is the band below's outer edge by construction —
-/// <see cref="MapConfig.ResetClimateLimits"/> accumulates them — and <c>Biome.ZoneOf</c> tests them
-/// as an ordered cascade, so a band never needs to know where it starts.
-/// </summary>
-public sealed class ClimateBand
-{
-    /// <summary>Outer edge. Set by <see cref="MapConfig.ResetClimateLimits"/>.</summary>
-    public int Upper;
-
-    /// <summary>The far-polar cut-off. Only the cold band has one.</summary>
-    public int? Plains;
-
-    /// <summary>Per-column jitter of this band's outer edge, in simulation columns.</summary>
-    public int[] VaryRange = [];
-}
-
-

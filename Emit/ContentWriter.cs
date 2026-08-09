@@ -3,7 +3,6 @@ using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
-using Ck3MapGen.World;
 
 namespace Ck3MapGen.Emit;
 
@@ -14,20 +13,17 @@ namespace Ck3MapGen.Emit;
 /// </summary>
 public static class ContentWriter
 {
-    public static void WriteAll(string modDir, string gameDir, WorldGrid world, MapConfig cfg,
+    public static void WriteAll(string modDir, string gameDir, MapConfig cfg,
         ProvinceMap provinces, int[] order, int landCount, List<Title> empires,
-        float[] provinceElevation, Rng rng, bool writeHistory = true,
-        MapGen.TerrainData? terra = null)
+        float[] provinceElevation, TerrainClass[] terrain, Rng rng, bool writeHistory = true)
     {
         // Blanking runs FIRST so the generated files below always win: several of them share a
         // filename with a vanilla file they are replacing.
-        BlankVanillaData(modDir, gameDir);
+        Core.Stage.Time("blank vanilla data", () => BlankVanillaData(modDir, gameDir));
 
-        // Terrain is resolved per pixel, then provinces take a majority vote. Everything that
-        // paints the ground — the detail textures, the masks, the colormap and
-        // common/province_terrain — is derived from this one array, so none of them can disagree.
-        var landMask = LandMaskFromProvinces(cfg, provinces, order, landCount);
-        var terrain = TerrainClassifier.Classify(world, cfg, provinceElevation, landMask, rng);
+        // Terrain arrives already resolved per pixel; provinces take a majority vote of it here.
+        // Everything that paints the ground — the detail textures, the masks, the colormap and
+        // common/province_terrain — is derived from that one array, so none of them can disagree.
         var provinceTerrain = ProvinceTerrain(cfg, provinces, order, terrain, landCount);
         ReportTerrain(terrain);
 
@@ -93,24 +89,24 @@ public static class ContentWriter
 
         // Per-province map anchors. replace_path drops vanilla's, so these must be rebuilt or
         // the map has nowhere to put holdings, armies or sieges.
-        LocatorWriter.WriteAll(modDir, gameDir, provinces, order, landCount, provinceElevation, cfg);
+        Core.Stage.Time("locators", () => LocatorWriter.WriteAll(modDir, gameDir, provinces, order, landCount, provinceElevation, cfg));
 
         // The main menu renders live 3D portraits, which is the step right after history load.
         FrontendWriter.WriteFrontend(modDir, gameDir);
 
         // Without these, vanilla's terrain painting is stretched across our continents.
-        TerrainTextureWriter.WriteAll(modDir, cfg, terrain, provinceElevation, rng);
+        Core.Stage.Time("terrain textures", () => TerrainTextureWriter.WriteAll(modDir, cfg, terrain, provinceElevation, rng));
 
         // And the rest of the map-sized graphics — water, foam, snow — which are all still
         // painted for vanilla's geography until we replace them.
-        MapGraphicsWriter.WriteAll(modDir, gameDir, cfg, provinces, order, landCount);
+        Core.Stage.Time("map graphics", () => MapGraphicsWriter.WriteAll(modDir, gameDir, cfg, provinces, order, landCount));
 
         // Per-material coverage masks, read back out of the detail textures written just above so
         // the two are the same data. MUST run after TerrainTextureWriter.
-        TerrainMaskWriter.WriteAll(modDir, gameDir, cfg);
+        Core.Stage.Time("terrain masks", () => TerrainMaskWriter.WriteAll(modDir, gameDir, cfg));
 
         // Foliage. replace_path drops vanilla's, so without this the world has no trees at all.
-        TreeWriter.WriteAll(modDir, cfg, terrain, rng);
+        Core.Stage.Time("trees", () => TreeWriter.WriteAll(modDir, cfg, terrain, rng));
 
         // Give the world rulers and a start date. Skippable so a load failure can be bisected
         // into "map and titles" versus "characters, dynasties and the bookmark".
@@ -162,35 +158,6 @@ public static class ContentWriter
 
             sb.Append($"{pad}}}\n");
         }
-    }
-
-    /// <summary>
-    /// Land/water taken from the *province partition*, which is the only authority on it.
-    ///
-    /// <see cref="Raster.LandMask"/> is the mask that goes *into* the province build; the build
-    /// then flips small blobs to the opposite domain to keep every province above the minimum
-    /// pixel count (198 tiny islands drowned on seed 1). So that mask says "land" on pixels the
-    /// finished province map calls ocean. <c>ForceCoastlineToMatchProvinces</c> already reconciles
-    /// the heightmap against the provinces for exactly this reason; terrain classification was
-    /// still reading the stale mask, which painted land materials on drowned islands and — most
-    /// visibly — planted trees standing in open water.
-    /// </summary>
-    private static byte[] LandMaskFromProvinces(MapConfig cfg, ProvinceMap provinces,
-        int[] order, int landCount)
-    {
-        int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
-        var mask = new byte[width * height];
-
-        Parallel.For(0, height, y =>
-        {
-            for (int x = 0; x < width; x++)
-            {
-                int i = y * width + x;
-                mask[i] = order[provinces.Label[i]] <= landCount ? (byte)1 : (byte)0;
-            }
-        });
-
-        return mask;
     }
 
     /// <summary>Coverage per terrain class, as a share of land — the quickest read on whether a

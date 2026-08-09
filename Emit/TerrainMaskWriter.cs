@@ -71,7 +71,13 @@ public static class TerrainMaskWriter
                 carried++;
             }
 
-            foreach (string path in Directory.GetFiles(source, "*.png"))
+            // Parallel across *files*, not across rows within one.
+            //
+            // Most of the cost here is the PNG deflate, one per mask, and there are over a hundred
+            // masks — so parallelising the pixel loop inside each one left the compression running
+            // a hundred times in a row on a single thread. The files are independent and each
+            // allocates its own buffer, so this is the loop that wanted the threads.
+            Parallel.ForEach(Directory.GetFiles(source, "*.png"), path =>
             {
                 string file = Path.GetFileName(path);
                 string material = Path.GetFileNameWithoutExtension(path);
@@ -85,7 +91,7 @@ public static class TerrainMaskWriter
 
                     // The TGAs are stored bottom-up; the masks are top-down like every other PNG,
                     // so the row is flipped back on the way out.
-                    Parallel.For(0, height, y =>
+                    for (int y = 0; y < height; y++)
                     {
                         long srcRow = (long)(height - 1 - y) * width * 4;
                         long dstRow = (long)y * width;
@@ -103,13 +109,14 @@ public static class TerrainMaskWriter
 
                             coverage[dstRow + x] = weight;
                         }
-                    });
-                    painted++;
+                    }
+
+                    Interlocked.Increment(ref painted);
                 }
-                else blanked++;
+                else Interlocked.Increment(ref blanked);
 
                 PngWriter.WriteGray8(Path.Combine(destination, file), width, height, coverage);
-            }
+            });
         }
 
         Console.WriteLine($"  terrain masks: {painted} painted from the blend, {blanked} blanked " +

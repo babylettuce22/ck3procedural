@@ -38,17 +38,22 @@ public sealed class MainForm : Form
     private readonly ToolStripStatusLabel _status = new() { Text = "Ready" };
 
     /// <summary>
-    /// The last heightmap loaded from disk, kept so previewing a settings change does not re-read
-    /// and re-derive the image every time. Cleared whenever the chosen file changes.
+    /// The last heightmap decoded from disk, kept so previewing a settings change does not pay to
+    /// decode the image again. Only the decode is cached — see <see cref="MapGen.HeightmapImage"/>
+    /// for why nothing derived from it may be.
     /// </summary>
-    private MapGen.TerrainData? _loaded;
-    private string? _loadedFrom;
+    private MapGen.HeightmapImage? _loaded;
     private string? _heightmapPath;
     private bool _busy;
 
     public MainForm(GenerationOptions options)
     {
         _options = options;
+
+        // A heightmap named on the command line is still the chosen one when the window opens.
+        // Without this, `--heightmap x.png --gui` came up with both buttons greyed out and no
+        // indication why.
+        _heightmapPath = options.HeightmapPath;
 
         Text = "CK3 Procedural Map";
         Width = 1500;
@@ -115,7 +120,7 @@ public sealed class MainForm : Form
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
         _heightmapPath = dialog.FileName;
-        if (_heightmapPath != _loadedFrom) { _loaded = null; _loadedFrom = null; }
+        _options.HeightmapPath = _heightmapPath;
         ApplySource();
     }
 
@@ -131,13 +136,18 @@ public sealed class MainForm : Form
     }
 
     /// <summary>
-    /// Derives everything the mod is made of — moisture, the land mask, provinces, the terrain
-    /// classification, cultures, faiths and titles — and optionally writes it out.
+    /// Derives everything the mod is made of — the drainage network, the land mask, provinces, the
+    /// climate, cultures, faiths and titles — and optionally writes it out.
     ///
-    /// The heightmap is read once and cached, so tuning a setting and previewing again pays only
-    /// for the deriving. That is what makes the preview worth using: none of these settings change
-    /// the heightmap, so re-reading and re-draining the image every time would be paying the slow
-    /// cost to look at the fast one.
+    /// Only the image *decode* is reused between runs, and only while the file on disk is byte-for-
+    /// byte the one that was decoded. Everything downstream is rebuilt from scratch every time.
+    ///
+    /// That is narrower than it used to be, and deliberately. The cache used to hold the whole
+    /// <see cref="MapGen.TerrainData"/> and key it on the file path alone, which produced two
+    /// silent failures: re-exporting a heightmap over the same path left the old one on screen, and
+    /// every river and lake setting appeared to do nothing at all, because those are consumed while
+    /// deriving TerrainData and the cache never let that run again. A cache that can make a setting
+    /// do nothing is worse than no cache; this one can only ever save the decode.
     /// </summary>
     private async Task BuildAsync(string? modDir)
     {
@@ -147,13 +157,13 @@ public sealed class MainForm : Form
             {
                 var cfg = _options.Config;
 
-                if (_loaded is null || _loadedFrom != _heightmapPath)
-                {
-                    _loaded = MapGen.HeightmapSource.Load(_heightmapPath!, cfg, new Rng(cfg.Seed));
-                    _loadedFrom = _heightmapPath;
-                }
+                if (_loaded is null || !_loaded.StillStandsFor(_heightmapPath!))
+                    _loaded = MapGen.HeightmapSource.Read(_heightmapPath!, cfg);
+                else
+                    MapGen.HeightmapSource.Apply(_loaded, cfg);
 
-                var r = Generator.FromTerrain(_loaded, cfg);
+                var terra = MapGen.TerrainData.FromElevation(_loaded.Elevation, cfg, new Rng(cfg.Seed));
+                var r = Generator.FromTerrain(terra, cfg);
                 if (modDir is not null) Generator.WriteMod(r, _options, modDir);
                 return r;
             });

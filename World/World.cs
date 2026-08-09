@@ -189,11 +189,9 @@ public sealed class WorldGrid
     public static WorldGrid CreateBlank(MapConfig config, Rng rng)
     {
         var world = new WorldGrid(config.WorldWidth, config.WorldHeight);
-        config.ResetClimateLimits(rng);
         world.SetGeographicalPoints();
         for (int i = 0; i < world.Count; i++)
             world.Elevation[i] = rng.Int(-254, -200);
-        config.ResetVaryRanges(rng);
         return world;
     }
 }

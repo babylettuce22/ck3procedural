@@ -89,9 +89,11 @@ public static class Program
             return 1;
         }
 
+        Core.Stage.Begin();
         var result = Generator.Generate(options);
         if (modDir is not null) Generator.WriteMod(result, options, modDir);
-        Generator.WriteDebugImages(result, outDir, scale);
+        Core.Stage.Time("debug images", () => Generator.WriteDebugImages(result, outDir, scale));
+        Core.Stage.Report();
         return 0;
     }
 }

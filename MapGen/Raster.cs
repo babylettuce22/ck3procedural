@@ -17,17 +17,52 @@ public static class Raster
     private static int Wrap(int v, int n) => ((v % n) + n) % n;
 
     /// <summary>
-    /// Land/sea mask at raster resolution, from the same sea-level threshold the simulation
-    /// uses. 1 = land.
+    /// Land/sea mask at province resolution, decided on the heightmap CK3 actually renders. 1 = land.
+    ///
+    /// Takes the *full* heightmap and applies the sea-level threshold there, then lets the four
+    /// heightmap pixels behind each province pixel vote. It used to threshold the province-resolution
+    /// copy instead, which is a 2x2 box average — and averaging before thresholding is not the same
+    /// test, nor a symmetric one. The sea floor sits hundreds of units below the water plane while a
+    /// coastal field sits a handful of units above it, so a block that is three-quarters dry land
+    /// still averages out well under sea level. Averaging first therefore eats the coast: every
+    /// shoreline creeps inland, headlands and spits vanish entirely, and the province map's
+    /// coastline stops agreeing with the one the player can see.
+    ///
+    /// A tie goes to land, which keeps a one-pixel sandbar rather than quietly deleting it.
     /// </summary>
     public static byte[] LandMask(float[] elevation, MapConfig cfg)
     {
         int sea = cfg.Limits.SeaLevelUpper;
-        var mask = new byte[elevation.Length];
-        for (int i = 0; i < elevation.Length; i++)
-            mask[i] = elevation[i] > sea ? (byte)1 : (byte)0;
+        int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
+        int scaleX = cfg.Width / width, scaleY = cfg.Height / height;
+        var mask = new byte[width * height];
 
-        ForceOceanBorder(mask, cfg.ProvinceWidth, cfg.ProvinceHeight, cfg.OceanBorder);
+        Parallel.For(0, height, y =>
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int dry = 0;
+                for (int j = 0; j < scaleY; j++)
+                {
+                    long row = (long)(y * scaleY + j) * cfg.Width + x * scaleX;
+                    for (int i = 0; i < scaleX; i++)
+                        if (elevation[row + i] > sea) dry++;
+                }
+
+                mask[y * width + x] = dry * 2 >= scaleX * scaleY ? (byte)1 : (byte)0;
+            }
+        });
+
+        ForceOceanBorder(mask, width, height, cfg.OceanBorder);
+
+        long land = 0;
+        foreach (byte m in mask) land += m;
+
+        // Read against the full-resolution share HeightmapSource prints: the two are the same
+        // coastline sampled twice, so they should agree to a fraction of a percent. They did not
+        // when this averaged first.
+        Console.WriteLine($"  province raster: {100.0 * land / mask.Length:F1}% land");
+
         return mask;
     }
 

@@ -1,7 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <!-- WinExe, not Exe: the GUI is the primary front end and a console window flashing up behind
+         it is noise. Output still reaches a terminal that launched it, because a Windows GUI
+         process inherits the parent's stdout handle, so driving the CLI through dotnet run prints
+         exactly as before. -->
+    <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>

@@ -22,6 +22,38 @@ namespace Ck3MapGen.MapGen;
 /// reading has no such constraint, and hand-rolling an inflate to avoid a dependency already in
 /// the project would be its own bug surface.
 /// </summary>
+/// <summary>
+/// A decoded heightmap, and nothing derived from one.
+///
+/// This is deliberately the *only* thing worth caching between runs, because it is the only thing
+/// that is a pure function of the file. Everything else the image leads to — the drainage network,
+/// river courses, lakes — depends on settings the user is in the middle of tuning, so caching any
+/// of it means a setting that silently does nothing.
+///
+/// The file's timestamp and length are kept so a heightmap re-exported over the same path is seen
+/// as a different image. Keying on the path alone is what makes "I regenerated my heightmap and the
+/// preview did not change" happen, and it is the sort of bug that reads as the whole tool being
+/// broken.
+/// </summary>
+public sealed class HeightmapImage
+{
+    public required string Path { get; init; }
+    public required DateTime Written { get; init; }
+    public required long Length { get; init; }
+    public required int Width { get; init; }
+    public required int Height { get; init; }
+    public required float[] Elevation { get; init; }
+
+    /// <summary>Whether this decode still stands for what is on disk at <paramref name="path"/>.</summary>
+    public bool StillStandsFor(string path)
+    {
+        if (!string.Equals(Path, path, StringComparison.OrdinalIgnoreCase)) return false;
+
+        var info = new FileInfo(path);
+        return info.Exists && info.LastWriteTimeUtc == Written && info.Length == Length;
+    }
+}
+
 public static class HeightmapSource
 {
     /// <summary>
@@ -31,15 +63,23 @@ public static class HeightmapSource
     private const int CoarseGridDivisor = 16;
 
     /// <summary>
-    /// Loads a heightmap and derives everything from it.
+    /// Loads a heightmap and derives everything from it. The one-shot path, for the CLI.
+    /// </summary>
+    public static TerrainData Load(string path, MapConfig cfg, Rng rng)
+        => TerrainData.FromElevation(Read(path, cfg).Elevation, cfg, rng);
+
+    /// <summary>
+    /// Decodes the image and puts its dimensions on the config. No setting is consulted, so the
+    /// result can be held across runs.
     ///
     /// The image is authoritative about map size: <paramref name="cfg"/>'s Width and Height are set
     /// from it, because provinces.png, rivers.png and every terrain texture are sized off those and
     /// a mismatch is a silent CK3 failure. Dimensions must be even, since the province map is
     /// exactly half the heightmap.
     /// </summary>
-    public static TerrainData Load(string path, MapConfig cfg, Rng rng)
+    public static HeightmapImage Read(string path, MapConfig cfg)
     {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         using var image = SharpImage.Load<L16>(path);
 
         if (image.Width % 2 != 0 || image.Height % 2 != 0)
@@ -47,25 +87,44 @@ public static class HeightmapSource
                 $"Heightmap is {image.Width}x{image.Height}; both dimensions must be even because " +
                 "provinces.png and rivers.png are exactly half the heightmap's resolution.");
 
+        var info = new FileInfo(path);
+        var loaded = new HeightmapImage
+        {
+            Path = path,
+            Written = info.LastWriteTimeUtc,
+            Length = info.Length,
+            Width = image.Width,
+            Height = image.Height,
+            Elevation = ToSimulationScale(image, image.Width, image.Height, cfg),
+        };
+
+        Apply(loaded, cfg);
+        Report(loaded.Elevation, cfg);
+        Console.WriteLine($"  decoded in {sw.ElapsedMilliseconds} ms");
+        return loaded;
+    }
+
+    /// <summary>
+    /// Puts a decoded image's dimensions back on the config. Idempotent, and cheap enough to call on
+    /// every run — which is the point: a cached image must still be able to size the config, because
+    /// nothing downstream works if Width and Height disagree with the raster.
+    /// </summary>
+    public static void Apply(HeightmapImage image, MapConfig cfg)
+    {
         cfg.Width = image.Width;
         cfg.Height = image.Height;
 
         // The coarse climate grid follows the image too. It used to come from a size preset, which
         // no longer exists now that the image is the only source of truth about size — and a fixed
-        // coarse grid against a variable heightmap would mean climate bands sampled at a different
-        // resolution on every map. Clamped at the top because the grid is a summary: past about a
-        // thousand cells across it stops being cheaper than the field it summarises.
+        // coarse grid against a variable heightmap would mean the landmass summary sampled at a
+        // different resolution on every map. Clamped at the top because the grid is a summary: past
+        // about a thousand cells across it stops being cheaper than the field it summarises.
         cfg.WorldWidth = Math.Clamp(cfg.Width / CoarseGridDivisor, 128, 1024);
         cfg.WorldHeight = Math.Max(64, cfg.WorldWidth / 2);
 
-        Console.WriteLine($"Heightmap loaded from {path}: {cfg.Width}x{cfg.Height}, " +
+        Console.WriteLine($"Heightmap {Path.GetFileName(image.Path)}: {cfg.Width}x{cfg.Height}, " +
                           $"provinces {cfg.ProvinceWidth}x{cfg.ProvinceHeight}, " +
                           $"climate grid {cfg.WorldWidth}x{cfg.WorldHeight}");
-
-        var elevation = ToSimulationScale(image, cfg);
-        Report(elevation, cfg);
-
-        return TerrainData.FromElevation(elevation, cfg, rng);
     }
 
     /// <summary>
@@ -80,9 +139,9 @@ public static class HeightmapSource
     /// is monotonic). Set <c>MatchVanillaHypsometry</c> false to keep an imported map's own
     /// height distribution.
     /// </summary>
-    private static float[] ToSimulationScale(SixLabors.ImageSharp.Image<L16> image, MapConfig cfg)
+    private static float[] ToSimulationScale(SixLabors.ImageSharp.Image<L16> image,
+        int width, int height, MapConfig cfg)
     {
-        int width = cfg.Width, height = cfg.Height;
         var elevation = new float[(long)width * height];
 
         float sea = cfg.Limits.SeaLevelUpper;
