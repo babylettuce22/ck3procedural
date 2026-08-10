@@ -47,6 +47,65 @@ public sealed class MapConfig
     [Description("Catchment, in province cells, above which a watercourse is drawn as a river. Absolute rather than a share of the map, so the same stream is a river on any size map.")]
     public double RiverMinCatchmentCells { get; set; } = 900;
 
+    /// <summary>
+    /// How readily a watercourse is drawn at all, as a multiplier on every catchment gate. Higher
+    /// puts more rivers on the map.
+    ///
+    /// Calibrated against vanilla, which draws river on **0.671%** of its province raster. At 1.0
+    /// with the default catchment we were drawing 2.289% — three and a half times too much, and
+    /// the reason a generated map read as scribbled rather than drained.
+    /// </summary>
+    [Category("10 Rivers and lakes")]
+    [Description("How readily a watercourse is drawn as a river, as a multiplier on every catchment gate. 1 is calibrated against vanilla, which carries river on 0.671% of its province map. Raise it for a wetter-looking world, lower it for a drier one.")]
+    public double RiverPropensity { get; set; } = 1.0;
+
+    /// <summary>
+    /// Catchment above which a river is navigable — a water body of its own rather than something
+    /// painted on the land. See <see cref="MapGen.RiverCarver"/>.
+    /// </summary>
+    [Category("10 Rivers and lakes")]
+    [Description("Catchment, in province cells, above which a river becomes navigable: carved below the waterline, given its own provinces, and declared in default.map as river_provinces. Vanilla has 224 of them covering 0.25% of its province map.")]
+    public double NavigableMinCatchmentCells { get; set; } = 26000;
+
+    /// <summary>
+    /// How high above sea level a river bed may sit and still be navigable. The second of the two
+    /// gates, and it is not optional — see <see cref="MapGen.RiverCarver"/>. Discharge alone runs a
+    /// sea-level canal up a mountain gorge.
+    /// </summary>
+    [Category("10 Rivers and lakes")]
+    [Description("How far above sea level a river bed may sit and still count as navigable. Together with the catchment gate this is what keeps a big mountain river from being flooded into a canal up a gorge.")]
+    public double NavigableMaxHeightAboveSea { get; set; } = 12;
+
+    /// <summary>
+    /// How far below sea level a navigable river's bed is cut. Vanilla's river provinces sit in a
+    /// narrow band just under the waterline rather than at the sea floor.
+    /// </summary>
+    [Category("10 Rivers and lakes")]
+    [Description("How far below sea level a navigable river's bed is cut. Vanilla's sit just under the waterline in a narrow band, not down at the sea floor.")]
+    public float NavigableBedBelowSea { get; set; } = 6;
+
+    /// <summary>Half-width of a navigable river's channel, in vanilla province pixels. Vanilla's
+    /// river provinces average 5.4 px across.</summary>
+    [Category("10 Rivers and lakes")]
+    [Description("Half-width of a navigable river's carved channel, in vanilla province pixels. Vanilla's river provinces run about 5.4 px wide.")]
+    public double NavigableWidthAtVanilla { get; set; } = 2.6;
+
+    /// <summary>
+    /// How deep an ordinary drawn river is notched into the ground it crosses.
+    ///
+    /// Vanilla notches its drawn streams a median of 65/65535 below their dry surroundings, 85% of
+    /// them. Tiny, but it is the difference between a ribbon lying in a groove and one painted
+    /// across a slope — and painted across a slope is what made rivers look half-buried in game.
+    /// </summary>
+    [Category("10 Rivers and lakes")]
+    [Description("How deep an ordinary river is notched into the ground it crosses, so the drawn ribbon has a groove to lie in instead of cutting through a hillside. Vanilla's measured notch is 65/65535.")]
+    public float RiverNotchDepth { get; set; } = 65;
+
+    /// <summary>Half-width of that notch, in vanilla province pixels.</summary>
+    [Category("10 Rivers and lakes")]
+    [Description("Half-width of an ordinary river's notch, in vanilla province pixels.")]
+    public double RiverNotchWidthAtVanilla { get; set; } = 2.0;
+
     // River geometry is authored in vanilla province pixels and scaled by MapScale, so a river is
     // the same fraction of a continent at every map size rather than nine times wider at `tiny`.
 
