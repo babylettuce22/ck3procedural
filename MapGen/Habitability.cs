@@ -21,15 +21,15 @@ namespace Ck3MapGen.MapGen;
 ///     valley is narrow, which is the point of it.
 ///   * <b>Slope.</b> Flat ground is farmed and steep ground is not. This is also what keeps a
 ///     mountain range from filling with tiny provinces just because it is near a coast.
-///   * <b>Latitude.</b> Warm and wet near the equator, dead at the poles, and dry in the belt
-///     around 25 degrees where the Hadley cells come back down — which is where every one of
-///     Earth's great deserts is, and the single cheapest way to get a plausible desert.
+///   * <b>Climate.</b> Rainfall and mean temperature, straight off the circulation model. Dry
+///     ground and cold ground both go empty, and the two multiply: a cold desert is not the sum of
+///     two problems but the product of them.
 ///
-/// Deliberately *not* the climate model, though it would be better. Climate is classified after the
-/// partition, because it needs the province land mask, so using it here would mean reordering the
-/// pipeline around a field that only sets province sizes. Latitude plus elevation plus distance to
-/// water is the same shape of answer for none of that cost — the climate model's own aridity is
-/// mostly a latitude effect too.
+/// The climate terms read the model's *continuous* fields rather than the Koppen class, on purpose.
+/// Koppen is a set of thresholds, so classifying first and weighting after would put a step in
+/// province size wherever a class boundary falls — the map would grow visible seams along the
+/// BSh/BWh line that no amount of noise would hide. The fields the classes are cut from have no
+/// such edges.
 /// </summary>
 public static class Habitability
 {
@@ -46,20 +46,29 @@ public static class Habitability
     private const double CoastWeight = 0.35;
     private const double FreshwaterWeight = 0.30;
 
-    /// <summary>Latitude of the dry belt, in degrees either side of the equator. Earth's deserts
-    /// sit here because this is where the Hadley circulation descends.</summary>
-    private const double DesertLatitude = 25;
+    /// <summary>
+    /// Rainfall at which the moisture term reaches 1-1/e, i.e. most of the way. Saturating rather
+    /// than linear because the step from 200 mm to 500 mm is the difference between steppe and
+    /// farmland, while the step from 1200 mm to 1500 mm is the difference between two kinds of
+    /// good farmland and settles nobody extra.
+    /// </summary>
+    private const double MoistureScaleMm = 500;
 
-    /// <summary>How wide that belt is, in degrees.</summary>
-    private const double DesertWidth = 12;
+    /// <summary>What is left of habitability on ground that gets no rain at all. Not zero: an oasis
+    /// belt is thin, not empty, and a zero here would make the Sahara one province.</summary>
+    private const double DesertFloor = 0.10;
 
-    /// <summary>What is left of habitability in the middle of the dry belt.</summary>
-    private const double DesertFloor = 0.30;
+    /// <summary>Mean annual temperature over which the cold term climbs from nothing to full. Below
+    /// the first figure is permafrost.</summary>
+    private const double ColdDeadC = -8;
+    private const double ColdFullC = 6;
+    private const double PolarFloor = 0.08;
 
-    /// <summary>Latitude past which nothing much lives, and where the falloff starts.</summary>
-    private const double PolarLatitude = 72;
-    private const double TemperateLatitude = 45;
-    private const double PolarFloor = 0.12;
+    /// <summary>Where heat starts to cost something on its own, in mean annual degrees, and what is
+    /// left at the top. Mild, because in practice hot ground is punished through rainfall.</summary>
+    private const double HotStartC = 25;
+    private const double HotEndC = 33;
+    private const double HotFloor = 0.75;
 
     /// <summary>Rise over run, in elevation units per pixel, at which ground is written off as
     /// unfarmable. Measured against the partition's own elevation field.</summary>
@@ -72,7 +81,7 @@ public static class Habitability
     /// never falls off a cliff.
     /// </summary>
     public static float[] Build(byte[] mask, float[] elevation, byte[] rivers, byte[] lakes,
-        int width, int height, MapConfig cfg)
+        ClimateField climate, int width, int height, MapConfig cfg)
     {
         double coastRange = Math.Max(1, cfg.Scaled(CoastRangeAtVanilla));
         double freshRange = Math.Max(1, cfg.Scaled(FreshwaterRangeAtVanilla));
@@ -81,16 +90,10 @@ public static class Habitability
         var toFresh = DistanceTo(width, height,
             cell => rivers[cell] != 0 || lakes[cell] != 0 || mask[cell] != 1);
 
-        double span = Math.Clamp(cfg.MapLatitudeSpan, 1, 180);
-        double equatorRow = Math.Clamp(cfg.EquatorPosition, 0, 1) * height;
-
         var field = new float[width * height];
 
         Parallel.For(0, height, y =>
         {
-            double latitude = Math.Abs((equatorRow - (y + 0.5)) / height * span);
-            double climate = Climate(latitude);
-
             for (int x = 0; x < width; x++)
             {
                 int cell = y * width + x;
@@ -98,8 +101,9 @@ public static class Habitability
                 double coast = CoastWeight * Falloff(toSea[cell], coastRange);
                 double fresh = FreshwaterWeight * Falloff(toFresh[cell], freshRange);
                 double slope = Slope(elevation, mask, width, height, x, y);
+                double weather = Weather(climate.AnnualMm[cell], climate.MeanC[cell]);
 
-                field[cell] = (float)Math.Clamp((BaseFertility + coast + fresh) * climate * slope,
+                field[cell] = (float)Math.Clamp((BaseFertility + coast + fresh) * weather * slope,
                     0.01, 1.0);
             }
         });
@@ -113,21 +117,26 @@ public static class Habitability
         => Math.Exp(-distance / range);
 
     /// <summary>
-    /// The latitude term: a wet tropical belt, a dry belt over the descending branch of the Hadley
-    /// cells, a temperate optimum, then a slide into the polar dead zone.
+    /// What the climate is worth: rainfall and warmth multiplied, not added.
+    ///
+    /// Multiplied because they are not independent problems a place can trade off. Rain on frozen
+    /// ground grows nothing and heat without rain grows nothing, so either one at zero should take
+    /// the whole term with it — which addition would not do, and which is the difference between
+    /// Siberia reading as half-habitable and reading as empty.
+    ///
+    /// The dry belt the old latitude term faked is now wherever the circulation model actually put
+    /// it, which is the point of the reorder: a desert lands in the rain shadow and on the
+    /// descending branch, not on a parallel.
     /// </summary>
-    private static double Climate(double latitude)
+    private static double Weather(double annualMm, double meanC)
     {
-        // Dry belt, as a notch rather than a step so its edges are not lines on the map.
-        double fromDesert = Math.Abs(latitude - DesertLatitude) / DesertWidth;
-        double desert = 1 - (1 - DesertFloor) * Math.Exp(-fromDesert * fromDesert);
+        double moisture = DesertFloor
+            + (1 - DesertFloor) * (1 - Math.Exp(-Math.Max(0, annualMm) / MoistureScaleMm));
 
-        // Cold. Nothing below the temperate line, then a smooth fall to the polar floor.
-        double cold = latitude <= TemperateLatitude
-            ? 1
-            : 1 - (1 - PolarFloor) * Field.SmoothStep(TemperateLatitude, PolarLatitude, latitude);
+        double cold = PolarFloor + (1 - PolarFloor) * Field.SmoothStep(ColdDeadC, ColdFullC, meanC);
+        double heat = 1 - (1 - HotFloor) * Field.SmoothStep(HotStartC, HotEndC, meanC);
 
-        return desert * cold;
+        return moisture * cold * heat;
     }
 
     /// <summary>

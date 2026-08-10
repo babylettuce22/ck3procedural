@@ -59,7 +59,7 @@ public sealed class ProvinceSizeField
             (float)x / CellPixels - 0.5f, (float)y / CellPixels - 0.5f);
 
     public static ProvinceSizeField Build(byte[] mask, float[] elevation, byte[] rivers,
-        byte[] lakes, int width, int height, MapConfig cfg, Rng rng)
+        byte[] lakes, ClimateField climate, int width, int height, MapConfig cfg, Rng rng)
     {
         int cw = Math.Max(2, width / CellPixels), ch = Math.Max(2, height / CellPixels);
         double variance = Math.Max(1.0, cfg.ProvinceSizeVariance);
@@ -86,7 +86,7 @@ public sealed class ProvinceSizeField
         double weight = Math.Clamp(cfg.HabitabilitySizeWeight, 0, 1);
         var settled = weight <= 0 ? null
             : Field.Downsample(
-                Habitability.Build(mask, elevation, rivers, lakes, width, height, cfg),
+                Habitability.Build(mask, elevation, rivers, lakes, climate, width, height, cfg),
                 width, height, CellPixels);
 
         // Which cells are land, and so which get to set the ends of every scale below. Doing it

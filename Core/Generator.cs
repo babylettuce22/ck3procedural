@@ -108,19 +108,30 @@ public static class Generator
         // From the full heightmap, not from provinceElevation: the coastline has to be the one the
         // renderer draws, and a 2x2 average of it is not that coastline. See Raster.LandMask.
         var landMask = Stage.Time("land mask", () => Raster.LandMask(terra.Elevation, cfg));
+
+        // Ahead of the partition, because province size follows how closely a place could be
+        // settled and that is a question about rainfall and temperature. Safe to run here on
+        // landMask rather than on the partition's own mask: the partition cannot move a pixel
+        // between land and sea — the Dijkstra front carries a hard land/sea barrier and every pass
+        // after it checks IsLand before reassigning — so the two masks are identical. Measured at
+        // 0 differing pixels of 524,288, and it is structural rather than luck.
+        var climate = Stage.Time("climate",
+            () => MapGen.ClimateModel.Build(cfg, provinceElevation, landMask,
+                new Rng(cfg.Seed ^ 0x0C11)));
+
         var provinces = Stage.Time("province partition",
             () => Provinces.Build(landMask, provinceElevation, terra.RiverMask, terra.LakeMask,
-                cfg.ProvinceWidth, cfg.ProvinceHeight, cfg, rng));
+                climate, cfg.ProvinceWidth, cfg.ProvinceHeight, cfg, rng));
         Console.WriteLine($"  {provinces.Count} provinces total");
 
         var provinceLandMask = ProvinceLandMask(cfg, provinces);
 
-        // Its own seed rather than whatever state the shared Rng happens to be in. The noise fields
-        // the classifier lays down should not depend on how many random numbers the steps before it
-        // happened to draw, which is what made moving this call change the map.
-        var terrain = Stage.Time("climate and terrain classification",
+        // Its own seed, and no longer the climate's. The noise fields the classifier lays down
+        // should not depend on how many random numbers the steps before it happened to draw — which
+        // they did, silently, while the climate model was drawing from this same generator.
+        var terrain = Stage.Time("terrain classification",
             () => MapGen.TerrainClassifier.Classify(cfg, provinceElevation, provinceLandMask,
-                new Rng(cfg.Seed ^ 0x0C11)));
+                climate, new Rng(cfg.Seed ^ 0x7E44)));
 
         return new GenerationResult
         {

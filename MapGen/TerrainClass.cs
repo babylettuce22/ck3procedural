@@ -97,12 +97,19 @@ public static class TerrainClassifier
     /// </summary>
     private const double WetlandShareOfLand = 0.75;
 
-    public static Result Classify(MapConfig cfg, float[] elevation, byte[] landMask, Rng rng)
+    /// <summary>
+    /// Paints terrain from an already-built climate.
+    ///
+    /// The climate is passed in rather than built here because the province partition needs it too
+    /// — province size follows habitability, which follows rainfall and temperature — and it now
+    /// runs first. Building it in both places would be the "derived twice in two places" mistake
+    /// the rest of this pipeline is careful to avoid.
+    /// </summary>
+    public static Result Classify(MapConfig cfg, float[] elevation, byte[] landMask,
+        ClimateField climate, Rng rng)
     {
         int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
         int sea = cfg.Limits.SeaLevelUpper;
-
-        var climate = ClimateModel.Build(cfg, elevation, landMask, rng);
 
         // Thresholds derived from this map's own distributions.
         float hills = LandPercentile(elevation, landMask, 1.0 - HillShareOfLand);
