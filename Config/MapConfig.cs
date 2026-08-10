@@ -111,6 +111,12 @@ public sealed class MapConfig
 
     // --- Province map. CK3's provinces.png and rivers.png are half the heightmap resolution
     // (vanilla: heightmap 18432x9216, provinces 9216x4608). ---
+    //
+    // UNDER INVESTIGATION: the provinces in game do not line up with the ones we paint, and there
+    // look to be fewer of them in game than the raster has. Ocean, mountain and impassable
+    // provinces do land correctly, which points at something that eats the small ones rather than
+    // at a wholesale coordinate shift — but the half-resolution assumption above is the other
+    // candidate and is the reason for this note.
     public int ProvinceWidth => Width / 2;
     public int ProvinceHeight => Height / 2;
 
@@ -495,7 +501,7 @@ public sealed class MapConfig
     /// </summary>
     [Category("12 Climate")]
     [Description("Warmth and cold that latitude cannot explain, in Celsius - what ocean currents do on Earth, where Norway and Labrador share a latitude and not a climate. 0 makes every isotherm a parallel, which is half of what makes a climate map look ruled.")]
-    public double TemperatureDriftC { get; set; } = 3;
+    public double TemperatureDriftC { get; set; } = 2;
 
     /// <summary>
     /// Height of the map's highest land in metres. A heightmap carries no absolute scale, so this is
@@ -504,7 +510,7 @@ public sealed class MapConfig
     /// </summary>
     [Category("12 Climate")]
     [Description("Height of the map's highest land in metres. A heightmap carries no absolute scale and the lapse rate needs one, so this is what decides how cold the mountains are. 4500 makes the tallest peak roughly alpine.")]
-    public double PeakElevationMetres { get; set; } = 4500;
+    public double PeakElevationMetres { get; set; } = 4000;
 
     /// <summary>
     /// Yearly rainfall on the middle of the map's land, in millimetres. The model's own output has
@@ -514,7 +520,7 @@ public sealed class MapConfig
     /// </summary>
     [Category("12 Climate")]
     [Description("Yearly rainfall on the middle of the map's land, in millimetres - Earth's is around 650. The circulation model has no units of its own, so this is what puts it on a scale Koppen can test. It scales without flattening the spread, so a dry world stays dry relative to itself.")]
-    public double MedianRainfallMm { get; set; } = 650;
+    public double MedianRainfallMm { get; set; } = 1450;
 
     /// <summary>
     /// Share of its remaining water an air parcel rains out per 100 vanilla province pixels of land

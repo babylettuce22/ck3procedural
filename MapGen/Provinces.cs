@@ -73,6 +73,7 @@ public static class Provinces
         Core.Stage.Detail("  · lloyd relaxation",
             () => Relax(map, mask, cost, cfg, component, componentCount));
         Core.Stage.Detail("  · border smoothing", () => SmoothBorders(map, cfg));
+        Core.Stage.Detail("  · sever waists", () => SeverWaists(map));
         Core.Stage.Detail("  · reconnect fragments", () => ReconnectFragments(map));
         Core.Stage.Detail("  · dissolve tiny", () => DissolveTinyProvinces(map, mask, cfg));
         Core.Stage.Detail("  · impassable", () => { MarkImpassable(map, elevation, mask, cfg); MergeImpassableRanges(map, cfg); });
@@ -253,6 +254,80 @@ public static class Provinces
 
         Console.WriteLine($"  relaxed {iterations}x: seeds moved {moved:F1} px on the last pass " +
                           $"({sw.ElapsedMilliseconds} ms)");
+    }
+
+    /// <summary>
+    /// Cuts the one- and two-pixel waists that border smoothing narrowed but could not close.
+    ///
+    /// SmoothBorders will not take a pixel whose removal would disconnect what is left of its
+    /// province, which is exactly the pixel holding a waist together: it thins a dumbbell down to
+    /// its bar and then protects the bar. Severing it hands the far lobe to ReconnectFragments,
+    /// which absorbs a fragment into whichever neighbour it borders most — so this runs before it.
+    /// </summary>
+    private static void SeverWaists(ProvinceMap map)
+    {
+        int width = map.Width, height = map.Height;
+        var source = map.Label;
+        var next = (int[])source.Clone();
+        int severed = 0;
+
+        // Hoisted out of the loop: a stackalloc inside one grows the frame on every iteration.
+        Span<int> neighborCounts = stackalloc int[9];
+        Span<int> neighborLabels = stackalloc int[9];
+
+        for (int y = 1; y < height - 1; y++)
+        {
+            for (int x = 1; x < width - 1; x++)
+            {
+                int cell = y * width + x;
+                int label = source[cell];
+
+                // On a border and *not* safe to give away is the signature: the only pixel whose
+                // removal splits its own province is one the province is hanging together by.
+                if (!OnBorder(source, width, height, x, y, label)) continue;
+                if (SafeToGiveAway(source, width, height, x, y, label)) continue;
+
+                int foreign = 0;
+                int bestNeighbor = -1;
+                int bestCount = 0;
+                int distinct = 0;
+
+                foreach (var (dx, dy) in Ring)
+                {
+                    int other = source[(y + dy) * width + (x + dx)];
+                    if (other == label) continue;
+                    if (map.Seeds[other].IsLand != map.Seeds[label].IsLand) continue;
+
+                    foreign++;
+                    int slot = 0;
+                    while (slot < distinct && neighborLabels[slot] != other) slot++;
+                    if (slot == distinct)
+                    {
+                        neighborLabels[distinct] = other;
+                        neighborCounts[distinct++] = 0;
+                    }
+
+                    if (++neighborCounts[slot] > bestCount)
+                    {
+                        bestCount = neighborCounts[slot];
+                        bestNeighbor = other;
+                    }
+                }
+
+                // Six of eight neighbours foreign means the pixel is surrounded on all but two
+                // sides, so what it joins is a bar one or two pixels wide. Anything looser than
+                // that is an ordinary border pixel, and cutting those would chew up the coast.
+                if (foreign >= 6 && bestNeighbor != -1)
+                {
+                    next[cell] = bestNeighbor;
+                    severed++;
+                }
+            }
+        }
+
+        map.Label = next;
+        if (severed > 0)
+            Console.WriteLine($"  severed {severed} pinched waists for fragment reconnection");
     }
 
     /// <summary>

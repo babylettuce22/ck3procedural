@@ -96,11 +96,11 @@ public static class ClimateModel
     /// hold it. Below 1 because condensation takes time and the parcel is still moving: see the note
     /// at the call site, where dumping all of it at once put a whole range's rain in one cell.
     /// </summary>
-    private const double CondensationRate = 0.5;
+    private const double CondensationRate = 0.35;
 
     /// <summary>How far the rising/sinking pattern is biased toward sinking. See the note at the
     /// call site: a Hadley cell rises narrowly and descends broadly.</summary>
-    private const double RisingBranchBias = 0.25;
+    private const double RisingBranchBias = 0.15;
 
     // The rest of the model's constants. These are settings in the sense that changing them changes
     // the map, but not in the sense that anyone should: they are properties of how an atmosphere
@@ -133,7 +133,7 @@ public static class ClimateModel
 
     /// <summary>Noise on the wind direction, so a circulation cell has a frayed edge rather than a
     /// ruled one. Deliberately small — the point is to break the line, not to invent weather.</summary>
-    private const double WindWanderStrength = 0.25;
+    private const double WindWanderStrength = 0.15;
 
     /// <summary>How fast a parcel over the sea recharges toward saturation, per cell crossed.</summary>
     private const double OceanEvaporation = 0.25;
@@ -337,7 +337,7 @@ public static class ClimateModel
 
         var noise = new SimplexNoise(rng);
         var warp = new SimplexNoise(rng);
-        double frequency = 3.5 / width;
+        double frequency = 1.5 / width;
         double warpAmplitude = width * 0.04;
 
         Parallel.For(0, height, y =>
@@ -426,7 +426,7 @@ public static class ClimateModel
         // A little noise on the wind so the cell boundaries are not ruled lines. Small: the point is
         // to fray the edge of a circulation cell, not to invent a different circulation.
         var noise = new SimplexNoise(rng);
-        double frequency = 5.0 / width;
+        double frequency = 2.0 / width;
         double wobble = WindWanderStrength;
 
         Parallel.For(0, height, y =>
@@ -613,10 +613,10 @@ public static class ClimateModel
         // upwind histories diverge — and Koppen turns any such step into a class boundary, which is
         // what left the arid belt speckled with single-cell rainforest. A cell is the model's own
         // resolution; smoothing at that scale discards nothing it actually resolved.
-        var meanUp = Field.Upsample(annualC, cw, ch, pw, ph);
-        var rangeUp = Field.Upsample(seasonalRange, cw, ch, pw, ph);
-        var julyUp = Field.Upsample(Field.Blur(julyRain, cw, ch, 2, 2), cw, ch, pw, ph);
-        var januaryUp = Field.Upsample(Field.Blur(januaryRain, cw, ch, 2, 2), cw, ch, pw, ph);
+        var meanUp = Field.Upsample(Field.Blur(annualC, cw, ch, 1, 2), cw, ch, pw, ph);
+        var rangeUp = Field.Upsample(Field.Blur(seasonalRange, cw, ch, 1, 2), cw, ch, pw, ph);
+        var julyUp = Field.Upsample(Field.Blur(julyRain, cw, ch, 2, 3), cw, ch, pw, ph);
+        var januaryUp = Field.Upsample(Field.Blur(januaryRain, cw, ch, 2, 3), cw, ch, pw, ph);
 
         // The coarse grid already applied a lapse for its own averaged height; the correction below
         // is only the difference between the pixel's height and that average, so nothing is counted

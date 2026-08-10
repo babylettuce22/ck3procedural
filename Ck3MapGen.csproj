@@ -19,4 +19,13 @@
     <PackageReference Include="SixLabors.ImageSharp" Version="4.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Vanilla files we keep by hand and copy into the mod verbatim; see Emit/StaticFileWriter.cs.
+         They ship beside the executable, which is where that writer looks for them, so a published
+         build carries them without needing the repo. -->
+    <None Update="VanillaFilesToCopy/**/*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

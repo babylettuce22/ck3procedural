@@ -18,6 +18,35 @@ public static class CompatibilityWriter
         System.Globalization.CultureInfo.InvariantCulture;
 
     /// <summary>
+    /// Vanilla's camera extents, and the province map they are authored against. Camera space is
+    /// provinces space, so all four scale with <see cref="Config.MapConfig.MapScale"/>.
+    ///
+    /// Neither panning bound is the map's own size, which is why they are copied rather than
+    /// assumed: 9090 is inside a 9216-wide map while 4696 is outside a 4608-tall one. The bound is
+    /// on the camera's centre, so the horizontal one stops short of the edge and the vertical one
+    /// overshoots to let the view sit past the poles. Scaling vanilla's numbers keeps that
+    /// asymmetry instead of inventing a model for it.
+    /// </summary>
+    private const double VanillaPanningWidth = 9090;
+    private const double VanillaPanningHeight = 4696;
+    private const int VanillaProvinceHeight = 4608;
+
+    /// <summary>
+    /// Vanilla's ZOOM_STEPS ladder, purely so a starting step can be chosen from it. The ladder
+    /// itself is left alone — it is shared with five parallel tilt arrays that have to stay the
+    /// same length, and camera height is absolute, so the steps mean the same thing on any map.
+    /// </summary>
+    private static readonly int[] ZoomSteps =
+    [
+        70, 90, 114, 142, 174, 210, 250, 295, 344, 396, 453, 513, 576, 643, 713, 787, 865, 948,
+        1036, 1130, 1233, 1345, 1470, 1609, 1768, 1949, 2159, 2406, 2699, 3050, 3477, 4000, 4649,
+        5464, 6500
+    ];
+
+    /// <summary>Vanilla's START_ZOOM_STEP, 33, is this height on its 9216-wide map.</summary>
+    private const double VanillaStartZoomHeight = 5464;
+
+    /// <summary>
     /// Overrides NJominiMap so the engine's world size matches the province map we actually
     /// ship. This is not optional and it is easy to miss.
     ///
@@ -62,19 +91,71 @@ public static class CompatibilityWriter
               	WATERLEVEL = {{waterLevel}}
               }
 
-              # Camera limits are map-sized too, and live in a different namespace and a
-              # different file (common/defines/graphic/00_graphics.txt). Vanilla ships 9090 x 4696
-              # for its 9216x4608 map; leaving those in place lets the frontend camera address a
-              # world several times larger than ours.
-              NCamera = {
-              	PANNING_WIDTH = {{cfg.ProvinceWidth}}
-              	PANNING_HEIGHT = {{cfg.ProvinceHeight}}
-              }
-
               """);
 
         Console.WriteLine($"  defines: WORLD_EXTENTS {cfg.ProvinceWidth - 1} x {extentY} x {cfg.ProvinceHeight - 1}, " +
                           $"WATERLEVEL {waterLevel} (vanilla 9215 x 50 x 4607, 3)");
+
+        WriteCameraDefines(modDir, cfg);
+    }
+
+    /// <summary>
+    /// Overrides NCamera so the camera is bounded by the map we ship rather than by vanilla's.
+    ///
+    /// Written into <c>common/defines/graphic/</c>, next to vanilla's own 00_graphics.txt, rather
+    /// than alongside our NJominiMap override one directory up. Defines merge across the whole
+    /// tree and the last file loaded wins, so being in the same directory is what makes "sorts
+    /// after 00_graphics.txt" a fact about one directory listing instead of an assumption about
+    /// how the loader walks subdirectories.
+    ///
+    /// START_LOOK_AT is the reason this matters beyond tidiness. Vanilla opens the camera at
+    /// { 5000 0 2300 }, which is the middle of a 9216x4608 map and *off* every smaller one — at
+    /// the standard 3072x1536 province raster it is past the eastern edge by more than half the
+    /// map's width. It is set to the centre here rather than scaled from vanilla's, whose 0.54
+    /// along x is Europe rather than anything a generated map has.
+    /// </summary>
+    private static void WriteCameraDefines(string modDir, Config.MapConfig cfg)
+    {
+        string dir = Path.Combine(modDir, "common", "defines", "graphic");
+        Directory.CreateDirectory(dir);
+
+        double panWidth = Math.Round(cfg.Scaled(VanillaPanningWidth));
+        double panHeight = Math.Round(VanillaPanningHeight * cfg.ProvinceHeight / VanillaProvinceHeight);
+
+        double lookX = cfg.ProvinceWidth / 2.0;
+        double lookZ = cfg.ProvinceHeight / 2.0;
+
+        int startStep = NearestZoomStep(cfg.Scaled(VanillaStartZoomHeight));
+
+        ParadoxText.WriteBom(Path.Combine(dir, "zz_generated_graphics.txt"),
+            $$"""
+              # Camera extents must match map_data/provinces.png, not vanilla's map.
+              NCamera = {
+              	PANNING_WIDTH = {{panWidth.ToString(Invariant)}}
+              	PANNING_HEIGHT = {{panHeight.ToString(Invariant)}}
+              	START_LOOK_AT = { {{lookX.ToString("F1", Invariant)}} 0 {{lookZ.ToString("F1", Invariant)}} }
+              	START_ZOOM_STEP = {{startStep}}
+              }
+
+              """);
+
+        Console.WriteLine($"  camera: panning {panWidth} x {panHeight}, look at " +
+                          $"{lookX:F0},{lookZ:F0}, zoom step {startStep} ({ZoomSteps[startStep]}) " +
+                          $"(vanilla 9090 x 4696, 5000,2300, 33)");
+    }
+
+    /// <summary>
+    /// The ladder step closest to <paramref name="height"/>. Camera height buys a fixed amount of
+    /// ground at a fixed field of view, so opening on the same *share* of the map as vanilla means
+    /// scaling its start height by the map scale and then landing on a real step.
+    /// </summary>
+    private static int NearestZoomStep(double height)
+    {
+        int best = 0;
+        for (int i = 1; i < ZoomSteps.Length; i++)
+            if (Math.Abs(ZoomSteps[i] - height) < Math.Abs(ZoomSteps[best] - height))
+                best = i;
+        return best;
     }
 
     /// <summary>

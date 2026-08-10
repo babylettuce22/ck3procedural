@@ -120,6 +120,9 @@ public static class ContentWriter
                 [HistoryWriter.BookmarkCharacter, HistoryWriter.ChallengeCharacter]);
         }
         else Console.WriteLine("  history: SKIPPED (--no-history)");
+
+        // Last, so that the files kept by hand can only fill gaps the writers above left.
+        Core.Stage.Time("static files", () => StaticFileWriter.WriteAll(modDir));
     }
 
     /// <summary>
