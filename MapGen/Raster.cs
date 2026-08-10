@@ -17,6 +17,86 @@ public static class Raster
     private static int Wrap(int v, int n) => ((v % n) + n) % n;
 
     /// <summary>
+    /// Heightmap rows the province grid is offset by, relative to the obvious block
+    /// [2y, 2y+1]. Every province-resolution field derived from the heightmap goes through
+    /// <see cref="ProvinceBlock"/> so they all share this one number.
+    ///
+    /// -1 is measured, not chosen. Sweeping the sampling offset against vanilla 1.19's own map_data
+    /// — reading province pixel (x,y) as heightmap (2y+oy, 2x+ox) — two independently authored
+    /// rasters peak at the same place:
+    ///
+    ///     oy    agreement with vanilla provinces.png    depth of its drawn river channels
+    ///     -1                     99.8829%                             62
+    ///      0                     99.8615%                             57
+    ///     +1                     99.7160%                             43
+    ///
+    /// The coastline in provinces.png and the channels under rivers.png were drawn by different
+    /// means, so both landing on the same optimum is what rules out a rasterising artefact in one
+    /// of them. The offset is vertical only — ox=0 and ox=+1 tie to four decimals, so horizontally
+    /// the block is already right. A one-pixel vertical shift with no horizontal component is what
+    /// an off-by-one in a vertical flip looks like: image rows run one way and the game's Z axis
+    /// the other.
+    ///
+    /// The caveat, stated because it cannot be measured away: this is vanilla's *internal*
+    /// relationship between its own files, not a reading of the engine. The inference is that
+    /// vanilla renders correctly, so its relationship is the one the engine expects. Our own output
+    /// cannot confirm it — provinces.png is derived from our heightmap by thresholding, so it
+    /// agrees with itself at any offset (measured 100.0000% at both 0 and +1) and self-consistency
+    /// is not the same thing as matching the engine.
+    /// </summary>
+    public const int ProvinceRowOffset = -1;
+
+    /// <summary>
+    /// The heightmap rows and columns behind one province pixel, clamped at the edges. The single
+    /// definition of how the two resolutions line up — if this and
+    /// <see cref="ProvinceElevation"/> ever disagreed, the coastline and the province map would
+    /// drift apart by a pixel and nothing would say so.
+    /// </summary>
+    public static (int Y0, int X0) ProvinceBlock(int x, int y, int scaleX, int scaleY,
+        int fullWidth, int fullHeight)
+    {
+        int y0 = Math.Clamp(y * scaleY + ProvinceRowOffset, 0, fullHeight - scaleY);
+        int x0 = Math.Clamp(x * scaleX, 0, fullWidth - scaleX);
+        return (y0, x0);
+    }
+
+    /// <summary>
+    /// The heightmap at province resolution, box-averaged over <see cref="ProvinceBlock"/>.
+    ///
+    /// Not <see cref="Field.Downsample"/>, which is a plain block average and knows nothing about
+    /// where CK3 expects the two grids to line up. Everything the partition does — seeds, costs,
+    /// the terrain the borders follow — is measured on this field, so it has to be sampled where
+    /// the land actually is.
+    /// </summary>
+    public static float[] ProvinceElevation(float[] elevation, MapConfig cfg)
+    {
+        int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
+        int scaleX = cfg.Width / width, scaleY = cfg.Height / height;
+        float inv = 1f / (scaleX * scaleY);
+
+        var province = new float[width * height];
+
+        Parallel.For(0, height, y =>
+        {
+            for (int x = 0; x < width; x++)
+            {
+                var (y0, x0) = ProvinceBlock(x, y, scaleX, scaleY, cfg.Width, cfg.Height);
+
+                float sum = 0;
+                for (int j = 0; j < scaleY; j++)
+                {
+                    long row = (long)(y0 + j) * cfg.Width + x0;
+                    for (int i = 0; i < scaleX; i++) sum += elevation[row + i];
+                }
+
+                province[y * width + x] = sum * inv;
+            }
+        });
+
+        return province;
+    }
+
+    /// <summary>
     /// Land/sea mask at province resolution, decided on the heightmap CK3 actually renders. 1 = land.
     ///
     /// Takes the *full* heightmap and applies the sea-level threshold there, then lets the four
@@ -41,10 +121,12 @@ public static class Raster
         {
             for (int x = 0; x < width; x++)
             {
+                var (y0, x0) = ProvinceBlock(x, y, scaleX, scaleY, cfg.Width, cfg.Height);
+
                 int dry = 0;
                 for (int j = 0; j < scaleY; j++)
                 {
-                    long row = (long)(y * scaleY + j) * cfg.Width + x * scaleX;
+                    long row = (long)(y0 + j) * cfg.Width + x0;
                     for (int i = 0; i < scaleX; i++)
                         if (elevation[row + i] > sea) dry++;
                 }

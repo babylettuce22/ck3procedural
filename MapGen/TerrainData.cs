@@ -46,7 +46,9 @@ public sealed class TerrainData
         int pw = cfg.ProvinceWidth, ph = cfg.ProvinceHeight;
         float sea = cfg.Limits.SeaLevelUpper;
 
-        var province = Field.Downsample(elevation, cfg.Width, cfg.Height, 2);
+        // Raster.ProvinceElevation, not Field.Downsample: the two grids do not line up on the
+        // obvious block, and this is the one place that knows where they do.
+        var province = Raster.ProvinceElevation(elevation, cfg);
         var flow = FlowField.Compute(province, pw, ph, sea);
 
         var courses = RiverNetwork.Extract(flow, province, pw, ph, sea, cfg, rng);
