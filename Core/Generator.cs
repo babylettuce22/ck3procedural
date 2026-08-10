@@ -109,8 +109,8 @@ public static class Generator
         // renderer draws, and a 2x2 average of it is not that coastline. See Raster.LandMask.
         var landMask = Stage.Time("land mask", () => Raster.LandMask(terra.Elevation, cfg));
         var provinces = Stage.Time("province partition",
-            () => Provinces.Build(landMask, provinceElevation, cfg.ProvinceWidth,
-                cfg.ProvinceHeight, cfg, rng));
+            () => Provinces.Build(landMask, provinceElevation, terra.RiverMask, terra.LakeMask,
+                cfg.ProvinceWidth, cfg.ProvinceHeight, cfg, rng));
         Console.WriteLine($"  {provinces.Count} provinces total");
 
         var provinceLandMask = ProvinceLandMask(cfg, provinces);

@@ -194,6 +194,22 @@ public sealed class MapConfig
     [Description("How wide a stretch of map holds provinces of roughly one size, in vanilla province pixels. The default is about the width of European Russia on vanilla's map; much smaller and the size changes every few provinces, which reads as noise rather than as regions.")]
     public double ProvinceSizeRegionPixels { get; set; } = 2600;
 
+    /// <summary>
+    /// How much of where provinces are small is decided by where the map could carry people, as
+    /// opposed to by noise. See <see cref="MapGen.Habitability"/>.
+    ///
+    /// Noise gets the unevenness right and the reasons wrong: the small provinces land nowhere in
+    /// particular, which is what reads as patterned rather than settled. This does not change how
+    /// much the size varies — <see cref="ProvinceSizeVariance"/> still owns that, and the count
+    /// correction still holds the province count fixed — only where the small ones go.
+    ///
+    /// Not 1 by default. Some noise left in keeps two coasts at the same latitude from coming out
+    /// identical, which is its own kind of artificial.
+    /// </summary>
+    [Category("03 Provinces")]
+    [Description("How much of where provinces are small is decided by where the map could carry people — coasts, river valleys, flat ground, kind latitudes — rather than by noise. 0 is pure noise. Does not change how much size varies or how many provinces there are, only where the small ones go.")]
+    public double HabitabilitySizeWeight { get; set; } = 0.75;
+
     /// <summary>Target area of one land province on *this* map, in province pixels.</summary>
     public double BaronyPixels => BaronyPixelsAtVanilla * CountyScale * CountyScale;
 

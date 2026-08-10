@@ -58,7 +58,8 @@ public sealed class ProvinceSizeField
         => Field.Sample(_factor, _width, _height,
             (float)x / CellPixels - 0.5f, (float)y / CellPixels - 0.5f);
 
-    public static ProvinceSizeField Build(byte[] mask, int width, int height, MapConfig cfg, Rng rng)
+    public static ProvinceSizeField Build(byte[] mask, float[] elevation, byte[] rivers,
+        byte[] lakes, int width, int height, MapConfig cfg, Rng rng)
     {
         int cw = Math.Max(2, width / CellPixels), ch = Math.Max(2, height / CellPixels);
         double variance = Math.Max(1.0, cfg.ProvinceSizeVariance);
@@ -71,29 +72,54 @@ public sealed class ProvinceSizeField
         var noise = new SimplexNoise(rng);
         double frequency = 1.0 / Math.Max(1.0, cfg.Scaled(cfg.ProvinceSizeRegionPixels));
 
-        var raw = new float[cw * ch];
+        var wander = new float[cw * ch];
         Parallel.For(0, ch, cy =>
         {
             double ny = cy * CellPixels * frequency;
             for (int cx = 0; cx < cw; cx++)
-                raw[cy * cw + cx] = (float)Field.Fbm(noise, cx * CellPixels * frequency, ny, 3);
+                wander[cy * cw + cx] = (float)Field.Fbm(noise, cx * CellPixels * frequency, ny, 3);
         });
 
-        // Normalised against the land only. Doing it over the whole raster would let the ocean —
-        // most of the map, and irrelevant here — decide where the ends of the scale are, so a map
-        // whose land happened to sit in the middle of the field would come out nearly uniform.
-        var land = new List<float>(cw * ch);
+        // Where the map can actually carry people, at the same coarse grid. Averaged down rather
+        // than point-sampled: a river is one pixel wide, so a cell that sampled its centre would
+        // miss almost every one of them and the freshwater term would do nothing.
+        double weight = Math.Clamp(cfg.HabitabilitySizeWeight, 0, 1);
+        var settled = weight <= 0 ? null
+            : Field.Downsample(
+                Habitability.Build(mask, elevation, rivers, lakes, width, height, cfg),
+                width, height, CellPixels);
+
+        // Which cells are land, and so which get to set the ends of every scale below. Doing it
+        // over the whole raster would let the ocean — most of the map, and irrelevant here —
+        // decide them, so a map whose land sat in the middle of the field would come out uniform.
+        var landCells = new List<int>(cw * ch);
         for (int cy = 0; cy < ch; cy++)
         {
             int y = Math.Min(height - 1, cy * CellPixels + CellPixels / 2);
             for (int cx = 0; cx < cw; cx++)
             {
                 int x = Math.Min(width - 1, cx * CellPixels + CellPixels / 2);
-                if (mask[y * width + x] == 1) land.Add(raw[cy * cw + cx]);
+                if (mask[y * width + x] == 1) landCells.Add(cy * cw + cx);
             }
         }
 
-        if (land.Count == 0) return Uniform(cw, ch);
+        if (landCells.Count == 0) return Uniform(cw, ch);
+
+        // Each source is flattened onto its own 0-1 scale before they are mixed, because they have
+        // no common unit — fbm is roughly [-1,1] and habitability is [0,1], and blending them raw
+        // would make the weight mean something different on every map.
+        var raw = Spread(wander, landCells, cw * ch);
+
+        if (settled is not null)
+        {
+            // Inverted: the more habitable a place is, the *smaller* its provinces want to be.
+            var density = Spread(settled, landCells, cw * ch);
+            for (int i = 0; i < raw.Length; i++)
+                raw[i] = (float)((1 - weight) * raw[i] + weight * (1 - density[i]));
+        }
+
+        var land = new List<float>(landCells.Count);
+        foreach (int cell in landCells) land.Add(raw[cell]);
 
         land.Sort();
         float lo = land[(int)(land.Count * Tail)];
@@ -134,6 +160,29 @@ public sealed class ProvinceSizeField
                           $"{cfg.Scaled(cfg.ProvinceSizeRegionPixels):F0} px across");
 
         return new ProvinceSizeField(factor, cw, ch) { Smallest = smallest, Largest = largest };
+    }
+
+    /// <summary>
+    /// Flattens a field onto 0-1 by where each value falls between its land percentiles, so two
+    /// fields with no common unit can be mixed. Percentiles rather than min/max, for the reason
+    /// <see cref="Tail"/> exists: one freak cell should not set the scale for the whole map.
+    /// </summary>
+    private static float[] Spread(float[] source, List<int> landCells, int length)
+    {
+        var sample = new List<float>(landCells.Count);
+        foreach (int cell in landCells) sample.Add(source[cell]);
+        sample.Sort();
+
+        float lo = sample[(int)(sample.Count * Tail)];
+        float hi = sample[(int)Math.Min(sample.Count - 1, sample.Count * (1 - Tail))];
+
+        var spread = new float[length];
+        if (hi - lo < 1e-6f) return spread;
+
+        for (int i = 0; i < length; i++)
+            spread[i] = (float)Math.Clamp((source[i] - lo) / (hi - lo), 0, 1);
+
+        return spread;
     }
 
     private static ProvinceSizeField Uniform(int width, int height)
