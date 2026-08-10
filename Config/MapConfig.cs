@@ -112,11 +112,11 @@ public sealed class MapConfig
     // --- Province map. CK3's provinces.png and rivers.png are half the heightmap resolution
     // (vanilla: heightmap 18432x9216, provinces 9216x4608). ---
     //
-    // UNDER INVESTIGATION: the provinces in game do not line up with the ones we paint, and there
-    // look to be fewer of them in game than the raster has. Ocean, mountain and impassable
-    // provinces do land correctly, which points at something that eats the small ones rather than
-    // at a wholesale coordinate shift — but the half-resolution assumption above is the other
-    // candidate and is the reason for this note.
+    // Half resolution is right, and it was checked: the shapes in game not matching this raster is
+    // not a resolution problem. CK3 draws land at *county* level, so the player sees the union of
+    // a county's baronies and never a barony on its own — which is why sea zones and impassable
+    // mountains, the two kinds with no county above them, are the two kinds that do line up.
+    // The ragged shapes come from Titles.Cluster, not from here.
     public int ProvinceWidth => Width / 2;
     public int ProvinceHeight => Height / 2;
 

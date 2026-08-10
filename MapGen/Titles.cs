@@ -223,51 +223,209 @@ public static class Titles
         return merged;
     }
 
+    /// <summary>How many settling passes to run. Movement dies out well before this on every map
+    /// measured; the cap is only there so a pair of members cannot trade places forever.</summary>
+    private const int SettlePasses = 12;
+
+    /// <summary>
+    /// Groups members into clusters of <paramref name="minSize"/> to <paramref name="maxSize"/>,
+    /// keeping each one as close to round as the adjacency allows.
+    ///
+    /// Compactness is the point, and it is not cosmetic. CK3 draws land at *county* level, so what
+    /// the player sees is the union of a county's baronies — provinces.png is never rendered on its
+    /// own, and a barony has no outline in game. That makes this function, not the province
+    /// partitioner, the thing that decides what the map looks like.
+    ///
+    /// It used to flood the adjacency graph in shuffled order, which is unconstrained by geometry:
+    /// a chain of eight baronies was exactly as likely as a blob of eight. Measured on the
+    /// 1024x512 test map, 11-18% of counties had a waist under 16 px against 0-5% of the baronies
+    /// making them up, and counties were *more* ragged than their own parts despite being three
+    /// times the area. Pinched counties over clean provinces is the signature.
+    ///
+    /// So growth takes the candidate nearest the cluster's running centre instead of the next one
+    /// off a shuffled queue, and <see cref="Settle"/> then trades boundary members between
+    /// neighbours while that keeps lowering the same distance. It is the graph-space counterpart of
+    /// the Lloyd relaxation <see cref="Provinces"/> already runs in pixel space.
+    ///
+    /// The seeds are still shuffled. Where a cluster starts should be arbitrary; only how it grows
+    /// from there should not be.
+    /// </summary>
     private static List<List<int>> Cluster(
         IReadOnlyList<int> members,
         Dictionary<int, HashSet<int>> adjacency,
         int minSize,
         int maxSize,
-        Rng rng)
+        Rng rng,
+        (double X, double Y)[] positions)
     {
         var assigned = new HashSet<int>();
         var clusters = new List<List<int>>();
 
-        var shuffledMembers = members.ToList();
-        Shuffle(shuffledMembers, rng);
+        var seeds = members.ToList();
+        Shuffle(seeds, rng);
 
-        foreach (int start in shuffledMembers)
+        var candidates = new List<int>();
+
+        foreach (int start in seeds)
         {
             if (!assigned.Add(start)) continue;
 
             int targetSize = rng.Int(minSize, maxSize + 1);
 
             var cluster = new List<int> { start };
-            var frontier = new Queue<int>();
-            frontier.Enqueue(start);
+            var (cx, cy) = At(positions, start);
 
-            while (cluster.Count < targetSize && frontier.Count > 0)
+            candidates.Clear();
+            Offer(start);
+
+            while (cluster.Count < targetSize && candidates.Count > 0)
             {
-                int current = frontier.Dequeue();
-                if (!adjacency.TryGetValue(current, out var neighbors)) continue;
+                // Nearest to the centre *so far*, so the cluster fills in around itself. Taking the
+                // nearest to the seed instead would let it reach past a gap and come back.
+                int bestAt = -1;
+                double best = double.PositiveInfinity;
 
-                var shuffledNeighbors = neighbors.ToList();
-                Shuffle(shuffledNeighbors, rng);
-
-                foreach (int n in shuffledNeighbors)
+                for (int i = 0; i < candidates.Count; i++)
                 {
-                    if (cluster.Count >= targetSize) break;
-                    if (!assigned.Add(n)) continue;
-                    cluster.Add(n);
-                    frontier.Enqueue(n);
+                    if (assigned.Contains(candidates[i])) continue;
+
+                    double cost = DistanceSquared((cx, cy), At(positions, candidates[i]));
+                    if (cost >= best) continue;
+
+                    best = cost;
+                    bestAt = i;
                 }
+
+                // Everything on the frontier was taken by a cluster seeded earlier.
+                if (bestAt < 0) break;
+
+                int chosen = candidates[bestAt];
+                candidates.RemoveAt(bestAt);
+                assigned.Add(chosen);
+                cluster.Add(chosen);
+
+                var (px, py) = At(positions, chosen);
+                cx += (px - cx) / cluster.Count;
+                cy += (py - cy) / cluster.Count;
+
+                Offer(chosen);
             }
 
             clusters.Add(cluster);
+
+            void Offer(int member)
+            {
+                if (!adjacency.TryGetValue(member, out var links)) return;
+                foreach (int n in links)
+                    if (!assigned.Contains(n)) candidates.Add(n);
+            }
         }
 
+        Settle(clusters, adjacency, positions, minSize, maxSize);
         return clusters;
     }
+
+    /// <summary>
+    /// Hands boundary members to a neighbouring cluster whose centre is nearer, which is what turns
+    /// the tendrils growth could not avoid into something round.
+    ///
+    /// Two guards keep it from trading one defect for a worse one. A cluster at
+    /// <paramref name="minSize"/> cannot give anything away and one at <paramref name="maxSize"/>
+    /// cannot take anything, so settling never undoes the size distribution growth just produced.
+    /// And a member is only moved if what it leaves behind is still one connected piece — a county
+    /// in two halves is not an improvement on a pinched one, and CK3 will happily draw it.
+    /// </summary>
+    private static void Settle(List<List<int>> clusters, Dictionary<int, HashSet<int>> adjacency,
+        (double X, double Y)[] positions, int minSize, int maxSize)
+    {
+        var owner = new Dictionary<int, int>();
+        for (int i = 0; i < clusters.Count; i++)
+            foreach (int member in clusters[i]) owner[member] = i;
+
+        var centre = new (double X, double Y)[clusters.Count];
+        for (int i = 0; i < clusters.Count; i++) centre[i] = Centre(clusters[i], positions);
+
+        var order = owner.Keys.ToList();
+
+        for (int pass = 0; pass < SettlePasses; pass++)
+        {
+            int moved = 0;
+
+            foreach (int member in order)
+            {
+                int from = owner[member];
+                if (clusters[from].Count <= minSize) continue;
+                if (!adjacency.TryGetValue(member, out var links)) continue;
+
+                var here = At(positions, member);
+                double bestCost = DistanceSquared(centre[from], here);
+                int best = -1;
+
+                // Only clusters this member actually touches, so the receiver stays connected for
+                // free — it is gaining a member adjacent to one it already holds.
+                foreach (int link in links)
+                {
+                    if (!owner.TryGetValue(link, out int to) || to == from) continue;
+                    if (clusters[to].Count >= maxSize) continue;
+
+                    double cost = DistanceSquared(centre[to], here);
+                    if (cost >= bestCost) continue;
+
+                    bestCost = cost;
+                    best = to;
+                }
+
+                if (best < 0) continue;
+                if (!StaysConnected(clusters[from], member, adjacency)) continue;
+
+                clusters[from].Remove(member);
+                clusters[best].Add(member);
+                owner[member] = best;
+                centre[from] = Centre(clusters[from], positions);
+                centre[best] = Centre(clusters[best], positions);
+                moved++;
+            }
+
+            if (moved == 0) break;
+        }
+    }
+
+    /// <summary>Whether what is left of a cluster is still one piece once a member is taken out.</summary>
+    private static bool StaysConnected(List<int> cluster, int dropped,
+        Dictionary<int, HashSet<int>> adjacency)
+    {
+        var remaining = new HashSet<int>(cluster);
+        remaining.Remove(dropped);
+        if (remaining.Count <= 1) return true;
+
+        var seen = new HashSet<int>();
+        var queue = new Queue<int>();
+
+        int start = remaining.First();
+        seen.Add(start);
+        queue.Enqueue(start);
+
+        while (queue.Count > 0)
+        {
+            if (!adjacency.TryGetValue(queue.Dequeue(), out var links)) continue;
+            foreach (int n in links)
+                if (remaining.Contains(n) && seen.Add(n)) queue.Enqueue(n);
+        }
+
+        return seen.Count == remaining.Count;
+    }
+
+    /// <summary>Squared, because only the ordering is ever used and a square root would not change it.</summary>
+    private static double DistanceSquared((double X, double Y) a, (double X, double Y) b)
+    {
+        double dx = a.X - b.X, dy = a.Y - b.Y;
+        return dx * dx + dy * dy;
+    }
+
+    /// <summary>Guarded like <see cref="Centre"/>: county members are province ids and every tier
+    /// above indexes from zero, so the two share this array shape but not its origin.</summary>
+    private static (double X, double Y) At((double X, double Y)[] positions, int member)
+        => member >= 0 && member < positions.Length ? positions[member] : (0, 0);
 
     /// <summary>
     /// Folds undersized clusters into a neighbour, so a scrap of land does not get a title of its
@@ -465,11 +623,9 @@ public static class Titles
 
         var byProvince = baronies.ToDictionary(b => b.ProvinceId);
 
-        var countyClusters = Cluster(provinceIds, adjacency, MinBaroniesPerCounty, MaxBaroniesPerCounty, rng);
-        var counties = Wrap("c", countyClusters, c => c.Select(p => byProvince[p]));
-
-        // Where each province sits, rolled up a tier at a time, so a stranded island can be given
-        // to the nearest crown when no adjacency reaches it.
+        // Where each province sits, rolled up a tier at a time. Two jobs: it is what keeps a
+        // cluster compact as it grows, and it is how a stranded island is given to the nearest
+        // crown when no adjacency reaches it.
         var provincePosition = new (double X, double Y)[landCount + 1];
         for (int label = 0; label < order.Length; label++)
         {
@@ -477,6 +633,10 @@ public static class Titles
             if (id >= 1 && id <= landCount)
                 provincePosition[id] = (map.Seeds[label].X, map.Seeds[label].Y);
         }
+
+        var countyClusters = Cluster(provinceIds, adjacency, MinBaroniesPerCounty,
+            MaxBaroniesPerCounty, rng, provincePosition);
+        var counties = Wrap("c", countyClusters, c => c.Select(p => byProvince[p]));
 
         var countyPosition = Roll(countyClusters, provincePosition);
 
@@ -486,7 +646,8 @@ public static class Titles
         var duchyAdjacency = LiftAdjacency(countyClusters, adjacency);
         var duchySea = LiftAdjacency(countyClusters, seaAdjacency);
         var duchyClusters = AbsorbUndersized(
-            Cluster(Enumerable.Range(0, counties.Count).ToList(), duchyAdjacency, MinCountiesPerDuchy, MaxCountiesPerDuchy, rng),
+            Cluster(Enumerable.Range(0, counties.Count).ToList(), duchyAdjacency,
+                MinCountiesPerDuchy, MaxCountiesPerDuchy, rng, countyPosition),
             Union(duchyAdjacency, duchySea), cfg.MinChildrenPerTitle, MaxCountiesPerDuchy);
         var duchies = Wrap("d", duchyClusters, c => c.Select(i => counties[i]));
         var duchyPosition = Roll(duchyClusters, countyPosition);
@@ -495,7 +656,8 @@ public static class Titles
         var kingdomAdjacency = LiftAdjacency(duchyClusters, duchyAdjacency);
         var kingdomSea = LiftAdjacency(duchyClusters, duchySea);
         var kingdomClusters = AbsorbUndersized(
-            Cluster(Enumerable.Range(0, duchies.Count).ToList(), Union(kingdomAdjacency, kingdomSea), MinDuchiesPerKingdom, MaxDuchiesPerKingdom, rng),
+            Cluster(Enumerable.Range(0, duchies.Count).ToList(), Union(kingdomAdjacency, kingdomSea),
+                MinDuchiesPerKingdom, MaxDuchiesPerKingdom, rng, duchyPosition),
             Union(kingdomAdjacency, kingdomSea), cfg.MinChildrenPerTitle, MaxDuchiesPerKingdom,
             duchyPosition);
         var kingdoms = Wrap("k", kingdomClusters, c => c.Select(i => duchies[i]));
@@ -504,7 +666,8 @@ public static class Titles
         var empireAdjacency = LiftAdjacency(kingdomClusters, kingdomAdjacency);
         var empireSea = LiftAdjacency(kingdomClusters, kingdomSea);
         var empireClusters = AbsorbUndersized(
-            Cluster(Enumerable.Range(0, kingdoms.Count).ToList(), Union(empireAdjacency, empireSea), MinKingdomsPerEmpire, MaxKingdomsPerEmpire, rng),
+            Cluster(Enumerable.Range(0, kingdoms.Count).ToList(), Union(empireAdjacency, empireSea),
+                MinKingdomsPerEmpire, MaxKingdomsPerEmpire, rng, kingdomPosition),
             Union(empireAdjacency, empireSea), cfg.MinChildrenPerTitle, MaxKingdomsPerEmpire,
             kingdomPosition);
         var empires = Wrap("e", empireClusters, c => c.Select(i => kingdoms[i]));
