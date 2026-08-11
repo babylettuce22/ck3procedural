@@ -38,46 +38,28 @@ public sealed class MapConfig
     public int Seed { get; set; } = 1;
 
 
-    /// <summary>
-    /// Catchment, in province cells, above which a watercourse is drawn as a river. Absolute
-    /// rather than a share of the map: a cell is the same area at every map size, so this is a
-    /// fixed catchment in square kilometres.
-    /// </summary>
-    [Category("10 Rivers and lakes")]
-    [Description("Catchment, in province cells, above which a watercourse is drawn as a river. Absolute rather than a share of the map, so the same stream is a river on any size map.")]
-    public double RiverMinCatchmentCells { get; set; } = 900;
-
-    // River geometry is authored in vanilla province pixels and scaled by MapScale, so a river is
-    // the same fraction of a continent at every map size rather than nine times wider at `tiny`.
-
-    /// <summary>Shortest course kept.</summary>
-    [Category("10 Rivers and lakes")]
-    [Description("Shortest course kept.")]
-    public double MinRiverPixelsAtVanilla { get; set; } = 30;
-
-    /// <summary>Douglas-Peucker tolerance. This is what removes the D8 staircase.</summary>
-    [Category("10 Rivers and lakes")]
-    [Description("Douglas-Peucker tolerance. This is what removes the D8 staircase.")]
-    public double RiverSimplifyAtVanilla { get; set; } = 1.6;
-
-    /// <summary>Largest perpendicular meander offset.</summary>
-    [Category("10 Rivers and lakes")]
-    [Description("Largest perpendicular meander offset.")]
-    public double MeanderPixelsAtVanilla { get; set; } = 2.5;
-
-    // No longer scaled by map size: a river is the same width and wanders the same distance
-    // whatever size map it is on, because a pixel is the same distance on all of them.
-    public int TerraMinRiverCells => Math.Max(8, (int)MinRiverPixelsAtVanilla);
-    public double TerraRiverSimplify => Math.Max(0.6, RiverSimplifyAtVanilla);
-    public double TerraMeanderPixels => Math.Max(0.5, MeanderPixelsAtVanilla);
-
-
-    /// <summary>How deep a filled depression must be to count as a lake.</summary>
-    [Category("10 Rivers and lakes")]
-    [Description("How deep a filled depression must be to count as a lake.")]
-    public float LakeDepth { get; set; } = 0.0015f;
-    [Category("10 Rivers and lakes")]
-    public int MinLakeCells { get; set; } = 400;
+    // --- Rivers and lakes ---
+    //
+    // Category "10 Rivers and lakes" was removed on 2026-08-10 along with the generator behind it.
+    // What it held, and what each knob is evidence about, since the replacement will want most of
+    // these questions answered again:
+    //
+    //   RiverMinCatchmentCells (900)  — drainage area above which a watercourse is drawn. Absolute
+    //                                   in province cells rather than a share of the map, which is
+    //                                   the right basis and was itself a fix; see the note in the
+    //                                   memory file about catchment scaling as MapScale squared.
+    //   MinRiverPixelsAtVanilla (30)  — shortest course kept.
+    //   RiverSimplifyAtVanilla (1.6)  — Douglas-Peucker tolerance, which is what removed the D8
+    //                                   staircase. A D8 flow direction cannot express a diagonal,
+    //                                   so any course traced off one needs this or an equivalent.
+    //   MeanderPixelsAtVanilla (2.5)  — largest perpendicular meander offset. Prime suspect for the
+    //                                   twisting: this displaced an already-noisy course rather
+    //                                   than replacing it with a smooth one.
+    //   LakeDepth (0.0015)            — how deep a filled depression had to be to count as a lake.
+    //   MinLakeCells (400)            — and how many cells. Note this one is a raw cell count with
+    //                                   no MapScale on it, so a lake needed the same absolute
+    //                                   number of pixels on every map — which is one concrete way
+    //                                   the old output changed with resolution.
 
     /// <summary>
     /// Share of land put above the mountain line. Vanilla's own heightmap has 3.3% of its land in
@@ -575,7 +557,6 @@ public sealed class Limits
     public Range PineTree = new(10, 255);
     public Range Hills = new(205, 255);
     public MountainRange Mountains = new(255, 510, 450);
-    public int RaindropsLower = 600;
 
     /// <summary>Sea level. Note the comment in the JS: elevation is halved when written to the heightmap.</summary>
     public int SeaLevelUpper = 36;

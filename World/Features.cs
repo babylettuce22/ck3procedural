@@ -24,36 +24,7 @@ public sealed class Continent : CellGroup
     public List<int> Provinces = [];
 }
 
-/// <summary>
-/// A connected body of inland water (world.rivers). ck2rpg flood-fills lakes and then decides
-/// per body whether it reaches the sea: if it does the whole body becomes a river, otherwise it
-/// stays a lake.
-/// </summary>
-public sealed class WaterBody : CellGroup
-{
-    /// <summary>Land cells bordering the body.</summary>
-    public List<int> Coasts = [];
-
-    /// <summary>Sea cells the body drains into.</summary>
-    public List<int> OceanOutlets = [];
-
-    public bool IsRiver;
-}
-
-/// <summary>
-/// A traced river course, from a highland source down to the sea or to a confluence with an
-/// existing river. Produced by generateRiver(); only rivers that actually reach water survive.
-/// </summary>
-public sealed class River
-{
-    public int Id;
-
-    /// <summary>Cells in flow order. Tributaries repeat their final cell, as the JS does.</summary>
-    public List<int> Cells = [];
-
-    public int StartX, StartY;
-    public int EndX, EndY;
-
-    /// <summary>True when this river ends by merging into another rather than reaching the sea.</summary>
-    public bool IsTributary;
-}
+// WaterBody and River lived here until 2026-08-10. Both were ck2rpg's shapes — a flood-filled
+// inland water body that becomes a river if it reaches the sea, and a traced course from a highland
+// source down to an outlet — and both were unreferenced by the time they were removed: nothing had
+// constructed either since the generator stopped making its own terrain.

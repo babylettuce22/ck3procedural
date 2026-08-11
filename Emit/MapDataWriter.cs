@@ -29,7 +29,13 @@ public static class MapDataWriter
     /// </summary>
     public const int WaterLevel16 = WaterLevel255 * Step255;
 
-    /// <summary>Vanilla's rivers.png palette. Reproduced exactly; CK3 keys off the indices.</summary>
+    /// <summary>
+    /// Vanilla's rivers.png palette. Reproduced exactly; CK3 keys off the indices.
+    ///
+    /// Kept in full while no course is drawn. These sixteen entries are measured from vanilla
+    /// rather than chosen, they are the format rather than the hydrology, and the file has to
+    /// carry a 256-entry palette regardless of how many entries the image uses.
+    /// </summary>
     private static readonly (byte R, byte G, byte B)[] RiverPaletteHead =
     [
         (0, 255, 0),     // 0  source
@@ -50,8 +56,6 @@ public static class MapDataWriter
         (24, 206, 0),    // 15
     ];
 
-    public const byte RiverIndexSource = 0;
-    public const byte RiverIndexJoin = 1;
     public const byte RiverIndexLand = 255;
 
     /// <summary>
@@ -61,20 +65,23 @@ public static class MapDataWriter
     /// </summary>
     public const byte RiverIndexWater = 254;
 
-    /// <summary>Returns the label -&gt; province id mapping and the land province count.</summary>
-    public static (int[] Order, int BaronyCount, int LandCount) WriteAll(string modDir,
-        MapConfig cfg, ProvinceMap provinces, bool writePacked, MapGen.TerrainData terra)
+    /// <summary>
+    /// Writes map_data from an ordering already decided by <see cref="BuildProvinceOrder"/>.
+    ///
+    /// The ordering is passed in rather than derived here because everything downstream — the title
+    /// hierarchy, the cultures, the GUI's county preview — is expressed in province *ids*, and those
+    /// only exist once the ordering does. Deriving it inside the writer made the ids a side effect
+    /// of writing files, so nothing could name a province without writing a mod first.
+    /// </summary>
+    public static void WriteAll(string modDir, MapConfig cfg, ProvinceMap provinces,
+        int[] order, int baronyCount, int landCount, bool writePacked, MapGen.TerrainData terra)
     {
         string dir = Path.Combine(modDir, "map_data");
         Directory.CreateDirectory(dir);
 
-        // Land provinces get the low ids and sea zones the high ones, so default.map needs a
-        // single contiguous sea_zones range instead of vanilla's dozens.
-        var order = BuildProvinceOrder(provinces, out int baronyCount, out int landCount);
-
         WriteProvincesPng(Path.Combine(dir, "provinces.png"), provinces, order);
         WriteDefinitionCsv(Path.Combine(dir, "definition.csv"), provinces, order);
-        WriteRiversPng(Path.Combine(dir, "rivers.png"), cfg, provinces, terra);
+        WriteRiversPng(Path.Combine(dir, "rivers.png"), cfg, provinces);
         WriteHeightmap(dir, cfg, writePacked, provinces, order, landCount, terra);
         WriteDefaultMap(Path.Combine(dir, "default.map"), provinces.Count, baronyCount, landCount);
         WriteStubs(dir);
@@ -84,7 +91,6 @@ public static class MapDataWriter
         Console.WriteLine($"  map_data written: {baronyCount} baronied + " +
                           $"{landCount - baronyCount} impassable land, " +
                           $"{provinces.Count - landCount} sea zones");
-        return (order, baronyCount, landCount);
     }
 
     /// <summary>
@@ -119,7 +125,7 @@ public static class MapDataWriter
     /// narrower number, and it gets baronyCount. default.map then needs one RANGE per group, which
     /// is why they have to be contiguous.
     /// </summary>
-    private static int[] BuildProvinceOrder(ProvinceMap provinces, out int baronyCount,
+    public static int[] BuildProvinceOrder(ProvinceMap provinces, out int baronyCount,
         out int landCount)
     {
         var order = new int[provinces.Count];
@@ -182,14 +188,20 @@ public static class MapDataWriter
     }
 
     /// <summary>
-    /// Palettised rivers map. Background is index 255 (white = land); courses are drawn at a
-    /// fixed width index with a green source and red joins, which is the minimum CK3 accepts.
+    /// rivers.png as palette indices, at province resolution: index 255 (white) on land, 254
+    /// (magenta) on water.
+    ///
+    /// No courses. The generator drew them until 2026-08-10 and the hydrology behind them was
+    /// removed to be rebuilt, so what this emits now is a valid, riverless rivers.png. The file is
+    /// not optional — default.map names it and CK3 needs it to load — and a map with no rivers on
+    /// it is a legal map, so this is the correct interim output rather than a stub.
+    ///
+    /// Public because the GUI previews this file, and a preview built from its own reading would be
+    /// a second opinion on what ships rather than a view of it.
     /// </summary>
-    private static void WriteRiversPng(string path, MapConfig cfg, ProvinceMap provinces,
-        MapGen.TerrainData terra)
+    public static byte[] RiverIndices(MapConfig cfg, ProvinceMap provinces)
     {
-        int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
-        var indices = new byte[width * height];
+        var indices = new byte[cfg.ProvinceWidth * cfg.ProvinceHeight];
         Array.Fill(indices, RiverIndexLand);
 
         // Water comes from the province partition rather than from a fresh elevation threshold,
@@ -199,30 +211,31 @@ public static class MapDataWriter
             if (!provinces.Seeds[provinces.Label[i]].IsLand) indices[i] = RiverIndexWater;
         });
 
-        // The courses were rasterised at exactly this resolution already, with the source and
-        // confluence markers and a per-segment width index in place.
-        //
-        // Only over land. A drawn river is a stream running across dry ground, and vanilla agrees
-        // emphatically: 98.8% of its drawn blue pixels are inside land provinces. Over water the
-        // water index is the whole answer.
-        for (int i = 0; i < indices.Length; i++)
-            if (terra.RiverPixels[i] != MapGen.RiverRaster.None
-                && provinces.Seeds[provinces.Label[i]].IsLand)
-                indices[i] = terra.RiverPixels[i];
+        return indices;
+    }
+
+    /// <summary>The colour a rivers.png index renders as — vanilla's palette for the course indices,
+    /// magenta for water and white for land. Shared with the GUI preview.</summary>
+    public static (byte R, byte G, byte B) RiverColour(byte index)
+        => index < RiverPaletteHead.Length ? RiverPaletteHead[index]
+            : index == RiverIndexWater ? ((byte)255, (byte)0, (byte)128)
+            : index == RiverIndexLand ? ((byte)255, (byte)255, (byte)255)
+            : ((byte)2, (byte)0, (byte)1);
+
+    private static void WriteRiversPng(string path, MapConfig cfg, ProvinceMap provinces)
+    {
+        var indices = RiverIndices(cfg, provinces);
 
         var palette = new byte[256 * 3];
         for (int i = 0; i < 256; i++)
         {
-            (byte r, byte g, byte b) = i < RiverPaletteHead.Length ? RiverPaletteHead[i]
-                : i == 254 ? ((byte)255, (byte)0, (byte)128)
-                : i == 255 ? ((byte)255, (byte)255, (byte)255)
-                : ((byte)2, (byte)0, (byte)1);
+            var (r, g, b) = RiverColour((byte)i);
             palette[i * 3] = r;
             palette[i * 3 + 1] = g;
             palette[i * 3 + 2] = b;
         }
 
-        PngWriter.WriteIndexed8(path, width, height, indices, palette);
+        PngWriter.WriteIndexed8(path, cfg.ProvinceWidth, cfg.ProvinceHeight, indices, palette);
     }
 
     /// <summary>

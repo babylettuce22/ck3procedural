@@ -162,7 +162,7 @@ public sealed class MainForm : Form
                 else
                     MapGen.HeightmapSource.Apply(_loaded, cfg);
 
-                var terra = MapGen.TerrainData.FromElevation(_loaded.Elevation, cfg, new Rng(cfg.Seed));
+                var terra = MapGen.TerrainData.FromElevation(_loaded.Elevation, cfg);
                 var r = Generator.FromTerrain(terra, cfg);
                 if (modDir is not null) Generator.WriteMod(r, _options, modDir);
                 return r;
@@ -236,7 +236,10 @@ public sealed class MainForm : Form
 
         AddView(_views, "Height", PreviewRenderer.RenderElevation(result));
         AddView(_views, "Terrain", PreviewRenderer.RenderTerrain(result));
+        AddView(_views, "Climate", PreviewRenderer.RenderClimate(result));
+        AddView(_views, "Rivers", PreviewRenderer.RenderRivers(result));
         AddView(_views, "Provinces", PreviewRenderer.RenderProvinces(result));
+        AddView(_views, "Counties", PreviewRenderer.RenderCounties(result));
 
         foreach (TabPage page in _views.TabPages)
             if (page.Text == selected) { _views.SelectedTab = page; break; }

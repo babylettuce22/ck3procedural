@@ -173,44 +173,4 @@ public static class Raster
             }
     }
 
-    /// <summary>
-    /// Rasterise the traced river courses onto a mask at the given resolution. River cells are
-    /// single cells on the simulation grid, so each becomes a small block; the course is then
-    /// connected by drawing a line between consecutive cells.
-    /// </summary>
-    public static byte[] RiverMask(WorldGrid w, int width, int height)
-    {
-        var mask = new byte[width * height];
-        double sx = (double)width / w.Width;
-        double sy = (double)height / w.Height;
-
-        foreach (var river in w.Rivers)
-        {
-            for (int i = 0; i < river.Cells.Count - 1; i++)
-            {
-                int a = river.Cells[i], b = river.Cells[i + 1];
-                DrawLine(mask, width, height,
-                    (int)((w.X(a) + 0.5) * sx), (int)((w.Y(a) + 0.5) * sy),
-                    (int)((w.X(b) + 0.5) * sx), (int)((w.Y(b) + 0.5) * sy));
-            }
-        }
-        return mask;
-    }
-
-    /// <summary>Bresenham, so upscaled river courses stay connected.</summary>
-    private static void DrawLine(byte[] mask, int width, int height, int x0, int y0, int x1, int y1)
-    {
-        int dx = Math.Abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
-        int dy = -Math.Abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
-        int err = dx + dy;
-
-        while (true)
-        {
-            if (x0 >= 0 && y0 >= 0 && x0 < width && y0 < height) mask[y0 * width + x0] = 1;
-            if (x0 == x1 && y0 == y1) break;
-            int e2 = 2 * err;
-            if (e2 >= dy) { err += dy; x0 += sx; }
-            if (e2 <= dx) { err += dx; y0 += sy; }
-        }
-    }
 }

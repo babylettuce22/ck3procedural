@@ -45,6 +45,30 @@ public sealed class GenerationResult
     public required ProvinceMap Provinces { get; init; }
 
     /// <summary>
+    /// Province label -&gt; the 1-based id the mod ships, from
+    /// <see cref="Emit.MapDataWriter.BuildProvinceOrder"/>. Baronied land first, then impassable
+    /// land, then sea, which is what makes <see cref="BaronyCount"/> and <see cref="LandCount"/>
+    /// usable as plain thresholds.
+    /// </summary>
+    public required int[] ProvinceOrder { get; init; }
+
+    /// <summary>Ids at or below this are land provinces with a barony — the ones counties are made
+    /// of. Above it and up to <see cref="LandCount"/> is impassable land.</summary>
+    public required int BaronyCount { get; init; }
+
+    public required int LandCount { get; init; }
+
+    /// <summary>
+    /// The empire-down title hierarchy, structure and colours but no names — naming needs cultures,
+    /// which the mod writer produces.
+    ///
+    /// Built here rather than while writing the mod because CK3 draws land at *county* level, so
+    /// this, and not the province partition, is what the map looks like. A preview that could not
+    /// show it was a preview of the wrong thing.
+    /// </summary>
+    public required List<MapGen.Title> Titles { get; init; }
+
+    /// <summary>
     /// Land/water as the finished province partition sees it, which is the only authority on it.
     /// <see cref="LandMask"/> is what went *into* the partition; the build then drowns islands too
     /// small to be provinces, so the two disagree on those pixels and everything downstream must
@@ -81,8 +105,8 @@ public static class Generator
         // The province map is derived from the same field the heightmap is read from, so the
         // coastline in provinces.png is the coastline in heightmap.png by construction.
         var image = Stage.Time("heightmap decode", () => HeightmapSource.Read(options.HeightmapPath, cfg));
-        var terra = Stage.Time("drainage, rivers and lakes",
-            () => TerrainData.FromElevation(image.Elevation, cfg, rng));
+        var terra = Stage.Time("province elevation",
+            () => TerrainData.FromElevation(image.Elevation, cfg));
 
         return FromTerrain(terra, cfg);
     }
@@ -120,8 +144,8 @@ public static class Generator
                 new Rng(cfg.Seed ^ 0x0C11)));
 
         var provinces = Stage.Time("province partition",
-            () => Provinces.Build(landMask, provinceElevation, terra.RiverMask, terra.LakeMask,
-                climate, cfg.ProvinceWidth, cfg.ProvinceHeight, cfg, rng));
+            () => Provinces.Build(landMask, provinceElevation, climate,
+                cfg.ProvinceWidth, cfg.ProvinceHeight, cfg, rng));
         Console.WriteLine($"  {provinces.Count} provinces total");
 
         var provinceLandMask = ProvinceLandMask(cfg, provinces);
@@ -133,6 +157,20 @@ public static class Generator
             () => MapGen.TerrainClassifier.Classify(cfg, provinceElevation, provinceLandMask,
                 climate, new Rng(cfg.Seed ^ 0x7E44)));
 
+        // Land provinces get the low ids and sea zones the high ones, so default.map needs a
+        // single contiguous sea_zones range instead of vanilla's dozens. Derived here rather than
+        // by the map_data writer so that ids — and therefore titles — exist without writing a mod.
+        var order = Emit.MapDataWriter.BuildProvinceOrder(provinces, out int baronyCount,
+            out int landCount);
+
+        // Titles get the narrower count: an impassable province has no barony.
+        //
+        // On its own seed for the reason the classifier above is: which counties form should not
+        // depend on how many numbers the province partition happened to draw. That does mean a
+        // given seed groups its counties differently than it did while this ran inside WriteMod.
+        var titles = Stage.Time("title hierarchy",
+            () => MapGen.Titles.Build(provinces, baronyCount, order, cfg, new Rng(cfg.Seed ^ 0x71C1)));
+
         return new GenerationResult
         {
             Config = cfg,
@@ -141,6 +179,10 @@ public static class Generator
             LandMask = landMask,
             ProvinceLandMask = provinceLandMask,
             Provinces = provinces,
+            ProvinceOrder = order,
+            BaronyCount = baronyCount,
+            LandCount = landCount,
+            Titles = titles,
             Terrain = terrain,
             Terra = terra,
             ElapsedMs = sw.ElapsedMilliseconds,
@@ -174,16 +216,14 @@ public static class Generator
 
         Emit.ModWriter.WriteDescriptors(modDir);
 
-        var (order, baronyCount, landCount) = Stage.Time("map_data (heightmap, provinces, rivers)",
-            () => Emit.MapDataWriter.WriteAll(
-                modDir, cfg, result.Provinces, options.WritePacked, result.Terra));
+        Stage.Time("map_data (heightmap, provinces, rivers)",
+            () => Emit.MapDataWriter.WriteAll(modDir, cfg, result.Provinces, result.ProvinceOrder,
+                result.BaronyCount, result.LandCount, options.WritePacked, result.Terra));
 
-        // Titles get the narrower count: an impassable province has no barony.
-        var empires = Stage.Time("title hierarchy",
-            () => Titles.Build(result.Provinces, baronyCount, order, cfg, rng));
         Emit.ContentWriter.WriteAll(
-            modDir, options.GameDir, cfg, result.Provinces, order, landCount,
-            empires, result.ProvinceElevation, result.Terrain.Terrain, rng, options.WriteHistory);
+            modDir, options.GameDir, cfg, result.Provinces, result.ProvinceOrder, result.LandCount,
+            result.Titles, result.ProvinceElevation, result.Terrain.Terrain, rng,
+            options.WriteHistory);
 
         Console.WriteLine($"  done in {sw.ElapsedMilliseconds} ms");
     }

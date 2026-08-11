@@ -58,8 +58,8 @@ public sealed class ProvinceSizeField
         => Field.Sample(_factor, _width, _height,
             (float)x / CellPixels - 0.5f, (float)y / CellPixels - 0.5f);
 
-    public static ProvinceSizeField Build(byte[] mask, float[] elevation, byte[] rivers,
-        byte[] lakes, ClimateField climate, int width, int height, MapConfig cfg, Rng rng)
+    public static ProvinceSizeField Build(byte[] mask, float[] elevation,
+        ClimateField climate, int width, int height, MapConfig cfg, Rng rng)
     {
         int cw = Math.Max(2, width / CellPixels), ch = Math.Max(2, height / CellPixels);
         double variance = Math.Max(1.0, cfg.ProvinceSizeVariance);
@@ -81,12 +81,13 @@ public sealed class ProvinceSizeField
         });
 
         // Where the map can actually carry people, at the same coarse grid. Averaged down rather
-        // than point-sampled: a river is one pixel wide, so a cell that sampled its centre would
-        // miss almost every one of them and the freshwater term would do nothing.
+        // than point-sampled, which mattered most for the freshwater term — a river is one pixel
+        // wide, so a cell sampling its centre missed almost every one. That term is gone with the
+        // hydrology and the averaging stays: it is the right way to coarsen a field either way.
         double weight = Math.Clamp(cfg.HabitabilitySizeWeight, 0, 1);
         var settled = weight <= 0 ? null
             : Field.Downsample(
-                Habitability.Build(mask, elevation, rivers, lakes, climate, width, height, cfg),
+                Habitability.Build(mask, elevation, climate, width, height, cfg),
                 width, height, CellPixels);
 
         // Which cells are land, and so which get to set the ends of every scale below. Doing it

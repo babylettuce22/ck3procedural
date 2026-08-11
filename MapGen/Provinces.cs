@@ -50,13 +50,12 @@ public static class Provinces
         (-1, 1, 1.41421356f, true), (1, 1, 1.41421356f, true),
     ];
 
-    public static ProvinceMap Build(byte[] mask, float[] elevation, byte[] rivers, byte[] lakes,
+    public static ProvinceMap Build(byte[] mask, float[] elevation,
         ClimateField climate, int width, int height, MapConfig cfg, Rng rng)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
-        var size = ProvinceSizeField.Build(mask, elevation, rivers, lakes, climate,
-            width, height, cfg, rng);
+        var size = ProvinceSizeField.Build(mask, elevation, climate, width, height, cfg, rng);
         var seeds = PlaceSeeds(mask, width, height, cfg, rng, size);
         Console.WriteLine($"  seeded {seeds.Count(s => s.IsLand)} land / " +
                           $"{seeds.Count(s => !s.IsLand)} sea provinces ({sw.ElapsedMilliseconds} ms)");

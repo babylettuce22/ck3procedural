@@ -168,7 +168,8 @@ public static class DebugRender
 
     /// <summary>
     /// A terrain-coloured view, equivalent in spirit to drawWorld()'s "colorful" mode: enough
-    /// to judge coastline shape, mountain placement, deserts and rivers at a glance.
+    /// to judge coastline shape, mountain placement and deserts at a glance. Rivers and lakes
+    /// were drawn here too until the hydrology was removed on 2026-08-10.
     /// </summary>
     public static void WriteTerrain(string path, WorldGrid w, MapConfig cfg, int scale = 1)
     {
@@ -183,9 +184,7 @@ public static class DebugRender
             int e = w.Elevation[i];
             (byte r, byte g, byte b) c;
 
-            if (w.River[i]) c = (60, 120, 220);
-            else if (w.Lake[i]) c = (40, 90, 180);
-            else if (e < 0) c = (8, 20, 70);
+            if (e < 0) c = (8, 20, 70);
             else if (e < sea) c = (20, 70, 130);
             else if (w.Beach[i]) c = (232, 210, 160);
             else if (e < hills) c = w.Desert[i] ? ((byte)216, (byte)196, (byte)120) : ((byte)90, (byte)132, (byte)60);

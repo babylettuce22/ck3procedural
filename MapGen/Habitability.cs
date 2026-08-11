@@ -12,13 +12,11 @@ namespace Ck3MapGen.MapGen;
 /// seeds by noise gets the *unevenness* right and the *reasons* wrong, so the small provinces land
 /// nowhere in particular and the map reads as patterned rather than settled.
 ///
-/// It is a weighting, not a simulation. Four terms, each of which is either already computed or
+/// It is a weighting, not a simulation. Three terms, each of which is either already computed or
 /// costs one pass over the raster:
 ///
 ///   * <b>Coastal access.</b> A coast is a road that needs no upkeep, so the shore is where people
 ///     are. Decays inland over <see cref="CoastRangeAtVanilla"/>.
-///   * <b>Freshwater.</b> Rivers and lakes, on the same footing and over a shorter range — a river
-///     valley is narrow, which is the point of it.
 ///   * <b>Slope.</b> Flat ground is farmed and steep ground is not. This is also what keeps a
 ///     mountain range from filling with tiny provinces just because it is near a coast.
 ///   * <b>Climate.</b> Rainfall and mean temperature, straight off the circulation model. Dry
@@ -30,21 +28,24 @@ namespace Ck3MapGen.MapGen;
 /// province size wherever a class boundary falls — the map would grow visible seams along the
 /// BSh/BWh line that no amount of noise would hide. The fields the classes are cut from have no
 /// such edges.
+///
+/// There was a fourth term until 2026-08-10: freshwater, rivers and lakes on the same footing over
+/// a shorter range than the coast, because a river valley is narrow and that is the point of it.
+/// It went with the hydrology it read. Its absence is a real loss and not a tidy-up — an inland
+/// river valley now reads exactly like the dry ground either side of it, so nothing pulls small
+/// provinces along a river the way the Nile or the Rhine pulls them. Restoring it is part of
+/// finishing the rivers, not an optional follow-up.
 /// </summary>
 public static class Habitability
 {
     /// <summary>How far inland a coast is still worth being near, in vanilla province pixels.</summary>
     private const double CoastRangeAtVanilla = 140;
 
-    /// <summary>The same for a river or lake shore. Shorter, because a valley is narrow.</summary>
-    private const double FreshwaterRangeAtVanilla = 55;
-
     /// <summary>Ground everywhere is worth something before any of the terms below apply, so the
     /// driest corner of the map is thinly settled rather than empty.</summary>
     private const double BaseFertility = 0.35;
 
     private const double CoastWeight = 0.35;
-    private const double FreshwaterWeight = 0.30;
 
     /// <summary>
     /// Rainfall at which the moisture term reaches 1-1/e, i.e. most of the way. Saturating rather
@@ -80,15 +81,12 @@ public static class Habitability
     /// carry the land value nearest them rather than a value of their own, so sampling near a coast
     /// never falls off a cliff.
     /// </summary>
-    public static float[] Build(byte[] mask, float[] elevation, byte[] rivers, byte[] lakes,
+    public static float[] Build(byte[] mask, float[] elevation,
         ClimateField climate, int width, int height, MapConfig cfg)
     {
         double coastRange = Math.Max(1, cfg.Scaled(CoastRangeAtVanilla));
-        double freshRange = Math.Max(1, cfg.Scaled(FreshwaterRangeAtVanilla));
 
         var toSea = DistanceTo(width, height, cell => mask[cell] != 1);
-        var toFresh = DistanceTo(width, height,
-            cell => rivers[cell] != 0 || lakes[cell] != 0 || mask[cell] != 1);
 
         var field = new float[width * height];
 
@@ -99,11 +97,10 @@ public static class Habitability
                 int cell = y * width + x;
 
                 double coast = CoastWeight * Falloff(toSea[cell], coastRange);
-                double fresh = FreshwaterWeight * Falloff(toFresh[cell], freshRange);
                 double slope = Slope(elevation, mask, width, height, x, y);
                 double weather = Weather(climate.AnnualMm[cell], climate.MeanC[cell]);
 
-                field[cell] = (float)Math.Clamp((BaseFertility + coast + fresh) * weather * slope,
+                field[cell] = (float)Math.Clamp((BaseFertility + coast) * weather * slope,
                     0.01, 1.0);
             }
         });

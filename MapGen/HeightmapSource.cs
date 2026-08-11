@@ -14,8 +14,6 @@ namespace Ck3MapGen.MapGen;
 ///
 /// Everything downstream — the province partition, rivers.png, the terrain textures, the title
 /// hierarchy — reads <see cref="TerrainData"/> and nothing else, so it cannot tell the difference.
-/// Rivers and lakes are derived from the imported field with exactly the same drainage code the
-/// generator uses on its own output.
 ///
 /// Reading is done with ImageSharp rather than by hand. The project writes its own PNGs because
 /// CK3 needs an exact pixel format per file and a general imaging library will not guarantee one;
@@ -26,9 +24,10 @@ namespace Ck3MapGen.MapGen;
 /// A decoded heightmap, and nothing derived from one.
 ///
 /// This is deliberately the *only* thing worth caching between runs, because it is the only thing
-/// that is a pure function of the file. Everything else the image leads to — the drainage network,
-/// river courses, lakes — depends on settings the user is in the middle of tuning, so caching any
-/// of it means a setting that silently does nothing.
+/// that is a pure function of the file. Everything else the image leads to depends on settings the
+/// user is in the middle of tuning, so caching any of it means a setting that silently does
+/// nothing. That was learned from the drainage network in particular, back when it was cached along
+/// with the image and every river setting therefore appeared to do nothing at all.
 ///
 /// The file's timestamp and length are kept so a heightmap re-exported over the same path is seen
 /// as a different image. Keying on the path alone is what makes "I regenerated my heightmap and the
@@ -65,8 +64,8 @@ public static class HeightmapSource
     /// <summary>
     /// Loads a heightmap and derives everything from it. The one-shot path, for the CLI.
     /// </summary>
-    public static TerrainData Load(string path, MapConfig cfg, Rng rng)
-        => TerrainData.FromElevation(Read(path, cfg).Elevation, cfg, rng);
+    public static TerrainData Load(string path, MapConfig cfg)
+        => TerrainData.FromElevation(Read(path, cfg).Elevation, cfg);
 
     /// <summary>
     /// Decodes the image and puts its dimensions on the config. No setting is consulted, so the

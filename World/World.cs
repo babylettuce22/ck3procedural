@@ -23,39 +23,29 @@ public sealed class WorldGrid
     public readonly int[] Elevation;
     public readonly int[] Magma;
     public readonly int[] Moisture;
-    public readonly int[] Raindrops;
 
     // --- Flags ---
     public readonly bool[] Spreading;
     public readonly bool[] Beach;
     public readonly bool[] Coastal;
     public readonly bool[] Desert;
-    public readonly bool[] River;
-    public readonly bool[] Lake;
     public readonly bool[] Tree;
     public readonly bool[] FloodFilled;
     public readonly bool[] FarmlandPotential;
-    public readonly bool[] DrawableRiver;
 
     // --- Group membership (-1 when unassigned) ---
     public readonly int[] MountainId;
     public readonly int[] ContinentId;
-    public readonly int[] WaterGroupId;
     public readonly int[] ForestId;
 
-    // --- River generation state (see MapGen/Rivers.cs) ---
-    /// <summary>Distance along its river, or -1 for "not a river cell".</summary>
-    public readonly int[] RiverRun;
-
-    /// <summary>
-    /// Index into <see cref="Rivers"/>, assigned only once a river is *completed*. Cells of a
-    /// river still being traced keep -1, and generateRiver depends on that distinction.
-    /// </summary>
-    public readonly int[] RiverObject;
-
-    public readonly bool[] RiverStartGreen;
-    public readonly bool[] RiverEndRed;
-    public readonly bool[] IsTributary;
+    // The hydrology state ck2rpg keeps per cell — Raindrops, River, Lake, DrawableRiver, RiverRun,
+    // RiverObject, RiverStartGreen, RiverEndRed, IsTributary, WaterGroupId, the Waters bodies and
+    // the Rivers list — was removed on 2026-08-10 along with the river generator. Most of it was
+    // already dead: only River, Lake and DrawableRiver were ever written, and only by copying the
+    // province-resolution masks down onto this coarse grid for a debug image. A rebuilt hydrology
+    // should not come back through here. This grid is a coarse summary at a fraction of the
+    // province raster's resolution, which is the wrong place to decide where a one-pixel river
+    // goes, and copying an answer down to it and back up is how the two disagreed before.
 
     /// <summary>Cell indices on a tectonic spreading line (world.tectonics.spreadingLine).</summary>
     public readonly List<int> SpreadingLine = [];
@@ -63,18 +53,10 @@ public sealed class WorldGrid
     /// <summary>Column positions of the spreading centres (world.tectonics.spreadingCenters).</summary>
     public readonly List<int> SpreadingCenters = [];
 
-    // --- Flood-filled feature groups (world.mountains / continents / rivers / forests) ---
+    // --- Flood-filled feature groups (world.mountains / continents / forests) ---
     public readonly List<CellGroup> Mountains = [];
     public readonly List<Continent> Continents = [];
-    public readonly List<WaterBody> Waters = [];
     public readonly List<CellGroup> Forests = [];
-
-    /// <summary>
-    /// Generated rivers. The JS stores these in the same `world.rivers` array as the
-    /// flood-filled lake bodies above, so whichever pass ran last clobbers the other; keeping
-    /// them separate avoids that.
-    /// </summary>
-    public readonly List<River> Rivers = [];
 
     // --- Geographical reference lines, in grid space (setGeographicalPoints) ---
     public int Equator;
@@ -94,36 +76,22 @@ public sealed class WorldGrid
         Elevation = new int[Count];
         Magma = new int[Count];
         Moisture = new int[Count];
-        Raindrops = new int[Count];
 
         Spreading = new bool[Count];
         Beach = new bool[Count];
         Coastal = new bool[Count];
         Desert = new bool[Count];
-        River = new bool[Count];
-        Lake = new bool[Count];
         Tree = new bool[Count];
         FloodFilled = new bool[Count];
         FarmlandPotential = new bool[Count];
-        DrawableRiver = new bool[Count];
 
         MountainId = new int[Count];
         ContinentId = new int[Count];
-        WaterGroupId = new int[Count];
         ForestId = new int[Count];
-        RiverRun = new int[Count];
-        RiverObject = new int[Count];
-
-        RiverStartGreen = new bool[Count];
-        RiverEndRed = new bool[Count];
-        IsTributary = new bool[Count];
 
         Array.Fill(MountainId, NoGroup);
         Array.Fill(ContinentId, NoGroup);
-        Array.Fill(WaterGroupId, NoGroup);
         Array.Fill(ForestId, NoGroup);
-        Array.Fill(RiverRun, -1);
-        Array.Fill(RiverObject, NoGroup);
     }
 
     public int Idx(int x, int y) => y * Width + x;
