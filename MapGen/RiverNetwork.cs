@@ -21,13 +21,6 @@ public static class RiverNetwork
     private static readonly int[] Dx = [-1, 0, 1, -1, 1, -1, 0, 1];
     private static readonly int[] Dy = [-1, -1, -1, 0, 0, 1, 1, 1];
 
-    /// <summary>
-    /// How much river a meander needs to swing through one offset. Rivers meander with a
-    /// wavelength of roughly ten to fourteen channel widths; below that the offset reverses faster
-    /// than the course advances and the result is a switchback rather than a bend.
-    /// </summary>
-    private const double MeanderWavelengthRatio = 12.0;
-
     public static List<RiverCourse> Extract(FlowField.Result flow, float[] height, int width,
         int hgt, float seaLevel, MapConfig cfg, Rng rng)
     {
@@ -169,13 +162,8 @@ public static class RiverNetwork
     /// catchment in cells is a fixed catchment in square kilometres — which is what actually
     /// decides whether a watercourse is worth drawing.
     /// </summary>
-    /// <summary>
-    /// Catchment a cell needs before it carries a drawn river. Divided by
-    /// <see cref="MapConfig.RiverPropensity"/> rather than multiplied, so a higher propensity means
-    /// a lower bar and therefore more rivers, which is the way round a reader expects.
-    /// </summary>
     private static float ChannelThreshold(MapConfig cfg)
-        => (float)Math.Max(4.0, cfg.RiverMinCatchmentCells / Math.Max(0.05, cfg.RiverPropensity));
+        => (float)Math.Max(4.0, cfg.RiverMinCatchmentCells);
 
     // --- smoothing ---
 
@@ -221,20 +209,9 @@ public static class RiverNetwork
                 float t = i / (float)Math.Max(1, dense.Count - 1);
                 amp *= MathF.Min(1f, MathF.Min(t, 1f - t) * 6f);
 
-                // Wavelength is tied to amplitude, and that ratio is the whole reason rivers
-                // stopped switchbacking. A meander's length along the valley runs roughly ten to
-                // fourteen times its width, so an offset of `amp` needs something like 12*amp of
-                // river to swing through. The old fixed frequencies were 17 px and 6 px against an
-                // amplitude of up to 2.5 px — 0.42 amplitude over wavelength on the fine octave,
-                // which is not a meander but a hairpin, and it is what made the map look scribbled.
-                double wavelength = Math.Max(8.0, MeanderWavelengthRatio * maxAmp);
-                double f = 1.0 / wavelength;
-
-                // The second octave is kept but pushed to a third of the amplitude at half the
-                // wavelength, so it frays the bend without ever reversing it.
-                double offset = meander.Noise2D(px * f, py * f)
-                                + 0.33 * meander.Noise2D(px * f * 2, py * f * 2);
-                float d = (float)(offset / 1.33) * amp;
+                double offset = meander.Noise2D(px * 0.06, py * 0.06)
+                                + 0.5 * meander.Noise2D(px * 0.17, py * 0.17);
+                float d = (float)(offset / 1.5) * amp;
 
                 result.Add((px - ty / len * d, py + tx / len * d));
             }
