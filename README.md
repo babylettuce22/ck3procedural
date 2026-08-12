@@ -1,3 +1,5 @@
+<img width="1790" height="935" alt="genguipic" src="https://github.com/user-attachments/assets/bece6c17-74fb-4f13-a539-60a07c044c55" />
+
 # CK3 Procedural Map
 
 A generator that turns a single heightmap into a complete, playable Crusader Kings III total
