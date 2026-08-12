@@ -314,8 +314,8 @@ public static class MapDataWriter
     /// How far, in *vanilla heightmap* pixels, the near-shore seabed is graded away from the coast,
     /// and how far the height field is smoothed either side of the coastline.
     ///
-    /// Both measured off vanilla's own heightmap. Its seabed falls from a mean of 18.80/255 one
-    /// pixel offshore to 14.82 nine pixels out — very close to linear at -0.45 a pixel — and then
+    /// Both measured off vanilla's own heightmap. Its seabed falls from a mean of 18.89/255 one
+    /// pixel offshore to 15.05 nine pixels out — very close to linear at -0.45 a pixel — and then
     /// continues into the abyss. Ours arrived flat: 18.85 at one pixel and 18.05 at nine, with a
     /// median of exactly 19 at every distance, i.e. a plate of water sitting precisely on the value
     /// CK3 tests against, then a cliff to black.
@@ -324,6 +324,37 @@ public static class MapDataWriter
 
     private const double SeabedGradePer255 = 0.45;
     private const int CoastSmoothReach = 3;
+
+    /// <summary>
+    /// How far offshore, in vanilla heightmap pixels, a *synthesised* shelf runs before it reaches
+    /// the abyss — vanilla's own slope carried all the way down from the plane rather than stopped
+    /// at <see cref="SeabedGradeReach"/>.
+    ///
+    /// Checked against vanilla at matched world distance, and it is close enough to be worth
+    /// quoting: measured 17.0 / 15.1 / 12.9 / 10.8 / 8.7 at 4.5 / 9 / 13.5 / 18 / 22.5 px offshore,
+    /// synthesised 16.96 / 14.78 / 12.67 / 10.56 / 8.44. Vanilla's real profile flattens out past
+    /// about 25 px where this stays linear to zero, which is the one place the two part company and
+    /// is well beyond anything a coastline cliff is visible at.
+    /// </summary>
+    private static readonly double SeabedSynthesisReach = WaterLevel255 / SeabedGradePer255;
+
+    /// <summary>
+    /// The share of near-shore water the existing grade must admit before its seabed is believed.
+    ///
+    /// Three measurements, all taken by this pass on real files. Vanilla's own heightmap admits
+    /// 19.13%. The playtest map that prompted this admits 0.50%. This program's own output, fed
+    /// back in after its shelf has been synthesised, admits 11.14% — and that third number is why
+    /// the threshold is 5% rather than the 10% it started at. A synthesised shelf descends at
+    /// vanilla's slope, so only the first pixel or so of it survives a gate that asks for water
+    /// within one step of the plane, and a threshold that our own well-formed output only just
+    /// clears is one bad rounding away from re-synthesising over its own work.
+    ///
+    /// The obvious test — "is nearly all water one value" — does not work. Vanilla holds 85.08% of
+    /// its water at exactly 0 against the playtest map's 99.74%, which is not a gap anything can be
+    /// hung on. Asking the gate itself is both sharper and exactly the right question, because what
+    /// is being decided is whether the gate has anything left to do.
+    /// </summary>
+    private const double SeabedAuthoredShare = 0.05;
 
     /// <summary>
     /// Chamfer distance from every pixel to the nearest pixel on the other side of the water plane,
@@ -427,6 +458,15 @@ public static class MapDataWriter
     /// own profile. Only ever *downward*: an author who drew a real seabed keeps it, because the
     /// grade is a floor the existing depth is taken the minimum against, not a replacement for it.
     ///
+    /// **The missing shelf.** That grade admits only water within one step of the plane, and on a
+    /// source whose ocean is pure black it therefore admits nothing — measured at 0.50% of
+    /// near-shore water on the map that prompted this, against 19.13% on vanilla's own heightmap.
+    /// The pass ran and did nothing, and the map shipped with a full-height wall from the water
+    /// plane to the seabed at every coastline. When <see cref="HasAuthoredSeabed"/> finds there is
+    /// no seabed to preserve, the shelf is synthesised instead of graded: same profile, run all the
+    /// way down to the abyss, and taken as a *ceiling* rather than a floor so it can only fill the
+    /// plate in and never cut into anything drawn above it.
+    ///
     /// **The steps.** <see cref="ForceCoastlineToMatchProvinces"/> reflects disagreeing pixels
     /// across the plane in 2x2 blocks, because provinces.png is half the heightmap's resolution.
     /// That removed the cliff the old clamp produced but left the height field stepped along the
@@ -439,9 +479,23 @@ public static class MapDataWriter
     {
         int width = cfg.Width, height = cfg.Height;
         int grade = Math.Max(1, (int)Math.Round(cfg.Scaled(SeabedGradeReach)));
+        int synthesis = Math.Max(1, (int)Math.Round(cfg.Scaled(SeabedSynthesisReach)));
         int smooth = Math.Max(1, (int)Math.Round(cfg.Scaled(CoastSmoothReach)));
 
-        var distance = CoastDistance(full, width, height, Math.Max(grade, smooth));
+        var distance = CoastDistance(full, width, height,
+            Math.Max(Math.Max(grade, synthesis), smooth));
+
+        bool authored = HasAuthoredSeabed(full, distance, grade, width, height);
+        int reach = authored ? grade : synthesis;
+
+        // The profile as a total drop across the whole reach, rather than a slope per pixel.
+        //
+        // Both halves have to scale with the map and only the reach used to. SeabedGradePer255 is
+        // measured in vanilla heightmap pixels, so applying it to a distance already scaled into
+        // this map's pixels graded a small map by the same *depth* over a much shorter run: on a
+        // 4096-wide map the reach scales to 2 px and the old form dropped 0.90/255 across it where
+        // the world-equivalent is the full 4.05.
+        double drop = authored ? SeabedGradeReach * SeabedGradePer255 * Step255 : WaterLevel16;
 
         // The shelf, first: the smoothing pass below should see the graded seabed, not the plate.
         long deepened = 0;
@@ -452,8 +506,13 @@ public static class MapDataWriter
                 long i = (long)y * width + x;
                 if (full[i] > WaterLevel16) continue;
 
+                // The ring touching land is distance 0, and it is graded like any other. It used to
+                // be skipped, which cost nothing while the only profile started at the plane — the
+                // target there is the plane itself, so the pass was a no-op on it either way. A
+                // synthesised shelf has to fill that ring, because it is the one pixel of water the
+                // coastline is actually drawn against.
                 int d = distance[i];
-                if (d == 0 || d > grade) continue;
+                if (d > reach) continue;
 
                 // Only the plate is graded — water lying within one 8-bit step of the plane, which
                 // is the artefact and nothing else. A seabed that already descends is left exactly
@@ -462,13 +521,17 @@ public static class MapDataWriter
                 // measured on a well-formed source, an ungated grade pushed the seabed nine pixels
                 // out from 14.00 to 13.48 where vanilla sits at 14.82, i.e. further from vanilla
                 // than doing nothing.
-                if (full[i] < WaterLevel16 - Step255) continue;
+                if (authored && full[i] < WaterLevel16 - Step255) continue;
 
                 // Vanilla's own fall-off, in 16-bit units, floored at the abyss.
-                int drop = (int)Math.Round(d * SeabedGradePer255 * Step255);
-                var target = (ushort)Math.Max(0, WaterLevel16 - drop);
+                var target = (ushort)Math.Max(0, WaterLevel16 - (int)Math.Round(drop * d / reach));
 
-                if (target >= full[i]) continue;
+                // Which way the shelf may move the water is the whole difference between the two
+                // cases, and each direction is the conservative one for its own source. Grading an
+                // authored seabed may only *deepen*, so relief somebody drew is never filled in.
+                // Synthesising one may only *shallow*, so it fills the flat plate in front of the
+                // coast and still leaves any bathymetry above the shelf line exactly as it was.
+                if (authored ? target >= full[i] : target <= full[i]) continue;
                 full[i] = target;
                 local++;
             }
@@ -485,8 +548,15 @@ public static class MapDataWriter
             for (int x = 0; x < width; x++)
             {
                 long i = (long)y * width + x;
-                int d = distance[i];
-                if (d == 0 || d > smooth) continue;
+
+                // Distance 0 is the shoreline ring itself, and skipping it left this pass unable to
+                // touch the pixels it was written for: ForceCoastlineToMatchProvinces reflects
+                // disagreeing pixels in 2x2 blocks, and every one of those blocks lies against the
+                // split, which is to say at distance 0. Measured on the playtest map, including it
+                // takes the land ring from 27.3/255 to 26.2 against a hinterland of 25.5 — a lip
+                // above the shore becoming a continuation of it — and the water ring from 19.0 to
+                // 18.2, where vanilla's own sits at 18.89.
+                if (distance[i] > smooth) continue;
 
                 bool land = source[i] > WaterLevel16;
                 long sum = 0;
@@ -519,8 +589,66 @@ public static class MapDataWriter
             return local;
         }, local => Interlocked.Add(ref smoothed, local));
 
-        Console.WriteLine($"  coastline shaping: {deepened:N0} seabed pixels graded over {grade} px, " +
+        Console.WriteLine($"  coastline shaping: {deepened:N0} seabed pixels " +
+                          $"{(authored ? "graded" : "synthesised")} over {reach} px, " +
                           $"{smoothed:N0} smoothed within {smooth} px of the shore");
+    }
+
+    /// <summary>
+    /// Whether the source drew a seabed at all, or only a coastline with black behind it.
+    ///
+    /// The question is asked of <see cref="ShapeCoastline"/>'s own gate, by measuring what share of
+    /// near-shore water that gate admits. That is not a proxy for the thing being decided, it *is*
+    /// the thing: the gate exists to protect an authored seabed from being flattened, so a gate
+    /// that admits almost nothing is one with nothing left to protect, and the pass it guards is a
+    /// measured no-op rather than a conservative one.
+    ///
+    /// This matters well beyond one playtest. The common authoring convention for a CK3 heightmap
+    /// is sea level at 19/255 and open water at pure black, with nothing in between, and every map
+    /// drawn that way arrives with the same ~19-step vertical drop from the water plane to the
+    /// seabed at every shoreline — the underwater half of the cliffs, which normalisation provably
+    /// cannot reach because it happens entirely below the plane.
+    ///
+    /// Erring toward <c>true</c> is the safe direction: it means the shelf is left alone.
+    /// </summary>
+    private static bool HasAuthoredSeabed(ushort[] full, byte[] distance, int grade,
+        int width, int height)
+    {
+        (long Near, long Admitted) totals = (0, 0);
+
+        Parallel.For(0, height, () => (Near: 0L, Admitted: 0L), (y, _, local) =>
+        {
+            for (int x = 0; x < width; x++)
+            {
+                long i = (long)y * width + x;
+                if (full[i] > WaterLevel16) continue;
+
+                // The same band the grade will act on, distance 0 included, so this measures the
+                // gate's hit rate over exactly the pixels the gate is asked about.
+                if (distance[i] > grade) continue;
+
+                local.Near++;
+                if (full[i] >= WaterLevel16 - Step255) local.Admitted++;
+            }
+            return local;
+        }, local =>
+        {
+            Interlocked.Add(ref totals.Near, local.Near);
+            Interlocked.Add(ref totals.Admitted, local.Admitted);
+        });
+
+        // No shoreline to shape — an all-land or all-water map. Nothing to invent, and nothing that
+        // would be visible if it were invented.
+        if (totals.Near == 0) return true;
+
+        double share = (double)totals.Admitted / totals.Near;
+        bool authored = share >= SeabedAuthoredShare;
+
+        Console.WriteLine($"  seabed: {share * 100:F2}% of the {totals.Near:N0} px of near-shore " +
+                          $"water lies within one step of the plane (vanilla 19.13%) — " +
+                          $"{(authored ? "authored, graded only where it is flat" : "none drawn, synthesising vanilla's shelf")}");
+
+        return authored;
     }
 
     /// <summary>

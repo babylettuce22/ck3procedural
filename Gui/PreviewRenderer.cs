@@ -39,10 +39,17 @@ public static class PreviewRenderer
     /// <summary>
     /// Hillshaded elevation from the province raster.
     ///
-    /// Built from <see cref="GenerationResult.ProvinceElevation"/>, which is the heightmap as it
-    /// was read, so this shows the relief the mod will actually ship rather than an intermediate.
+    /// Built from <see cref="GenerationResult.ProvinceElevation"/>. That is the field *after*
+    /// <see cref="MapGen.HeightmapNormalizer"/> has run — normalisation happens at decode, so
+    /// nothing downstream ever sees the source's own scale — but *before* the three passes between
+    /// the elevation field and the file: the 16-bit conversion, the snap onto provinces.png and the
+    /// coastline shaping. This is the shape of the terrain, not the bytes that ship.
+    ///
+    /// <see cref="RenderHeightmap"/> is the one that shows the file. The distinction is not
+    /// academic: the seabed shelf and the shoreline snap are invisible here by construction, and
+    /// they are precisely what a cliff at the coast is made of.
     /// </summary>
-    public static Image RenderElevation(GenerationResult result)
+    public static Image RenderRelief(GenerationResult result)
     {
         var cfg = result.Config;
         int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
@@ -85,7 +92,7 @@ public static class PreviewRenderer
     ///
     /// Every other view here interprets — hillshades, colours by class, outlines. This one refuses
     /// to, and that is its entire purpose. It is the only place the passes between the elevation
-    /// field and the file are visible at all: <see cref="RenderElevation"/> is built from
+    /// field and the file are visible at all: <see cref="RenderRelief"/> is built from
     /// <see cref="GenerationResult.ProvinceElevation"/> and so shows the map *before* the scale
     /// conversion, the snap onto provinces.png and the seabed grade, none of which it can see and
     /// two of which exist to fix things that only appear at this stage.

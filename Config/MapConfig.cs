@@ -74,28 +74,72 @@ public sealed class MapConfig
     public int SeaFloorElevation { get; set; } = -250;
 
     /// <summary>
-    /// Whether an imported heightmap is rescaled onto CK3's height scale before anything reads it.
+    /// How an imported heightmap is rescaled onto CK3's height scale before anything reads it.
     ///
-    /// Off, because a heightmap this program wrote is already on that scale and normalising it
-    /// would be a lossy round trip for no gain. Turn it on for a heightmap drawn anywhere else —
-    /// Azgaar above all, whose exports put sea level at the equivalent of 51/255 against our 19 and
-    /// so read as almost entirely land. See <see cref="MapGen.HeightmapNormalizer"/>.
+    /// The default is <see cref="Config.HeightmapNormalization.Off"/>, and what each mode costs on a
+    /// map that does not need it has been measured rather than assumed:
+    ///
+    ///   * <b>Stretch is not free.</b> Run over vanilla's own heightmap — already on CK3's scale,
+    ///     bottom anchor correctly detected as a no-op — it still applies a 1.113x stretch, because
+    ///     <see cref="LandTopPercentile"/> anchors at 173.6/255 where vanilla's top 0.01% runs on to
+    ///     191. Land moves by a mean of 3.00/255 and 8,814 px clip.
+    ///   * <b>Shift is free.</b> On vanilla it detects the floor at 19.00/255, which is vanilla's own
+    ///     lowest land pixel, shifts by 0.00 and clips nothing; the emitted distribution is
+    ///     36 / 57 / 86 / 143 / 191 in and out. Same result on this program's own output.
+    ///
+    /// So Shift is a defensible default where Stretch is not — it is the identity on a correct map
+    /// and still removes the shore cliff from a plateau. It is left off only because Off is the one
+    /// setting that cannot surprise anybody, and this program's own heightmaps never need it.
+    ///
+    /// Two different faults want two different modes; see
+    /// <see cref="Config.HeightmapNormalization"/> and <see cref="MapGen.HeightmapNormalizer"/>.
     /// </summary>
     [Category("11 Height scale")]
-    [Description("Rescale an imported heightmap onto CK3's height scale. Off for heightmaps this program wrote, which are already on it. On for anything drawn elsewhere — an Azgaar export puts sea level at the equivalent of 51/255 against CK3's 19 and reads as almost entirely land without this.")]
-    public bool NormalizeImportedHeightmap { get; set; } = false;
+    [Description("Rescale an imported heightmap onto CK3's height scale. Off for heightmaps this program wrote — measured on vanilla's own, normalising an already-correct map still applies a 1.11x stretch, so this is not a free no-op. Stretch for anything drawn elsewhere. Shift when the relief is already right and only sits too high.")]
+    public HeightmapNormalization Normalization { get; set; } = HeightmapNormalization.Shift;
 
     /// <summary>
     /// Where the source heightmap puts its own sea level, on the 0-255 scale.
     ///
-    /// This is the one value normalisation cannot guess, because a heightmap carries no record of
-    /// it: the coastline is wherever its author decided, and every pixel below is seabed that CK3
-    /// will render as sea no matter how deep. 19 is CK3's own, and therefore a no-op. Azgaar's is
-    /// 20 on its 0-100 scale, which is 51 here.
+    /// Advisory rather than load-bearing, since the land floor became a detected value: this now
+    /// decides only which pixels count as water, not what the land scale is anchored on. Measured
+    /// on the playtest map that prompted the change, the detected floor came out at 128/255 under
+    /// every source sea level from 0 to 40, which is the whole reason the anchor stopped being a
+    /// percentile — see <see cref="MapGen.HeightmapNormalizer"/>.
+    ///
+    /// It still has to be roughly right for a source that puts its coastline somewhere unusual.
+    /// 19 is CK3's own. Azgaar's is 20 on its 0-100 scale, which is 51 here.
     /// </summary>
     [Category("11 Height scale")]
-    [Description("Where the source heightmap puts sea level, on the 0-255 scale. CK3's own is 19. Azgaar's is 20/100, which is 51 here. Normalisation cannot guess this — a heightmap carries no record of where its author put the coastline.")]
+    [Description("Where the source heightmap puts sea level, on the 0-255 scale. CK3's own is 19; Azgaar's is 20/100, which is 51 here. This decides only which pixels count as water — the land scale is anchored on a detected floor, so this no longer has to be exactly right for the land side to come out correct.")]
     public double SourceSeaLevel { get; set; } = 19;
+
+    /// <summary>
+    /// How far the land density may fall below its own peak before the bottom anchor stops walking
+    /// down, as a fraction of the busiest land level.
+    ///
+    /// This is what replaced taking the bottom anchor as a true minimum, and it is the single
+    /// change that turns normalisation from a near-no-op into a vanilla-matching result. The
+    /// failure it exists for: on the playtest map the lowest land pixel was 20.00/255, set by 585
+    /// pixels out of 2.25 million, so the affine map was anchored on 0.026% of the land and the
+    /// continent — which actually starts at 128/255 — was left a plateau with a wall at every
+    /// shore. <see cref="LandTopPercentile"/> exists precisely because one stray sample must not
+    /// set the scale, and the bottom anchor had no equivalent protection.
+    ///
+    /// A percentile is the obvious fix and the wrong one. The pixels in the fringe just above the
+    /// water plane shuttle between the land and water populations depending on where
+    /// <see cref="SourceSeaLevel"/> is put, and near the sparse bottom of a distribution that moves
+    /// a percentile a long way: on that map bottom-p1 swung from 33 to 94 over source sea levels 0
+    /// to 40. Walking down from the *mode* while density holds is stable — floor 128/255 in all
+    /// eighteen combinations of six sea levels and thresholds 0.05, 0.10 and 0.20 — which is the
+    /// right way to handle a constant nobody can pin down.
+    ///
+    /// Raise it towards 1 to cut the fringe harder, lower it towards 0 to keep more of it. 0
+    /// disables detection and takes the true minimum, which is the old behaviour.
+    /// </summary>
+    [Category("11 Height scale")]
+    [Description("How far land density may fall below its own peak before the bottom anchor stops walking down. This is what stops a few hundred stray coastal pixels from anchoring the whole land scale and leaving the map a plateau with a cliff at every shore. Measured stable from 0.05 to 0.20; 0 disables detection and takes the true minimum instead.")]
+    public double LandFloorDensity { get; set; } = 0.10;
 
     /// <summary>
     /// What the highest land pixel becomes after normalisation, on the 0-255 scale.
@@ -665,6 +709,43 @@ public sealed class MapConfig
 
     public Limits Limits { get; } = new();
 
+}
+
+/// <summary>
+/// How <see cref="MapGen.HeightmapNormalizer"/> rescales an imported heightmap.
+///
+/// The two anchors are independent decisions and welding them into one switch made the setting
+/// scarier than it needed to be. The *bottom* anchor is what fixes a shore cliff; the *top* anchor
+/// is what decides how dramatic the result reads. Shift moves the bottom and leaves the top alone,
+/// Stretch does both.
+/// </summary>
+public enum HeightmapNormalization : byte
+{
+    /// <summary>The source is already on CK3's scale. Returns it untouched, bit for bit.</summary>
+    Off,
+
+    /// <summary>
+    /// Subtract the offset between the detected land floor and the lowest land CK3 will render dry.
+    ///
+    /// Relief is preserved exactly 1:1 — nothing is scaled, so no slope is exaggerated and nothing
+    /// clips at the top. For a source whose terrain is already shaped correctly and only sits too
+    /// high, this is the honest conversion. It is not the default because it cannot recover a
+    /// source that is also *compressed*: on the playtest map it landed p50 24 and a highest pixel
+    /// of 147/255 against vanilla's 36 and 191, i.e. correct at the shore and flat everywhere else.
+    /// </summary>
+    Shift,
+
+    /// <summary>
+    /// Map the detected land floor and <see cref="MapConfig.LandTopPercentile"/> affinely onto the
+    /// lowest dry value and <see cref="MapConfig.LandTop"/>.
+    ///
+    /// The default, because it is the one that reaches vanilla: measured on the playtest map it
+    /// gives land percentiles 25 / 39 / 74 / 148 / 191 against vanilla's 36 / 57 / 87 / 143 / 191,
+    /// where Shift stops at 147. It can exaggerate — a source with a narrow land band is amplified
+    /// by whatever it takes to fill the range — so the amplification factor is printed on every
+    /// run. 1.40x on that map; watch for anything much above 2.
+    /// </summary>
+    Stretch,
 }
 
 /// <summary>Port of the <c>limits</c> global.</summary>

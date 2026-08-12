@@ -127,9 +127,73 @@ public static class HeightmapSource
         // setting has had a say. This is the reading that says whether the file needs normalising
         // at all: a heightmap on CK3's scale lands near vanilla's 47% water, and one that is not
         // reports a few percent and land percentiles far above vanilla's 36 / 57 / 87 / 143 / 191.
-        Console.WriteLine($"  as decoded: {Hypsometry.Measure(loaded.Raw).Describe()}");
+        var hypsometry = Hypsometry.Measure(loaded.Raw);
+        Console.WriteLine($"  as decoded: {hypsometry.Describe()}");
         Console.WriteLine($"  decoded in {sw.ElapsedMilliseconds} ms");
+
+        WarnAboutScale(loaded, hypsometry, cfg);
         return loaded;
+    }
+
+    /// <summary>
+    /// Land so high above the water plane that the map will ship as a plateau, said in words rather
+    /// than left to be inferred from the percentiles above.
+    ///
+    /// The line before this one already carried the whole diagnosis, and a playtester read it and
+    /// shipped anyway — which is the correct reading of that outcome: a number printed beside a
+    /// reference number is not a warning, because it asks the reader to already know which way is
+    /// bad and by how much. This says what is wrong and which setting fixes it.
+    /// </summary>
+    private static void WarnAboutScale(HeightmapImage image, Hypsometry hypsometry, MapConfig cfg)
+    {
+        // Vanilla's land sits at a median of 36/255. Triple it before saying anything: a genuinely
+        // mountainous map drawn on CK3's own scale can run high, and this must not cry wolf on one.
+        const int Plateau = 108;
+
+        int median = hypsometry.Percentile(50);
+
+        if (median >= Plateau && cfg.Normalization != Config.HeightmapNormalization.Stretch)
+        {
+            Console.WriteLine();
+            Console.WriteLine($"  WARNING: this heightmap's land sits at a median of {median}/255 " +
+                              "against vanilla's 36. It is not on CK3's height scale.");
+
+            if (cfg.Normalization == Config.HeightmapNormalization.Off)
+                Console.WriteLine("  Normalisation is off, so the whole landmass will ship as a " +
+                                  "plateau with a vertical cliff at every shoreline, and the " +
+                                  "climate model will read the continental interior as kilometres " +
+                                  "up and chill every biome on the map.");
+            else
+                Console.WriteLine("  Shift will bring it down onto the water plane, which fixes " +
+                                  "the shoreline, but relief stays exactly as compressed as the " +
+                                  "source drew it — measured on such a map, a highest pixel of " +
+                                  "147/255 against vanilla's 191.");
+
+            Console.WriteLine("  Set Normalization to Stretch (11 Height scale), or pass " +
+                              "--normalize-heightmap.");
+            Console.WriteLine();
+        }
+
+        // 8-bit data in a 16-bit pipeline. Not an error — it round-trips correctly — but the stretch
+        // cannot create levels it was not given, and MapDataWriter's terracing note is measured at
+        // twice this many. Worth knowing before blaming the tool for banding on every slope.
+        int distinct = DistinctValues(image.Raw);
+
+        if (distinct < 1000)
+            Console.WriteLine($"  NOTE: only {distinct:N0} distinct values in the decoded source " +
+                              "(vanilla's heightmap has 31,516). This is 8-bit data in a 16-bit " +
+                              "file; normalising cannot add levels back and will spend some of " +
+                              "these, which reads in game as terracing on gentle slopes.");
+    }
+
+    private static int DistinctValues(ushort[] raw)
+    {
+        var seen = new bool[65536];
+        foreach (ushort v in raw) seen[v] = true;
+
+        int count = 0;
+        foreach (bool s in seen) if (s) count++;
+        return count;
     }
 
     /// <summary>The image's 16-bit samples, row-major, without interpreting any of them.</summary>
@@ -232,9 +296,9 @@ public static class HeightmapSource
                           "greyscale heightmap on CK3's scale, where water is at or below " +
                           $"{Emit.MapDataWriter.WaterLevel16}.");
 
-        if (!cfg.NormalizeImportedHeightmap)
+        if (cfg.Normalization == Config.HeightmapNormalization.Off)
             Console.WriteLine("  A heightmap drawn outside this program almost certainly is not. " +
-                              "Set NormalizeImportedHeightmap and give SourceSeaLevel the 0-255 " +
+                              "Set Normalization to Stretch and give SourceSeaLevel the 0-255 " +
                               "value its own coastline sits at — 51 for an Azgaar export.");
     }
 }

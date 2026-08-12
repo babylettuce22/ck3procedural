@@ -68,11 +68,20 @@ public static class Program
                     break;
 
                 // Rescale a heightmap drawn on somebody else's height scale onto CK3's. The value
-                // is where the source puts its own sea level on the 0-255 scale, which nothing can
-                // infer from the file — 51 for an Azgaar export. Defaults to CK3's own 19, which
-                // makes the flag on its own a no-op rather than a silent misreading.
+                // is where the source puts its own sea level on the 0-255 scale — 51 for an Azgaar
+                // export. It is advisory now that the land floor is detected rather than taken as a
+                // minimum: it decides which pixels count as water, not what the land is anchored on.
                 case "--normalize-heightmap":
-                    cfg.NormalizeImportedHeightmap = true;
+                    cfg.Normalization = Config.HeightmapNormalization.Stretch;
+                    if (i + 1 < args.Length && !args[i + 1].StartsWith("--"))
+                        cfg.SourceSeaLevel = double.Parse(args[++i],
+                            System.Globalization.CultureInfo.InvariantCulture);
+                    break;
+
+                // Move land down onto the water plane without rescaling it. For a source whose
+                // relief is already correct and only sits too high; see HeightmapNormalization.
+                case "--shift-heightmap":
+                    cfg.Normalization = Config.HeightmapNormalization.Shift;
                     if (i + 1 < args.Length && !args[i + 1].StartsWith("--"))
                         cfg.SourceSeaLevel = double.Parse(args[++i],
                             System.Globalization.CultureInfo.InvariantCulture);
@@ -109,7 +118,9 @@ public static class Program
             Console.Error.WriteLine(
                 "Usage: Ck3MapGen --heightmap <file.png> [--mod [dir]] [--seed n] [--out dir]");
             Console.Error.WriteLine(
-                "       [--normalize-heightmap [source sea level 0-255]] [--land-top 0-255]");
+                "       [--normalize-heightmap | --shift-heightmap [source sea level 0-255]]");
+            Console.Error.WriteLine(
+                "       [--land-top 0-255] [--land-top-percentile 0-100]");
             Console.Error.WriteLine(
                 "This tool builds a CK3 mod around a heightmap; it does not generate terrain.");
             return 1;
