@@ -117,13 +117,14 @@ public static class Faiths
     private static readonly Dictionary<string, string> ForcedDoctrines = new()
     {
         ["doctrine_head_of_faith"] = "doctrine_no_head",
+        ["hostility_group"] = "pagan_hostility_doctrine",
     };
 
     public const string Family = "rf_pagan";
 
     public static FaithMap Build(List<Title> empires, ProvinceMap provinces, int[] order,
         int landCount, TerrainClass[] provinceTerrain, Dictionary<Title, int> development,
-        VanillaVocabulary vocab, MapConfig cfg, Rng rng)
+        GovernmentMap governments, VanillaVocabulary vocab, MapConfig cfg, Rng rng)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -148,7 +149,8 @@ public static class Faiths
             var members = all.Where(i => religionOf[i] == r).ToList();
             if (members.Count == 0) continue;
 
-            var religion = CreateReligion(religions.Count, vocab, usedNames, rng);
+            var religion = CreateReligion(religions.Count, TribalShare(members.Select(i => counties[i])),
+                vocab, usedNames, cfg, rng);
             religions.Add(religion);
 
             int within = Math.Max(1, (int)Math.Round(members.Count / cfg.CountiesPerFaith));
@@ -173,26 +175,25 @@ public static class Faiths
             // Step 2: Determine Organization & Hierarchy
             var primaryFaith = religionFaiths.OrderByDescending(f => f.Counties.Count).First();
 
+            // Organization, from one number and no coin flip: a faith is organized when enough of
+            // its people are settled to sustain the apparatus of one — a priesthood, temples that
+            // earn, a hierarchy that can enforce doctrine. A faith whose adherents are mostly
+            // tribesmen has none of that.
+            //
+            // Deliberately not conditioned on monotheism as well. Monotheist religions are already
+            // biased toward settled land by CreateReligion, so they reach the same answer through
+            // this rule; a second path to it would just be somewhere else for the two to disagree.
+            foreach (var faith in religionFaiths)
+                faith.IsOrganized = TribalShare(faith.Counties) < cfg.UnreformedTribalShare;
+
             foreach (var faith in religionFaiths)
             {
-                if (faith != primaryFaith)
+                // Heresy is a feature of organized religion. An unreformed faith is not a deviation
+                // from an orthodoxy — it is what came before one — and neither is it something a
+                // deviation can be measured against. Vanilla agrees: of the 36 religion files that
+                // declare unreformed_faith_doctrine, not one also declares a parent_faith.
+                if (faith != primaryFaith && faith.IsOrganized && primaryFaith.IsOrganized)
                     faith.ParentFaith = primaryFaith;
-
-                // Determine Organization based on development & monotheism:
-                // Faiths in low-development/tribal areas (avg dev < 6.0) or non-monotheisms become Unorganized.
-                double avgDev = faith.Counties.Count > 0
-                    ? faith.Counties.Average(c => development.GetValueOrDefault(c))
-                    : 0.0;
-
-                if (religion.Monotheist)
-                {
-                    faith.IsOrganized = true;
-                }
-                else
-                {
-                    // Low development areas become Unorganized (Unreformed) pagans
-                    faith.IsOrganized = avgDev >= 6.0 && rng.Chance(0.50);
-                }
 
                 religion.Faiths.Add(faith);
                 faiths.Add(faith);
@@ -244,6 +245,22 @@ public static class Faiths
 
         Report(religions, faiths, counties.Count, sw.ElapsedMilliseconds);
         return new FaithMap { Religions = religions, Faiths = faiths, ByCounty = byCounty };
+
+        // The share of a set of counties under tribal government — the one measure both religious
+        // organization and monotheism are read off. A set with nothing in it counts as wholly
+        // tribal, which is the conservative answer: it declines to organize a faith we know nothing
+        // about.
+        double TribalShare(IEnumerable<Title> of)
+        {
+            int tribal = 0, total = 0;
+            foreach (var county in of)
+            {
+                total++;
+                if (governments.IsTribal(county)) tribal++;
+            }
+
+            return total == 0 ? 1.0 : tribal / (double)total;
+        }
     }
     private static string GenerateHeadTitleName(Religion religion, Rng rng)
     {
@@ -342,12 +359,26 @@ public static class Faiths
         _ => 1.0,
     };
 
-    private static Religion CreateReligion(int index, VanillaVocabulary vocab,
-        HashSet<string> usedNames, Rng rng)
+    /// <summary>
+    /// Mints a religion over land that is <paramref name="tribalShare"/> tribal.
+    ///
+    /// That share is what decides whether it worships one god. Rolled flat — as this did — the
+    /// result is monotheist steppe nomads with a papacy, because nothing connected theology to the
+    /// ground it stood on. Weighting the roll by how settled the land is puts monotheism where the
+    /// scribes and the temples are, while leaving enough noise that it is not simply a readout of
+    /// development.
+    /// </summary>
+    private static Religion CreateReligion(int index, double tribalShare, VanillaVocabulary vocab,
+        HashSet<string> usedNames, MapConfig cfg, Rng rng)
     {
         var language = Language.Create($"religion_tongue_{index}", rng);
         string key = $"gen_religion_{index}";
-        bool monotheist = rng.Chance(0.35);
+
+        // 1.6x on wholly settled land down to 0.15x on wholly tribal. The map's own tribal share
+        // sits near a third, which lands the average multiplier close to 1 and keeps the map-wide
+        // rate near the configured one.
+        double settled = 1.0 - tribalShare;
+        bool monotheist = rng.Chance(Math.Clamp(cfg.MonotheistShare * (0.15 + 1.45 * settled), 0.0, 1.0));
 
         var doctrines = new Dictionary<string, string>();
         foreach (string group in FilledGroups)
@@ -456,11 +487,18 @@ public static class Faiths
     ///   - Local sites (internal high-development counties)
     ///   - Shared sites (re-using holy sites created by other faiths/religions, creating "Jerusalems")
     ///   - Foreign sites (placed in major counties of OTHER religions, creating Crusade targets)
+    ///
+    /// At most one site leaves home, and the rest are the faith's own. Reforming an unreformed faith
+    /// needs three of its five sites in hand, so the older allocation — one shared *and* one foreign,
+    /// leaving three at home — put every unreformed faith exactly one lost county away from never
+    /// being able to reform at all. That cost nothing while nothing was unreformed; it is a trap now
+    /// that the tribal periphery genuinely is.
     /// </summary>
     private static void PlaceHolySites(Faith faith, Dictionary<Title, int> development,
         List<Faith> allFaiths, List<Title> allCounties, int targetCount, Rng rng)
     {
         var chosenCounties = new List<Title>();
+        int abroad = Math.Max(0, targetCount - 4);
 
         // 1. Shared Holy Site ("Jerusalem"): Re-use a holy site declared by an existing faith
         var existingHolySites = allFaiths
@@ -470,19 +508,20 @@ public static class Faiths
             .OrderByDescending(c => development.GetValueOrDefault(c))
             .ToList();
 
-        if (existingHolySites.Count > 0 && rng.Chance(0.75))
+        if (chosenCounties.Count < abroad && existingHolySites.Count > 0 && rng.Chance(0.75))
         {
             chosenCounties.Add(rng.Pick(existingHolySites.Take(4).ToList()));
         }
 
-        // 2. Foreign / Heathen Holy Site: Target a high-dev county owned by a different religion
+        // 2. Foreign / Heathen Holy Site: a high-dev county owned by a different religion, but only
+        // if the shared draw above did not already spend the one site allowed to sit abroad.
         var foreignCounties = allCounties
             .Where(c => !faith.Counties.Contains(c) && !chosenCounties.Contains(c))
             .OrderByDescending(c => development.GetValueOrDefault(c))
             .Take(25)
             .ToList();
 
-        if (foreignCounties.Count > 0 && rng.Chance(0.85))
+        if (chosenCounties.Count < abroad && foreignCounties.Count > 0 && rng.Chance(0.85))
         {
             chosenCounties.Add(rng.Pick(foreignCounties.Take(5).ToList()));
         }
@@ -541,10 +580,12 @@ public static class Faiths
 
         int monotheist = religions.Count(r => r.Monotheist);
         int heads = faiths.Count(f => f.Head is not null);
+        int unreformed = faiths.Count(f => !f.IsOrganized);
         var sizes = faiths.Select(f => f.Counties.Count).OrderBy(n => n).ToList();
 
         Console.WriteLine($"  faiths: {faiths.Count} in {religions.Count} religions " +
-                          $"({monotheist} monotheist, {heads} heads of faith) over {counties} counties — " +
+                          $"({monotheist} monotheist, {unreformed} unreformed, {heads} heads of faith) " +
+                          $"over {counties} counties — " +
                           $"median {sizes[sizes.Count / 2]}, largest {sizes[^1]} counties " +
                           $"({elapsedMs} ms)");
     }

@@ -80,6 +80,49 @@ public static class PreviewRenderer
     }
 
     /// <summary>
+    /// heightmap.png itself: the greyscale, at the heightmap's own resolution, with nothing done to
+    /// it.
+    ///
+    /// Every other view here interprets — hillshades, colours by class, outlines. This one refuses
+    /// to, and that is its entire purpose. It is the only place the passes between the elevation
+    /// field and the file are visible at all: <see cref="RenderElevation"/> is built from
+    /// <see cref="GenerationResult.ProvinceElevation"/> and so shows the map *before* the scale
+    /// conversion, the snap onto provinces.png and the seabed grade, none of which it can see and
+    /// two of which exist to fix things that only appear at this stage.
+    ///
+    /// Rendered at <see cref="MapConfig.Width"/> rather than province resolution, because half the
+    /// artefacts worth catching here are one pixel wide.
+    ///
+    /// **It will look very dark, and that is the reading.** Vanilla's own land sits at a median of
+    /// 36/255 with 40% of the map at exactly 0, so a correct CK3 heightmap is a nearly black image
+    /// with faint grey continents. A map that looks comfortably mid-grey is one whose land is too
+    /// high, and a map whose land is a single flat tone a few steps off the water is the pancake
+    /// <see cref="MapGen.HeightmapNormalizer"/> exists to open back up.
+    ///
+    /// Point-sampled like every other view, and here that is a deliberate choice rather than an
+    /// inherited one. Averaging blocks would give a truer overall impression and destroy the one
+    /// thing this view is best at: banding. Quantisation terracing is a pattern in the exact values,
+    /// and a box filter smooths it into a gradient that looks fine — so the sampling that keeps
+    /// real pixel values is the one that can still show the defect.
+    /// </summary>
+    public static Image RenderHeightmap(GenerationResult result)
+    {
+        var cfg = result.Config;
+
+        var full = Emit.MapDataWriter.ShippedHeightmap(
+            cfg, result.Provinces, result.ProvinceOrder, result.LandCount, result.Terra);
+
+        return Downsample(cfg.Width, cfg.Height, i =>
+        {
+            // The 0-255 scale everything else in the tool quotes, so water reads as exactly 19 and
+            // a normalised land ceiling as exactly 191. Dividing by 256 instead would be off by a
+            // step at the top and make those numbers not quite match anything.
+            var v = (byte)(full[i] / Emit.MapDataWriter.Step255);
+            return (v, v, v);
+        });
+    }
+
+    /// <summary>
     /// The climate the terrain was painted from, in Koppen-Geiger's own published colours.
     ///
     /// The only view here that can be checked against something outside this program: laid beside
@@ -294,11 +337,11 @@ public static class PreviewRenderer
 
         var development = MapGen.Development.ForCounties(counties, provinceTerrain, cfg, new Rng(cfg.Seed ^ 0x0DE7));
 
-        // The same rule the mod writer uses, not a copy of it. Neither cultures nor faiths exist at
-        // preview time — both are built while writing the mod — so the pastoralist clause cannot
-        // fire, clan falls back to each county's own ground rather than its heritage's, and no
-        // theocracy is shown at all. See MapGen.Governments.Build.
-        var governments = MapGen.Governments.Build(counties, provinceTerrain, development, null, null,
+        // The same rule the mod writer uses, not a copy of it. Cultures do not exist at preview
+        // time — they are built while writing the mod — so the pastoralist clause cannot fire, clan
+        // falls back to each county's own ground rather than its heritage's, and no theocracy is
+        // shown at all. See MapGen.Governments.Build.
+        var governments = MapGen.Governments.Build(counties, provinceTerrain, development, null,
             cfg, new Rng(cfg.Seed ^ 0x6017));
 
         var government = new string[counties.Count];

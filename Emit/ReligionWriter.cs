@@ -82,12 +82,11 @@ public static class ReligionWriter
             sb.Append($"\tgraphical_faith = {religion.GraphicalFaith}\n");
             sb.Append("\tpagan_roots = yes\n\n");
 
-            // Write religion-level doctrines EXCEPT hostility_group (set per-faith)
-            foreach (var (group, doctrine) in religion.Doctrines)
-            {
-                if (group == "hostility_group") continue;
+            // Hostility included: it is pinned to the pagan one for the whole religion (see
+            // MapGen.Faiths.ForcedDoctrines), which is where vanilla declares it too, so there is
+            // nothing left for a faith to override.
+            foreach (var (_, doctrine) in religion.Doctrines)
                 sb.Append($"\tdoctrine = {doctrine}\n");
-            }
             sb.Append('\n');
 
             sb.Append("\ttraits = {\n");
@@ -108,17 +107,12 @@ public static class ReligionWriter
                 sb.Append($"\t\t\tcolor = {{ {F(r)} {F(g)} {F(b)} }}\n");
                 sb.Append($"\t\t\ticon = {faith.Icon}\n\n");
 
-                // Organization AND Hostility Doctrines MUST match vanilla pairing
-                if (faith.IsOrganized)
-                {
-                    sb.Append("\t\t\tdoctrine = doctrine_organized\n");
-                    sb.Append("\t\t\tdoctrine = pagan_hostility_doctrine\n");
-                }
-                else
-                {
-                    sb.Append("\t\t\tdoctrine = doctrine_unreformed\n");
-                    sb.Append("\t\t\tdoctrine = unreformed_hostility_doctrine\n");
-                }
+                // There is no "organized" doctrine to name: vanilla's `unreformed_faith` group holds
+                // only unreformed_faith_doctrine and its West African variant, and a faith that
+                // names neither *is* the organized case. Writing an invented opposite silently
+                // dropped the whole distinction, so unorganized faiths came out reformed.
+                if (!faith.IsOrganized)
+                    sb.Append("\t\t\tdoctrine = unreformed_faith_doctrine\n");
 
                 if (faith.ParentFaith is not null)
                 {

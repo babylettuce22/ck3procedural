@@ -585,6 +585,31 @@ public static class MapDataWriter
 
 
     /// <summary>
+    /// The height field exactly as heightmap.png will carry it: on CK3's 16-bit scale, reconciled
+    /// with provinces.png, and coast-shaped.
+    ///
+    /// Split out of <see cref="WriteHeightmap"/> so the GUI can show the file itself rather than a
+    /// second opinion on it. Everything that happens between the elevation field and the PNG — the
+    /// scale conversion, the coastline snap, the seabed grade and the smoothing over it — was
+    /// otherwise visible only by writing the mod and loading it, which is a slow way to discover
+    /// that a map is a pancake.
+    /// </summary>
+    public static ushort[] ShippedHeightmap(MapConfig cfg, ProvinceMap provinces, int[] order,
+        int landCount, MapGen.TerrainData terra)
+    {
+        // Always the field the terrain was generated at. There is no upsample-and-embellish path
+        // any more: the heightmap is what the erosion produced, at the resolution it produced it.
+        var full = ElevationTo16(terra.Elevation, cfg);
+        ForceCoastlineToMatchProvinces(full, cfg, provinces, order, landCount);
+
+        // MUST follow the snap: it derives the land/water split from the heightmap itself, which is
+        // only the split CK3 will actually render once the snap has reconciled it with provinces.png.
+        ShapeCoastline(full, cfg);
+
+        return full;
+    }
+
+    /// <summary>
     /// Emits heightmap.png, and optionally the packed/indirection pair CK3 renders from.
     ///
     /// The packed format is self-describing through level_offsets, so a generator can in
@@ -600,14 +625,7 @@ public static class MapDataWriter
     private static void WriteHeightmap(string dir, MapConfig cfg, bool writePacked,
         ProvinceMap provinces, int[] order, int landCount, MapGen.TerrainData terra)
     {
-        // Always the field the terrain was generated at. There is no upsample-and-embellish path
-        // any more: the heightmap is what the erosion produced, at the resolution it produced it.
-        var full = ElevationTo16(terra.Elevation, cfg);
-        ForceCoastlineToMatchProvinces(full, cfg, provinces, order, landCount);
-
-        // MUST follow the snap: it derives the land/water split from the heightmap itself, which is
-        // only the split CK3 will actually render once the snap has reconciled it with provinces.png.
-        ShapeCoastline(full, cfg);
+        var full = ShippedHeightmap(cfg, provinces, order, landCount, terra);
 
         ReportHypsometry(full);
         PngWriter.WriteGray16(Path.Combine(dir, "heightmap.png"), cfg.Width, cfg.Height, full);

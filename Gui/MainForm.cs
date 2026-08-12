@@ -149,6 +149,7 @@ public sealed class MainForm : Form
     private static readonly (string Name, Func<GenerationResult, PreviewRenderer.Image> Render)[] Views =
         [
         ("Height", PreviewRenderer.RenderElevation),
+        ("Heightmap", PreviewRenderer.RenderHeightmap),
         ("Terrain", PreviewRenderer.RenderTerrain),
         ("Climate", PreviewRenderer.RenderClimate),
         ("Drainage", PreviewRenderer.RenderDrainage),

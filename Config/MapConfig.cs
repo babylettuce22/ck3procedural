@@ -425,6 +425,32 @@ public sealed class MapConfig
     public int HolySitesPerFaith { get; set; } = 5;
 
     /// <summary>
+    /// How tribal a faith's counties must be before it is written as unreformed.
+    ///
+    /// Read against the faith's *share* of tribal counties rather than its mean development, and
+    /// against the government map rather than development directly. Both choices matter: a mean
+    /// over the two dozen counties of a faith regresses to the map's own mean and stops
+    /// discriminating, and deriving from government means this tracks <see cref="StartYear"/> for
+    /// free — a late start has almost no tribes and therefore almost no unreformed faiths, with no
+    /// second threshold to keep in sync.
+    /// </summary>
+    [Category("14 Cultures and faiths")]
+    [Description("How tribal a faith must be to start unreformed, as a share of its counties. 0.34 makes a faith unreformed once a third of its people are tribal; 0 organises everything, 1 leaves the whole map unreformed.")]
+    public double UnreformedTribalShare { get; set; } = 0.34;
+
+    /// <summary>
+    /// Share of generated religions that worship one god.
+    ///
+    /// Weighted by how settled the religion's counties are rather than rolled flat, because a flat
+    /// roll produces monotheist steppe nomads with a papacy. A fully settled religion lands near
+    /// 1.6x this number and a fully tribal one near 0.15x, which leaves the map-wide rate close to
+    /// what is set here.
+    /// </summary>
+    [Category("14 Cultures and faiths")]
+    [Description("Share of generated religions that are monotheist. Weighted by how settled the religion's land is, so monotheism clusters in the developed core rather than falling randomly across the map.")]
+    public double MonotheistShare { get; set; } = 0.35;
+
+    /// <summary>
     /// How strongly province growth resists crossing a slope. 0 is a plain geodesic voronoi, whose
     /// boundaries fall wherever seeds happen to be equidistant and cut straight over mountains.
     /// Higher makes the frontier stall at ridgelines so two provinces meet there instead.

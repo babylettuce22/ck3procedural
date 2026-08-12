@@ -110,9 +110,13 @@ public static class Governments
         return false;
     }
 
+    /// <summary>
+    /// Builds the government map. Runs *before* faiths, not after: whether a faith starts
+    /// unreformed is read off how tribal its counties are, so the government map is an input to
+    /// religion rather than the other way round. Nothing here needs to know about faiths.
+    /// </summary>
     public static GovernmentMap Build(List<Title> counties, TerrainClass[] provinceTerrain,
-        Dictionary<Title, int> development, CultureMap? cultures, FaithMap? faiths, MapConfig cfg,
-        Rng rng)
+        Dictionary<Title, int> development, CultureMap? cultures, MapConfig cfg, Rng rng)
     {
         int threshold = TribalThreshold(cfg);
         var assigned = new Dictionary<Title, string>();

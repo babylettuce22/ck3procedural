@@ -47,6 +47,21 @@ public static class CompatibilityWriter
     private const double VanillaStartZoomHeight = 5464;
 
     /// <summary>
+    /// Vanilla's FLAT_MAP_ZOOM_STEP — the step at which the terrain gives way to the paper map on
+    /// the tabletop.
+    ///
+    /// This has to be overridden for the same reason every other zoom step does: a step is an
+    /// absolute camera height, and on a smaller map the whole world is in view far below step 21.
+    ///
+    /// It is specifically load-bearing for <see cref="MapTableWriter"/>. Vanilla's map-table layers
+    /// fade in at exactly 21, so the tabletop appears on the same frame the map goes flat. Scaling
+    /// the layer fade — which MapTableWriter does — while leaving this at 21 pulls the two apart and
+    /// leaves a window of nine-odd zoom steps where the physical table is drawn under a map that is
+    /// still 3D terrain. That is worse than either error alone, so the pair moves together.
+    /// </summary>
+    private const int VanillaFlatMapZoomStep = 21;
+
+    /// <summary>
     /// Overrides NJominiMap so the engine's world size matches the province map we actually
     /// ship. This is not optional and it is easy to miss.
     ///
@@ -125,7 +140,8 @@ public static class CompatibilityWriter
         double lookX = cfg.ProvinceWidth / 2.0;
         double lookZ = cfg.ProvinceHeight / 2.0;
 
-        int startStep = NearestZoomStep(cfg.Scaled(VanillaStartZoomHeight));
+        int startStep = NearestZoomStep(VanillaStartZoomHeight * ViewScale(cfg));
+        int flatStep = ScaleZoomStep(VanillaFlatMapZoomStep, cfg);
 
         ParadoxText.WriteBom(Path.Combine(dir, "zz_generated_graphics.txt"),
             $$"""
@@ -135,13 +151,15 @@ public static class CompatibilityWriter
               	PANNING_HEIGHT = {{panHeight.ToString(Invariant)}}
               	START_LOOK_AT = { {{lookX.ToString("F1", Invariant)}} 0 {{lookZ.ToString("F1", Invariant)}} }
               	START_ZOOM_STEP = {{startStep}}
+              	FLAT_MAP_ZOOM_STEP = {{flatStep}}
               }
 
               """);
 
         Console.WriteLine($"  camera: panning {panWidth} x {panHeight}, look at " +
-                          $"{lookX:F0},{lookZ:F0}, zoom step {startStep} ({ZoomSteps[startStep]}) " +
-                          $"(vanilla 9090 x 4696, 5000,2300, 33)");
+                          $"{lookX:F0},{lookZ:F0}, zoom step {startStep} ({ZoomSteps[startStep]}), " +
+                          $"flat map at step {flatStep} ({ZoomSteps[flatStep]}) " +
+                          $"(vanilla 9090 x 4696, 5000,2300, 33, 21)");
     }
 
     /// <summary>
@@ -153,7 +171,23 @@ public static class CompatibilityWriter
     /// "never", and scaling it would land it on a real step and start fading the table out.
     /// </summary>
     internal static int ScaleZoomStep(int step, Config.MapConfig cfg)
-        => step < 0 || step >= ZoomSteps.Length ? step : NearestZoomStep(cfg.Scaled(ZoomSteps[step]));
+        => step < 0 || step >= ZoomSteps.Length ? step : NearestZoomStep(ZoomSteps[step] * ViewScale(cfg));
+
+    /// <summary>
+    /// The ratio a camera *height* scales by: the larger of the two axis ratios.
+    ///
+    /// Camera height buys a footprint of ground with the screen's aspect, so "the whole map is in
+    /// view" is governed by whichever axis runs out last. On vanilla's 2:1 map that is the width,
+    /// which is why the width ratio alone was enough for a long time. On a square 5000x5000 map the
+    /// height ratio is twice the width ratio, and scaling by width alone opens the camera too low
+    /// and drops FLAT_MAP_ZOOM_STEP — and with it the map table's fade — below the height where the
+    /// map actually fits.
+    ///
+    /// Same rule as the map table's mesh, and for the same reason: cover the demanding axis and let
+    /// the other one have slack.
+    /// </summary>
+    private static double ViewScale(Config.MapConfig cfg)
+        => Math.Max(cfg.MapScale, (double)cfg.ProvinceHeight / VanillaProvinceHeight);
 
     /// <summary>
     /// The ladder step closest to <paramref name="height"/>. Camera height buys a fixed amount of

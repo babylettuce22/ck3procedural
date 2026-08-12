@@ -46,8 +46,13 @@ public static class ContentWriter
         // cultures are assigned. Cultures and faiths in turn read how rich a county is, so
         // development comes first — which is why it is keyed by Title and not by title key.
         //
-        // So: development, cultures, names, faiths. Nothing reads a title's name before
-        // AssignNames runs, and everything that writes one runs after it.
+        // Governments sit between the two: they read cultures (for the pastoralist and clan rules)
+        // and faiths read them back, because whether a faith starts unreformed is decided by how
+        // tribal its counties are. That edge runs one way only — nothing in Governments knows about
+        // religion — so there is no cycle to break.
+        //
+        // So: development, cultures, names, governments, faiths. Nothing reads a title's name
+        // before AssignNames runs, and everything that writes one runs after it.
         var vocabulary = Core.Stage.Time("vanilla vocabulary", () => MapGen.VanillaVocabulary.Read(gameDir));
 
         // Fail here rather than three writers later. Without a vocabulary every generated culture
@@ -78,15 +83,16 @@ public static class ContentWriter
             return map;
         });
 
-        var faiths = Core.Stage.Time("faiths", () => MapGen.Faiths.Build(empires, provinces, order,
-            landCount, provinceTerrain, development, vocabulary, cfg, new Rng(cfg.Seed ^ 0x0FA1)));
-
         // Who holds what at the start date. Derived once here because the holdings written below and
         // the governments HistoryWriter writes have to be the same answer — see MapGen.Governments.
         var governments = MapGen.Governments.Build(counties, provinceTerrain, development, cultures,
-            faiths, cfg, new Rng(cfg.Seed ^ 0x6017));
+            cfg, new Rng(cfg.Seed ^ 0x6017));
         Console.WriteLine("  governments: " + string.Join(", ",
             governments.Tally(counties.Count).Select(g => $"{g.Count} {g.Government[..^11]}")));
+
+        var faiths = Core.Stage.Time("faiths", () => MapGen.Faiths.Build(empires, provinces, order,
+            landCount, provinceTerrain, development, governments, vocabulary, cfg,
+            new Rng(cfg.Seed ^ 0x0FA1)));
 
         Core.Stage.Time("titles, history and localisation", () =>
         {
