@@ -57,6 +57,63 @@ public sealed class MapConfig
     public int SeaFloorElevation { get; set; } = -250;
 
     /// <summary>
+    /// Whether an imported heightmap is rescaled onto CK3's height scale before anything reads it.
+    ///
+    /// Off, because a heightmap this program wrote is already on that scale and normalising it
+    /// would be a lossy round trip for no gain. Turn it on for a heightmap drawn anywhere else —
+    /// Azgaar above all, whose exports put sea level at the equivalent of 51/255 against our 19 and
+    /// so read as almost entirely land. See <see cref="MapGen.HeightmapNormalizer"/>.
+    /// </summary>
+    [Category("11 Height scale")]
+    [Description("Rescale an imported heightmap onto CK3's height scale. Off for heightmaps this program wrote, which are already on it. On for anything drawn elsewhere — an Azgaar export puts sea level at the equivalent of 51/255 against CK3's 19 and reads as almost entirely land without this.")]
+    public bool NormalizeImportedHeightmap { get; set; } = false;
+
+    /// <summary>
+    /// Where the source heightmap puts its own sea level, on the 0-255 scale.
+    ///
+    /// This is the one value normalisation cannot guess, because a heightmap carries no record of
+    /// it: the coastline is wherever its author decided, and every pixel below is seabed that CK3
+    /// will render as sea no matter how deep. 19 is CK3's own, and therefore a no-op. Azgaar's is
+    /// 20 on its 0-100 scale, which is 51 here.
+    /// </summary>
+    [Category("11 Height scale")]
+    [Description("Where the source heightmap puts sea level, on the 0-255 scale. CK3's own is 19. Azgaar's is 20/100, which is 51 here. Normalisation cannot guess this — a heightmap carries no record of where its author put the coastline.")]
+    public double SourceSeaLevel { get; set; } = 19;
+
+    /// <summary>
+    /// What the highest land pixel becomes after normalisation, on the 0-255 scale.
+    ///
+    /// 191 is vanilla's own highest land pixel. Vanilla does not use the top of the byte range —
+    /// its land sits at p50 36 and runs out well short of 255 — so stretching an imported map onto
+    /// all of it produces terrain markedly more dramatic than anything in the base game. Raise it
+    /// towards 255 for a deliberately alpine map; that is the knob that decides how flat the
+    /// result reads.
+    /// </summary>
+    [Category("11 Height scale")]
+    [Description("What the highest land pixel becomes, on the 0-255 scale. 191 is vanilla's own highest; vanilla never uses the top of the range. Raise towards 255 for a more dramatic map — this is the knob that decides how flat the result reads.")]
+    public double LandTop { get; set; } = 191;
+
+    /// <summary>
+    /// Which percentile of land the top anchor is taken at, rather than the maximum.
+    ///
+    /// Anchoring on the highest pixel lets a single stray sample set the scale for the whole map,
+    /// and exported heightmaps are full of stray samples. Everything above the anchor is clipped
+    /// flat onto <see cref="LandTop"/>, so the setting trades the tips of the tallest peaks for a
+    /// bigger stretch under them. 100 anchors on the true maximum and clips nothing.
+    ///
+    /// The default is deliberately close to it. Land is counted in *pixels*, and a percentile is a
+    /// share of them, so on a map with fifteen million land pixels a seemingly cautious 99.5 clips
+    /// seventy-five thousand — an entire mountain range flattened onto one value, which reads in
+    /// game as a mesa. Measured on an 8192x4096 Azgaar export: p99.5 anchored at 49/255 and clipped
+    /// 75,690 px, p99.9 at 64 and 15,142 px, p99.99 at 76 and 1,514 px, p100 at 84 and none. Only
+    /// the last two are outlier rejection; the first two are terrain. Turn it down deliberately,
+    /// watching the clipped count in the log, rather than as a matter of course.
+    /// </summary>
+    [Category("11 Height scale")]
+    [Description("Which percentile of land the top anchor is taken at, instead of the maximum. Everything above it is clipped flat, so this trades the tips of the tallest peaks for a bigger stretch under them. Land is counted in pixels: on a large map even 99.5 can flatten a whole mountain range, so watch the clipped count in the log. 100 anchors on the true maximum.")]
+    public double LandTopPercentile { get; set; } = 99.99;
+
+    /// <summary>
     /// Where the equator line sits, as a fraction of map height. Everything about climate is
     /// measured as distance from it, so this slides every band up or down the map together.
     ///

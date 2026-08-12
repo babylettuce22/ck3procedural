@@ -581,38 +581,7 @@ public static class MapDataWriter
     /// highest pixel at 191/255 rather than 255.
     /// </summary>
     private static void ReportHypsometry(ushort[] height)
-    {
-        long zero = 0, water = 0;
-        var landHistogram = new int[256];
-
-        foreach (ushort v in height)
-        {
-            if (v == 0) zero++;
-            if (v <= WaterLevel16) { water++; continue; }
-            landHistogram[v / Step255]++;
-        }
-
-        long land = height.LongLength - water;
-        Console.WriteLine($"  heightmap as shipped: {100.0 * zero / height.LongLength:F2}% exactly 0 " +
-                          $"(vanilla 40.14), {100.0 * water / height.LongLength:F2}% water " +
-                          $"(vanilla 47.18)");
-
-        Console.WriteLine($"  land 0-255 percentiles: p50 {Percentile(50)}, p75 {Percentile(75)}, " +
-                          $"p90 {Percentile(90)}, p99 {Percentile(99)}, max {Percentile(100)} " +
-                          $"(vanilla 36 / 57 / 87 / 143 / 191 — a reading on the source heightmap, " +
-                          $"not a target)");
-
-        int Percentile(double q)
-        {
-            long want = (long)(land * q / 100.0), running = 0;
-            for (int b = 0; b < 256; b++)
-            {
-                running += landHistogram[b];
-                if (running >= want) return b;
-            }
-            return 255;
-        }
-    }
+        => Console.WriteLine($"  heightmap as shipped: {MapGen.Hypsometry.Measure(height).Describe()}");
 
 
     /// <summary>

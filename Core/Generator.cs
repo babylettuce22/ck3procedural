@@ -113,7 +113,7 @@ public static class Generator
         // coastline in provinces.png is the coastline in heightmap.png by construction.
         var image = Stage.Time("heightmap decode", () => HeightmapSource.Read(options.HeightmapPath, cfg));
         var terra = Stage.Time("province elevation",
-            () => TerrainData.FromElevation(image.Elevation, cfg));
+            () => TerrainData.FromElevation(image.ToElevation(cfg), cfg));
 
         return FromTerrain(terra, cfg);
     }

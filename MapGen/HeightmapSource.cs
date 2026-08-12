@@ -29,6 +29,13 @@ namespace Ck3MapGen.MapGen;
 /// nothing. That was learned from the drainage network in particular, back when it was cached along
 /// with the image and every river setting therefore appeared to do nothing at all.
 ///
+/// What is held is the raw 16-bit samples, which is as far as "pure function of the file" reaches.
+/// It used to be the simulation-scale elevation field, and that was already a step too far:
+/// <see cref="ToElevation"/> reads <see cref="MapConfig.PeakElevation"/> and
+/// <see cref="MapConfig.SeaFloorElevation"/>, so both of those were settings the GUI let you change
+/// and then ignored for as long as the same heightmap stayed loaded. Normalisation would have been
+/// a third and much more visible one.
+///
 /// The file's timestamp and length are kept so a heightmap re-exported over the same path is seen
 /// as a different image. Keying on the path alone is what makes "I regenerated my heightmap and the
 /// preview did not change" happen, and it is the sort of bug that reads as the whole tool being
@@ -41,7 +48,9 @@ public sealed class HeightmapImage
     public required long Length { get; init; }
     public required int Width { get; init; }
     public required int Height { get; init; }
-    public required float[] Elevation { get; init; }
+
+    /// <summary>The image's own 16-bit samples, exactly as they were decoded.</summary>
+    public required ushort[] Raw { get; init; }
 
     /// <summary>Whether this decode still stands for what is on disk at <paramref name="path"/>.</summary>
     public bool StillStandsFor(string path)
@@ -50,6 +59,21 @@ public sealed class HeightmapImage
 
         var info = new FileInfo(path);
         return info.Exists && info.LastWriteTimeUtc == Written && info.Length == Length;
+    }
+
+    /// <summary>
+    /// The samples on the simulation's elevation scale, by way of normalisation.
+    ///
+    /// Every step here reads settings, which is why it is a method run per-run rather than a
+    /// property computed once at decode.
+    /// </summary>
+    public float[] ToElevation(MapConfig cfg)
+    {
+        var normalized = HeightmapNormalizer.Normalize(Raw, cfg);
+        var elevation = HeightmapSource.ToSimulationScale(normalized, cfg);
+
+        HeightmapSource.ReportElevation(elevation, cfg);
+        return elevation;
     }
 }
 
@@ -65,7 +89,7 @@ public static class HeightmapSource
     /// Loads a heightmap and derives everything from it. The one-shot path, for the CLI.
     /// </summary>
     public static TerrainData Load(string path, MapConfig cfg)
-        => TerrainData.FromElevation(Read(path, cfg).Elevation, cfg);
+        => TerrainData.FromElevation(Read(path, cfg).ToElevation(cfg), cfg);
 
     /// <summary>
     /// Decodes the image and puts its dimensions on the config. No setting is consulted, so the
@@ -94,13 +118,38 @@ public static class HeightmapSource
             Length = info.Length,
             Width = image.Width,
             Height = image.Height,
-            Elevation = ToSimulationScale(image, image.Width, image.Height, cfg),
+            Raw = ReadRaw(image),
         };
 
         Apply(loaded, cfg);
-        Report(loaded.Elevation, cfg);
+
+        // The source's own distribution, measured against *our* water plane and printed before any
+        // setting has had a say. This is the reading that says whether the file needs normalising
+        // at all: a heightmap on CK3's scale lands near vanilla's 47% water, and one that is not
+        // reports a few percent and land percentiles far above vanilla's 36 / 57 / 87 / 143 / 191.
+        Console.WriteLine($"  as decoded: {Hypsometry.Measure(loaded.Raw).Describe()}");
         Console.WriteLine($"  decoded in {sw.ElapsedMilliseconds} ms");
         return loaded;
+    }
+
+    /// <summary>The image's 16-bit samples, row-major, without interpreting any of them.</summary>
+    private static ushort[] ReadRaw(SixLabors.ImageSharp.Image<L16> image)
+    {
+        var raw = new ushort[(long)image.Width * image.Height];
+
+        image.ProcessPixelRows(accessor =>
+        {
+            for (int y = 0; y < accessor.Height; y++)
+            {
+                var row = accessor.GetRowSpan(y);
+                long offset = (long)y * accessor.Width;
+
+                for (int x = 0; x < row.Length; x++)
+                    raw[offset + x] = row[x].PackedValue;
+            }
+        });
+
+        return raw;
     }
 
     /// <summary>
@@ -133,42 +182,35 @@ public static class HeightmapSource
     /// the water plane so that a pixel at exactly <c>WaterLevel16</c> comes back at exactly sea
     /// level and the coastline survives the round trip.
     ///
-    /// Note the round trip is not the identity by design: on the way out the land is remapped onto
-    /// vanilla's measured hypsometric curve, which rescales heights (never moves them, the mapping
-    /// is monotonic). Set <c>MatchVanillaHypsometry</c> false to keep an imported map's own
-    /// height distribution.
+    /// With normalisation off the round trip is now the identity: nothing on either side reshapes
+    /// what it converts. It used to remap land onto vanilla's measured hypsometric curve on the way
+    /// out, and the note here still said so long after that was removed.
     /// </summary>
-    private static float[] ToSimulationScale(SixLabors.ImageSharp.Image<L16> image,
-        int width, int height, MapConfig cfg)
+    internal static float[] ToSimulationScale(ushort[] raw, MapConfig cfg)
     {
-        var elevation = new float[(long)width * height];
+        var elevation = new float[raw.Length];
 
         float sea = cfg.Limits.SeaLevelUpper;
         float floor = cfg.SeaFloorElevation;
         float top = cfg.PeakElevation;
         const float water = Emit.MapDataWriter.WaterLevel16;
 
-        image.ProcessPixelRows(accessor =>
+        Parallel.For(0, raw.Length, i =>
         {
-            for (int y = 0; y < accessor.Height; y++)
-            {
-                var row = accessor.GetRowSpan(y);
-                long offset = (long)y * width;
-
-                for (int x = 0; x < row.Length; x++)
-                {
-                    float v = row[x].PackedValue;
-                    elevation[offset + x] = v <= water
-                        ? floor + v / water * (sea - floor)
-                        : sea + 1f + (v - water) / (65535f - water) * (top - sea - 1f);
-                }
-            }
+            float v = raw[i];
+            elevation[i] = v <= water
+                ? floor + v / water * (sea - floor)
+                : sea + 1f + (v - water) / (65535f - water) * (top - sea - 1f);
         });
 
         return elevation;
     }
 
-    private static void Report(float[] elevation, MapConfig cfg)
+    /// <summary>
+    /// What the field looks like once it is on the simulation's scale — the last chance to notice a
+    /// heightmap that will produce an empty world before anything spends time on one.
+    /// </summary>
+    internal static void ReportElevation(float[] elevation, MapConfig cfg)
     {
         float sea = cfg.Limits.SeaLevelUpper;
         long land = 0;
@@ -184,9 +226,15 @@ public static class HeightmapSource
         Console.WriteLine($"  elevation {min:F0}..{max:F0} (sea {sea:F0}), " +
                           $"{100.0 * land / elevation.Length:F1}% land");
 
-        if (land == 0)
-            Console.WriteLine("  WARNING: no pixel is above the water plane. Expected a 16-bit " +
-                              "greyscale heightmap on CK3's scale, where water is at or below " +
-                              $"{Emit.MapDataWriter.WaterLevel16}.");
+        if (land != 0) return;
+
+        Console.WriteLine("  WARNING: no pixel is above the water plane. Expected a 16-bit " +
+                          "greyscale heightmap on CK3's scale, where water is at or below " +
+                          $"{Emit.MapDataWriter.WaterLevel16}.");
+
+        if (!cfg.NormalizeImportedHeightmap)
+            Console.WriteLine("  A heightmap drawn outside this program almost certainly is not. " +
+                              "Set NormalizeImportedHeightmap and give SourceSeaLevel the 0-255 " +
+                              "value its own coastline sits at — 51 for an Azgaar export.");
     }
 }

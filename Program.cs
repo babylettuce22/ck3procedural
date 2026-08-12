@@ -67,6 +67,30 @@ public static class Program
                     options.WritePacked = false;
                     break;
 
+                // Rescale a heightmap drawn on somebody else's height scale onto CK3's. The value
+                // is where the source puts its own sea level on the 0-255 scale, which nothing can
+                // infer from the file — 51 for an Azgaar export. Defaults to CK3's own 19, which
+                // makes the flag on its own a no-op rather than a silent misreading.
+                case "--normalize-heightmap":
+                    cfg.NormalizeImportedHeightmap = true;
+                    if (i + 1 < args.Length && !args[i + 1].StartsWith("--"))
+                        cfg.SourceSeaLevel = double.Parse(args[++i],
+                            System.Globalization.CultureInfo.InvariantCulture);
+                    break;
+
+                // What the highest land pixel becomes, on the 0-255 scale. Vanilla's own is 191.
+                case "--land-top" when i + 1 < args.Length:
+                    cfg.LandTop = double.Parse(args[++i],
+                        System.Globalization.CultureInfo.InvariantCulture);
+                    break;
+
+                // Which percentile of land the top anchor is taken at. 100 anchors on the true
+                // maximum and clips nothing.
+                case "--land-top-percentile" when i + 1 < args.Length:
+                    cfg.LandTopPercentile = double.Parse(args[++i],
+                        System.Globalization.CultureInfo.InvariantCulture);
+                    break;
+
                 default:
                     Console.Error.WriteLine($"Unknown argument: {args[i]}");
                     return 1;
@@ -84,6 +108,8 @@ public static class Program
         {
             Console.Error.WriteLine(
                 "Usage: Ck3MapGen --heightmap <file.png> [--mod [dir]] [--seed n] [--out dir]");
+            Console.Error.WriteLine(
+                "       [--normalize-heightmap [source sea level 0-255]] [--land-top 0-255]");
             Console.Error.WriteLine(
                 "This tool builds a CK3 mod around a heightmap; it does not generate terrain.");
             return 1;

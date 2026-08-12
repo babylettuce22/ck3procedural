@@ -605,7 +605,7 @@ public sealed class MainForm : Form
                 });
 
                 var terra = Stage.Time("province elevation",
-                    () => MapGen.TerrainData.FromElevation(_loaded!.Elevation, cfg));
+                    () => MapGen.TerrainData.FromElevation(_loaded!.ToElevation(cfg), cfg));
 
                 var r = Generator.FromTerrain(terra, cfg);
                 if (modDir is not null) Generator.WriteMod(r, _options, modDir);
