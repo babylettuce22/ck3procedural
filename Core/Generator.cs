@@ -77,6 +77,13 @@ public sealed class GenerationResult
     public required byte[] ProvinceLandMask { get; init; }
 
     /// <summary>
+    /// Where the water goes, and how much of it. Nothing consumes this yet — it is what rivers.png
+    /// and the carved major rivers will both be selected from, and it is here first because the
+    /// failure that removed the last hydrology was in the network rather than in either raster.
+    /// </summary>
+    public required MapGen.Drainage Drainage { get; init; }
+
+    /// <summary>
     /// The climate and the terrain painted from it. Computed once here rather than by each consumer,
     /// because it was being derived three times a run - the mod writer, the debug images and the GUI
     /// preview each built their own - and the climate model is not cheap.
@@ -143,6 +150,19 @@ public static class Generator
             () => MapGen.ClimateModel.Build(cfg, provinceElevation, landMask,
                 new Rng(cfg.Seed ^ 0x0C11)));
 
+        // After the climate because discharge is weighted by rainfall, which is what keeps the map's
+        // great rivers out of its deserts — catchment area alone puts them wherever the basins are
+        // biggest, and the biggest basin on a dry continent is a wadi.
+        //
+        // This is also why the network does not live on TerrainData with the elevation it is derived
+        // from, which is where that type's own note says a rebuilt hydrology belongs. It cannot:
+        // TerrainData is built before there is a land mask, let alone a climate. When the major
+        // rivers are carved the pipeline has to fold back on itself here anyway — carving lowers the
+        // heightmap, which moves the coastline, which moves the climate — so the ordering is worth
+        // revisiting then rather than guessing at it now.
+        var drainage = Stage.Time("drainage",
+            () => MapGen.Drainage.Build(cfg, provinceElevation, landMask, climate.AnnualMm));
+
         var provinces = Stage.Time("province partition",
             () => Provinces.Build(landMask, provinceElevation, climate,
                 cfg.ProvinceWidth, cfg.ProvinceHeight, cfg, rng));
@@ -183,6 +203,7 @@ public static class Generator
             BaronyCount = baronyCount,
             LandCount = landCount,
             Titles = titles,
+            Drainage = drainage,
             Terrain = terrain,
             Terra = terra,
             ElapsedMs = sw.ElapsedMilliseconds,
@@ -222,7 +243,7 @@ public static class Generator
 
         Emit.ContentWriter.WriteAll(
             modDir, options.GameDir, cfg, result.Provinces, result.ProvinceOrder, result.LandCount,
-            result.Titles, result.ProvinceElevation, result.Terrain.Terrain, rng,
+            result.Titles, result.ProvinceElevation, result.Terrain, rng,
             options.WriteHistory);
 
         Console.WriteLine($"  done in {sw.ElapsedMilliseconds} ms");
@@ -249,6 +270,19 @@ public static class Generator
         // The climate behind it, in Koppen's own colours — the only view that can be checked
         // against a real atlas rather than judged by eye.
         Io.DebugRender.WriteKoppen(Path.Combine(outDir, "debug_climate.png"), classified.Climate,
+            result.Config.ProvinceWidth, result.Config.ProvinceHeight);
+
+        // Where the water goes, which no other view shows: debug_elevation.png has the relief the
+        // network is derived from but says nothing about what drains where, and rivers.png has no
+        // courses on it to look at yet.
+        Io.DebugRender.WriteDrainage(Path.Combine(outDir, "debug_drainage.png"), result.Drainage,
+            result.ProvinceElevation, result.Config);
+
+        // And rivers.png itself, so the file that ships can be read without opening the mod. With
+        // no course generator this is land and water only, which is still worth a look: it is the
+        // coastline provinces.png agrees with, and the canvas any rebuilt hydrology draws onto.
+        Io.DebugRender.WriteRivers(Path.Combine(outDir, "debug_rivers.png"),
+            Emit.MapDataWriter.RiverIndices(result.Config, result.Provinces),
             result.Config.ProvinceWidth, result.Config.ProvinceHeight);
 
         // And the two fields the classification is a function of, so a mottled climate map can be

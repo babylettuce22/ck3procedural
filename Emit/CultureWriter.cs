@@ -1,3 +1,4 @@
+using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
@@ -18,12 +19,12 @@ namespace Ck3MapGen.Emit;
 /// </summary>
 public static class CultureWriter
 {
-    public static void WriteAll(string modDir, CultureMap cultures, VanillaVocabulary vocab, Rng rng)
+    public static void WriteAll(string modDir, MapConfig cfg, CultureMap cultures, VanillaVocabulary vocab, Rng rng)
     {
         WritePillars(modDir, cultures);
         WriteCultures(modDir, cultures);
         WriteNameLists(modDir, cultures);
-        WriteHistory(modDir, cultures, vocab, rng);
+        WriteHistory(modDir, cfg, cultures, vocab, rng);
         WriteLocalisation(modDir, cultures);
 
         Console.WriteLine($"  cultures written: {cultures.Cultures.Count} cultures, " +
@@ -224,7 +225,7 @@ public static class CultureWriter
     /// culture ends up with a plausible number of them and the common ones stay common — without
     /// every culture starting from an identical technological position.
     /// </summary>
-    private static void WriteHistory(string modDir, CultureMap cultures, VanillaVocabulary vocab,
+    private static void WriteHistory(string modDir, MapConfig cfg, CultureMap cultures, VanillaVocabulary vocab,
         Rng rng)
     {
         if (vocab.InnovationFrequency.Count == 0) return;
@@ -244,7 +245,7 @@ public static class CultureWriter
 
             var sb = new StringBuilder();
             sb.Append($"# {culture.Name}, of the {culture.Heritage.Name} heritage.\n\n");
-            sb.Append($"{HistoryWriter.StartDate} = {{\n");
+            sb.Append($"{cfg.StartDate} = {{\n");
             foreach (string innovation in chosen)
                 sb.Append($"\tdiscover_innovation = {innovation}\n");
             sb.Append("}\n");
@@ -281,7 +282,9 @@ public static class CultureWriter
         foreach (var culture in cultures.Cultures)
         {
             entries[culture.Key] = culture.Name;
+            entries[$"{culture.Key}_name"] = culture.Name;
             entries[$"{culture.Key}_collective_noun"] = Plural(culture.Name);
+            entries[$"{culture.Key}_prefix"] = culture.Prefix;
             entries[$"mercenary_company_{culture.Key}"] = $"{culture.Name} Company";
 
             entries[$"dynnp_{culture.Key}"] = culture.LocationPrefix + " ";

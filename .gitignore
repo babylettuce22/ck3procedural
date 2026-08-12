@@ -487,3 +487,7 @@ sixlabors.lic
 # Claude Code: the ck3-modding skill is shared, per-machine settings are not
 .claude/settings.local.json
 .claude/*.local.json
+
+# Local helper for dumping the source tree to a text file, and its output
+csfileprinter.py
+cs_files_list.txt

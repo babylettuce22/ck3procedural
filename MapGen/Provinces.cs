@@ -76,7 +76,7 @@ public static class Provinces
         Core.Stage.Detail("  · sever waists", () => SeverWaists(map));
         Core.Stage.Detail("  · reconnect fragments", () => ReconnectFragments(map));
         Core.Stage.Detail("  · dissolve tiny", () => DissolveTinyProvinces(map, mask, cfg));
-        Core.Stage.Detail("  · impassable", () => { MarkImpassable(map, elevation, mask, cfg); MergeImpassableRanges(map, cfg); });
+        Core.Stage.Detail("  · impassable", () => { MarkImpassable(map, elevation, mask, cfg); MarkTrappedProvincesImpassable(map); MergeImpassableRanges(map, cfg);  });
         Core.Stage.Detail("  · province report", () => Report(map, elevation, cfg));
         return map;
     }
@@ -684,12 +684,64 @@ public static class Provinces
     }
 
     /// <summary>
-    /// Flags the most mountainous land provinces as impassable_mountains.
+    /// Slope at every pixel: the magnitude of the elevation gradient, in height units per pixel.
     ///
-    /// Ranked by the share of the province standing above the mountain line rather than by mean
-    /// height, so a province is impassable because it is *mostly* mountain, not because it happens
-    /// to contain one peak. A floor on that share stops a map with little high ground from having
-    /// impassable provinces forced on it just to reach the target count.
+    /// Central differences, wrapping in x the way the rest of the partition does — the map is a
+    /// cylinder and a province may straddle the seam. Rows at the poles fall back to a one-sided
+    /// difference rather than wrapping in y, because the top and bottom edges of the raster are not
+    /// neighbours.
+    /// </summary>
+    private static float[] Slopes(float[] elevation, int width, int height)
+    {
+        var slope = new float[elevation.Length];
+
+        Parallel.For(0, height, y =>
+        {
+            int up = Math.Max(0, y - 1), down = Math.Min(height - 1, y + 1);
+            float dyScale = down == up ? 1f : 1f / (down - up);
+
+            for (int x = 0; x < width; x++)
+            {
+                int left = (x - 1 + width) % width, right = (x + 1) % width;
+                int i = y * width + x;
+
+                float dx = (elevation[y * width + right] - elevation[y * width + left]) * 0.5f;
+                float dy = (elevation[down * width + x] - elevation[up * width + x]) * dyScale;
+
+                slope[i] = MathF.Sqrt(dx * dx + dy * dy);
+            }
+        });
+
+        return slope;
+    }
+
+    /// <summary>The value at <paramref name="fraction"/> of the land distribution of a field.</summary>
+    private static float LandLine(float[] field, byte[] mask, double fraction)
+    {
+        var land = new List<float>();
+        for (int i = 0; i < field.Length; i += 7)
+            if (mask[i] != 0) land.Add(field[i]);
+        if (land.Count == 0) return float.MaxValue;
+
+        land.Sort();
+        return land[(int)Math.Clamp(land.Count * fraction, 0, land.Count - 1)];
+    }
+
+    /// <summary>
+    /// Flags the most impassable land provinces as impassable_mountains.
+    ///
+    /// Scored on two things a province can be, not one. **Height**: the share standing above the
+    /// mountain line — so a province qualifies by being mostly mountain rather than by containing a
+    /// single peak. **Steepness**: the share standing above the steep line, which is what actually
+    /// stops an army. Height on its own cannot tell a wall from a tableland; it scores a high
+    /// plateau maximally while people have crossed those on foot for millennia, and it misses the
+    /// escarpments and gorges that sit below the mountain line and genuinely cannot be marched
+    /// through. Both lines are percentiles of this map's own land, the same basis the terrain
+    /// classifier and the heightmap's hypsometry use, so "mountain" and "steep" mean one thing
+    /// throughout and survive a change of heightmap.
+    ///
+    /// A floor on the combined score stops a map with little relief from having impassable
+    /// provinces forced on it just to reach the target count.
     ///
     /// Vanilla's proportion is the reference: 1,188 impassable against 11,301 baronied provinces.
     /// </summary>
@@ -698,45 +750,56 @@ public static class Provinces
         double share = Math.Clamp(cfg.ImpassableShareOfLand, 0, 0.5);
         if (share <= 0) return;
 
-        // The mountain line, as a percentile of this map's own land — the same basis the terrain
-        // classifier and the heightmap's hypsometry use, so "mountain" means one thing throughout.
-        var land = new List<float>();
-        for (int i = 0; i < elevation.Length; i += 7)
-            if (mask[i] != 0) land.Add(elevation[i]);
-        if (land.Count == 0) return;
+        float mountainLine = LandLine(elevation, mask, 1.0 - cfg.MountainLineShare);
+        if (mountainLine == float.MaxValue) return;
 
-        land.Sort();
-        float mountainLine = land[(int)Math.Clamp(
-            land.Count * (1.0 - cfg.MountainLineShare), 0, land.Count - 1)];
+        var slope = Slopes(elevation, map.Width, map.Height);
+        float steepLine = LandLine(slope, mask, 1.0 - Math.Clamp(cfg.SteepLineShare, 0, 1));
 
         var total = new int[map.Count];
         var high = new int[map.Count];
+        var steep = new int[map.Count];
         for (int i = 0; i < map.Label.Length; i++)
         {
             int label = map.Label[i];
             if (!map.Seeds[label].IsLand) continue;
             total[label]++;
             if (elevation[i] >= mountainLine) high[label]++;
+            if (slope[i] >= steepLine) steep[label]++;
         }
 
-        var ranked = new List<(int Label, double Share)>();
+        double slopeWeight = Math.Clamp(cfg.ImpassableSlopeWeight, 0, 1);
+        var ranked = new List<(int Label, double Score, double High, double Steep)>();
         for (int i = 0; i < map.Count; i++)
-            if (map.Seeds[i].IsLand && total[i] > 0)
-                ranked.Add((i, (double)high[i] / total[i]));
+        {
+            if (!map.Seeds[i].IsLand || total[i] == 0) continue;
 
-        ranked.Sort((a, b) => b.Share.CompareTo(a.Share));
+            double highShare = (double)high[i] / total[i];
+            double steepShare = (double)steep[i] / total[i];
+            ranked.Add((i, highShare * (1 - slopeWeight) + steepShare * slopeWeight,
+                highShare, steepShare));
+        }
+
+        ranked.Sort((a, b) => b.Score.CompareTo(a.Score));
 
         int want = (int)Math.Round(ranked.Count * share);
         int marked = 0;
-        foreach (var (label, mountainous) in ranked)
+        double highSum = 0, steepSum = 0;
+        foreach (var (label, score, highShare, steepShare) in ranked)
         {
-            if (marked >= want || mountainous < cfg.ImpassableMinMountainShare) break;
+            if (marked >= want || score < cfg.ImpassableMinMountainShare) break;
             map.Seeds[label].IsImpassable = true;
+            highSum += highShare;
+            steepSum += steepShare;
             marked++;
         }
 
+        string mix = marked == 0
+            ? ""
+            : $", mean {highSum / marked:P0} above the line and {steepSum / marked:P0} steep";
         Console.WriteLine($"  impassable: {marked} of {ranked.Count} land provinces " +
-                          $"(target {want}, mountain line {mountainLine:F0})");
+                          $"(target {want}, mountain line {mountainLine:F0}, " +
+                          $"steep line {steepLine:F2}/px{mix})");
     }
 
     /// <summary>
@@ -839,6 +902,109 @@ public static class Provinces
             if (!touching.TryGetValue(b, out var sb)) touching[b] = sb = [];
             sa.Add(b);
             sb.Add(a);
+        }
+    }
+
+    /// <summary>
+    /// Finds playable land provinces that are enclosed by impassable mountains with no land path 
+    /// to the main continent and no sea access, and converts them to impassable_mountains.
+    /// </summary>
+    private static void MarkTrappedProvincesImpassable(ProvinceMap map)
+    {
+        int width = map.Width, height = map.Height;
+        int count = map.Count;
+
+        var neighbors = new HashSet<int>[count];
+        var seaAccess = new bool[count];
+        for (int i = 0; i < count; i++) neighbors[i] = [];
+
+        // 1. Build neighbor graph and identify coastal/sea access for land provinces
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int a = map.Label[y * width + x];
+
+                if (x + 1 < width) CheckEdge(a, map.Label[y * width + x + 1]);
+                if (y + 1 < height) CheckEdge(a, map.Label[(y + 1) * width + x]);
+
+                void CheckEdge(int u, int v)
+                {
+                    if (u == v) return;
+                    var seedU = map.Seeds[u];
+                    var seedV = map.Seeds[v];
+
+                    // If a land province touches water, it has sea access
+                    if (seedU.IsLand && !seedV.IsLand) seaAccess[u] = true;
+                    if (seedV.IsLand && !seedU.IsLand) seaAccess[v] = true;
+
+                    // Track land-to-land adjacencies
+                    if (seedU.IsLand && seedV.IsLand)
+                    {
+                        neighbors[u].Add(v);
+                        neighbors[v].Add(u);
+                    }
+                }
+            }
+        }
+
+        // 2. Find connected components of playable land (!IsImpassable)
+        var visited = new bool[count];
+        var components = new List<List<int>>();
+
+        for (int i = 0; i < count; i++)
+        {
+            if (visited[i] || !map.Seeds[i].IsLand || map.Seeds[i].IsImpassable) continue;
+
+            var comp = new List<int>();
+            var queue = new Queue<int>();
+            queue.Enqueue(i);
+            visited[i] = true;
+
+            while (queue.Count > 0)
+            {
+                int curr = queue.Dequeue();
+                comp.Add(curr);
+
+                foreach (int nbr in neighbors[curr])
+                {
+                    if (visited[nbr] || !map.Seeds[nbr].IsLand || map.Seeds[nbr].IsImpassable) continue;
+                    visited[nbr] = true;
+                    queue.Enqueue(nbr);
+                }
+            }
+
+            components.Add(comp);
+        }
+
+        if (components.Count <= 1) return; // 0 or 1 main land component; nothing is trapped
+
+        // 3. Identify the largest land component (the main landmass)
+        int largestComponentIdx = 0;
+        for (int c = 1; c < components.Count; c++)
+        {
+            if (components[c].Count > components[largestComponentIdx].Count)
+                largestComponentIdx = c;
+        }
+
+        // 4. Mark trapped components (no sea access AND not connected to the main landmass)
+        int convertedCount = 0;
+        for (int c = 0; c < components.Count; c++)
+        {
+            if (c == largestComponentIdx) continue;
+            if (components[c].Any(p => seaAccess[p])) continue; // Has coastal access (e.g. island/peninsula)
+
+            // Trapped in land with no sea access: convert all provinces in this pocket to impassable
+            foreach (int p in components[c])
+            {
+                map.Seeds[p].IsImpassable = true;
+                convertedCount++;
+            }
+        }
+
+        if (convertedCount > 0)
+        {
+            Console.WriteLine($"  connectivity check: filled {convertedCount} trapped province(s) into impassable_mountains");
         }
     }
 

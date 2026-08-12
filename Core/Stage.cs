@@ -21,6 +21,37 @@ public static class Stage
     private static readonly List<(string Name, long Ms, bool Nested)> Recorded = [];
     private static readonly Stopwatch Wall = new();
 
+    /// <summary>
+    /// Raised as each phase starts, so a front end can say which one is running. The CLI ignores it;
+    /// the GUI puts the name in the status bar, which is the difference between a window that looks
+    /// hung for two minutes and one that is visibly working.
+    ///
+    /// Raised on whatever thread the phase runs on — a handler that touches UI must marshal.
+    /// </summary>
+    public static event Action<string>? Entering;
+
+    /// <summary>
+    /// The same, for spans inside a phase. Kept separate from <see cref="Entering"/> because their
+    /// time is already inside their parent's: a progress estimate that counted both would count it
+    /// twice. This is for saying <em>which part</em> of a long phase is running, and the province
+    /// partition — the longest of them — is the reason it exists.
+    /// </summary>
+    public static event Action<string>? Detailing;
+
+    /// <summary>
+    /// Cancellation for the run in progress, checked at every phase boundary.
+    ///
+    /// Phase boundaries and not finer, deliberately: the phases are the loops, most of them
+    /// Parallel.For over millions of pixels, and threading a token through all of them would be a
+    /// large change to the pipeline for a button. The cost is that Cancel takes effect when the
+    /// current phase ends rather than instantly — seconds on a big map, and the longest single
+    /// phase is the bound.
+    ///
+    /// A static because there is one run at a time by construction; the GUI locks its controls for
+    /// the duration and the CLI is one pass and exits.
+    /// </summary>
+    public static CancellationToken Cancellation { get; set; } = CancellationToken.None;
+
     /// <summary>Starts a fresh accounting. Called once at the top of a run.</summary>
     public static void Begin()
     {
@@ -34,6 +65,7 @@ public static class Stage
     /// <summary>Times <paramref name="work"/> and files it under <paramref name="name"/>.</summary>
     public static T Time<T>(string name, Func<T> work)
     {
+        Enter(name);
         var clock = Stopwatch.StartNew();
         var result = work();
         Record(name, clock.ElapsedMilliseconds, nested: false);
@@ -43,9 +75,17 @@ public static class Stage
     /// <inheritdoc cref="Time{T}"/>
     public static void Time(string name, Action work)
     {
+        Enter(name);
         var clock = Stopwatch.StartNew();
         work();
         Record(name, clock.ElapsedMilliseconds, nested: false);
+    }
+
+    /// <summary>The phase boundary: announce the phase, and give a cancel somewhere to land.</summary>
+    private static void Enter(string name)
+    {
+        Cancellation.ThrowIfCancellationRequested();
+        Entering?.Invoke(name);
     }
 
     /// <summary>
@@ -55,6 +95,7 @@ public static class Stage
     /// </summary>
     public static T Detail<T>(string name, Func<T> work)
     {
+        Detailing?.Invoke(name);
         var clock = Stopwatch.StartNew();
         var result = work();
         Record(name, clock.ElapsedMilliseconds, nested: true);
@@ -64,6 +105,7 @@ public static class Stage
     /// <inheritdoc cref="Detail{T}"/>
     public static void Detail(string name, Action work)
     {
+        Detailing?.Invoke(name);
         var clock = Stopwatch.StartNew();
         work();
         Record(name, clock.ElapsedMilliseconds, nested: true);

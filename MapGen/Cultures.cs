@@ -40,6 +40,16 @@ public sealed class Culture
 
     public string NameListKey => $"name_list_{Key}";
 
+    /// <summary>
+    /// The combining form CK3 splices into a hybrid culture's name ("Burgundo" + "-French"). Without
+    /// it the game renders the raw <c>{key}_prefix</c> token, so every culture needs one. Vanilla's
+    /// are all the name with its final vowel traded for an -o.
+    /// </summary>
+    public string Prefix
+        => "aeiouy".Contains(char.ToLowerInvariant(Name[^1]))
+            ? Name[..^1] + "o"
+            : Name + "o";
+
     public required List<string> MaleNames { get; init; }
     public required List<string> FemaleNames { get; init; }
     public required List<string> DynastyNames { get; init; }

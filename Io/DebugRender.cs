@@ -147,6 +147,110 @@ public static class DebugRender
         PngWriter.WriteRgb8(path, outW, outH, rgb);
     }
 
+    /// <summary>
+    /// The drainage network: ground by height, filled depressions in teal, discharge as a ramp.
+    ///
+    /// The only view here that cannot be point-sampled. Everything else on this page is areas —
+    /// a climate zone or a province is thousands of cells and any one of them stands for the block —
+    /// whereas a watercourse is one cell wide and a minority inside every block it crosses, so
+    /// taking the top-left cell of each block breaks it into dots. Each block resolves to its
+    /// highest-discharge cell instead, which is what <see cref="MapGen.Drainage.ViewRank"/> is for.
+    /// </summary>
+    public static void WriteDrainage(string path, MapGen.Drainage drainage, float[] elevation,
+        MapConfig cfg, int maxWidth = 2048)
+    {
+        int width = drainage.Width, height = drainage.Height;
+        int step = Math.Max(1, width / maxWidth);
+        int outW = width / step, outH = height / step;
+        var rgb = new byte[outW * outH * 3];
+
+        Parallel.For(0, outH, y =>
+        {
+            for (int x = 0; x < outW; x++)
+            {
+                int source = y * step * width + x * step;
+                int best = drainage.ViewRank(source);
+
+                for (int by = 0; by < step; by++)
+                {
+                    int row = (y * step + by) * width + x * step;
+                    for (int bx = 0; bx < step; bx++)
+                    {
+                        int rank = drainage.ViewRank(row + bx);
+                        if (rank <= best) continue;
+                        best = rank;
+                        source = row + bx;
+                    }
+                }
+
+                var (r, g, b) = drainage.Shade(elevation, cfg, source);
+                int o = (y * outW + x) * 3;
+                rgb[o] = r;
+                rgb[o + 1] = g;
+                rgb[o + 2] = b;
+            }
+        });
+
+        PngWriter.WriteRgb8(path, outW, outH, rgb);
+    }
+
+    /// <summary>
+    /// rivers.png itself, through its own palette, block-sampled so the courses survive.
+    ///
+    /// The same rule as <see cref="WriteDrainage"/> and for the same reason — a course is one pixel
+    /// wide — with one addition: a *wider* course outranks a narrower one, so where a trunk and a
+    /// tributary share a block the trunk is what comes through. Sources and junctions outrank
+    /// everything, because a marker in the wrong place is the failure worth seeing.
+    ///
+    /// With no course generator in the tool this is land and water only, and the ranking costs
+    /// nothing: a flat rank is exactly the plain point sample. It is kept because it is a view of a
+    /// file the mod ships and CK3 requires.
+    /// </summary>
+    public static void WriteRivers(string path, byte[] indices, int width, int height,
+        int maxWidth = 2048)
+    {
+        int step = Math.Max(1, width / maxWidth);
+        int outW = width / step, outH = height / step;
+        var rgb = new byte[outW * outH * 3];
+
+        // Land and water rank 0; widths 3..11 rank by width; the two markers sit above both.
+        static int Rank(byte index) => index switch
+        {
+            Emit.MapDataWriter.RiverIndexLand or Emit.MapDataWriter.RiverIndexWater => 0,
+            0 or 1 or 2 => 32,
+            _ => index,
+        };
+
+        Parallel.For(0, outH, y =>
+        {
+            for (int x = 0; x < outW; x++)
+            {
+                int source = y * step * width + x * step;
+                int best = Rank(indices[source]);
+
+                for (int by = 0; by < step; by++)
+                {
+                    int row = (y * step + by) * width + x * step;
+                    for (int bx = 0; bx < step; bx++)
+                    {
+                        int rank = Rank(indices[row + bx]);
+                        if (rank <= best) continue;
+                        best = rank;
+                        source = row + bx;
+                    }
+                }
+
+                var (r, g, b) = Emit.MapDataWriter.RiverColour(indices[source]);
+                int o = (y * outW + x) * 3;
+                rgb[o] = r;
+                rgb[o + 1] = g;
+                rgb[o + 2] = b;
+            }
+        });
+
+        PngWriter.WriteRgb8(path, outW, outH, rgb);
+    }
+
     /// <summary>Elevation as greyscale, normalised across the actual range so detail is visible.</summary>
     public static void WriteElevation(string path, WorldGrid w, int scale = 1)
     {

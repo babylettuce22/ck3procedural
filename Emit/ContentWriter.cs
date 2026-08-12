@@ -13,10 +13,18 @@ namespace Ck3MapGen.Emit;
 /// </summary>
 public static class ContentWriter
 {
+    /// <param name="classified">
+    /// The painted terrain *and* the climate behind it. Both are needed rather than just the
+    /// terrain classes: the material families in <see cref="TerrainPalette"/> are indexed by
+    /// climate, so the painter cannot pick a family without it.
+    /// </param>
     public static void WriteAll(string modDir, string gameDir, MapConfig cfg,
         ProvinceMap provinces, int[] order, int landCount, List<Title> empires,
-        float[] provinceElevation, TerrainClass[] terrain, Rng rng, bool writeHistory = true)
+        float[] provinceElevation, TerrainClassifier.Result classified, Rng rng,
+        bool writeHistory = true)
     {
+        var terrain = classified.Terrain;
+
         // Blanking runs FIRST so the generated files below always win: several of them share a
         // filename with a vanilla file they are replacing.
         Core.Stage.Time("blank vanilla data", () => BlankVanillaData(modDir, gameDir));
@@ -24,8 +32,12 @@ public static class ContentWriter
         // Terrain arrives already resolved per pixel; provinces take a majority vote of it here.
         // Everything that paints the ground — the detail textures, the masks, the colormap and
         // common/province_terrain — is derived from that one array, so none of them can disagree.
-        var provinceTerrain = ProvinceTerrain(cfg, provinces, order, terrain, landCount);
-        ReportTerrain(terrain);
+        var provinceTerrain = Core.Stage.Time("province terrain vote", () =>
+        {
+            var vote = ProvinceTerrain(cfg, provinces, order, terrain, landCount);
+            ReportTerrain(terrain);
+            return vote;
+        });
 
         // --- The order below is forced, and each step needs the one before it ---
         //
@@ -36,7 +48,7 @@ public static class ContentWriter
         //
         // So: development, cultures, names, faiths. Nothing reads a title's name before
         // AssignNames runs, and everything that writes one runs after it.
-        var vocabulary = MapGen.VanillaVocabulary.Read(gameDir);
+        var vocabulary = Core.Stage.Time("vanilla vocabulary", () => MapGen.VanillaVocabulary.Read(gameDir));
 
         // Fail here rather than three writers later. Without a vocabulary every generated culture
         // and faith would reference an ethos, a tradition and a doctrine that do not exist, and CK3
@@ -50,52 +62,75 @@ public static class ContentWriter
 
         // Derived once and shared: the county's development and its baronies' holdings have to
         // agree, and they are written by two different emitters into two different directories.
-        var development = MapGen.Development.ForCounties(counties, provinceTerrain, cfg,
-            new Rng(cfg.Seed ^ 0x0DE7));
-        ReportDevelopment(development);
+        var development = Core.Stage.Time("development", () =>
+        {
+            var levels = MapGen.Development.ForCounties(counties, provinceTerrain, cfg,
+                new Rng(cfg.Seed ^ 0x0DE7));
+            ReportDevelopment(levels);
+            return levels;
+        });
 
-        var cultures = MapGen.Cultures.Build(empires, provinces, order, landCount, provinceTerrain,
-            development, vocabulary, cfg, new Rng(cfg.Seed ^ 0x0C17));
+        var cultures = Core.Stage.Time("cultures", () =>
+        {
+            var map = MapGen.Cultures.Build(empires, provinces, order, landCount, provinceTerrain,
+                development, vocabulary, cfg, new Rng(cfg.Seed ^ 0x0C17));
+            Titles.AssignNames(empires, map, new Rng(cfg.Seed ^ 0x7171));
+            return map;
+        });
 
-        Titles.AssignNames(empires, cultures, new Rng(cfg.Seed ^ 0x7171));
+        var faiths = Core.Stage.Time("faiths", () => MapGen.Faiths.Build(empires, provinces, order,
+            landCount, provinceTerrain, development, vocabulary, cfg, new Rng(cfg.Seed ^ 0x0FA1)));
 
-        var faiths = MapGen.Faiths.Build(empires, provinces, order, landCount, provinceTerrain,
-            development, vocabulary, cfg, new Rng(cfg.Seed ^ 0x0FA1));
+        // Who holds what at the start date. Derived once here because the holdings written below and
+        // the governments HistoryWriter writes have to be the same answer — see MapGen.Governments.
+        var governments = MapGen.Governments.Build(counties, provinceTerrain, development, cultures,
+            faiths, cfg, new Rng(cfg.Seed ^ 0x6017));
+        Console.WriteLine("  governments: " + string.Join(", ",
+            governments.Tally(counties.Count).Select(g => $"{g.Count} {g.Government[..^11]}")));
 
-        WriteLandedTitles(modDir, empires);
-        WriteProvinceTerrain(modDir, provinceTerrain, landCount);
-        WriteProvinceHistory(modDir, empires, provinceTerrain, development, cultures, faiths, cfg.Seed);
-        WriteLocalisation(modDir, empires);
+        Core.Stage.Time("titles, history and localisation", () =>
+        {
+            WriteLandedTitles(modDir, empires, faiths);
+            WriteProvinceTerrain(modDir, provinceTerrain, landCount);
+            WriteProvinceHistory(modDir, cfg, empires, provinceTerrain, development, cultures, faiths, governments, cfg.Seed);
+            WriteLocalisation(modDir, empires);
+        });
 
         // The cultures and faiths themselves. Additive — vanilla's stay declared and unheld.
-        CultureWriter.WriteAll(modDir, cultures, vocabulary, new Rng(cfg.Seed ^ 0x0C1A));
+        Core.Stage.Time("culture files",
+            () => CultureWriter.WriteAll(modDir, cfg, cultures, vocabulary, new Rng(cfg.Seed ^ 0x0C1A)));
 
-        // The engine's world size must match the province map we ship.
-        CompatibilityWriter.WriteDefines(modDir, cfg);
+        Core.Stage.Time("compatibility", () =>
+        {
+            // The engine's world size must match the province map we ship.
+            CompatibilityWriter.WriteDefines(modDir, cfg);
 
-        // Re-declare rather than blank: a missing region key is a hard script error.
-        CompatibilityWriter.WriteGeographicalRegions(modDir, gameDir, empires);
+            // Re-declare rather than blank: a missing region key is a hard script error.
+            CompatibilityWriter.WriteGeographicalRegions(modDir, gameDir, empires);
 
-        // Faiths hold their holy sites, so a site with no county leaves a dangling object.
-        CompatibilityWriter.WriteHolySites(modDir, gameDir, empires);
+            // Faiths hold their holy sites, so a site with no county leaves a dangling object.
+            CompatibilityWriter.WriteHolySites(modDir, gameDir, empires);
+        });
 
         // MUST follow WriteHolySites, which recreates that whole directory and would otherwise
         // delete the generated faiths' own sites along with it.
-        ReligionWriter.WriteAll(modDir, faiths);
+        Core.Stage.Time("religion files", () => ReligionWriter.WriteAll(modDir, faiths));
 
         // Vanilla/DLC script hardcodes title keys, and the coat of arms system dereferences
         // whatever it gets back when the lookup fails.
-        CompatibilityWriter.WriteVanillaTitulars(modDir, gameDir, empires);
+        Core.Stage.Time("vanilla titulars",
+            () => CompatibilityWriter.WriteVanillaTitulars(modDir, gameDir, empires));
 
         // Per-province map anchors. replace_path drops vanilla's, so these must be rebuilt or
         // the map has nowhere to put holdings, armies or sieges.
         Core.Stage.Time("locators", () => LocatorWriter.WriteAll(modDir, gameDir, provinces, order, landCount, provinceElevation, cfg));
 
         // The main menu renders live 3D portraits, which is the step right after history load.
-        FrontendWriter.WriteFrontend(modDir, gameDir);
+        Core.Stage.Time("frontend", () => FrontendWriter.WriteFrontend(modDir, gameDir));
 
         // Without these, vanilla's terrain painting is stretched across our continents.
-        Core.Stage.Time("terrain textures", () => TerrainTextureWriter.WriteAll(modDir, cfg, terrain, provinceElevation, rng));
+        Core.Stage.Time("terrain textures", () => TerrainTextureWriter.WriteAll(modDir, cfg, terrain,
+            classified.Climate, provinceElevation, rng));
 
         // And the rest of the map-sized graphics — water, foam, snow — which are all still
         // painted for vanilla's geography until we replace them.
@@ -108,16 +143,24 @@ public static class ContentWriter
         // Foliage. replace_path drops vanilla's, so without this the world has no trees at all.
         Core.Stage.Time("trees", () => TreeWriter.WriteAll(modDir, cfg, terrain, rng));
 
+        // The tabletop the map sits on, whose entities are placed in world coordinates and so are
+        // the wrong size and in the wrong place on any map that is not vanilla's. Must run before
+        // StaticFileWriter, which copies the unscaled originals only where nothing generated one.
+        Core.Stage.Time("map table", () => MapTableWriter.WriteAll(modDir, cfg));
+
         // Give the world rulers and a start date. Skippable so a load failure can be bisected
         // into "map and titles" versus "characters, dynasties and the bookmark".
         if (writeHistory)
         {
-            HistoryWriter.WriteAll(modDir, cfg, empires, development, cultures, faiths);
+            Core.Stage.Time("history and portraits", () =>
+            {
+                HistoryWriter.WriteAll(modDir, cfg, empires, development, cultures, faiths, governments);
 
-            // Every bookmark and challenge character needs a portrait entry or the engine holds
-            // a null one.
-            PortraitWriter.WriteAll(modDir, gameDir,
-                [HistoryWriter.BookmarkCharacter, HistoryWriter.ChallengeCharacter]);
+                // Every bookmark and challenge character needs a portrait entry or the engine holds
+                // a null one.
+                PortraitWriter.WriteAll(modDir, gameDir,
+                    [HistoryWriter.BookmarkCharacter, HistoryWriter.ChallengeCharacter]);
+            });
         }
         else Console.WriteLine("  history: SKIPPED (--no-history)");
 
@@ -130,7 +173,7 @@ public static class ContentWriter
     /// than adding to it — vanilla's baronies reference province ids up to ~14143, which no
     /// longer exist on our map, so leaving it in place would dangle every one of them.
     /// </summary>
-    private static void WriteLandedTitles(string modDir, List<Title> empires)
+    private static void WriteLandedTitles(string modDir, List<Title> empires, FaithMap faiths)
     {
         string dir = Path.Combine(modDir, "common", "landed_titles");
         Directory.CreateDirectory(dir);
@@ -138,6 +181,22 @@ public static class ContentWriter
         var sb = new StringBuilder();
         sb.Append("# Generated de jure hierarchy.\n\n");
         foreach (var empire in empires) Write(empire, 0);
+
+        sb.Append("# Head of faith landless titles.\n\n");
+        foreach (var faith in faiths.Faiths)
+        {
+            if (faith.Head is null) continue;
+            var (r, g, b) = faith.Color;
+            string fr = r.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+            string fg = g.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+            string fb = b.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+            sb.Append($"{faith.Head.TitleKey} = {{\n");
+            sb.Append($"    color = {{ {fr} {fg} {fb} }}\n");
+            sb.Append($"    capital = {faith.Head.Seat.Key}\n");
+            sb.Append("    landless = yes\n");
+            sb.Append("}\n\n");
+        }
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_landed_titles.txt"), sb.ToString());
         return;
@@ -154,7 +213,6 @@ public static class ContentWriter
             }
             else
             {
-                // A county's capital is its first barony; higher tiers inherit theirs.
                 if (title.Tier == "c") sb.Append($"{pad}    definite_form = no\n");
                 foreach (var child in title.Children) Write(child, depth + 1);
             }
@@ -270,9 +328,9 @@ public static class ContentWriter
     /// between two peoples — the partitions are county-grained by construction and this is where
     /// that shows.
     /// </summary>
-    private static void WriteProvinceHistory(string modDir, List<Title> empires,
+    private static void WriteProvinceHistory(string modDir, MapConfig cfg, List<Title> empires,
         TerrainClass[] provinceTerrain, Dictionary<Title, int> development, CultureMap cultures,
-        FaithMap faiths, int cfgSeed)
+        FaithMap faiths, GovernmentMap governments, int cfgSeed)
     {
         string dir = Path.Combine(modDir, "history", "provinces");
         Directory.CreateDirectory(dir);
@@ -281,11 +339,13 @@ public static class ContentWriter
         var counts = new Dictionary<string, int>();
 
         var sb = new StringBuilder();
+
         foreach (var county in Titles.Flatten(empires).Where(t => t.Tier == "c"))
         {
             int level = development.GetValueOrDefault(county);
-            string culture = cultures.For(county).Key;
+            string cultureKey = cultures.For(county).Key;
             string faith = faiths.For(county).Key;
+            string government = governments.For(county);
 
             for (int i = 0; i < county.Children.Count; i++)
             {
@@ -294,11 +354,11 @@ public static class ContentWriter
                     ? provinceTerrain[barony.ProvinceId]
                     : TerrainClass.Plains;
 
-                string holding = MapGen.Development.Holding(i, terrain, level, rng);
+                string holding = MapGen.Development.Holding(i, terrain, level, government, rng);
                 counts[holding] = counts.GetValueOrDefault(holding) + 1;
 
                 sb.Append($"{barony.ProvinceId} = {{\n");
-                sb.Append($"    culture = {culture}\n");
+                sb.Append($"    culture = {cultureKey}\n");
                 sb.Append($"    religion = {faith}\n");
                 sb.Append($"    holding = {holding}\n");
                 sb.Append("}\n");

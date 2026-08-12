@@ -3,6 +3,35 @@ using Ck3MapGen.Core;
 
 namespace Ck3MapGen.MapGen;
 
+public sealed class HeadOfFaith
+{
+    public required string TitleKey { get; init; }
+    public required string Name { get; init; }
+    public required Title Seat { get; init; }
+}
+
+public sealed class Faith
+{
+    public required string Key { get; init; }
+    public required string Name { get; init; }
+    public required Religion Religion { get; init; }
+    public required (double R, double G, double B) Color { get; init; }
+    public required string Icon { get; init; }
+
+    public required List<string> Tenets { get; init; }
+
+    public List<Title> Counties { get; } = [];
+    public List<(string Key, Title County)> HolySites { get; } = [];
+
+    public HeadOfFaith? Head { get; set; }
+
+    /// <summary>
+    /// If non-null, this faith is a heresy/branch of the main orthodoxy.
+    /// </summary>
+    public Faith? ParentFaith { get; set; }
+    public bool IsOrganized { get; set; } = true;
+}
+
 /// <summary>A generated religion: a liturgical language, a doctrine baseline, and its faiths.</summary>
 public sealed class Religion
 {
@@ -34,24 +63,6 @@ public sealed class Religion
     public List<Faith> Faiths { get; } = [];
 }
 
-/// <summary>One faith of a religion, and the ground that holds it.</summary>
-public sealed class Faith
-{
-    public required string Key { get; init; }
-    public required string Name { get; init; }
-    public required Religion Religion { get; init; }
-    public required (double R, double G, double B) Color { get; init; }
-    public required string Icon { get; init; }
-
-    /// <summary>Its three core tenets — the doctrines a player actually reads off the faith screen.</summary>
-    public required List<string> Tenets { get; init; }
-
-    public List<Title> Counties { get; } = [];
-
-    /// <summary>Holy site keys, resolved to counties this faith holds.</summary>
-    public List<(string Key, Title County)> HolySites { get; } = [];
-}
-
 /// <summary>The finished religious geography.</summary>
 public sealed class FaithMap
 {
@@ -80,33 +91,9 @@ public sealed class FaithMap
 
 /// <summary>
 /// Grows religions and faiths over the same county graph the cultures used.
-///
-/// The one thing this deliberately does *not* do is follow the culture map. Seeds are placed
-/// independently and the frontier is weighted differently — see
-/// <see cref="MapConfig.FaithTerrainWeight"/>, which is lower than the culture equivalent, so a
-/// faith crosses a mountain range a language would have stopped at. That mismatch is the entire
-/// point. A world where every culture border is also a faith border reads as a world with one
-/// axis of difference; the interesting map is the one where a kingdom holds two faiths, or where
-/// one faith spans four languages and its adherents have that in common and nothing else. Every
-/// religious war CK3 can generate lives in the gap between the two maps.
-///
-/// Religions are coarser than cultures, roughly matching vanilla's ratio: it ships ~193 cultures
-/// against ~120 faiths in ~48 religions.
 /// </summary>
 public static class Faiths
 {
-    /// <summary>
-    /// Doctrine groups a generated faith fills, and nothing else.
-    ///
-    /// Vanilla's group list also holds religion-specific machinery — the Muslim succession split,
-    /// the Jewish temple authorities, the Zoroastrian branches — which exist to model one real
-    /// religion each and mean nothing on an invented one. The special single-doctrine groups
-    /// (is_christian_faith, has_jizya_doctrine and friends) are opt-in flags and are left off, which
-    /// is what vanilla's own pagan religions do.
-    ///
-    /// Members are read from the install rather than listed here; only the choice of *which groups
-    /// to answer* is ours.
-    /// </summary>
     private static readonly string[] FilledGroups =
     [
         "hostility_group", "doctrine_theism", "doctrine_head_of_faith", "doctrine_gender",
@@ -121,11 +108,8 @@ public static class Faiths
     /// <summary>
     /// Doctrines forced regardless of what the group offers.
     ///
-    /// <c>doctrine_no_head</c> is the load-bearing one. Taking a spiritual or temporal head instead
-    /// obliges the faith to name a <c>religious_head</c> title that actually exists, and CK3 does
-    /// not warn when it does not — it just leaves the faith holding a null title. Minting head-of-
-    /// faith titles is a piece of work in its own right, so until it is done every generated faith
-    /// is headless, which is both safe and the commonest arrangement among vanilla's pagans anyway.
+    /// <c>doctrine_no_head</c> is the religion-level baseline. Faiths that mint a head of faith title
+    /// override this in their faith block with <c>doctrine_spiritual_head</c> and a <c>religious_head</c> title.
     ///
     /// The hostility doctrine is pinned to the pagan one to match the family; see
     /// <see cref="Family"/>.
@@ -133,17 +117,8 @@ public static class Faiths
     private static readonly Dictionary<string, string> ForcedDoctrines = new()
     {
         ["doctrine_head_of_faith"] = "doctrine_no_head",
-        ["hostility_group"] = "pagan_hostility_doctrine",
     };
 
-    /// <summary>
-    /// Every generated religion is scripted as a pagan-family one.
-    ///
-    /// Not for flavour — the family drives which hostility doctrine is legal and which great holy
-    /// war content applies, and the Abrahamic family in particular assumes machinery (heads of
-    /// faith, crusade targets) a generated world has none of. Doctrines carry the actual variety a
-    /// player reads: whether the faith is monotheist, how it treats outsiders, what it makes a crime.
-    /// </summary>
     public const string Family = "rf_pagan";
 
     public static FaithMap Build(List<Title> empires, ProvinceMap provinces, int[] order,
@@ -167,6 +142,7 @@ public static class Faiths
         var byCounty = new Dictionary<Title, Faith>();
         var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // Step 1: Create Religions and Faiths
         for (int r = 0; r < religionTarget; r++)
         {
             var members = all.Where(i => religionOf[i] == r).ToList();
@@ -178,33 +154,114 @@ public static class Faiths
             int within = Math.Max(1, (int)Math.Round(members.Count / cfg.CountiesPerFaith));
             var faithOf = RegionGrowth.Partition(graph, members, within, rng, out _);
 
+            var religionFaiths = new List<Faith>();
+
             for (int f = 0; f < within; f++)
             {
                 var owned = members.Where(i => faithOf[i] == f).Select(i => counties[i]).ToList();
                 if (owned.Count == 0) continue;
 
-                var faith = CreateFaith(religion, faiths.Count, vocab, usedNames, rng);
-                religion.Faiths.Add(faith);
-                faiths.Add(faith);
+                var faith = CreateFaith(religion, faiths.Count + religionFaiths.Count, vocab, usedNames, rng);
                 faith.Counties.AddRange(owned);
                 foreach (var county in owned) byCounty[county] = faith;
 
-                PlaceHolySites(faith, development, cfg.HolySitesPerFaith);
+                religionFaiths.Add(faith);
+            }
+
+            if (religionFaiths.Count == 0) continue;
+
+            // Step 2: Determine Organization & Hierarchy
+            var primaryFaith = religionFaiths.OrderByDescending(f => f.Counties.Count).First();
+
+            foreach (var faith in religionFaiths)
+            {
+                if (faith != primaryFaith)
+                    faith.ParentFaith = primaryFaith;
+
+                // Determine Organization based on development & monotheism:
+                // Faiths in low-development/tribal areas (avg dev < 6.0) or non-monotheisms become Unorganized.
+                double avgDev = faith.Counties.Count > 0
+                    ? faith.Counties.Average(c => development.GetValueOrDefault(c))
+                    : 0.0;
+
+                if (religion.Monotheist)
+                {
+                    faith.IsOrganized = true;
+                }
+                else
+                {
+                    // Low development areas become Unorganized (Unreformed) pagans
+                    faith.IsOrganized = avgDev >= 6.0 && rng.Chance(0.50);
+                }
+
+                religion.Faiths.Add(faith);
+                faiths.Add(faith);
+            }
+
+            // Step 3: Mint Heads of Faith (ONLY for Organized Faiths)
+            double headShare = cfg.HeadOfFaithShare * (religion.Monotheist ? 2.0 : 1.0);
+
+            if (primaryFaith.IsOrganized && rng.Chance(headShare))
+            {
+                primaryFaith.Head = new HeadOfFaith
+                {
+                    TitleKey = $"d_{primaryFaith.Key}_head",
+                    Name = GenerateHeadTitleName(religion, rng),
+                    Seat = null!,
+                };
+            }
+
+            foreach (var faith in religionFaiths.Where(f => f != primaryFaith && f.IsOrganized))
+            {
+                if (rng.Chance(headShare * 0.35))
+                {
+                    faith.Head = new HeadOfFaith
+                    {
+                        TitleKey = $"d_{faith.Key}_head",
+                        Name = GenerateHeadTitleName(religion, rng),
+                        Seat = null!,
+                    };
+                }
+            }
+        }
+
+        // Step 4: Place Holy Sites (Local, Shared "Jerusalems", and Foreign Targets)
+        foreach (var faith in faiths)
+        {
+            PlaceHolySites(faith, development, faiths, counties, cfg.HolySitesPerFaith, rng);
+
+            // Resolve Head of Faith seat to the primary holy site
+            if (faith.Head is not null && faith.HolySites.Count > 0)
+            {
+                faith.Head = new HeadOfFaith
+                {
+                    TitleKey = faith.Head.TitleKey,
+                    Name = faith.Head.Name,
+                    Seat = faith.HolySites[0].County,
+                };
             }
         }
 
         Report(religions, faiths, counties.Count, sw.ElapsedMilliseconds);
         return new FaithMap { Religions = religions, Faiths = faiths, ByCounty = byCounty };
     }
+    private static string GenerateHeadTitleName(Religion religion, Rng rng)
+    {
+        string word = religion.Language.Word(rng, 2, 3);
+        string prefix = religion.Monotheist
+            ? rng.Pick([
+                "the High Seat of", "the Sacred Throne of", "the Prime Apex of",
+                "the First Sanctum of", "the Grand Exaltate of", "the Sole Pinnacle of",
+                "the Eternal Canopy of", "the Crown Sanctum of", "the Supreme Spire of"
+            ])
+            : rng.Pick([
+                "the Great Conclave of", "the High Circle of", "the Vault of",
+                "the Eternal Hearth of", "the Radiant Mirror of", "the Silent Order of",
+                "the Grand Coven of", "the Star Shrine of", "the Sacred Spire of"
+            ]);
 
-    /// <summary>
-    /// The same county graph the cultures grew on, but with terrain flattened by a smaller weight.
-    ///
-    /// Kept as its own function rather than shared with <see cref="Cultures"/> because the two are
-    /// only incidentally the same shape: what stops a language and what stops a creed are different
-    /// forces, and the day one of them wants to follow rivers or trade routes instead, it should be
-    /// free to without disturbing the other.
-    /// </summary>
+        return $"{prefix} {word}";
+    }
     private static RegionGrowth.Graph CountyGraph(List<Title> counties, ProvinceMap provinces,
         int[] order, int landCount, TerrainClass[] provinceTerrain, double terrainWeight)
     {
@@ -268,11 +325,6 @@ public static class Faiths
         return new RegionGrowth.Graph { Neighbours = neighbours, EnterCost = cost, Position = position };
     }
 
-    /// <summary>
-    /// How much a terrain slows a creed down. Flatter than the culture figures across the board,
-    /// and pointedly cheap along coasts: a faith travels with merchants and missionaries, which is
-    /// how the real ones crossed seas long before the languages behind them did.
-    /// </summary>
     private static double Resistance(TerrainClass t) => t switch
     {
         TerrainClass.DesertMountains => 5.0,
@@ -316,8 +368,6 @@ public static class Faiths
                 "doctrine_theism" => Prefer(members,
                     monotheist ? ["doctrine_monotheist"] : ["doctrine_polytheist"], rng),
 
-                // A monotheism that tolerates everything and a polytheism that tolerates nothing
-                // are both possible, just less usual — the weighting says so without forbidding it.
                 "doctrine_pluralism" => Prefer(members, monotheist
                     ? ["doctrine_pluralism_fundamentalist", "doctrine_pluralism_righteous"]
                     : ["doctrine_pluralism_pluralistic", "doctrine_pluralism_righteous"], rng),
@@ -347,22 +397,6 @@ public static class Faiths
         };
     }
 
-    /// <summary>
-    /// Fills the religion's localization block by walking a real one's tag list.
-    ///
-    /// Two kinds of tag are passed through untouched. The obvious ones are values in shouting case
-    /// — CHARACTER_HERHIS_HIS and its family — which are engine vocabulary rather than content. The
-    /// less obvious ones are the *grammatical* tags, which have to be recognised by tag name and
-    /// not by the case of their value: several vanilla religions point SheHe and HerHis at ordinary
-    /// lowercase keys like `paganism_devil_shehe`, and a case test alone replaces those with an
-    /// invented word, so the game renders a god's name where a pronoun belongs.
-    ///
-    /// Everything else is a name this religion should have its own word for, so it gets a generated
-    /// key and a word out of the liturgical language.
-    ///
-    /// Possessives and plurals are derived from the tag they belong to rather than generated
-    /// independently, so the god named in one line is recognisably the same god in the next.
-    /// </summary>
     private static void BuildLocalization(string religionKey, Language language,
         VanillaVocabulary vocab, Rng rng, List<(string, string)> into, Dictionary<string, string> text)
     {
@@ -390,18 +424,9 @@ public static class Faiths
         }
     }
 
-    /// <summary>
-    /// Whether a template value is engine vocabulary to pass through rather than content to replace.
-    /// Vanilla writes those in upper case throughout, and a multi-value `{ A B }` list is always
-    /// one of them.
-    /// </summary>
     private static bool IsConstant(string value)
         => value.StartsWith('{') || value.All(c => !char.IsLower(c));
 
-    /// <summary>
-    /// Tags that select a pronoun or a kinship word rather than naming anything. A closed set, and
-    /// recognised by the tag rather than by its value — see <see cref="BuildLocalization"/>.
-    /// </summary>
     private static bool IsGrammatical(string tag) =>
         tag.EndsWith("SheHe", StringComparison.Ordinal)
         || tag.EndsWith("HerHis", StringComparison.Ordinal)
@@ -413,8 +438,6 @@ public static class Faiths
     private static Faith CreateFaith(Religion religion, int index, VanillaVocabulary vocab,
         HashSet<string> usedNames, Rng rng)
     {
-        // Faiths of one religion should read as variants of each other, so the name comes from the
-        // religion's own tongue rather than from a fresh one.
         return new Faith
         {
             Key = $"gen_faith_{index}",
@@ -427,23 +450,60 @@ public static class Faiths
     }
 
     /// <summary>
-    /// Holy sites go to the faith's richest counties.
+    /// Places holy sites for a faith.
     ///
-    /// Development is the closest thing the generator has to "somewhere that matters" — it already
-    /// encodes terrain, coastal access and size — and putting the shrines in the backwaters would
-    /// make every holy war a fight over nothing. Fewer than the requested number is fine and
-    /// happens on small faiths; a site pointing at a county that does not exist is not.
+    /// Rather than putting all sites strictly inside the faith's own counties, this allocates:
+    ///   - Local sites (internal high-development counties)
+    ///   - Shared sites (re-using holy sites created by other faiths/religions, creating "Jerusalems")
+    ///   - Foreign sites (placed in major counties of OTHER religions, creating Crusade targets)
     /// </summary>
-    private static void PlaceHolySites(Faith faith, Dictionary<Title, int> development, int count)
+    private static void PlaceHolySites(Faith faith, Dictionary<Title, int> development,
+        List<Faith> allFaiths, List<Title> allCounties, int targetCount, Rng rng)
     {
-        var ranked = faith.Counties
-            .OrderByDescending(c => development.GetValueOrDefault(c))
-            .ThenBy(c => c.Index)
-            .Take(Math.Max(1, count));
+        var chosenCounties = new List<Title>();
 
-        int n = 0;
-        foreach (var county in ranked)
-            faith.HolySites.Add(($"{faith.Key}_site_{n++}", county));
+        // 1. Shared Holy Site ("Jerusalem"): Re-use a holy site declared by an existing faith
+        var existingHolySites = allFaiths
+            .Where(f => f != faith && f.HolySites.Count > 0)
+            .SelectMany(f => f.HolySites.Select(hs => hs.County))
+            .Distinct()
+            .OrderByDescending(c => development.GetValueOrDefault(c))
+            .ToList();
+
+        if (existingHolySites.Count > 0 && rng.Chance(0.75))
+        {
+            chosenCounties.Add(rng.Pick(existingHolySites.Take(4).ToList()));
+        }
+
+        // 2. Foreign / Heathen Holy Site: Target a high-dev county owned by a different religion
+        var foreignCounties = allCounties
+            .Where(c => !faith.Counties.Contains(c) && !chosenCounties.Contains(c))
+            .OrderByDescending(c => development.GetValueOrDefault(c))
+            .Take(25)
+            .ToList();
+
+        if (foreignCounties.Count > 0 && rng.Chance(0.85))
+        {
+            chosenCounties.Add(rng.Pick(foreignCounties.Take(5).ToList()));
+        }
+
+        // 3. Local Holy Sites: Fill remaining slots with faith's own highest-dev counties
+        var localRanked = faith.Counties
+            .Where(c => !chosenCounties.Contains(c))
+            .OrderByDescending(c => development.GetValueOrDefault(c))
+            .ThenBy(c => c.Index);
+
+        foreach (var county in localRanked)
+        {
+            if (chosenCounties.Count >= targetCount) break;
+            chosenCounties.Add(county);
+        }
+
+        // Register the sites using county-derived keys so shared sites share the key in script
+        foreach (var county in chosenCounties)
+        {
+            faith.HolySites.Add(($"site_{county.Key}", county));
+        }
     }
 
     private static string Prefer(List<string> members, string[] preferred, Rng rng)
@@ -480,10 +540,11 @@ public static class Faiths
         if (faiths.Count == 0) return;
 
         int monotheist = religions.Count(r => r.Monotheist);
+        int heads = faiths.Count(f => f.Head is not null);
         var sizes = faiths.Select(f => f.Counties.Count).OrderBy(n => n).ToList();
 
         Console.WriteLine($"  faiths: {faiths.Count} in {religions.Count} religions " +
-                          $"({monotheist} monotheist) over {counties} counties — " +
+                          $"({monotheist} monotheist, {heads} heads of faith) over {counties} counties — " +
                           $"median {sizes[sizes.Count / 2]}, largest {sizes[^1]} counties " +
                           $"({elapsedMs} ms)");
     }

@@ -95,13 +95,17 @@ public static class Development
         // the score, so counties on identical terrain do not all land on the same number.
         scored.Sort((a, b) => a.Score.CompareTo(b.Score));
 
+        double yearsPassed = cfg.StartYear - 867;
+        double yearDevBonus = yearsPassed / 50.0; // Subtracts 1 dev level per 50 years prior to 867
+
         var result = new Dictionary<Title, int>(scored.Count);
         for (int i = 0; i < scored.Count; i++)
         {
             double rank = scored.Count == 1 ? 1.0 : i / (double)(scored.Count - 1);
             double curved = Math.Pow(rank, cfg.DevelopmentSkew);
-            int level = (int)Math.Round(cfg.DevelopmentBase + curved * cfg.DevelopmentSpread
-                                        * cfg.DevelopmentScale);
+
+            double baseLevel = cfg.DevelopmentBase + yearDevBonus;
+            int level = (int)Math.Round(baseLevel + curved * cfg.DevelopmentSpread * cfg.DevelopmentScale);
 
             result[scored[i].County] = Math.Clamp(level, 0, 100);
         }
@@ -109,34 +113,57 @@ public static class Development
         return result;
     }
 
-    /// <summary>
-    /// The holding a barony gets. The first barony of a county is its capital and must hold a
-    /// castle — CK3 needs somewhere for the count to live, and a county whose capital is empty is
-    /// not playable.
-    ///
-    /// At most ONE further barony is ever settled, and only in a county developed enough to deserve
-    /// it. That cap is deliberate: filling every slot makes each county a dense cluster of
-    /// holdings, which is neither what vanilla looks like nor what the map should read as at 867 —
-    /// most of a county is countryside, and a second settlement is a mark of a place doing well.
-    /// Every barony past the second is empty however rich the county is.
-    ///
-    /// So development shows on the ground and not only in a number: a poor county is a lone castle,
-    /// a prosperous one has a town or an abbey beside it. Cities want flat productive land or a
-    /// coast; where the ground will not carry one, the second holding is a church instead.
-    /// </summary>
-    public static string Holding(int indexInCounty, TerrainClass terrain, int development, Rng rng)
+    /// <summary>The terrain most of a county sits on, which is the terrain the county *is*.</summary>
+    public static TerrainClass DominantTerrain(Title county, TerrainClass[] provinceTerrain)
     {
-        if (indexInCounty == 0) return "castle_holding";
+        var counts = new Dictionary<TerrainClass, int>();
+        foreach (var barony in county.Children)
+        {
+            if (barony.ProvinceId < 0 || barony.ProvinceId >= provinceTerrain.Length) continue;
+            var t = provinceTerrain[barony.ProvinceId];
+            counts[t] = counts.GetValueOrDefault(t) + 1;
+        }
+
+        return counts.Count == 0
+            ? TerrainClass.Plains
+            : counts.OrderByDescending(kv => kv.Value).ThenBy(kv => (int)kv.Key).First().Key;
+    }
+
+    /// <summary>
+    /// The holding a barony gets.
+    ///
+    /// The capital is not a choice: it is whatever the county's government seats its ruler in — see
+    /// <see cref="GovernmentMap.CapitalHolding"/> — because each government names exactly one
+    /// <c>primary_holding</c> and a ruler on anything else cannot hold his own seat.
+    ///
+    /// At most ONE further barony is settled, with a city or a church depending on development and
+    /// local terrain. A tribe can carry that second holding too, but far more rarely than a settled
+    /// county would: a tribal ruler's city and temple vassals are how a tribe grows into something
+    /// else, so a world with none of them can never start that.
+    /// </summary>
+    public static string Holding(int indexInCounty, TerrainClass terrain, int development,
+        string government, Rng rng)
+    {
+        string capital = GovernmentMap.CapitalHolding(government);
+        if (indexInCounty == 0) return capital;
         if (indexInCounty > 1) return "none";
 
         // Ramped across the development range rather than switched at a threshold, so there is no
         // single number where counties suddenly all sprout a town.
         double chance = Math.Clamp((development - 6) / 18.0, 0.0, 0.85);
+        if (government == GovernmentMap.Tribal) chance = Math.Min(chance, 0.12);
         if (rng.NextDouble() > chance) return "none";
 
         bool productive = terrain is TerrainClass.Plains or TerrainClass.Farmlands
             or TerrainClass.Floodplains or TerrainClass.Beach;
 
-        return rng.NextDouble() < (productive ? 0.65 : 0.30) ? "city_holding" : "church_holding";
+        string second = rng.NextDouble() < (productive ? 0.65 : 0.30) ? "city_holding" : "church_holding";
+
+        // A republic's capital is already the city and a theocracy's is already the church. Doubling
+        // it would spend the county's one extra holding on a second of what it has, so the other is
+        // built instead and those counties end up the two-holding ones — which is what a trading
+        // city or a cathedral town should be.
+        return second != capital ? second
+            : capital == "city_holding" ? "church_holding" : "city_holding";
     }
 }

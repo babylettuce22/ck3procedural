@@ -96,12 +96,13 @@ public static class PreviewRenderer
     }
 
     /// <summary>
-    /// rivers.png exactly as it will be written — the same indices through the same palette.
+    /// rivers.png exactly as it will be written — the same indices through the same palette. Not a
+    /// second opinion on the file: a view of it.
     ///
-    /// Which, since the hydrology was removed on 2026-08-10, is white land on magenta water and
-    /// nothing else. Kept deliberately rather than removed with the rest: it is a view of a file
-    /// the mod still ships and CK3 still requires, it costs one array, and it is where a rebuilt
-    /// river system will first become visible.
+    /// Which, with no course generator in the tool, is white land on magenta water and nothing
+    /// else. Kept deliberately rather than removed with the rest: it is a view of a file the mod
+    /// still ships and CK3 still requires, it costs one array, and it is where a rebuilt river
+    /// system will first become visible.
     ///
     /// The rank argument to <see cref="Downsample"/> is what will matter then. A river is a
     /// one-pixel chain and point sampling breaks it up — at full map size the downsample keeps one
@@ -121,6 +122,28 @@ public static class PreviewRenderer
         static bool IsCourse(byte index)
             => index != Emit.MapDataWriter.RiverIndexLand
             && index != Emit.MapDataWriter.RiverIndexWater;
+    }
+
+    /// <summary>
+    /// The drainage network rivers.png will be selected from: where the water goes, how much of it
+    /// there is, and which hollows it stands in rather than leaving.
+    ///
+    /// Deliberately a view of the network and not of the courses. The two acceptance criteria for
+    /// the rebuilt hydrology are that a course reaches an outlet and that the same map produces the
+    /// same rivers at any resolution, and both are properties of this rather than of the raster
+    /// drawn from it — a finished rivers.png shows only the cells that passed a gate, which is
+    /// exactly the picture in which a course that dies inland looks the same as one that was never
+    /// long enough to draw.
+    /// </summary>
+    public static Image RenderDrainage(GenerationResult result)
+    {
+        var drainage = result.Drainage;
+        var elevation = result.ProvinceElevation;
+        var cfg = result.Config;
+
+        return Downsample(drainage.Width, drainage.Height,
+            i => drainage.Shade(elevation, cfg, i),
+            drainage.ViewRank);
     }
 
     /// <summary>
@@ -145,57 +168,95 @@ public static class PreviewRenderer
     /// neighbours can land close enough together to read as one county. The outline is drawn on the
     /// land side only, which leaves the sea flat and the coastline crisp.
     /// </summary>
-    public static Image RenderCounties(GenerationResult result)
+    /// <summary>
+    /// Generalized renderer for land titles of any tier ("c", "d", "k", "e"),
+    /// mapping each province up to its ancestor of the target tier.
+    /// </summary>
+    private static Image RenderTitles(GenerationResult result, string targetTier)
     {
         var map = result.Provinces;
         var order = result.ProvinceOrder;
         int width = map.Width, height = map.Height;
         int baronyCount = result.BaronyCount, landCount = result.LandCount;
 
-        var counties = Titles.Flatten(result.Titles).Where(t => t.Tier == "c").ToList();
+        // Flatten hierarchy and isolate titles matching the target tier
+        var targetTitles = Titles.Flatten(result.Titles).Where(t => t.Tier == targetTier).ToList();
 
-        // Province id -> county, which is the whole reason this view needs the title hierarchy.
-        var countyOf = new int[baronyCount + 1];
-        Array.Fill(countyOf, NoCounty);
-        for (int c = 0; c < counties.Count; c++)
-            foreach (var barony in counties[c].Children)
-                if (barony.ProvinceId >= 1 && barony.ProvinceId <= baronyCount)
-                    countyOf[barony.ProvinceId] = c;
+        // Map Title objects to their list index for rapid comparison
+        var targetIndexMap = new Dictionary<Title, int>();
+        for (int i = 0; i < targetTitles.Count; i++)
+        {
+            targetIndexMap[targetTitles[i]] = i;
+        }
+
+        // Map Province ID -> Index of the parent title in targetTitles
+        var titleIndexOf = new int[baronyCount + 1];
+        Array.Fill(titleIndexOf, NoCounty);
+
+        // Map each barony province up to its target ancestor
+        var baronies = Titles.Flatten(result.Titles).Where(t => t.Tier == "b");
+        foreach (var b in baronies)
+        {
+            if (b.ProvinceId >= 1 && b.ProvinceId <= baronyCount)
+            {
+                Title? ancestor = b;
+                while (ancestor != null && ancestor.Tier != targetTier)
+                {
+                    ancestor = ancestor.Parent;
+                }
+
+                if (ancestor != null && targetIndexMap.TryGetValue(ancestor, out int index))
+                {
+                    titleIndexOf[b.ProvinceId] = index;
+                }
+            }
+        }
 
         int At(int i)
         {
             int id = order[map.Label[i]];
-            return id <= baronyCount ? countyOf[id] : id <= landCount ? Impassable : Water;
+            return id <= baronyCount ? titleIndexOf[id] : id <= landCount ? Impassable : Water;
         }
 
-        // Right and down only. Testing all four neighbours would draw the seam twice, once from
-        // each side, and double its width for no extra information.
-        bool Edge(int i, int county)
+        // Right and down pixel check for borders
+        bool Edge(int i, int titleIndex)
         {
             int x = i % width, y = i / width;
-            return (x + 1 < width && At(i + 1) != county)
-                || (y + 1 < height && At(i + width) != county);
+            return (x + 1 < width && At(i + 1) != titleIndex)
+                || (y + 1 < height && At(i + width) != titleIndex);
         }
 
         return Downsample(width, height,
             i =>
             {
-                int c = At(i);
-                if (c == Water) return ((byte)38, (byte)62, (byte)96);
-                if (c == Impassable) return ((byte)92, (byte)92, (byte)100);
+                int t = At(i);
+                if (t == Water) return ((byte)38, (byte)62, (byte)96);
+                if (t == Impassable) return ((byte)92, (byte)92, (byte)100);
 
-                // Land with a barony but no county. Nothing should produce this, so it is painted
-                // to be noticed rather than quietly blended into the sea.
-                if (c == NoCounty) return ((byte)255, (byte)0, (byte)255);
+                // Land that is assigned a barony but has no parent of the target tier
+                if (t == NoCounty) return ((byte)255, (byte)0, (byte)255);
 
-                return Edge(i, c) ? ((byte)22, (byte)24, (byte)28) : counties[c].Color;
+                var color = targetTitles[t].Color;
+                return Edge(i, t) ? ((byte)22, (byte)24, (byte)28) : color;
             },
             i =>
             {
-                int c = At(i);
-                return c >= 0 && Edge(i, c) ? 1 : 0;
+                int t = At(i);
+                return t >= 0 && Edge(i, t) ? 1 : 0;
             });
     }
+
+    public static Image RenderCounties(GenerationResult result)
+    => RenderTitles(result, "c");
+
+    public static Image RenderDuchies(GenerationResult result)
+        => RenderTitles(result, "d");
+
+    public static Image RenderKingdoms(GenerationResult result)
+        => RenderTitles(result, "k");
+
+    public static Image RenderEmpires(GenerationResult result)
+        => RenderTitles(result, "e");
 
     /// <summary>Province cells in randomised colours, land and sea tinted apart.</summary>
     public static Image RenderProvinces(GenerationResult result)
@@ -214,6 +275,86 @@ public static class PreviewRenderer
 
         return Downsample(map.Width, map.Height, i => colours[map.Label[i]]);
     }
+
+
+    /// <summary>
+    /// Renders the start-date government distribution — feudal, tribal, clan, republic and
+    /// theocracy — from development, county terrain and the heritage each county belongs to.
+    /// </summary>
+    public static Image RenderGovernment(GenerationResult result)
+    {
+        var map = result.Provinces;
+        var order = result.ProvinceOrder;
+        int width = map.Width, height = map.Height;
+        int baronyCount = result.BaronyCount, landCount = result.LandCount;
+        var cfg = result.Config;
+
+        var counties = Titles.Flatten(result.Titles).Where(t => t.Tier == "c").ToList();
+        var provinceTerrain = result.Terrain.Terrain;
+
+        var development = MapGen.Development.ForCounties(counties, provinceTerrain, cfg, new Rng(cfg.Seed ^ 0x0DE7));
+
+        // The same rule the mod writer uses, not a copy of it. Neither cultures nor faiths exist at
+        // preview time — both are built while writing the mod — so the pastoralist clause cannot
+        // fire, clan falls back to each county's own ground rather than its heritage's, and no
+        // theocracy is shown at all. See MapGen.Governments.Build.
+        var governments = MapGen.Governments.Build(counties, provinceTerrain, development, null, null,
+            cfg, new Rng(cfg.Seed ^ 0x6017));
+
+        var government = new string[counties.Count];
+        for (int c = 0; c < counties.Count; c++) government[c] = governments.For(counties[c]);
+
+        // Map Province ID -> County Index
+        var countyOf = new int[baronyCount + 1];
+        Array.Fill(countyOf, NoCounty);
+        for (int c = 0; c < counties.Count; c++)
+            foreach (var barony in counties[c].Children)
+                if (barony.ProvinceId >= 1 && barony.ProvinceId <= baronyCount)
+                    countyOf[barony.ProvinceId] = c;
+
+        int At(int i)
+        {
+            int id = order[map.Label[i]];
+            return id <= baronyCount ? countyOf[id] : id <= landCount ? Impassable : Water;
+        }
+
+        bool Edge(int i, int county)
+        {
+            int x = i % width, y = i / width;
+            return (x + 1 < width && At(i + 1) != county)
+                || (y + 1 < height && At(i + width) != county);
+        }
+
+        // Aesthetic colors for the visual preview, near enough to CK3's own government colours to
+        // read the same way once the mod is loaded.
+        var boundaryColor = ((byte)22, (byte)24, (byte)28);  // Clean dark outlines
+
+        (byte, byte, byte) Colour(string g) => g switch
+        {
+            GovernmentMap.Tribal => ((byte)185, (byte)95, (byte)60),    // Terracotta
+            GovernmentMap.Clan => ((byte)80, (byte)150, (byte)95),      // Green
+            GovernmentMap.Republic => ((byte)200, (byte)70, (byte)70),  // Red
+            GovernmentMap.Theocracy => ((byte)205, (byte)205, (byte)200), // Bone
+            _ => ((byte)65, (byte)110, (byte)160),                      // Slate blue, feudal
+        };
+
+        return Downsample(width, height,
+            i =>
+            {
+                int c = At(i);
+                if (c == Water) return ((byte)38, (byte)62, (byte)96);
+                if (c == Impassable) return ((byte)92, (byte)92, (byte)100);
+                if (c == NoCounty) return ((byte)255, (byte)0, (byte)255);
+
+                return Edge(i, c) ? boundaryColor : Colour(government[c]);
+            },
+            i =>
+            {
+                int c = At(i);
+                return c >= 0 && Edge(i, c) ? 1 : 0;
+            });
+    }
+
 
     private static (byte R, byte G, byte B) Colour(TerrainClass terrain)
         => Io.DebugRender.TerrainColour(terrain);

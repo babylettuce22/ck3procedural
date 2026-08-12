@@ -82,10 +82,12 @@ public static class ReligionWriter
             sb.Append($"\tgraphical_faith = {religion.GraphicalFaith}\n");
             sb.Append("\tpagan_roots = yes\n\n");
 
-            // Declared at religion level so every faith inherits them, exactly as vanilla does.
-            // Note the ordering rule from the format docs: doctrines cannot follow the faiths block.
-            foreach (var (_, doctrine) in religion.Doctrines)
+            // Write religion-level doctrines EXCEPT hostility_group (set per-faith)
+            foreach (var (group, doctrine) in religion.Doctrines)
+            {
+                if (group == "hostility_group") continue;
                 sb.Append($"\tdoctrine = {doctrine}\n");
+            }
             sb.Append('\n');
 
             sb.Append("\ttraits = {\n");
@@ -106,6 +108,29 @@ public static class ReligionWriter
                 sb.Append($"\t\t\tcolor = {{ {F(r)} {F(g)} {F(b)} }}\n");
                 sb.Append($"\t\t\ticon = {faith.Icon}\n\n");
 
+                // Organization AND Hostility Doctrines MUST match vanilla pairing
+                if (faith.IsOrganized)
+                {
+                    sb.Append("\t\t\tdoctrine = doctrine_organized\n");
+                    sb.Append("\t\t\tdoctrine = pagan_hostility_doctrine\n");
+                }
+                else
+                {
+                    sb.Append("\t\t\tdoctrine = doctrine_unreformed\n");
+                    sb.Append("\t\t\tdoctrine = unreformed_hostility_doctrine\n");
+                }
+
+                if (faith.ParentFaith is not null)
+                {
+                    sb.Append($"\t\t\tparent_faith = {faith.ParentFaith.Key}\n");
+                }
+
+                if (faith.Head is not null && faith.IsOrganized)
+                {
+                    sb.Append("\t\t\tdoctrine = doctrine_spiritual_head\n");
+                    sb.Append($"\t\t\treligious_head = {faith.Head.TitleKey}\n");
+                }
+
                 foreach (var (key, _) in faith.HolySites)
                     sb.Append($"\t\t\tholy_site = {key}\n");
                 sb.Append('\n');
@@ -122,14 +147,6 @@ public static class ReligionWriter
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_religions.txt"), sb.ToString());
     }
-
-    /// <summary>
-    /// Faith colours are floats in 0-1, unlike the 0-255 triples titles and cultures use.
-    /// Invariant formatting is not optional: a machine with a comma decimal separator would emit
-    /// `0,42` and Paradox's parser reads that as two values.
-    /// </summary>
-    private static string F(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
-
     private static void WriteLocalisation(string modDir, FaithMap faiths)
     {
         string dir = Path.Combine(modDir, "localization", "english");
@@ -147,8 +164,6 @@ public static class ReligionWriter
                 $"The faiths gathered under {religion.Name} share their gods and their rites, " +
                 $"and disagree about everything else.";
 
-            // The god names, afterlives and clerical titles generated for this religion's
-            // localization block.
             foreach (var (key, value) in religion.LocalizationText) entries[key] = value;
         }
 
@@ -158,6 +173,9 @@ public static class ReligionWriter
             entries[$"{faith.Key}_adj"] = faith.Name;
             entries[$"{faith.Key}_adherent"] = faith.Name;
             entries[$"{faith.Key}_adherent_plural"] = faith.Name + "s";
+
+            if (faith.Head is not null)
+                entries[faith.Head.TitleKey] = faith.Head.Name;
 
             foreach (var (key, county) in faith.HolySites)
                 entries[$"{key}_effect_name"] = $"Holy Site of {county.Name}";
@@ -169,4 +187,6 @@ public static class ReligionWriter
 
         ParadoxText.WriteBom(Path.Combine(dir, "gen_faiths_l_english.yml"), sb.ToString());
     }
+    private static string F(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
 }

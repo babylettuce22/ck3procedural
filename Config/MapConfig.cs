@@ -37,29 +37,12 @@ public sealed class MapConfig
     [Description("Seed for every random decision.")]
     public int Seed { get; set; } = 1;
 
-
-    // --- Rivers and lakes ---
-    //
-    // Category "10 Rivers and lakes" was removed on 2026-08-10 along with the generator behind it.
-    // What it held, and what each knob is evidence about, since the replacement will want most of
-    // these questions answered again:
-    //
-    //   RiverMinCatchmentCells (900)  — drainage area above which a watercourse is drawn. Absolute
-    //                                   in province cells rather than a share of the map, which is
-    //                                   the right basis and was itself a fix; see the note in the
-    //                                   memory file about catchment scaling as MapScale squared.
-    //   MinRiverPixelsAtVanilla (30)  — shortest course kept.
-    //   RiverSimplifyAtVanilla (1.6)  — Douglas-Peucker tolerance, which is what removed the D8
-    //                                   staircase. A D8 flow direction cannot express a diagonal,
-    //                                   so any course traced off one needs this or an equivalent.
-    //   MeanderPixelsAtVanilla (2.5)  — largest perpendicular meander offset. Prime suspect for the
-    //                                   twisting: this displaced an already-noisy course rather
-    //                                   than replacing it with a smooth one.
-    //   LakeDepth (0.0015)            — how deep a filled depression had to be to count as a lake.
-    //   MinLakeCells (400)            — and how many cells. Note this one is a raw cell count with
-    //                                   no MapScale on it, so a lake needed the same absolute
-    //                                   number of pixels on every map — which is one concrete way
-    //                                   the old output changed with resolution.
+    [Category("02 World State")]
+    public int StartYear { get; set; } = 900;
+    [Description("Bookmark date, determines ratio of feudal to tribal governments based on development and terrain and relative to the 867 vanilla start date")]
+    public string StartDate => $"{Math.Max(1, StartYear)}.1.1";
+    public string BirthDate => $"{Math.Max(1, StartYear - 37)}.1.1";
+    public string DeathDate => $"{Math.Max(1, StartYear + 33)}.1.1";
 
     /// <summary>
     /// Share of land put above the mountain line. Vanilla's own heightmap has 3.3% of its land in
@@ -261,7 +244,7 @@ public sealed class MapConfig
     /// </summary>
     [Category("04 Titles")]
     [Description("Fewest children a duchy, kingdom or empire may have and still exist. 2 stops one-province islands from founding a duchy, a kingdom and an empire on the way up. Raising it much past 2 cascades and collapses the hierarchy.")]
-    public int MinChildrenPerTitle { get; set; } = 2;
+    public int MinChildrenPerTitle { get; set; } = 4;
 
     /// <summary>
     /// Largest a fused impassable mountain range may get, in baronies' worth of area. 0 disables
@@ -313,6 +296,23 @@ public sealed class MapConfig
     [Category("15 Rulers")]
     [Description("Share of empires actually held by an emperor at the start date. Kept low on purpose — an emperor should be a rarity the map is built around.")]
     public double EmpireTitleShare { get; set; } = 0.15;
+
+    /// <summary>
+    /// Share of *eligible* counties — settled, coastal and well above the tribal line — that start
+    /// as merchant republics. The eligibility is most of the rarity: vanilla's republics are a
+    /// handful of ports, not a proportion of the world.
+    /// </summary>
+    [Category("15 Rulers")]
+    [Description("Share of settled, prosperous coastal counties that start as merchant republics. Their capital is a city rather than a castle, so this also changes what those counties hold.")]
+    public double RepublicShare { get; set; } = 0.1;
+
+    /// <summary>
+    /// Share of eligible counties that start as prince-bishoprics. Counties holding one of their
+    /// own faith's holy sites are four times as likely, which is where vanilla puts its own.
+    /// </summary>
+    [Category("14 Cultures and faiths")]
+    [Description("Share of generated faiths that start with a head of faith title. Monotheist faiths are twice as likely to be organised into one.")]
+    public double HeadOfFaithShare { get; set; } = 0.3;
 
 
     // --- Cultures and faiths ---
@@ -368,10 +368,6 @@ public sealed class MapConfig
     public int HolySitesPerFaith { get; set; } = 5;
 
     /// <summary>
-    /// Smallest allowed province in pixels. Below this CK3 cannot derive borders, a centroid or
-    /// locator positions and crashes in geometry code without logging anything.
-    /// </summary>
-    /// <summary>
     /// How strongly province growth resists crossing a slope. 0 is a plain geodesic voronoi, whose
     /// boundaries fall wherever seeds happen to be equidistant and cut straight over mountains.
     /// Higher makes the frontier stall at ridgelines so two provinces meet there instead.
@@ -417,12 +413,40 @@ public sealed class MapConfig
     public double ImpassableShareOfLand { get; set; } = 0.095;
 
     /// <summary>
-    /// How much of a province must stand above the mountain line before it may be impassable. Stops
-    /// a map with little high ground being given impassable provinces just to hit the target count.
+    /// The impassability score a province must reach before it may be impassable at all — that is,
+    /// how much of it must be high, steep, or a mix of the two, per
+    /// <see cref="ImpassableSlopeWeight"/>. Stops a map with little relief being given impassable
+    /// provinces just to hit the target count.
     /// </summary>
     [Category("03 Provinces")]
-    [Description("How much of a province must stand above the mountain line before it may be impassable. Stops a flat map being given impassable provinces just to hit the target count.")]
+    [Description("The impassability score a province must reach before it may be impassable — how much of it must be high, steep, or a mix of the two. Stops a flat map being given impassable provinces just to hit the target count.")]
     public double ImpassableMinMountainShare { get; set; } = 0.45;
+
+    /// <summary>
+    /// How much of the impassability score comes from steepness rather than from height.
+    ///
+    /// Height alone cannot tell a wall from a tableland. A high plateau is high everywhere and so
+    /// scores maximally on height while being perfectly crossable — armies have marched over the
+    /// Anatolian and Iranian plateaus for as long as there have been armies. What actually stops
+    /// them is relief: escarpments, gorges and ridge lines, which can sit well below the mountain
+    /// line and still be impassable. Vanilla's own impassables — Alps, Caucasus, Zagros, Atlas —
+    /// are all steep before they are tall.
+    ///
+    /// 0 is the old height-only behaviour, 1 ignores height entirely.
+    /// </summary>
+    [Category("03 Provinces")]
+    [Description("How much of the impassability score comes from steepness rather than height. Height alone marks high plateaus, which are crossable; what stops an army is relief. 0 is height-only, 1 is slope-only.")]
+    public double ImpassableSlopeWeight { get; set; } = 0.5;
+
+    /// <summary>
+    /// Share of land counted as steep ground, as a percentile of this map's own slopes — the same
+    /// basis as <see cref="MountainLineShare"/>, and for the same reason: an absolute gradient
+    /// classifies a wildly different fraction of the map from one seed and one heightmap to the next.
+    /// </summary>
+    [Category("03 Provinces")]
+    [Description("Share of land counted as steep ground, as a percentile of this map's own slopes. A percentile rather than an absolute gradient, so it means the same thing on any heightmap.")]
+    public double SteepLineShare { get; set; } = 0.4;
+
     [Category("03 Provinces")]
     [Description("Smallest allowed province in pixels. Below this CK3 cannot derive borders, a centroid or locator positions and crashes in geometry code without logging anything.")]
     public int MinProvincePixels { get; set; } = 32;
@@ -447,14 +471,6 @@ public sealed class MapConfig
     // temperature and rainfall that come out. The settings below are that model's parameters, and
     // they are deliberately in real units - degrees Celsius, millimetres of rain, degrees of
     // latitude - so they can be checked against a real climate atlas rather than tuned blind.
-    //
-    // What went: TropicalWidthScale, SubTropicalWidthScale, TemperateWidthScale, ClimateBandScale,
-    // ClimateWanderPixels and ClimateLapsePixels. All six described a band edge that was a function
-    // of y, which is exactly what made the old maps come out in stripes. ClimateBandScale in
-    // particular had a failure mode worth not repeating: the widths were authored in raster pixels
-    // against vanilla's 18432-wide map, so on any smaller map a single band could be wider than the
-    // whole map, and then no climate setting changed anything at all. MapLatitudeSpan has no such
-    // mode - a map is however much of a world its author says it is, at any resolution.
 
     /// <summary>
     /// How many degrees of latitude the map covers, top edge to bottom edge. With
@@ -499,7 +515,7 @@ public sealed class MapConfig
     /// </summary>
     [Category("12 Climate")]
     [Description("Warmth and cold that latitude cannot explain, in Celsius - what ocean currents do on Earth, where Norway and Labrador share a latitude and not a climate. 0 makes every isotherm a parallel, which is half of what makes a climate map look ruled.")]
-    public double TemperatureDriftC { get; set; } = 2;
+    public double TemperatureDriftC { get; set; } = 1;
 
     /// <summary>
     /// Height of the map's highest land in metres. A heightmap carries no absolute scale, so this is
@@ -518,7 +534,7 @@ public sealed class MapConfig
     /// </summary>
     [Category("12 Climate")]
     [Description("Yearly rainfall on the middle of the map's land, in millimetres - Earth's is around 650. The circulation model has no units of its own, so this is what puts it on a scale Koppen can test. It scales without flattening the spread, so a dry world stays dry relative to itself.")]
-    public double MedianRainfallMm { get; set; } = 1450;
+    public double MedianRainfallMm { get; set; } = 1600;
 
     /// <summary>
     /// Share of its remaining water an air parcel rains out per 100 vanilla province pixels of land
@@ -527,7 +543,7 @@ public sealed class MapConfig
     /// </summary>
     [Category("12 Climate")]
     [Description("Share of its water an air parcel rains out per 100 vanilla province pixels of land it crosses. The continental-interior dial: higher leaves the far side of a landmass a desert, lower carries rain all the way across it.")]
-    public double RainoutPer100Pixels { get; set; } = 0.05;
+    public double RainoutPer100Pixels { get; set; } = 0.1;
 
     /// <summary>
     /// Extra rain a climbing air parcel drops per kilometre it is lifted. The rain shadow behind a

@@ -191,10 +191,12 @@ public static class MapDataWriter
     /// rivers.png as palette indices, at province resolution: index 255 (white) on land, 254
     /// (magenta) on water.
     ///
-    /// No courses. The generator drew them until 2026-08-10 and the hydrology behind them was
-    /// removed to be rebuilt, so what this emits now is a valid, riverless rivers.png. The file is
-    /// not optional — default.map names it and CK3 needs it to load — and a map with no rivers on
-    /// it is a legal map, so this is the correct interim output rather than a stub.
+    /// No courses. A course generator was written against <see cref="MapGen.Drainage"/> on
+    /// 2026-08-11 and removed the same day, so what this emits is a valid, riverless rivers.png —
+    /// which is what it emitted between the hydrology's removal on 2026-08-10 and that attempt.
+    /// The file is **not optional**: default.map names it, CK3 will not load without it, and a map
+    /// with no rivers drawn on it is a legal map. This is the correct interim output rather than a
+    /// stub, and commenting it out silently costs the mod its ability to load.
     ///
     /// Public because the GUI previews this file, and a preview built from its own reading would be
     /// a second opinion on what ships rather than a view of it.
@@ -309,6 +311,219 @@ public static class MapDataWriter
     }
 
     /// <summary>
+    /// How far, in *vanilla heightmap* pixels, the near-shore seabed is graded away from the coast,
+    /// and how far the height field is smoothed either side of the coastline.
+    ///
+    /// Both measured off vanilla's own heightmap. Its seabed falls from a mean of 18.80/255 one
+    /// pixel offshore to 14.82 nine pixels out — very close to linear at -0.45 a pixel — and then
+    /// continues into the abyss. Ours arrived flat: 18.85 at one pixel and 18.05 at nine, with a
+    /// median of exactly 19 at every distance, i.e. a plate of water sitting precisely on the value
+    /// CK3 tests against, then a cliff to black.
+    /// </summary>
+    private const int SeabedGradeReach = 9;
+
+    private const double SeabedGradePer255 = 0.45;
+    private const int CoastSmoothReach = 3;
+
+    /// <summary>
+    /// Chamfer distance from every pixel to the nearest pixel on the other side of the water plane,
+    /// in whole pixels, capped at <paramref name="cap"/>.
+    ///
+    /// Two sequential scans rather than one dilation pass per unit of reach: at 170 million pixels
+    /// even a nine-pixel reach would be some ten billion neighbour tests. Orthogonal steps cost 3
+    /// and diagonal 4, the usual 3-4 chamfer, which is divided back out at the end.
+    /// </summary>
+    private static byte[] CoastDistance(ushort[] full, int width, int height, int cap)
+    {
+        const int Orthogonal = 3, Diagonal = 4;
+        int capUnits = (cap + 1) * Orthogonal;
+
+        var distance = new ushort[full.Length];
+
+        // Seed: every pixel with a neighbour on the other side of the plane is at distance zero.
+        Parallel.For(0, height, y =>
+        {
+            for (int x = 0; x < width; x++)
+            {
+                long i = (long)y * width + x;
+                bool land = full[i] > WaterLevel16;
+                distance[i] = (ushort)capUnits;
+
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    int yy = y + dy;
+                    if (yy < 0 || yy >= height) continue;
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        if (dx == 0 && dy == 0) continue;
+                        int xx = ((x + dx) % width + width) % width;
+                        if (full[(long)yy * width + xx] > WaterLevel16 != land)
+                        {
+                            distance[i] = 0;
+                            dy = 2;
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+
+        // Forward scan, then backward. Sequential by nature — each pass depends on the one before.
+        for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+            {
+                Relax(y, x, -1, 0, Orthogonal);
+                Relax(y, x, -1, -1, Diagonal);
+                Relax(y, x, 0, -1, Orthogonal);
+                Relax(y, x, 1, -1, Diagonal);
+            }
+
+        for (int y = height - 1; y >= 0; y--)
+            for (int x = width - 1; x >= 0; x--)
+            {
+                Relax(y, x, 1, 0, Orthogonal);
+                Relax(y, x, 1, 1, Diagonal);
+                Relax(y, x, 0, 1, Orthogonal);
+                Relax(y, x, -1, 1, Diagonal);
+            }
+
+        var result = new byte[full.Length];
+        Parallel.For(0, height, y =>
+        {
+            for (int x = 0; x < width; x++)
+            {
+                long i = (long)y * width + x;
+                result[i] = (byte)Math.Min(cap + 1, distance[i] / Orthogonal);
+            }
+        });
+
+        return result;
+
+        void Relax(int y, int x, int dx, int dy, int cost)
+        {
+            long target = (long)y * width + x;
+            if (distance[target] == 0) return;
+
+            int yy = y + dy;
+            if (yy < 0 || yy >= height) return;
+            int xx = ((x + dx) % width + width) % width;
+
+            int candidate = distance[(long)yy * width + xx] + cost;
+            if (candidate < distance[target]) distance[target] = (ushort)candidate;
+        }
+    }
+
+    /// <summary>
+    /// Grades the near-shore seabed away from the coast, and smooths the height field either side
+    /// of it.
+    ///
+    /// Two artefacts, both measured against vanilla, both local to the coast — nothing here reshapes
+    /// the map the way <see cref="ElevationTo16"/> deliberately no longer does. Inland and in open
+    /// ocean the author's terrain is untouched.
+    ///
+    /// **The shelf.** 9.77% of every pixel we shipped sat on exactly <see cref="WaterLevel255"/>
+    /// against vanilla's 0.90% — thirteen million pixels of dead-flat water resting on the precise
+    /// value CK3 tests to decide what is sea, then dropping to black. It is graded here to vanilla's
+    /// own profile. Only ever *downward*: an author who drew a real seabed keeps it, because the
+    /// grade is a floor the existing depth is taken the minimum against, not a replacement for it.
+    ///
+    /// **The steps.** <see cref="ForceCoastlineToMatchProvinces"/> reflects disagreeing pixels
+    /// across the plane in 2x2 blocks, because provinces.png is half the heightmap's resolution.
+    /// That removed the cliff the old clamp produced but left the height field stepped along the
+    /// shore. Smoothing is *side-restricted* — a land pixel averages over land neighbours only and a
+    /// water pixel over water — so the land/water split itself is untouched and the exact agreement
+    /// with provinces.png that the snap exists to guarantee still holds. Blurring across the split
+    /// instead would pull both sides toward the plane and rebuild the very plate being removed here.
+    /// </summary>
+    private static void ShapeCoastline(ushort[] full, MapConfig cfg)
+    {
+        int width = cfg.Width, height = cfg.Height;
+        int grade = Math.Max(1, (int)Math.Round(cfg.Scaled(SeabedGradeReach)));
+        int smooth = Math.Max(1, (int)Math.Round(cfg.Scaled(CoastSmoothReach)));
+
+        var distance = CoastDistance(full, width, height, Math.Max(grade, smooth));
+
+        // The shelf, first: the smoothing pass below should see the graded seabed, not the plate.
+        long deepened = 0;
+        Parallel.For(0, height, () => 0L, (y, _, local) =>
+        {
+            for (int x = 0; x < width; x++)
+            {
+                long i = (long)y * width + x;
+                if (full[i] > WaterLevel16) continue;
+
+                int d = distance[i];
+                if (d == 0 || d > grade) continue;
+
+                // Only the plate is graded — water lying within one 8-bit step of the plane, which
+                // is the artefact and nothing else. A seabed that already descends is left exactly
+                // as its author drew it. Without this gate the floor below is taken against a
+                // distribution much like its own target and so biases the whole shelf deeper:
+                // measured on a well-formed source, an ungated grade pushed the seabed nine pixels
+                // out from 14.00 to 13.48 where vanilla sits at 14.82, i.e. further from vanilla
+                // than doing nothing.
+                if (full[i] < WaterLevel16 - Step255) continue;
+
+                // Vanilla's own fall-off, in 16-bit units, floored at the abyss.
+                int drop = (int)Math.Round(d * SeabedGradePer255 * Step255);
+                var target = (ushort)Math.Max(0, WaterLevel16 - drop);
+
+                if (target >= full[i]) continue;
+                full[i] = target;
+                local++;
+            }
+            return local;
+        }, local => Interlocked.Add(ref deepened, local));
+
+        // Side-restricted 3x3 mean over the coastal band, read from a snapshot so the pass is not
+        // fed its own output.
+        var source = (ushort[])full.Clone();
+        long smoothed = 0;
+
+        Parallel.For(0, height, () => 0L, (y, _, local) =>
+        {
+            for (int x = 0; x < width; x++)
+            {
+                long i = (long)y * width + x;
+                int d = distance[i];
+                if (d == 0 || d > smooth) continue;
+
+                bool land = source[i] > WaterLevel16;
+                long sum = 0;
+                int n = 0;
+
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    int yy = y + dy;
+                    if (yy < 0 || yy >= height) continue;
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        int xx = ((x + dx) % width + width) % width;
+                        ushort v = source[(long)yy * width + xx];
+                        if (v > WaterLevel16 != land) continue;
+                        sum += v;
+                        n++;
+                    }
+                }
+
+                if (n == 0) continue;
+                var mean = (ushort)(sum / n);
+
+                // The averaging cannot move a pixel across the plane — the whole point of the snap
+                // is that this side is already correct — so it is clamped back if it would.
+                full[i] = land
+                    ? Math.Max(mean, (ushort)(WaterLevel16 + Step255))
+                    : Math.Min(mean, (ushort)WaterLevel16);
+                local++;
+            }
+            return local;
+        }, local => Interlocked.Add(ref smoothed, local));
+
+        Console.WriteLine($"  coastline shaping: {deepened:N0} seabed pixels graded over {grade} px, " +
+                          $"{smoothed:N0} smoothed within {smooth} px of the shore");
+    }
+
+    /// <summary>
     /// The float elevation field back to CK3's 16-bit scale — the exact inverse of
     /// <see cref="MapGen.HeightmapSource"/>'s read, and nothing else.
     ///
@@ -420,6 +635,11 @@ public static class MapDataWriter
         // any more: the heightmap is what the erosion produced, at the resolution it produced it.
         var full = ElevationTo16(terra.Elevation, cfg);
         ForceCoastlineToMatchProvinces(full, cfg, provinces, order, landCount);
+
+        // MUST follow the snap: it derives the land/water split from the heightmap itself, which is
+        // only the split CK3 will actually render once the snap has reconciled it with provinces.png.
+        ShapeCoastline(full, cfg);
+
         ReportHypsometry(full);
         PngWriter.WriteGray16(Path.Combine(dir, "heightmap.png"), cfg.Width, cfg.Height, full);
 

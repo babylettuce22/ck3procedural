@@ -145,6 +145,17 @@ public static class CompatibilityWriter
     }
 
     /// <summary>
+    /// A zoom-ladder index authored against vanilla's map, moved onto this one — step to camera
+    /// height, height scaled, back to the nearest step.
+    ///
+    /// Indices outside the ladder come back untouched. That is not defensiveness: vanilla's map
+    /// table layers use <c>fade_out=80</c> against a 35-step ladder, which is how the format spells
+    /// "never", and scaling it would land it on a real step and start fading the table out.
+    /// </summary>
+    internal static int ScaleZoomStep(int step, Config.MapConfig cfg)
+        => step < 0 || step >= ZoomSteps.Length ? step : NearestZoomStep(cfg.Scaled(ZoomSteps[step]));
+
+    /// <summary>
     /// The ladder step closest to <paramref name="height"/>. Camera height buys a fixed amount of
     /// ground at a fixed field of view, so opening on the same *share* of the map as vanilla means
     /// scaling its start height by the map scale and then landing on a real step.
