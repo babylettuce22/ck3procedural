@@ -1,0 +1,15 @@
+﻿# The one static modifier the system needs.
+#
+# There is no `holding_one_settlements` … `holding_more_than_five_settlements` ladder here, and that
+# absence is deliberate: the per-colony upkeep lives on settlement_01/02/03's character_modifier, so
+# the engine stacks it per building instead of script picking a rung. See the note at the top of
+# 00_settlement_buildings.txt for what the ladder costs to maintain.
+
+# Put on a county to take it off the board — it can never be colonised while this is on it.
+#
+# Nothing in this framework applies it. It exists so the *generator* can mark counties that should
+# stay wild forever (a dead heart of a continent, ground reserved for a later mechanic) without
+# needing a second holding type, and so hand-written content in a specific world can do the same.
+block_settlement_ability = {
+	icon = county_modifier_development_negative
+}

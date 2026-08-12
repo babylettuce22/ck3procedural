@@ -1,0 +1,178 @@
+﻿# Promoting a finished colony into a real holding.
+#
+# Hidden interactions on the holder's own titles, which is how vanilla and AGOT both do holding
+# conversion: `target_type = title` with `target_filter = actor_domain_titles` puts the button in
+# the county view without any GUI work.
+#
+# There are three of these because there are three holding types a promoted colony can become, and
+# CK3 has no interaction inheritance to factor them with. What CAN be factored is everything they
+# have in common, and it is: `can_promote_colony_trigger` carries all three gates, and
+# `promote_colony_effect` carries the government rules. Each interaction below is therefore its
+# target filter, its one extra requirement, and its one `set_holding_type` line — about thirty
+# lines each, against AGOT's four near-identical hundred-and-fifty-line copies.
+
+# --- The default: a castle, or a tribe for a tribal ruler ---------------------------------------
+
+promote_colony_interaction = {
+	category = interaction_category_uncategorized
+	hidden = yes
+
+	desc = promote_colony_interaction_desc
+
+	target_type = title
+	target_filter = actor_domain_titles
+
+	auto_accept = yes
+
+	is_shown = {
+		scope:actor = { this = scope:recipient }
+	}
+
+	can_be_picked_title = {
+		scope:target = {
+			holder = scope:actor
+			tier = tier_county
+			is_colony_county_trigger = yes
+		}
+	}
+
+	has_valid_target_showing_failures_only = {
+		scope:target = {
+			can_promote_colony_trigger = yes
+			title_province ?= { has_ongoing_construction = no }
+		}
+	}
+
+	on_accept = {
+		scope:actor = { save_scope_as = promoting_holder }
+
+		promote_colony_effect = { COUNTY = scope:target }
+
+		scope:actor = {
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = promote_colony_toast
+				left_icon = scope:actor
+				right_icon = scope:target
+			}
+		}
+	}
+
+	ai_will_do = { base = 150 }
+}
+
+
+# --- A city, where the holder's culture knows how to plan one ----------------------------------
+
+promote_colony_to_city_interaction = {
+	category = interaction_category_uncategorized
+	hidden = yes
+
+	desc = promote_colony_to_city_interaction_desc
+
+	target_type = title
+	target_filter = actor_domain_titles
+
+	auto_accept = yes
+
+	is_shown = {
+		scope:actor = {
+			this = scope:recipient
+			NOT = { government_has_flag = government_is_tribal }
+		}
+	}
+
+	can_be_picked_title = {
+		scope:target = {
+			holder = scope:actor
+			tier = tier_county
+			is_colony_county_trigger = yes
+		}
+	}
+
+	has_valid_target_showing_failures_only = {
+		scope:target = {
+			can_promote_colony_trigger = yes
+			title_province ?= { has_ongoing_construction = no }
+		}
+		scope:actor = {
+			culture = { has_innovation = innovation_city_planning }
+		}
+	}
+
+	on_accept = {
+		scope:target = {
+			title_province ?= { set_holding_type = city_holding }
+			set_color_from_title = de_jure_liege
+		}
+
+		scope:actor = {
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = promote_colony_toast
+				left_icon = scope:actor
+				right_icon = scope:target
+			}
+		}
+	}
+
+	ai_will_do = { base = 100 }
+}
+
+
+# --- A temple, likewise ------------------------------------------------------------------------
+
+promote_colony_to_temple_interaction = {
+	category = interaction_category_uncategorized
+	hidden = yes
+
+	desc = promote_colony_to_temple_interaction_desc
+
+	target_type = title
+	target_filter = actor_domain_titles
+
+	auto_accept = yes
+
+	is_shown = {
+		scope:actor = {
+			this = scope:recipient
+			NOT = { government_has_flag = government_is_tribal }
+		}
+	}
+
+	can_be_picked_title = {
+		scope:target = {
+			holder = scope:actor
+			tier = tier_county
+			is_colony_county_trigger = yes
+		}
+	}
+
+	has_valid_target_showing_failures_only = {
+		scope:target = {
+			can_promote_colony_trigger = yes
+			title_province ?= { has_ongoing_construction = no }
+		}
+		scope:actor = {
+			culture = { has_innovation = innovation_city_planning }
+		}
+	}
+
+	on_accept = {
+		scope:target = {
+			title_province ?= { set_holding_type = church_holding }
+			set_color_from_title = de_jure_liege
+		}
+
+		scope:actor = {
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = promote_colony_toast
+				left_icon = scope:actor
+				right_icon = scope:target
+			}
+		}
+	}
+
+	ai_will_do = { base = 80 }
+}

@@ -1,0 +1,135 @@
+﻿l_english:
+
+ # Key prefixes are not decoration: CK3 looks up a building as `building_<key>`, the label above its
+ # icon as `building_type_<key>`, and a trait as `trait_<key>`. A bare key here shows the raw string
+ # in-game and reports nothing, which is why every one of these was caught by ck3-tiger rather than
+ # by playing.
+
+ # --- Trait and government -----------------------------------------------------------------
+ trait_wilderness:0 "Wilderness"
+ trait_wilderness_desc:0 "This land answers to no one."
+
+ wilderness_government:0 "Wilderness"
+ wilderness_government_adjective:0 "Untamed"
+ wilderness_government_realm:0 "Wilderness"
+ wilderness_government_desc:0 "Empty country. No lord holds it, no levy comes from it, and crossing it is a risk in itself."
+
+ # --- Holdings -----------------------------------------------------------------------------
+ wilderness_holding:0 "Wilderness"
+ wilderness_holding_desc:0 "Unsettled land. Somebody could live here, given years and money and a tolerance for what already does."
+
+ settlement_holding:0 "Colony"
+ settlement_holding_desc:0 "A foothold rather than a holding — a palisade, a few families, and a great deal still to do."
+
+ # --- The wilderness itself ----------------------------------------------------------------
+ building_wilderness_01:0 "Untamed Land"
+ building_wilderness_01_desc:0 "No road, no field, no roof. Whatever wealth is here is still in the ground or on the hoof."
+ building_type_wilderness_01:0 "Wilderness"
+ building_type_wilderness_01_desc:0 "Land nobody has taken in hand."
+
+ # --- Obstacles ----------------------------------------------------------------------------
+ building_beast_dens:0 "Beast Dens"
+ building_beast_dens_desc:0 "Wolves, bear, or worse. The herds thin every winter and the shepherds will not go out alone."
+ building_beast_dens_cleared:0 "Clear the Dens"
+ building_beast_dens_cleared_desc:0 "Hunt them out, or drive them far enough that they become somebody else's trouble."
+ building_type_beast_dens:0 "Beasts"
+ building_type_beast_dens_desc:0 "Something with teeth has the run of this county."
+
+ building_bandit_camps:0 "Bandit Camps"
+ building_bandit_camps_desc:0 "Somebody was already here, and they have no use for a tax collector."
+ building_bandit_camps_cleared:0 "Break the Camps"
+ building_bandit_camps_cleared_desc:0 "Root them out of the hills. Some will hang; some will take the coin and enlist."
+ building_type_bandit_camps:0 "Bandits"
+ building_type_bandit_camps_desc:0 "Men who were here first and intend to stay."
+
+ building_dense_growth:0 "Dense Growth"
+ building_dense_growth_desc:0 "Old forest, close-grown. Nothing can be built here until a good deal of it comes down."
+ building_dense_growth_cleared:0 "Clear the Growth"
+ building_dense_growth_cleared_desc:0 "Fell it, burn the stumps, and sell what timber the work does not eat."
+ building_type_dense_growth:0 "Dense Growth"
+ building_type_dense_growth_desc:0 "Forest that has to come down before anything goes up."
+
+ building_flooded_lands:0 "Flooded Lands"
+ building_flooded_lands_desc:0 "Standing water half the year. The ground will not hold a foundation and the air carries fever."
+ building_flooded_lands_cleared:0 "Drain the Lowlands"
+ building_flooded_lands_cleared_desc:0 "Ditch it, dyke it, and hope the river agrees."
+ building_type_flooded_lands:0 "Flooded Lands"
+ building_type_flooded_lands_desc:0 "Ground that is under water more often than not."
+
+ building_scree_slopes:0 "Scree Slopes"
+ building_scree_slopes_desc:0 "Loose rock and no level ground. Every cart that comes up is unloaded twice."
+ building_scree_slopes_cleared:0 "Cut Terraces"
+ building_scree_slopes_cleared_desc:0 "Cut benches into the slope until there is somewhere flat enough to stand a building on."
+ building_type_scree_slopes:0 "Broken Ground"
+ building_type_scree_slopes_desc:0 "Rock and rubble where level ground should be."
+
+ building_killing_cold:0 "Killing Cold"
+ building_killing_cold_desc:0 "The winters here take people. Not a hardship — a cause of death."
+ building_killing_cold_cleared:0 "Build Against the Winter"
+ building_killing_cold_cleared_desc:0 "Deep stores, banked walls, and fuel enough to last. The cold does not leave; you simply stop losing to it."
+ building_type_killing_cold:0 "Killing Cold"
+ building_type_killing_cold_desc:0 "Winters that are a cause of death rather than a season."
+
+ # --- The colony ---------------------------------------------------------------------------
+ building_settlement_01:0 "Colony"
+ building_settlement_01_desc:0 "A palisade and a few dozen souls. It costs more than it earns and will for years."
+ building_settlement_02:0 "Growing Colony"
+ building_settlement_02_desc:0 "Fields cleared, a mill, a road worth the name. It very nearly pays for itself."
+ building_settlement_03:0 "Established Colony"
+ building_settlement_03_desc:0 "No longer an outpost. Give it a lord's seat and it will pass for anywhere else."
+ building_type_settlement_01:0 "Colony"
+ building_type_settlement_01_desc:0 "A foothold on ground nobody held."
+
+ # --- Modifiers ----------------------------------------------------------------------------
+ block_settlement_ability:0 "Unsettlable"
+ block_settlement_ability_desc:0 "Nobody will live here. Not for money, not for land, not for anything."
+
+ # --- Decision -----------------------------------------------------------------------------
+ settle_the_wilderness_decision:0 "Settle the Wilderness"
+ settle_the_wilderness_decision_tooltip:0 "Send settlers into the empty country on our borders."
+ settle_the_wilderness_decision_confirm:0 "Send Them Out"
+ settle_the_wilderness_decision_desc:0 "There is land beyond our borders that no lord holds and no map names.\n\nSettling it is not a conquest. It is an expense — men who must be fed through a first winter, a palisade against whatever already lives there, and years before any of it shows in the ledger. What it buys is a county that did not exist before.\n\nThe steward has a place in mind."
+
+ # --- Interactions -------------------------------------------------------------------------
+ promote_colony_interaction:0 "Raise a Seat"
+ promote_colony_interaction_desc:0 "The colony has grown past its palisade. Build a proper seat here and let it stand as any other county does."
+ promote_colony_to_city_interaction:0 "Charter a Town"
+ promote_colony_to_city_interaction_desc:0 "Grant the colony a charter and let it grow as a town rather than a fortress."
+ promote_colony_to_temple_interaction:0 "Consecrate a Temple"
+ promote_colony_to_temple_interaction_desc:0 "Give the colony over to the faith, and let its temple be the seat here."
+
+ # --- Toasts -------------------------------------------------------------------------------
+ colonize_claimed_toast:0 "Settlers Depart"
+ promote_colony_toast:0 "A Colony Comes of Age"
+ colonize_obstacle_cleared_toast:0 "The Way Is Clear"
+
+ # --- Requirement tooltips -----------------------------------------------------------------
+ colonize_at_settlement_limit_tt:0 "We hold as many colonies as we can support"
+ colonize_must_border_realm_tt:0 "The land must border our realm"
+ colonize_obstacles_remain_tt:0 "Nothing may still be blocking the land"
+ colonize_needs_development_tt:0 "The county must have reached #V 3 #! Development"
+ colonize_needs_full_settlement_tt:0 "The colony must be fully established"
+
+ # --- Cost breakdown -----------------------------------------------------------------------
+ colonize_cost_tier_desc:0 "Rank"
+
+ # --- Auto-generated holding modifiers -------------------------------------------------------
+ # CK3 creates these eight names per holding type on its own; these are the strings they display
+ # under. Worded to match vanilla's own block in localization/english/modifiers/modifiers_l_english.yml.
+ wilderness_holding_build_speed:0 "Wilderness [buildings|E] Construction Time"
+ wilderness_holding_build_gold_cost:0 "Wilderness [buildings|E] Construction Cost"
+ wilderness_holding_build_piety_cost:0 "Wilderness [buildings|E] Piety Cost"
+ wilderness_holding_build_prestige_cost:0 "Wilderness [buildings|E] Prestige Cost"
+ wilderness_holding_holding_build_speed:0 "Wilderness [holding|E] Construction Time"
+ wilderness_holding_holding_build_gold_cost:0 "Wilderness [holding|E] Construction Cost"
+ wilderness_holding_holding_build_piety_cost:0 "Wilderness [holding|E] Piety Cost"
+ wilderness_holding_holding_build_prestige_cost:0 "Wilderness [holding|E] Prestige Cost"
+
+ settlement_holding_build_speed:0 "Colony [buildings|E] Construction Time"
+ settlement_holding_build_gold_cost:0 "Colony [buildings|E] Construction Cost"
+ settlement_holding_build_piety_cost:0 "Colony [buildings|E] Piety Cost"
+ settlement_holding_build_prestige_cost:0 "Colony [buildings|E] Prestige Cost"
+ settlement_holding_holding_build_speed:0 "Colony [holding|E] Construction Time"
+ settlement_holding_holding_build_gold_cost:0 "Colony [holding|E] Construction Cost"
+ settlement_holding_holding_build_piety_cost:0 "Colony [holding|E] Piety Cost"
+ settlement_holding_holding_build_prestige_cost:0 "Colony [holding|E] Prestige Cost"

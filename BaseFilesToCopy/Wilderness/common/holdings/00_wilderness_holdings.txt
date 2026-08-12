@@ -1,0 +1,43 @@
+﻿# The two holdings colonisation moves a county between.
+#
+#     wilderness_holding  ->  settlement_holding  ->  castle / city / church / tribal
+#
+# The blocker buildings appear in BOTH lists on purpose. A blocker is a fact about the ground, not
+# about who owns it, so claiming a county does not clear its wolves — it inherits them. That single
+# decision is what makes colonisation a project rather than a purchase.
+
+wilderness_holding = {
+	primary_building = wilderness_01
+
+	buildings = {
+		beast_dens
+		bandit_camps
+		dense_growth
+		flooded_lands
+		scree_slopes
+		killing_cold
+	}
+
+	# The dummy holder is immortal and blocks inheritance anyway, but saying it here means a
+	# wilderness barony cannot leak into a real succession even if the dummy is somehow removed.
+	can_be_inherited = no
+}
+
+settlement_holding = {
+	primary_building = settlement_01
+
+	buildings = {
+		beast_dens
+		beast_dens_cleared
+		bandit_camps
+		bandit_camps_cleared
+		dense_growth
+		dense_growth_cleared
+		flooded_lands
+		flooded_lands_cleared
+		scree_slopes
+		scree_slopes_cleared
+		killing_cold
+		killing_cold_cleared
+	}
+}

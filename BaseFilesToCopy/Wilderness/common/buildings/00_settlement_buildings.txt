@@ -1,0 +1,144 @@
+﻿# The colony. Three levels between claiming a county and it becoming a real holding.
+#
+# ---- Where the cost of an empire of colonies lives ----
+#
+# On `settlement_01.character_modifier`, and nowhere else.
+#
+# The obvious design — and the one AGOT ships — is a counter variable on the holder, incremented on
+# colonisation and decremented on promotion, driving an escalating malus. That counter is a cache of
+# something the game already knows, and it goes stale on every path that moves a county without
+# passing through colonisation script: inheritance, revocation, conquest, title destruction. AGOT
+# carries a 40-line reconciliation effect for it, called from eight places including two debug
+# interactions.
+#
+# Putting the malus on the building instead means the engine maintains it. Ten colonies is ten
+# copies of this modifier because it is ten buildings; lose five in a war and the cost halves the
+# same tick, with no script involved and nothing to reconcile. `wilderness_settlement_count` in
+# script_values still reports the number for anything that wants to *read* it, but nothing has to
+# write it.
+#
+# The trade is that the cost is linear where AGOT's ladder accelerates. That is a fair price for
+# deleting an entire class of bug, and a colony that stays merely expensive rather than ruinous is
+# also the better game.
+
+settlement_01 = {
+	# Placed by script when a county is colonised, never built directly.
+	can_construct = { always = no }
+	can_construct_potential = { always = no }
+
+	next_building = settlement_02
+
+	# One generic asset — see the note in 00_wilderness_buildings.txt on why there is no
+	# graphical_regions filter on generated maps.
+	asset = {
+		type = pdxmesh
+		names = { "building_western_tribal_01_a_mesh" }
+		illustration = "gfx/interface/illustrations/holding_types/tribe_grass.dds"
+		soundeffect = {
+			soundeffect = "event:/SFX/Ambience/3DMapEmitters/Holdings/City/tribal_city"
+			soundparameter = { "Tier" = 0 }
+		}
+	}
+
+	levy = 25
+	max_garrison = 100
+	garrison_reinforcement_factor = 0.01
+
+	province_modifier = {
+		# A colony occupies a slot a real holding would have filled.
+		building_slot_add = -1
+	}
+
+	county_modifier = {
+		# Still a rough place to travel through, though far better than the wilderness it replaced.
+		travel_danger = 20
+		development_growth = 0.10
+	}
+
+	character_modifier = {
+		# THE upkeep. One copy per colony held, maintained by the engine. See the note above.
+		domain_tax_mult = -0.06
+		domain_limit = 1
+	}
+
+	type_icon = "icon_building_outposts.dds"
+	ai_value = { base = 100 }
+}
+
+settlement_02 = {
+	construction_time = slow_construction_time
+	cost = { gold = settlement_upgrade_cost }
+
+	can_construct = { wilderness_can_grow_settlement_trigger = yes }
+	can_construct_potential = { wilderness_can_grow_settlement_trigger = yes }
+
+	next_building = settlement_03
+
+	asset = {
+		type = pdxmesh
+		names = { "building_western_tribal_01_a_mesh" }
+		illustration = "gfx/interface/illustrations/holding_types/tribe_grass.dds"
+		soundeffect = {
+			soundeffect = "event:/SFX/Ambience/3DMapEmitters/Holdings/City/tribal_city"
+			soundparameter = { "Tier" = 1 }
+		}
+	}
+
+	levy = 75
+	max_garrison = 200
+	garrison_reinforcement_factor = 0.02
+
+	province_modifier = {
+		building_slot_add = -1
+	}
+
+	county_modifier = {
+		travel_danger = 10
+		development_growth = 0.20
+	}
+
+	character_modifier = {
+		# The colony is paying for more of itself now.
+		domain_tax_mult = -0.03
+		domain_limit = 1
+	}
+
+	type_icon = "icon_building_outposts.dds"
+	ai_value = { base = 120 }
+}
+
+settlement_03 = {
+	construction_time = very_slow_construction_time
+	cost = { gold = settlement_upgrade_cost }
+
+	can_construct = { wilderness_can_grow_settlement_trigger = yes }
+	can_construct_potential = { wilderness_can_grow_settlement_trigger = yes }
+
+	# No next_building: the step past this one is not a building at all but a change of holding
+	# type, which is what the promote interactions in 00_colonization_interactions.txt do.
+
+	asset = {
+		type = pdxmesh
+		names = { "building_western_tribal_01_a_mesh" }
+		illustration = "gfx/interface/illustrations/holding_types/tribe_grass.dds"
+		soundeffect = {
+			soundeffect = "event:/SFX/Ambience/3DMapEmitters/Holdings/City/tribal_city"
+			soundparameter = { "Tier" = 2 }
+		}
+	}
+
+	levy = 150
+	max_garrison = 300
+	garrison_reinforcement_factor = 0.03
+
+	county_modifier = {
+		development_growth = 0.30
+	}
+
+	character_modifier = {
+		domain_limit = 1
+	}
+
+	type_icon = "icon_building_outposts.dds"
+	ai_value = { base = 140 }
+}

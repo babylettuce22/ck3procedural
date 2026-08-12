@@ -1,0 +1,87 @@
+﻿# Every number the colonisation system uses, in one file.
+#
+# The point of putting them here rather than inline is that each rule then has exactly ONE encoding.
+# AGOT writes its settlement cap three times — a trigger with `count > N`, a second trigger with
+# `count = N`, and a script_value returning N — and two of the three disagree at the top tier, so
+# its AI stops colonising one county before its player-facing warning appears. That is what a rule
+# with three homes always becomes.
+#
+# So: nothing below is repeated anywhere. Triggers call these; they do not re-derive them.
+
+
+# --- What it costs to claim a county ---------------------------------------------------------
+
+@base_colonize_cost = 50
+
+# Scaled by rank, because a king claiming a county is committing a smaller share of his realm to it
+# than a count is, and should feel a proportionate bill.
+colonize_cost = {
+	value = @base_colonize_cost
+
+	if = {
+		limit = { highest_held_title_tier = tier_county }
+		add = { value = 25 desc = colonize_cost_tier_desc }
+	}
+	else_if = {
+		limit = { highest_held_title_tier = tier_duchy }
+		add = { value = 50 desc = colonize_cost_tier_desc }
+	}
+	else_if = {
+		limit = { highest_held_title_tier = tier_kingdom }
+		add = { value = 75 desc = colonize_cost_tier_desc }
+	}
+	else = {
+		add = { value = 100 desc = colonize_cost_tier_desc }
+	}
+}
+
+
+# --- What it costs to clear an obstacle, and to grow a colony -------------------------------
+
+wilderness_clear_cost_cheap = 75
+wilderness_clear_cost_standard = 150
+wilderness_clear_cost_dear = 250
+
+settlement_upgrade_cost = 200
+
+
+# --- How many colonies a ruler may hold at once ----------------------------------------------
+
+# THE cap. Read by the AI event, the player decision and the warning alike — there is no second
+# encoding of this rule anywhere in the system.
+#
+# Deliberately generous at the top: an emperor who wants to spend a reign filling in the map should
+# be able to, and the per-colony upkeep on settlement_01 is what actually restrains him. This is
+# here to stop a count claiming a continent, not to cap ambition.
+wilderness_settlement_limit = {
+	value = 1
+
+	if = { limit = { highest_held_title_tier = tier_duchy }    value = 2 }
+	if = { limit = { highest_held_title_tier = tier_kingdom }  value = 3 }
+	if = { limit = { highest_held_title_tier = tier_empire }   value = 4 }
+	if = { limit = { highest_held_title_tier = tier_hegemony } value = 5 }
+}
+
+# How many the ruler currently holds, counted from the world rather than from a stored variable.
+#
+# This is the read side of the design note in 00_settlement_buildings.txt: the cost of colonies
+# lives on the buildings, so nothing has to *write* a count, and anything that wants to know one
+# asks here. Iterating held titles is cheap next to keeping a cache honest across inheritance,
+# revocation and conquest.
+wilderness_settlement_count = {
+	value = 0
+
+	every_held_title = {
+		limit = {
+			tier = tier_county
+			title_province ?= { has_holding_type = settlement_holding }
+		}
+		add = 1
+	}
+}
+
+# Headroom. Negative or zero means the ruler is at or over the cap.
+wilderness_settlement_headroom = {
+	value = wilderness_settlement_limit
+	subtract = wilderness_settlement_count
+}

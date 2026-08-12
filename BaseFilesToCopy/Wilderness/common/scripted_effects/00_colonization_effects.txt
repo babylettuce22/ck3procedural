@@ -1,0 +1,392 @@
+﻿# Everything that MOVES a county between wilderness, colony and settled.
+#
+# There are exactly three such transitions and each has exactly one effect below. Every entry point
+# — the AI pulse, the player decision, the promote interactions — calls one of them and adds
+# nothing of its own. AGOT's equivalent logic is inlined at four call sites with the culture rules
+# copy-pasted verbatim into each, which is why its adventurer decision and its AI event drifted
+# apart; the rule here is that if a caller needs to do something extra, the extra goes in the
+# effect, behind a parameter.
+
+
+# =====================================================================================
+#  Seeding: what is in the way
+# =====================================================================================
+
+# Province scope. Puts one obstacle on a wilderness province, chosen by the ground it sits on.
+#
+# Terrain-keyed rather than a flat random draw. AGOT rolls a uniform list with a couple of triggers
+# bolted on, so its tundra grows dense forest as readily as its jungle does; the point of a blocker
+# is to say something true about the place, and CK3 already knows what the place is.
+#
+# The weights within each terrain are the flavour; the terrain is the constraint. Every branch is
+# reachable for some terrain, and the fallback at the bottom means no province comes out empty.
+wilderness_seed_obstacle_effect = {
+	random_list = {
+		# Cold kills before anything else does.
+		10 = {
+			trigger = { OR = { terrain = taiga  terrain = mountains  terrain = desert_mountains } }
+			modifier = { terrain = taiga  add = 20 }
+			add_building = killing_cold
+		}
+
+		# Standing water: marsh, delta, river bottom, and any low coast.
+		10 = {
+			trigger = {
+				OR = {
+					terrain = wetlands
+					terrain = floodplains
+					AND = { is_riverside_province = yes  NOT = { terrain = mountains } }
+				}
+			}
+			modifier = { terrain = wetlands  add = 25 }
+			add_building = flooded_lands
+		}
+
+		# Ground you cannot get a cart across.
+		10 = {
+			trigger = { OR = { terrain = mountains  terrain = desert_mountains  terrain = hills } }
+			modifier = { terrain = mountains  add = 20 }
+			modifier = { terrain = desert_mountains  add = 20 }
+			add_building = scree_slopes
+		}
+
+		# Trees, and what lives in them.
+		10 = {
+			trigger = { OR = { terrain = forest  terrain = jungle  terrain = taiga } }
+			modifier = { terrain = jungle  add = 25 }
+			add_building = dense_growth
+		}
+		10 = {
+			trigger = { OR = { terrain = forest  terrain = taiga  terrain = hills  terrain = jungle } }
+			add_building = beast_dens
+		}
+
+		# People. Anywhere at all, but likeliest on open ground somebody could live off.
+		10 = {
+			modifier = {
+				OR = { terrain = plains  terrain = steppe  terrain = drylands  terrain = farmlands }
+				add = 15
+			}
+			add_building = bandit_camps
+		}
+	}
+}
+
+# Province scope. The full seeding for one wilderness province: one obstacle usually, two sometimes.
+#
+# Never zero, unlike AGOT — where a 1-in-6 weight leaves the county with nothing in the way at all,
+# which makes a wilderness county indistinguishable from a merely poor one. If a county is worth
+# marking as wild, something is stopping people living there.
+wilderness_seed_province_effect = {
+	wilderness_seed_obstacle_effect = yes
+
+	# A second, for the genuinely hostile quarter of the map. The effect above skips a building the
+	# province already has, so this can safely land on the same draw.
+	if = {
+		limit = { always = yes }
+		random = {
+			chance = 25
+			wilderness_seed_obstacle_effect = yes
+		}
+	}
+}
+
+# Character scope, called on the wilderness dummy at game start. Seeds every county it holds.
+#
+# Runs from on_game_start_after_lobby rather than during history load: adding buildings to a holding
+# that history is still assembling is the error AGOT worked around by commenting the call out of its
+# game-start block and moving it to a post-lobby effect. Do it after the lobby and it just works.
+wilderness_setup_on_start_effect = {
+	every_held_title = {
+		limit = { tier = tier_county }
+
+		title_province ?= {
+			if = {
+				limit = { has_holding_type = wilderness_holding }
+				wilderness_seed_province_effect = yes
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Choosing where to go
+# =====================================================================================
+
+# Character scope. Sets scope:wilderness to the best wilderness county this ruler can reach, or
+# leaves it unset if there is none.
+#
+# Shared by the player decision and the AI pulse. That sharing is the point: AGOT scores its
+# adjacency separately in the AI event and in the conqueror story cycle, and the two lists have
+# drifted — the conqueror version orders on a `scope:curr_county` it sets inside the same block it
+# reads it from, which cannot mean what it looks like it means. One list, one scoring, both callers.
+#
+# The scoring prefers, in order: counties inside a duchy the ruler already holds land in, then a
+# kingdom, then an empire, then merely bordering. Filling in the holes in your own duchy before
+# striking off across the map is both what a real lord would do and what keeps AI realms compact.
+wilderness_pick_adjacent_effect = {
+	every_sub_realm_county = {
+		every_title_to_title_neighboring_and_across_water_county = {
+			limit = {
+				is_wilderness_county_trigger = yes
+				NOT = { has_county_modifier = block_settlement_ability }
+			}
+			add_to_list = adjacent_wilderness
+		}
+	}
+
+	ordered_in_list = {
+		list = adjacent_wilderness
+		order_by = {
+			value = 0
+
+			# Bordering anything of the ruler's at all.
+			every_neighboring_county = {
+				limit = { holder = root }
+				add = 2
+			}
+
+			# And progressively better the closer it sits to land they already govern. The three
+			# blocks are scored against THIS county's own de jure parents, which is why each one
+			# compares `prev` — inside every_neighboring_county, prev is the wilderness county
+			# being scored.
+			every_neighboring_county = {
+				limit = { holder = root  duchy ?= prev.duchy }
+				add = 16
+			}
+			every_neighboring_county = {
+				limit = { holder = root  kingdom ?= prev.kingdom }
+				add = 8
+			}
+			every_neighboring_county = {
+				limit = { holder = root  empire ?= prev.empire }
+				add = 4
+			}
+		}
+		position = 0
+		save_scope_as = wilderness
+	}
+}
+
+
+# =====================================================================================
+#  Transition 1: wilderness -> colony
+# =====================================================================================
+
+# Claims a wilderness county for a ruler.
+#
+#   $COUNTY$     the wilderness county title
+#   $COLONIZER$  the character claiming it
+#
+# The county keeps its obstacles. Claiming ground is not the same as clearing it, and the whole
+# shape of the mechanic depends on that: what the player buys here is a liability with potential,
+# not a finished county.
+colonize_county_effect = {
+	$COUNTY$ = { save_scope_as = colony }
+	$COLONIZER$ = { save_scope_as = colonizer }
+
+	scope:colony = {
+		create_title_and_vassal_change = {
+			type = returned
+			save_scope_as = change
+		}
+		change_title_holder = {
+			holder = scope:colonizer
+			change = scope:change
+			take_baronies = yes
+		}
+		resolve_title_and_vassal_change = scope:change
+
+		# Settlers bring their own. A later pass should derive these from a founder character rather
+		# than from the liege — that is what produces frontier heresies and cultural drift — but
+		# nothing here may name a specific culture or faith key: these files ship identically for
+		# every seed, and the generator's culture keys differ on every one.
+		set_county_faith = scope:colonizer.faith
+		set_county_culture = scope:colonizer.culture
+
+		generate_coa = yes
+
+		# The capital becomes the colony; anything else in the county stays empty until the colony
+		# is promoted and can support real vassals.
+		every_county_province = {
+			limit = {
+				has_holding = yes
+				has_holding_type = wilderness_holding
+				is_county_capital = yes
+			}
+			set_holding_type = settlement_holding
+		}
+		every_county_province = {
+			limit = {
+				has_holding = yes
+				has_holding_type = wilderness_holding
+				is_county_capital = no
+			}
+			remove_holding = yes
+		}
+		every_county_province = {
+			barony ?= { generate_coa = yes }
+		}
+
+		# A colony starts with something, so the first years are not spent at zero.
+		random_list = {
+			34 = { change_development_level = 2 }
+			33 = { change_development_level = 3 }
+			33 = { change_development_level = 4 }
+		}
+	}
+
+	scope:colonizer = {
+		remove_short_term_gold = colonize_cost
+
+		# One claim at a time. Without this an AI with gold empties a whole region in a year, which
+		# is both ahistorical and the fastest way to make the frontier stop existing.
+		set_variable = {
+			name = colonization_cooldown
+			years = 2
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Transition 2: colony -> settled
+# =====================================================================================
+
+# Turns a finished colony into a real holding of whatever kind its holder can actually seat.
+#
+#   $COUNTY$  the colony county title
+#
+# Government-driven, not a choice, for the same reason the generator's Development.Holding is: each
+# government names exactly one primary_holding, and a ruler seated on anything else cannot hold his
+# own capital. The promote interactions offer city and church as alternatives where the holder's
+# innovations allow it; this is the default path.
+promote_colony_effect = {
+	$COUNTY$ = {
+		title_province ?= {
+			if = {
+				limit = { scope:promoting_holder ?= { government_has_flag = government_is_tribal } }
+				set_holding_type = tribal_holding
+			}
+			else = {
+				set_holding_type = castle_holding
+			}
+		}
+		set_color_from_title = de_jure_liege
+	}
+}
+
+
+# =====================================================================================
+#  Transition 3: colony -> wilderness
+# =====================================================================================
+
+# Hands a county back to the wilderness.
+#
+#   $COUNTY$  the county to abandon
+#
+# Currently reached only when a ruler is over the cap. It is written as a general effect rather than
+# folded into that one caller because reversion is the interesting half of the mechanic and is
+# meant to grow teeth later: a colony at low control, with its obstacles uncleared, through a bad
+# winter, ought to be able to fail. The machinery for that is this effect and a trigger.
+abandon_county_effect = {
+	$COUNTY$ = {
+		save_scope_as = abandoned
+
+		# The dummy is found by trait, never by character id — the generator names it whatever it
+		# likes and this file cannot know what that was.
+		random_ruler = {
+			limit = { has_trait = wilderness }
+			save_scope_as = wilderness_holder
+		}
+
+		if = {
+			limit = { exists = scope:wilderness_holder }
+
+			hidden_effect = {
+				create_title_and_vassal_change = {
+					type = revoked
+					save_scope_as = change
+				}
+				change_title_holder = {
+					holder = scope:wilderness_holder
+					change = scope:change
+					take_baronies = yes
+				}
+				resolve_title_and_vassal_change = scope:change
+
+				# Culture and faith are left alone. AGOT wipes them to a dedicated unknown pair;
+				# we cannot, since those keys are generated per seed — and leaving the last
+				# inhabitants' culture on abandoned ground is the better story anyway.
+				change_development_level = -100
+
+				every_county_province = {
+					limit = { has_holding = yes  is_county_capital = no }
+					remove_holding = yes
+				}
+				every_county_province = {
+					limit = { has_holding = yes  is_county_capital = yes }
+					if = {
+						limit = { NOT = { has_holding_type = wilderness_holding } }
+						set_holding_type = wilderness_holding
+					}
+					# The land goes back to what it was, obstacles and all.
+					wilderness_seed_province_effect = yes
+				}
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Upkeep
+# =====================================================================================
+
+# Province scope, from every `*_cleared` building's on_complete.
+#
+# One effect for all six pairs, so a seventh blocker needs no new hook. Deliberately quiet for now:
+# clearing an obstacle is its own reward, and the event content that should hang here — the wolves
+# that come back, the bandits who ask to be hired, the ruin found under the trees — is the next
+# piece of work rather than part of the framework.
+wilderness_obstacle_cleared_effect = {
+	save_scope_as = cleared_province
+
+	county ?= {
+		holder ?= {
+			send_interface_toast = {
+				title = colonize_obstacle_cleared_toast
+				left_icon = scope:cleared_province.county
+			}
+		}
+	}
+}
+
+# Character scope. Called from the yearly pulse: an AI over the cap gives one back.
+#
+# AI only. A player over the cap keeps their colonies and pays for them — the cap exists to stop the
+# AI hoarding wilderness it will never develop, and taking a county off a player without asking is
+# the kind of thing that reads as a bug however well it is explained.
+release_excess_colony_effect = {
+	if = {
+		limit = {
+			is_ai = yes
+			wilderness_settlement_headroom < 0
+		}
+
+		# The worst one: lowest development, so the AI abandons its failures rather than its
+		# investments.
+		ordered_held_title = {
+			limit = {
+				tier = tier_county
+				is_colony_county_trigger = yes
+				NOT = { this = root.capital_county }
+			}
+			order_by = development_level
+			position = 0
+
+			abandon_county_effect = { COUNTY = this }
+		}
+	}
+}

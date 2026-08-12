@@ -1,0 +1,46 @@
+﻿namespace = wilderness_colonization
+
+# The AI's decision to claim a county.
+#
+# Hidden and immediate: this is a branch of the yearly pulse, not something anybody sees. It is an
+# event rather than more on_action script only because an event gets its own scope and can be fired
+# for testing from the console (`event wilderness_colonization.0001`).
+#
+# The gate below is the AI's affordability check, which is deliberately stricter than the player's:
+# a player who wants to bankrupt himself settling a swamp is entitled to, but an AI that spends its
+# last fifty gold on a colony it then cannot develop just makes the map worse.
+wilderness_colonization.0001 = {
+	hidden = yes
+	scope = character
+
+	trigger = {
+		is_ai = yes
+		is_landed = yes
+		can_colonize_at_all_trigger = yes
+		can_hold_another_colony_trigger = yes
+
+		# Enough gold for the claim AND something left over, plus income to carry the upkeep the
+		# new settlement_01 will start charging.
+		gold > colonize_cost
+		monthly_character_income > 1.5
+
+		any_sub_realm_county = {
+			any_title_to_title_neighboring_and_across_water_county = {
+				is_wilderness_county_trigger = yes
+				NOT = { has_county_modifier = block_settlement_ability }
+			}
+		}
+	}
+
+	immediate = {
+		wilderness_pick_adjacent_effect = yes
+
+		if = {
+			limit = { exists = scope:wilderness }
+			colonize_county_effect = {
+				COUNTY = scope:wilderness
+				COLONIZER = root
+			}
+		}
+	}
+}

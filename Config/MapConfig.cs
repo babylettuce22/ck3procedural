@@ -37,6 +37,23 @@ public sealed class MapConfig
     [Description("Seed for every random decision.")]
     public int Seed { get; set; } = 1;
 
+    /// <summary>
+    /// Whether the mod ships the wilderness and colonisation system.
+    ///
+    /// Gates the <c>Wilderness</c> file set in BaseFilesToCopy — the government, holdings,
+    /// buildings, effects and localisation that let an unsettled county exist and be claimed. Off
+    /// leaves a mod with no notion of wilderness at all rather than one with the notion and no
+    /// counties in it, because the two halves have to agree: the generated history that seats
+    /// counties on the dummy holder is what makes those files mean anything, and those files are
+    /// what stop that history from dangling.
+    ///
+    /// Nothing in the set references a generated culture, faith or title key, so it is safe to ship
+    /// with any seed.
+    /// </summary>
+    [Category("02 World State")]
+    [Description("Ship the wilderness and colonisation system: unsettled counties held by nobody, obstacles that have to be cleared, and colonies that grow into real holdings. Off leaves the mod with no notion of wilderness at all.")]
+    public bool EnableWilderness { get; set; } = true;
+
     [Category("02 World State")]
     public int StartYear { get; set; } = 900;
     [Description("Bookmark date, determines ratio of feudal to tribal governments based on development and terrain and relative to the 867 vanilla start date")]

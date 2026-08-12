@@ -1,0 +1,71 @@
+﻿# The player's way into colonisation.
+#
+# A decision rather than a scripted GUI, deliberately. AGOT puts its colonise button on the county
+# view through a scripted_gui, which needs a widget injected into vanilla's window_character.gui and
+# ties the whole mechanic to a file that every other UI mod also wants to touch. A decision needs no
+# GUI work at all, survives every patch, and is one of the few places a player reliably looks.
+#
+# The cost is that a decision cannot be aimed at a county the way a GUI button can, so this picks
+# the target itself — the same ordered_in_list scoring the AI uses, shared through
+# wilderness_pick_adjacent_effect so the player and the AI cannot end up preferring different
+# counties. County-targeted colonisation can be added later as a second entry point; nothing in
+# 00_colonization_effects.txt would change.
+
+settle_the_wilderness_decision = {
+	picture = {
+		reference = "gfx/interface/illustrations/decisions/decision_found_kingdom.dds"
+	}
+
+	desc = settle_the_wilderness_decision_desc
+	selection_tooltip = settle_the_wilderness_decision_tooltip
+	sort_order = 150
+	decision_group_type = realm
+
+	is_shown = {
+		can_colonize_at_all_trigger = yes
+
+		# Only offer it to somebody who has wilderness within reach — otherwise it sits greyed out
+		# in the list of every ruler in a fully settled part of the map.
+		any_sub_realm_county = {
+			any_title_to_title_neighboring_and_across_water_county = {
+				is_wilderness_county_trigger = yes
+			}
+		}
+	}
+
+	is_valid = {
+		can_hold_another_colony_trigger = yes
+	}
+
+	is_valid_showing_failures_only = {
+		is_at_war = no
+	}
+
+	cost = {
+		gold = colonize_cost
+	}
+
+	effect = {
+		wilderness_pick_adjacent_effect = yes
+
+		if = {
+			limit = { exists = scope:wilderness }
+
+			colonize_county_effect = {
+				COUNTY = scope:wilderness
+				COLONIZER = root
+			}
+
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = colonize_claimed_toast
+				left_icon = root
+				right_icon = scope:wilderness
+			}
+		}
+	}
+
+	# The AI reaches colonisation through its own yearly pulse, which can weigh gold and income
+	# properly; a decision check would duplicate that. 0 means never checked by the AI.
+	ai_check_interval = 0
+}

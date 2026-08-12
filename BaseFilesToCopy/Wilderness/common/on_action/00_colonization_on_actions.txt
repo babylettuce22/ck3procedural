@@ -1,0 +1,89 @@
+﻿# Where the system hooks into the running game.
+#
+# Every hook below APPENDS a custom on_action to a vanilla one rather than redefining the vanilla
+# one's effect. That is the single most important compatibility rule in CK3 modding: redefining
+# `on_game_start_after_lobby = { effect = ... }` would silently delete every other mod's — and
+# several of vanilla's own — game-start work.
+
+# --- Setup ---------------------------------------------------------------------------------------
+
+on_game_start_after_lobby = {
+	on_actions = {
+		wilderness_on_game_start
+	}
+}
+
+# Seeds obstacles across every wilderness county.
+#
+# After the lobby, not during history load. Adding buildings to a holding that history is still
+# assembling errors; AGOT hit this and worked around it by commenting the call out of its game-start
+# block, leaving the dead code in place with a note. Running it here is the fix rather than the
+# workaround.
+#
+# The generator has already done the expensive half — deciding which counties are wild, and writing
+# them into history — so this is one pass over one character's titles, not a world scan.
+wilderness_on_game_start = {
+	effect = {
+		every_ruler = {
+			limit = { has_trait = wilderness }
+			wilderness_setup_on_start_effect = yes
+		}
+	}
+}
+
+
+# --- The AI's yearly look at the frontier ---------------------------------------------------------
+
+yearly_playable_pulse = {
+	on_actions = {
+		wilderness_yearly_pulse
+	}
+}
+
+wilderness_yearly_pulse = {
+	# Gated hard at the top. `trigger` here means the effect below never runs for the great majority
+	# of rulers, which is what keeps a yearly pulse off the performance budget — the list iteration
+	# in wilderness_pick_adjacent_effect is only reached by someone who actually borders wilderness.
+	trigger = {
+		is_ai = yes
+		can_colonize_at_all_trigger = yes
+	}
+
+	effect = {
+		# An AI over the cap sheds its worst colony before considering another.
+		release_excess_colony_effect = yes
+
+		random = {
+			chance = 40
+			trigger_event = wilderness_colonization.0001
+		}
+	}
+}
+
+
+# --- Keeping the frontier honest -------------------------------------------------------------------
+
+# When a title changes hands there is nothing to reconcile, because nothing caches a colony count —
+# the upkeep rides on the settlement buildings and moves with the county by itself. This hook exists
+# only to clear the per-character claim cooldown, which is meaningless on a new holder.
+#
+# (That absence is the design. See the note at the top of 00_settlement_buildings.txt for what the
+# alternative costs: AGOT reconciles a counter from eight call sites, two of them debug buttons.)
+on_title_gain = {
+	on_actions = {
+		wilderness_on_title_gain
+	}
+}
+
+wilderness_on_title_gain = {
+	effect = {
+		if = {
+			limit = {
+				has_variable = colonization_cooldown
+				scope:title ?= { tier = tier_county }
+				scope:title ?= { is_colony_county_trigger = yes }
+			}
+			remove_variable = colonization_cooldown
+		}
+	}
+}

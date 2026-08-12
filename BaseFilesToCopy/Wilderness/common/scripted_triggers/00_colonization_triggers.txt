@@ -1,0 +1,135 @@
+﻿# Every condition the colonisation system tests, defined once.
+#
+# The convention throughout: a trigger asking about a COUNTY runs in title scope, a trigger asking
+# about a RULER runs in character scope, and neither reaches into the other except through an
+# explicit `holder` or `title_province`. Mixing the two is how AGOT's `agot_upgrade_settlement_to_
+# full_holding_effect` ended up taking a $COUNTY$ parameter it never reads and silently operating on
+# whatever scope happened to be current.
+
+
+# --- County state ------------------------------------------------------------------------------
+
+# Title scope. Is this county unclaimed wilderness?
+#
+# Asks the government flag rather than `has_government = wilderness_government` so that a second
+# uninteractable government — ruins, an off-limits region — can be added without editing this.
+is_wilderness_county_trigger = {
+	holder ?= { government_has_flag = government_is_wilderness }
+}
+
+# Title scope. Is this county a colony that has not yet grown into a real holding?
+is_colony_county_trigger = {
+	title_province ?= { has_holding_type = settlement_holding }
+}
+
+# Title scope. Neither wild nor a colony — i.e. finished, a normal county like any other.
+is_settled_county_trigger = {
+	title_province ?= {
+		NOR = {
+			has_holding_type = wilderness_holding
+			has_holding_type = settlement_holding
+		}
+	}
+}
+
+# Title scope. Has every obstacle in this county's capital been cleared?
+#
+# The `obstacle` flag is the entire interface between this trigger and the six blocker pairs in
+# 00_wilderness_buildings.txt — no blocker is named here, so adding a seventh needs no edit.
+county_obstacles_cleared_trigger = {
+	title_province ?= {
+		has_building_with_flag = { flag = obstacle count = 0 }
+	}
+}
+
+
+# --- Ruler state -------------------------------------------------------------------------------
+
+# Character scope. Room for one more colony?
+#
+# The single reading of the cap. See wilderness_settlement_limit in 00_colonization_values.txt for
+# why there is exactly one.
+can_hold_another_colony_trigger = {
+	custom_tooltip = {
+		text = colonize_at_settlement_limit_tt
+		wilderness_settlement_headroom > 0
+	}
+}
+
+# Character scope. A ruler who is allowed to colonise at all — as opposed to one who merely wants
+# to. Landless adventurers, mercenaries and the wilderness dummy itself are all excluded here.
+can_colonize_at_all_trigger = {
+	is_landed = yes
+	is_adult = yes
+	is_alive = yes
+	NOT = { government_has_flag = government_is_uninteractable }
+	NOT = { has_variable = colonization_cooldown }
+}
+
+# Character scope, with scope:wilderness set to a candidate county.
+#
+# Adjacency is the rule that makes colonisation read as a frontier advancing rather than as a land
+# grab: you may only claim ground you can already reach from somewhere you hold. `title_to_title`
+# neighbouring includes across-water, so an island chain is still colonisable.
+can_reach_wilderness_trigger = {
+	custom_tooltip = {
+		text = colonize_must_border_realm_tt
+		any_sub_realm_county = {
+			any_title_to_title_neighboring_and_across_water_county = {
+				this = scope:wilderness
+			}
+		}
+	}
+}
+
+
+# --- Building gates ----------------------------------------------------------------------------
+
+# Province scope, from a building's can_construct. Anyone but the wilderness dummy.
+#
+# Its AI is disabled anyway, so this is about the build menu of an unclaimed county reading as empty
+# rather than as full of things that cannot be started.
+wilderness_can_clear_obstacle_trigger = {
+	scope:holder ?= {
+		NOT = { government_has_flag = government_is_wilderness }
+	}
+}
+
+# Province scope, from settlement_02/03's can_construct.
+#
+# A colony grows by being worked on, and the obstacles come first: there is no point raising a
+# second row of houses while the wolves are still taking the livestock.
+wilderness_can_grow_settlement_trigger = {
+	scope:holder ?= {
+		NOT = { government_has_flag = government_is_wilderness }
+	}
+	custom_tooltip = {
+		text = colonize_obstacles_remain_tt
+		has_building_with_flag = { flag = obstacle count = 0 }
+	}
+}
+
+
+# --- Promotion ---------------------------------------------------------------------------------
+
+# Title scope. Is this colony ready to stop being one?
+#
+# Three conditions, and each is doing separate work: the obstacles gate the land, the development
+# gates the people, and settlement_03 gates the investment. A colony that meets all three has
+# stopped being a frontier post and become a place.
+can_promote_colony_trigger = {
+	is_colony_county_trigger = yes
+
+	custom_tooltip = {
+		text = colonize_obstacles_remain_tt
+		county_obstacles_cleared_trigger = yes
+	}
+	custom_tooltip = {
+		text = colonize_needs_development_tt
+		development_level >= 3
+	}
+	custom_tooltip = {
+		text = colonize_needs_full_settlement_tt
+		title_province ?= { has_building = settlement_03 }
+	}
+}

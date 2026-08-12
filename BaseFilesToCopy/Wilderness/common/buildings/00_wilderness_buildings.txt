@@ -1,0 +1,314 @@
+﻿# The wilderness holding's primary building, and the six obstacles that sit on top of it.
+#
+# ---- The blocker pattern ----
+#
+# Each obstacle is a PAIR: `x` is the obstacle itself, `x_cleared` is the work of removing it.
+# `next_building` makes the second an upgrade of the first, so clearing a wolf den is, mechanically,
+# constructing over one — which means it costs time and gold, shows in the build queue, and can be
+# interrupted by a siege, all without a line of script.
+#
+# Both halves carry `flag = obstacle`. That flag is the whole interface: nothing downstream knows
+# the names below, it only ever asks `has_building_with_flag = { flag = obstacle count = 0 }`.
+# Adding a seventh blocker therefore needs no change anywhere else in this system.
+#
+# The `x` half is never constructible (`can_construct = always no`) — it is placed by script when
+# the county is seeded. The `x_cleared` half is constructible by anyone EXCEPT the wilderness dummy,
+# whose AI is off anyway; the guard is there so the build menu of an unclaimed county is empty
+# rather than merely unusable.
+#
+# ---- Why the maluses land where they do ----
+#
+# `county_modifier` for anything about the place being hard to live in, because those stack across
+# every province in the county and a county is what colonisation claims. `province_modifier` for
+# anything about the specific ground. `character_modifier` only where the obstacle should follow the
+# holder off the county — disease does, wolves do not.
+
+
+# =====================================================================================
+#  The wilderness itself
+# =====================================================================================
+
+wilderness_01 = {
+	# Placed by script when the generator seeds a county, never built.
+	can_construct = { always = no }
+	can_construct_potential = { always = no }
+
+	# A lone tree where a holding would be. Not a building model: an empty county should read as
+	# empty at map zoom, and the terrain and foliage the generator paints are the real visual.
+	#
+	# One generic asset and no `graphical_regions` filter, deliberately. CompatibilityWriter
+	# re-declares vanilla's graphical regions against generated provinces by splitting them evenly
+	# (`i % graphical.Count`), so region membership on our maps has no relation to climate — a
+	# per-region asset would scatter desert huts through tundra. Filter on nothing, or on terrain.
+	asset = {
+		type = pdxmesh
+		names = {
+			"tree_pine_single_01_a_mesh"
+			"tree_pine_single_01_b_mesh"
+			"tree_pine_single_01_c_mesh"
+		}
+		illustration = "gfx/interface/illustrations/holding_types/tribe_grass.dds"
+	}
+
+	county_modifier = {
+		# -1.0 is total: no tax, no levy, no garrison, and development that cannot creep upward on
+		# its own. A wilderness county must be worth exactly nothing until somebody settles it,
+		# or the AI will hoard them as free income.
+		tax_mult = -1.0
+		levy_size = -1.0
+		garrison_size = -1.0
+		development_growth_factor = -1.0
+
+		# The one number that makes the map feel different rather than just look emptier. Crossing
+		# the wilderness is dangerous, so an army or a travelling character pays for the shortcut.
+		travel_danger = 30
+	}
+
+	province_modifier = {
+		fort_level = -1
+	}
+
+	levy = 0
+	max_garrison = 0
+
+	type_icon = "icon_building_royal_forest.dds"
+
+	# Placed by script; the AI must never consider it.
+	ai_value = { base = -100 }
+}
+
+
+# =====================================================================================
+#  Obstacles
+# =====================================================================================
+
+# --- Beasts: wolves, bears, big cats. Forest, taiga and hill country. ---
+
+beast_dens = {
+	can_construct = { always = no }
+	can_construct_potential = { always = no }
+
+	county_modifier = {
+		development_growth_factor = -0.20
+		supply_limit_mult = -0.30
+		tax_mult = -0.20
+		garrison_size = -0.15
+		levy_size = -0.10
+		travel_danger = 15
+	}
+
+	next_building = beast_dens_cleared
+	type_icon = "icon_building_hunting_grounds.dds"
+	flag = obstacle
+	ai_value = { base = -100 }
+}
+
+beast_dens_cleared = {
+	construction_time = quick_construction_time
+	cost = { gold = wilderness_clear_cost_cheap }
+
+	can_construct = { wilderness_can_clear_obstacle_trigger = yes }
+	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
+
+	type_icon = "icon_building_hunting_grounds.dds"
+	flag = obstacle
+	ai_value = { base = 100 }
+
+	on_complete = { wilderness_obstacle_cleared_effect = yes }
+}
+
+
+# --- Bandits: whoever was already living here and would rather you had not come. ---
+
+bandit_camps = {
+	can_construct = { always = no }
+	can_construct_potential = { always = no }
+
+	county_modifier = {
+		hostile_raid_time = -0.50
+		supply_limit_mult = -0.30
+		tax_mult = -0.25
+		monthly_county_control_growth_add = -0.10
+		travel_danger = 15
+	}
+
+	next_building = bandit_camps_cleared
+	type_icon = "icon_building_warcamps.dds"
+	flag = obstacle
+	ai_value = { base = -100 }
+}
+
+bandit_camps_cleared = {
+	construction_time = standard_construction_time
+	cost = { gold = wilderness_clear_cost_standard }
+
+	can_construct = { wilderness_can_clear_obstacle_trigger = yes }
+	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
+
+	type_icon = "icon_building_warcamps.dds"
+	flag = obstacle
+	ai_value = { base = 100 }
+
+	on_complete = { wilderness_obstacle_cleared_effect = yes }
+}
+
+
+# --- Dense growth: forest and jungle that has to come down before anything goes up. ---
+
+dense_growth = {
+	can_construct = { always = no }
+	can_construct_potential = { always = no }
+
+	county_modifier = {
+		supply_limit_mult = -0.50
+		development_growth_factor = -0.25
+		travel_danger = 15
+	}
+
+	province_modifier = {
+		# Slower to build in, but the timber is right there once you start.
+		holding_build_speed = -0.20
+		build_gold_cost = -0.10
+	}
+
+	next_building = dense_growth_cleared
+	type_icon = "icon_building_logging_camps.dds"
+	flag = obstacle
+	ai_value = { base = -100 }
+}
+
+dense_growth_cleared = {
+	construction_time = standard_construction_time
+	cost = { gold = wilderness_clear_cost_standard }
+
+	can_construct = { wilderness_can_clear_obstacle_trigger = yes }
+	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
+
+	type_icon = "icon_building_logging_camps.dds"
+	flag = obstacle
+	ai_value = { base = 100 }
+
+	on_complete = { wilderness_obstacle_cleared_effect = yes }
+}
+
+
+# --- Flooded lands: marsh, delta and river bottom. The one obstacle that follows the holder. ---
+
+flooded_lands = {
+	can_construct = { always = no }
+	can_construct_potential = { always = no }
+
+	county_modifier = {
+		development_growth_factor = -0.20
+		county_opinion_add = -10
+		travel_danger = 15
+	}
+
+	province_modifier = {
+		build_gold_cost = 0.50
+		holding_build_speed = -0.25
+	}
+
+	character_modifier = {
+		# Fever. Unlike wolves, this one reaches the man who owns the place.
+		health = -0.10
+	}
+
+	next_building = flooded_lands_cleared
+	type_icon = "icon_building_waterworks.dds"
+	flag = obstacle
+	ai_value = { base = -100 }
+}
+
+flooded_lands_cleared = {
+	construction_time = slow_construction_time
+	cost = { gold = wilderness_clear_cost_dear }
+
+	can_construct = { wilderness_can_clear_obstacle_trigger = yes }
+	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
+
+	type_icon = "icon_building_waterworks.dds"
+	flag = obstacle
+	ai_value = { base = 100 }
+
+	on_complete = { wilderness_obstacle_cleared_effect = yes }
+}
+
+
+# --- Scree slopes: loose rock and no level ground. Mountains, desert mountains, high hills. ---
+
+scree_slopes = {
+	can_construct = { always = no }
+	can_construct_potential = { always = no }
+
+	county_modifier = {
+		development_growth_factor = -0.25
+		supply_limit_mult = -0.25
+		travel_danger = 15
+	}
+
+	province_modifier = {
+		build_gold_cost = 0.35
+		holding_build_speed = -0.20
+		# Rock is at least worth something to a garrison.
+		fort_level = 1
+	}
+
+	next_building = scree_slopes_cleared
+	type_icon = "icon_building_hill_forts.dds"
+	flag = obstacle
+	ai_value = { base = -100 }
+}
+
+scree_slopes_cleared = {
+	construction_time = slow_construction_time
+	cost = { gold = wilderness_clear_cost_dear }
+
+	can_construct = { wilderness_can_clear_obstacle_trigger = yes }
+	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
+
+	type_icon = "icon_building_hill_forts.dds"
+	flag = obstacle
+	ai_value = { base = 100 }
+
+	on_complete = { wilderness_obstacle_cleared_effect = yes }
+}
+
+
+# --- Killing cold: arctic and high taiga. Never fully cleared, only endured. ---
+
+killing_cold = {
+	can_construct = { always = no }
+	can_construct_potential = { always = no }
+
+	county_modifier = {
+		development_growth_factor = -0.30
+		supply_limit_mult = -0.40
+		levy_size = -0.20
+		travel_danger = 20
+	}
+
+	character_modifier = {
+		health = -0.05
+	}
+
+	next_building = killing_cold_cleared
+	type_icon = "icon_building_hillside_grazing.dds"
+	flag = obstacle
+	ai_value = { base = -100 }
+}
+
+killing_cold_cleared = {
+	# The dearest and slowest of the six. You do not clear the cold; you build against it.
+	construction_time = very_slow_construction_time
+	cost = { gold = wilderness_clear_cost_dear }
+
+	can_construct = { wilderness_can_clear_obstacle_trigger = yes }
+	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
+
+	type_icon = "icon_building_hillside_grazing.dds"
+	flag = obstacle
+	ai_value = { base = 100 }
+
+	on_complete = { wilderness_obstacle_cleared_effect = yes }
+}
