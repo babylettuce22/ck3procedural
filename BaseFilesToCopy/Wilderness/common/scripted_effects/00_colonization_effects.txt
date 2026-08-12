@@ -377,13 +377,22 @@ release_excess_colony_effect = {
 
 		# The worst one: lowest development, so the AI abandons its failures rather than its
 		# investments.
+		#
+		# `multiply = -1` is load-bearing and is NOT a sign convention quibble. Every `ordered_`
+		# list in CK3 sorts DESCENDING, so position 0 is the highest-scoring member; negating the
+		# key is how vanilla asks for the lowest, and it does so in 54 places (see
+		# 00_accolades_scripted_effects.txt, "Now, find our least developed county"). Without it
+		# this effect reads as "abandon the worst" and does the exact opposite.
 		ordered_held_title = {
 			limit = {
 				tier = tier_county
 				is_colony_county_trigger = yes
 				NOT = { this = root.capital_county }
 			}
-			order_by = development_level
+			order_by = {
+				value = development_level
+				multiply = -1
+			}
 			position = 0
 
 			abandon_county_effect = { COUNTY = this }
