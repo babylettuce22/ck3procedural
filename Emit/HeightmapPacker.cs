@@ -3,7 +3,7 @@ namespace Ck3MapGen.Emit;
 /// <summary>
 /// Builds the packed_heightmap/indirection_heightmap pair CK3 renders terrain from.
 ///
-/// The heightmap the game reads is not heightmap.png. It is a texture atlas of 64-pixel tiles at
+/// The heightmap the game reads is not heightmap.png. It is a texture atlas of 32-pixel tiles at
 /// five levels of detail, plus a lookup that says where each tile of the world lives in that atlas
 /// and how far it was decimated. heightmap.png is the authoring format; this is the runtime one.
 ///
@@ -23,8 +23,8 @@ namespace Ck3MapGen.Emit;
 /// bottom-up distance from the foot of the atlas to the foot of each level's region.
 ///
 /// **A tile's source window starts one row ABOVE its own grid line** — rows
-/// <c>[ty*64 - 1, ty*64 + 64)</c>, columns <c>[tx*64, tx*64 + 65)</c>. Asymmetric, and not a
-/// guess: it takes level 0 from 0.700 to 0.005. The previous packer read <c>[ty*64, ty*64 + 65)</c>
+/// <c>[ty*32 - 1, ty*32 + 32)</c>, columns <c>[tx*32, tx*32 + 33)</c>. Asymmetric, and not a
+/// guess: it takes level 0 from 0.700 to 0.005. The previous packer read <c>[ty*32, ty*32 + 33)</c>
 /// and so shipped every tile one row south of where CK3 looks for it.
 ///
 /// **Tiles are decimated, not averaged.** Taking every 2^level-th sample [0.005-0.014] against
@@ -41,7 +41,7 @@ public static class HeightmapPacker
 {
     /// <summary>Source pixels a tile spans. The tile stores one more sample than this, overlapping
     /// its neighbour so adjacent tiles share an edge and the terrain does not crack between them.</summary>
-    public const int TileStep = 64;
+    public const int TileStep = 32;
 
     /// <summary>Levels of detail, from 0 (full resolution) to 4 (decimated 16x).</summary>
     public const int Levels = 5;
@@ -72,7 +72,7 @@ public static class HeightmapPacker
     /// </summary>
     private static readonly double[] VanillaShare = [0.0256, 0.1193, 0.1471, 0.1167, 0.5913];
 
-    /// <summary>Samples along a tile edge at each level: 65, 33, 17, 9, 5.</summary>
+    /// <summary>Samples along a tile edge at each level: 33, 17, 9, 5, 3.</summary>
     public static int TileSize(int level) => TileStep / Decimation(level) + 1;
 
     /// <summary>How far a level decimates its source: 1, 2, 4, 8, 16. Written to the indirection's B.</summary>
@@ -101,7 +101,7 @@ public static class HeightmapPacker
         // Vanilla leans on this hard: 14,314 of its 41,472 tiles — 34.5% of the world — point at
         // one single open-ocean tile, the one empty_tile_offset names. Content-hashing every level
         // rather than special-casing ocean subsumes that and costs nothing, since the comparison is
-        // over at most 65x65 samples and only ever between tiles at the same level.
+        // over at most 33x33 samples and only ever between tiles at the same level.
         var slotOf = new int[tileCount];
         var slots = new List<ushort[]>[Levels];
         var tilesPerLevel = new int[Levels];
@@ -112,21 +112,21 @@ public static class HeightmapPacker
             slots[l] = [];
 
             for (int ty = 0; ty < tilesY; ty++)
-            for (int tx = 0; tx < tilesX; tx++)
-            {
-                int t = ty * tilesX + tx;
-                if (level[t] != l) continue;
-                tilesPerLevel[l]++;
-
-                var samples = Extract(full, width, height, tx, ty, l);
-                if (!seen.TryGetValue(samples, out int slot))
+                for (int tx = 0; tx < tilesX; tx++)
                 {
-                    slot = slots[l].Count;
-                    seen[samples] = slot;
-                    slots[l].Add(samples);
+                    int t = ty * tilesX + tx;
+                    if (level[t] != l) continue;
+                    tilesPerLevel[l]++;
+
+                    var samples = Extract(full, width, height, tx, ty, l);
+                    if (!seen.TryGetValue(samples, out int slot))
+                    {
+                        slot = slots[l].Count;
+                        seen[samples] = slot;
+                        slots[l].Add(samples);
+                    }
+                    slotOf[t] = slot;
                 }
-                slotOf[t] = slot;
-            }
         }
 
         // empty_tile_offset has to name a tile that is inert if CK3 ever substitutes it. Vanilla's
@@ -156,8 +156,8 @@ public static class HeightmapPacker
                 var samples = slots[l][slot];
 
                 for (int y = 0; y < s; y++)
-                for (int x = 0; x < s; x++)
-                    packed[(long)(py + y) * atlasWidth + px + x] = samples[y * s + x];
+                    for (int x = 0; x < s; x++)
+                        packed[(long)(py + y) * atlasWidth + px + x] = samples[y * s + x];
             }
         }
 
@@ -238,8 +238,8 @@ public static class HeightmapPacker
     /// Ranks tiles by relief and spends vanilla's budget on them, steepest first.
     ///
     /// Dead-flat tiles drop to the coarsest level whatever the budget says. A tile with no gradient
-    /// at all is open ocean or a plateau interior, and storing it at 65x65 buys literally nothing —
-    /// it is the same value 4,225 times. Letting one consume a level-0 slot would displace a
+    /// at all is open ocean or a plateau interior, and storing it at 33x33 buys literally nothing —
+    /// it is the same value 1,089 times. Letting one consume a level-0 slot would displace a
     /// mountain face that needed it.
     /// </summary>
     private static int[] AssignLevels(float[] metric)
@@ -309,22 +309,28 @@ public static class HeightmapPacker
     private static (int width, int height, int[] cols, int[] rows, int[] offsets) Layout(int[] slotsPerLevel)
     {
         int best = -1;
-        long bestScore = long.MaxValue;
+        long bestMaxDim = long.MaxValue;
+        long bestDiff = long.MaxValue;
         int maxCols = Math.Min(MaxAddressable, MaxTextureSide / TileSize(0));
 
         for (int c = 1; c <= maxCols; c++)
         {
-            var (h, ok) = Measure(c * TileSize(0), slotsPerLevel);
+            int candidateWidth = c * TileSize(0);
+            var (h, ok) = Measure(candidateWidth, slotsPerLevel);
             if (!ok) continue;
 
-            long score = Math.Max((long)c * TileSize(0), h);
-            if (score >= bestScore) continue;
-            bestScore = score;
-            best = c;
+            long maxDim = Math.Max((long)candidateWidth, h);
+            long diff = Math.Abs((long)candidateWidth - h);
+
+            // Prefer smaller max dimension; tie-break on aspect ratio closest to square
+            if (maxDim < bestMaxDim || (maxDim == bestMaxDim && diff < bestDiff))
+            {
+                bestMaxDim = maxDim;
+                bestDiff = diff;
+                best = c;
+            }
         }
 
-        // Nothing fits: take the widest allowed and let the caller's warnings say why. Better to
-        // emit something inspectable than to throw from inside a mod write.
         if (best < 0) best = maxCols;
 
         int width = best * TileSize(0);
