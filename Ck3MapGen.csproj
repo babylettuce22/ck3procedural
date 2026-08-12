@@ -20,10 +20,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Vanilla files we keep by hand and copy into the mod verbatim; see Emit/StaticFileWriter.cs.
-         They ship beside the executable, which is where that writer looks for them, so a published
-         build carries them without needing the repo. -->
-    <None Update="VanillaFilesToCopy/**/*">
+    <!-- Files we keep by hand and copy into the mod verbatim; see Emit/StaticFileWriter.cs.
+         Each immediate subfolder is one file set (Core, Wilderness, ...). They ship beside the
+         executable, which is where that writer looks for them, so a published build carries them
+         without needing the repo. -->
+    <None Update="BaseFilesToCopy/**/*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

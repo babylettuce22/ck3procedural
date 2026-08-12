@@ -171,7 +171,14 @@ public static class ContentWriter
         else Console.WriteLine("  history: SKIPPED (--no-history)");
 
         // Last, so that the files kept by hand can only fill gaps the writers above left.
-        Core.Stage.Time("static files", () => StaticFileWriter.WriteAll(modDir));
+        //
+        // Core is unconditional — it is vanilla data replace_path deleted and nothing regenerates.
+        // Wilderness is a whole optional system, so it ships only when asked for; see
+        // MapConfig.EnableWilderness for why it is all-or-nothing rather than a share knob.
+        List<string> sets = [StaticFileWriter.Core];
+        if (cfg.EnableWilderness) sets.Add(StaticFileWriter.Wilderness);
+
+        Core.Stage.Time("static files", () => StaticFileWriter.WriteAll(modDir, sets));
     }
 
     /// <summary>

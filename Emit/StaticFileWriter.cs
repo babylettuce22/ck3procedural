@@ -1,8 +1,14 @@
 namespace Ck3MapGen.Emit;
 
 /// <summary>
-/// Copies the hand-kept files in VanillaFilesToCopy/ into the mod, laid out as a mod root so a
-/// file's path in that folder is its path in the mod.
+/// Copies the hand-kept files in BaseFilesToCopy/ into the mod.
+///
+/// That folder is not itself a mod root. Each immediate subfolder is one *file set*, and each set
+/// is a mod root, so a file's path below its set folder is its path in the mod. Sets exist so a
+/// feature can be switched off wholesale from <see cref="Config.MapConfig"/> without the writer
+/// needing to know a single filename — <see cref="Wilderness"/> ships only when the wilderness and
+/// colonisation system is enabled, and adding a second optional system means adding a folder and a
+/// bool, not editing this class.
 ///
 /// It exists because replace_path is all-or-nothing: declaring gfx/map/map_object_data drops
 /// every vanilla file under it, including the ones we do not generate and have no reason to
@@ -16,46 +22,69 @@ namespace Ck3MapGen.Emit;
 public static class StaticFileWriter
 {
     /// <summary>Folder name, both in the repo and beside the built executable.</summary>
-    public const string SourceFolder = "VanillaFilesToCopy";
+    public const string SourceFolder = "BaseFilesToCopy";
+
+    /// <summary>Vanilla files nothing regenerates. Always copied.</summary>
+    public const string Core = "Core";
+
+    /// <summary>The static half of the wilderness and colonisation system. Gated.</summary>
+    public const string Wilderness = "Wilderness";
 
     /// <summary>
-    /// Files that document the folder rather than belong in a mod. Copying README.txt would put
-    /// it in the mod root, where CK3 ignores it and the next person to look wonders what wrote it.
+    /// Files that document a set rather than belong in a mod. Copying README.txt would put it in
+    /// the mod root, where CK3 ignores it and the next person to look wonders what wrote it.
     /// </summary>
     private static readonly string[] NotModContent = ["README.txt"];
 
-    public static void WriteAll(string modDir)
+    /// <summary>
+    /// Where a set lives beside the executable. Beside it rather than in the repo because the
+    /// csproj copies the folder to the output directory, so a published build carries it too.
+    /// </summary>
+    public static string SetDirectory(string set)
+        => Path.Combine(AppContext.BaseDirectory, SourceFolder, set);
+
+    public static void WriteAll(string modDir, IEnumerable<string> sets)
     {
-        // Beside the executable, not in the repo: the csproj copies the folder to the output
-        // directory, so a published build carries it too.
-        string sourceDir = Path.Combine(AppContext.BaseDirectory, SourceFolder);
-
-        if (!Directory.Exists(sourceDir))
-        {
-            Console.WriteLine($"  static files: SKIPPED ({SourceFolder} not found beside the executable)");
-            return;
-        }
-
         int copied = 0, skipped = 0;
+        var written = new List<string>();
 
-        foreach (string sourceFile in Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories))
+        foreach (string set in sets)
         {
-            string relativePath = Path.GetRelativePath(sourceDir, sourceFile);
-            if (NotModContent.Contains(relativePath, StringComparer.OrdinalIgnoreCase)) continue;
+            string sourceDir = SetDirectory(set);
 
-            string targetFile = Path.Combine(modDir, relativePath);
-
-            if (File.Exists(targetFile))
+            if (!Directory.Exists(sourceDir))
             {
-                skipped++;
+                Console.WriteLine($"  static files: SKIPPED set '{set}' " +
+                                  $"({SourceFolder}/{set} not found beside the executable)");
                 continue;
             }
 
-            Directory.CreateDirectory(Path.GetDirectoryName(targetFile)!);
-            File.Copy(sourceFile, targetFile);
-            copied++;
+            int setCopied = 0;
+
+            foreach (string sourceFile in Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories))
+            {
+                string relativePath = Path.GetRelativePath(sourceDir, sourceFile);
+                if (NotModContent.Contains(Path.GetFileName(relativePath), StringComparer.OrdinalIgnoreCase))
+                    continue;
+
+                string targetFile = Path.Combine(modDir, relativePath);
+
+                if (File.Exists(targetFile))
+                {
+                    skipped++;
+                    continue;
+                }
+
+                Directory.CreateDirectory(Path.GetDirectoryName(targetFile)!);
+                File.Copy(sourceFile, targetFile);
+                setCopied++;
+            }
+
+            copied += setCopied;
+            written.Add($"{setCopied} from {set}");
         }
 
-        Console.WriteLine($"  copied {copied} static files ({skipped} left alone, already generated)");
+        Console.WriteLine($"  copied {copied} static files ({string.Join(", ", written)}; " +
+                          $"{skipped} left alone, already generated)");
     }
 }

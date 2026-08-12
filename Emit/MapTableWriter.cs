@@ -37,7 +37,7 @@ public static class MapTableWriter
     public static void WriteAll(string modDir, Config.MapConfig cfg)
     {
         string relative = Path.Combine("gfx", "map", "map_object_data");
-        string sourceDir = Path.Combine(AppContext.BaseDirectory, StaticFileWriter.SourceFolder, relative);
+        string sourceDir = Path.Combine(StaticFileWriter.SetDirectory(StaticFileWriter.Core), relative);
 
         if (!Directory.Exists(sourceDir))
         {
