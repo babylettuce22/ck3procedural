@@ -227,8 +227,10 @@ public static class Cultures
             var members = all.Where(i => heritageOf[i] == h).ToList();
             if (members.Count == 0) continue;
 
-            var language = Language.Create($"language_gen_{heritages.Count}", rng);
-            usedNames.Add(language.Name);
+            // Guarantee the first generated heritage gets the English-like language
+            var language = heritages.Count == 0
+                ? Language.CreateAnglic($"language_gen_{heritages.Count}", rng)
+                : Language.Create($"language_gen_{heritages.Count}", rng); usedNames.Add(language.Name);
 
             var heritage = new Heritage
             {

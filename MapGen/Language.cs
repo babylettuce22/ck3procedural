@@ -27,15 +27,49 @@ public sealed class Language
     private static readonly string[] ComplexCodas =
         ["th", "sh", "st", "nd", "ng", "nt", "rk", "rn", "rd", "ls", "ft", "sk", "lm", "rg", "ts"];
 
-    // Standard CK3-safe Latin-1 diacritics for visual flavor
     private static readonly Dictionary<char, char[]> DiacriticMap = new()
     {
-        { 'a', ['á', 'ä', 'â', 'å'] },
+        { 'a', ['á', 'ä', 'â', 'å', 'æ'] },
         { 'e', ['é', 'ë', 'ê'] },
         { 'i', ['í', 'ï', 'î'] },
         { 'o', ['ó', 'ö', 'ô', 'ø'] },
         { 'u', ['ú', 'ü', 'û'] }
     };
+
+    // --- Old & Middle English Phoneme & Affix Pools ---
+    private static readonly string[] EnglishOnsets =
+    [
+        "b", "c", "d", "f", "g", "h", "k", "l", "m", "n", "p", "r", "s", "t", "w", "y",
+        "br", "cl", "cr", "dr", "fl", "fr", "gr", "pr", "sc", "sh", "st", "sw", "th", "tr", "tw", "wh", "wr"
+    ];
+
+    private static readonly string[] EnglishVowels =
+        ["a", "e", "i", "o", "u", "ea", "ee", "eo", "ae", "oo", "ou", "ay", "ow"];
+
+    private static readonly string[] EnglishCodas =
+    [
+        "d", "g", "k", "l", "m", "n", "r", "s", "t", "th", "sh", "ch", "ck", "gh",
+        "ft", "ld", "nd", "ng", "nk", "rd", "rk", "rn", "rt", "st"
+    ];
+
+    private static readonly string[] EnglishBaronyAffixes =
+        ["ton", "ham", "ford", "wick", "bury", "stead", "dale", "by", "ster", "ing", "mere", "wood", "field", "croft"];
+
+    private static readonly string[] EnglishCountyAffixes =
+        ["shire", "land", "fold", "march", "sart", "halgh", "worth", "don", "bridge", "mouth"];
+
+    private static readonly string[] EnglishDuchyAffixes =
+        ["shire", "land", "reach", "march", "realm", "fold", "sex"];
+
+    private static readonly string[] EnglishKingdomAffixes =
+        ["land", "realm", "ia", "cia", "ria"];
+
+    private static readonly string[] EnglishMaleEndings =
+        ["ric", "wald", "bert", "gar", "mund", "ed", "red", "ward", "win", "hard", "man"];
+
+    private static readonly string[] EnglishFemaleEndings =
+        ["hild", "wen", "gyth", "burg", "fled", "thryth", "eth", "is", "eva"];
+
 
     public string Key { get; }
     public string Name { get; private set; } = "";
@@ -48,15 +82,8 @@ public sealed class Language
     private readonly double _medialCodaChance;
     private readonly double _finalCodaChance;
 
-    // --- NEW: Orthographic and Morphological Flavor Traits ---
-
-    /// <summary>Does this language use prefixes for places (like Caer- or Al-) instead of suffixes?</summary>
     private readonly bool _usesPlacePrefixes;
-
-    /// <summary>Chance to inject an apostrophe between syllables (e.g., M'baku, K'tah).</summary>
     private readonly double _apostropheChance;
-
-    /// <summary>A specific accent this language applies to a specific vowel (e.g., all 'o's become 'ö').</summary>
     private readonly char _targetVowelForAccent;
     private readonly char _accentCharacter;
 
@@ -79,17 +106,38 @@ public sealed class Language
         _medialCodaChance = rng.Decimal(0.10, 0.40);
         _finalCodaChance = rng.Decimal(0.25, 0.70);
 
-        // 1 in 4 languages use place-name prefixes instead of suffixes.
         _usesPlacePrefixes = rng.Chance(0.25);
-
-        // Very rare chance for apostrophe-heavy languages (alien/ancient feel).
         _apostropheChance = rng.Chance(0.10) ? rng.Decimal(0.1, 0.3) : 0.0;
 
-        // 30% chance for a language to have a signature diacritic (e.g., Norse 'ø' or German 'ü').
         if (rng.Chance(0.30))
         {
             _targetVowelForAccent = rng.Pick(['a', 'e', 'i', 'o', 'u']);
             _accentCharacter = rng.Pick(DiacriticMap[_targetVowelForAccent]);
+        }
+    }
+
+    /// <summary>Constructs a language specifically tuned for Old/Middle English phonology.</summary>
+    private Language(string key, Rng rng, bool isAnglic)
+    {
+        Key = key;
+
+        _onsets = Draw(EnglishOnsets, rng.Int(12, 18), rng);
+        _vowels = Draw(EnglishVowels, rng.Int(6, 10), rng);
+        _codas = Draw(EnglishCodas, rng.Int(8, 14), rng);
+
+        _bareOnsetChance = 0.10;
+        _medialCodaChance = 0.35;
+        _finalCodaChance = 0.65;
+
+        // English predominantly uses suffixes (e.g. Oxford, Nottingham)
+        _usesPlacePrefixes = rng.Chance(0.10);
+        _apostropheChance = 0.0; // English place/person names rarely use inner apostrophes
+
+        // 20% chance for an Old-English 'æ' accent flavor
+        if (rng.Chance(0.20))
+        {
+            _targetVowelForAccent = 'a';
+            _accentCharacter = 'æ';
         }
     }
 
@@ -108,6 +156,25 @@ public sealed class Language
         return language;
     }
 
+    /// <summary>Creates an Old/Middle English sound-alike language.</summary>
+    public static Language CreateAnglic(string key, Rng rng)
+    {
+        var language = new Language(key, rng, isAnglic: true);
+
+        language.MaleEndings = EnglishMaleEndings;
+        language.FemaleEndings = EnglishFemaleEndings;
+        language.BaronyAffixes = EnglishBaronyAffixes;
+        language.CountyAffixes = EnglishCountyAffixes;
+        language.DuchyAffixes = EnglishDuchyAffixes;
+        language.KingdomAffixes = EnglishKingdomAffixes;
+
+        // Names like "Anglish", "Aenglish", "Ealdic", "Aenglisc", "Westran"
+        string[] anglicNames = ["Anglish", "Aenglisc", "Ealdic", "Westran", "Seaxan", "Mierce", "Northan"];
+        language.Name = rng.Pick(anglicNames);
+
+        return language;
+    }
+
     public string Word(Rng rng, int minSyllables = 2, int maxSyllables = 3)
         => Capitalise(Root(rng, minSyllables, maxSyllables));
 
@@ -117,16 +184,13 @@ public sealed class Language
     public string FemaleName(Rng rng)
         => Capitalise(Join(Root(rng, 1, 2), rng.Chance(0.80) ? rng.Pick(FemaleEndings) : ""));
 
-    /// <summary>A place name that adapts to whether the language favors prefixes or suffixes.</summary>
     public string PlaceName(Rng rng, string[] affixes)
     {
         string root = Root(rng, 1, 2);
         if (!rng.Chance(0.75)) return Capitalise(root);
 
         string affix = rng.Pick(affixes);
-
-        // Some languages use a hyphen for affixes (e.g., Al-Karak vs Alkerek)
-        bool useHyphen = rng.Chance(0.20);
+        bool useHyphen = rng.Chance(0.10); // Less hyphens for English place names
 
         if (_usesPlacePrefixes)
         {
@@ -136,10 +200,6 @@ public sealed class Language
         return Capitalise(useHyphen ? $"{root}-{affix}" : Join(root, affix));
     }
 
-    /// <summary>
-    /// Generates a compound name by merging two distinct roots. Excellent for Dynasties or Major cities.
-    /// (e.g., "Black-wood", "Gond-wana").
-    /// </summary>
     public string CompoundName(Rng rng)
     {
         string root1 = Root(rng, 1, 2);
@@ -156,13 +216,11 @@ public sealed class Language
         {
             bool last = i == count - 1;
 
-            // Orthographic flavor: Apostrophes between syllables
             if (i > 0 && rng.Chance(_apostropheChance)) sb.Append('\'');
 
             if (!rng.Chance(_bareOnsetChance) || i > 0) sb.Append(rng.Pick(_onsets));
 
             string vowel = rng.Pick(_vowels);
-            // Apply language's signature accent if applicable
             if (_accentCharacter != '\0')
                 vowel = vowel.Replace(_targetVowelForAccent, _accentCharacter);
 
@@ -201,17 +259,12 @@ public sealed class Language
         bool firstEndsInVowel = IsVowelOrAccent(first[^1]);
         bool secondStartsInVowel = IsVowelOrAccent(second[0]);
 
-        // Vowel meeting a vowel: drop the first one
         if (firstEndsInVowel && secondStartsInVowel)
             return Tidy(first[..^1] + second);
 
-        // Identical letters meeting: drop one
         if (first[^1] == second[0])
             return Tidy(first + second[1..]);
 
-        // NEW: Smarter Consonant smoothing. 
-        // If a heavy coda meets a heavy onset, it creates an unpronounceable seam (e.g. "rk" + "st" -> "rkst").
-        // We drop the coda to smooth the transition.
         if (!firstEndsInVowel && !secondStartsInVowel)
         {
             int trailingConsonants = first.Length - Math.Max(0, LastVowelIndex(first) + 1);
@@ -219,7 +272,6 @@ public sealed class Language
 
             if (trailingConsonants + leadingConsonants > 3)
             {
-                // Strip the trailing consonants from the first part
                 first = first[..^trailingConsonants];
             }
         }
@@ -238,7 +290,7 @@ public sealed class Language
 
             if (IsVowelOrAccent(c))
                 consonantRun = 0;
-            else if (c != '\'' && c != '-') // Don't count punctuation as consonants
+            else if (c != '\'' && c != '-')
             {
                 if (++consonantRun > 3) { consonantRun--; continue; }
             }
@@ -250,7 +302,7 @@ public sealed class Language
     }
 
     private static bool IsVowelOrAccent(char c)
-        => c is 'a' or 'e' or 'i' or 'o' or 'u' or 'y' or 'á' or 'ä' or 'â' or 'å' or 'é' or 'ë' or 'ê' or 'í' or 'ï' or 'î' or 'ó' or 'ö' or 'ô' or 'ø' or 'ú' or 'ü' or 'û';
+        => c is 'a' or 'e' or 'i' or 'o' or 'u' or 'y' or 'á' or 'ä' or 'â' or 'å' or 'æ' or 'é' or 'ë' or 'ê' or 'í' or 'ï' or 'î' or 'ó' or 'ö' or 'ô' or 'ø' or 'ú' or 'ü' or 'û';
 
     private static int LastVowelIndex(string s)
     {
@@ -270,7 +322,6 @@ public sealed class Language
     {
         if (word.Length == 0) return word;
 
-        // Handle names that start with an apostrophe or hyphen safely
         int firstChar = 0;
         while (firstChar < word.Length && !char.IsLetter(word[firstChar]))
             firstChar++;
@@ -280,7 +331,6 @@ public sealed class Language
         Span<char> chars = word.ToCharArray();
         chars[firstChar] = char.ToUpperInvariant(chars[firstChar]);
 
-        // Capitalize after hyphens for compound names (e.g. Al-Fariq)
         for (int i = firstChar + 1; i < chars.Length - 1; i++)
         {
             if (chars[i] == '-' && char.IsLetter(chars[i + 1]))
@@ -294,8 +344,6 @@ public sealed class Language
     {
         var copy = pool.ToList();
         rng.Shuffle(copy);
-        // Note: Distinct() is technically redundant here since your base arrays are already distinct, 
-        // but left it in case you modify the source arrays to add weighted probabilities.
         return [.. copy.Take(Math.Min(count, copy.Count)).Distinct()];
     }
 }
