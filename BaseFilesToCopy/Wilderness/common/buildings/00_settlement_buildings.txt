@@ -53,19 +53,50 @@ settlement_01 = {
 		# Still a rough place to travel through, though far better than the wilderness it replaced.
 		travel_danger = 20
 
-		# A multiplier, not a flat add, and not a lump sum at founding.
+		# ---- Why a colony develops SLOWLY, and why this number is so large ----
 		#
-		# Colonies used to be handed 2-4 development the moment they were claimed. That was worth
-		# more than the county — development is the one statistic a ruler can already move on their
-		# own through a steward, so a free four levels made claiming wilderness the cheapest
-		# development in the game. Settling empty ground should buy the right to develop it, not the
-		# result.
+		# This was +0.25 — a bonus — on the reasoning that settling empty ground should buy the
+		# right to develop it rather than the result, so a compounding factor beat the flat 2-4
+		# development colonies used to be handed at founding. That reasoning still stands and the
+		# lump sum is still gone. The sign was wrong because it left out where a colony's
+		# development actually comes from.
 		#
-		# As a factor it compounds with whatever the holder is already doing rather than replacing
-		# it, so a ruler who invests in a colony is rewarded and one who ignores it is not. And it
-		# ends when the colony is promoted and this building goes — which is correct, because what
-		# it represents is that everything here is new and there is nothing to work around.
-		development_growth_factor = 0.25
+		# CK3 spreads development between adjacent counties: every month a county gains
+		# `(highest neighbouring development - its own) * DEVELOPMENT_SPREAD_NEIGHBOUR_FACTOR`,
+		# which is 0.1 in 00_defines.txt. A colony is the maximum case of that formula in both
+		# terms — it starts at zero development, and it is by definition adjacent to the realm that
+		# colonised it, because colonisation requires a bordering county. Claim wilderness next to
+		# a 30-development capital and the new colony draws 3.0 a month from the neighbour alone,
+		# against the 0.20-0.30 the buildings below contribute. The neighbour is worth ten to
+		# fifteen times everything else in this file put together.
+		#
+		# So the colony's development was never really being earned. It was the capital's
+		# development, arriving through a border, and the +0.25 was multiplying it.
+		#
+		# ---- Why not just switch the spread off ----
+		#
+		# `DEVELOPMENT_SPREAD_NEIGHBOUR_FACTOR = 0` in a defines override is the one-line version,
+		# and it is what to reach for if this ever needs to be harsher. It is not the default here
+		# because the spread is a good mechanic that is only wrong in this one case: land near a
+		# rich neighbour genuinely should develop faster, and turning that off changes every county
+		# in the world to fix a problem that exists on colonies. Doing it as a modifier also means
+		# it expires on its own — the building goes when the colony is promoted, and the malus goes
+		# with it, with no script and nothing to reconcile. Same reason the upkeep lives on
+		# `character_modifier` below rather than on a counter.
+		#
+		# ---- The floor this must not cross ----
+		#
+		# can_promote_colony_trigger requires `development_level >= 3`. At -1.0 a colony's
+		# development freezes, it can never clear that bar, and the whole system deadlocks with no
+		# error — the promote button simply never enables. Anything tuned here has to leave real
+		# growth behind, which is also why the flat `development_growth` on the two tiers below is
+		# kept rather than removed: those are the floor that lets a colony founded out in deep
+		# wilderness, with no developed neighbour to draw on at all, still reach promotion.
+		#
+		# The malus is steepest here and eases at each tier (-0.75, -0.50, -0.25). A colony with
+		# nobody in it yet cannot absorb its neighbour's prosperity; one that is nearly a real
+		# holding increasingly can. That is the same ramp the levies and the tax malus already use.
+		development_growth_factor = -0.75
 	}
 
 	character_modifier = {
@@ -107,7 +138,14 @@ settlement_02 = {
 
 	county_modifier = {
 		travel_danger = 10
+
+		# The flat add is the colony developing itself; the factor is how much of the neighbour's
+		# development it can absorb. They pull in opposite directions on purpose — see the long
+		# note on settlement_01. Note the factor scales the flat add too, so this is really 0.10 a
+		# month of guaranteed local growth, which is the point: it does not depend on there being
+		# a rich neighbour.
 		development_growth = 0.20
+		development_growth_factor = -0.50
 	}
 
 	character_modifier = {
@@ -145,7 +183,13 @@ settlement_03 = {
 	garrison_reinforcement_factor = 0.03
 
 	county_modifier = {
+		# The last tier, and the shallowest malus. A colony this far along has people in it, and
+		# letting the neighbour's prosperity reach them is no longer a windfall for empty ground —
+		# it is what happens to a real place next to a rich one. This is also the tier promotion
+		# is gated on (`has_building = settlement_03`), so it is the tier that has to be able to
+		# push a county to development 3 without help.
 		development_growth = 0.30
+		development_growth_factor = -0.25
 	}
 
 	character_modifier = {

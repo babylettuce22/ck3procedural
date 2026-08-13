@@ -16,6 +16,17 @@ wilderness_government = {
 		legitimacy = no
 	}
 
+	# The engine populates a landed ruler's court on its own — commanders, guests, a royal court if
+	# the tier allows one — and the game-start sweep only runs once, so anything generated afterwards
+	# accumulates forever. These three stop most of it being generated at all; the yearly sweep in
+	# 00_colonization_on_actions.txt catches the rest.
+	#
+	# court_generate_commanders and royal_court are top-level fields, NOT government_rules entries.
+	# Putting them inside that block is silently ignored — see _governments.info, which documents
+	# court_generate_spouses at rule level and these two outside it.
+	court_generate_commanders = no
+	royal_court = none
+
 	primary_holding = wilderness_holding
 	valid_holdings = { wilderness_holding }
 

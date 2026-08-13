@@ -59,6 +59,31 @@ wilderness_holder = {
 }
 
 
+# Landed title scope. Is this title part of the wilderness rather than of somebody's realm?
+#
+# The title window's counterpart to the two above, and the third window Emit/GuiWriter.cs empties.
+# Clicking an unsettled county — or the titular kingdom the dummy holds so the map has something to
+# label the wild with — opens the same panel a real duchy gets: a succession law, a council, a list
+# of vassals, a de jure drift timer. None of that is false exactly, which is the problem; it is the
+# engine reporting bookkeeping as though it were politics.
+#
+# Asks the HOLDER's government rather than the title's own key, for two reasons. The titular kingdom
+# is named by the generator (WildernessMap.TitleKey), and nothing in this file set is allowed to
+# reference a generated key — see BaseFilesToCopy/README.txt. And going through the holder means one
+# rule covers the kingdom, every wilderness county under it, and every barony under those, without
+# enumerating tiers.
+#
+# Note this goes false the instant a county is colonised, unlike `wilderness_unfinished_county`. A
+# colony has a real holder with real politics; it should get the real window.
+wilderness_title = {
+	scope = landed_title
+
+	is_shown = {
+		holder ?= { government_has_flag = government_is_wilderness }
+	}
+}
+
+
 # Character scope, with scope:wilderness set to the province the county view is showing.
 #
 # The Settle button on the county view. This is the third way into colonisation and the only one

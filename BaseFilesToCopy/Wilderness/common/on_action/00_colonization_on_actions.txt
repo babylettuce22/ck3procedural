@@ -32,6 +32,36 @@ wilderness_on_game_start = {
 }
 
 
+# --- Keeping the dummy from becoming a household --------------------------------------------------
+
+yearly_global_pulse = {
+	on_actions = {
+		wilderness_yearly_cleanup
+	}
+}
+
+# The game-start cleanup runs once; the engine keeps generating courtiers and guests for a landed
+# ruler forever after. Without a recurring sweep the dummy slowly accumulates a court of hundreds —
+# each one a portrait, an opinion, and a claim on land nobody should inherit.
+#
+# The government fields in 00_wilderness_government.txt stop most of that being generated; this is
+# the backstop for whatever the engine does anyway. One character per year, found by trait, so the
+# cost is a single pass over rulers rather than anything per-county.
+wilderness_yearly_cleanup = {
+	effect = {
+		every_ruler = {
+			limit = {
+				has_trait = wilderness
+				any_courtier_or_guest = { always = yes }
+			}
+			every_courtier_or_guest = {
+				death = { death_reason = death_vanished }
+			}
+		}
+	}
+}
+
+
 # --- The AI's yearly look at the frontier ---------------------------------------------------------
 
 yearly_playable_pulse = {
@@ -90,18 +120,24 @@ wilderness_yearly_pulse = {
 
 		# --- And consider starting another -----------------------------------------------------
 		#
-		# 6%, down from 40%. At 40 every AI ruler bordering wilderness claimed everything within
-		# reach inside two or three years and the frontier was gone before the first succession —
-		# the map spent one reign becoming a normal map. Colonisation is supposed to be a thing a
-		# realm does once in a while and remembers, not a land rush.
+		# 10%, down from the original 40%. At 40 every AI ruler bordering wilderness claimed
+		# everything within reach inside two or three years and the frontier was gone before the
+		# first succession — the map spent one reign becoming a normal map. Colonisation is supposed
+		# to be a thing a realm does once in a while and remembers, not a land rush.
 		#
-		# The modifiers are what stop 6% being merely slow-and-uniform. A greedy or bold ruler with
+		# Briefly 6, then raised once wars against the wilderness were closed. Most of what looked
+		# like a colonisation rush was actually CONQUEST: realms were taking unsettled counties
+		# through de jure and claim CBs, which no amount of tuning here would have touched. With
+		# that route shut the pulse is the only way in, so it can afford to be a little more
+		# generous than when it was competing with a free one.
+		#
+		# The modifiers are what stop 10% being merely slow-and-uniform. A greedy or bold ruler with
 		# money to spare is several times likelier to try than a cautious one, so which realms push
 		# into the wilderness says something about who is running them — and two neighbours in the
 		# same position behave differently, which is most of what makes the frontier feel alive
 		# rather than scheduled.
 		random = {
-			chance = 6
+			chance = 10
 
 			modifier = { ai_greed > 50     add = 5 }
 			modifier = { ai_boldness > 50  add = 4 }

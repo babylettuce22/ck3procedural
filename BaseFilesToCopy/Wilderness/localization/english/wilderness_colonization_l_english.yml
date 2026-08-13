@@ -34,6 +34,14 @@
  settlement_holding:0 "Colony"
  settlement_holding_desc:0 "A foothold rather than a holding — a palisade, a few families, and a great deal still to do."
 
+ # A holding type needs a SECOND name, not just the one above. Anywhere the UI says "$TYPE$
+ # Holding" it looks up `<key>_concept_key`, not `<key>`, and vanilla points that at a game
+ # concept (`castle_holding_concept_key` is "[castle|E]") so the phrase is clickable. These two
+ # holdings have no concept behind them, so they are plain strings — and without them the county
+ # window prints the raw key, which is what it was doing.
+ wilderness_holding_concept_key:0 "Wilderness"
+ settlement_holding_concept_key:0 "Colony"
+
  # --- The wilderness itself ----------------------------------------------------------------
  building_wilderness_01:0 "Untamed Land"
  building_wilderness_01_desc:0 "No road, no field, no roof. Whatever wealth is here is still in the ground or on the hoof."
@@ -143,6 +151,14 @@
  colonize_obstacles_remain_tt:0 "Nothing may still be blocking the land"
  colonize_needs_development_tt:0 "The county must have reached #V 3 #! Development"
  colonize_needs_full_settlement_tt:0 "The colony must be fully established"
+
+ # --- The emptied character and title windows ------------------------------------------------
+ # Emit/GuiWriter.cs hides the body of vanilla's character and title windows for the wilderness
+ # dummy and its titles, and splices in a panel showing one of these instead. Both are deliberately
+ # short: the windows were emptied because the engine was reporting invented facts about unheld
+ # land, and filling them back up with prettier invented facts would undo the point.
+ WILDERNESS_HOLDER_WINDOW:0 "No one holds this country.\n\nWhat lives here keeps no court and answers no summons."
+ WILDERNESS_TITLE_WINDOW:0 "Unclaimed land.\n\nIt has a name on the map and nothing else — no seat, no law, and no one to swear."
 
  # --- Cost breakdown -----------------------------------------------------------------------
  colonize_cost_tier_desc:0 "Rank"
