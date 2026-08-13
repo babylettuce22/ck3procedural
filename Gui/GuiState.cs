@@ -29,6 +29,27 @@ public sealed class GuiState
     public string? PresetDir { get; set; }
 
     /// <summary>
+    /// Where the game and the launcher's mod folder were last found, and what the last mod written
+    /// was called.
+    ///
+    /// Remembered for the same reason the heightmap path is: they are answers about *this machine*
+    /// rather than decisions about the map, and re-answering them every launch is work the user has
+    /// already done. <see cref="Core.GameLocator"/> searches on every launch regardless — this only
+    /// wins over the search when it still points at something real, which is what makes a hand-picked
+    /// folder stick even on a machine where the search would have found a different install.
+    /// </summary>
+    public string? GameDir { get; set; }
+
+    /// <inheritdoc cref="GameDir"/>
+    public string? ModRoot { get; set; }
+
+    /// <inheritdoc cref="GameDir"/>
+    public string? ModName { get; set; }
+
+    /// <summary>The last mod folder actually written, which is what "Open mod folder" opens.</summary>
+    public string? LastModDir { get; set; }
+
+    /// <summary>
     /// What the last run of each kind cost, phase by phase — the whole basis of the progress
     /// estimate. Two of them because writing the mod runs a dozen phases a preview never does, so
     /// one shared profile would over-predict every preview and under-predict every write.

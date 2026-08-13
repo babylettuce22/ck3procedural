@@ -758,6 +758,7 @@ public static class MapDataWriter
         // Always the field the terrain was generated at. There is no upsample-and-embellish path
         // any more: the heightmap is what the erosion produced, at the resolution it produced it.
         var full = ElevationTo16(terra.Elevation, cfg);
+
         ForceCoastlineToMatchProvinces(full, cfg, provinces, order, landCount);
 
         // MUST follow the snap: it derives the land/water split from the heightmap itself, which is

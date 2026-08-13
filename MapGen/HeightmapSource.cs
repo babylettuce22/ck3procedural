@@ -210,8 +210,9 @@ public static class HeightmapSource
         // Normalisation cannot fix it in any mode: the pixels are already on the correct side of
         // the plane and simply have no relief below it.
         int waterMedian = hypsometry.WaterPercentile(50);
+        bool depthlessOcean = hypsometry.Water > 0 && waterMedian >= water255 - 1;
 
-        if (hypsometry.Water > 0 && waterMedian >= water255 - 1)
+        if (depthlessOcean)
             found.Add(new HeightmapWarning(
                 $"The ocean has no depth (median water pixel {waterMedian}/255, sitting on the "
                 + $"water plane at {water255}; vanilla's is 0).",
@@ -222,43 +223,46 @@ public static class HeightmapSource
                 + "drew.\n\nFix: give the ocean a floor well below sea level, 0 being the usual "
                 + "convention, and redraw."));
 
-        // --- The ocean was drawn just above the plane ---------------------------------------------
+        // --- Part of that ocean is on the land side of the plane ---------------------------------
         //
-        // The fault the 0-255 scale everything else is quoted on cannot show, which is exactly why
-        // it needs its own check. The heightmap is 16-bit and the plane is at 4883, so every raw
-        // value from 4884 to 5139 is land that still rounds to 19/255: it prints as sitting exactly
-        // on the water plane while CK3 renders it as ground. Measured on the map that prompted this,
-        // 2.12% of the raster — some 900,000 px — at raw 4884, forming a shelf fifteen to twenty
-        // pixels wide around every coast. Only 4.93% of it touches solid land, so it is not a
-        // shoreline artefact; it is the ocean, drawn on the wrong side of the line.
+        // The fault the 0-255 scale everything else is quoted on cannot show, which is why it needs
+        // its own check. The heightmap is 16-bit and the plane is at 4883, so every raw value from
+        // 4884 to 5139 is land that still rounds to 19/255: it prints as sitting exactly on the
+        // water plane while CK3 makes provinces, counties and terrain out of it. Measured on the map
+        // that prompted this, 2.12% of the raster — some 900,000 px — at raw 4884, forming a shelf
+        // fifteen to twenty pixels wide around every coast.
         //
-        // The test is that the *modal* land value falls in the plane's own 0-255 bucket. A real
-        // heightmap's commonest land value sits clear of it — vanilla's is 23/255, four steps up,
-        // and the black-ocean map's is 129 — because ordinary terrain has no reason to pile up on
-        // the one value the engine tests against. A flat population there is always something drawn
-        // flat, and the only thing anybody draws flat at sea level is the sea.
+        // **Gated on the ocean being depthless, and that gate is the whole check.** On its own the
+        // histogram signature is worthless, because "the ocean drawn a unit too high" and "flat
+        // lowland at the lowest value that is still land" are the same distribution. A map came in
+        // with 10.40% of its raster at exactly 4884 — twenty times the threshold here — and it was
+        // correct: a generator that floors its lowland at sea level plus one, rendering perfectly
+        // in game. What separated it was the sea itself. Flood-filled from the border, its ocean had
+        // a median depth of 0.00/255 and 60.68% of it at exactly 0, against the bad map's ocean
+        // sitting entirely *on* the plane at 19.00. Only 1.51% of the good map's flat band touched
+        // open ocean, against 8.39% of the bad map's shelf.
+        //
+        // So the claim "this is the ocean, drawn on the wrong side of the line" is only coherent
+        // when the ocean is not already drawn correctly on the right side of it. If the sea is
+        // properly deep, the coastline is where its author put it and a flat band above it is land.
         int modal = 0;
         long modalCount = 0;
 
         for (int v = water16 + 1; v < histogram.Length; v++)
             if (histogram[v] > modalCount) { modalCount = histogram[v]; modal = v; }
 
-        // Big enough to be a drawn surface rather than a few stray samples. Half a percent of the
-        // raster is a quarter of what the measured case holds, and far above what terrain produces
-        // on any single value by accident.
-        if (modal != 0 && modal / step == water255 && modalCount >= total / 200)
+        // Big enough to be a drawn surface rather than a few stray samples.
+        if (depthlessOcean && modal != 0 && modal / step == water255 && modalCount >= total / 200)
             found.Add(new HeightmapWarning(
-                $"The ocean is drawn just above sea level (commonest land value is raw {modal} = "
+                $"Part of that ocean is on the land side of the plane (raw {modal} = "
                 + $"{(double)modal / step:F4}/255, {modal - water16} unit(s) above the plane at "
                 + $"{water16}, holding {100.0 * modalCount / total:F2}% of the map).",
-                "It rounds to 19/255, so it reads as water in every figure the tool prints, and "
-                + "CK3 renders it as open ground.\n\n"
-                + (cfg.SourceSeaLevel * step < modal
-                    ? $"Fix: set SourceSeaLevel to {(double)modal / step:F4} (currently "
-                      + $"{cfg.SourceSeaLevel:F4}) to count it as water. Better still, redraw the "
-                      + "ocean floor below sea level — reclassifying it leaves it flat on the "
-                      + "plane with no depth, which is the fault above."
-                    : "SourceSeaLevel already covers it, so it is being counted as water.")));
+                "It rounds to 19/255, so it reads as water in every figure the tool prints. CK3 "
+                + "does not round: it is land, and the generator will cut provinces, counties and "
+                + "terrain out of it.\n\nFix: the same redraw as above. Moving SourceSeaLevel to "
+                + $"{(double)modal / step:F4} would reclassify it as water, but that is not worth "
+                + "doing — it adds no depth, so the band simply lands flat on the plane and renders "
+                + "as ground anyway. Give the ocean a floor instead."));
 
         foreach (var warning in found)
         {

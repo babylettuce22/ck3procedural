@@ -56,6 +56,10 @@ public sealed class MainForm : Form
     private readonly Button _writeMod = Theme.MakeButton("Write mod", 96);
     private readonly Button _cancel = Theme.MakeButton("Cancel", 72);
     private readonly Button _openMod = Theme.MakeButton("Open mod folder", 120);
+    private readonly Button _gameFolder = Theme.MakeButton("Game folder…", 104);
+
+    /// <summary>Carries the resolved game folder, which is far too long to sit on a button.</summary>
+    private readonly ToolTip _tips = new() { AutoPopDelay = 20000, InitialDelay = 400 };
     private readonly Button _savePreset = Theme.MakeButton("Save preset…", 110);
     private readonly Button _loadPreset = Theme.MakeButton("Load preset…", 110);
 
@@ -183,6 +187,13 @@ public sealed class MainForm : Form
     private bool _busy;
     private CancellationTokenSource? _cancellation;
 
+    /// <summary>Where mod folders are created, and what the next one is called by default.</summary>
+    private string _modRoot = "";
+    private string _modName = GenerationOptions.DefaultModName;
+
+    /// <summary>The last mod folder written this session, or the one written last session.</summary>
+    private string? _lastModDir;
+
     public MainForm(GenerationOptions options)
     {
         _options = options;
@@ -193,6 +204,14 @@ public sealed class MainForm : Form
         _heightmapPath = options.HeightmapPath
             ?? (File.Exists(_state.HeightmapPath) ? _state.HeightmapPath : null);
         options.HeightmapPath = _heightmapPath;
+
+        // A folder picked by hand last session beats whatever the search would turn up, but only
+        // while it is still a game folder — an install that has since moved must not pin the tool to
+        // where it used to be. See LocateFolders, which reports whichever won.
+        if (Core.GameLocator.IsGameDir(_state.GameDir)) options.GameDir = _state.GameDir!;
+
+        _modRoot = Directory.Exists(_state.ModRoot) ? _state.ModRoot! : GenerationOptions.ModRoot;
+        _modName = _state.ModName ?? GenerationOptions.DefaultModName;
 
         Text = "CK3 Procedural Map";
         StartPosition = FormStartPosition.Manual;
@@ -211,9 +230,10 @@ public sealed class MainForm : Form
         _browse.Click += (_, _) => PickHeightmap();
         _roll.Click += (_, _) => _seed.Value = Random.Shared.Next(1, int.MaxValue);
         _preview.Click += async (_, _) => await BuildAsync(null);
-        _writeMod.Click += async (_, _) => await BuildAsync(GenerationOptions.DefaultModDir);
+        _writeMod.Click += async (_, _) => await WriteModAsync();
         _cancel.Click += (_, _) => RequestCancel();
         _openMod.Click += (_, _) => OpenModFolder();
+        _gameFolder.Click += (_, _) => PickGameFolder();
         _savePreset.Click += (_, _) => SavePreset();
         _loadPreset.Click += (_, _) => LoadPreset();
 
@@ -224,6 +244,8 @@ public sealed class MainForm : Form
         Controls.Add(BuildBody());
         Controls.Add(BuildToolbar());
         Controls.Add(BuildStatusBar());
+
+        _lastModDir = _state.LastModDir;
 
         ApplySource();
         SelectView(_view);
@@ -262,6 +284,7 @@ public sealed class MainForm : Form
         bar.Controls.Add(_writeMod);
         bar.Controls.Add(_cancel);
         bar.Controls.Add(_openMod);
+        bar.Controls.Add(_gameFolder);
         bar.Controls.Add(_sourceName);
 
         return bar;
@@ -402,6 +425,102 @@ public sealed class MainForm : Form
 
         Place(_body, 300, 400, _state.SettingsWidth);
         Place(_right, 200, 80, _state.ViewerHeight);
+
+        ReportFolders();
+    }
+
+    /// <summary>
+    /// Says where the game and the mod folder were found, in the log, on every launch.
+    ///
+    /// The search itself has already run — <see cref="GenerationOptions.GameDir"/> is set from
+    /// <see cref="Core.GameLocator"/> when the options are constructed, and the mod root in this
+    /// window's constructor — so this is the report rather than the search. It is worth printing
+    /// even when everything is found: the first thing a wrong answer looks like is a run that fails
+    /// three phases in, and the first thing anyone asks is which install it was reading.
+    /// </summary>
+    private void ReportFolders()
+    {
+        bool found = Core.GameLocator.IsGameDir(_options.GameDir);
+
+        Console.WriteLine(found
+            ? $"Game folder: {_options.GameDir}"
+            : $"Game folder: not found (looked in the usual Steam, GOG and Epic places on every drive)");
+        Console.WriteLine($"Mod folder:  {_modRoot}");
+        Console.WriteLine();
+
+        ShowGameFolder();
+
+        if (!found) _status.Text = "Crusader Kings III not found — set the game folder before writing a mod";
+    }
+
+    /// <summary>Keeps the game-folder button's tooltip and colour honest about what it points at.</summary>
+    private void ShowGameFolder()
+    {
+        bool found = Core.GameLocator.IsGameDir(_options.GameDir);
+
+        _tips.SetToolTip(_gameFolder, found
+            ? $"Reading the game's own data from:\n{_options.GameDir}"
+            : $"Crusader Kings III was not found. Click to point the tool at the 'game' folder "
+              + $"of your install.\n\nLast tried: {_options.GameDir}");
+
+        _gameFolder.Text = found ? "Game folder…" : "Game folder ⚠";
+        _gameFolder.ForeColor = found ? Theme.Text : Theme.Danger;
+    }
+
+    /// <summary>
+    /// Points the tool at a CK3 install by hand, for when the search came back empty or came back
+    /// with the wrong one of two installs.
+    /// </summary>
+    private void PickGameFolder()
+    {
+        using var dialog = new FolderBrowserDialog
+        {
+            Description = "The 'game' folder of your Crusader Kings III install",
+            UseDescriptionForTitle = true,
+            SelectedPath = Directory.Exists(_options.GameDir) ? _options.GameDir : "",
+        };
+
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        // Normalize, not the raw pick: the folder people recognise is the one named after the game,
+        // and the one this needs is 'game' inside it.
+        string? resolved = Core.GameLocator.Normalize(dialog.SelectedPath);
+        if (resolved is null)
+        {
+            MessageBox.Show(this,
+                $"There is no Crusader Kings III game data in\n\n{dialog.SelectedPath}\n\n"
+                + "The folder wanted is the one holding common, map_data and gfx — normally "
+                + @"…\steamapps\common\Crusader Kings III\game.",
+                "Not a game folder", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        _options.GameDir = resolved;
+        Console.WriteLine($"Game folder: {resolved}");
+        ShowGameFolder();
+        _status.Text = "Game folder set";
+    }
+
+    /// <summary>
+    /// Blocks a write that is going to fail, and offers the fix rather than only the diagnosis.
+    /// </summary>
+    /// <returns>Whether the game folder is now usable.</returns>
+    private bool EnsureGameFolder()
+    {
+        if (Core.GameLocator.IsGameDir(_options.GameDir)) return true;
+
+        var answer = MessageBox.Show(this,
+            "Crusader Kings III could not be found on this machine, and the mod is generated "
+            + "against the game's own culture, religion and map data — so it cannot be written "
+            + "without it.\n\n"
+            + $"Last tried:\n{_options.GameDir}\n\n"
+            + "Point the tool at the 'game' folder of your install now?",
+            "Game folder not found", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning);
+
+        if (answer != DialogResult.OK) return false;
+
+        PickGameFolder();
+        return Core.GameLocator.IsGameDir(_options.GameDir);
     }
 
     /// <summary>
@@ -463,6 +582,13 @@ public sealed class MainForm : Form
         _state.ViewerHeight = _right.SplitterDistance;
         _state.HeightmapPath = _heightmapPath;
         _state.View = _view;
+
+        // Only a game folder that is really one, so a bad hand-picked path cannot outlive the
+        // session that set it and pre-empt the search next launch.
+        _state.GameDir = Core.GameLocator.IsGameDir(_options.GameDir) ? _options.GameDir : null;
+        _state.ModRoot = _modRoot;
+        _state.ModName = _modName;
+        _state.LastModDir = _lastModDir;
         _state.Save();
 
         Stage.Entering -= OnStageEntered;
@@ -480,7 +606,7 @@ public sealed class MainForm : Form
                 return true;
 
             case Keys.Control | Keys.S when _writeMod.Enabled:
-                _ = BuildAsync(GenerationOptions.DefaultModDir);
+                _ = WriteModAsync();
                 return true;
 
             case Keys.Escape when _busy:
@@ -515,8 +641,12 @@ public sealed class MainForm : Form
             ? "(no heightmap chosen)"
             : Path.GetFileName(_heightmapPath);
 
-        _openMod.Enabled = Directory.Exists(GenerationOptions.DefaultModDir);
+        _openMod.Enabled = ModFolderToOpen() is not null;
         SetEnabled(!_busy);
+
+        // After SetEnabled, which repaints buttons from their enabled state and would otherwise
+        // take the warning colour off the game-folder button every time a run finished.
+        ShowGameFolder();
     }
 
     private void SavePreset()
@@ -568,12 +698,57 @@ public sealed class MainForm : Form
         }
     }
 
+    /// <summary>
+    /// The mod folder written last, or failing that the folder mods live in.
+    ///
+    /// The second case is not a consolation prize: before anything has been written, the useful
+    /// thing to open is the launcher's mod folder, which is also the quickest way to see whether
+    /// the tool has found the right one.
+    /// </summary>
+    private string? ModFolderToOpen()
+    {
+        if (Directory.Exists(_lastModDir)) return _lastModDir;
+        return Directory.Exists(_modRoot) ? _modRoot : null;
+    }
+
     private void OpenModFolder()
     {
-        string dir = GenerationOptions.DefaultModDir;
-        if (!Directory.Exists(dir)) return;
+        if (ModFolderToOpen() is not { } dir) return;
 
         Process.Start(new ProcessStartInfo(dir) { UseShellExecute = true });
+    }
+
+    /// <summary>
+    /// Asks what the mod is called and where it goes, then writes it.
+    ///
+    /// The name is asked for every write rather than once and remembered, because writing twice in
+    /// one session is normally two different maps — a seed rolled, a setting changed — and the old
+    /// behaviour of always writing into a folder called <c>proceduralmap</c> meant the second one
+    /// quietly ate the first. The box comes up filled with the last name used, so agreeing to
+    /// overwrite is still one keypress.
+    /// </summary>
+    private async Task WriteModAsync()
+    {
+        if (_busy || _heightmapPath is null) return;
+
+        // Before the dialog rather than after: being asked to name a mod and only then told the
+        // game is missing is two dead ends where one would do.
+        if (!EnsureGameFolder()) return;
+
+        using var dialog = new ModNameDialog(_modRoot, _modName);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        _modRoot = dialog.ModRoot;
+        _modName = dialog.ModDisplayName;
+        _options.ModName = dialog.ModDisplayName;
+
+        string modDir = dialog.ModDir;
+        await BuildAsync(modDir);
+
+        // Only if it is actually there. A cancelled or failed write must not leave the button
+        // pointing at a folder that was never created.
+        if (Directory.Exists(modDir)) _lastModDir = modDir;
+        ApplySource();
     }
 
     // --- Running --------------------------------------------------------------------------------
@@ -823,6 +998,7 @@ public sealed class MainForm : Form
         _browse.Enabled = enabled;
         _savePreset.Enabled = enabled;
         _loadPreset.Enabled = enabled;
+        _gameFolder.Enabled = enabled;
         _cancel.Enabled = !enabled;
 
         bool ready = enabled && _heightmapPath is not null;

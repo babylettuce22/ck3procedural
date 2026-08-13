@@ -16,8 +16,14 @@ public sealed class GenerationOptions
 {
     public MapConfig Config { get; set; } = new();
 
-    public string GameDir { get; set; } =
-        @"C:\Program Files (x86)\Steam\steamapps\common\Crusader Kings III\game";
+    /// <summary>
+    /// The game's own <c>game</c> directory, which every emitter reads vanilla data out of.
+    ///
+    /// Searched for rather than assumed — see <see cref="GameLocator"/>. The fallback is the old
+    /// hardcoded path, which is right often enough to be a sensible thing to fail against and
+    /// wrong often enough that it must not be the only answer.
+    /// </summary>
+    public string GameDir { get; set; } = GameLocator.FindGameDir() ?? GameLocator.DefaultGameDir;
 
     /// <summary>Skip characters, title history, dynasties and the bookmark.</summary>
     public bool WriteHistory { get; set; } = true;
@@ -31,9 +37,19 @@ public sealed class GenerationOptions
     /// </summary>
     public string? HeightmapPath { get; set; }
 
-    public static string DefaultModDir => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-        "Paradox Interactive", "Crusader Kings III", "mod", "proceduralmap");
+    /// <summary>
+    /// What the mod calls itself in the launcher. The folder it is written into is chosen separately
+    /// — see <see cref="Gui.ModNameDialog"/> — because a folder name and a display name are allowed
+    /// to differ and only one of them has to survive being a path.
+    /// </summary>
+    public string ModName { get; set; } = DefaultModName;
+
+    public const string DefaultModName = "Procedural Map";
+
+    /// <summary>The launcher's mod folder, found rather than assumed. See <see cref="GameLocator"/>.</summary>
+    public static string ModRoot => GameLocator.FindModRoot();
+
+    public static string DefaultModDir => Path.Combine(ModRoot, "proceduralmap");
 }
 
 public sealed class GenerationResult
@@ -236,11 +252,20 @@ public static class Generator
         var cfg = result.Config;
         var rng = new Rng(cfg.Seed);
 
+        // Checked here rather than where it is first read. The vanilla data is not touched until
+        // several minutes of map_data has already been written, so a wrong game directory used to
+        // announce itself only after the slowest part of the run — and then as a half-written mod.
+        if (!GameLocator.IsGameDir(options.GameDir))
+            throw new DirectoryNotFoundException(
+                $"'{options.GameDir}' is not a Crusader Kings III game folder — no common/landed_titles " +
+                "or map_data inside it. The mod is generated against the game's own data, so this has " +
+                "to point at the 'game' folder of a CK3 install.");
+
         Console.WriteLine($"Writing mod to {modDir}");
         var sw = System.Diagnostics.Stopwatch.StartNew();
         Directory.CreateDirectory(modDir);
 
-        Emit.ModWriter.WriteDescriptors(modDir);
+        Emit.ModWriter.WriteDescriptors(modDir, options.ModName);
 
         Stage.Time("map_data (heightmap, provinces, rivers)",
             () => Emit.MapDataWriter.WriteAll(modDir, cfg, result.Provinces, result.ProvinceOrder,

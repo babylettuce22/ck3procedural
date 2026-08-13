@@ -67,6 +67,10 @@ public static class ModWriter
     public static void WriteDescriptors(string modDir, string name = "Procedural Map")
     {
         string folder = Path.GetFileName(modDir.TrimEnd(Path.DirectorySeparatorChar));
+
+        // A mod with no name is one the launcher lists as a blank row. Falling back on the folder
+        // it lives in beats that, and the folder can never be empty.
+        if (string.IsNullOrWhiteSpace(name)) name = folder;
         string replacements =
             string.Concat(ReplacePaths.Select(p => $"replace_path=\"{p}\"\n"));
 

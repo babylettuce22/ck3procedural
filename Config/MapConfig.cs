@@ -111,7 +111,7 @@ public sealed class MapConfig
     /// 19 is CK3's own. Azgaar's is 20 on its 0-100 scale, which is 51 here.
     /// </summary>
     [Category("11 Height scale")]
-    [Description("Where the source heightmap puts sea level, on the 0-255 scale. CK3's own is 19; Azgaar's is 20/100, which is 51 here. This decides only which pixels count as water — the land scale is anchored on a detected floor, so this no longer has to be exactly right for the land side to come out correct.")]
+    [Description("Where the source heightmap puts sea level, on the 0-255 scale. CK3's own is 19; This decides only which pixels count as water — the land scale is anchored on a detected floor, so this no longer has to be exactly right for the land side to come out correct.")]
     public double SourceSeaLevel { get; set; } = 19;
 
     /// <summary>

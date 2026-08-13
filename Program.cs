@@ -34,11 +34,31 @@ public static class Program
                     outDir = args[++i];
                     break;
 
-                // Emit the mod itself. Defaults to the launcher's mod folder when given no value.
+                // Emit the mod itself. Defaults to the launcher's mod folder when given no value,
+                // and takes a bare name as a folder inside it — `--mod "Second Map"` is by far the
+                // commoner intent than a path, now that the mod folder is searched for rather than
+                // assumed and so is not necessarily somewhere the caller can spell.
                 case "--mod":
-                    modDir = i + 1 < args.Length && !args[i + 1].StartsWith("--")
-                        ? args[++i]
-                        : GenerationOptions.DefaultModDir;
+                    if (i + 1 < args.Length && !args[i + 1].StartsWith("--"))
+                    {
+                        modDir = ModDir(args[++i]);
+
+                        // A named mod calls itself that in the launcher too. Left alone when no name
+                        // was given, so the default folder still ships as "Procedural Map" rather
+                        // than as "proceduralmap".
+                        options.ModName = Path.GetFileName(modDir.TrimEnd(
+                            Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                    }
+                    else
+                    {
+                        modDir = GenerationOptions.DefaultModDir;
+                    }
+                    break;
+
+                // Which install to read vanilla data from. Only needed when the search guesses
+                // wrong, or picks the wrong one of two installs.
+                case "--game" when i + 1 < args.Length:
+                    options.GameDir = Core.GameLocator.Normalize(args[++i]) ?? args[i];
                     break;
 
                 case "--scale" when i + 1 < args.Length:
@@ -116,7 +136,9 @@ public static class Program
         if (options.HeightmapPath is null)
         {
             Console.Error.WriteLine(
-                "Usage: Ck3MapGen --heightmap <file.png> [--mod [dir]] [--seed n] [--out dir]");
+                "Usage: Ck3MapGen --heightmap <file.png> [--mod [name|dir]] [--game dir]");
+            Console.Error.WriteLine(
+                "       [--seed n] [--out dir]");
             Console.Error.WriteLine(
                 "       [--normalize-heightmap | --shift-heightmap [source sea level 0-255]]");
             Console.Error.WriteLine(
@@ -126,6 +148,8 @@ public static class Program
             return 1;
         }
 
+        Console.WriteLine($"Game folder: {options.GameDir}");
+
         Core.Stage.Begin();
         var result = Generator.Generate(options);
         if (modDir is not null) Generator.WriteMod(result, options, modDir);
@@ -133,4 +157,14 @@ public static class Program
         Core.Stage.Report();
         return 0;
     }
+
+    /// <summary>
+    /// A <c>--mod</c> value as a directory: a path is taken as written, a bare name is a folder of
+    /// that name inside the launcher's mod folder.
+    /// </summary>
+    private static string ModDir(string value)
+        => Path.IsPathRooted(value) || value.Contains(Path.DirectorySeparatorChar)
+           || value.Contains(Path.AltDirectorySeparatorChar)
+            ? value
+            : Path.Combine(GenerationOptions.ModRoot, value);
 }

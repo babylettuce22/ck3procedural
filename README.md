@@ -80,10 +80,28 @@ provinces, counties, duchies, kingdoms, empires, government — and a log. Zoom 
 rebuild and a view switch, because tuning is a loop of nudge a setting, rebuild, look at the same
 place. Progress and time remaining are learned from the previous run rather than hardcoded.
 
-The **CLI** takes `--heightmap`, `--mod`, `--seed`, `--out`, `--scale`, `--county-scale`,
+The **CLI** takes `--heightmap`, `--mod`, `--game`, `--seed`, `--out`, `--scale`, `--county-scale`,
 `--normalize-heightmap`, `--land-top`, `--land-top-percentile`, `--no-history` and `--no-packed`. It
 also dumps debug PNGs — elevation, terrain, provinces, terrain classes, Köppen climate, drainage,
-rivers, rainfall and temperature — which are how a change gets eyeballed.
+rivers, rainfall and temperature — which are how a change gets eyeballed. `--mod` takes a bare name
+as well as a path, and puts a folder of that name in the launcher's mod folder.
+
+## Finding the game
+
+Neither directory the tool needs is hardcoded any more. `Core/GameLocator` looks for the CK3 install
+through Steam's registry keys and its `libraryfolders.vdf` — which is what knows about a library on a
+second drive — and then through the usual Steam, GOG, Epic and Paradox paths on every fixed drive.
+The launcher's mod folder is found the same way, following a Documents folder that has been
+redirected onto OneDrive or off C: entirely. The whole search is registry reads and a fixed list of
+existence checks, so it runs on every launch for about ten milliseconds.
+
+What it found is printed in the log at startup and carried on the *Game folder…* button, which is
+also how a wrong or missing answer is corrected — by hand, remembered for next time, and re-searched
+if the install later moves. A write refuses to start without a real game folder rather than failing
+several minutes in, because the mod is generated *against* vanilla's own culture and religion data.
+
+Writing asks what the mod is called and shows where it will land. That is a name per map rather than
+a fixed `proceduralmap` folder every map overwrites in turn.
 
 ## Rules the code holds itself to
 
