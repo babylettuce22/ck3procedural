@@ -66,19 +66,38 @@ can_colonize_at_all_trigger = {
 	NOT = { has_variable = colonization_cooldown }
 }
 
-# Character scope, with scope:wilderness set to a candidate county.
+# Title scope. Does this county touch land the given character's realm holds?
+#
+#   $CHARACTER$  the would-be coloniser
 #
 # Adjacency is the rule that makes colonisation read as a frontier advancing rather than as a land
 # grab: you may only claim ground you can already reach from somewhere you hold. `title_to_title`
 # neighbouring includes across-water, so an island chain is still colonisable.
+#
+# Asked from the COUNTY's side, not the ruler's, and that is a performance decision rather than a
+# stylistic one. The same question phrased as `any_sub_realm_county = { any_neighboring... }` walks
+# the whole realm once per candidate; phrased this way it walks a county's six-or-so neighbours.
+# `can_be_picked_title` runs this once for every title the recipient holds, and the wilderness dummy
+# holds every unsettled county on the map — so the realm-side phrasing would be a world scan per
+# right-click. The interaction schema is explicit that can_be_picked_title "should be a fast way of
+# deciding what can end up in the list".
+county_borders_realm_trigger = {
+	any_title_to_title_neighboring_and_across_water_county = {
+		holder ?= {
+			OR = {
+				this = $CHARACTER$
+				target_is_liege_or_above = $CHARACTER$
+			}
+		}
+	}
+}
+
+# Character scope, with scope:wilderness set to a candidate county. The tooltipped wrapper the
+# decision and the AI gate use; the rule itself lives once, above.
 can_reach_wilderness_trigger = {
 	custom_tooltip = {
 		text = colonize_must_border_realm_tt
-		any_sub_realm_county = {
-			any_title_to_title_neighboring_and_across_water_county = {
-				this = scope:wilderness
-			}
-		}
+		scope:wilderness = { county_borders_realm_trigger = { CHARACTER = root } }
 	}
 }
 

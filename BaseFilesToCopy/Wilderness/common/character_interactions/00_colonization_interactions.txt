@@ -1,4 +1,123 @@
-﻿# Promoting a finished colony into a real holding.
+﻿# =====================================================================================
+#  Claiming a county: the county-targeted route
+# =====================================================================================
+
+# Colonisation aimed at a county the player picks, with no GUI work at all.
+#
+# The trick is that `target_filter = recipient_domain_titles` populates the title picker from the
+# RECIPIENT's domain — and the wilderness dummy's domain is every unsettled county on the map. So
+# opening this on the dummy lists the wilderness, and `can_be_picked_title` prunes that list to the
+# counties this particular ruler can actually reach. No widget, no override of vanilla's county view,
+# no scripted GUI: it is the same machinery vanilla uses for Grant Title and Revoke Title.
+#
+# What it costs, honestly: the player reaches it by clicking a wilderness county, then its holder,
+# then the interaction — one step more than a button sitting on the county panel. And the picker is
+# a list of county names rather than a map selection. Both are real, and both are the price of not
+# shipping a copy of window_county_view.gui that goes stale on the next patch.
+#
+# settle_the_wilderness_decision stays as the no-picker fallback: it aims itself, so a player who
+# never finds this still has a way in, and the AI never uses either.
+
+claim_wilderness_interaction = {
+	category = interaction_category_diplomacy
+	icon = purchase_land_interaction
+
+	desc = claim_wilderness_interaction_desc
+
+	target_type = title
+	target_filter = recipient_domain_titles
+
+	# The dummy is incapable and has no AI worth consulting. Nothing about this is a negotiation.
+	auto_accept = yes
+
+	# The wilderness is not in anybody's diplomatic range and never will be. 122 vanilla interactions
+	# turn this off; this is one more.
+	use_diplomatic_range = no
+
+	is_shown = {
+		scope:recipient = { has_trait = wilderness }
+		scope:actor = {
+			NOT = { this = scope:recipient }
+			can_colonize_at_all_trigger = yes
+		}
+	}
+
+	is_valid_showing_failures_only = {
+		scope:actor = {
+			can_hold_another_colony_trigger = yes
+
+			custom_tooltip = {
+				text = colonize_not_while_at_war_tt
+				is_at_war = no
+			}
+		}
+	}
+
+	# Runs once per title the recipient holds — which here means once per wilderness county in the
+	# world. Ordered cheapest test first for that reason: tier, then holding type, then the bounded
+	# neighbour walk. See county_borders_realm_trigger for why the adjacency test is phrased from
+	# the county's side.
+	can_be_picked_title = {
+		scope:target = {
+			tier = tier_county
+			is_wilderness_county_trigger = yes
+			NOT = { has_county_modifier = block_settlement_ability }
+			county_borders_realm_trigger = { CHARACTER = scope:actor }
+		}
+	}
+
+	# The same conditions again, tooltipped. can_be_picked_title silently filters the list; this is
+	# what explains a greyed-out button once something IS picked, and the schema is explicit that the
+	# two are separate checks rather than one.
+	has_valid_target_showing_failures_only = {
+		scope:target = {
+			tier = tier_county
+			is_wilderness_county_trigger = yes
+
+			custom_tooltip = {
+				text = colonize_must_border_realm_tt
+				county_borders_realm_trigger = { CHARACTER = scope:actor }
+			}
+		}
+	}
+
+	# Explicitly scoped to the actor. The implicit scope inside a cost block is not reliably the
+	# actor — vanilla's adoption interactions write `scope:actor.dynasty.medium_dynasty_prestige_value`
+	# for the same reason — and colonize_cost reads highest_held_title_tier, so an unscoped read here
+	# would price the claim off the wrong character.
+	cost = {
+		gold = {
+			value = 0
+			add = scope:actor.colonize_cost
+		}
+	}
+
+	on_accept = {
+		colonize_county_effect = {
+			COUNTY = scope:target
+			COLONIZER = scope:actor
+		}
+
+		scope:actor = {
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = colonize_claimed_toast
+				left_icon = scope:actor
+				right_icon = scope:target
+			}
+		}
+	}
+
+	# The AI colonises through its yearly pulse, which can weigh gold and income properly. It must
+	# never reach for this: 0 means never considered.
+	ai_frequency = 0
+}
+
+
+# =====================================================================================
+#  Promoting a finished colony into a real holding
+# =====================================================================================
+
 #
 # Hidden interactions on the holder's own titles, which is how vanilla and AGOT both do holding
 # conversion: `target_type = title` with `target_filter = actor_domain_titles` puts the button in

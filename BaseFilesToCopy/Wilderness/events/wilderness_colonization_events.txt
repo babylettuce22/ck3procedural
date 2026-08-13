@@ -37,6 +37,12 @@ wilderness_colonization.0001 = {
 
 		if = {
 			limit = { exists = scope:wilderness }
+
+			# The AI's half of the payment rule. The two player entry points declare a `cost` block
+			# and let the engine deduct; an event has no such block, so it pays here. See the note in
+			# colonize_county_effect for why the charge is not inside the effect itself.
+			remove_short_term_gold = colonize_cost
+
 			colonize_county_effect = {
 				COUNTY = scope:wilderness
 				COLONIZER = root

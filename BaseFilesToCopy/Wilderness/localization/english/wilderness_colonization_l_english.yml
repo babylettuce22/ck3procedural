@@ -91,6 +91,8 @@
  settle_the_wilderness_decision_desc:0 "There is land beyond our borders that no lord holds and no map names.\n\nSettling it is not a conquest. It is an expense — men who must be fed through a first winter, a palisade against whatever already lives there, and years before any of it shows in the ledger. What it buys is a county that did not exist before.\n\nThe steward has a place in mind."
 
  # --- Interactions -------------------------------------------------------------------------
+ claim_wilderness_interaction:0 "Claim the Land"
+ claim_wilderness_interaction_desc:0 "No lord holds this country and no map names it. Send settlers, and it becomes ours to make something of — or to lose."
  promote_colony_interaction:0 "Raise a Seat"
  promote_colony_interaction_desc:0 "The colony has grown past its palisade. Build a proper seat here and let it stand as any other county does."
  promote_colony_to_city_interaction:0 "Charter a Town"
@@ -106,6 +108,7 @@
  # --- Requirement tooltips -----------------------------------------------------------------
  colonize_at_settlement_limit_tt:0 "We hold as many colonies as we can support"
  colonize_must_border_realm_tt:0 "The land must border our realm"
+ colonize_not_while_at_war_tt:0 "We cannot spare settlers while at war"
  colonize_obstacles_remain_tt:0 "Nothing may still be blocking the land"
  colonize_needs_development_tt:0 "The county must have reached #V 3 #! Development"
  colonize_needs_full_settlement_tt:0 "The colony must be fully established"

@@ -238,7 +238,16 @@ colonize_county_effect = {
 	}
 
 	scope:colonizer = {
-		remove_short_term_gold = colonize_cost
+		# NOTE: this effect does NOT charge for the claim. Every caller pays for itself.
+		#
+		# That looks like the duplication this file exists to avoid, and it is the one place the rule
+		# has to live twice, because `cost` on a decision or an interaction is not a payment — it is
+		# the UI affordance. The engine reads it to print the price, grey the button out when the
+		# player cannot afford it, and only then deduct. Charging in here as well billed the player
+		# twice for the same county while the AI, which has no cost block, paid once.
+		#
+		# So: the two player entry points declare `cost = { gold = ... }` and the engine handles it;
+		# wilderness_colonization.0001 deducts explicitly, one line, right where it fires.
 
 		# One claim at a time. Without this an AI with gold empties a whole region in a year, which
 		# is both ahistorical and the fastest way to make the frontier stop existing.
