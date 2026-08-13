@@ -115,6 +115,12 @@
 
  # --- Toasts -------------------------------------------------------------------------------
  colonize_claimed_toast:0 "Settlers Depart"
+
+ # --- The settling event -------------------------------------------------------------------
+ # Placeholder text. scope:colony is the county just claimed.
+ wilderness_colonization.0010.t:0 "The Settlers Go Out"
+ wilderness_colonization.0010.desc:0 "They left before dawn, in carts and on foot — younger sons with no land coming to them, families a bad harvest had turned out, a handful of men who did not say why they were going.\n\nAhead of them is [colony.GetName], which is not a place yet so much as a direction. There is no road to it and no roof on it. What there is, they will have to make, through a winter that will not care whether they manage it.\n\nWhat comes back to us from that country now depends on people whose names we do not know."
+ wilderness_colonization.0010.a:0 "Let them make what they can of it."
  promote_colony_toast:0 "A Colony Comes of Age"
  colonize_obstacle_cleared_toast:0 "The Way Is Clear"
 

@@ -262,6 +262,11 @@ colonize_county_effect = {
 	}
 
 	scope:colonizer = {
+		# The one player-facing moment of colonisation. Fired here rather than from each entry
+		# point so the button, the decision and the interaction all reach it; the event's own
+		# trigger keeps it away from the AI.
+		trigger_event = wilderness_colonization.0010
+
 		# NOTE: this effect does NOT charge for the claim. Every caller pays for itself.
 		#
 		# That looks like the duplication this file exists to avoid, and it is the one place the rule

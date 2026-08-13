@@ -1,5 +1,42 @@
 ﻿namespace = wilderness_colonization
 
+
+# The moment a county is claimed. Player-facing, and deliberately thin.
+#
+# A placeholder, but a placeholder in the right SHAPE: it is fired from colonize_county_effect
+# rather than from any one entry point, so the button, the decision and the interaction all reach it
+# and a fourth way in would too. Anything built here later inherits that for free.
+#
+# `scope:colony` is the county just claimed, saved by colonize_county_effect. Saved scopes carry
+# into events triggered from the same effect, which is what lets the text below name the place
+# without this event having to work out which county it is about.
+#
+# What it is for later: this is where the character of a colony gets decided. A founding party, a
+# reason these people left, a first winter that goes well or badly — the things that would make two
+# colonies differ from each other beyond their terrain. One option now, because a placeholder that
+# pretends to offer a choice teaches the player the choice does not matter.
+wilderness_colonization.0010 = {
+	type = character_event
+	title = wilderness_colonization.0010.t
+	desc = wilderness_colonization.0010.desc
+	theme = realm
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+
+	# Players only. The AI claims counties on its yearly pulse and must never be stopped by a
+	# window; the guard lives here rather than at the call site so every caller is covered by it.
+	trigger = {
+		is_ai = no
+	}
+
+	option = {
+		name = wilderness_colonization.0010.a
+	}
+}
+
 # The AI's decision to claim a county.
 #
 # Hidden and immediate: this is a branch of the yearly pulse, not something anybody sees. It is an
