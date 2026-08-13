@@ -40,12 +40,18 @@ public static class GuiWriter
     /// <param name="Scope">The PdxGui path to the object that scripted_gui expects as its root.</param>
     /// <param name="Extend">Widgets that already have a `visible`; ours is ANDed onto theirs.</param>
     /// <param name="Insert">Widgets with no `visible` of their own; ours is inserted after the anchor.</param>
+    /// <param name="Add">
+    /// Whole widgets to splice in after an anchor, rather than conditions to hide one. The text is
+    /// indented to match the anchor, and <c>{HIDE}</c> / <c>{SHOW}</c> in it are replaced with the
+    /// wilderness test and its negation.
+    /// </param>
     private sealed record Target(
         string File,
         string ScriptedGui,
         string Scope,
         (string Anchor, string What)[] Extend,
-        (string Anchor, string What)[] Insert);
+        (string Anchor, string What)[] Insert,
+        (string Anchor, string What, string Block)[] Add);
 
     /// <summary>
     /// The two windows that show an unsettled county as though somebody lived there.
@@ -71,9 +77,21 @@ public static class GuiWriter
             ],
             Insert:
             [
-                ("datacontext = \"[County.GetCount.GetGovernment]\"", "government"),
-                ("datacontext = \"[County.GetCulture]\"", "culture"),
-                ("datacontext = \"[County.GetFaith]\"", "faith"),
+                // Whole panels rather than the individual rows inside them. Nobody has surveyed
+                // this country, so nothing should be reported about it — not its development, not
+                // its control, and above all not its modifiers. A wilderness county's penalties are
+                // meant to be discovered by marching into it, and a tooltip listing them in advance
+                // turns a frontier into a spreadsheet.
+                ("name = \"county_stats\"", "stats"),
+                ("name = \"county_modifiers_grid\"", "modifiers"),
+                ("name = \"holding_info\"", "holdings"),
+            ],
+            Add:
+            [
+                // Spliced in as the first child of county_info, so it sits where the holder's
+                // portrait would be on a settled county — the one place in this window a player
+                // already looks to find out whose land this is.
+                ("name = \"county_info\"", "settle button", SettleButton),
             ]),
 
         new Target(
@@ -90,8 +108,41 @@ public static class GuiWriter
                 ("name = \"faith_button\"", "faith"),
                 ("datacontext = \"[Character.GetCulture]\"", "culture"),
                 ("datacontext = \"[Character.GetHouse]\"", "house"),
-            ]),
+            ],
+            Add: []),
     ];
+
+    /// <summary>
+    /// The Settle button, spliced into the county view.
+    ///
+    /// <c>{SHOW}</c> is replaced with the wilderness test — the button exists only on unsettled
+    /// land. Its enabled state and tooltip come from the <c>wilderness_settle</c> scripted_gui
+    /// rather than from anything here, so the conditions the player reads are the same ones the
+    /// effect checks; a GUI that decides for itself when to grey out is how a button ends up
+    /// disagreeing with what happens when you press it.
+    ///
+    /// The province goes across as <c>wilderness</c> via AddScope, which is the scope name
+    /// 00_wilderness_scripted_gui.txt reads.
+    /// </summary>
+    private const string SettleButton = """
+        vbox = {
+            name = "wilderness_settle_area"
+            visible = "{SHOW}"
+            layoutpolicy_horizontal = expanding
+            margin = { 5 10 }
+
+            button_standard = {
+                name = "wilderness_settle_button"
+                size = { 280 40 }
+                text = "WILDERNESS_SETTLE_BUTTON"
+
+                onclick = "[GetScriptedGui('wilderness_settle').Execute( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End )]"
+                tooltip = "[GetScriptedGui('wilderness_settle').BuildTooltip( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End )]"
+                enabled = "[GetScriptedGui('wilderness_settle').IsValid( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End )]"
+                visible = "[GetScriptedGui('wilderness_settle').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End )]"
+            }
+        }
+        """;
 
     public static void WriteAll(string modDir, string gameDir, Config.MapConfig cfg)
     {
@@ -153,8 +204,34 @@ public static class GuiWriter
             patched.Add(what);
         }
 
+        // --- Whole widgets spliced in ----------------------------------------------------------
+        string show = $"[GetScriptedGui('{target.ScriptedGui}').IsShown( GuiScope.SetRoot( "
+                    + $"{target.Scope}.MakeScope ).End )]";
+
+        foreach (var (anchor, what, block) in target.Add)
+        {
+            int at = text.IndexOf(anchor, StringComparison.Ordinal);
+            if (at < 0) continue;
+
+            int lineStart = text.LastIndexOf('\n', at) + 1;
+            string indent = text[lineStart..at];
+
+            int lineEnd = text.IndexOf('\n', at);
+            if (lineEnd < 0) continue;
+
+            // Re-indent the block to sit where the anchor sits. Written against a fixed left margin
+            // in the constant above, so this shifts the whole thing rather than guessing per line.
+            string body = string.Join('\n',
+                block.Replace("{SHOW}", show)
+                     .Split('\n')
+                     .Select(line => line.Length == 0 ? line : indent + line));
+
+            text = text.Insert(lineEnd + 1, body + "\n");
+            patched.Add(what);
+        }
+
         // Refuse rather than half-patch. All of them or none.
-        int expected = target.Extend.Length + target.Insert.Length;
+        int expected = target.Extend.Length + target.Insert.Length + target.Add.Length;
         if (patched.Count != expected)
         {
             Console.WriteLine($"  gui: SKIPPED {target.File} — found {patched.Count} of {expected} "

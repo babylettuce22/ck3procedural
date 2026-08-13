@@ -122,6 +122,12 @@
  colonize_at_settlement_limit_tt:0 "We hold as many colonies as we can support"
  colonize_must_border_realm_tt:0 "The land must border our realm"
  colonize_not_while_at_war_tt:0 "We cannot spare settlers while at war"
+ colonize_cannot_afford_tt:0 "We cannot afford to outfit an expedition"
+
+ # --- The Settle button on the county view ---------------------------------------------------
+ # Emit/GuiWriter.cs injects a button carrying this text into a copy of vanilla's county window.
+ WILDERNESS_SETTLE_BUTTON:0 "Settle This Land"
+ colonize_settle_button_effect_tt:0 "Send settlers into this country, and make it ours to hold — or to lose."
  colonize_obstacles_remain_tt:0 "Nothing may still be blocking the land"
  colonize_needs_development_tt:0 "The county must have reached #V 3 #! Development"
  colonize_needs_full_settlement_tt:0 "The colony must be fully established"

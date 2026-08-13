@@ -57,3 +57,71 @@ wilderness_holder = {
 		has_trait = wilderness
 	}
 }
+
+
+# Character scope, with scope:wilderness set to the province the county view is showing.
+#
+# The Settle button on the county view. This is the third way into colonisation and the only one
+# that lets the player choose the county by looking at it — the decision picks its own target, and
+# the interaction lists titles rather than showing them on the map.
+#
+# Emit/GuiWriter.cs injects the button that calls this, and passes the province as `wilderness` via
+# AddScope. The name, and that scope name, are a contract with that writer.
+#
+# ---- On paying for it ----
+#
+# This charges explicitly, like the AI event and unlike the decision and the interaction. Those two
+# declare `cost = { gold = ... }` and let the engine deduct, because on a decision or an interaction
+# `cost` is not merely a payment — it is what prints the price and greys the button out. A
+# scripted_gui has no such block, so the tooltip below states the price and the effect takes it.
+# See the note in colonize_county_effect.
+wilderness_settle = {
+	scope = character
+
+	# The AI colonises through its yearly pulse, which can weigh gold and income properly. It must
+	# never reach for a GUI button.
+	ai_is_valid = { always = no }
+
+	is_shown = {
+		can_colonize_at_all_trigger = yes
+	}
+
+	is_valid = {
+		can_hold_another_colony_trigger = yes
+
+		custom_tooltip = {
+			text = colonize_not_while_at_war_tt
+			is_at_war = no
+		}
+
+		custom_tooltip = {
+			text = colonize_must_border_realm_tt
+			scope:wilderness.county ?= { county_borders_realm_trigger = { CHARACTER = root } }
+		}
+
+		custom_tooltip = {
+			text = colonize_cannot_afford_tt
+			gold >= colonize_cost
+		}
+	}
+
+	effect = {
+		custom_tooltip = colonize_settle_button_effect_tt
+
+		hidden_effect = {
+			remove_short_term_gold = colonize_cost
+
+			colonize_county_effect = {
+				COUNTY = scope:wilderness.county
+				COLONIZER = root
+			}
+		}
+
+		send_interface_toast = {
+			type = event_toast_effect_good
+			title = colonize_claimed_toast
+			left_icon = root
+			right_icon = scope:wilderness.county
+		}
+	}
+}
