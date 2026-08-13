@@ -32,6 +32,23 @@ public sealed class WildernessMap
     /// </summary>
     public const string HolderId = "gen_wilderness_holder";
 
+    /// <summary>
+    /// A titular kingdom the dummy holds, purely so its realm has a name.
+    ///
+    /// Without it the dummy's primary title is whichever county it happens to hold first, so every
+    /// unsettled county on the map is labelled with one arbitrary county's name — "Breostdon" over
+    /// the whole northern waste. A ruler's realm takes its name from their primary title, and a
+    /// titular kingdom outranks every county, so this becomes it.
+    ///
+    /// Landless, in the vanilla sense: it has no de jure counties and exists only to be held. That
+    /// is the same device vanilla uses for head-of-faith titles like <c>k_orthodox</c>, and the
+    /// generator already emits those, so this needs no new machinery.
+    ///
+    /// The key is referenced by the localisation in BaseFilesToCopy/Wilderness — the one place a
+    /// static file names something the generator defines. See the note beside it there.
+    /// </summary>
+    public const string TitleKey = "k_gen_wilderness";
+
     private readonly HashSet<Title> counties;
 
     internal WildernessMap(HashSet<Title> counties) => this.counties = counties;

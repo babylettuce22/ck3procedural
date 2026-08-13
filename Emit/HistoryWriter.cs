@@ -374,6 +374,19 @@ public static class HistoryWriter
             sb.Append("}\n");
         }
 
+        // The titular wilderness kingdom, held from the same date. It outranks every county the
+        // dummy holds, so it becomes the primary title and gives the realm its name — without it
+        // every unsettled county on the map is labelled after whichever county came first.
+        if (wild.Count > 0)
+        {
+            sb.Append($"{WildernessMap.TitleKey} = {{\n");
+            sb.Append($"\t{cfg.StartDate} = {{\n");
+            sb.Append($"\t\tholder = {WildernessMap.HolderId}\n");
+            sb.Append("\t\tgovernment = wilderness_government\n");
+            sb.Append("\t}\n");
+            sb.Append("}\n");
+        }
+
         // Wilderness counties, all on the one dummy.
         //
         // No liege and no development. A liege would make empty ground somebody's vassal and put it

@@ -131,7 +131,7 @@ public static class ContentWriter
 
         Core.Stage.Time("titles, history and localisation", () =>
         {
-            WriteLandedTitles(modDir, empires, faiths);
+            WriteLandedTitles(modDir, empires, faiths, wilderness);
             WriteProvinceTerrain(modDir, provinceTerrain, landCount);
             WriteProvinceHistory(modDir, cfg, empires, provinceTerrain, development, cultures, faiths, governments, wilderness, cfg.Seed);
             WriteLocalisation(modDir, empires);
@@ -226,7 +226,8 @@ public static class ContentWriter
     /// than adding to it — vanilla's baronies reference province ids up to ~14143, which no
     /// longer exist on our map, so leaving it in place would dangle every one of them.
     /// </summary>
-    private static void WriteLandedTitles(string modDir, List<Title> empires, FaithMap faiths)
+    private static void WriteLandedTitles(string modDir, List<Title> empires, FaithMap faiths,
+        WildernessMap wilderness)
     {
         string dir = Path.Combine(modDir, "common", "landed_titles");
         Directory.CreateDirectory(dir);
@@ -248,6 +249,26 @@ public static class ContentWriter
             sb.Append($"    color = {{ {fr} {fg} {fb} }}\n");
             sb.Append($"    capital = {faith.Head.Seat.Key}\n");
             sb.Append("    landless = yes\n");
+            sb.Append("}\n\n");
+        }
+
+        // The wilderness realm's own title. Landless in vanilla's sense — no de jure counties,
+        // held only so the dummy's realm is called something. Its capital has to be a real county,
+        // and the first unsettled one is as good as any: nothing reads it except the map's label
+        // placement, and every candidate is equally empty.
+        var wildCapital = wilderness.Counties.FirstOrDefault();
+        if (wildCapital is not null)
+        {
+            sb.Append("# The wilderness realm. Titular: it exists so unsettled land has a name.\n\n");
+            sb.Append($"{WildernessMap.TitleKey} = {{\n");
+            sb.Append("    color = { 108 104 96 }\n");
+            sb.Append($"    capital = {wildCapital.Key}\n");
+            sb.Append("    landless = yes\n");
+            sb.Append("    definite_form = yes\n");
+
+            // Stops the holder being announced as "King of the Wilderness" everywhere a ruler's
+            // style is printed. Vanilla sets the same flag on k_orthodox for the same reason.
+            sb.Append("    ruler_uses_title_name = no\n");
             sb.Append("}\n\n");
         }
 

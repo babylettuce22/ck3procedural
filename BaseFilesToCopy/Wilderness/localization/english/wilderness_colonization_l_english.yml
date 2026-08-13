@@ -11,6 +11,15 @@
  # The generated dummy that holds every unsettled county writes `name = "wilderness_holder_name"`,
  # so this is what the county view shows where a lord's name would go. See Emit/HistoryWriter.cs.
  wilderness_holder_name:0 "The Wild"
+
+ # The titular kingdom the dummy holds so its realm has a name — otherwise every unsettled county
+ # on the map is labelled after whichever county the dummy happened to hold first.
+ #
+ # This key is defined in C#, not here: WildernessMap.TitleKey in MapGen/Wilderness.cs. It is the
+ # only place a file in this set names something the generator owns, so if that constant changes
+ # this string silently stops resolving and the map shows the raw key.
+ k_gen_wilderness:0 "The Wilderness"
+ k_gen_wilderness_adj:0 "Wild"
  trait_wilderness_desc:0 "This land answers to no one."
 
  wilderness_government:0 "Wilderness"
