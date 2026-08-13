@@ -95,6 +95,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// says regardless of terrain, which produces empty farmland; at 1 it follows the mountains,
     /// ice and marsh and ignores where they are.
     /// </summary>
+    [AdvancedSetting]
     [Category("16 Wilderness")]
     [Description("How strongly wilderness follows hostile terrain — mountains, ice, desert, marsh, jungle — against the edge bias. At 0 it ignores terrain entirely and can leave empty farmland.")]
     public double WildernessTerrainWeight { get; set; } = 0.7;
@@ -107,9 +108,31 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// fault rather than as a frontier; growing clumps from seeds and discarding the runts is what
     /// makes the result look deliberate. 1 disables the check and restores the speckle.
     /// </summary>
+    [AdvancedSetting]
     [Category("16 Wilderness")]
     [Description("Smallest connected run of counties kept as wilderness. Lone wild counties surrounded by settled land read as a bug, so runts below this are given back. Set to 1 to allow singletons.")]
     public int WildernessMinClump { get; set; } = 3;
+
+    /// <summary>
+    /// How strongly wilderness avoids the middle of a kingdom.
+    ///
+    /// Placement otherwise seeks exactly the wrong ground. Hostile terrain forms ridges — mountain
+    /// ranges, marsh belts — and the clumping pass deliberately follows them, so the same rule that
+    /// makes wilderness look intentional also runs it straight through the middle of realms and
+    /// leaves starting kingdoms in disconnected halves. <see cref="WildernessEdgeBias"/> does not
+    /// help: it measures distance from the middle of the MAP, and a range through the heart of a
+    /// kingdom near the map's rim scores high on it.
+    ///
+    /// This scores a county down by the share of its neighbours belonging to the same kingdom, so
+    /// borders and coasts are preferred over interiors. It is a bias, not a guarantee — the
+    /// connectivity guard in <see cref="MapGen.Wilderness"/> is what actually refuses to sever a
+    /// title. Raising this mostly reduces how often that guard has to throw a region away.
+    ///
+    /// 0 restores the old behaviour of ignoring realm shape entirely.
+    /// </summary>
+    [Category("16 Wilderness")]
+    [Description("How strongly wilderness avoids the interior of a kingdom, preferring borders and coasts. Placement otherwise follows mountain ranges straight through the middle of realms and splits them in two. 0 ignores realm shape.")]
+    public double WildernessAvoidRealmInteriors { get; set; } = 0.5;
 
     /// <summary>
     /// Share of generated faiths that keep one holy site out in unclaimed wilderness.
@@ -650,12 +673,55 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// <summary>
     /// The impassability score a province must reach before it may be impassable at all — that is,
     /// how much of it must be high, steep, or a mix of the two, per
-    /// <see cref="ImpassableSlopeWeight"/>. Stops a map with little relief being given impassable
-    /// provinces just to hit the target count.
+    /// <see cref="ImpassableSlopeWeight"/>.
+    ///
+    /// A backstop, not the main instrument. <see cref="ImpassableScoreDeviations"/> does the
+    /// ordinary work; this catches the one thing a spread test cannot see, which is a map with no
+    /// mountains on it at all. A flat map and a mountainous one have much the same distribution
+    /// *shape* — the top tenth of provinces sits about the same distance up the tail in both — so
+    /// only an absolute number can tell them apart, and that is all this is here for.
+    ///
+    /// Lowered from 0.45 when the adaptive floor went in. At 0.45 it was not a backstop at all: on
+    /// a vanilla-sized heightmap downsampled to a quarter, it rejected 33 of the 40 provinces the
+    /// map had asked for, while the same world at full size hit its target exactly. It was binding
+    /// on legitimate maps, which is the adaptive floor's job, and doing it on the one quantity that
+    /// does not survive a change of resolution.
     /// </summary>
     [Category("03 Provinces")]
-    [Description("The impassability score a province must reach before it may be impassable — how much of it must be high, steep, or a mix of the two. Stops a flat map being given impassable provinces just to hit the target count.")]
-    public double ImpassableMinMountainShare { get; set; } = 0.45;
+    [Description("The impassability score a province must reach before it may be impassable at all. A backstop for a map with no mountains on it; the deviations setting does the ordinary work.")]
+    public double ImpassableMinMountainShare { get; set; } = 0.35;
+
+    /// <summary>
+    /// How far above the map's own median impassability score a province must stand, in median
+    /// absolute deviations, before it may be impassable.
+    ///
+    /// This exists because the score's *mean is pinned and its spread is not*. Both halves of the
+    /// score are shares of a province lying above a percentile line, so averaged over provinces
+    /// they come back to the percentiles themselves: mean highShare is
+    /// <see cref="MountainLineShare"/> and mean steepShare is <see cref="SteepLineShare"/>, on
+    /// every map, at every resolution, by construction. Nothing about the terrain can move that
+    /// number. What terrain and resolution move is how far the tail reaches past it.
+    ///
+    /// And it reaches a long way less at low resolution. A province is a fixed area in *pixels*, so
+    /// a heightmap at a quarter scale gives provinces covering some nine times the ground, and each
+    /// one bundles the wall together with the valley beside it. Measured on one world at two sizes:
+    /// the marked provinces averaged 0.58 at 9216 px wide and 0.465 at 2304, against a mean that
+    /// sat at 0.2175 in both. The distribution did not move; it shrank.
+    ///
+    /// A constant floor under a distribution like that is either above the tail or below it, with
+    /// nothing in between, which is exactly what was observed. Measuring the cut in the tail's own
+    /// units instead makes it mean the same thing on both.
+    ///
+    /// Deviations about the median rather than standard deviations about the mean: the tail being
+    /// tested for is itself what inflates a standard deviation, so it would widen its own goalposts.
+    ///
+    /// Default set to sit below where the target share falls on an ordinary distribution, so on a
+    /// map with real relief the count is decided by <see cref="ImpassableShareOfLand"/> and this
+    /// only bites when the tail is genuinely thinner than that.
+    /// </summary>
+    [Category("03 Provinces")]
+    [Description("How far above the map's own median impassability score a province must stand, in median absolute deviations, before it may be impassable. Measured in the score distribution's own units so it means the same thing at any heightmap resolution.")]
+    public double ImpassableScoreDeviations { get; set; } = 1.5;
 
     /// <summary>
     /// How much of the impassability score comes from steepness rather than from height.
