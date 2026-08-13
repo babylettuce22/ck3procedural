@@ -126,3 +126,27 @@ wilderness_settle = {
 		}
 	}
 }
+
+
+# Province scope. Is this county unsettled OR a colony that has not finished growing?
+#
+# Broader than `wilderness_county` above, and the two are not interchangeable. That one strips the
+# county window down to nothing, which must only happen on land nobody holds. This one answers "is
+# there still a colonisation in progress here", which stays true through the whole colony phase and
+# only goes false when the county is promoted to a real holding.
+#
+# Used by Emit/GuiWriter.cs to hide vanilla's "Build New Holding" prompt on the empty baronies of a
+# county that has not been settled yet. Filling in a county's other baronies is the reward for
+# finishing the colony, not something to be done around it.
+wilderness_unfinished_county = {
+	scope = province
+
+	is_shown = {
+		county ?= {
+			OR = {
+				holder ?= { government_has_flag = government_is_wilderness }
+				title_province ?= { has_holding_type = settlement_holding }
+			}
+		}
+	}
+}

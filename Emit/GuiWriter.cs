@@ -50,7 +50,7 @@ public static class GuiWriter
         string ScriptedGui,
         string Scope,
         (string Anchor, string What)[] Extend,
-        (string Anchor, string What)[] Insert,
+        (string Anchor, string What, string? Gui)[] Insert,
         (string Anchor, string What, string Block)[] Add);
 
     /// <summary>
@@ -82,9 +82,16 @@ public static class GuiWriter
                 // its control, and above all not its modifiers. A wilderness county's penalties are
                 // meant to be discovered by marching into it, and a tooltip listing them in advance
                 // turns a frontier into a spreadsheet.
-                ("name = \"county_stats\"", "stats"),
-                ("name = \"county_modifiers_grid\"", "modifiers"),
-                ("name = \"holding_info\"", "holdings"),
+                ("name = \"county_stats\"", "stats", null),
+                ("name = \"county_modifiers_grid\"", "modifiers", null),
+                ("name = \"holding_info\"", "holdings", null),
+
+                // Vanilla draws this prompt on any empty barony whether or not a holding can
+                // actually be built, so gating construction in script empties the menu behind it
+                // but leaves the button. Hidden on a WIDER condition than the rest of this window:
+                // the panels above are stripped only on wilderness, while this stays hidden through
+                // the colony phase too, until the county is promoted.
+                ("name = \"construct_holding\"", "build-holding prompt", "wilderness_unfinished_county"),
             ],
             Add:
             [
@@ -104,10 +111,10 @@ public static class GuiWriter
                 // The portrait box. NOT main_content, which is the whole window body — the close
                 // button lives inside it (blockoverride "button_close"), so hiding that would open
                 // a window the player cannot shut.
-                ("name = \"main_characters\"", "portrait"),
-                ("name = \"faith_button\"", "faith"),
-                ("datacontext = \"[Character.GetCulture]\"", "culture"),
-                ("datacontext = \"[Character.GetHouse]\"", "house"),
+                ("name = \"main_characters\"", "portrait", null),
+                ("name = \"faith_button\"", "faith", null),
+                ("datacontext = \"[Character.GetCulture]\"", "culture", null),
+                ("datacontext = \"[Character.GetHouse]\"", "house", null),
             ],
             Add: []),
     ];
@@ -234,7 +241,7 @@ public static class GuiWriter
         }
 
         // --- Widgets with none ----------------------------------------------------------------
-        foreach (var (anchor, what) in target.Insert)
+        foreach (var (anchor, what, gui) in target.Insert)
         {
             int at = text.IndexOf(anchor, StringComparison.Ordinal);
             if (at < 0) continue;
@@ -248,7 +255,16 @@ public static class GuiWriter
             int lineEnd = text.IndexOf('\n', at);
             if (lineEnd < 0) continue;
 
-            text = text.Insert(lineEnd + 1, $"{indent}visible = \"{hide}\"\n");
+            // Most entries hide on the target's own question; one asks a different one. The
+            // build-holding prompt has to stay hidden through the colony phase, while the panels
+            // beside it come back the moment the county is claimed, so it names its own
+            // scripted_gui rather than sharing this file's.
+            string condition = gui is null
+                ? hide
+                : $"[Not( GetScriptedGui('{gui}').IsShown( GuiScope.SetRoot( "
+                  + $"{target.Scope}.MakeScope ).End ) )]";
+
+            text = text.Insert(lineEnd + 1, $"{indent}visible = \"{condition}\"\n");
             patched.Add(what);
         }
 
