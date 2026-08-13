@@ -126,11 +126,12 @@ public static class GuiWriter
     /// </summary>
     private const string SettleButton = """
         vbox = {
-            name = "wilderness_settle_area"
-            visible = "{SHOW}"
+            name = "wilderness_buttons"
             layoutpolicy_horizontal = expanding
             margin = { 5 10 }
+            spacing = 4
 
+            # --- Claiming unsettled land -------------------------------------------------------
             button_standard = {
                 name = "wilderness_settle_button"
                 size = { 280 40 }
@@ -139,7 +140,54 @@ public static class GuiWriter
                 onclick = "[GetScriptedGui('wilderness_settle').Execute( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End )]"
                 tooltip = "[GetScriptedGui('wilderness_settle').BuildTooltip( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End )]"
                 enabled = "[GetScriptedGui('wilderness_settle').IsValid( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End )]"
-                visible = "[GetScriptedGui('wilderness_settle').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End )]"
+                visible = "[And( {SHOW_RAW}, GetScriptedGui('wilderness_settle').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End ) )]"
+            }
+
+            # --- Promoting a finished colony ---------------------------------------------------
+            #
+            # These drive the promote_colony_* interactions rather than scripted GUIs of their own.
+            # The interactions already carry every condition — can_promote_colony_trigger, the
+            # innovation requirements, the government rules — so asking them directly means the
+            # button cannot drift from what pressing it does. It is also exactly how vanilla
+            # surfaces feudalize_holding_interaction in window_title.gui.
+            #
+            # There is no separate "make it a tribe" button because there is no separate choice:
+            # promote_colony_effect seats a tribal ruler on a tribal holding and everyone else on a
+            # castle. The button says "raise a seat"; the realm decides what kind of seat that is.
+            button_standard = {
+                name = "wilderness_promote_button"
+                size = { 280 40 }
+                text = "WILDERNESS_PROMOTE_BUTTON"
+                datacontext = "[HoldingView.GetCountyTitle]"
+
+                visible = "[GetPlayer.IsPlayerInteractionShownAndCanPickTitle( 'promote_colony_interaction', Title.Self )]"
+                enabled = "[GetPlayer.IsPlayerInteractionWithTargetTitleValid( 'promote_colony_interaction', Title.Self )]"
+                tooltip = "[GetPlayer.GetPlayerInteractionWithTargetTitleTooltip( 'promote_colony_interaction', Title.Self )]"
+                onclick = "[GetPlayer.OpenPlayerInteractionWithTargetTitle( 'promote_colony_interaction', Title.Self )]"
+            }
+
+            button_standard = {
+                name = "wilderness_promote_city_button"
+                size = { 280 40 }
+                text = "WILDERNESS_PROMOTE_CITY_BUTTON"
+                datacontext = "[HoldingView.GetCountyTitle]"
+
+                visible = "[GetPlayer.IsPlayerInteractionShownAndCanPickTitle( 'promote_colony_to_city_interaction', Title.Self )]"
+                enabled = "[GetPlayer.IsPlayerInteractionWithTargetTitleValid( 'promote_colony_to_city_interaction', Title.Self )]"
+                tooltip = "[GetPlayer.GetPlayerInteractionWithTargetTitleTooltip( 'promote_colony_to_city_interaction', Title.Self )]"
+                onclick = "[GetPlayer.OpenPlayerInteractionWithTargetTitle( 'promote_colony_to_city_interaction', Title.Self )]"
+            }
+
+            button_standard = {
+                name = "wilderness_promote_temple_button"
+                size = { 280 40 }
+                text = "WILDERNESS_PROMOTE_TEMPLE_BUTTON"
+                datacontext = "[HoldingView.GetCountyTitle]"
+
+                visible = "[GetPlayer.IsPlayerInteractionShownAndCanPickTitle( 'promote_colony_to_temple_interaction', Title.Self )]"
+                enabled = "[GetPlayer.IsPlayerInteractionWithTargetTitleValid( 'promote_colony_to_temple_interaction', Title.Self )]"
+                tooltip = "[GetPlayer.GetPlayerInteractionWithTargetTitleTooltip( 'promote_colony_to_temple_interaction', Title.Self )]"
+                onclick = "[GetPlayer.OpenPlayerInteractionWithTargetTitle( 'promote_colony_to_temple_interaction', Title.Self )]"
             }
         }
         """;
@@ -221,8 +269,11 @@ public static class GuiWriter
 
             // Re-indent the block to sit where the anchor sits. Written against a fixed left margin
             // in the constant above, so this shifts the whole thing rather than guessing per line.
+            // {SHOW} is the whole bracketed expression; {SHOW_RAW} is its innards, for splicing
+            // inside an And(...) that supplies its own brackets.
             string body = string.Join('\n',
-                block.Replace("{SHOW}", show)
+                block.Replace("{SHOW_RAW}", Inner(show))
+                     .Replace("{SHOW}", show)
                      .Split('\n')
                      .Select(line => line.Length == 0 ? line : indent + line));
 
