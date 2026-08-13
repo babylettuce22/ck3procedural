@@ -7,6 +7,10 @@
 
  # --- Trait and government -----------------------------------------------------------------
  trait_wilderness:0 "Wilderness"
+
+ # The generated dummy that holds every unsettled county writes `name = "wilderness_holder_name"`,
+ # so this is what the county view shows where a lord's name would go. See Emit/HistoryWriter.cs.
+ wilderness_holder_name:0 "The Wild"
  trait_wilderness_desc:0 "This land answers to no one."
 
  wilderness_government:0 "Wilderness"

@@ -1,4 +1,4 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 
 namespace Ck3MapGen.MapGen;
@@ -124,7 +124,8 @@ public static class Faiths
 
     public static FaithMap Build(List<Title> empires, ProvinceMap provinces, int[] order,
         int landCount, TerrainClass[] provinceTerrain, Dictionary<Title, int> development,
-        GovernmentMap governments, VanillaVocabulary vocab, MapConfig cfg, Rng rng)
+        GovernmentMap governments, VanillaVocabulary vocab, WildernessMap wilderness,
+        MapConfig cfg, Rng rng)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -164,7 +165,13 @@ public static class Faiths
                 if (owned.Count == 0) continue;
 
                 var faith = CreateFaith(religion, faiths.Count + religionFaiths.Count, vocab, usedNames, rng);
-                faith.Counties.AddRange(owned);
+
+                // Wilderness counties are kept out of Counties, and that is what keeps holy sites
+                // out of them: sites are drawn from this list, and a pilgrimage destination on land
+                // nobody holds is a faith pointing its followers at an empty mountain. They still
+                // get an entry in byCounty here — overwritten with the unsettled faith once the map
+                // is built — because a county missing from it falls back to a neighbour's faith.
+                faith.Counties.AddRange(owned.Where(c => !wilderness.Contains(c)));
                 foreach (var county in owned) byCounty[county] = faith;
 
                 religionFaiths.Add(faith);

@@ -98,14 +98,38 @@ public static class ContentWriter
             governments.Tally(counties.Count).Select(g => $"{g.Count} {g.Government[..^11]}")));
 
         var faiths = Core.Stage.Time("faiths", () => MapGen.Faiths.Build(empires, provinces, order,
-            landCount, provinceTerrain, development, governments, vocabulary, cfg,
+            landCount, provinceTerrain, development, governments, vocabulary, wilderness, cfg,
             new Rng(cfg.Seed ^ 0x0FA1)));
+
+        // Empty counties get a culture and a faith of their own.
+        //
+        // Applied by overwriting after both maps are built, rather than by teaching the two region
+        // growers to skip wilderness. The growth is what decides where cultural and religious
+        // borders fall, and holes punched in it would bend those borders around the empty ground —
+        // but a frontier is not a border, and the settled world on either side of a wilderness
+        // should meet across it exactly as if it were not there. So: grow over everything, then
+        // overwrite. The counties are lost from their original culture's tally and nothing else.
+        if (wilderness.Count > 0)
+        {
+            var unsettledCulture = MapGen.Cultures.CreateUnsettled(
+                cultures.Heritages[0], vocabulary, new Rng(cfg.Seed ^ 0x0C55));
+
+            cultures.Cultures.Add(unsettledCulture);
+            foreach (var county in wilderness.Counties) cultures.ByCounty[county] = unsettledCulture;
+
+            var (unsettledReligion, unsettledFaith) = MapGen.Faiths.CreateUnsettled(vocabulary,
+                new HashSet<string>(StringComparer.OrdinalIgnoreCase), cfg, new Rng(cfg.Seed ^ 0x0FA5));
+
+            faiths.Religions.Add(unsettledReligion);
+            faiths.Faiths.Add(unsettledFaith);
+            foreach (var county in wilderness.Counties) faiths.ByCounty[county] = unsettledFaith;
+        }
 
         Core.Stage.Time("titles, history and localisation", () =>
         {
             WriteLandedTitles(modDir, empires, faiths);
             WriteProvinceTerrain(modDir, provinceTerrain, landCount);
-            WriteProvinceHistory(modDir, cfg, empires, provinceTerrain, development, cultures, faiths, governments, cfg.Seed);
+            WriteProvinceHistory(modDir, cfg, empires, provinceTerrain, development, cultures, faiths, governments, wilderness, cfg.Seed);
             WriteLocalisation(modDir, empires);
         });
 
@@ -167,7 +191,7 @@ public static class ContentWriter
         {
             Core.Stage.Time("history and portraits", () =>
             {
-                HistoryWriter.WriteAll(modDir, cfg, empires, development, cultures, faiths, governments);
+                HistoryWriter.WriteAll(modDir, cfg, empires, development, cultures, faiths, governments, wilderness);
 
                 // Every bookmark and challenge character needs a portrait entry or the engine holds
                 // a null one.
@@ -350,7 +374,7 @@ public static class ContentWriter
     /// </summary>
     private static void WriteProvinceHistory(string modDir, MapConfig cfg, List<Title> empires,
         TerrainClass[] provinceTerrain, Dictionary<Title, int> development, CultureMap cultures,
-        FaithMap faiths, GovernmentMap governments, int cfgSeed)
+        FaithMap faiths, GovernmentMap governments, WildernessMap wilderness, int cfgSeed)
     {
         string dir = Path.Combine(modDir, "history", "provinces");
         Directory.CreateDirectory(dir);
@@ -366,6 +390,7 @@ public static class ContentWriter
             string cultureKey = cultures.For(county).Key;
             string faith = faiths.For(county).Key;
             string government = governments.For(county);
+            bool wild = wilderness.Contains(county);
 
             for (int i = 0; i < county.Children.Count; i++)
             {
@@ -374,7 +399,16 @@ public static class ContentWriter
                     ? provinceTerrain[barony.ProvinceId]
                     : TerrainClass.Plains;
 
-                string holding = MapGen.Development.Holding(i, terrain, level, government, rng);
+                // A wilderness county is one wilderness holding in its capital and nothing at all
+                // in the rest. Not "poorer holdings": none. That shape is what the colonisation
+                // scripts expect to find and what they undo — colonize_county_effect turns the
+                // capital into a settlement and leaves the empty baronies for the colony to grow
+                // into, so a wilderness county that shipped with a castle in barony three would
+                // strand it there forever.
+                string holding = wild
+                    ? (i == 0 ? "wilderness_holding" : "none")
+                    : MapGen.Development.Holding(i, terrain, level, government, rng);
+
                 counts[holding] = counts.GetValueOrDefault(holding) + 1;
 
                 sb.Append($"{barony.ProvinceId} = {{\n");

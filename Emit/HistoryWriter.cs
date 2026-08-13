@@ -41,14 +41,31 @@ public static class HistoryWriter
 
     public static void WriteAll(string modDir, MapConfig cfg, List<Title> empires,
         Dictionary<Title, int> development, CultureMap cultures, FaithMap faiths,
-        GovernmentMap governments)
+        GovernmentMap governments, WildernessMap wilderness)
     {
-        var counties = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
-        if (counties.Count == 0) return;
+        var all = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
+        if (all.Count == 0) return;
+
+        // Split once, here, and never look at the combined list again.
+        //
+        // Everything below this line means "counties with people in them": a generated ruler, a
+        // house for him to belong to, a government, a bookmark he could be played from. A
+        // wilderness county has none of those and is written separately at the bottom — one dummy
+        // holder for all of them, and no character, dynasty or realm entry at all.
+        var counties = all.Where(c => !wilderness.Contains(c)).ToList();
+        var wild = all.Where(wilderness.Contains).ToList();
+
+        // Guard against a config that leaves nobody. A map that is entirely wilderness has no
+        // rulers to write and no bookmark to open on, and every step below assumes at least one.
+        if (counties.Count == 0)
+        {
+            Console.WriteLine("  history: SKIPPED (every county is wilderness — lower WildernessShare)");
+            return;
+        }
 
         // Who wears which of the de jure titles, and who owes whom. Seeded off the config rather
         // than a live stream so the same seed always produces the same political map.
-        var realms = Realms.Build(empires, development, cfg, new Rng(cfg.Seed ^ 0x2E17));
+        var realms = Realms.Build(empires, development, wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17));
 
         // The bookmark and the challenge character go to the two greatest rulers rather than to
         // whichever counties happened to be first — a start screen offering a random count while
@@ -67,13 +84,15 @@ public static class HistoryWriter
 
         WriteDynasties(modDir, counties, cultures);
         WriteCharacters(modDir, cfg, counties, cultures, faiths, realms, governments);
-        WriteTitleHistory(modDir, cfg, empires, development, realms, governments, faiths);
+        WriteWildernessHolder(modDir, cfg, wild);
+        WriteTitleHistory(modDir, cfg, empires, development, realms, governments, faiths, wild);
         WriteBookmark(modDir, cfg, bookmarkCounty, realms, cultures, faiths, governments);
         WriteChallengeCharacter(modDir, challengeCounty, realms, cfg, cultures, faiths, governments);
         WriteBookmarkLocalisation(modDir, bookmarkCounty, challengeCounty, cultures);
 
         Console.WriteLine($"  history: {counties.Count} rulers, " +
                           $"{counties.Count} dynasties, " +
+                          (wild.Count > 0 ? $"{wild.Count} wilderness counties, " : "") +
                           $"1 bookmark at {cfg.StartDate} on {Primary(bookmarkCounty, realms).Key}");
     }
 
@@ -286,9 +305,51 @@ public static class HistoryWriter
     /// he holds in his capital, and writing the duchy without it would seat him in two governments
     /// at once.
     /// </summary>
+    /// <summary>
+    /// The single character every wilderness county is held by.
+    ///
+    /// One for the whole map, not one per county. It exists so the titles are not ownerless — CK3
+    /// treats a held-by-nobody county very differently from an empty one, and the scripts in
+    /// BaseFilesToCopy all reach the county through <c>holder</c>. Its trait does the rest: the
+    /// <c>wilderness</c> trait in the Wilderness file set makes it immortal, infertile, unschemable
+    /// and unable to inherit or be inherited from, and raises its domain limit past any real map.
+    ///
+    /// Born a thousand years before the start date so it is never a minor and never comes of age
+    /// into anything. No dynasty, because <c>rulers_should_have_dynasty = no</c> on the wilderness
+    /// government and a house would put empty land in the dynasty tree.
+    ///
+    /// Written even when there is no wilderness, so the file exists and nothing dangles if a county
+    /// later points at it.
+    /// </summary>
+    private static void WriteWildernessHolder(string modDir, MapConfig cfg, List<Title> wild)
+    {
+        if (wild.Count == 0) return;
+
+        string dir = Path.Combine(modDir, "history", "characters");
+        Directory.CreateDirectory(dir);
+
+        var sb = new StringBuilder();
+        sb.Append($"# The holder of every unsettled county. See MapGen/Wilderness.cs.\n\n");
+        sb.Append($"{WildernessMap.HolderId} = {{\n");
+        sb.Append("\tname = \"wilderness_holder_name\"\n");
+        sb.Append($"\treligion = {MapGen.Faiths.UnsettledFaithKey}\n");
+        sb.Append($"\tculture = {MapGen.Cultures.UnsettledKey}\n");
+        sb.Append("\tdisallow_random_traits = yes\n");
+        sb.Append("\tsexuality = asexual\n");
+
+        // A millennium before the start, so no start date can make it a child.
+        sb.Append($"\t{Math.Max(1, cfg.StartYear - 1000)}.1.1 = {{\n");
+        sb.Append("\t\tbirth = yes\n");
+        sb.Append("\t\ttrait = wilderness\n");
+        sb.Append("\t}\n");
+        sb.Append("}\n");
+
+        ParadoxText.WriteBom(Path.Combine(dir, "01_generated_wilderness.txt"), sb.ToString());
+    }
+
     private static void WriteTitleHistory(string modDir, MapConfig cfg, List<Title> empires,
         Dictionary<Title, int> development, RealmMap realms, GovernmentMap governments,
-        FaithMap faiths)
+        FaithMap faiths, List<Title> wild)
     {
         string dir = Path.Combine(modDir, "history", "titles");
         Directory.CreateDirectory(dir);
@@ -309,6 +370,23 @@ public static class HistoryWriter
             if (government != GovernmentMap.Feudal) sb.Append($"\t\tgovernment = {government}\n");
             if (liege is not null) sb.Append($"\t\tliege = {liege.Key}\n");
             if (level > 0) sb.Append($"\t\tchange_development_level = {level}\n");
+            sb.Append("\t}\n");
+            sb.Append("}\n");
+        }
+
+        // Wilderness counties, all on the one dummy.
+        //
+        // No liege and no development. A liege would make empty ground somebody's vassal and put it
+        // inside a realm; development would give it a number the wilderness holding's -100% growth
+        // then fights against. The government is what the scripts actually test — every trigger in
+        // the Wilderness file set asks `government_has_flag = government_is_wilderness` rather than
+        // naming this holder, so the two halves stay independent.
+        foreach (var county in wild)
+        {
+            sb.Append($"{county.Key} = {{\n");
+            sb.Append($"\t{cfg.StartDate} = {{\n");
+            sb.Append($"\t\tholder = {WildernessMap.HolderId}\n");
+            sb.Append("\t\tgovernment = wilderness_government\n");
             sb.Append("\t}\n");
             sb.Append("}\n");
         }

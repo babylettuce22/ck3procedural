@@ -47,11 +47,17 @@ public sealed class RealmMap
 /// </summary>
 public static class Realms
 {
+    /// <param name="wilderness">
+    /// Counties nobody lives in. They are held by the wilderness dummy rather than by a generated
+    /// ruler, so they must not appear here at all: not as their own holder, not as the seat of a
+    /// duchy, and not as anybody's liege. Pass <see cref="WildernessMap.Empty"/> when the feature
+    /// is off.
+    /// </param>
     public static RealmMap Build(List<Title> empires, Dictionary<Title, int> development,
-        MapConfig cfg, Rng rng)
+        WildernessMap wilderness, MapConfig cfg, Rng rng)
     {
         var all = Titles.Flatten(empires).ToList();
-        var weight = Weigh(empires, development);
+        var weight = Weigh(empires, development, wilderness);
 
         // Which titles somebody wears. Iterated in the fixed order Flatten produces so the same
         // seed always promotes the same titles.
@@ -66,13 +72,22 @@ public static class Realms
                 _ => 0,
             };
 
-            if (share > 0 && rng.Chance(share)) Realize(title, realized, weight);
+            // Weight 0 means every county beneath it is wilderness — a duchy of empty mountains.
+            // Realising it would seat a duke on land nobody lives on, so it stays unheld and
+            // becomes something a coloniser can eventually claim by filling the counties in.
+            if (share > 0 && weight.GetValueOrDefault(title) > 0 && rng.Chance(share))
+                Realize(title, realized, weight);
         }
 
         // A title's holder is the ruler of the richest county under it, found by following the
         // strongest child down. Two titles that pick the same county are two titles on one ruler.
+        //
+        // Wilderness counties are skipped rather than given a holder: the dummy holds them, and
+        // HistoryWriter writes that separately. A county missing from here produces no generated
+        // character, no dynasty and no title history — which is exactly right for empty ground.
         var holderCounty = new Dictionary<Title, Title>();
-        foreach (var county in all.Where(t => t.Tier == "c")) holderCounty[county] = county;
+        foreach (var county in all.Where(t => t.Tier == "c" && !wilderness.Contains(t)))
+            holderCounty[county] = county;
         foreach (var title in realized) holderCounty[title] = Capital(title, weight);
 
         // The highest title each ruler wears, which is where their liege is recorded.
@@ -155,7 +170,15 @@ public static class Realms
     /// Counted with a floor of one per county so that a large poor duchy still outweighs a tiny
     /// one — otherwise a map whose development came out flat would pick capitals arbitrarily.
     /// </summary>
-    private static Dictionary<Title, int> Weigh(List<Title> empires, Dictionary<Title, int> development)
+    /// <remarks>
+    /// A wilderness county weighs nothing, and that one value carries the whole exclusion: it keeps
+    /// <see cref="Strongest"/> from ever descending into empty ground while a settled sibling
+    /// exists, and it makes a title's weight zero exactly when everything under it is wilderness,
+    /// which is the test <see cref="Build"/> uses to leave such titles unheld. A *settled* county
+    /// with no development still weighs 1, so the two cases stay distinguishable.
+    /// </remarks>
+    private static Dictionary<Title, int> Weigh(List<Title> empires,
+        Dictionary<Title, int> development, WildernessMap wilderness)
     {
         var weight = new Dictionary<Title, int>();
 
@@ -164,7 +187,9 @@ public static class Realms
 
         int Visit(Title title)
         {
-            int total = title.Tier == "c" ? development.GetValueOrDefault(title) + 1 : 0;
+            int total = title.Tier == "c" && !wilderness.Contains(title)
+                ? development.GetValueOrDefault(title) + 1
+                : 0;
             foreach (var child in title.Children) total += Visit(child);
 
             weight[title] = total;
