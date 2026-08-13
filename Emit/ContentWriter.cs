@@ -166,6 +166,11 @@ public static class ContentWriter
         // the map has nowhere to put holdings, armies or sieges.
         Core.Stage.Time("locators", () => LocatorWriter.WriteAll(modDir, gameDir, provinces, order, landCount, provinceElevation, cfg));
 
+        // Close every casus belli against the wilderness. Without this a neighbour who creates a
+        // title covering unsettled ground gets a de jure war on it, and realms conquer the frontier
+        // instead of settling it. See Emit/CasusBelliWriter.cs.
+        Core.Stage.Time("casus belli", () => CasusBelliWriter.WriteAll(modDir, gameDir, cfg));
+
         // Hide the dummy holder, its government, and the culture and faith the engine forced us to
         // invent, on any county nobody lives in. Reads vanilla's county view and writes a patched
         // copy into the mod; the game folder is never written to. See Emit/GuiWriter.cs.
