@@ -37,3 +37,23 @@ wilderness_county = {
 		county.holder ?= { government_has_flag = government_is_wilderness }
 	}
 }
+
+
+# Character scope. Is this character the dummy that holds the wilderness?
+#
+# The character window's counterpart to the above. Clicking a wilderness county's shield on the map
+# opens its holder like any other ruler, and the engine has no idea the holder is a bookkeeping
+# device: it draws a portrait, a court, a faith and a culture, all of them invented to satisfy
+# requirements rather than to be read.
+#
+# Asks the trait rather than the government because this is a question about a CHARACTER, and the
+# trait is what the character carries. A landless heir of the dummy — which should never exist, but
+# the trait blocks inheritance precisely because "should never" is not "cannot" — would still answer
+# yes here, which is the safe direction to be wrong in.
+wilderness_holder = {
+	scope = character
+
+	is_shown = {
+		has_trait = wilderness
+	}
+}

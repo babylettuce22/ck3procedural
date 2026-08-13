@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Ck3MapGen.Io;
 
 namespace Ck3MapGen.Emit;
@@ -32,82 +32,110 @@ namespace Ck3MapGen.Emit;
 /// </summary>
 public static class GuiWriter
 {
-    private const string SourceFile = "window_county_view.gui";
-
     /// <summary>
-    /// The scripted_gui in BaseFilesToCopy/Wilderness that answers "is this county unsettled".
-    /// Contract with common/scripted_guis/00_wilderness_scripted_gui.txt — the name must match.
+    /// One vanilla UI file to patch: which widgets to hide, and how to ask whether to hide them.
     /// </summary>
-    private const string ScriptedGui = "wilderness_county";
+    /// <param name="File">Filename under the game's gui/ folder.</param>
+    /// <param name="ScriptedGui">The scripted_gui in BaseFilesToCopy/Wilderness that answers the question.</param>
+    /// <param name="Scope">The PdxGui path to the object that scripted_gui expects as its root.</param>
+    /// <param name="Extend">Widgets that already have a `visible`; ours is ANDed onto theirs.</param>
+    /// <param name="Insert">Widgets with no `visible` of their own; ours is inserted after the anchor.</param>
+    private sealed record Target(
+        string File,
+        string ScriptedGui,
+        string Scope,
+        (string Anchor, string What)[] Extend,
+        (string Anchor, string What)[] Insert);
 
     /// <summary>
-    /// The PdxGui expression for "this county is NOT wilderness".
+    /// The two windows that show an unsettled county as though somebody lived there.
     ///
-    /// <c>HoldingView</c> is the county window's own data context and is reachable from every widget
-    /// in the file, which is why the province is fetched through it rather than through whatever
-    /// local datacontext the patched widget happens to sit under — several of them rebind to a
-    /// character or a faith, where <c>Province</c> is not in scope.
+    /// Every anchor below was checked to occur EXACTLY once in the 1.19 files. That matters more
+    /// than it looks: a string appearing twice would patch only the first, silently leaving half
+    /// the panel visible. `datacontext = "[Character.GetFaith]"` is the worked example — it appears
+    /// twice in the character window, so the unique `name = "faith_button"` on the line above is
+    /// used instead.
     /// </summary>
-    private const string NotWilderness =
-        "[Not( GetScriptedGui('" + ScriptedGui + "').IsShown( GuiScope.SetRoot( "
-        + "HoldingView.GetProvince.MakeScope ).End ) )]";
-
-    /// <summary>
-    /// The widgets to hide, each keyed by a line that occurs exactly once in vanilla's file.
-    ///
-    /// Anchored on text rather than line numbers because line numbers move on every patch and a
-    /// wrong one edits an unrelated widget. Each of these is a <c>datacontext</c> naming the very
-    /// thing being hidden, so a patch that renames one has almost certainly restructured the panel
-    /// anyway — in which case refusing to patch is the right outcome.
-    /// </summary>
-    private static readonly (string Anchor, string What)[] InsertAfter =
+    private static readonly Target[] Targets =
     [
-        ("datacontext = \"[County.GetCount.GetGovernment]\"", "government"),
-        ("datacontext = \"[County.GetCulture]\"", "culture"),
-        ("datacontext = \"[County.GetFaith]\"", "faith"),
+        new Target(
+            File: "window_county_view.gui",
+            ScriptedGui: "wilderness_county",
+            Scope: "HoldingView.GetProvince",
+            Extend:
+            [
+                // Vanilla's own Province.IsValid guard has to survive, so this one is extended
+                // rather than inserted — overwriting it would show the portrait on every county
+                // that currently hides it.
+                ("name = \"holder_info\"", "holder"),
+            ],
+            Insert:
+            [
+                ("datacontext = \"[County.GetCount.GetGovernment]\"", "government"),
+                ("datacontext = \"[County.GetCulture]\"", "culture"),
+                ("datacontext = \"[County.GetFaith]\"", "faith"),
+            ]),
+
+        new Target(
+            File: "window_character.gui",
+            ScriptedGui: "wilderness_holder",
+            Scope: "CharacterWindow.GetCharacter",
+            Extend: [],
+            Insert:
+            [
+                // The portrait box. NOT main_content, which is the whole window body — the close
+                // button lives inside it (blockoverride "button_close"), so hiding that would open
+                // a window the player cannot shut.
+                ("name = \"main_characters\"", "portrait"),
+                ("name = \"faith_button\"", "faith"),
+                ("datacontext = \"[Character.GetCulture]\"", "culture"),
+                ("datacontext = \"[Character.GetHouse]\"", "house"),
+            ]),
     ];
 
     public static void WriteAll(string modDir, string gameDir, Config.MapConfig cfg)
     {
         if (!cfg.EnableWilderness)
         {
-            Console.WriteLine("  county view: SKIPPED (wilderness disabled)");
+            Console.WriteLine("  gui: SKIPPED (wilderness disabled)");
             return;
         }
 
-        string source = Path.Combine(gameDir, "gui", SourceFile);
+        foreach (var target in Targets) Patch(modDir, gameDir, target);
+    }
+
+    private static void Patch(string modDir, string gameDir, Target target)
+    {
+        string source = Path.Combine(gameDir, "gui", target.File);
         if (!File.Exists(source))
         {
-            Console.WriteLine($"  county view: SKIPPED ({SourceFile} not found in the game folder)");
+            Console.WriteLine($"  gui: SKIPPED ({target.File} not found in the game folder)");
             return;
         }
 
         string text = File.ReadAllText(source);
+        string hide = $"[Not( GetScriptedGui('{target.ScriptedGui}').IsShown( GuiScope.SetRoot( "
+                    + $"{target.Scope}.MakeScope ).End ) )]";
+
         var patched = new List<string>();
 
-        // --- The holder block, which already has a `visible` to extend ------------------------
-        //
-        // Handled separately because overwriting its condition would show the portrait on every
-        // county that currently hides it. `Province.IsValid` is vanilla's own guard and has to
-        // survive; ours is ANDed onto it.
-        var holder = new Regex(
-            "(name\\s*=\\s*\"holder_info\"[\\s\\S]{0,400}?visible\\s*=\\s*\")(\\[[^\"]*\\])(\")",
-            RegexOptions.Compiled);
-
-        var holderMatch = holder.Match(text);
-        if (holderMatch.Success)
+        // --- Widgets that already have a `visible` -------------------------------------------
+        foreach (var (anchor, what) in target.Extend)
         {
-            string existing = holderMatch.Groups[2].Value;
-            string combined = $"[And( {Inner(existing)}, {Inner(NotWilderness)} )]";
+            var match = Regex.Match(text,
+                Regex.Escape(anchor) + @"[\s\S]{0,400}?visible\s*=\s*""(\[[^""]*\])""");
 
-            text = text.Remove(holderMatch.Groups[2].Index, holderMatch.Groups[2].Length)
-                       .Insert(holderMatch.Groups[2].Index, combined);
+            if (!match.Success) continue;
 
-            patched.Add("holder");
+            var group = match.Groups[1];
+            string combined = $"[And( {Inner(group.Value)}, {Inner(hide)} )]";
+
+            text = text.Remove(group.Index, group.Length).Insert(group.Index, combined);
+            patched.Add(what);
         }
 
-        // --- The three panels with no `visible` of their own ----------------------------------
-        foreach (var (anchor, what) in InsertAfter)
+        // --- Widgets with none ----------------------------------------------------------------
+        foreach (var (anchor, what) in target.Insert)
         {
             int at = text.IndexOf(anchor, StringComparison.Ordinal);
             if (at < 0) continue;
@@ -121,16 +149,17 @@ public static class GuiWriter
             int lineEnd = text.IndexOf('\n', at);
             if (lineEnd < 0) continue;
 
-            text = text.Insert(lineEnd + 1, $"{indent}visible = \"{NotWilderness}\"\n");
+            text = text.Insert(lineEnd + 1, $"{indent}visible = \"{hide}\"\n");
             patched.Add(what);
         }
 
-        // Refuse rather than half-patch. Four targets or none.
-        if (patched.Count != InsertAfter.Length + 1)
+        // Refuse rather than half-patch. All of them or none.
+        int expected = target.Extend.Length + target.Insert.Length;
+        if (patched.Count != expected)
         {
-            Console.WriteLine($"  county view: SKIPPED — found {patched.Count} of "
-                + $"{InsertAfter.Length + 1} widgets ({string.Join(", ", patched)}). "
-                + $"Vanilla's {SourceFile} has changed shape; not shipping a partial override.");
+            Console.WriteLine($"  gui: SKIPPED {target.File} — found {patched.Count} of {expected} "
+                + $"widgets ({string.Join(", ", patched)}). Vanilla has changed shape; "
+                + "not shipping a partial override.");
             return;
         }
 
@@ -138,10 +167,10 @@ public static class GuiWriter
         Directory.CreateDirectory(dir);
 
         // No BOM. GUI files are not script files and vanilla's ship without one.
-        ParadoxText.WriteNoBom(Path.Combine(dir, SourceFile), text);
+        ParadoxText.WriteNoBom(Path.Combine(dir, target.File), text);
 
-        Console.WriteLine($"  county view: hid {string.Join(", ", patched)} on wilderness counties "
-            + $"(patched a copy of vanilla's {SourceFile}; the game folder is untouched)");
+        Console.WriteLine($"  gui: {target.File} — hid {string.Join(", ", patched)} "
+            + "(patched a copy; the game folder is untouched)");
     }
 
     /// <summary>Strips the outer brackets from a PdxGui expression so it can be nested inside one.</summary>
