@@ -97,6 +97,30 @@ wilderness_seed_province_effect = {
 # that history is still assembling is the error AGOT worked around by commenting the call out of its
 # game-start block and moving it to a post-lobby effect. Do it after the lobby and it just works.
 wilderness_setup_on_start_effect = {
+	# --- Stop the holder being a person -------------------------------------------------------
+	#
+	# History can declare the dummy but it cannot stop the engine treating it as a character
+	# afterwards, and the engine is thorough: it rolls personality traits, generates a court, finds
+	# an heir, and offers the whole thing to the player as a neighbouring ruler with an opinion of
+	# them. `disallow_random_traits` in history covers only the first of those.
+	#
+	# So the cleanup runs here, once, after history has finished loading. Everything below is
+	# undoing something the engine did on its own — none of it is flavour.
+	clear_traits = yes
+	add_trait = wilderness
+
+	# The single most important line. `incapable` takes the character out of the diplomacy,
+	# scheme and marriage systems wholesale, which is most of what made it show up as somebody the
+	# player could interact with.
+	add_trait = incapable
+
+	# A court is a hundred generated characters per dummy, each with an opinion, a portrait and a
+	# succession claim on land nobody should inherit.
+	every_courtier_or_guest = {
+		death = { death_reason = death_vanished }
+	}
+
+	# --- Then seed what is in the way ---------------------------------------------------------
 	every_held_title = {
 		limit = { tier = tier_county }
 

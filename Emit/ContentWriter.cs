@@ -25,6 +25,10 @@ public static class ContentWriter
     {
         var terrain = classified.Terrain;
 
+        // Stamped before anything is written. StaticFileWriter compares against it to tell a file a
+        // writer produced in this run from one a previous run left behind — see its WriteAll.
+        var runStarted = DateTime.UtcNow;
+
         // Blanking runs FIRST so the generated files below always win: several of them share a
         // filename with a vanilla file they are replacing.
         Core.Stage.Time("blank vanilla data", () => BlankVanillaData(modDir, gameDir));
@@ -209,7 +213,7 @@ public static class ContentWriter
         List<string> sets = [StaticFileWriter.Core];
         if (cfg.EnableWilderness) sets.Add(StaticFileWriter.Wilderness);
 
-        Core.Stage.Time("static files", () => StaticFileWriter.WriteAll(modDir, sets));
+        Core.Stage.Time("static files", () => StaticFileWriter.WriteAll(modDir, sets, runStarted));
     }
 
     /// <summary>
