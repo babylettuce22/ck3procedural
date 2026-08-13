@@ -406,6 +406,110 @@ public static class PreviewRenderer
     }
 
 
+    /// <summary>
+    /// Which counties nobody lives in, against the settled map behind them.
+    ///
+    /// The view exists because the wilderness stage is otherwise invisible: it writes no history
+    /// yet and reports only a count, so there is no way to judge whether a share of 12% has landed
+    /// as a frontier along the northern rim or as confetti across the whole map — and those two
+    /// results have the same number in the log.
+    ///
+    /// Settled counties are drawn washed-out on purpose. The question this answers is where the
+    /// empty ground is and what shape it makes, so the settled map is context rather than content.
+    /// </summary>
+    public static Image RenderWilderness(GenerationResult result)
+    {
+        var map = result.Provinces;
+        var order = result.ProvinceOrder;
+        int width = map.Width, height = map.Height;
+        int baronyCount = result.BaronyCount, landCount = result.LandCount;
+        var cfg = result.Config;
+
+        var counties = Titles.Flatten(result.Titles).Where(t => t.Tier == "c").ToList();
+        var provinceTerrain = result.Terrain.Terrain;
+
+        // Recomputed here rather than carried on the result, which is how RenderGovernment does it
+        // too. The seeds must match ContentWriter's exactly or the preview shows a different world
+        // from the one the mod ships — see the calls there.
+        var development = MapGen.Development.ForCounties(counties, provinceTerrain, cfg,
+            new Rng(cfg.Seed ^ 0x0DE7));
+
+        var wilderness = MapGen.Wilderness.Build(counties, map, order, landCount, provinceTerrain,
+            development, cfg, new Rng(cfg.Seed ^ 0x1D17));
+
+        var isWild = new bool[counties.Count];
+        for (int c = 0; c < counties.Count; c++) isWild[c] = wilderness.Contains(counties[c]);
+
+        var countyOf = new int[baronyCount + 1];
+        Array.Fill(countyOf, NoCounty);
+        for (int c = 0; c < counties.Count; c++)
+            foreach (var barony in counties[c].Children)
+                if (barony.ProvinceId >= 1 && barony.ProvinceId <= baronyCount)
+                    countyOf[barony.ProvinceId] = c;
+
+        int At(int i)
+        {
+            int id = order[map.Label[i]];
+            return id <= baronyCount ? countyOf[id] : id <= landCount ? Impassable : Water;
+        }
+
+        bool Edge(int i, int county)
+        {
+            int x = i % width, y = i / width;
+            return (x + 1 < width && At(i + 1) != county)
+                || (y + 1 < height && At(i + width) != county);
+        }
+
+        // A wilderness county borders settled land: the frontier itself, and the only line worth
+        // picking out, since it is where colonisation can actually happen.
+        bool Frontier(int i, int county)
+        {
+            int x = i % width, y = i / width;
+            return (x + 1 < width && Neighbour(At(i + 1)))
+                || (y + 1 < height && Neighbour(At(i + width)))
+                || (x > 0 && Neighbour(At(i - 1)))
+                || (y > 0 && Neighbour(At(i - width)));
+
+            bool Neighbour(int other) => other >= 0 && other != county && !isWild[other];
+        }
+
+        var boundaryColor = ((byte)22, (byte)24, (byte)28);
+
+        return Downsample(width, height,
+            i =>
+            {
+                int c = At(i);
+                if (c == Water) return ((byte)38, (byte)62, (byte)96);
+                if (c == Impassable) return ((byte)92, (byte)92, (byte)100);
+                if (c == NoCounty) return ((byte)255, (byte)0, (byte)255);
+
+                if (isWild[c])
+                {
+                    if (Edge(i, c)) return boundaryColor;
+
+                    // Amber against the muted settled ground, and brighter along the frontier edge.
+                    return Frontier(i, c) ? ((byte)255, (byte)190, (byte)90)
+                                          : ((byte)168, (byte)120, (byte)48);
+                }
+
+                return Edge(i, c) ? ((byte)70, (byte)74, (byte)80)
+                                  : ((byte)108, (byte)114, (byte)122);
+            },
+            i =>
+            {
+                int c = At(i);
+                if (c < 0) return 0;
+
+                // Rank so the thin things survive downsampling: the frontier line first, then any
+                // wilderness at all, then ordinary borders. Without this a one-county clump can
+                // vanish entirely at preview scale, which is the exact case worth seeing.
+                if (isWild[c] && Frontier(i, c)) return 3;
+                if (isWild[c]) return 2;
+                return Edge(i, c) ? 1 : 0;
+            });
+    }
+
+
     private static (byte R, byte G, byte B) Colour(TerrainClass terrain)
         => Io.DebugRender.TerrainColour(terrain);
 
