@@ -144,7 +144,7 @@ public static class ContentWriter
         Core.Stage.Time("compatibility", () =>
         {
             // The engine's world size must match the province map we ship.
-            CompatibilityWriter.WriteDefines(modDir, cfg);
+            CompatibilityWriter.WriteDefines(modDir, gameDir, cfg);
 
             // Re-declare rather than blank: a missing region key is a hard script error.
             CompatibilityWriter.WriteGeographicalRegions(modDir, gameDir, empires);

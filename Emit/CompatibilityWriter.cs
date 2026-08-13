@@ -62,6 +62,54 @@ public static class CompatibilityWriter
     private const int VanillaFlatMapZoomStep = 21;
 
     /// <summary>
+    /// Vanilla's government list, plus ours.
+    ///
+    /// A government type declared in <c>common/governments</c> is NOT registered until its key also
+    /// appears in <c>NGovernment.GOVERNMENT_TYPES</c>. Miss it and the game logs a wall of
+    /// "Could not find the preregistered modifier type 'x_government_opinion'" — one per contract
+    /// modifier — and the government half-exists thereafter. ck3-tiger does not catch this: the
+    /// script files are all valid, and the missing piece is an engine registration list.
+    ///
+    /// Read from the installed game rather than hardcoded. The list is thirty-odd entries that
+    /// Paradox adds to every major patch, and a stale copy would silently *remove* whichever
+    /// governments were added since — a far worse failure than the one it fixes.
+    /// </summary>
+    private static string GovernmentTypes(string gameDir, Config.MapConfig cfg)
+    {
+        string source = Path.Combine(gameDir, "common", "defines", "00_defines.txt");
+        if (!cfg.EnableWilderness || !File.Exists(source)) return "";
+
+        string text = File.ReadAllText(source);
+
+        int start = text.IndexOf("GOVERNMENT_TYPES", StringComparison.Ordinal);
+        if (start < 0) return "";
+
+        int open = text.IndexOf('{', start);
+        int close = text.IndexOf('}', open);
+        if (open < 0 || close < 0) return "";
+
+        var entries = System.Text.RegularExpressions.Regex
+            .Matches(text[(open + 1)..close], "\"([^\"]+)\"")
+            .Select(m => m.Groups[1].Value)
+            .ToList();
+
+        if (entries.Count == 0) return "";
+        entries.Add("wilderness_government");
+
+        var sb = new StringBuilder();
+        sb.Append("\n# Vanilla's list, read from the installed game, plus the wilderness government.\n");
+        sb.Append("# A government absent from here is never registered, whatever common/governments says.\n");
+        sb.Append("NGovernment = {\n\tGOVERNMENT_TYPES = {\n");
+        foreach (string entry in entries) sb.Append($"\t\t\"{entry}\"\n");
+        sb.Append("\t}\n}\n");
+
+        Console.WriteLine($"  defines: GOVERNMENT_TYPES {entries.Count} entries "
+                          + $"({entries.Count - 1} vanilla + wilderness)");
+
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// Overrides NJominiMap so the engine's world size matches the province map we actually
     /// ship. This is not optional and it is easy to miss.
     ///
@@ -71,7 +119,7 @@ public static class CompatibilityWriter
     /// pathfinding node and terrain lookup lands in the wrong place — with nothing logged,
     /// because none of it is a script error.
     /// </summary>
-    public static void WriteDefines(string modDir, Config.MapConfig cfg)
+    public static void WriteDefines(string modDir, string gameDir, Config.MapConfig cfg)
     {
         string dir = Path.Combine(modDir, "common", "defines");
         Directory.CreateDirectory(dir);
@@ -105,7 +153,7 @@ public static class CompatibilityWriter
               	WORLD_EXTENTS_Z = {{cfg.ProvinceHeight - 1}}
               	WATERLEVEL = {{waterLevel}}
               }
-
+              {{GovernmentTypes(gameDir, cfg)}}
               """);
 
         Console.WriteLine($"  defines: WORLD_EXTENTS {cfg.ProvinceWidth - 1} x {extentY} x {cfg.ProvinceHeight - 1}, " +
