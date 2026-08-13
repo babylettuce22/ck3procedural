@@ -166,6 +166,11 @@ public static class ContentWriter
         // the map has nowhere to put holdings, armies or sieges.
         Core.Stage.Time("locators", () => LocatorWriter.WriteAll(modDir, gameDir, provinces, order, landCount, provinceElevation, cfg));
 
+        // Hide the dummy holder, its government, and the culture and faith the engine forced us to
+        // invent, on any county nobody lives in. Reads vanilla's county view and writes a patched
+        // copy into the mod; the game folder is never written to. See Emit/GuiWriter.cs.
+        Core.Stage.Time("county view", () => GuiWriter.WriteAll(modDir, gameDir, cfg));
+
         // The main menu renders live 3D portraits, which is the step right after history load.
         Core.Stage.Time("frontend", () => FrontendWriter.WriteFrontend(modDir, gameDir));
 

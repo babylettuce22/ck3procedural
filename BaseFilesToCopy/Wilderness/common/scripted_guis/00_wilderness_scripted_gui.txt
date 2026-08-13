@@ -1,0 +1,39 @@
+﻿# The bridge between the UI and the colonisation system.
+#
+# A scripted_gui is the only way a .gui file can ask a question about game state: PdxGui can read
+# data-model promotes like `County.GetFaith`, but it cannot run a trigger. `IsShown` is that trigger,
+# callable from a widget's `visible`.
+#
+# Emit/GuiWriter.cs is the only caller. It injects references to `wilderness_county` into a copy of
+# vanilla's window_county_view.gui, so the name below is a contract with that writer — renaming it
+# here silently stops the injection working, because a .gui file that names a scripted_gui which
+# does not exist logs nothing and simply evaluates false.
+
+# Province scope. Is the county this province belongs to unsettled?
+#
+# Province rather than title scope because that is what the county view has to hand:
+# `HoldingView.GetProvince` is available everywhere in that window, while the county title is not
+# reachable from every widget that needs the answer.
+#
+# ---- The one duplicated condition in this system, and why ----
+#
+# Everywhere else, "is this county wilderness" is asked through is_wilderness_county_trigger, so the
+# rule has exactly one definition. Here it is written out instead, and that is a concession rather
+# than a preference.
+#
+# `county = { is_wilderness_county_trigger = yes }` is valid CK3 — both vanilla
+# (tgp_scripted_guis.txt: `coronation_trigger = yes`) and AGOT (`agot_is_pirate_domicile_title_trigger
+# = yes`) call scripted triggers from inside a scripted_gui. But ck3-tiger reports it as an unknown
+# token in this position, and a validator that cries wolf on one line trains you to ignore it on the
+# next. The inline form validates clean and behaves identically.
+#
+# The cost is real: if the definition of wilderness ever changes, it has to change in two places.
+# Both are one line, both say the same thing, and this comment is the pointer between them. Revisit
+# if tiger learns to resolve this — the delegating form is the better code.
+wilderness_county = {
+	scope = province
+
+	is_shown = {
+		county.holder ?= { government_has_flag = government_is_wilderness }
+	}
+}
