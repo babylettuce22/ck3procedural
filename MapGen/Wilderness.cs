@@ -1,4 +1,4 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 using Ck3MapGen.World;
 
@@ -203,20 +203,49 @@ public static class Wilderness
         //
         // Clumps are offered in descending order of how wild they are, so when two conflict the
         // more deserving one is kept.
-        int severed = 0;
+        // A split is repaired by ABSORBING the stranded side, not by refusing the clump. Refusing
+        // was the first attempt and it fails at exactly the settings that need it most: at a high
+        // share the first clump grows to most of a continent, severs one duchy somewhere, and is
+        // thrown away whole — a 90% target delivered 13%, and the only regions that survived were
+        // islands, which sever nothing because their titles are entirely wild.
+        //
+        // Absorbing scales in both directions. A belt that strands three counties takes those three
+        // with it; a continent-wide region simply finishes the job. Either way the outcome satisfies
+        // the rule, because a title that is *entirely* wilderness was always allowed — it is only
+        // settled land on both sides of a belt that reads as two realms sharing a name.
+        //
+        // The budget is what stops absorption running away. A clump that would strand half a
+        // kingdom is still refused, because swallowing half a kingdom to place one region is worse
+        // than not placing it.
+        int budget = Math.Max(target, (int)Math.Round(target * 1.35));
+
+        int refused = 0, absorbed = 0;
         var accepted = new List<List<int>>();
         var taken = new HashSet<int>();
 
         foreach (var clump in kept.OrderByDescending(c => c.Average(i => score[i])))
         {
-            if (Severs(clump, taken, neighbours, counties))
+            var trial = new HashSet<int>(taken);
+            foreach (int i in clump) trial.Add(i);
+
+            var stranded = StrandedBy(trial, neighbours, counties);
+            if (taken.Count + clump.Count + stranded.Count > budget)
             {
-                severed++;
+                refused++;
                 continue;
             }
 
             accepted.Add(clump);
             foreach (int i in clump) taken.Add(i);
+
+            if (stranded.Count > 0)
+            {
+                // Stranded counties join the region that stranded them, so the run log's region
+                // count stays the number of places a player would point at.
+                accepted[^1].AddRange(stranded);
+                foreach (int i in stranded) taken.Add(i);
+                absorbed += stranded.Count;
+            }
         }
 
         // Same floor as the runt rule: the map must contain wilderness somewhere or the scripts
@@ -233,7 +262,8 @@ public static class Wilderness
 
         Console.WriteLine($"  wilderness: {result.Count} counties in {kept.Count} regions "
             + $"({(double)result.Count / counties.Count:P1} of the map, target {cfg.WildernessShare:P0})"
-            + (severed > 0 ? $", {severed} given back for severing a title" : ""));
+            + (absorbed > 0 ? $", {absorbed} absorbed to keep titles whole" : "")
+            + (refused > 0 ? $", {refused} regions refused on budget" : ""));
 
         return new WildernessMap(result);
     }
@@ -266,51 +296,79 @@ public static class Wilderness
     /// Only the titles this clump actually touches are checked. A clump cannot disconnect a duchy it
     /// has no county in, so the cost is proportional to the clump rather than to the map.
     /// </summary>
-    private static bool Severs(List<int> clump, HashSet<int> alreadyTaken,
-        List<int>[] neighbours, List<Title> counties)
+    private static HashSet<int> StrandedBy(HashSet<int> wild, List<int>[] neighbours,
+        List<Title> counties)
     {
-        var wild = new HashSet<int>(alreadyTaken);
-        foreach (int i in clump) wild.Add(i);
+        var stranded = new HashSet<int>();
 
-        // Duchies and kingdoms both, because they fragment independently: a belt can leave every
-        // duchy intact and still cut the kingdom above them into two halves.
-        var affected = new HashSet<Title>();
-        foreach (int i in clump)
+        // Absorbing a county can strand another — it belongs to a duchy and a kingdom, and taking
+        // it may cut either — so this repeats until nothing new falls out. Bounded because a
+        // pathological map could otherwise walk the whole continent one county at a time; hitting
+        // the cap simply means the caller sees a large stranded set and refuses on budget, which is
+        // the right answer anyway.
+        for (int pass = 0; pass < 8; pass++)
         {
-            if (counties[i].Parent is { } duchy) affected.Add(duchy);
-            if (Kingdom(counties[i]) is { } kingdom) affected.Add(kingdom);
-        }
+            var before = stranded.Count;
 
-        foreach (var title in affected)
-        {
-            var members = new HashSet<int>();
-            for (int i = 0; i < counties.Count; i++)
+            // Duchies and kingdoms both, because they fragment independently: a belt can leave
+            // every duchy intact and still cut the kingdom above them into two halves.
+            var titles = new HashSet<Title>();
+            foreach (int i in wild.Concat(stranded))
             {
-                if (wild.Contains(i)) continue;
-                if (ReferenceEquals(counties[i].Parent, title) || ReferenceEquals(Kingdom(counties[i]), title))
-                    members.Add(i);
+                if (counties[i].Parent is { } duchy) titles.Add(duchy);
+                if (Kingdom(counties[i]) is { } kingdom) titles.Add(kingdom);
             }
 
-            if (members.Count <= 1) continue;
-
-            // Flood from any member, never stepping outside the title.
-            var seen = new HashSet<int>();
-            var queue = new Queue<int>();
-            int start = members.First();
-            queue.Enqueue(start);
-            seen.Add(start);
-
-            while (queue.Count > 0)
+            foreach (var title in titles)
             {
-                foreach (int next in neighbours[queue.Dequeue()])
-                    if (members.Contains(next) && seen.Add(next))
-                        queue.Enqueue(next);
+                var members = new HashSet<int>();
+                for (int i = 0; i < counties.Count; i++)
+                {
+                    if (wild.Contains(i) || stranded.Contains(i)) continue;
+                    if (ReferenceEquals(counties[i].Parent, title)
+                        || ReferenceEquals(Kingdom(counties[i]), title))
+                        members.Add(i);
+                }
+
+                if (members.Count <= 1) continue;
+
+                // Every connected piece of what the title has left, flooding without ever stepping
+                // outside it.
+                var pieces = new List<List<int>>();
+                var seen = new HashSet<int>();
+
+                foreach (int start in members)
+                {
+                    if (!seen.Add(start)) continue;
+
+                    var piece = new List<int> { start };
+                    var queue = new Queue<int>();
+                    queue.Enqueue(start);
+
+                    while (queue.Count > 0)
+                        foreach (int next in neighbours[queue.Dequeue()])
+                            if (members.Contains(next) && seen.Add(next))
+                            {
+                                piece.Add(next);
+                                queue.Enqueue(next);
+                            }
+
+                    pieces.Add(piece);
+                }
+
+                if (pieces.Count <= 1) continue;
+
+                // Keep the largest piece as the title's real territory; everything else is a
+                // remnant the wilderness has cut off, and goes wild with it.
+                foreach (var piece in pieces.OrderByDescending(p => p.Count).Skip(1))
+                    foreach (int i in piece)
+                        stranded.Add(i);
             }
 
-            if (seen.Count != members.Count) return true;
+            if (stranded.Count == before) break;
         }
 
-        return false;
+        return stranded;
     }
 
     /// <summary>A county's de jure kingdom, or null if the tree is shallower than that.</summary>
