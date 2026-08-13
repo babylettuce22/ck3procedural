@@ -11,7 +11,15 @@
 
 # --- What it costs to claim a county ---------------------------------------------------------
 
-@base_colonize_cost = 50
+# Founding a colony is close in price to building a holding outright (400, see
+# promote_colony_cost), and that is deliberate. At 50 + rank it came to 75-150, which any AI could
+# pay out of pocket in the first year — so every ruler bordering wilderness claimed everything they
+# could reach within a couple of years and the frontier stopped existing before the first
+# succession. The claim has to be an investment a ruler weighs, not loose change.
+#
+# What you get for it is far less than a holding: an empty county with obstacles on it and an
+# upkeep bill. The price is for the ground and the right to work it.
+@base_colonize_cost = 200
 
 # Scaled by rank, because a king claiming a county is committing a smaller share of his realm to it
 # than a count is, and should feel a proportionate bill.
@@ -20,18 +28,18 @@ colonize_cost = {
 
 	if = {
 		limit = { highest_held_title_tier = tier_county }
-		add = { value = 25 desc = colonize_cost_tier_desc }
-	}
-	else_if = {
-		limit = { highest_held_title_tier = tier_duchy }
 		add = { value = 50 desc = colonize_cost_tier_desc }
 	}
 	else_if = {
+		limit = { highest_held_title_tier = tier_duchy }
+		add = { value = 100 desc = colonize_cost_tier_desc }
+	}
+	else_if = {
 		limit = { highest_held_title_tier = tier_kingdom }
-		add = { value = 75 desc = colonize_cost_tier_desc }
+		add = { value = 150 desc = colonize_cost_tier_desc }
 	}
 	else = {
-		add = { value = 100 desc = colonize_cost_tier_desc }
+		add = { value = 200 desc = colonize_cost_tier_desc }
 	}
 }
 

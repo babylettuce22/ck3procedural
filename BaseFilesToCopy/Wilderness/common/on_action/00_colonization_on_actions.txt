@@ -89,8 +89,34 @@ wilderness_yearly_pulse = {
 		}
 
 		# --- And consider starting another -----------------------------------------------------
+		#
+		# 6%, down from 40%. At 40 every AI ruler bordering wilderness claimed everything within
+		# reach inside two or three years and the frontier was gone before the first succession —
+		# the map spent one reign becoming a normal map. Colonisation is supposed to be a thing a
+		# realm does once in a while and remembers, not a land rush.
+		#
+		# The modifiers are what stop 6% being merely slow-and-uniform. A greedy or bold ruler with
+		# money to spare is several times likelier to try than a cautious one, so which realms push
+		# into the wilderness says something about who is running them — and two neighbours in the
+		# same position behave differently, which is most of what makes the frontier feel alive
+		# rather than scheduled.
 		random = {
-			chance = 40
+			chance = 6
+
+			modifier = { ai_greed > 50     add = 5 }
+			modifier = { ai_boldness > 50  add = 4 }
+			modifier = { has_trait = ambitious  add = 5 }
+
+			# Genuinely rich, not merely solvent. A ruler sitting on ten times the price is one for
+			# whom this is pocket money, and those are the ones who historically did it.
+			modifier = {
+				gold > { value = colonize_cost  multiply = 10 }
+				add = 6
+			}
+
+			# Nothing better to do with the men.
+			modifier = { is_at_war = no  add = 2 }
+
 			trigger_event = wilderness_colonization.0001
 		}
 	}

@@ -284,11 +284,14 @@ colonize_county_effect = {
 		# So: the two player entry points declare `cost = { gold = ... }` and the engine handles it;
 		# wilderness_colonization.0001 deducts explicitly, one line, right where it fires.
 
-		# One claim at a time. Without this an AI with gold empties a whole region in a year, which
-		# is both ahistorical and the fastest way to make the frontier stop existing.
+		# One claim at a time, and not soon after the last. Two years was not nearly enough: with
+		# the old 40% pulse and a cheap claim, a wealthy AI could take a county every other year
+		# and clear a region inside a decade. Five means a ruler founds a couple of colonies in a
+		# reign rather than a province of them, and it applies to the player for the same reason —
+		# the pause is where a colony either takes hold or does not.
 		set_variable = {
 			name = colonization_cooldown
-			years = 2
+			years = 5
 		}
 	}
 }

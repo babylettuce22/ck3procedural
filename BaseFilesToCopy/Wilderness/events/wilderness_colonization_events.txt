@@ -57,10 +57,29 @@ wilderness_colonization.0001 = {
 		NOT = { has_variable = colonization_cooldown }
 		can_hold_another_colony_trigger = yes
 
-		# Enough gold for the claim AND something left over, plus income to carry the upkeep the
-		# new settlement_01 will start charging.
-		gold > colonize_cost
-		monthly_character_income > 1.5
+		# --- Who is actually in a position to do this ------------------------------------------
+		#
+		# These were far too loose. `gold > colonize_cost` with a cost of 75-150 meant any ruler
+		# who had not just fought a war qualified, so the pulse's job of making colonisation rare
+		# was being done by the dice alone. Rarity that comes only from a low chance is uniform —
+		# every realm equally unlikely, forever. Rarity that comes from conditions means the realms
+		# that DO push outward are the ones it makes sense for, which is the version worth having.
+		#
+		# Three times the price in hand, not merely the price. A ruler who would be broke the
+		# moment the claim went through cannot carry a colony through its first winter, and a
+		# colony that fails is worse than one never founded.
+		gold > { value = colonize_cost  multiply = 3 }
+
+		# Enough income to absorb the upkeep settlement_01 starts charging on the day it appears.
+		monthly_character_income > 4
+
+		# Not while fighting. Settlers and soldiers come out of the same villages, and an AI that
+		# colonises mid-war is one that does it while its army is dying somewhere else.
+		is_at_war = no
+
+		# Not already holding more than they can govern. A ruler over their domain limit is losing
+		# money on what they have; handing them another county models nobody's actual behaviour.
+		domain_size < domain_limit
 
 		any_sub_realm_county = {
 			any_title_to_title_neighboring_and_across_water_county = {
