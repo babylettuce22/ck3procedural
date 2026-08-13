@@ -1,6 +1,10 @@
 ﻿using System.ComponentModel;
-
 namespace Ck3MapGen.Config;
+
+[AttributeUsage(AttributeTargets.Property)]
+public sealed class AdvancedSettingAttribute : Attribute
+{
+}
 
 /// <summary>
 /// Every knob the mod is built with.
@@ -16,7 +20,7 @@ namespace Ck3MapGen.Config;
 /// user picks — the heightmap is the only authority on how big the map is, and disagreeing with it
 /// is a silent CK3 failure rather than an error.
 /// </summary>
-public sealed class MapConfig
+public sealed class MapConfig : CustomTypeDescriptor
 {
     /// <summary>Heightmap size. Set from the image; not user-editable.</summary>
     [Browsable(false)]
@@ -31,6 +35,11 @@ public sealed class MapConfig
 
     [Browsable(false)]
     public int WorldHeight { get; set; } = 512;
+
+    [Category("01 General")]
+    [Description("Toggle between showing basic settings and advanced fine-tuning knobs.")]
+    [RefreshProperties(RefreshProperties.All)] // Tells PropertyGrid to redraw instantly when changed
+    public bool ShowAdvancedSettings { get; set; } = false;
 
     /// <summary>Seed for every random decision.</summary>
     [Category("01 General")]
@@ -54,6 +63,54 @@ public sealed class MapConfig
     [Description("Ship the wilderness and colonisation system: unsettled counties held by nobody, obstacles that have to be cleared, and colonies that grow into real holdings. Off leaves the mod with no notion of wilderness at all.")]
     public bool EnableWilderness { get; set; } = true;
 
+    /// <summary>
+    /// Share of counties left unsettled, as a fraction of the whole map.
+    ///
+    /// A target rather than a guarantee: the clumping pass below discards anything too small to
+    /// read as a region, so the delivered share lands a little under this. Zero disables placement
+    /// while still shipping the scripts — but with <see cref="EnableWilderness"/> on, at least one
+    /// county is always placed, because a wilderness system with no wilderness in it is
+    /// indistinguishable from a broken one and there would be nothing to test against.
+    /// </summary>
+    [Category("16 Wilderness")]
+    [Description("Share of counties left as unsettled wilderness. A target, not a guarantee — clumps too small to read as a region are discarded, so the delivered share lands slightly under this.")]
+    public double WildernessShare { get; set; } = 0.12;
+
+    /// <summary>
+    /// How strongly wilderness is pulled toward the map's edges rather than its interior.
+    ///
+    /// 1 puts it on the rim, 0 ignores position entirely and places purely on how hostile the
+    /// ground is, and -1 pulls it inland instead. The default leans outward because a frontier
+    /// reads as a frontier when it is at the edge of the known world; set it negative for a map
+    /// whose middle is a wasteland and whose coasts are settled.
+    /// </summary>
+    [Category("16 Wilderness")]
+    [Description("Pull wilderness toward the map edges (1), ignore position (0), or pull it inland (-1). Edge-biased reads as a frontier at the rim of the world; inland-biased makes the interior the wasteland.")]
+    public double WildernessEdgeBias { get; set; } = 0.5;
+
+    /// <summary>
+    /// How strongly hostile ground attracts wilderness, against everything else.
+    ///
+    /// The other half of the placement score. At 0 wilderness lands wherever the position bias
+    /// says regardless of terrain, which produces empty farmland; at 1 it follows the mountains,
+    /// ice and marsh and ignores where they are.
+    /// </summary>
+    [Category("16 Wilderness")]
+    [Description("How strongly wilderness follows hostile terrain — mountains, ice, desert, marsh, jungle — against the edge bias. At 0 it ignores terrain entirely and can leave empty farmland.")]
+    public double WildernessTerrainWeight { get; set; } = 0.7;
+
+    /// <summary>
+    /// Smallest run of connected counties kept as wilderness.
+    ///
+    /// The whole reason placement is a two-pass affair. Ranking counties by score and taking the
+    /// worst N speckles single wild counties through settled land, which reads as a generation
+    /// fault rather than as a frontier; growing clumps from seeds and discarding the runts is what
+    /// makes the result look deliberate. 1 disables the check and restores the speckle.
+    /// </summary>
+    [Category("16 Wilderness")]
+    [Description("Smallest connected run of counties kept as wilderness. Lone wild counties surrounded by settled land read as a bug, so runts below this are given back. Set to 1 to allow singletons.")]
+    public int WildernessMinClump { get; set; } = 3;
+
     [Category("02 World State")]
     public int StartYear { get; set; } = 900;
     [Description("Bookmark date, determines ratio of feudal to tribal governments based on development and terrain and relative to the 867 vanilla start date")]
@@ -65,11 +122,16 @@ public sealed class MapConfig
     /// Share of land put above the mountain line. Vanilla's own heightmap has 3.3% of its land in
     /// the 121-170 band, and that is the number this reproduces.
     /// </summary>
+    [AdvancedSetting]
     [Category("11 Height scale")]
     [Description("Share of land put above the mountain line. Vanilla's own heightmap has 3.3% of its land in the 121-170 band, and that is the number this reproduces.")]
     public double MountainLineShare { get; set; } = 0.035;
+    
+    [AdvancedSetting]
     [Category("11 Height scale")]
     public int PeakElevation { get; set; } = 520;
+    
+    [AdvancedSetting]
     [Category("11 Height scale")]
     public int SeaFloorElevation { get; set; } = -250;
 
@@ -110,6 +172,7 @@ public sealed class MapConfig
     /// It still has to be roughly right for a source that puts its coastline somewhere unusual.
     /// 19 is CK3's own. Azgaar's is 20 on its 0-100 scale, which is 51 here.
     /// </summary>
+    
     [Category("11 Height scale")]
     [Description("Where the source heightmap puts sea level, on the 0-255 scale. CK3's own is 19; This decides only which pixels count as water — the land scale is anchored on a detected floor, so this no longer has to be exactly right for the land side to come out correct.")]
     public double SourceSeaLevel { get; set; } = 19;
@@ -137,6 +200,7 @@ public sealed class MapConfig
     /// Raise it towards 1 to cut the fringe harder, lower it towards 0 to keep more of it. 0
     /// disables detection and takes the true minimum, which is the old behaviour.
     /// </summary>
+    [AdvancedSetting]
     [Category("11 Height scale")]
     [Description("How far land density may fall below its own peak before the bottom anchor stops walking down. This is what stops a few hundred stray coastal pixels from anchoring the whole land scale and leaving the map a plateau with a cliff at every shore. Measured stable from 0.05 to 0.20; 0 disables detection and takes the true minimum instead.")]
     public double LandFloorDensity { get; set; } = 0.10;
@@ -150,6 +214,7 @@ public sealed class MapConfig
     /// towards 255 for a deliberately alpine map; that is the knob that decides how flat the
     /// result reads.
     /// </summary>
+    [AdvancedSetting]
     [Category("11 Height scale")]
     [Description("What the highest land pixel becomes, on the 0-255 scale. 191 is vanilla's own highest; vanilla never uses the top of the range. Raise towards 255 for a more dramatic map — this is the knob that decides how flat the result reads.")]
     public double LandTop { get; set; } = 191;
@@ -170,6 +235,7 @@ public sealed class MapConfig
     /// the last two are outlier rejection; the first two are terrain. Turn it down deliberately,
     /// watching the clipped count in the log, rather than as a matter of course.
     /// </summary>
+    [AdvancedSetting]
     [Category("11 Height scale")]
     [Description("Which percentile of land the top anchor is taken at, instead of the maximum. Everything above it is clipped flat, so this trades the tips of the tallest peaks for a bigger stretch under them. Land is counted in pixels: on a large map even 99.5 can flatten a whole mountain range, so watch the clipped count in the log. 100 anchors on the true maximum.")]
     public double LandTopPercentile { get; set; } = 99.99;
@@ -249,6 +315,7 @@ public sealed class MapConfig
     /// Average sea zone area, same basis. Vanilla's sea zones are an order of magnitude larger
     /// than its baronies — roughly 800 of them over 20M water pixels.
     /// </summary>
+    [AdvancedSetting]
     [Category("03 Provinces")]
     [Description("Average sea zone area, same basis. Vanilla's sea zones are an order of magnitude larger than its baronies — roughly 800 of them over 20M water pixels.")]
     public double SeaZonePixelsAtVanilla { get; set; } = 25000;
@@ -273,6 +340,7 @@ public sealed class MapConfig
     /// Small values make province size change every few provinces, which reads as noise rather than
     /// as regions; the default is about the width of European Russia on vanilla's map.
     /// </summary>
+    [AdvancedSetting]
     [Category("03 Provinces")]
     [Description("How wide a stretch of map holds provinces of roughly one size, in vanilla province pixels. The default is about the width of European Russia on vanilla's map; much smaller and the size changes every few provinces, which reads as noise rather than as regions.")]
     public double ProvinceSizeRegionPixels { get; set; } = 2600;
@@ -345,6 +413,7 @@ public sealed class MapConfig
     /// default therefore reaches the seas real medieval realms actually spanned without letting a
     /// kingdom claim another continent.
     /// </summary>
+    [AdvancedSetting]
     [Category("04 Titles")]
     [Description("How wide a stretch of water a kingdom or empire may reach across, in vanilla province pixels. Counties and duchies always stay on one landmass. Vanilla reference: Dover about 30 px, the Irish Sea about 90.")]
     public double SeaBridgePixelsAtVanilla { get; set; } = 110;
@@ -377,6 +446,7 @@ public sealed class MapConfig
     /// the deepest point that province has. 0 lets a model sit on the border; 1 pins it to the
     /// single deepest pixel and leaves flatness no say.
     /// </summary>
+    [AdvancedSetting]
     [Category("04 Titles")]
     [Description("How deep inside its province a holding or army model must stand, as a fraction of that province's deepest point. Raising it keeps models further from coastlines; lowering it lets flatness matter more than position.")]
     public double LocatorInteriorFraction { get; set; } = 0.6;
@@ -386,6 +456,7 @@ public sealed class MapConfig
     /// map's median slope, so 1 means being a province-radius off centre costs as much as standing
     /// on ground one median slope steeper.
     /// </summary>
+    [AdvancedSetting]
     [Category("04 Titles")]
     [Description("How much a holding prefers the middle of its province over flat ground. 0 puts it on the flattest eligible pixel wherever that is; higher pulls it toward the centre even if the ground there is steeper.")]
     public double LocatorCentroidPull { get; set; } = 0.75;
@@ -525,6 +596,7 @@ public sealed class MapConfig
     /// vanilla province pixels. The cost is a first difference, so without this it answers to
     /// pixel-scale roughness and fringes every border at that scale. 0 uses the heightmap as it is.
     /// </summary>
+    [AdvancedSetting]
     [Category("03 Provinces")]
     [Description("How far the partition blurs the terrain before growing provinces along it, in vanilla province pixels. Its cost is a first difference, so on an unsmoothed heightmap it answers to every scrap of pixel-scale roughness and frays the border at that scale. 0 uses the heightmap as it is.")]
     public double ProvinceTerrainSmoothPixels { get; set; } = 8;
@@ -544,6 +616,7 @@ public sealed class MapConfig
     /// two lopsided neighbours. Each round costs a whole repartition, which is the slowest step
     /// here, so this is the setting to drop to 0 when previewing something else.
     /// </summary>
+    [AdvancedSetting]
     [Category("03 Provinces")]
     [Description("Rounds of Lloyd relaxation on the province seeds — move each seed to the middle of the province it grew, then grow them all again. Turns a voronoi diagram into a centroidal one, which is what stops provinces being squeezed to a waist between lopsided neighbours. Each round costs a full repartition, the slowest step in the tool.")]
     public int ProvinceRelaxIterations { get; set; } = 1;
@@ -591,6 +664,7 @@ public sealed class MapConfig
     [Description("Share of land counted as steep ground, as a percentile of this map's own slopes. A percentile rather than an absolute gradient, so it means the same thing on any heightmap.")]
     public double SteepLineShare { get; set; } = 0.4;
 
+    [AdvancedSetting]
     [Category("03 Provinces")]
     [Description("Smallest allowed province in pixels. Below this CK3 cannot derive borders, a centroid or locator positions and crashes in geometry code without logging anything.")]
     public int MinProvincePixels { get; set; } = 32;
@@ -604,6 +678,7 @@ public sealed class MapConfig
     /// touched the top edge and 17 the bottom. A province clipped by the map boundary has an
     /// open border, which is the sort of thing a boundary-following walk cannot close.
     /// </summary>
+    [AdvancedSetting]
     [Category("03 Provinces")]
     [Description("Rows and columns of forced ocean around the edge of the province map, in province pixels. Vanilla has water along every edge — its top and bottom rows are entirely sea, and its province map has only a handful of large ocean provinces touching them. A generated map happily runs land off the poles instead: on seed 1 at vanilla size, 33 land provinces touched the top edge and 17 the bottom. A prov...")]
     public int OceanBorder { get; set; } = 1;
@@ -709,6 +784,46 @@ public sealed class MapConfig
 
     public Limits Limits { get; } = new();
 
+    /// <summary>
+    /// Hands the base descriptor a real parent, so every member we do not override below
+    /// (attributes, converter, editor, events) still answers for this type instead of returning
+    /// the empty defaults a parentless <see cref="CustomTypeDescriptor"/> gives.
+    /// </summary>
+    public MapConfig()
+        : base(TypeDescriptor.GetProvider(typeof(MapConfig)).GetTypeDescriptor(typeof(MapConfig)))
+    {
+    }
+
+    /// <summary>
+    /// The object the grid reads and writes property values on. The parentless base returns null
+    /// here, which is what leaves every row blank and uneditable.
+    /// </summary>
+    public override object GetPropertyOwner(PropertyDescriptor? pd) => this;
+
+    public override PropertyDescriptorCollection GetProperties()
+    => GetProperties(null);
+
+    public override PropertyDescriptorCollection GetProperties(Attribute[]? attributes)
+    {
+        // Get all default properties
+        var baseProps = TypeDescriptor.GetProperties(this, attributes, true);
+
+        // If advanced mode is enabled, show everything as normal
+        if (ShowAdvancedSettings)
+            return baseProps;
+
+        // Otherwise, filter out anything tagged with [AdvancedSetting]
+        var filtered = new List<PropertyDescriptor>();
+        foreach (PropertyDescriptor prop in baseProps)
+        {
+            if (prop.Attributes[typeof(AdvancedSettingAttribute)] == null)
+            {
+                filtered.Add(prop);
+            }
+        }
+
+        return new PropertyDescriptorCollection(filtered.ToArray());
+    }
 }
 
 /// <summary>

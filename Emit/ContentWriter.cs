@@ -75,6 +75,13 @@ public static class ContentWriter
             return levels;
         });
 
+        // Which counties nobody lives in. Between development and cultures because it reads the
+        // first and every stage below it has to skip what it returns — a wilderness county has no
+        // culture, no faith, no government, no ruler and no holdings, and each of those is somebody
+        // else's file. See MapGen/Wilderness.cs.
+        var wilderness = Core.Stage.Time("wilderness", () => MapGen.Wilderness.Build(counties,
+            provinces, order, landCount, provinceTerrain, development, cfg, new Rng(cfg.Seed ^ 0x1D17)));
+
         var cultures = Core.Stage.Time("cultures", () =>
         {
             var map = MapGen.Cultures.Build(empires, provinces, order, landCount, provinceTerrain,
