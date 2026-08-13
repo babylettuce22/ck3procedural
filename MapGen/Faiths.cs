@@ -368,11 +368,57 @@ public static class Faiths
     /// scribes and the temples are, while leaving enough noise that it is not simply a readout of
     /// development.
     /// </summary>
-    private static Religion CreateReligion(int index, double tribalShare, VanillaVocabulary vocab,
+    /// <summary>The faith wilderness counties carry. Fixed, so history and script can name it.</summary>
+    public const string UnsettledFaithKey = "gen_faith_unsettled";
+
+    /// <summary>
+    /// The faith of land nobody lives on, and the religion that holds it.
+    ///
+    /// A whole religion for one faith, rather than another faith inside a generated one, because
+    /// doctrines live at religion level: hanging "Unsettled" off a generated religion would make
+    /// empty ground share that religion's hostility, marriage and clerical rules and count as its
+    /// co-religionist for every war and opinion check in the game.
+    ///
+    /// The doctrines themselves come from the ordinary generator rather than a hand-written list.
+    /// Doctrine groups are numerous, version-specific and individually mandatory — a religion
+    /// missing one loads with a broken faith rather than an error — so the safe way to get a valid
+    /// set is to ask the same code that produces every other one.
+    ///
+    /// It holds no holy sites, which is the one place this departs from a normal faith. Sites are
+    /// counties, and every county this faith owns is empty by definition; pointing a pilgrimage at
+    /// unclaimed wilderness would be worse than owning none.
+    /// </summary>
+    public static (Religion Religion, Faith Faith) CreateUnsettled(VanillaVocabulary vocab,
         HashSet<string> usedNames, MapConfig cfg, Rng rng)
     {
-        var language = Language.Create($"religion_tongue_{index}", rng);
-        string key = $"gen_religion_{index}";
+        var religion = CreateReligion(0, 0, vocab, usedNames, cfg, rng,
+            keyOverride: "gen_religion_unsettled");
+
+        var faith = new Faith
+        {
+            Key = UnsettledFaithKey,
+            Name = "Unsettled",
+            Religion = religion,
+            Color = (0.42, 0.40, 0.37),
+            Icon = vocab.FaithIcons.Count > 0 ? rng.Pick(vocab.FaithIcons) : "germanic",
+            Tenets = Sample(vocab.Tenets, 3, rng),
+            IsOrganized = false,
+        };
+
+        religion.Faiths.Add(faith);
+        return (religion, faith);
+    }
+
+    /// <param name="keyOverride">
+    /// Names the religion something other than <c>gen_religion_{index}</c>. Only the unsettled
+    /// religion uses it: its key has to be stable across seeds so history and script can name it,
+    /// and it must not occupy an index the numbered religions might later want.
+    /// </param>
+    private static Religion CreateReligion(int index, double tribalShare, VanillaVocabulary vocab,
+        HashSet<string> usedNames, MapConfig cfg, Rng rng, string? keyOverride = null)
+    {
+        var language = Language.Create($"religion_tongue_{keyOverride ?? index.ToString()}", rng);
+        string key = keyOverride ?? $"gen_religion_{index}";
 
         // 1.6x on wholly settled land down to 0.15x on wholly tribal. The map's own tribal share
         // sits near a third, which lands the average multiplier close to 1 and keeps the map-wide
