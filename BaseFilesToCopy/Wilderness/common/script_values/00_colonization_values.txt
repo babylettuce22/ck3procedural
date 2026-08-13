@@ -19,30 +19,54 @@
 #
 # What you get for it is far less than a holding: an empty county with obstacles on it and an
 # upkeep bill. The price is for the ground and the right to work it.
-@base_colonize_cost = 200
+@base_colonize_cost = 100
+
+# Tribal rulers pay in the currency they actually have.
+#
+# A tribal realm is prestige-rich and gold-poor by design, so a gold price that reads as steep for a
+# feudal count is prohibitive for a chief with the same land — and settling empty country is exactly
+# the thing a tribal realm should be BEST at. Charging them 300 prestige and a token 75 gold prices
+# the same act in the currency their whole government is built to accumulate.
+@tribal_colonize_gold = 75
+@tribal_colonize_prestige = 300
 
 # Scaled by rank, because a king claiming a county is committing a smaller share of his realm to it
 # than a count is, and should feel a proportionate bill.
 colonize_cost = {
 	value = @base_colonize_cost
 
+	# Tribal replaces the whole scale rather than adding to it — see colonize_prestige_cost, which
+	# is where a tribal ruler's real price lives.
 	if = {
+		limit = { government_has_flag = government_is_tribal }
+		value = @tribal_colonize_gold
+	}
+	else_if = {
 		limit = { highest_held_title_tier = tier_county }
-		add = { value = 50 desc = colonize_cost_tier_desc }
+		add = { value = 25 desc = colonize_cost_tier_desc }
 	}
 	else_if = {
 		limit = { highest_held_title_tier = tier_duchy }
-		add = { value = 100 desc = colonize_cost_tier_desc }
+		add = { value = 50 desc = colonize_cost_tier_desc }
 	}
 	else_if = {
 		limit = { highest_held_title_tier = tier_kingdom }
-		add = { value = 150 desc = colonize_cost_tier_desc }
+		add = { value = 75 desc = colonize_cost_tier_desc }
 	}
 	else = {
-		add = { value = 200 desc = colonize_cost_tier_desc }
+		add = { value = 100 desc = colonize_cost_tier_desc }
 	}
 }
 
+# Zero for everyone but tribal rulers, who pay here instead of in gold.
+colonize_prestige_cost = {
+	value = 0
+
+	if = {
+		limit = { government_has_flag = government_is_tribal }
+		value = @tribal_colonize_prestige
+	}
+}
 
 # --- What it costs to clear an obstacle, and to grow a colony -------------------------------
 

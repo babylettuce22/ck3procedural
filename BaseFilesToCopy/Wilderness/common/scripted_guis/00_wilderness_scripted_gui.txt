@@ -129,6 +129,13 @@ wilderness_settle = {
 			text = colonize_cannot_afford_tt
 			gold >= colonize_cost
 		}
+
+		# Tribal rulers pay most of the price here rather than in gold; zero for everyone else, so
+		# this passes trivially for them.
+		custom_tooltip = {
+			text = colonize_cannot_afford_prestige_tt
+			prestige >= colonize_prestige_cost
+		}
 	}
 
 	effect = {
@@ -136,6 +143,7 @@ wilderness_settle = {
 
 		hidden_effect = {
 			remove_short_term_gold = colonize_cost
+			add_prestige = { value = colonize_prestige_cost  multiply = -1 }
 
 			colonize_county_effect = {
 				COUNTY = scope:wilderness.county

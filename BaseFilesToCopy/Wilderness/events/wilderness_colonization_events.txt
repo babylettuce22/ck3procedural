@@ -69,6 +69,7 @@ wilderness_colonization.0001 = {
 		# moment the claim went through cannot carry a colony through its first winter, and a
 		# colony that fails is worse than one never founded.
 		gold > { value = colonize_cost  multiply = 3 }
+		prestige >= colonize_prestige_cost
 
 		# Enough income to absorb the upkeep settlement_01 starts charging on the day it appears.
 		monthly_character_income > 4
@@ -99,6 +100,7 @@ wilderness_colonization.0001 = {
 			# and let the engine deduct; an event has no such block, so it pays here. See the note in
 			# colonize_county_effect for why the charge is not inside the effect itself.
 			remove_short_term_gold = colonize_cost
+			add_prestige = { value = colonize_prestige_cost  multiply = -1 }
 
 			colonize_county_effect = {
 				COUNTY = scope:wilderness

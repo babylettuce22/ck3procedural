@@ -91,6 +91,10 @@ claim_wilderness_interaction = {
 			value = 0
 			add = scope:actor.colonize_cost
 		}
+		prestige = {
+			value = 0
+			add = scope:actor.colonize_prestige_cost
+		}
 	}
 
 	on_accept = {
