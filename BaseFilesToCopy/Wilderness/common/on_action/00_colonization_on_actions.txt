@@ -120,24 +120,32 @@ wilderness_yearly_pulse = {
 
 		# --- And consider starting another -----------------------------------------------------
 		#
-		# 10%, down from the original 40%. At 40 every AI ruler bordering wilderness claimed
-		# everything within reach inside two or three years and the frontier was gone before the
-		# first succession — the map spent one reign becoming a normal map. Colonisation is supposed
-		# to be a thing a realm does once in a while and remembers, not a land rush.
+		# 17.5%, having been 40, then 6, then 10.
 		#
-		# Briefly 6, then raised once wars against the wilderness were closed. Most of what looked
-		# like a colonisation rush was actually CONQUEST: realms were taking unsettled counties
-		# through de jure and claim CBs, which no amount of tuning here would have touched. With
-		# that route shut the pulse is the only way in, so it can afford to be a little more
-		# generous than when it was competing with a free one.
+		# The history is worth keeping because each move was answering a different thing. 40 was a
+		# land rush: every AI bordering wilderness claimed everything in reach inside two or three
+		# years and the frontier was gone before the first succession. 6 over-corrected. 10 was
+		# raised once wars against the wilderness were closed — most of what had looked like a
+		# colonisation rush was actually CONQUEST through de jure and claim CBs, which no tuning
+		# here would ever have touched.
 		#
-		# The modifiers are what stop 10% being merely slow-and-uniform. A greedy or bold ruler with
+		# 17.5 is measured against observed play rather than reasoned from first principles, which
+		# is the right way round for a number like this.
+		#
+		# NOTE if this still reads as too rare: the base chance may not be the binding constraint.
+		# `domain_size < domain_limit` in wilderness_colonization.0001 excludes any ruler at or over
+		# their domain limit, and a great many AI rulers sit exactly there — that gate can reject
+		# more candidates than this roll does. The five-year claim cooldown is the other ceiling: at
+		# 17.5% a ruler waits about six years for a first claim and is then locked for five more, so
+		# no amount of chance here produces more than roughly one colony per ruler per decade.
+		#
+		# The modifiers are what stop 17.5% being merely slow-and-uniform. A greedy or bold ruler with
 		# money to spare is several times likelier to try than a cautious one, so which realms push
 		# into the wilderness says something about who is running them — and two neighbours in the
 		# same position behave differently, which is most of what makes the frontier feel alive
 		# rather than scheduled.
 		random = {
-			chance = 10
+			chance = 17.5
 
 			modifier = { ai_greed > 50     add = 5 }
 			modifier = { ai_boldness > 50  add = 4 }
