@@ -173,6 +173,12 @@ public sealed class MainForm : Form
     /// for why nothing derived from it may be.
     /// </summary>
     private MapGen.HeightmapImage? _loaded;
+
+    /// <summary>
+    /// What the last build found wrong with the heightmap. Set on the worker thread and read on the
+    /// UI thread once it has finished, which is the same handoff <see cref="_loaded"/> uses.
+    /// </summary>
+    private IReadOnlyList<MapGen.HeightmapWarning> _warnings = [];
     private string? _heightmapPath;
     private bool _busy;
     private CancellationTokenSource? _cancellation;
@@ -603,6 +609,10 @@ public sealed class MainForm : Form
                         _loaded = MapGen.HeightmapSource.Read(_heightmapPath!, cfg);
                     else
                         MapGen.HeightmapSource.Apply(_loaded, cfg);
+
+                    // Every build, not just a fresh decode: these depend on the height settings, so
+                    // changing one and rebuilding has to change what they say.
+                    _warnings = MapGen.HeightmapSource.Diagnose(_loaded, cfg);
                 });
 
                 var terra = Stage.Time("province elevation",
@@ -631,6 +641,49 @@ public sealed class MainForm : Form
         _status.Text = modDir is null
             ? $"Preview — {result.Provinces.Count} provinces. Nothing written."
             : $"Mod written to {modDir} — {result.Provinces.Count} provinces";
+
+        ShowHeightmapWarnings(modDir);
+    }
+
+    /// <summary>
+    /// Puts the import diagnostics in front of the user rather than in the log.
+    ///
+    /// These are the faults that produce a map which loads, generates without error, and is wrong
+    /// in game — an ocean rendered as open ground, a continent that is one plateau with a cliff at
+    /// every shore. Each one was already printed, and printing was measurably not enough: the log
+    /// scrolls past during a build nobody is watching, and the reports that reached us were of a
+    /// broken map rather than of a warning ignored.
+    ///
+    /// Shown after the preview is on screen, so the map behind the dialog is the map being
+    /// complained about, and the title says whether anything was written.
+    /// </summary>
+    private void ShowHeightmapWarnings(string? modDir)
+    {
+        if (_warnings.Count == 0) return;
+
+        var text = new System.Text.StringBuilder();
+        text.AppendLine(_warnings.Count == 1
+            ? "This heightmap has a problem that will be visible in game:"
+            : $"This heightmap has {_warnings.Count} problems that will be visible in game:");
+
+        foreach (var warning in _warnings)
+        {
+            text.AppendLine();
+            text.AppendLine($"• {warning.Title}");
+            text.AppendLine();
+            text.AppendLine(warning.Detail);
+        }
+
+        if (modDir is not null)
+        {
+            text.AppendLine();
+            text.AppendLine("The mod has been written anyway, so it is loadable — fix the settings "
+                            + "or the source and write it again.");
+        }
+
+        MessageBox.Show(this, text.ToString(),
+            modDir is null ? "Heightmap warnings" : "Heightmap warnings — mod written",
+            MessageBoxButtons.OK, MessageBoxIcon.Warning);
     }
 
     /// <summary>Runs work off the UI thread, with the buttons locked and failures sent to the log.</summary>

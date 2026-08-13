@@ -95,7 +95,7 @@ public sealed class MapConfig
     /// <see cref="Config.HeightmapNormalization"/> and <see cref="MapGen.HeightmapNormalizer"/>.
     /// </summary>
     [Category("11 Height scale")]
-    [Description("Rescale an imported heightmap onto CK3's height scale. Off for heightmaps this program wrote — measured on vanilla's own, normalising an already-correct map still applies a 1.11x stretch, so this is not a free no-op. Stretch for anything drawn elsewhere. Shift when the relief is already right and only sits too high.")]
+    [Description("Rescale an imported heightmap onto CK3's height scale.")]
     public HeightmapNormalization Normalization { get; set; } = HeightmapNormalization.Shift;
 
     /// <summary>

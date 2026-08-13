@@ -29,32 +29,74 @@ public sealed class Hypsometry
     /// <summary>One bucket per value of the 0-255 scale, counting land pixels only.</summary>
     private readonly int[] _landHistogram;
 
+    /// <summary>The same, for water. Only the buckets up to the water plane are ever used.</summary>
+    private readonly int[] _waterHistogram;
+
     public long Total { get; }
     public long Zero { get; }
     public long Water { get; }
     public long Land => Total - Water;
 
-    private Hypsometry(long total, long zero, long water, int[] landHistogram)
+    private Hypsometry(long total, long zero, long water, int[] landHistogram, int[] waterHistogram)
     {
         Total = total;
         Zero = zero;
         Water = water;
         _landHistogram = landHistogram;
+        _waterHistogram = waterHistogram;
     }
 
     public static Hypsometry Measure(ushort[] height)
     {
         long zero = 0, water = 0;
         var landHistogram = new int[256];
+        var waterHistogram = new int[256];
 
         foreach (ushort v in height)
         {
             if (v == 0) zero++;
-            if (v <= MapDataWriter.WaterLevel16) { water++; continue; }
+            if (v <= MapDataWriter.WaterLevel16)
+            {
+                water++;
+                waterHistogram[v / MapDataWriter.Step255]++;
+                continue;
+            }
             landHistogram[v / MapDataWriter.Step255]++;
         }
 
-        return new Hypsometry(height.LongLength, zero, water, landHistogram);
+        return new Hypsometry(height.LongLength, zero, water, landHistogram, waterHistogram);
+    }
+
+    /// <summary>
+    /// The same measurement, from a 16-bit histogram already built rather than from the pixels.
+    ///
+    /// Every figure here is a count over values, so a histogram carries all of it: this is exact,
+    /// not an approximation of <see cref="Measure"/>. It exists so the import diagnostics can run
+    /// on every build off the histogram cached with the decode, instead of a fresh pass over the
+    /// raster each time a setting changes.
+    /// </summary>
+    public static Hypsometry FromHistogram(int[] histogram, long total)
+    {
+        var landHistogram = new int[256];
+        var waterHistogram = new int[256];
+        long water = 0;
+
+        for (int v = 0; v < histogram.Length; v++)
+        {
+            int count = histogram[v];
+            if (count == 0) continue;
+
+            if (v <= MapDataWriter.WaterLevel16)
+            {
+                water += count;
+                waterHistogram[v / MapDataWriter.Step255] += count;
+                continue;
+            }
+
+            landHistogram[v / MapDataWriter.Step255] += count;
+        }
+
+        return new Hypsometry(total, histogram[0], water, landHistogram, waterHistogram);
     }
 
     /// <summary>
@@ -76,9 +118,34 @@ public sealed class Hypsometry
         return 255;
     }
 
+    /// <summary>
+    /// The value on the 0-255 scale at or below which <paramref name="q"/> percent of *water* sits.
+    ///
+    /// The reading that catches an ocean with no depth in it. CK3 renders the sea surface at the
+    /// water plane, so a seabed drawn resting on that same plane comes out coplanar with it and the
+    /// ocean shows as ground rather than water. Vanilla's water median is 0 and so is that of a map
+    /// drawn to the black-ocean convention; a plate ocean reads 19, and nothing else does.
+    /// </summary>
+    public int WaterPercentile(double q)
+    {
+        if (Water == 0) return 0;
+
+        var want = (long)(Water * q / 100.0);
+        long running = 0;
+
+        for (int b = 0; b < _waterHistogram.Length; b++)
+        {
+            running += _waterHistogram[b];
+            if (running >= want) return b;
+        }
+
+        return MapDataWriter.WaterLevel255;
+    }
+
     public string Describe()
         => $"{100.0 * Zero / Total:F2}% exactly 0 (vanilla 40.14), " +
            $"{100.0 * Water / Total:F2}% water (vanilla 47.18); land p50 {Percentile(50)}, " +
            $"p75 {Percentile(75)}, p90 {Percentile(90)}, p99 {Percentile(99)}, " +
-           $"max {Percentile(100)} (vanilla {VanillaLand})";
+           $"max {Percentile(100)} (vanilla {VanillaLand}); " +
+           $"water p50 {WaterPercentile(50)} (vanilla 0)";
 }

@@ -112,6 +112,11 @@ public static class Generator
         // The province map is derived from the same field the heightmap is read from, so the
         // coastline in provinces.png is the coastline in heightmap.png by construction.
         var image = Stage.Time("heightmap decode", () => HeightmapSource.Read(options.HeightmapPath, cfg));
+
+        // Settings-dependent, so it sits here rather than inside the decode — the GUI caches the
+        // decode and must still re-diagnose on every build.
+        HeightmapSource.Diagnose(image, cfg);
+
         var terra = Stage.Time("province elevation",
             () => TerrainData.FromElevation(image.ToElevation(cfg), cfg));
 

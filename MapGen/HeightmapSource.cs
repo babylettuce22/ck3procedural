@@ -41,6 +41,14 @@ namespace Ck3MapGen.MapGen;
 /// preview did not change" happen, and it is the sort of bug that reads as the whole tool being
 /// broken.
 /// </summary>
+/// <summary>
+/// One thing wrong with an imported heightmap, in a form that can be shown as well as logged.
+///
+/// <paramref name="Title"/> is the finding in a sentence; <paramref name="Detail"/> explains what it
+/// will look like in game and names the setting that fixes it, in paragraphs split on a blank line.
+/// </summary>
+public sealed record HeightmapWarning(string Title, string Detail);
+
 public sealed class HeightmapImage
 {
     public required string Path { get; init; }
@@ -51,6 +59,17 @@ public sealed class HeightmapImage
 
     /// <summary>The image's own 16-bit samples, exactly as they were decoded.</summary>
     public required ushort[] Raw { get; init; }
+
+    /// <summary>
+    /// One bucket per 16-bit value. Cached with the decode because it is, like
+    /// <see cref="Raw"/> itself, a pure function of the file — no setting is consulted to build it.
+    ///
+    /// It is what lets <see cref="HeightmapSource.Diagnose"/> run on every build rather than only
+    /// on a fresh decode. Every distribution question the diagnostics ask is answerable from this
+    /// in 65,536 steps instead of a pass over thirty million pixels, so re-checking a cached image
+    /// costs nothing and a setting that changes the diagnosis actually changes it.
+    /// </summary>
+    public required int[] Histogram { get; init; }
 
     /// <summary>Whether this decode still stands for what is on disk at <paramref name="path"/>.</summary>
     public bool StillStandsFor(string path)
@@ -110,6 +129,7 @@ public static class HeightmapSource
                 $"Heightmap is {image.Width}x{image.Height}; both dimensions must be even because " +
                 "provinces.png and rivers.png are exactly half the heightmap's resolution.");
 
+        var raw = ReadRaw(image);
         var info = new FileInfo(path);
         var loaded = new HeightmapImage
         {
@@ -118,82 +138,151 @@ public static class HeightmapSource
             Length = info.Length,
             Width = image.Width,
             Height = image.Height,
-            Raw = ReadRaw(image),
+            Raw = raw,
+            Histogram = Histogram(raw),
         };
 
         Apply(loaded, cfg);
 
-        // The source's own distribution, measured against *our* water plane and printed before any
-        // setting has had a say. This is the reading that says whether the file needs normalising
-        // at all: a heightmap on CK3's scale lands near vanilla's 47% water, and one that is not
-        // reports a few percent and land percentiles far above vanilla's 36 / 57 / 87 / 143 / 191.
-        var hypsometry = Hypsometry.Measure(loaded.Raw);
-        Console.WriteLine($"  as decoded: {hypsometry.Describe()}");
         Console.WriteLine($"  decoded in {sw.ElapsedMilliseconds} ms");
-
-        WarnAboutScale(loaded, hypsometry, cfg);
         return loaded;
     }
 
-    /// <summary>
-    /// Land so high above the water plane that the map will ship as a plateau, said in words rather
-    /// than left to be inferred from the percentiles above.
-    ///
-    /// The line before this one already carried the whole diagnosis, and a playtester read it and
-    /// shipped anyway — which is the correct reading of that outcome: a number printed beside a
-    /// reference number is not a warning, because it asks the reader to already know which way is
-    /// bad and by how much. This says what is wrong and which setting fixes it.
-    /// </summary>
-    private static void WarnAboutScale(HeightmapImage image, Hypsometry hypsometry, MapConfig cfg)
+    /// <summary>One bucket per 16-bit value. A pure function of the file, so it rides the decode.</summary>
+    private static int[] Histogram(ushort[] raw)
     {
+        var histogram = new int[65536];
+        foreach (ushort v in raw) histogram[v]++;
+        return histogram;
+    }
+
+    /// <summary>
+    /// Everything wrong with an imported heightmap that can be seen before generating anything,
+    /// returned rather than only printed.
+    ///
+    /// Returned, because printing was measurably not enough. Every fault below was already visible
+    /// in the "as decoded" line — a playtester read that line, shipped the map, and reported the
+    /// result as a bug in the tool. A number printed beside a reference number is not a warning: it
+    /// asks the reader to already know which way is bad and by how much. These say what is wrong,
+    /// what it will look like in game, and which setting fixes it, and the GUI puts them in front of
+    /// the user instead of in a log they have no reason to read.
+    ///
+    /// Settings-dependent, so it runs on every build rather than riding the cached decode — the
+    /// whole point is that changing Normalization and rebuilding must change what this says. It is
+    /// cheap enough to do that with because it reads <see cref="HeightmapImage.Histogram"/>, which
+    /// is a pure function of the file and therefore *is* cached.
+    /// </summary>
+    public static IReadOnlyList<HeightmapWarning> Diagnose(HeightmapImage image, MapConfig cfg)
+    {
+        const int water16 = Emit.MapDataWriter.WaterLevel16;
+        const int water255 = Emit.MapDataWriter.WaterLevel255;
+        const int step = Emit.MapDataWriter.Step255;
+
+        var histogram = image.Histogram;
+        long total = image.Raw.LongLength;
+        var found = new List<HeightmapWarning>();
+
+        var hypsometry = Hypsometry.FromHistogram(histogram, total);
+        Console.WriteLine($"  as decoded: {hypsometry.Describe()}");
+
+        // --- The land sits far above the water plane -------------------------------------------
+        //
         // Vanilla's land sits at a median of 36/255. Triple it before saying anything: a genuinely
         // mountainous map drawn on CK3's own scale can run high, and this must not cry wolf on one.
         const int Plateau = 108;
-
         int median = hypsometry.Percentile(50);
 
         if (median >= Plateau && cfg.Normalization != Config.HeightmapNormalization.Stretch)
+            found.Add(new HeightmapWarning(
+                $"The land is not on CK3's height scale (median {median}/255, vanilla's is 36).",
+                (cfg.Normalization == Config.HeightmapNormalization.Off
+                    ? "Normalisation is off, so the whole landmass will ship as a plateau with a "
+                      + "vertical cliff at every shoreline, and the climate model will read the "
+                      + "continental interior as kilometres up and chill every biome on the map."
+                    : "Shift will bring it down onto the water plane, which fixes the shoreline, "
+                      + "but relief stays exactly as compressed as the source drew it — measured "
+                      + "on such a map, a highest pixel of 147/255 against vanilla's 191.")
+                + "\n\nFix: set Normalization to Stretch, under 11 Height scale."));
+
+        // --- The ocean has no depth ---------------------------------------------------------------
+        //
+        // A different fault from the one above and it reads completely differently in game.
+        // Normalisation cannot fix it in any mode: the pixels are already on the correct side of
+        // the plane and simply have no relief below it.
+        int waterMedian = hypsometry.WaterPercentile(50);
+
+        if (hypsometry.Water > 0 && waterMedian >= water255 - 1)
+            found.Add(new HeightmapWarning(
+                $"The ocean has no depth (median water pixel {waterMedian}/255, sitting on the "
+                + $"water plane at {water255}; vanilla's is 0).",
+                "CK3 draws the sea surface at the water plane, so a seabed resting on that same "
+                + "plane is coplanar with it and the ocean renders as open ground rather than "
+                + "water.\n\nCoastline shaping grades the near-shore seabed automatically, but only "
+                + "within a shelf's reach of land — open ocean past that keeps whatever the source "
+                + "drew.\n\nFix: give the ocean a floor well below sea level, 0 being the usual "
+                + "convention, and redraw."));
+
+        // --- The ocean was drawn just above the plane ---------------------------------------------
+        //
+        // The fault the 0-255 scale everything else is quoted on cannot show, which is exactly why
+        // it needs its own check. The heightmap is 16-bit and the plane is at 4883, so every raw
+        // value from 4884 to 5139 is land that still rounds to 19/255: it prints as sitting exactly
+        // on the water plane while CK3 renders it as ground. Measured on the map that prompted this,
+        // 2.12% of the raster — some 900,000 px — at raw 4884, forming a shelf fifteen to twenty
+        // pixels wide around every coast. Only 4.93% of it touches solid land, so it is not a
+        // shoreline artefact; it is the ocean, drawn on the wrong side of the line.
+        //
+        // The test is that the *modal* land value falls in the plane's own 0-255 bucket. A real
+        // heightmap's commonest land value sits clear of it — vanilla's is 23/255, four steps up,
+        // and the black-ocean map's is 129 — because ordinary terrain has no reason to pile up on
+        // the one value the engine tests against. A flat population there is always something drawn
+        // flat, and the only thing anybody draws flat at sea level is the sea.
+        int modal = 0;
+        long modalCount = 0;
+
+        for (int v = water16 + 1; v < histogram.Length; v++)
+            if (histogram[v] > modalCount) { modalCount = histogram[v]; modal = v; }
+
+        // Big enough to be a drawn surface rather than a few stray samples. Half a percent of the
+        // raster is a quarter of what the measured case holds, and far above what terrain produces
+        // on any single value by accident.
+        if (modal != 0 && modal / step == water255 && modalCount >= total / 200)
+            found.Add(new HeightmapWarning(
+                $"The ocean is drawn just above sea level (commonest land value is raw {modal} = "
+                + $"{(double)modal / step:F4}/255, {modal - water16} unit(s) above the plane at "
+                + $"{water16}, holding {100.0 * modalCount / total:F2}% of the map).",
+                "It rounds to 19/255, so it reads as water in every figure the tool prints, and "
+                + "CK3 renders it as open ground.\n\n"
+                + (cfg.SourceSeaLevel * step < modal
+                    ? $"Fix: set SourceSeaLevel to {(double)modal / step:F4} (currently "
+                      + $"{cfg.SourceSeaLevel:F4}) to count it as water. Better still, redraw the "
+                      + "ocean floor below sea level — reclassifying it leaves it flat on the "
+                      + "plane with no depth, which is the fault above."
+                    : "SourceSeaLevel already covers it, so it is being counted as water.")));
+
+        foreach (var warning in found)
         {
             Console.WriteLine();
-            Console.WriteLine($"  WARNING: this heightmap's land sits at a median of {median}/255 " +
-                              "against vanilla's 36. It is not on CK3's height scale.");
-
-            if (cfg.Normalization == Config.HeightmapNormalization.Off)
-                Console.WriteLine("  Normalisation is off, so the whole landmass will ship as a " +
-                                  "plateau with a vertical cliff at every shoreline, and the " +
-                                  "climate model will read the continental interior as kilometres " +
-                                  "up and chill every biome on the map.");
-            else
-                Console.WriteLine("  Shift will bring it down onto the water plane, which fixes " +
-                                  "the shoreline, but relief stays exactly as compressed as the " +
-                                  "source drew it — measured on such a map, a highest pixel of " +
-                                  "147/255 against vanilla's 191.");
-
-            Console.WriteLine("  Set Normalization to Stretch (11 Height scale), or pass " +
-                              "--normalize-heightmap.");
-            Console.WriteLine();
+            Console.WriteLine($"  WARNING: {warning.Title}");
+            foreach (string line in warning.Detail.Split('\n'))
+                Console.WriteLine($"  {line}");
         }
+
+        if (found.Count != 0) Console.WriteLine();
 
         // 8-bit data in a 16-bit pipeline. Not an error — it round-trips correctly — but the stretch
         // cannot create levels it was not given, and MapDataWriter's terracing note is measured at
-        // twice this many. Worth knowing before blaming the tool for banding on every slope.
-        int distinct = DistinctValues(image.Raw);
+        // twice this many. A note rather than a warning, so it stays out of the dialog.
+        int distinct = 0;
+        foreach (int count in histogram) if (count != 0) distinct++;
 
         if (distinct < 1000)
             Console.WriteLine($"  NOTE: only {distinct:N0} distinct values in the decoded source " +
                               "(vanilla's heightmap has 31,516). This is 8-bit data in a 16-bit " +
                               "file; normalising cannot add levels back and will spend some of " +
                               "these, which reads in game as terracing on gentle slopes.");
-    }
 
-    private static int DistinctValues(ushort[] raw)
-    {
-        var seen = new bool[65536];
-        foreach (ushort v in raw) seen[v] = true;
-
-        int count = 0;
-        foreach (bool s in seen) if (s) count++;
-        return count;
+        return found;
     }
 
     /// <summary>The image's 16-bit samples, row-major, without interpreting any of them.</summary>
