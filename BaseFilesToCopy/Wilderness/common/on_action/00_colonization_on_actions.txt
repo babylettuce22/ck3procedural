@@ -132,12 +132,14 @@ wilderness_yearly_pulse = {
 		# 17.5 is measured against observed play rather than reasoned from first principles, which
 		# is the right way round for a number like this.
 		#
-		# NOTE if this still reads as too rare: the base chance may not be the binding constraint.
-		# `domain_size < domain_limit` in wilderness_colonization.0001 excludes any ruler at or over
-		# their domain limit, and a great many AI rulers sit exactly there — that gate can reject
-		# more candidates than this roll does. The five-year claim cooldown is the other ceiling: at
-		# 17.5% a ruler waits about six years for a first claim and is then locked for five more, so
-		# no amount of chance here produces more than roughly one colony per ruler per decade.
+		# The domain limit gate that used to sit alongside this has since been removed — it was the
+		# real constraint, not the chance, and it was rejecting rulers for a cost a colony does not
+		# have. See the note where it used to be, in wilderness_colonization.0001.
+		#
+		# The remaining ceiling is the five-year claim cooldown: at 17.5% a ruler waits about six
+		# years for a first claim and is then locked for five more, so no chance value here produces
+		# more than roughly one colony per ruler per decade. That is the number to move next if the
+		# frontier still fills too slowly.
 		#
 		# The modifiers are what stop 17.5% being merely slow-and-uniform. A greedy or bold ruler with
 		# money to spare is several times likelier to try than a cautious one, so which realms push

@@ -78,9 +78,25 @@ wilderness_colonization.0001 = {
 		# colonises mid-war is one that does it while its army is dying somewhere else.
 		is_at_war = no
 
-		# Not already holding more than they can govern. A ruler over their domain limit is losing
-		# money on what they have; handing them another county models nobody's actual behaviour.
-		domain_size < domain_limit
+		# NO domain limit check here, and its absence is deliberate.
+		#
+		# `domain_size < domain_limit` used to sit here on the reasoning that a ruler already over
+		# their limit should not take more land. Two things make that wrong rather than merely
+		# strict.
+		#
+		# A colony carries its own domain slot: every tier of settlement_01/02/03 grants
+		# `domain_limit = 1`, so claiming one does not consume domain space — it brings space with
+		# it. The gate was rejecting rulers for a cost the thing does not have.
+		#
+		# And it was the binding constraint on the whole system. A great many AI rulers sit exactly
+		# at their domain limit, because they take land until they hit it; testing for strictly
+		# under it excluded most of the map's rulers permanently, whatever the pulse chance said.
+		#
+		# What happens to a ruler who ends up genuinely overextended is vanilla's problem and vanilla
+		# already solves it: the AI grants surplus holdings out to vassals. A colony handed to a
+		# vassal keeps working — the upkeep rides on the building and moves with the county, and the
+		# vassal runs this same pulse, so they inherit the job of promoting it. A realm pushing a
+		# frontier and settling vassals on it is a better outcome than one that never pushes at all.
 
 		any_sub_realm_county = {
 			any_title_to_title_neighboring_and_across_water_county = {
