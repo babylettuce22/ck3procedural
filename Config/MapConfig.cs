@@ -111,6 +111,24 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Description("Smallest connected run of counties kept as wilderness. Lone wild counties surrounded by settled land read as a bug, so runts below this are given back. Set to 1 to allow singletons.")]
     public int WildernessMinClump { get; set; } = 3;
 
+    /// <summary>
+    /// Share of generated faiths that keep one holy site out in unclaimed wilderness.
+    ///
+    /// A sacred grove, a peak, a ruin past the last farm — ground the faith reveres and nobody
+    /// holds. It is the only thing in the system that makes one wilderness county worth more than
+    /// another: without it every unsettled county is interchangeable and you simply take whichever
+    /// the adjacency scoring picks.
+    ///
+    /// Only ever placed in wilderness that shares a de jure duchy or kingdom with the faith's own
+    /// land, so it reads as their sacred ground rather than a random assignment, and never as the
+    /// faith's primary site — a head of faith cannot be seated on land nobody holds.
+    ///
+    /// 0 disables it. High values make holy wilderness ordinary, which defeats the point.
+    /// </summary>
+    [Category("16 Wilderness")]
+    [Description("Share of generated faiths with one holy site out in unclaimed wilderness — a grove or peak nobody holds. Gives a reason to want one particular wilderness county rather than any of them. Never the faith's primary site.")]
+    public double WildernessHolySiteShare { get; set; } = 0.15;
+
     [Category("02 World State")]
     public int StartYear { get; set; } = 900;
     [Description("Bookmark date, determines ratio of feudal to tribal governments based on development and terrain and relative to the 867 vanilla start date")]
@@ -696,16 +714,19 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// <see cref="EquatorPosition"/> this is the entire mapping from pixels to latitude, and
     /// therefore the only control over how many climate zones the map crosses.
     /// </summary>
+    [AdvancedSetting]
     [Category("12 Climate")]
     [Description("How many degrees of latitude the map covers from top edge to bottom edge. With the equator position this is the whole mapping from pixels to latitude, so it decides how many climate zones the map crosses. 80 degrees with the equator near the bottom is roughly the sweep of vanilla's map.")]
     public double MapLatitudeSpan { get; set; } = 80;
 
     /// <summary>Annual mean temperature at sea level on the equator. Earth's is about 26.</summary>
+    [AdvancedSetting]
     [Category("12 Climate")]
     [Description("Annual mean temperature at sea level on the equator, in Celsius. Earth's is about 26. Raising this and the pole figure together is how to make a hotter world.")]
     public double EquatorTemperatureC { get; set; } = 26;
 
     /// <summary>Annual mean temperature at sea level at the pole. Earth's northern one is about -20.</summary>
+    [AdvancedSetting]
     [Category("12 Climate")]
     [Description("Annual mean temperature at sea level at the pole, in Celsius. Earth's northern one is about -20. Bringing it closer to the equator figure gives a flatter, more uniform world with far less tundra and taiga.")]
     public double PoleTemperatureC { get; set; } = -20;
@@ -715,6 +736,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// This decides where Koppen's C/D boundary falls, and therefore where oceanic forest gives way
     /// to continental forest and taiga.
     /// </summary>
+    [AdvancedSetting]
     [Category("12 Climate")]
     [Description("How far apart the warmest and coldest months are at high latitude, in Celsius. Decides where temperate gives way to continental and taiga, because Koppen splits those on the coldest month rather than on the average.")]
     public double SeasonalRangeC { get; set; } = 44;
@@ -723,6 +745,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// How far inland the sea keeps moderating the seasons, in vanilla province pixels. Inside it a
     /// coast has mild winters; past it a continental interior swings freely.
     /// </summary>
+    [AdvancedSetting]
     [Category("12 Climate")]
     [Description("How far inland the sea goes on moderating the seasons, in vanilla province pixels. Inside it a coast has mild winters and cool summers; past it an interior swings freely. This is what separates an oceanic climate from a continental one at the same latitude.")]
     public double ContinentalityPixels { get; set; } = 900;
@@ -732,6 +755,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// currents do - Norway and Labrador share a latitude and not a climate. Without it every
     /// isotherm on the map is a parallel.
     /// </summary>
+    [AdvancedSetting]
     [Category("12 Climate")]
     [Description("Warmth and cold that latitude cannot explain, in Celsius - what ocean currents do on Earth, where Norway and Labrador share a latitude and not a climate. 0 makes every isotherm a parallel, which is half of what makes a climate map look ruled.")]
     public double TemperatureDriftC { get; set; } = 1;
@@ -741,6 +765,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// what gives it one - and the lapse rate needs a real one or a mountain cannot be given a real
     /// temperature.
     /// </summary>
+    [AdvancedSetting]
     [Category("12 Climate")]
     [Description("Height of the map's highest land in metres. A heightmap carries no absolute scale and the lapse rate needs one, so this is what decides how cold the mountains are. 4500 makes the tallest peak roughly alpine.")]
     public double PeakElevationMetres { get; set; } = 4000;
@@ -769,6 +794,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// range exists without this - cooling alone squeezes the water out - but this sharpens the
     /// contrast between the windward and leeward sides.
     /// </summary>
+    [AdvancedSetting]
     [Category("12 Climate")]
     [Description("Extra rain an air parcel drops per kilometre it is lifted over a range. A rain shadow forms without this, because cooling alone squeezes the water out, but raising it sharpens the contrast between a soaking windward slope and a desert behind it.")]
     public double OrographicRainStrength { get; set; } = 0.8;
@@ -778,6 +804,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// the wet belt on the equator and the great deserts at 30 degrees; at 0 the subtropical deserts
     /// largely disappear.
     /// </summary>
+    [AdvancedSetting]
     [Category("12 Climate")]
     [Description("How strongly the rising and sinking branches of the circulation drive rainfall. This is what puts the wet belt on the equator and the great deserts at 30 degrees; at 0 the subtropical deserts largely disappear.")]
     public double ConvectiveRainStrength { get; set; } = 1.3;

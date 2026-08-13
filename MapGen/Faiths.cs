@@ -166,11 +166,16 @@ public static class Faiths
 
                 var faith = CreateFaith(religion, faiths.Count + religionFaiths.Count, vocab, usedNames, rng);
 
-                // Wilderness counties are kept out of Counties, and that is what keeps holy sites
-                // out of them: sites are drawn from this list, and a pilgrimage destination on land
-                // nobody holds is a faith pointing its followers at an empty mountain. They still
-                // get an entry in byCounty here — overwritten with the unsettled faith once the map
-                // is built — because a county missing from it falls back to a neighbour's faith.
+                // Wilderness counties are kept out of Counties, which is the list holy sites are
+                // normally drawn from — so a faith's ordinary sites all sit on land it actually
+                // holds. PlaceHolySites reaches past this deliberately for one site in
+                // WildernessHolySiteShare of faiths, and only for wilderness sharing a de jure
+                // parent with the faith's own land; that is the exception, and it is placed last so
+                // it can never become the head of faith's seat.
+                //
+                // They still get an entry in byCounty here — overwritten with the unsettled faith
+                // once the map is built — because a county missing from it falls back to a
+                // neighbour's faith.
                 faith.Counties.AddRange(owned.Where(c => !wilderness.Contains(c)));
                 foreach (var county in owned) byCounty[county] = faith;
 
@@ -236,7 +241,8 @@ public static class Faiths
         // Step 4: Place Holy Sites (Local, Shared "Jerusalems", and Foreign Targets)
         foreach (var faith in faiths)
         {
-            PlaceHolySites(faith, development, faiths, counties, cfg.HolySitesPerFaith, rng);
+            PlaceHolySites(faith, development, faiths, counties, cfg.HolySitesPerFaith,
+                wilderness, cfg.WildernessHolySiteShare, rng);
 
             // Resolve Head of Faith seat to the primary holy site
             if (faith.Head is not null && faith.HolySites.Count > 0)
@@ -548,7 +554,8 @@ public static class Faiths
     /// that the tribal periphery genuinely is.
     /// </summary>
     private static void PlaceHolySites(Faith faith, Dictionary<Title, int> development,
-        List<Faith> allFaiths, List<Title> allCounties, int targetCount, Rng rng)
+        List<Faith> allFaiths, List<Title> allCounties, int targetCount,
+        WildernessMap wilderness, double wildShare, Rng rng)
     {
         var chosenCounties = new List<Title>();
         int abroad = Math.Max(0, targetCount - 4);
@@ -579,7 +586,38 @@ public static class Faiths
             chosenCounties.Add(rng.Pick(foreignCounties.Take(5).ToList()));
         }
 
-        // 3. Local Holy Sites: Fill remaining slots with faith's own highest-dev counties
+        // 3. Wilderness Holy Site: sacred ground out past the last farm.
+        //
+        // Decided BEFORE the local fill so a slot can be reserved for it, and appended AFTER so it
+        // can never land at index 0 — HolySites[0] is the head of faith's seat, and a head of faith
+        // cannot be seated on land nobody holds.
+        //
+        // "Nearby" is de jure rather than geometric: a wilderness county sharing a duchy, or failing
+        // that a kingdom, with land the faith already holds. That is what makes it read as *their*
+        // sacred ground rather than a county drawn out of a hat, and it needs no adjacency graph.
+        Title? wildSite = null;
+        bool wantWild = wilderness.Count > 0
+            && faith.Counties.Count > 0
+            && rng.Chance(wildShare);
+
+        if (wantWild)
+        {
+            var duchies = faith.Counties.Select(c => c.Parent).Where(p => p is not null).ToHashSet();
+            var kingdoms = faith.Counties.Select(c => c.Parent?.Parent).Where(p => p is not null).ToHashSet();
+
+            var nearby = wilderness.Counties
+                .Where(c => !chosenCounties.Contains(c))
+                .Where(c => duchies.Contains(c.Parent) || kingdoms.Contains(c.Parent?.Parent))
+                .OrderBy(c => c.Index)
+                .ToList();
+
+            if (nearby.Count > 0) wildSite = rng.Pick(nearby);
+        }
+
+        // 4. Local Holy Sites: Fill remaining slots with faith's own highest-dev counties, leaving
+        // room for the wilderness site if one was found.
+        int localTarget = wildSite is null ? targetCount : targetCount - 1;
+
         var localRanked = faith.Counties
             .Where(c => !chosenCounties.Contains(c))
             .OrderByDescending(c => development.GetValueOrDefault(c))
@@ -587,9 +625,14 @@ public static class Faiths
 
         foreach (var county in localRanked)
         {
-            if (chosenCounties.Count >= targetCount) break;
+            if (chosenCounties.Count >= localTarget) break;
             chosenCounties.Add(county);
         }
+
+        // Last, so it is never the seat. If the faith had no local counties to fill ahead of it the
+        // list is empty and the site is dropped rather than seated — a faith whose only holy site is
+        // unclaimed wilderness has nowhere to put its head.
+        if (wildSite is not null && chosenCounties.Count > 0) chosenCounties.Add(wildSite);
 
         // Register the sites using county-derived keys so shared sites share the key in script
         foreach (var county in chosenCounties)
