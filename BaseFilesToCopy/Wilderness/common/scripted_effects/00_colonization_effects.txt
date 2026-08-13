@@ -253,12 +253,18 @@ colonize_county_effect = {
 			barony ?= { generate_coa = yes }
 		}
 
-		# A colony starts with something, so the first years are not spent at zero.
-		random_list = {
-			34 = { change_development_level = 2 }
-			33 = { change_development_level = 3 }
-			33 = { change_development_level = 4 }
-		}
+		# A colony starts at whatever the ground was worth, which is nothing.
+		#
+		# It used to be handed 2-4 development on founding, and that was too much: development is
+		# the one county statistic a ruler can already move on their own, through a steward and
+		# through time, so a free two-to-four levels was worth more than the county itself and made
+		# claiming wilderness the cheapest development in the game. Settling somewhere empty should
+		# buy you the *right* to develop it, not the result.
+		#
+		# What replaces it is a growth multiplier on settlement_01 — a colony develops faster than
+		# ordinary land, because everything built there is new and there is nothing to work around.
+		# That rewards the same investment over years instead of at a stroke, and it disappears when
+		# the colony is promoted, which is the point at which it has stopped being new.
 	}
 
 	scope:colonizer = {
@@ -303,6 +309,20 @@ colonize_county_effect = {
 promote_colony_effect = {
 	$COUNTY$ = {
 		title_province ?= {
+			# Tear the colony down before raising anything on top of it.
+			#
+			# set_holding_type brings the new holding's own primary building with it, but the
+			# settlement chain belongs to no holding type once this county stops being a colony, so
+			# nothing removes it. Left in place it holds the slot the castle needs, and the map
+			# shows a promoted county as a banner standing on nothing — a holding with no model.
+			#
+			# Guarded individually rather than assumed: an upgrade replaces the tier below it, so
+			# only one of the three is ever present, but which one depends on how far the colony got
+			# and it costs nothing to be sure.
+			if = { limit = { has_building = settlement_01 }  remove_building = settlement_01 }
+			if = { limit = { has_building = settlement_02 }  remove_building = settlement_02 }
+			if = { limit = { has_building = settlement_03 }  remove_building = settlement_03 }
+
 			if = {
 				limit = { scope:promoting_holder ?= { government_has_flag = government_is_tribal } }
 				set_holding_type = tribal_holding

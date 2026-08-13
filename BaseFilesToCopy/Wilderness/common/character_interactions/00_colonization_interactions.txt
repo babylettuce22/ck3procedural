@@ -163,6 +163,13 @@ promote_colony_interaction = {
 		}
 	}
 
+	cost = {
+		gold = {
+			value = 0
+			add = scope:actor.promote_colony_cost
+		}
+	}
+
 	on_accept = {
 		scope:actor = { save_scope_as = promoting_holder }
 
@@ -220,9 +227,24 @@ promote_colony_to_city_interaction = {
 		}
 	}
 
+	cost = {
+		gold = {
+			value = 0
+			add = scope:actor.promote_colony_cost
+		}
+	}
+
 	on_accept = {
 		scope:target = {
-			title_province ?= { set_holding_type = city_holding }
+			# Same teardown as promote_colony_effect: the settlement chain belongs to no holding
+			# once this stops being a colony, and left in place it holds the slot the new one
+			# needs, leaving a banner standing on nothing.
+			title_province ?= {
+				if = { limit = { has_building = settlement_01 }  remove_building = settlement_01 }
+				if = { limit = { has_building = settlement_02 }  remove_building = settlement_02 }
+				if = { limit = { has_building = settlement_03 }  remove_building = settlement_03 }
+				set_holding_type = city_holding
+			}
 			set_color_from_title = de_jure_liege
 		}
 
@@ -278,9 +300,24 @@ promote_colony_to_temple_interaction = {
 		}
 	}
 
+	cost = {
+		gold = {
+			value = 0
+			add = scope:actor.promote_colony_cost
+		}
+	}
+
 	on_accept = {
 		scope:target = {
-			title_province ?= { set_holding_type = church_holding }
+			# Same teardown as promote_colony_effect: the settlement chain belongs to no holding
+			# once this stops being a colony, and left in place it holds the slot the new one
+			# needs, leaving a banner standing on nothing.
+			title_province ?= {
+				if = { limit = { has_building = settlement_01 }  remove_building = settlement_01 }
+				if = { limit = { has_building = settlement_02 }  remove_building = settlement_02 }
+				if = { limit = { has_building = settlement_03 }  remove_building = settlement_03 }
+				set_holding_type = church_holding
+			}
 			set_color_from_title = de_jure_liege
 		}
 

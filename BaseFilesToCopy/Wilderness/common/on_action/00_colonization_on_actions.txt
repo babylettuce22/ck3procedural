@@ -54,6 +54,41 @@ wilderness_yearly_pulse = {
 		# An AI over the cap sheds its worst colony before considering another.
 		release_excess_colony_effect = yes
 
+		# --- Finish what it started ------------------------------------------------------------
+		#
+		# Promotion runs here rather than through the promote_colony_* interactions, and that is not
+		# a shortcut — the AI genuinely cannot reach those. CK3 only drives a hidden interaction for
+		# the AI when it carries a `special_interaction` tag the engine knows, which is why vanilla's
+		# own feudalize reaches the AI and any mod's conversion interaction does not. Ours have
+		# ai_will_do weights that nothing ever reads.
+		#
+		# Without this an AI colonises, clears its blockers, builds up to settlement_03 — and then
+		# sits on a permanent colony forever, paying upkeep and taking the wrong-holding penalty,
+		# because the last step was the one step it had no way to take.
+		#
+		# Same effect the player's buttons call, and the same price, so the AI is not quietly on a
+		# cheaper path than the player.
+		if = {
+			limit = {
+				gold > promote_colony_cost
+				any_held_title = {
+					tier = tier_county
+					can_promote_colony_trigger = yes
+				}
+			}
+
+			random_held_title = {
+				limit = {
+					tier = tier_county
+					can_promote_colony_trigger = yes
+				}
+				promote_colony_effect = { COUNTY = this }
+			}
+
+			remove_short_term_gold = promote_colony_cost
+		}
+
+		# --- And consider starting another -----------------------------------------------------
 		random = {
 			chance = 40
 			trigger_event = wilderness_colonization.0001

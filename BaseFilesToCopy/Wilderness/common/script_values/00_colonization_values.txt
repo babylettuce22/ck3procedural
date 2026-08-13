@@ -44,6 +44,15 @@ wilderness_clear_cost_dear = 250
 
 settlement_upgrade_cost = 200
 
+# What it costs to turn a finished colony into a real holding.
+#
+# Deferred to vanilla's own new-holding price rather than given a number here. Raising a seat on a
+# colony puts the same castle, city or temple on the map that building one from scratch would, and
+# if the two prices differ then whichever is cheaper becomes the way everyone does it. Reading
+# vanilla's value also means a patch that rebalances holdings rebalances this with it — as of 1.19
+# it resolves to 400.
+promote_colony_cost = main_building_tier_1_cost
+
 
 # --- How many colonies a ruler may hold at once ----------------------------------------------
 
