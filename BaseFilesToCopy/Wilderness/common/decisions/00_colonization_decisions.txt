@@ -35,6 +35,7 @@ settle_the_wilderness_decision = {
 
 	is_valid = {
 		can_hold_another_colony_trigger = yes
+		colonization_off_cooldown_trigger = yes
 	}
 
 	is_valid_showing_failures_only = {

@@ -17,6 +17,7 @@ wilderness_colonization.0001 = {
 		is_ai = yes
 		is_landed = yes
 		can_colonize_at_all_trigger = yes
+		NOT = { has_variable = colonization_cooldown }
 		can_hold_another_colony_trigger = yes
 
 		# Enough gold for the claim AND something left over, plus income to carry the upkeep the

@@ -123,6 +123,7 @@
  colonize_must_border_realm_tt:0 "The land must border our realm"
  colonize_not_while_at_war_tt:0 "We cannot spare settlers while at war"
  colonize_cannot_afford_tt:0 "We cannot afford to outfit an expedition"
+ colonize_on_cooldown_tt:0 "Our settlers are still on the road; we cannot raise another party yet"
 
  # --- The Settle button on the county view ---------------------------------------------------
  # Emit/GuiWriter.cs injects a button carrying this text into a copy of vanilla's county window.

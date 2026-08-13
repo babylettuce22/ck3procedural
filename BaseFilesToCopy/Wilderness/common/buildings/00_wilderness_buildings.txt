@@ -7,9 +7,19 @@
 # constructing over one — which means it costs time and gold, shows in the build queue, and can be
 # interrupted by a siege, all without a line of script.
 #
-# Both halves carry `flag = obstacle`. That flag is the whole interface: nothing downstream knows
-# the names below, it only ever asks `has_building_with_flag = { flag = obstacle count = 0 }`.
+# ONLY the `x` half carries `flag = obstacle`. That flag is the whole interface: nothing downstream
+# knows the names below, it only ever asks `has_building_with_flag = { flag = obstacle count = 0 }`.
 # Adding a seventh blocker therefore needs no change anywhere else in this system.
+#
+# The `x_cleared` half must NOT carry it, and this was originally wrong. When both halves had the
+# flag the count could never reach zero — upgrading a blocker replaced an obstacle with another
+# obstacle — so `county_obstacles_cleared_trigger` was false forever and no colony could be
+# promoted. The flag means "this is in the way"; ground somebody has cleared is not in the way.
+#
+# The cleared building stays rather than deleting itself, which is the other way to fix this (AGOT
+# removes it in on_complete). Keeping it means the county carries a visible record of what was done
+# to it, and gives each cleared blocker somewhere to hang a reward later — drained marsh is good
+# farmland, felled forest is timber — which a building that erases itself cannot do.
 #
 # The `x` half is never constructible (`can_construct = always no`) — it is placed by script when
 # the county is seeded. The `x_cleared` half is constructible by anyone EXCEPT the wilderness dummy,
@@ -111,7 +121,6 @@ beast_dens_cleared = {
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
 	type_icon = "icon_building_hunting_grounds.dds"
-	flag = obstacle
 	ai_value = { base = 100 }
 
 	on_complete = { wilderness_obstacle_cleared_effect = yes }
@@ -146,7 +155,6 @@ bandit_camps_cleared = {
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
 	type_icon = "icon_building_warcamps.dds"
-	flag = obstacle
 	ai_value = { base = 100 }
 
 	on_complete = { wilderness_obstacle_cleared_effect = yes }
@@ -185,7 +193,6 @@ dense_growth_cleared = {
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
 	type_icon = "icon_building_logging_camps.dds"
-	flag = obstacle
 	ai_value = { base = 100 }
 
 	on_complete = { wilderness_obstacle_cleared_effect = yes }
@@ -228,7 +235,6 @@ flooded_lands_cleared = {
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
 	type_icon = "icon_building_waterworks.dds"
-	flag = obstacle
 	ai_value = { base = 100 }
 
 	on_complete = { wilderness_obstacle_cleared_effect = yes }
@@ -268,7 +274,6 @@ scree_slopes_cleared = {
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
 	type_icon = "icon_building_hill_forts.dds"
-	flag = obstacle
 	ai_value = { base = 100 }
 
 	on_complete = { wilderness_obstacle_cleared_effect = yes }
@@ -307,7 +312,6 @@ killing_cold_cleared = {
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
 	type_icon = "icon_building_hillside_grazing.dds"
-	flag = obstacle
 	ai_value = { base = 100 }
 
 	on_complete = { wilderness_obstacle_cleared_effect = yes }

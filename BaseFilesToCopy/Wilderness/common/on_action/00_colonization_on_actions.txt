@@ -47,6 +47,7 @@ wilderness_yearly_pulse = {
 	trigger = {
 		is_ai = yes
 		can_colonize_at_all_trigger = yes
+		NOT = { has_variable = colonization_cooldown }
 	}
 
 	effect = {

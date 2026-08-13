@@ -45,6 +45,7 @@ claim_wilderness_interaction = {
 	is_valid_showing_failures_only = {
 		scope:actor = {
 			can_hold_another_colony_trigger = yes
+			colonization_off_cooldown_trigger = yes
 
 			custom_tooltip = {
 				text = colonize_not_while_at_war_tt

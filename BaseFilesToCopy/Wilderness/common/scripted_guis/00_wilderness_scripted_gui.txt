@@ -88,6 +88,7 @@ wilderness_settle = {
 
 	is_valid = {
 		can_hold_another_colony_trigger = yes
+		colonization_off_cooldown_trigger = yes
 
 		custom_tooltip = {
 			text = colonize_not_while_at_war_tt
