@@ -240,6 +240,11 @@ colony_launch_expedition_effect = {
 		# Visible on the county, so a player looking at the map can see that ground is spoken for —
 		# and so no other ruler, and no other expedition of the same ruler, can aim at it.
 		add_county_modifier = settling_expedition_underway
+
+		# Everything that happens on the road adds to or subtracts from this, and
+		# colony_settling_chance reads it. Set here rather than on first use so no event has to
+		# cope with it not existing yet.
+		set_variable = { name = expedition_fortune  value = 0 }
 	}
 
 	scope:colonizer = {
@@ -254,16 +259,26 @@ colony_launch_expedition_effect = {
 
 		trigger_event = wilderness_colonization.0010
 
-		# Two years for it to take or not. Long enough that the first winter has happened and the
-		# player has stopped watching, which is the point — the decision was made while the carts
-		# were being loaded, and this is when the news comes back.
+		# ---- The timeline ----
 		#
+		# Seven months, not two years. Two years was chosen so the player would have stopped
+		# watching when the news came back, and that was the wrong instinct: with nothing happening
+		# in between, "stopped watching" is indistinguishable from "forgot", and a decision you have
+		# forgotten making is not one you feel the outcome of.
+		#
+		# So it is one season out and one season there, with word arriving in the middle. 0014 is
+		# the word from the road; 0011 is the news.
+		trigger_event = {
+			id = wilderness_colonization.0014
+			months = 3
+		}
+
 		# Fired on the coloniser, so if he dies in the interval there is no resolution at all and
 		# the ground stays wilderness. That is the honest outcome: the man who sent them is dead and
 		# nobody else was ever going to follow it up.
 		trigger_event = {
 			id = wilderness_colonization.0011
-			years = 2
+			months = 7
 		}
 	}
 }
@@ -289,6 +304,8 @@ colony_clear_expedition_effect = {
 		}
 		if = { limit = { has_variable = colony_leader }         remove_variable = colony_leader }
 		if = { limit = { has_variable = colony_led_by_soldier } remove_variable = colony_led_by_soldier }
+		if = { limit = { has_variable = expedition_fortune }    remove_variable = expedition_fortune }
+		if = { limit = { has_variable = settlers_were_promised } remove_variable = settlers_were_promised }
 	}
 }
 
@@ -464,6 +481,19 @@ colony_settling_success_effect = {
 	colonize_county_effect = {
 		COUNTY = scope:colony
 		COLONIZER = root
+	}
+
+	# A promise made on the road, come due now that there is somewhere to owe it.
+	if = {
+		limit = { scope:colony ?= { has_variable = settlers_were_promised } }
+
+		scope:colony = {
+			remove_variable = settlers_were_promised
+			add_county_modifier = {
+				modifier = settlers_promised_land
+				years = 15
+			}
+		}
 	}
 
 	if = {

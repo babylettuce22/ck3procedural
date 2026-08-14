@@ -117,6 +117,25 @@ no_expedition_underway_trigger = {
 }
 
 
+# Character scope, with scope:colony set to the county an expedition was aimed at. Is that
+# expedition still a going concern?
+#
+# Every event in the expedition chain opens with this, and it is written once because the chain is
+# where a stale check does the most damage: an event whose trigger silently fails does not report,
+# it simply never happens, and the expedition hangs unresolved forever with the county wearing a
+# marker nothing will ever take off.
+#
+# That is not hypothetical. wilderness_colonization.0011 asked whether the county was a COLONY held
+# by root — which was true when the claim happened up front, and became permanently false when the
+# claim moved to the success branch. Nothing fired, for any expedition, and there was no error.
+expedition_still_out_trigger = {
+	has_variable = expedition_underway
+	exists = scope:colony
+	var:expedition_underway = scope:colony
+	scope:colony = { has_county_modifier = settling_expedition_underway }
+}
+
+
 # Title scope. Is this county one somebody could aim an expedition at?
 #
 # The three-part test — wilderness, not marked unsettlable, nobody already out there — written once.

@@ -173,6 +173,29 @@
  colonize_expedition_soldier_tt:0 "#V [expedition_soldier.GetShortUIName]#! leads the expedition. If the colony holds, one obstacle will already have been dealt with"
  colonize_expedition_none_tt:0 "Nobody leads the expedition. Poorer odds, but no one of ours is out there when it goes wrong"
 
+ # --- Word from the road ---------------------------------------------------------------------
+ # Three months out, one of these arrives. Each asks for a different thing: money, a decision
+ # about the man, or a promise that only costs anything if they live.
+ wilderness_colonization.0016.t:0 "Short Rations"
+ wilderness_colonization.0016.desc:0 "A rider from the column, and he has not eaten well.\n\nThey are further from [colony.GetName] than the maps allowed for, and the carts are lighter than they were. It is not a disaster yet. It becomes one in about six weeks, and by then there will be nothing to send that would arrive in time."
+ wilderness_colonization.0016.a:0 "Send carts after them."
+ wilderness_colonization.0016.b:0 "They will have to make do."
+
+ wilderness_colonization.0017.t:0 "The Man We Sent"
+ wilderness_colonization.0017.desc:0 "The rider is careful about how he puts it, which tells us most of it.\n\n[expedition_leader.GetFirstName] is not sleeping. He has been overruling men who know the country better than he does, and twice now he has been wrong in front of everybody. Nobody has said the word yet. They are all thinking about who would be in charge if he were not."
+ wilderness_colonization.0017.a:0 "He has our authority. Say so, loudly."
+ wilderness_colonization.0017.b:0 "Put [expedition_soldier.GetFirstName] over him."
+ wilderness_colonization.0017.c:0 "They can sort it out among themselves."
+
+ wilderness_colonization.0018.t:0 "They Want to Turn Back"
+ wilderness_colonization.0018.desc:0 "It has stopped being a journey and become a thing they are enduring, and some of them have started counting the days back rather than forward.\n\nWhat they want is to know what they get. Not wages — land. Their own, held of us and not worked for somebody else, which is the only thing that was ever going to move people this far from anywhere.\n\nWe can promise that. It is not ours to promise until there is a colony to cut it out of."
+ wilderness_colonization.0018.a:0 "Promise them land of their own."
+ wilderness_colonization.0018.b:0 "They knew what they were signing for."
+
+ colonize_settlers_promised_tt:0 "If the colony holds, its settlers will hold us to it"
+ settlers_promised_land:0 "Promised Their Own Land"
+ settlers_promised_land_desc:0 "They were told, on a bad road a long way from here, that this country would be theirs. Some of it will have to be."
+
  wilderness_colonization.0012.t:0 "Word from the Colony"
  wilderness_colonization.0012.desc:0 "A rider from [colony.GetName], two years on.\n\nThey lost people — he is matter-of-fact about it, and does not give a number unless asked. But there are roofs, there is a palisade, and there was enough put by to get through the second winter without sending to us for it.\n\nIt is a place now. A poor one, but a place."
  wilderness_colonization.0012.a:0 "Then it was worth the sending."

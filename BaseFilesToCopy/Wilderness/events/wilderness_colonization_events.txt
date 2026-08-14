@@ -111,15 +111,20 @@ wilderness_colonization.0011 = {
 	hidden = yes
 	scope = character
 
-	# Everything here is conditional on the world not having moved on. Two years is long enough for
-	# the county to have been promoted, granted away, conquered or abandoned, and none of those are
-	# this event's business.
+	# ---- This trigger was the bug that made expeditions never resolve ----
+	#
+	# It used to ask whether scope:colony was a COLONY held by root. That was true back when the
+	# claim happened up front and this event only had to decide whether to keep it. It became
+	# permanently false the moment the claim moved to the success branch, because the county is now
+	# still WILDERNESS held by the dummy right up until this event says otherwise.
+	#
+	# So it never passed, for any expedition, and an event whose trigger fails does not report —
+	# it simply does not happen. Nothing fired at two years, or at ten.
+	#
+	# expedition_still_out_trigger asks the question that is actually being asked: is this party
+	# still out there. It is shared with 0014 so the two cannot drift apart again.
 	trigger = {
-		exists = scope:colony
-		scope:colony = {
-			holder ?= { this = root }
-			is_colony_county_trigger = yes
-		}
+		expedition_still_out_trigger = yes
 	}
 
 	immediate = {
@@ -155,6 +160,206 @@ wilderness_colonization.0011 = {
 		}
 		else = {
 			colony_settling_failure_effect = yes
+		}
+	}
+}
+
+
+# Word from the road, three months out. Hidden, and a dispatcher rather than an event in its own
+# right: it picks which of the three things happened and fires that.
+#
+# ---- Why there is a middle at all ----
+#
+# The first build had the party leave and the news arrive two years later with nothing in between.
+# That is not suspense, it is a delay — the decision in 0010 is made and then forgotten, and the
+# outcome lands on a player who no longer remembers choosing anything.
+#
+# So there is one letter from the road, and it asks for something. Each of the three trades a
+# different currency, which is what keeps them from being the same event with different text:
+#
+#   0016  gold        — they are short, and it costs money now to fix
+#   0017  the man     — the leader is failing, and the choice is what to do about him
+#   0018  a promise   — a better chance now against a debt owed only if they survive
+#
+# The AI answers these too. Character events resolve for AI on `ai_chance`, so an AI expedition has
+# the same middle as a player's and its odds move for the same reasons.
+wilderness_colonization.0014 = {
+	hidden = yes
+	scope = character
+
+	trigger = {
+		expedition_still_out_trigger = yes
+	}
+
+	immediate = {
+		# The leader, if there is one — 0017 needs him and the other two mention him.
+		scope:colony = {
+			if = {
+				limit = { has_variable = colony_leader }
+				var:colony_leader = { save_scope_as = expedition_leader }
+			}
+		}
+
+		random_list = {
+			10 = { trigger_event = wilderness_colonization.0016 }
+
+			# Only where there is a man to be failing.
+			10 = {
+				trigger = { exists = scope:expedition_leader }
+				trigger_event = wilderness_colonization.0017
+			}
+
+			10 = { trigger_event = wilderness_colonization.0018 }
+		}
+	}
+}
+
+
+# Short rations. The currency is gold, and it is the plainest of the three on purpose — one of them
+# should be a decision a player can make without thinking hard.
+wilderness_colonization.0016 = {
+	type = character_event
+	title = wilderness_colonization.0016.t
+	desc = wilderness_colonization.0016.desc
+	theme = realm
+
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+
+	trigger = { expedition_still_out_trigger = yes }
+
+	option = {
+		name = wilderness_colonization.0016.a
+		trigger = { gold >= 50 }
+
+		remove_short_term_gold = 50
+		scope:colony = { change_variable = { name = expedition_fortune  add = 15 } }
+
+		ai_chance = {
+			base = 60
+			modifier = { add = -50  gold < 150 }
+			modifier = { add = 25   ai_greed < 25 }
+		}
+	}
+
+	option = {
+		name = wilderness_colonization.0016.b
+
+		scope:colony = { change_variable = { name = expedition_fortune  add = -10 } }
+
+		ai_chance = {
+			base = 40
+			modifier = { add = 60  gold < 50 }
+		}
+	}
+}
+
+
+# The man is failing. The currency is the leader himself, and the middle option is the interesting
+# one: it re-opens the choice from 0010 and recomputes the odds off a different set of numbers,
+# which is why it is worth having even though it costs nothing.
+wilderness_colonization.0017 = {
+	type = character_event
+	title = wilderness_colonization.0017.t
+	desc = wilderness_colonization.0017.desc
+	theme = realm
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+
+	right_portrait = {
+		character = scope:expedition_leader
+		animation = stress
+	}
+
+	trigger = {
+		expedition_still_out_trigger = yes
+		exists = scope:expedition_leader
+	}
+
+	option = {
+		name = wilderness_colonization.0017.a
+
+		scope:colony = { change_variable = { name = expedition_fortune  add = 8 } }
+		scope:expedition_leader = { add_stress = minor_stress_gain }
+
+		ai_chance = { base = 50 }
+	}
+
+	# Replacing him is not free and not a penalty either: the odds are simply recalculated from the
+	# soldier's numbers instead, and whether that is better is the player's to judge from what they
+	# know of the two men.
+	option = {
+		name = wilderness_colonization.0017.b
+		trigger = {
+			exists = scope:expedition_soldier
+			NOT = { scope:expedition_soldier = scope:expedition_leader }
+		}
+
+		scope:colony = {
+			set_variable = { name = colony_leader  value = scope:expedition_soldier }
+			change_variable = { name = expedition_fortune  add = -3 }
+		}
+
+		ai_chance = { base = 30 }
+	}
+
+	option = {
+		name = wilderness_colonization.0017.c
+
+		scope:colony = { change_variable = { name = expedition_fortune  add = -12 } }
+
+		ai_chance = {
+			base = 20
+			modifier = { add = 40  ai_compassion < 25 }
+		}
+	}
+}
+
+
+# They want to turn back. The currency is a promise, and it is the only one of the three whose cost
+# lands after the fact — see settlers_promised_land for why that is the point.
+wilderness_colonization.0018 = {
+	type = character_event
+	title = wilderness_colonization.0018.t
+	desc = wilderness_colonization.0018.desc
+	theme = realm
+
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+
+	trigger = { expedition_still_out_trigger = yes }
+
+	option = {
+		name = wilderness_colonization.0018.a
+
+		scope:colony = {
+			change_variable = { name = expedition_fortune  add = 12 }
+			set_variable = { name = settlers_were_promised }
+		}
+
+		custom_tooltip = colonize_settlers_promised_tt
+
+		ai_chance = {
+			base = 50
+			modifier = { add = 30  ai_honor < 25 }
+		}
+	}
+
+	option = {
+		name = wilderness_colonization.0018.b
+
+		scope:colony = { change_variable = { name = expedition_fortune  add = -6 } }
+
+		ai_chance = {
+			base = 50
+			modifier = { add = 30  ai_honor > 60 }
 		}
 	}
 }

@@ -170,6 +170,14 @@ colony_settling_chance = {
 		}
 	}
 
+	# What happened on the road. Every interim event moves this, and it is the only thing the player
+	# can still influence once the party has gone — which is what makes those events decisions rather
+	# than weather reports.
+	if = {
+		limit = { scope:colony ?= { has_variable = expedition_fortune } }
+		add = scope:colony.var:expedition_fortune
+	}
+
 	# Never certain in either direction. A hopeless expedition can still come through and a
 	# well-found one can still be unlucky, because otherwise the choice above is arithmetic the
 	# player does once and never thinks about again.

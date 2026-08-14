@@ -26,6 +26,19 @@ settling_expedition_underway = {
 }
 
 
+# What it costs to have promised the settlers more than a lord ought to.
+#
+# The third interim event trades a better chance now for this later, and it only lands if the colony
+# actually survives — which is the point. Buying success with a debt you only owe if you succeed is
+# a real decision; buying it with gold you have already spent is just a price.
+settlers_promised_land = {
+	icon = county_modifier_control_negative
+
+	monthly_county_control_growth_add = -0.3
+	county_opinion_add = -15
+}
+
+
 # =====================================================================================
 #  Presence: what changes when the lord is actually there
 # =====================================================================================
