@@ -86,7 +86,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// </summary>
     [Category("16 Wilderness")]
     [Description("Pull wilderness toward the map edges (1), ignore position (0), or pull it inland (-1). Edge-biased reads as a frontier at the rim of the world; inland-biased makes the interior the wasteland.")]
-    public double WildernessEdgeBias { get; set; } = 0.5;
+    public double WildernessEdgeBias { get; set; } = 0.75;
 
     /// <summary>
     /// How strongly hostile ground attracts wilderness, against everything else.
@@ -98,7 +98,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     [AdvancedSetting]
     [Category("16 Wilderness")]
     [Description("How strongly wilderness follows hostile terrain — mountains, ice, desert, marsh, jungle — against the edge bias. At 0 it ignores terrain entirely and can leave empty farmland.")]
-    public double WildernessTerrainWeight { get; set; } = 0.7;
+    public double WildernessTerrainWeight { get; set; } = 0.75;
 
     /// <summary>
     /// Smallest run of connected counties kept as wilderness.
@@ -111,7 +111,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     [AdvancedSetting]
     [Category("16 Wilderness")]
     [Description("Smallest connected run of counties kept as wilderness. Lone wild counties surrounded by settled land read as a bug, so runts below this are given back. Set to 1 to allow singletons.")]
-    public int WildernessMinClump { get; set; } = 3;
+    public int WildernessMinClump { get; set; } = 2;
 
     /// <summary>
     /// How strongly wilderness avoids the middle of a kingdom.
@@ -132,7 +132,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// </summary>
     [Category("16 Wilderness")]
     [Description("How strongly wilderness avoids the interior of a kingdom, preferring borders and coasts. Placement otherwise follows mountain ranges straight through the middle of realms and splits them in two. 0 ignores realm shape.")]
-    public double WildernessAvoidRealmInteriors { get; set; } = 0.5;
+    public double WildernessAvoidRealmInteriors { get; set; } = 0.6;
 
     /// <summary>
     /// Share of generated faiths that keep one holy site out in unclaimed wilderness.

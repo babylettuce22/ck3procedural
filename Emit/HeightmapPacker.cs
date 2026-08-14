@@ -1,9 +1,9 @@
-namespace Ck3MapGen.Emit;
+﻿namespace Ck3MapGen.Emit;
 
 /// <summary>
 /// Builds the packed_heightmap/indirection_heightmap pair CK3 renders terrain from.
 ///
-/// The heightmap the game reads is not heightmap.png. It is a texture atlas of 32-pixel tiles at
+/// The heightmap the game reads is not heightmap.png. It is a texture atlas of 64-pixel tiles at
 /// five levels of detail, plus a lookup that says where each tile of the world lives in that atlas
 /// and how far it was decimated. heightmap.png is the authoring format; this is the runtime one.
 ///
@@ -23,8 +23,8 @@ namespace Ck3MapGen.Emit;
 /// bottom-up distance from the foot of the atlas to the foot of each level's region.
 ///
 /// **A tile's source window starts one row ABOVE its own grid line** — rows
-/// <c>[ty*32 - 1, ty*32 + 32)</c>, columns <c>[tx*32, tx*32 + 33)</c>. Asymmetric, and not a
-/// guess: it takes level 0 from 0.700 to 0.005. The previous packer read <c>[ty*32, ty*32 + 33)</c>
+/// <c>[ty*64 - 1, ty*64 + 64)</c>, columns <c>[tx*64, tx*64 + 65)</c>. Asymmetric, and not a
+/// guess: it takes level 0 from 0.700 to 0.005. The previous packer read <c>[ty*64, ty*64 + 65)</c>
 /// and so shipped every tile one row south of where CK3 looks for it.
 ///
 /// **Tiles are decimated, not averaged.** Taking every 2^level-th sample [0.005-0.014] against
@@ -39,9 +39,21 @@ namespace Ck3MapGen.Emit;
 /// </summary>
 public static class HeightmapPacker
 {
-    /// <summary>Source pixels a tile spans. The tile stores one more sample than this, overlapping
-    /// its neighbour so adjacent tiles share an edge and the terrain does not crack between them.</summary>
-    public const int TileStep = 32;
+    /// <summary>
+    /// Source pixels a tile spans. The tile stores one more sample than this, overlapping its
+    /// neighbour so adjacent tiles share an edge and the terrain does not crack between them —
+    /// hence <c>tile_size=65</c> in heightmap.heightmap, which is vanilla's own value.
+    ///
+    /// This was 32 (a 33-sample tile) and is now vanilla's 64. Nothing in the format demands one
+    /// over the other, and 33 packed a much smaller atlas, but vanilla is the only configuration
+    /// the engine is known to render at every zoom level: a map shipped at 33 loaded and looked
+    /// correct close up, then vanished when zoomed out to the map table, which is precisely where
+    /// the packed atlas rather than heightmap.png is what gets drawn.
+    ///
+    /// <see cref="VanillaShare"/> was already measured against vanilla's 41,472 tiles, i.e. at this
+    /// stride, so the level budget only becomes self-consistent with the change.
+    /// </summary>
+    public const int TileStep = 64;
 
     /// <summary>Levels of detail, from 0 (full resolution) to 4 (decimated 16x).</summary>
     public const int Levels = 5;
@@ -72,7 +84,7 @@ public static class HeightmapPacker
     /// </summary>
     private static readonly double[] VanillaShare = [0.0256, 0.1193, 0.1471, 0.1167, 0.5913];
 
-    /// <summary>Samples along a tile edge at each level: 33, 17, 9, 5, 3.</summary>
+    /// <summary>Samples along a tile edge at each level: 65, 33, 17, 9, 5 — vanilla's own ladder.</summary>
     public static int TileSize(int level) => TileStep / Decimation(level) + 1;
 
     /// <summary>How far a level decimates its source: 1, 2, 4, 8, 16. Written to the indirection's B.</summary>
@@ -101,7 +113,7 @@ public static class HeightmapPacker
         // Vanilla leans on this hard: 14,314 of its 41,472 tiles — 34.5% of the world — point at
         // one single open-ocean tile, the one empty_tile_offset names. Content-hashing every level
         // rather than special-casing ocean subsumes that and costs nothing, since the comparison is
-        // over at most 33x33 samples and only ever between tiles at the same level.
+        // over at most 65x65 samples and only ever between tiles at the same level.
         var slotOf = new int[tileCount];
         var slots = new List<ushort[]>[Levels];
         var tilesPerLevel = new int[Levels];

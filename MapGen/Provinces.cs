@@ -740,8 +740,26 @@ public static class Provinces
     /// classifier and the heightmap's hypsometry use, so "mountain" and "steep" mean one thing
     /// throughout and survive a change of heightmap.
     ///
-    /// A floor on the combined score stops a map with little relief from having impassable
-    /// provinces forced on it just to reach the target count.
+    /// The floor under the combined score is measured against the map's own score distribution
+    /// rather than being a constant, because the distribution's *mean is pinned and its spread is
+    /// not*. Both halves of the score are shares of a province lying above a percentile line, so
+    /// averaged over provinces they come back to the percentiles themselves — mean highShare is
+    /// <see cref="MapConfig.MountainLineShare"/>, mean steepShare is
+    /// <see cref="MapConfig.SteepLineShare"/> — on every map at every resolution. Only the reach of
+    /// the tail past that fixed mean varies, and it varies a great deal: a province is a fixed area
+    /// in pixels, so a heightmap at a quarter scale gives provinces covering nine times the ground,
+    /// each bundling the wall together with the valley beside it. One world measured at two sizes
+    /// put the marked provinces at 0.58 and at 0.465 against a mean of 0.2175 in both.
+    ///
+    /// A constant floor under that is above the tail or below it with nothing in between, and both
+    /// were seen: the same settings took every province it asked for at full size and 7 of 40 at a
+    /// quarter. Cutting in the tail's own units — deviations about the median, which the tail
+    /// cannot widen the way it widens a standard deviation — makes the cut mean one thing on both.
+    ///
+    /// <see cref="MapConfig.ImpassableMinMountainShare"/> survives underneath it as a backstop for
+    /// the one case a spread test is blind to, a map with no mountains at all: shape alone cannot
+    /// separate that from a mountainous one, since the top tenth of provinces sits about as far up
+    /// the tail in either, so only an absolute number can reject it.
     ///
     /// Vanilla's proportion is the reference: 1,188 impassable against 11,301 baronied provinces.
     /// </summary>
@@ -780,17 +798,34 @@ public static class Provinces
                 highShare, steepShare));
         }
 
+        if (ranked.Count == 0) return;
+
         ranked.Sort((a, b) => b.Score.CompareTo(a.Score));
+
+        // Sorted descending, so the median is the middle of the list and the deviations only need
+        // the one extra sort. Both are over every land province, not over the ones about to be
+        // marked — the point is to place the cut against the whole population's shape.
+        double median = ranked[ranked.Count / 2].Score;
+
+        var deviation = new double[ranked.Count];
+        for (int i = 0; i < ranked.Count; i++) deviation[i] = Math.Abs(ranked[i].Score - median);
+        Array.Sort(deviation);
+        double mad = deviation[deviation.Length / 2];
+
+        double adaptive = median + Math.Max(0, cfg.ImpassableScoreDeviations) * mad;
+        double floor = Math.Max(cfg.ImpassableMinMountainShare, adaptive);
 
         int want = (int)Math.Round(ranked.Count * share);
         int marked = 0;
         double highSum = 0, steepSum = 0;
+        double cut = 0;
         foreach (var (label, score, highShare, steepShare) in ranked)
         {
-            if (marked >= want || score < cfg.ImpassableMinMountainShare) break;
+            if (marked >= want || score < floor) break;
             map.Seeds[label].IsImpassable = true;
             highSum += highShare;
             steepSum += steepShare;
+            cut = score;
             marked++;
         }
 
@@ -800,6 +835,17 @@ public static class Provinces
         Console.WriteLine($"  impassable: {marked} of {ranked.Count} land provinces " +
                           $"(target {want}, mountain line {mountainLine:F0}, " +
                           $"steep line {steepLine:F2}/px{mix})");
+
+        // Printed every run, because the whole failure this replaced was invisible without it: a
+        // count that stops short of its target and a count that reaches it look identical unless
+        // the floor and the score it cut at are both on the page.
+        string bound = marked >= want ? "target share"
+            : adaptive > cfg.ImpassableMinMountainShare ? "floor, adaptive"
+            : "floor, absolute backstop";
+        Console.WriteLine($"    score: median {median:F3}, deviation {mad:F3}, " +
+                          $"floor {floor:F3} (adaptive {adaptive:F3} vs backstop " +
+                          $"{cfg.ImpassableMinMountainShare:F2}), cut at {cut:F3} — " +
+                          $"limited by {bound}");
     }
 
     /// <summary>

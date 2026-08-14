@@ -137,10 +137,20 @@ internal static class Preset
         [nameof(MapConfig.Width), nameof(MapConfig.Height),
          nameof(MapConfig.WorldWidth), nameof(MapConfig.WorldHeight)];
 
+    /// <summary>
+    /// Lives on the config only because the PropertyGrid needs somewhere to put it, and decides
+    /// what the grid shows rather than what the map is. Carrying it would let someone else's
+    /// preset change your view.
+    /// </summary>
+    private static readonly string[] ViewOnly = [nameof(MapConfig.ShowAdvancedSettings)];
+
+    private static bool Saved(System.Reflection.PropertyInfo p)
+        => !FromImage.Contains(p.Name) && !ViewOnly.Contains(p.Name);
+
     public static void Save(MapConfig config, string path)
     {
         var values = Settable(config)
-            .Where(p => !FromImage.Contains(p.Name))
+            .Where(Saved)
             .ToDictionary(p => p.Name, p => p.GetValue(config));
 
         File.WriteAllText(path, JsonSerializer.Serialize(values, Format));
@@ -160,7 +170,7 @@ internal static class Preset
         int applied = 0;
         foreach (var property in Settable(config))
         {
-            if (FromImage.Contains(property.Name)) continue;
+            if (!Saved(property)) continue;
             if (!document.TryGetValue(property.Name, out var element)) continue;
 
             var value = element.Deserialize(property.PropertyType);
