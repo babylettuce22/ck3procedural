@@ -185,7 +185,6 @@ promote_colony_interaction = {
 	has_valid_target_showing_failures_only = {
 		scope:target = {
 			can_promote_colony_trigger = yes
-			title_province ?= { has_ongoing_construction = no }
 		}
 	}
 
@@ -247,7 +246,6 @@ promote_colony_to_city_interaction = {
 	has_valid_target_showing_failures_only = {
 		scope:target = {
 			can_promote_colony_trigger = yes
-			title_province ?= { has_ongoing_construction = no }
 		}
 		scope:actor = {
 			culture = { has_innovation = innovation_city_planning }
@@ -320,7 +318,6 @@ promote_colony_to_temple_interaction = {
 	has_valid_target_showing_failures_only = {
 		scope:target = {
 			can_promote_colony_trigger = yes
-			title_province ?= { has_ongoing_construction = no }
 		}
 		scope:actor = {
 			culture = { has_innovation = innovation_city_planning }

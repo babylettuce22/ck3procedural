@@ -222,4 +222,23 @@ can_promote_colony_trigger = {
 		text = colonize_needs_full_settlement_tt
 		title_province ?= { has_building = settlement_03 }
 	}
+
+	# ---- Why the construction check moved in here ----
+	#
+	# It used to live in each of the three promote interactions, as its own line, three times — and
+	# nowhere else. The AI does not promote through those interactions; it calls
+	# promote_colony_effect straight from the yearly pulse, gated on this trigger alone. So the AI
+	# was the one caller allowed to promote a colony with a building still going up.
+	#
+	# That is worse than untidy, because promotion is not atomic: promote_colony_effect tears down
+	# the settlement chain, swaps the holding type, and THEN converts a colonist out of
+	# colony_government. If the teardown or the swap is refused mid-construction, the government
+	# change still happens — and what is left is a county that is still a colony held by a ruler who
+	# is now feudal or tribal, which no longer matches any promotion path and never matures.
+	#
+	# One home for the rule means the AI and the three buttons cannot disagree about it again.
+	custom_tooltip = {
+		text = colonize_construction_in_progress_tt
+		title_province ?= { has_ongoing_construction = no }
+	}
 }

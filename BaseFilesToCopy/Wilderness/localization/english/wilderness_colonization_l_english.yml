@@ -152,6 +152,7 @@
  colonize_obstacles_remain_tt:0 "Nothing may still be blocking the land"
  colonize_needs_development_tt:0 "The county must have reached #V 4 #! Development"
  colonize_needs_full_settlement_tt:0 "The colony must be fully established"
+ colonize_construction_in_progress_tt:0 "Nothing may still be under construction here"
 
  # --- The emptied character and title windows ------------------------------------------------
  # Emit/GuiWriter.cs hides the body of vanilla's character and title windows for the wilderness

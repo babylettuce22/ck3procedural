@@ -414,6 +414,22 @@ promote_colony_effect = {
 	if = {
 		limit = {
 			exists = scope:colony_promoter
+
+			# ---- The county actually stopped being a colony ----
+			#
+			# Everything below converts a colonist out of colony_government, and that must not happen
+			# unless the holding swap above really took. It is not guaranteed to: `set_holding_type`
+			# and the `remove_building` calls before it can be refused — mid-construction was the
+			# case that bit, and is now gated in can_promote_colony_trigger — and a refusal is
+			# silent.
+			#
+			# When that happened the government change ran anyway, leaving a county that is still a
+			# colony held by a ruler who is now feudal or tribal. Nothing promotes it after that:
+			# the holder is no longer a colonist, so none of the colonist paths apply, and the
+			# county sits at settlement_holding forever. Asking the county what it is now, rather
+			# than assuming the lines above worked, is the whole fix.
+			scope:finished_colony = { is_colony_county_trigger = no }
+
 			scope:colony_promoter = {
 				is_colonist_trigger = yes
 				exists = liege

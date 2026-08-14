@@ -108,6 +108,15 @@ wilderness_yearly_pulse = {
 				}
 			}
 
+			# Charged BEFORE the promotion, not after, and the order is load-bearing.
+			#
+			# promote_colony_cost is a quarter price for a colonist. promote_colony_effect converts a
+			# colonist out of colony_government as its last act — so read afterwards, the value has
+			# already gone back to full, and an AI colonist who was checked against 100 gold was then
+			# billed 400. The gate and the bill have to read the same number, which means reading it
+			# on the same side of the promotion.
+			remove_short_term_gold = promote_colony_cost
+
 			random_held_title = {
 				limit = {
 					tier = tier_county
@@ -115,8 +124,6 @@ wilderness_yearly_pulse = {
 				}
 				promote_colony_effect = { COUNTY = this }
 			}
-
-			remove_short_term_gold = promote_colony_cost
 		}
 
 		# --- And consider starting another -----------------------------------------------------
