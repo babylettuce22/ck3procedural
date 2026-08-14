@@ -269,11 +269,6 @@
  WILDERNESS_OVERSEE_BUTTON:0 "Go and Oversee It"
 
 
- move_seat_to_colony_decision:0 "Move Our Seat Here"
- move_seat_to_colony_decision_tooltip:0 "Move the court, the council and the whole apparatus of our rule to this colony."
- move_seat_to_colony_decision_confirm:0 "Send for the Court"
- move_seat_to_colony_decision_desc:0 "We could stop visiting and simply live here.\n\nIt would mean the court comes out — the council, the chancery, the whole weight of it — to a county that had no name on any map ten years ago. Our vassals would find that their liege now sits a very long way from anywhere they consider real. Our heir would be raised in it.\n\nAnd this land would stop being somewhere we go. It would be where we are from."
- colonize_seat_moved_toast:0 "The Court Comes Out"
 
  # --- The leak detector ----------------------------------------------------------------------
  # Diagnostic, not flavour. Both strings name the county and the holder so the route can be
@@ -284,7 +279,6 @@
 
  colonize_already_present_tt:0 "We are already there"
  colonize_already_travelling_tt:0 "We are already on the road"
- colonize_seat_already_here_tt:0 "Our seat is already here"
 
  # --- Granting a colony away -----------------------------------------------------------------
  wilderness_colonization.0015.t:0 "A Man With Nothing"
