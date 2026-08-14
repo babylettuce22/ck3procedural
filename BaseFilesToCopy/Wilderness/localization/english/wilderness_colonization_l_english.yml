@@ -27,6 +27,38 @@
  wilderness_government_realm:0 "Wilderness"
  wilderness_government_desc:0 "Empty country. No lord holds it, no levy comes from it, and crossing it is a risk in itself."
 
+ # --- What a title of ours is CALLED ------------------------------------------------------
+ #
+ # CK3 builds a title's full name from `TITLE_TIERED_NAME`, which is "$TIER|U$ of $NAME$" — so
+ # "County of Braemar" is the tier word plus the title. The tier word is looked up as
+ # `<tier>_<government>`, where <government> is the government key with `_government` stripped:
+ # feudal_government gives `county_feudal` ("County"), clan_government gives `county_clan`
+ # ("Chiefdom"), theocracy_government gives `county_theocracy` ("Great Temple").
+ #
+ # NOT `mechanic_type`, which is the tempting reading and is wrong: republic_government and
+ # tribal_government declare no mechanic_type at all, and still resolve `county_republic` and
+ # `county_tribal`.
+ #
+ # Both of this mod's governments were therefore asking for keys nobody had written. A missing
+ # tier key is not a silent failure — it shows the raw key — so a colonist's county was liable to
+ # read "County_colony of Braemar" anywhere the full name is drawn.
+ #
+ # IMPORTANT, because it limits what this buys: the tier word is a fact about the HOLDER's
+ # government, not about the holding. A colony held by an ordinary feudal lord — which is every
+ # colony the player founds and keeps — still reads "County of X", because that lord is still
+ # feudal. Only a colony held by a colonist reads "Colony of X". Making the county window say
+ # "Colony" regardless of who holds it needs a GUI change in Emit/GuiWriter.cs, not a string here.
+ barony_colony:0 "Colony"
+ county_colony:0 "Colony"
+ duchy_colony:0 "Colonies"
+
+ # The wilderness dummy has the same gap. "Wilderness of Braemar" is also the honest phrasing for
+ # ground nobody holds, which is a happier accident than it sounds.
+ barony_wilderness:0 "Wilderness"
+ county_wilderness:0 "Wilderness"
+ duchy_wilderness:0 "Wilderness"
+ kingdom_wilderness:0 "Wilderness"
+
  # --- Holdings -----------------------------------------------------------------------------
  wilderness_holding:0 "Wilderness"
  wilderness_holding_desc:0 "Unsettled land. Somebody could live here, given years and money and a tolerance for what already does."
