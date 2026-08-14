@@ -43,6 +43,36 @@ county_obstacles_cleared_trigger = {
 }
 
 
+# --- Colonists ---------------------------------------------------------------------------------
+
+# Character scope. Is this a ruler whose only land is a colony?
+#
+# Asks the flag rather than `has_government = colony_government`, for the same reason
+# is_wilderness_county_trigger asks a flag: a second frontier government — a chartered company, a
+# monastic foundation — could be added later without editing anything that tests this.
+is_colonist_trigger = {
+	government_has_flag = government_is_colony
+}
+
+# Character scope. Is this character standing in a colony they themselves hold?
+#
+# THE presence test. Everything about "the lord is here" reduces to this one line, which is why it
+# is written once: the refresh effect asks it, the oversee interaction asks it, and the capital-move
+# decision asks it, and none of them may disagree about what being somewhere means.
+#
+# Phrased from the character's held titles rather than from `location.county.holder`, which would
+# need a two-step `prev.prev` to get back to the character being asked about. One `prev` is a thing
+# a reader can check; two is where scope bugs live. It is also the cheaper direction — a ruler holds
+# a handful of counties, and only the colonies among them are compared.
+character_is_at_own_colony_trigger = {
+	any_held_title = {
+		tier = tier_county
+		is_colony_county_trigger = yes
+		title_province = prev.location
+	}
+}
+
+
 # --- Ruler state -------------------------------------------------------------------------------
 
 # Character scope. Room for one more colony?
@@ -154,6 +184,29 @@ wilderness_can_grow_settlement_trigger = {
 # Three conditions, and each is doing separate work: the obstacles gate the land, the development
 # gates the people, and settlement_03 gates the investment. A colony that meets all three has
 # stopped being a frontier post and become a place.
+# Any scope. Should the seat raised on this colony be a tribe rather than a castle?
+#
+# Reads `scope:colony_promoter`, which promote_colony_effect saves from the county's own holder — so
+# unlike the `scope:promoting_holder` this replaces, there is no caller that can fail to set it.
+#
+# The second branch is the case the old code had no answer for. A colonist is neither feudal nor
+# tribal — colony_government is its own thing — so a colonist's promotion fell through to castle
+# whatever realm he came out of. The rule that fixes it is that a colonist raises the kind of seat
+# his SPONSOR would have raised: a chief's settlers build a hall, not a keep. The design sketch
+# reached for the county's culture instead, but culture has no tribal/feudal axis in CK3 — the
+# liege's government is the fact that actually exists.
+colony_promotes_to_tribe_trigger = {
+	scope:colony_promoter ?= {
+		OR = {
+			government_has_flag = government_is_tribal
+			AND = {
+				is_colonist_trigger = yes
+				liege ?= { government_has_flag = government_is_tribal }
+			}
+		}
+	}
+}
+
 can_promote_colony_trigger = {
 	is_colony_county_trigger = yes
 
@@ -163,7 +216,7 @@ can_promote_colony_trigger = {
 	}
 	custom_tooltip = {
 		text = colonize_needs_development_tt
-		development_level >= 3
+		development_level >= 4
 	}
 	custom_tooltip = {
 		text = colonize_needs_full_settlement_tt

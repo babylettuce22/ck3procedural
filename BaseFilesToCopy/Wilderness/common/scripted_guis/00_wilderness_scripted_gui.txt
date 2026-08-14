@@ -141,10 +141,29 @@ wilderness_settle = {
 	effect = {
 		custom_tooltip = colonize_settle_button_effect_tt
 
-		hidden_effect = {
-			remove_short_term_gold = colonize_cost
-			add_prestige = { value = colonize_prestige_cost  multiply = -1 }
+		# ---- Why the two payment lines are NOT in the hidden_effect below ----
+		#
+		# A scripted_gui has no `cost` block. On a decision or an interaction that block is what
+		# prints the price — the engine reads it, shows "−125 Gold", greys the button out, and then
+		# deducts. Here the only thing that can print a price is the effect tooltip, which is built
+		# from the effects themselves, and `hidden_effect` is precisely the instruction not to show
+		# them.
+		#
+		# So these two sat inside it and the button charged the player 125 gold while telling them
+		# nothing at all — the is_valid tooltip below says "we cannot afford to outfit an expedition"
+		# when the money is short and says nothing whatever when it is not, which is a button whose
+		# price you learn by pressing it.
+		#
+		# Out here they render as two lines of the tooltip, in the same red the rest of the game uses,
+		# and the number comes from the same colonize_cost the check reads.
+		#
+		# Everything below stays hidden because it is not a price, it is the whole transition — a
+		# title transfer, a culture and faith set, four holding changes and a coat of arms. Tooltipped
+		# it would be forty lines describing machinery.
+		remove_short_term_gold = colonize_cost
+		add_prestige = { value = colonize_prestige_cost  multiply = -1 }
 
+		hidden_effect = {
 			colonize_county_effect = {
 				COUNTY = scope:wilderness.county
 				COLONIZER = root
@@ -157,6 +176,63 @@ wilderness_settle = {
 			left_icon = root
 			right_icon = scope:wilderness.county
 		}
+	}
+}
+
+
+# Character scope, with scope:wilderness set to the province the county view is showing.
+#
+# The "Go and Oversee It" button on the county view. Unlike every other scripted_gui in this file it
+# has NO effect block, and that is not an omission.
+#
+# CK3 has no script effect that creates an activity — there is no `create_activity` anywhere in the
+# game files. Activities start only through the planner UI. So the button cannot *do* anything: its
+# onclick opens the planner for `activity_oversee_colony`, via `ToggleGameViewData`, which is how
+# vanilla's own activity list opens a host window. What this scripted_gui provides is the two things
+# a .gui file cannot work out for itself — whether the button belongs on THIS county, and whether the
+# player can act on it — and the tooltip that explains a no.
+#
+# The ownership rule is deliberately NOT duplicated as a gate here. `is_location_valid` on the
+# activity is what enforces "a colony you hold yourself", because that is the check the planner
+# actually runs when it builds its location list; this only decides whether a button appears on the
+# panel you are looking at. Writing the rule twice is how the button and the planner end up
+# disagreeing about what is allowed.
+wilderness_oversee = {
+	scope = character
+
+	# The AI never hosts this — see the ai_will_do note on the activity — and must never reach a
+	# button.
+	ai_is_valid = { always = no }
+
+	is_shown = {
+		scope:wilderness.county ?= {
+			holder = root
+			is_colony_county_trigger = yes
+		}
+
+		# A colonist lives in his colony already. Offering him a journey to where he is standing is
+		# the button explaining itself badly.
+		is_colonist_trigger = no
+	}
+
+	is_valid = {
+		custom_tooltip = {
+			text = colonize_already_present_tt
+			NOT = { has_character_modifier = overseeing_the_settlement }
+		}
+		custom_tooltip = {
+			text = colonize_not_while_at_war_tt
+			is_at_war = no
+		}
+		custom_tooltip = {
+			text = colonize_already_travelling_tt
+			is_travelling = no
+		}
+		is_available = yes
+	}
+
+	effect = {
+		custom_tooltip = colonize_oversee_button_effect_tt
 	}
 }
 

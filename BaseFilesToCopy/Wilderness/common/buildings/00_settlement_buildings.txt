@@ -86,7 +86,7 @@ settlement_01 = {
 		#
 		# ---- The floor this must not cross ----
 		#
-		# can_promote_colony_trigger requires `development_level >= 3`. At -1.0 a colony's
+		# can_promote_colony_trigger requires `development_level >= x`. At -1.0 a colony's
 		# development freezes, it can never clear that bar, and the whole system deadlocks with no
 		# error — the promote button simply never enables. Anything tuned here has to leave real
 		# growth behind, which is also why the flat `development_growth` on the two tiers below is
@@ -96,13 +96,12 @@ settlement_01 = {
 		# The malus is steepest here and eases at each tier (-0.75, -0.50, -0.25). A colony with
 		# nobody in it yet cannot absorb its neighbour's prosperity; one that is nearly a real
 		# holding increasingly can. That is the same ramp the levies and the tax malus already use.
-		development_growth_factor = -0.75
+		development_growth_factor = -0.95
 	}
 
 	character_modifier = {
 		# THE upkeep. One copy per colony held, maintained by the engine. See the note above.
 		domain_tax_mult = -0.06
-		domain_limit = 1
 	}
 
 	type_icon = "icon_building_outposts.dds"
@@ -139,19 +138,17 @@ settlement_02 = {
 	county_modifier = {
 		travel_danger = 10
 
-		# The flat add is the colony developing itself; the factor is how much of the neighbour's
+		# factor is how much of the neighbour's
 		# development it can absorb. They pull in opposite directions on purpose — see the long
 		# note on settlement_01. Note the factor scales the flat add too, so this is really 0.10 a
 		# month of guaranteed local growth, which is the point: it does not depend on there being
 		# a rich neighbour.
-		development_growth = 0.20
-		development_growth_factor = -0.50
+		development_growth_factor = -0.95
 	}
 
 	character_modifier = {
 		# The colony is paying for more of itself now.
 		domain_tax_mult = -0.03
-		domain_limit = 1
 	}
 
 	type_icon = "icon_building_outposts.dds"
@@ -188,12 +185,10 @@ settlement_03 = {
 		# it is what happens to a real place next to a rich one. This is also the tier promotion
 		# is gated on (`has_building = settlement_03`), so it is the tier that has to be able to
 		# push a county to development 3 without help.
-		development_growth = 0.30
-		development_growth_factor = -0.25
+		development_growth_factor = -0.95
 	}
 
 	character_modifier = {
-		domain_limit = 1
 	}
 
 	type_icon = "icon_building_outposts.dds"

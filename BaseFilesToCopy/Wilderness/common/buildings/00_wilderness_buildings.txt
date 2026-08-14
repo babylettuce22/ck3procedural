@@ -104,7 +104,7 @@ beast_dens = {
 		tax_mult = -0.20
 		garrison_size = -0.15
 		levy_size = -0.10
-		travel_danger = 15
+		travel_danger = 50
 	}
 
 	next_building = beast_dens_cleared
@@ -138,7 +138,7 @@ bandit_camps = {
 		supply_limit_mult = -0.30
 		tax_mult = -0.25
 		monthly_county_control_growth_add = -0.10
-		travel_danger = 15
+		travel_danger = 50
 	}
 
 	next_building = bandit_camps_cleared
@@ -170,13 +170,13 @@ dense_growth = {
 	county_modifier = {
 		supply_limit_mult = -0.50
 		development_growth_factor = -0.25
-		travel_danger = 15
+		travel_danger = 25
 	}
 
 	province_modifier = {
 		# Slower to build in, but the timber is right there once you start.
-		holding_build_speed = -0.20
-		build_gold_cost = -0.10
+		holding_build_speed = 0.50
+		build_gold_cost = -0.05
 	}
 
 	next_building = dense_growth_cleared
@@ -206,14 +206,14 @@ flooded_lands = {
 	can_construct_potential = { always = no }
 
 	county_modifier = {
-		development_growth_factor = -0.20
+		development_growth_factor = -0.50
 		county_opinion_add = -10
 		travel_danger = 15
 	}
 
 	province_modifier = {
 		build_gold_cost = 0.50
-		holding_build_speed = -0.25
+		holding_build_speed = 0.50
 	}
 
 	character_modifier = {
@@ -248,14 +248,14 @@ scree_slopes = {
 	can_construct_potential = { always = no }
 
 	county_modifier = {
-		development_growth_factor = -0.25
+		development_growth_factor = -0.40
 		supply_limit_mult = -0.25
 		travel_danger = 15
 	}
 
 	province_modifier = {
 		build_gold_cost = 0.35
-		holding_build_speed = -0.20
+		holding_build_speed = 0.20
 		# Rock is at least worth something to a garrison.
 		fort_level = 1
 	}
@@ -287,7 +287,8 @@ killing_cold = {
 	can_construct_potential = { always = no }
 
 	county_modifier = {
-		development_growth_factor = -0.30
+		development_growth_factor = -0.65
+		holding_build_speed = 0.20
 		supply_limit_mult = -0.40
 		levy_size = -0.20
 		travel_danger = 20

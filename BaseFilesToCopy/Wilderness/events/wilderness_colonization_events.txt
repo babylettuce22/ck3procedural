@@ -37,6 +37,269 @@ wilderness_colonization.0010 = {
 	}
 }
 
+# A colony granted to somebody who had nothing.
+#
+# Fires to the LIEGE, and only to a player liege — colonization_grant_reaction_effect gates it —
+# because the AI granting land to a courtier is ordinary housekeeping and does not need a window.
+#
+# It exists to make the asymmetry legible at the moment it happens. The player has just handed a
+# county to a man with no land, and the opinion bonus he picked up is not something anyone reads in
+# a tooltip while it is being applied. This is where it gets said out loud.
+wilderness_colonization.0015 = {
+	type = character_event
+	title = wilderness_colonization.0015.t
+	desc = wilderness_colonization.0015.desc
+	theme = realm
+
+	left_portrait = {
+		character = scope:colonist
+		animation = happiness
+	}
+
+	trigger = {
+		is_ai = no
+		exists = scope:colonist
+	}
+
+	option = {
+		name = wilderness_colonization.0015.a
+	}
+}
+
+
+# =====================================================================================
+#  A colony comes of age
+# =====================================================================================
+#
+# ---- Why there are two events and not one with a branch ----
+#
+# Because they are two different pieces of news and the difference is the whole point. Folding them
+# into one event with a conditional desc would put the most important line the mechanic ever prints
+# behind a `first_valid` block, where it reads as a variation rather than as a turn.
+#
+# Both are narration. colony_completion_effect has already changed the world by the time either
+# fires — see the note there for why the mechanical work does not live inside an event. What the
+# player chooses here is what to do NEXT, which is the only kind of choice an event can safely own.
+
+# The ordinary ending, and the one the player should mostly get: the colonist finishes, and stays.
+wilderness_colonization.0020 = {
+	type = character_event
+	title = wilderness_colonization.0020.t
+	desc = wilderness_colonization.0020.desc
+	theme = realm
+
+	left_portrait = {
+		character = scope:colonist
+		animation = personality_honorable
+	}
+	right_portrait = {
+		character = root
+		animation = thinking
+	}
+
+	trigger = {
+		exists = scope:colonist
+		exists = scope:finished_colony
+	}
+
+	option = {
+		name = wilderness_colonization.0020.a
+
+		# He has been useless to you for a generation and has just stopped being useless. Saying so
+		# costs nothing and is worth something to a man who spent twenty years in a palisade.
+		add_prestige = minor_prestige_gain
+
+		reverse_add_opinion = {
+			target = scope:colonist
+			modifier = colonist_raised_up_opinion
+			opinion = 15
+		}
+
+		# Heavily weighted, because the alternative below is a tyranny hit for a county that is worth
+		# one county. An AI that revoked here half the time — which is what two unweighted options
+		# would give it — would make every AI-granted colony a trap and teach the player that
+		# colonists are never allowed to keep anything.
+		ai_chance = {
+			base = 100
+		}
+	}
+
+	option = {
+		name = wilderness_colonization.0020.b
+
+		# Or take the county back now that it is finally worth having. It is legal, it is what the
+		# contract lets you do, and everyone will see exactly what you did.
+		trigger = {
+			scope:finished_colony = { holder ?= { this = scope:colonist } }
+		}
+
+		scope:colonist = {
+			add_opinion = {
+				target = root
+				modifier = colonist_sent_to_the_frontier_opinion
+				opinion = -60
+			}
+		}
+
+		every_vassal = {
+			limit = { NOT = { this = scope:colonist } }
+			add_opinion = {
+				target = root
+				modifier = lost_a_colony_opinion
+				opinion = -15
+			}
+		}
+
+		scope:finished_colony = {
+			create_title_and_vassal_change = {
+				type = revoked
+				save_scope_as = seizure
+			}
+			change_title_holder = {
+				holder = root
+				change = scope:seizure
+				take_baronies = yes
+			}
+			resolve_title_and_vassal_change = scope:seizure
+		}
+
+		add_tyranny = medium_tyranny_gain
+
+		ai_chance = {
+			base = 5
+			modifier = { add = 20  ai_greed > 75 }
+			modifier = { factor = 0  has_trait = just }
+		}
+	}
+}
+
+# The other ending. A generation of being nobody's concern, and on the day the seat goes up he
+# decides he does not need a lord for it.
+#
+# See colony_secession_chance for why the odds are small and what moves them. The short version is
+# that a frontier which always breaks away is a tax on granting rather than a risk, and the correct
+# response to a tax is never to grant.
+wilderness_colonization.0021 = {
+	type = character_event
+	title = wilderness_colonization.0021.t
+	desc = wilderness_colonization.0021.desc
+	theme = realm
+
+	left_portrait = {
+		character = scope:colonist
+		animation = personality_bold
+	}
+	right_portrait = {
+		character = root
+		animation = anger
+	}
+
+	trigger = {
+		exists = scope:colonist
+		exists = scope:finished_colony
+	}
+
+	# Let him go. There is a five-year truce on the table already and the county was never worth
+	# anything to you; what you lose is the admission.
+	option = {
+		name = wilderness_colonization.0021.a
+
+		add_stress = medium_stress_impact_gain
+
+		# Weighted explicitly rather than left to the default, because an unweighted option and a
+		# weighted one are not comparable and the AI's split between these two would be whatever the
+		# engine's default happens to be this patch. Most lords write off a county they never saw.
+		ai_chance = {
+			base = 60
+		}
+	}
+
+	# Or decide that this is not finished. A claim is not an army, and the truce means it will keep
+	# for five years — which is the honest shape of the choice: you are agreeing to remember.
+	option = {
+		name = wilderness_colonization.0021.b
+
+		add_pressed_claim = scope:finished_colony
+
+		add_stress = minor_stress_impact_gain
+
+		ai_chance = {
+			base = 40
+			modifier = { add = 40  ai_vengefulness > 50 }
+			modifier = { add = -30  is_at_war = yes }
+		}
+	}
+}
+
+# =====================================================================================
+#  The leak detector
+# =====================================================================================
+#
+# ---- What this is for ----
+#
+# An AI realm was observed holding UNCOLONISED wilderness — a county whose capital still carries
+# wilderness_holding, in somebody's realm, with no colonisation having happened. Nothing in this
+# file set can produce that: colonize_county_effect converts the capital in the same effect that
+# moves the title, so a county that is ours is never still wild.
+#
+# Static analysis closed off the obvious routes and found none of them open. All 121 casus belli in
+# the generated mod carry the `allowed_against_character` guard, so no war can be declared on the
+# dummy. Holy wars, de jure wars and faction seizures all filter their county transfers on the
+# defender's realm, and the dummy is independent, so it is never in one. The `wilderness` trait
+# carries `immortal`, `inheritance_blocker = all` and `claim_inheritance_blocker = all`, so nothing
+# arrives by succession. A fabricated or bought claim is only usable through claim_cb, which is
+# guarded like the rest.
+#
+# Which means the route is something not yet enumerated — and enumerating it by reading files has
+# reached its limit. So instead of guessing again, this catches it in the act and says what it was.
+#
+# ---- Why it is deferred by a week ----
+#
+# on_title_gain fires when the title moves, and colonize_county_effect moves the title BEFORE it
+# converts the holding. Checked immediately, every legitimate colonisation in the game would look
+# like a leak. Seven days later the conversion has long since happened, so a county still carrying
+# wilderness_holding under a real ruler is unambiguously wrong.
+#
+# ---- Why it reverts as well as reports ----
+#
+# Because the state is broken either way. A wilderness county in a realm has no upkeep, no colony,
+# no promotion path and no way back — it is a county that skipped the entire mechanic. Handing it
+# to the dummy is what abandon_county_effect exists for and puts the world back somewhere the rest
+# of the system understands.
+#
+# Remove this once the route is known and closed at its source. It is a net, not a fix.
+wilderness_colonization.0099 = {
+	hidden = yes
+	scope = character
+
+	trigger = {
+		exists = scope:leak_county
+		scope:leak_county = {
+			tier = tier_county
+			title_province ?= { has_holding_type = wilderness_holding }
+			holder ?= { NOT = { has_trait = wilderness } }
+		}
+	}
+
+	immediate = {
+		debug_log = wilderness_leak_debug_log
+
+		# Every human player, not just this county's neighbours — whoever is testing needs to see it
+		# whether or not it happened anywhere near them.
+		every_player = {
+			send_interface_toast = {
+				type = event_toast_effect_bad
+				title = wilderness_leak_toast
+				left_icon = scope:leak_county.holder
+				right_icon = scope:leak_county
+			}
+		}
+
+		abandon_county_effect = { COUNTY = scope:leak_county }
+	}
+}
+
+
 # The AI's decision to claim a county.
 #
 # Hidden and immediate: this is a branch of the yearly pulse, not something anybody sees. It is an

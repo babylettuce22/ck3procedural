@@ -1,0 +1,14 @@
+﻿# The contract group colony_government points at.
+#
+# A new file rather than an edit of vanilla's subject_contract_groups.txt: these databases merge
+# across files, so adding one here leaves every vanilla group untouched and conflicts with nothing.
+#
+# One contract, and no `modify_contract_layout`. A colonist has nothing to negotiate — the terms are
+# what they are until he stops being a colonist, at which point his government changes and this
+# group stops applying to him without anything having to convert it.
+
+colony_vassal = {
+	contracts = {
+		colony_obligations
+	}
+}

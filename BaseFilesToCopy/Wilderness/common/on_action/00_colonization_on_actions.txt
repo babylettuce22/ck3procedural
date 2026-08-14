@@ -67,6 +67,7 @@ wilderness_yearly_cleanup = {
 yearly_playable_pulse = {
 	on_actions = {
 		wilderness_yearly_pulse
+		wilderness_yearly_presence_refresh
 	}
 }
 
@@ -193,5 +194,164 @@ wilderness_on_title_gain = {
 			}
 			remove_variable = colonization_cooldown
 		}
+
+		# --- The leak detector -----------------------------------------------------------------
+		#
+		# A county whose capital is still wilderness_holding has arrived in somebody's realm. That
+		# should be impossible — colonize_county_effect converts the capital in the same effect that
+		# moves the title — so this is either the unidentified route that put uncolonised wilderness
+		# in an AI realm, or a new one.
+		#
+		# Deferred, because on_title_gain fires BEFORE colonize_county_effect converts the holding
+		# and an immediate check would flag every legitimate colonisation in the game. See
+		# wilderness_colonization.0099 for the rest of the reasoning, including why it reverts.
+		if = {
+			limit = {
+				NOT = { has_trait = wilderness }
+				scope:title ?= { tier = tier_county }
+				scope:title ?= { title_province ?= { has_holding_type = wilderness_holding } }
+			}
+
+			scope:title = { save_scope_as = leak_county }
+			trigger_event = {
+				id = wilderness_colonization.0099
+				days = 7
+			}
+		}
+
+		# --- A colony changing hands -----------------------------------------------------------
+		#
+		# This is where granting a colony away becomes a mechanic, and it is deliberately hung off
+		# the gain rather than off an interaction of its own. Vanilla's Grant Title already moves
+		# counties, and the AI already uses it to shed surplus holdings — so hooking here means the
+		# player's grant, the AI's own housekeeping, an inheritance and a war all arrive at the same
+		# place, and none of them needed to know this system exists.
+		if = {
+			limit = {
+				OR = {
+					scope:transfer_type = flag:granted
+					scope:transfer_type = flag:inheritance
+				}
+				scope:title ?= { tier = tier_county }
+				scope:title ?= { is_colony_county_trigger = yes }
+				NOT = { has_trait = wilderness }
+			}
+
+			# Whoever was overseeing this county is not overseeing it now. Cleared from the county
+			# side because the previous holder's own refresh can no longer see a title they have
+			# lost — see the note on colony_refresh_presence_effect.
+			scope:title = {
+				if = {
+					limit = { has_county_modifier = settlement_overseen }
+					remove_county_modifier = settlement_overseen
+				}
+			}
+
+			# Becoming a colonist follows from the facts on the ground and applies to an heir as
+			# readily as to a grantee. Having feelings about it does not — see the note above the
+			# two effects for why they are separate.
+			colonization_make_colonist_effect = yes
+
+			if = {
+				limit = { scope:transfer_type = flag:granted }
+				colonization_grant_reaction_effect = { COUNTY = scope:title }
+
+				# Clean up the liege who gave the colony away
+				if = {
+					limit = { exists = scope:granting_liege }
+					scope:granting_liege = {
+						colony_refresh_presence_effect = yes
+					}
+				}
+			}
+
+			# And the new holder may well be standing in it — a colonist always is.
+			colony_refresh_presence_effect = yes
+		}
+	}
+}
+
+
+# --- Presence: keeping "the lord is here" honest ---------------------------------------------------
+#
+# Four hooks and a backstop, all calling the same refresh. See the note on
+# colony_refresh_presence_effect for why every one of them calls the identical effect rather than a
+# grant here and a revoke there: the effect recomputes from where the character actually is, so it
+# is correct whatever happened in between, including the cases nobody enumerated.
+#
+# Every hook is gated on the character having something to do with a colony at all, which is what
+# keeps this off the performance budget — travel on_actions fire constantly and the great majority of
+# travellers have never seen a frontier.
+
+on_travel_plan_start = {
+	on_actions = {
+		wilderness_travel_presence_refresh
+	}
+}
+
+on_travel_plan_arrival = {
+	on_actions = {
+		wilderness_travel_presence_refresh
+	}
+}
+
+on_travel_plan_complete = {
+	on_actions = {
+		wilderness_travel_presence_refresh
+	}
+}
+
+on_travel_plan_abort = {
+	on_actions = {
+		wilderness_travel_presence_refresh
+	}
+}
+
+on_travel_plan_cancel = {
+	on_actions = {
+		wilderness_travel_presence_refresh
+	}
+}
+
+wilderness_travel_presence_refresh = {
+	# The travel on_actions run in the travelling character's scope. The gate is deliberately
+	# generous on the second branch: somebody who HAS the modifier must always be re-evaluated, even
+	# if they no longer hold a colony at all, or it would stick to them forever.
+	trigger = {
+		OR = {
+			has_character_modifier = overseeing_the_settlement
+			any_held_title = {
+				tier = tier_county
+				is_colony_county_trigger = yes
+			}
+		}
+	}
+
+	effect = {
+		colony_refresh_presence_effect = yes
+	}
+}
+
+# The backstop, appended to the yearly pulse declared at the top of this file rather than declaring
+# `yearly_playable_pulse` a second time — two definitions of the same on_action key do not merge,
+# and the later one silently wins, which would have deleted the AI's whole frontier look.
+#
+# The five hooks above catch every ordinary way of arriving and leaving. This catches the rest —
+# imprisonment, a county lost in a war, a colony promoted out from under a lord who was standing in
+# it, and whatever the next patch adds. Yearly is frequent enough for a mechanic measured in years
+# and cheap enough to be invisible.
+wilderness_yearly_presence_refresh = {
+	trigger = {
+		OR = {
+			has_character_modifier = overseeing_the_settlement
+			any_held_title = {
+				tier = tier_county
+				is_colony_county_trigger = yes
+			}
+		}
+	}
+
+	effect = {
+		colony_refresh_presence_effect = yes
 	}
 }

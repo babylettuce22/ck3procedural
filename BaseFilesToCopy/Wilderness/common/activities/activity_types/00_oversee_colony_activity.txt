@@ -1,0 +1,221 @@
+﻿# The lord goes and lives in his colony.
+#
+# =====================================================================================
+#  Why this is an activity and not a travel plan
+# =====================================================================================
+#
+# It was a travel plan first, and it could not work. CK3 derives a landed ruler's location from
+# where he BELONGS — his capital, his domicile, or an activity — and when a one-way plan completes
+# it applies the engine's own `return_home` effect, which rewrites the plan's destination to his
+# capital. The lord arrived at the colony and turned round in the same tick. Every one-way
+# `start_travel_plan` in vanilla belongs to somebody whose home moved first: a ward sent to a new
+# court, a hostage, an adventurer whose domicile travels with him.
+#
+# An activity is the third of those homes, and the only one that is temporary by design. The engine
+# holds the host at the activity location for as long as the activity runs and sends him home when
+# it ends — which is exactly the shape wanted, and it means `return_home` firing at the end is
+# correct rather than something to fight.
+#
+# It also buys the cost for free, which was the entire argument for presence over moving the
+# capital: a lord at an activity is genuinely absent from his court, and every vanilla consequence
+# of absence — schemes maturing unwatched, the council drifting, an heir growing up somewhere else
+# — applies without a line of script. Nothing here shields the player from any of it.
+#
+# =====================================================================================
+#  Why it has no end date
+# =====================================================================================
+#
+# The phase below is progressed after fifty years, which is not a duration so much as a number
+# chosen to be longer than a reign. Nothing is expected to reach it.
+#
+# What actually ends this is `promote_colony_effect` invalidating it the moment the colony becomes a
+# real holding — the lord stays until the work is finished, which is the only ending the fiction
+# has. Fifty years is the backstop for a colony that never finishes because the county was lost,
+# the save was edited, or something nobody predicted: without it a stuck activity would hold a
+# player's ruler out of his own court permanently with no way back.
+#
+# CK3 has no open-ended phase, and no script effect creates an activity at all — they are started
+# only through the planner UI. Both of those shape what is below.
+
+activity_oversee_colony = {
+	# Offered only to somebody who has a colony of his own to go to. A colonist is deliberately
+	# excluded: his capital IS his colony, he is already there, and the presence rule covers him
+	# permanently without him travelling anywhere.
+	is_shown = {
+		is_landed = yes
+		is_adult = yes
+		is_colonist_trigger = no
+
+		any_held_title = {
+			tier = tier_county
+			is_colony_county_trigger = yes
+		}
+	}
+
+	can_always_plan = no
+
+	can_start_showing_failures_only = {
+		is_available = yes
+
+		custom_tooltip = {
+			text = colonize_not_while_at_war_tt
+			is_at_war = no
+		}
+	}
+
+	is_valid = {
+		scope:host = {
+			is_alive = yes
+			is_imprisoned = no
+			is_incapable = no
+			is_landed = yes
+		}
+	}
+
+	# ---- The ownership rule, and the only place it is enforced ----
+	#
+	# "You may only oversee a colony you hold yourself." There is no second copy of this: the button
+	# on the county view drives the planner, and the planner's location list is filtered by
+	# `province_filter` and then by this. A lord cannot reach a colony of his vassal's through any
+	# route, including one nobody has thought of yet, because the location simply is not offered.
+	#
+	# `county_controller` is deliberately NOT used, unlike vanilla's hike, which accepts anything in
+	# the host's realm. Holding it is the point — an overseen colony pays its holder, and a lord
+	# standing in a vassal's colony is a guest.
+	is_location_valid = {
+		custom_tooltip = {
+			text = colonize_oversee_must_hold_tt
+			county ?= {
+				holder = scope:host
+				is_colony_county_trigger = yes
+			}
+		}
+	}
+
+	on_invalidated = {
+		invalidation_imprisoned_effect = yes
+		invalidation_incapable_effect = yes
+		invalidation_unlanded_effect = yes
+	}
+
+	# He has arrived and the activity has begun: he is now living here. The refresh reads his
+	# location and grants the presence modifiers off the back of it — no flag, no variable, nothing
+	# this file has to tell it. See colony_refresh_presence_effect.
+	on_enter_active_state = {
+		scope:host = { colony_refresh_presence_effect = yes }
+	}
+
+	# Both endings run the same line, because "he is leaving" is one fact however it came about —
+	# the colony finished, the county was lost, he was imprisoned, fifty years elapsed. The refresh
+	# recomputes from where he is rather than being told what happened.
+	on_complete = {
+		scope:host = { colony_refresh_presence_effect = yes }
+	}
+
+	province_filter = domain
+	ai_province_filter = domain
+
+	max_province_icons = 3
+	allow_zero_guest_invites = yes
+	open_invite = no
+
+	province_description = {
+		desc = activity_oversee_colony_province_desc
+	}
+
+	# No gold cost. The price of this is the years, and charging for it as well would be pricing the
+	# same thing twice — see the note at the top on what absence already costs.
+
+	###################
+	# PHASES
+	###################
+
+	phases = {
+		phase_overseeing = {
+			is_predefined = yes
+			location_source = pickable
+
+			# See the note at the top on why this is fifty years rather than a duration. It is the
+			# backstop for a colony that never finishes, not the expected ending.
+			on_phase_active = {
+				if = {
+					limit = { this = scope:host }
+					scope:activity = { progress_activity_phase_after = { years = 50 } }
+				}
+			}
+		}
+	}
+
+	###################
+	# GUESTS
+	###################
+
+	# Nobody comes. A lord riding out to live in a palisade for a decade is not hosting anything,
+	# and an entourage would turn an act of government into a party.
+	max_guests = 0
+
+	###################
+	# AI
+	###################
+
+	# The AI must never start this, and the zero is doing real work rather than being cautious.
+	#
+	# An AI that took itself out of its own court for fifty years would be handing its realm to
+	# whatever happened next, and no `ai_will_do` weighting can see that far — the costs of absence
+	# are exactly the indirect, long-horizon ones AI evaluation is worst at.
+	#
+	# The AI does not need it either. An AI lord's colonies are finished by the yearly pulse, and an
+	# AI colonist is permanently present in his own colony without going anywhere.
+	ai_will_do = { value = 0 }
+	ai_check_interval = 0
+
+	###################
+	# GRAPHICS
+	###################
+
+	# One unconditional background, and no `environment` or `ambience` line.
+	#
+	# The first draft had both, naming an `environment_event_wilderness` and a forest ambience event
+	# that do not exist — invented asset keys are the quiet failure mode this whole file set is
+	# written to avoid, and ck3-tiger caught them. A background with only a texture falls back to the
+	# engine's defaults for the rest, which is correct rather than merely safe.
+	#
+	# The texture is vanilla's own. This mod ships two placeholder .dds files and no more; adding a
+	# third that has to be drawn before the activity looks right would make the mechanic wait on art.
+	background = {
+		trigger = { always = yes }
+		texture = "gfx/interface/illustrations/event_scenes/forest.dds"
+	}
+
+	window_characters = {
+		host = {
+			camera = camera_body
+
+			effect = {
+				if = {
+					limit = { scope:host.location = scope:activity.activity_location }
+					scope:host = { add_to_list = characters }
+				}
+			}
+
+			scripted_animation = {
+				animation = personality_honorable
+			}
+		}
+
+		travel_host = {
+			camera = camera_event_horse_left
+
+			effect = {
+				if = {
+					limit = { scope:host.location != scope:activity.activity_location }
+					scope:host = { add_to_list = characters }
+				}
+			}
+
+			scripted_animation = {
+				animation = jockey_walk
+			}
+		}
+	}
+}

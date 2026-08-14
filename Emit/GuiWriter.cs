@@ -4,15 +4,17 @@ using Ck3MapGen.Io;
 namespace Ck3MapGen.Emit;
 
 /// <summary>
-/// Patches vanilla's county view so an unsettled county stops claiming to have a ruler.
+/// Patches vanilla's county, character and title windows so unsettled land stops claiming to have
+/// a ruler.
 ///
-/// A wilderness county is held by a dummy character, and CK3's county window has no idea that is
-/// meant to be a fiction: it draws the dummy's portrait, its name, its government, and the culture
-/// and faith the generator had to invent to satisfy the engine. All four are true in the save and
-/// all four are noise on screen.
+/// A wilderness county is held by a dummy character, and CK3's UI has no idea that is meant to be a
+/// fiction: it draws the dummy's portrait, its name, its government, and the culture and faith the
+/// generator had to invent to satisfy the engine. All four are true in the save and all four are
+/// noise on screen. Click through to the dummy itself, or to the title it holds, and the engine goes
+/// further — a court, a council, a succession law — none of which anybody wrote.
 ///
-/// **This never writes to the game directory.** It reads the installed
-/// <c>gui/window_county_view.gui</c>, edits the text in memory, and writes the result into the mod,
+/// **This never writes to the game directory.** It reads the installed <c>gui/*.gui</c> files,
+/// edits the text in memory, and writes the result into the mod,
 /// where CK3 loads it in preference to vanilla's. Disabling the mod restores vanilla with nothing to
 /// undo. Same read-transform-write shape as <see cref="MapTableWriter"/> and the three
 /// <see cref="CompatibilityWriter"/> methods that re-declare vanilla data.
@@ -34,6 +36,8 @@ public static class GuiWriter
 {
     /// <summary>
     /// One vanilla UI file to patch: which widgets to hide, and how to ask whether to hide them.
+    /// The scripted_gui is asked at the file's own <see cref="Scope"/>, which is why the three
+    /// entries below name three different questions rather than sharing one.
     /// </summary>
     /// <param name="File">Filename under the game's gui/ folder.</param>
     /// <param name="ScriptedGui">The scripted_gui in BaseFilesToCopy/Wilderness that answers the question.</param>
@@ -42,8 +46,8 @@ public static class GuiWriter
     /// <param name="Insert">Widgets with no `visible` of their own; ours is inserted after the anchor.</param>
     /// <param name="Add">
     /// Whole widgets to splice in after an anchor, rather than conditions to hide one. The text is
-    /// indented to match the anchor, and <c>{HIDE}</c> / <c>{SHOW}</c> in it are replaced with the
-    /// wilderness test and its negation.
+    /// indented to match the anchor, and <c>{SHOW}</c> in it is replaced with the wilderness test
+    /// (<c>{SHOW_RAW}</c> with the same thing unbracketed, for nesting inside an <c>And(...)</c>).
     /// </param>
     private sealed record Target(
         string File,
@@ -54,7 +58,13 @@ public static class GuiWriter
         (string Anchor, string What, string Block)[] Add);
 
     /// <summary>
-    /// The two windows that show an unsettled county as though somebody lived there.
+    /// The three windows that show an unsettled county as though somebody lived there.
+    ///
+    /// They are treated differently on purpose. The county view is EDITED — it keeps its shape and
+    /// loses the panels that would be lies, because the player still needs it to look at wilderness
+    /// and decide whether to settle it. The character and title windows are EMPTIED, because there
+    /// is no version of "the dummy's council" or "the wilderness kingdom's succession law" worth
+    /// showing; everything in them is bookkeeping wearing the costume of politics.
     ///
     /// Every anchor below was checked to occur EXACTLY once in the 1.19 files. That matters more
     /// than it looks: a string appearing twice would patch only the first, silently leaving half
@@ -108,16 +118,106 @@ public static class GuiWriter
             Extend: [],
             Insert:
             [
-                // The portrait box. NOT main_content, which is the whole window body — the close
-                // button lives inside it (blockoverride "button_close"), so hiding that would open
-                // a window the player cannot shut.
-                ("name = \"main_characters\"", "portrait", null),
-                ("name = \"faith_button\"", "faith", null),
-                ("datacontext = \"[Character.GetCulture]\"", "culture", null),
-                ("datacontext = \"[Character.GetHouse]\"", "house", null),
+                // The whole window body. This used to be four narrower anchors — the portrait box,
+                // the faith button, the culture and house rows — which hid the four things that
+                // most obviously lied about the dummy and left the rest of the character sheet
+                // standing: an empty court, a lifestyle with no focus, a dynasty tree of one. Every
+                // one of those is the same lie in a quieter font.
+                //
+                // Hiding main_content takes the close button with it (its blockoverride lives deep
+                // inside the portrait widget), which is why the placeholder below carries its own.
+                ("name = \"main_content\"", "window body", null),
             ],
-            Add: []),
+            Add:
+            [
+                // Anchored on a property of the window itself rather than on anything inside
+                // main_content, because it has to be main_content's SIBLING — spliced in as a child
+                // of the container we just hid, it would inherit that container's `visible` and
+                // never draw. `using = Window_Size_Sidebar` specifically, out of the several unique
+                // lines up there, because it sits below the window's two `datacontext` lines and so
+                // does not wedge a widget between a container and its own context.
+                ("using = Window_Size_Sidebar", "placeholder", CharacterPlaceholder),
+            ]),
+
+        new Target(
+            File: "window_title.gui",
+            ScriptedGui: "wilderness_title",
+            Scope: "TitleViewWindow.GetTitle",
+            Extend: [],
+            Insert:
+            [
+                // The outer vbox has exactly one child, so hiding it empties the window. Anchoring
+                // on the child rather than the parent because the parent's opening line is a bare
+                // `vbox = {` with nothing to match on.
+                ("name = \"title_view_main_tab\"", "window body", null),
+            ],
+            Add:
+            [
+                // Same sibling problem as the character window, solved with a different anchor:
+                // `using = Window_Background_Sidebar` is the only unique line that is a direct
+                // property of the window here.
+                ("using = Window_Background_Sidebar", "placeholder", TitlePlaceholder),
+            ]),
     ];
+
+    /// <summary>
+    /// What an emptied window shows instead: a line of text, and a way out.
+    ///
+    /// Deliberately almost nothing. The point of blanking these two windows is that the engine has
+    /// no vocabulary for "nobody lives here" and fills the silence with invented facts, so replacing
+    /// them with a smaller set of invented facts would miss the point. One sentence saying the land
+    /// is unheld, and the frame around it, is the whole design until there is something real to add.
+    ///
+    /// The close button is not decoration. Both windows keep theirs inside the body being hidden —
+    /// character: a blockoverride within the portrait widget; title: one within the header — so
+    /// without this the player opens a window they cannot shut.
+    /// </summary>
+    /// <param name="text">Loc key for the one line of body text.</param>
+    /// <param name="onclick">
+    /// The close button's onclick lines, already written out. A list rather than a single
+    /// expression because the title window's close is three calls, not one — see
+    /// <see cref="TitlePlaceholder"/>.
+    /// </param>
+    private static string Placeholder(string text, params string[] onclick) => $$"""
+        widget = {
+            name = "wilderness_placeholder"
+            visible = "{SHOW}"
+            size = { 100% 100% }
+
+            button_close = {
+                parentanchor = top|right
+                position = { -18 18 }
+                size = { 30 30 }
+                shortcut = "close_window"
+        {{string.Join('\n', onclick.Select(c => $"        onclick = \"{c}\""))}}
+            }
+
+            text_multi = {
+                name = "wilderness_placeholder_text"
+                parentanchor = center
+                autoresize = yes
+                max_width = 320
+                align = center
+                text = "{{text}}"
+            }
+        }
+        """;
+
+    // Properties rather than fields: `Targets` above is a static field initialised in textual
+    // order, so a field declared down here would still be null when that array is built.
+    private static string CharacterPlaceholder
+        => Placeholder("WILDERNESS_HOLDER_WINDOW", "[CharacterWindow.Close]");
+
+    /// <summary>
+    /// The title window closes three things, not one: vanilla's own close button clears the history
+    /// and claimant sub-panels alongside the window, and leaving those open behind a closed window
+    /// strands them on screen.
+    /// </summary>
+    private static string TitlePlaceholder
+        => Placeholder("WILDERNESS_TITLE_WINDOW",
+            "[TitleViewWindow.Close]",
+            "[TitleViewWindow.CloseHistory]",
+            "[TitleViewWindow.CloseClaimants]");
 
     /// <summary>
     /// The Settle button, spliced into the county view.
@@ -138,6 +238,28 @@ public static class GuiWriter
             margin = { 5 10 }
             spacing = 4
 
+            # ---- Why the whole block is gated on GetPlayer.IsValid ----
+            #
+            # Because `GetPlayer` is not always a character. It is invalid in observer mode, across
+            # the frames around a load, and while a widget tree is being built before a player is
+            # attached — and PdxGui evaluates a widget's expressions whenever it updates it, not
+            # only when somebody is looking at it.
+            #
+            # The three promote buttons below survive that: their promotes are engine-side calls on
+            # the player object and the engine null-checks them itself. The settle button does not,
+            # because it is the only one that hands a scope INTO script — `SetRoot( GetPlayer... )`
+            # — and script has no null to check. An invalid root reached `wilderness_settle`'s
+            # is_shown, which is a plain `can_colonize_at_all_trigger`, and every character trigger
+            # in it failed with "Scoped object of type 'character' is not valid", once per
+            # evaluation, filling the log with thousands of them.
+            #
+            # Guarding the container rather than each expression is deliberate: an invisible widget
+            # is not updated, so nothing inside is evaluated at all, and that covers `tooltip` and
+            # `enabled` — neither of which can be wrapped in a boolean guard of its own. It is also
+            # exactly what vanilla does in hud.gui, which gates its own player-dependent blocks on
+            # `GetPlayer.IsValid` for the same reason.
+            visible = "[GetPlayer.IsValid]"
+
             # --- Claiming unsettled land -------------------------------------------------------
             button_standard = {
                 name = "wilderness_settle_button"
@@ -146,8 +268,8 @@ public static class GuiWriter
 
                 onclick = "[GetScriptedGui('wilderness_settle').Execute( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End )]"
                 tooltip = "[GetScriptedGui('wilderness_settle').BuildTooltip( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End )]"
-                enabled = "[GetScriptedGui('wilderness_settle').IsValid( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End )]"
-                visible = "[And( {SHOW_RAW}, GetScriptedGui('wilderness_settle').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End ) )]"
+                enabled = "[And( GetPlayer.IsValid, GetScriptedGui('wilderness_settle').IsValid( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End ) )]"
+                visible = "[And( GetPlayer.IsValid, And( {SHOW_RAW}, GetScriptedGui('wilderness_settle').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End ) ) )]"
             }
 
             # --- Promoting a finished colony ---------------------------------------------------
@@ -161,6 +283,45 @@ public static class GuiWriter
             # There is no separate "make it a tribe" button because there is no separate choice:
             # promote_colony_effect seats a tribal ruler on a tribal holding and everyone else on a
             # castle. The button says "raise a seat"; the realm decides what kind of seat that is.
+            # --- Going out to a colony yourself ------------------------------------------------
+            #
+            # Sits above the promote buttons because it belongs to the part of a colony's life
+            # before promotion: a lord who is present is what makes an unfinished colony render
+            # anything at all.
+            #
+            # ---- Why this one is unlike every other button here ----
+            #
+            # The other four drive something directly — a scripted_gui's Execute, or an interaction.
+            # This one cannot, because CK3 has no effect that creates an activity: there is no
+            # `create_activity` anywhere in the game files, and activities begin only through the
+            # planner UI. So the onclick opens the planner instead, with
+            # `ToggleGameViewData( 'activity_list_detail_host_window', ... )` — the same call
+            # vanilla's own activity list uses to open a host window for a given type.
+            #
+            # That splits the button in two. Its conditions come from the `wilderness_oversee`
+            # scripted_gui, which answers "does this button belong on THIS county, and can the
+            # player act on it"; its action comes from the planner, which enforces the ownership
+            # rule itself through the activity's `is_location_valid`. The rule is not written twice,
+            # which is why the two cannot disagree.
+            #
+            # The practical cost: the player picks the colony again in the planner rather than the
+            # button aiming at the county they are looking at. That is how every activity in the
+            # game works, and `is_location_valid` means the list holds only their own colonies.
+            #
+            # There is no matching "come home" button, and no longer a decision either. The activity
+            # ends when the colony is promoted — see promote_colony_effect — or through the activity
+            # window, which is where a player already looks for the way out of an activity.
+            button_standard = {
+                name = "wilderness_oversee_button"
+                size = { 280 40 }
+                text = "WILDERNESS_OVERSEE_BUTTON"
+
+                visible = "[And( GetPlayer.IsValid, GetScriptedGui('wilderness_oversee').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End ) )]"
+                enabled = "[And( GetPlayer.IsValid, GetScriptedGui('wilderness_oversee').IsValid( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End ) )]"
+                tooltip = "[GetScriptedGui('wilderness_oversee').BuildTooltip( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End )]"
+                onclick = "[ToggleGameViewData( 'activity_list_detail_host_window', GetActivityType( 'activity_oversee_colony' ).Self )]"
+            }
+
             button_standard = {
                 name = "wilderness_promote_button"
                 size = { 280 40 }

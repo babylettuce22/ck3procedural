@@ -18,8 +18,7 @@ wilderness_holding = {
 		killing_cold
 	}
 
-	# The dummy holder is immortal and blocks inheritance anyway, but saying it here means a
-	# wilderness barony cannot leak into a real succession even if the dummy is somehow removed.
+	can_be_built = { always = no }
 	can_be_inherited = no
 }
 
@@ -40,4 +39,6 @@ settlement_holding = {
 		killing_cold
 		killing_cold_cleared
 	}
+
+	can_be_built = { always = no }
 }

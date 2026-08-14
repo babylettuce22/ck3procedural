@@ -1,0 +1,47 @@
+﻿# The asymmetry between granting a colony to a courtier and granting one to a vassal.
+#
+# ---- Why they differ, and why the difference matters ----
+#
+# A courtier has nothing. Handing him a county is a promotion, and he should be grateful — he
+# arrives with a stake in the place and a reason to make it work.
+#
+# A vassal already has land. Handing him a frontier county is a burden at best, and everyone at
+# court can read it as what it usually is. The penalty scales with his rank, because a count sent to
+# the edge of the map grumbles and a duke sent there has been insulted.
+#
+# That second case gives the mechanic a use nobody had to design: granting a colony to a troublesome
+# vassal is exile. You have rewarded him with land, technically. It falls out of the asymmetry for
+# free rather than needing a system of its own, which is the good kind of mechanic.
+#
+# ---- Why both decay ----
+#
+# Neither is a fact about the man; both are a fact about a day. Gratitude for being raised wears off
+# as the work gets hard, and being sent away stops stinging once you have made something of the
+# place. A permanent opinion here would still be sitting on a grandson who was born in the colony
+# and thinks of it as home.
+#
+# The size of each is passed at the call site with `opinion = N`, not fixed here — that is what lets
+# one modifier carry the tier scaling for the exile case instead of needing four.
+
+# Raised from nothing. Applied to the colonist, about the liege who granted the land.
+colonist_raised_up_opinion = {
+	monthly_change = -0.15
+	decaying = yes
+}
+
+# Sent away. Applied to the vassal, about the liege who did the sending.
+colonist_sent_to_the_frontier_opinion = {
+	monthly_change = 0.2
+	decaying = yes
+}
+
+# What the rest of the court thinks of a lord who lets a frontier walk away from him.
+#
+# Not decaying on a schedule of its own — `decaying` with a monthly_change back toward zero is the
+# same shape as the two above, kept for consistency. A liege who loses one colony is embarrassed; a
+# liege who loses three has a reputation, and this stacks because each one was a separate failure.
+lost_a_colony_opinion = {
+	monthly_change = 0.1
+	decaying = yes
+	stacking = yes
+}

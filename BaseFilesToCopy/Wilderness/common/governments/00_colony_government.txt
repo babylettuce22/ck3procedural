@@ -1,0 +1,147 @@
+﻿# The government of a ruler whose only land is a colony.
+#
+# ---- Why this exists at all ----
+#
+# A colony produces nothing for an absentee lord. That is not a wart in the design, it is the
+# load-bearing rule: settlement_holding appears in no government's `valid_holdings`, vanilla's
+# included, so the engine applies its wrong-holding-type penalty to whoever holds one. Tribal is
+# merely the government that says so out loud in its warning text.
+#
+# From that one fact three answers fall out, each with a real cost — hold it and stay home and it
+# produces nothing; hold it and live there and it produces while you are absent from your court;
+# grant it away and it produces for somebody else. This government is the third answer. Without it
+# there is nobody a colony can be granted to who would be any better at holding it than you are.
+#
+# `primary_holding = settlement_holding` is the whole point of the file. It is what makes a colonist
+# a ruler who can actually seat himself on the thing he was given, rather than a count sitting on a
+# holding his government cannot hold. Everything else below is either negative or bookkeeping.
+#
+# ---- How a character comes to have it ----
+#
+# Two ways, and neither needs the grant path to know about the other.
+#
+# `colonization_make_colonist_effect` calls `change_government` explicitly when a colony is
+# granted to somebody landless — that is the deliberate route, and it fires from on_title_gain so
+# vanilla's own Grant Title reaches it, which means the AI reaches it too without a line of AI code.
+#
+# `can_get_government` below is the route nobody has to script: it is what the engine consults when
+# it picks a government on its own, so an heir who inherits nothing but colonies comes out a
+# colonist without any succession script existing. That is the job the design sketch gave to a
+# `required_heir_government_types` field, which does not exist in 1.19 — this is where the same
+# guarantee actually lives.
+
+colony_government = {
+	government_rules = {
+		# A colonist keeps a name and passes it on. Everything else that makes a court is stripped:
+		# there is no court out on the frontier, and a cadet branch founded in a palisade is the
+		# engine inventing a dynasty out of forty families.
+		create_cadet_branches = no
+		rulers_should_have_dynasty = yes
+		dynasty_named_realms = no
+		council = no
+		legitimacy = no
+		allow_accolades = no
+	}
+
+	# Top-level fields, NOT government_rules entries — see the note in 00_wilderness_government.txt
+	# for what putting them in the wrong block silently costs.
+	royal_court = none
+	court_generate_commanders = no
+
+	primary_holding = settlement_holding
+	valid_holdings = { settlement_holding }
+
+	# Same reasoning as the wilderness government: settlement_holding is deliberately absent, so the
+	# empty baronies around a colony stay shut until it is promoted. A colonist may not develop his
+	# way out of being a colonist.
+	required_county_holdings = { castle_holding city_holding church_holding }
+
+	vassal_contract_group = colony_vassal
+
+	# The engine's own route to this government. See the note above.
+	#
+	# Phrased as "holds a colony and holds no settled county" rather than "capital is a colony"
+	# because a character's capital is not reliably set at the moment the engine picks a government
+	# for them. Held titles are.
+	#
+	# The wilderness dummy cannot match: it holds wilderness_holding, never settlement_holding.
+	can_get_government = {
+		any_held_title = {
+			tier = tier_county
+			is_colony_county_trigger = yes
+		}
+		NOT = {
+			any_held_title = {
+				tier = tier_county
+				is_settled_county_trigger = yes
+			}
+		}
+	}
+
+	# No `fallback` line, which means 0: the engine will never reach for this government to fill a
+	# gap. It is picked because the trigger above passed, or not at all.
+
+	# Deliberately thin and mostly negative, because the colonist's SITUATION is the content. He is a
+	# man with one palisade, a long way from anybody, holding land that does not pay yet.
+	#
+	# ---- What is deliberately NOT in here: an income malus ----
+	#
+	# The first draft had `monthly_income = -0.25`, on the reasoning that a colonist is poor. He is,
+	# but the colony's own income is already near zero — the wrong-holding-type penalty sees to that
+	# — so a malus on top of it does not make him poorer, it makes him permanently unable to reach
+	# `promote_colony_cost`. A colonist who can never finish his colony is a dead end with no error
+	# attached: the county simply sits there forever and the whole granted-colony arc never resolves.
+	#
+	# What pays him instead is the presence rule, and it pays him for free. A colonist LIVES in his
+	# colony — it is his capital and he has nowhere else to be — so
+	# `character_is_at_own_colony_trigger` passes for him permanently and he holds
+	# `overseeing_the_settlement` the way an absentee lord only holds it while he is standing there.
+	#
+	# That is not a special case bolted on; it is the same rule read straight. "A colony produces for
+	# whoever is actually in it" explains the travelling lord and the colonist with one sentence, and
+	# it is the reason granting works at all.
+	character_modifier = {
+		# Nobody rides out to a frontier post looking for service.
+		knight_limit = -2
+
+		# Hard living, honestly priced: it kills slowly and it wears on a man.
+		health = -0.1
+		stress_gain_mult = 0.15
+
+		# The one thing he is good at. Everything in the county is new and there is nothing to work
+		# around, which is the same reason a colony develops faster than old land does.
+		monthly_county_control_growth_add = 0.3
+	}
+
+	# A colonist's standing view of the lord who sent him out. Mild, and it improves with what the
+	# liege is: a man out on the edge of the world would rather be forgotten by somebody important
+	# than remembered by somebody who cannot protect him.
+	opinion_of_liege = {
+		value = -5
+		scope:liege = {
+			add = {
+				value = prestige_level
+				multiply = 2
+			}
+		}
+	}
+	opinion_of_liege_desc = colony_opinion_of_liege_desc
+
+	ai = {
+		use_lifestyle = yes
+		arrange_marriage = yes
+		use_goals = yes
+		use_decisions = yes
+		use_scripted_guis = yes
+		use_legends = no
+		perform_religious_reformation = no
+	}
+
+	flags = {
+		government_is_colony
+		government_is_settled
+	}
+
+	# Pale earth. Reads as a place on the map rather than as a power on it.
+	color = hsv{ 0.09 0.35 0.55 }
+}

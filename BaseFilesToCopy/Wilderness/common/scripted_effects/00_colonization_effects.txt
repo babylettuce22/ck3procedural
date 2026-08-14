@@ -24,7 +24,10 @@ wilderness_seed_obstacle_effect = {
 	random_list = {
 		# Cold kills before anything else does.
 		10 = {
-			trigger = { OR = { terrain = taiga  terrain = mountains  terrain = desert_mountains } }
+			trigger = {
+				NOT = { has_building = killing_cold }
+				OR = { terrain = taiga  terrain = mountains  terrain = desert_mountains }
+			}
 			modifier = { terrain = taiga  add = 20 }
 			add_building = killing_cold
 		}
@@ -32,6 +35,7 @@ wilderness_seed_obstacle_effect = {
 		# Standing water: marsh, delta, river bottom, and any low coast.
 		10 = {
 			trigger = {
+				NOT = { has_building = flooded_lands }
 				OR = {
 					terrain = wetlands
 					terrain = floodplains
@@ -44,7 +48,10 @@ wilderness_seed_obstacle_effect = {
 
 		# Ground you cannot get a cart across.
 		10 = {
-			trigger = { OR = { terrain = mountains  terrain = desert_mountains  terrain = hills } }
+			trigger = {
+				NOT = { has_building = scree_slopes }
+				OR = { terrain = mountains  terrain = desert_mountains  terrain = hills }
+			}
 			modifier = { terrain = mountains  add = 20 }
 			modifier = { terrain = desert_mountains  add = 20 }
 			add_building = scree_slopes
@@ -52,17 +59,24 @@ wilderness_seed_obstacle_effect = {
 
 		# Trees, and what lives in them.
 		10 = {
-			trigger = { OR = { terrain = forest  terrain = jungle  terrain = taiga } }
+			trigger = {
+				NOT = { has_building = dense_growth }
+				OR = { terrain = forest  terrain = jungle  terrain = taiga }
+			}
 			modifier = { terrain = jungle  add = 25 }
 			add_building = dense_growth
 		}
 		10 = {
-			trigger = { OR = { terrain = forest  terrain = taiga  terrain = hills  terrain = jungle } }
+			trigger = {
+				NOT = { has_building = beast_dens }
+				OR = { terrain = forest  terrain = taiga  terrain = hills  terrain = jungle }
+			}
 			add_building = beast_dens
 		}
 
 		# People. Anywhere at all, but likeliest on open ground somebody could live off.
 		10 = {
+			trigger = { NOT = { has_building = bandit_camps } }
 			modifier = {
 				OR = { terrain = plains  terrain = steppe  terrain = drylands  terrain = farmlands }
 				add = 15
@@ -78,14 +92,15 @@ wilderness_seed_obstacle_effect = {
 # which makes a wilderness county indistinguishable from a merely poor one. If a county is worth
 # marking as wild, something is stopping people living there.
 wilderness_seed_province_effect = {
+	# Guaranteed two, chance for 3rd
+
+	wilderness_seed_obstacle_effect = yes
 	wilderness_seed_obstacle_effect = yes
 
-	# A second, for the genuinely hostile quarter of the map. The effect above skips a building the
-	# province already has, so this can safely land on the same draw.
 	if = {
 		limit = { always = yes }
 		random = {
-			chance = 25
+			chance = 40 # 40% chance of a third blocker
 			wilderness_seed_obstacle_effect = yes
 		}
 	}
@@ -311,6 +326,32 @@ colonize_county_effect = {
 # innovations allow it; this is the default path.
 promote_colony_effect = {
 	$COUNTY$ = {
+		# Read from the county, not from a scope the caller was supposed to have set.
+		#
+		# This used to test `scope:promoting_holder`, which the promote interactions save and the AI
+		# pulse does not — and because the test was written `scope:promoting_holder ?= { ... }`, the
+		# missing scope failed silently and fell through to castle. Every AI tribal ruler in the game
+		# has been raising castles on its colonies since, with nothing in the log to say so.
+		#
+		# A county always knows its holder. Nothing has to be passed and no caller can forget.
+		holder ?= { save_scope_as = colony_promoter }
+
+		# Saved rather than passed on to colony_completion_effect as a parameter, and that is not
+		# tidiness. The AI pulse calls this effect as `promote_colony_effect = { COUNTY = this }`, so
+		# `$COUNTY$` is the literal text `this` — and handing that down into a block that runs in the
+		# colonist's scope would substitute to the COLONIST. A saved scope means the same county
+		# whoever is reading it.
+		save_scope_as = finished_colony
+
+		# The presence modifier belongs to a colony, and this county is about to stop being one.
+		# Cleared here rather than left to colony_refresh_presence_effect because that effect can
+		# only reach counties through a character, and a promoted county is no longer one the refresh
+		# would look at.
+		if = {
+			limit = { has_county_modifier = settlement_overseen }
+			remove_county_modifier = settlement_overseen
+		}
+
 		title_province ?= {
 			# Tear the colony down before raising anything on top of it.
 			#
@@ -327,7 +368,7 @@ promote_colony_effect = {
 			if = { limit = { has_building = settlement_03 }  remove_building = settlement_03 }
 
 			if = {
-				limit = { scope:promoting_holder ?= { government_has_flag = government_is_tribal } }
+				limit = { colony_promotes_to_tribe_trigger = yes }
 				set_holding_type = tribal_holding
 			}
 			else = {
@@ -335,6 +376,352 @@ promote_colony_effect = {
 			}
 		}
 		set_color_from_title = de_jure_liege
+	}
+
+	# --- The lord who came out to live here can go home now ------------------------------------
+	#
+	# This is what actually ends activity_oversee_colony. Its own phase runs for fifty years, which
+	# is a backstop rather than a duration — the real ending is the work being finished, and this is
+	# the line that says so.
+	#
+	# Checked against the activity's LOCATION as well as its type, because a lord may hold several
+	# colonies and be living in a different one. Promoting the colony he is not standing in must not
+	# call him home from the one he is.
+	#
+	# `invalidate_activity` rather than `complete_activity`: completion runs an activity's conclusion
+	# and its rewards, and there are none here. The activity simply stops mattering, and the engine
+	# sends him home the way it sends anybody home from anywhere — see the note at the top of
+	# 00_oversee_colony_activity.txt on why that is now the correct behaviour rather than the bug.
+	scope:colony_promoter ?= {
+		if = {
+			limit = {
+				exists = involved_activity
+				involved_activity = {
+					has_activity_type = activity_oversee_colony
+					activity_host = prev
+					activity_location.county ?= scope:finished_colony
+				}
+			}
+			invalidate_activity = involved_activity
+		}
+	}
+
+	# A colonist's colony finishing is not a building upgrade, it is the end of an arc: the man stops
+	# being a colonist, the frontier stops being a frontier, and there is exactly one moment at which
+	# he might decide he no longer needs the lord who sent him out.
+	#
+	# Tested BEFORE anything changes his government, because the whole question is what he was.
+	if = {
+		limit = {
+			exists = scope:colony_promoter
+			scope:colony_promoter = {
+				is_colonist_trigger = yes
+				exists = liege
+			}
+		}
+		scope:colony_promoter = {
+			colony_completion_effect = yes
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Transition 2b: colonist -> ordinary lord, or colonist -> nobody's man
+# =====================================================================================
+
+# Character scope: the COLONIST whose colony has just been promoted.
+#
+# Takes no parameters. The county arrives as `scope:finished_colony`, saved by promote_colony_effect
+# — see the note there for why a parameter would have resolved to the wrong thing entirely.
+#
+# ---- Why the roll lives here ----
+#
+# Because this is the only moment it means anything. A colonist spends a generation holding a county
+# that produces nothing, under a contract with one line in it, at the far end of somebody else's
+# map. Seceding at any point in that generation wins him a palisade. Seceding on the day the seat is
+# raised wins him a county — and on that same day he stops needing the man who paid for it.
+#
+# It is a small chance, and it has to be able to not happen: see colony_secession_chance for why a
+# frontier that always breaks away is a tax on granting rather than a risk worth taking.
+#
+# ---- Why the mechanical work happens before the event, not inside it ----
+#
+# Events can be dropped. A liege who dies in the same tick, a save loaded mid-chain, an on_action
+# ordering nobody predicted — any of them leaves a state where the roll happened and the world does
+# not reflect it, and that is the class of bug that shows up as a county with two lords. So the
+# world is changed here, unconditionally and in one place, and the events below are narration of
+# something that has already happened. The player's choice in 0021 is about what to do NEXT, which
+# is a choice an event can safely own.
+colony_completion_effect = {
+	save_scope_as = colonist
+	liege = { save_scope_as = colony_liege }
+
+	# He stops being a colonist because there is now a seat here, and a seat is the one thing
+	# colony_government cannot hold. Done before the secession roll: after it there is no liege to
+	# read, and which government he lands in depends on the realm that sent him.
+	if = {
+		limit = { colony_promotes_to_tribe_trigger = yes }
+		change_government = tribal_government
+	}
+	else = {
+		change_government = feudal_government
+	}
+
+	# The roll. Written as a variable rather than as a `random` wrapping both outcomes because
+	# `random` has no else branch, and duplicating the whole consequence block inside two random_list
+	# entries is how the two halves drift apart.
+	random = {
+		chance = colony_secession_chance
+		set_variable = { name = colony_secedes }
+	}
+
+	if = {
+		limit = { has_variable = colony_secedes }
+		remove_variable = colony_secedes
+
+		create_title_and_vassal_change = {
+			type = independency
+			save_scope_as = change
+		}
+		change_liege_or_become_independent = {
+			CHANGE = scope:change
+			VASSAL = this
+		}
+		resolve_title_and_vassal_change = scope:change
+
+		# A truce, for the same reason vanilla grants one after every independence war: without it
+		# the liege reconquers on the next tick and the whole moment was theatre.
+		add_truce_both_ways = {
+			character = scope:colony_liege
+			years = 5
+			name = TRUCE_COLONY_INDEPENDENCE
+		}
+
+		add_prestige = major_prestige_gain
+		scope:colony_liege = {
+			add_prestige = major_prestige_loss
+
+			# The rest of the court noticed. Stacking, because each frontier lost is its own failure.
+			every_vassal = {
+				limit = { NOT = { this = scope:colonist } }
+				add_opinion = {
+					target = scope:colony_liege
+					modifier = lost_a_colony_opinion
+					opinion = -10
+				}
+			}
+
+			trigger_event = wilderness_colonization.0021
+		}
+	}
+	else = {
+		scope:colony_liege = {
+			trigger_event = wilderness_colonization.0020
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Granting a colony away
+# =====================================================================================
+
+# Character scope: the character who has just GAINED a colony county. Called from on_title_gain.
+#
+#   $COUNTY$  the county just gained
+#
+# ---- Why this hangs off on_title_gain rather than an interaction of its own ----
+#
+# Because vanilla's Grant Title already does the granting, and the AI already uses it. A dedicated
+# "settle a colonist here" interaction would be a second way to do a thing the game can do, reachable
+# only by the player, and the AI would go on granting colonies through the vanilla path with none of
+# this applying. Hooking the gain instead means every route in — the player's grant, the AI's
+# surplus-holding logic, inheritance, a war — comes out the same, and none of them had to know.
+#
+# ---- The asymmetry, which is the content ----
+#
+# A landless courtier handed a county has been raised up. He becomes a colonist, and he is grateful.
+#
+# A vassal who already holds land has been sent away. He does NOT become a colonist — he is a count
+# with a castle who now also holds a colony, and it is a burden he did not ask for. The penalty
+# scales with his rank, which is what makes granting a colony to a troublesome duke read, correctly,
+# as exile.
+# ---- Split into two, because a grant and an inheritance are not the same event ----
+#
+# Becoming a colonist follows from the facts on the ground: a man whose only county is a colony is a
+# colonist, however he came by it. That half runs for an heir as readily as for a grantee.
+#
+# Being grateful or resentful about it does not. An heir who inherits his father's colony was not
+# raised up by anybody and was not sent anywhere — the opinion half is a reaction to a decision
+# somebody made about him, and there was no decision. Running both halves off one hook would give
+# every colonist's son a grudge, or a debt, against a liege who did nothing.
+
+# Character scope: whoever now holds a colony county. Makes them a colonist if that is what they are.
+colonization_make_colonist_effect = {
+	if = {
+		# Landless until a moment ago, or landless-but-for-colonies now: this is the whole of what he
+		# holds. Testing what he holds NOW rather than what he held before is the reliable form —
+		# on_title_gain fires after the transfer, so "held nothing before" is not a question the game
+		# can still answer.
+		limit = {
+			is_colonist_trigger = no
+			NOT = {
+				any_held_title = {
+					tier = tier_county
+					is_settled_county_trigger = yes
+				}
+			}
+		}
+
+		change_government = colony_government
+	}
+}
+
+# Character scope: a character who has just been GRANTED a colony county.
+#
+#   $COUNTY$  the county just granted
+#
+# The asymmetry, which is the content.
+#
+# A landless courtier handed a county has been raised up, and he is grateful. A vassal who already
+# holds land has been sent away — he is a count with a castle who now also holds somebody's
+# frontier, and the penalty scales with his rank, which is what makes granting a colony to a
+# troublesome duke read, correctly, as exile.
+colonization_grant_reaction_effect = {
+	# An independent ruler cannot be granted anything, but title transfers reach odd states during
+	# wars and successions, and a grudge against a liege who does not exist is an error in the log.
+	if = {
+		limit = { exists = liege }
+
+		$COUNTY$ = { save_scope_as = granted_colony }
+		liege = { save_scope_as = granting_liege }
+
+		if = {
+			limit = { is_colonist_trigger = yes }
+
+			add_opinion = {
+				target = scope:granting_liege
+				modifier = colonist_raised_up_opinion
+				opinion = 40
+			}
+
+			save_scope_as = colonist
+			scope:granting_liege = {
+				if = { limit = { is_ai = no }  trigger_event = wilderness_colonization.0015 }
+			}
+		}
+		else_if = {
+			limit = { highest_held_title_tier >= tier_kingdom }
+			add_opinion = {
+				target = scope:granting_liege
+				modifier = colonist_sent_to_the_frontier_opinion
+				opinion = -40
+			}
+		}
+		else_if = {
+			limit = { highest_held_title_tier = tier_duchy }
+			add_opinion = {
+				target = scope:granting_liege
+				modifier = colonist_sent_to_the_frontier_opinion
+				opinion = -25
+			}
+		}
+		else = {
+			add_opinion = {
+				target = scope:granting_liege
+				modifier = colonist_sent_to_the_frontier_opinion
+				opinion = -12
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Presence: the lord is here, or he is not
+# =====================================================================================
+
+# Character scope. Brings this character's presence modifiers into line with where they are standing.
+#
+# ---- Why residence is a variable and not just a location ----
+#
+# Because CK3 will not leave a landed ruler parked anywhere. His location is derived from where he
+# belongs — his capital, or an activity, or a travel plan in progress — and once a one-way plan
+# completes the engine puts him back. Every one-way `start_travel_plan` in vanilla belongs to
+# somebody whose HOME moved: a ward sent to a new court, a hostage, an adventurer whose domicile
+# travels with him. There is no supported "a lord lives here for a while".
+#
+# So the intent is stored. `var:overseeing_colony` is the county the lord has decided to live in; it
+# is set on arrival, survives whatever the engine does about his position, and is cleared only when
+# he decides to go home, loses the county, or the colony stops being one.
+#
+# And because the intent is stored, the location can be ASSERTED. The refresh re-pins him with
+# `set_location` whenever the engine has drifted him back to his capital. That is not fighting the
+# engine for its own sake: the point of presence over a capital move was that the cost — schemes
+# maturing, the council drifting, an heir raised elsewhere — is already in the base game and keys
+# off where the man actually is. A residence the engine does not believe in would have the benefits
+# and none of the cost, which is the one version of this mechanic not worth shipping.
+#
+# A colonist needs none of it. His capital IS his colony, so the plain location branch below covers
+# him and he never has a variable set.
+#
+# ---- Why it is a refresh rather than a grant and a revoke ----
+#
+# Because there are a dozen ways to stop being somewhere and only one way to be there. A lord can
+# leave a colony by travelling, by being imprisoned, by losing the county, by the colony being
+# promoted out from under him, by dying and passing it on. Writing a matching removal for each of
+# those is how a modifier ends up stuck on somebody who is three provinces away.
+#
+# So nothing removes the modifier in particular. Every hook calls this, it strips whatever is there
+# and reapplies only what the world currently justifies, and the answer is correct whatever happened
+# in between — including things nobody thought of when it was written.
+#
+# ---- Who this runs for ----
+#
+# Everybody who holds a colony, which importantly includes colonists. A colonist's capital IS his
+# colony, so he passes the test permanently and holds the modifier permanently — that is not a
+# special case, it is the same rule ("a colony produces for whoever is in it") read straight, and it
+# is what makes a granted colony worth anything to the man who was given it.
+colony_refresh_presence_effect = {
+	if = {
+		limit = { has_character_modifier = overseeing_the_settlement }
+		remove_character_modifier = overseeing_the_settlement
+	}
+
+	every_held_title = {
+		limit = {
+			tier = tier_county
+			has_county_modifier = settlement_overseen
+		}
+		remove_county_modifier = settlement_overseen
+	}
+
+	# --- Is he standing in a colony of his own? ------------------------------------------------
+	#
+	# One branch, one question. This used to be two: a stored `overseeing_colony` variable naming a
+	# county he had DECIDED to live in, asserted back onto him with `set_location` whenever the engine
+	# had walked him home, and this plain location test underneath it as the fallback.
+	#
+	# All of that existed to work around a landed ruler not staying where a one-way travel plan put
+	# him. activity_oversee_colony makes the engine keep him there itself, which means his location is
+	# now simply true and there is nothing left to store or to assert. The variable, the assertion and
+	# its `is_travelling` guard all came out together — see the note at the top of
+	# 00_oversee_colony_activity.txt.
+	#
+	# Colonists are excluded deliberately. The modifier says a LIEGE is here overseeing the work; a
+	# colonist living in his own colony is not overseeing anything, he is the one being overseen.
+	if = {
+		limit = {
+			character_is_at_own_colony_trigger = yes
+			is_colonist_trigger = no
+		}
+
+		add_character_modifier = overseeing_the_settlement
+
+		location.county ?= {
+			add_county_modifier = settlement_overseen
+		}
 	}
 }
 
@@ -360,6 +747,13 @@ abandon_county_effect = {
 		random_ruler = {
 			limit = { has_trait = wilderness }
 			save_scope_as = wilderness_holder
+		}
+
+		# Same reason as in promote_colony_effect: nobody is overseeing a county that has gone back to
+		# being empty country, and no character-side refresh will ever look at it again.
+		if = {
+			limit = { has_county_modifier = settlement_overseen }
+			remove_county_modifier = settlement_overseen
 		}
 
 		if = {
