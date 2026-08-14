@@ -147,6 +147,27 @@ activity_oversee_colony = {
 	}
 
 	###################
+	# INTENTS
+	###################
+
+	# Required, not decorative. Without a `host_intents` block the planner has nothing to select and
+	# refuses to start the activity with "invalid intent" — see the note at the top of
+	# common/activities/intents/00_colonization_intents.txt for what that looks like and why nothing
+	# reports it.
+	host_intents = {
+		default = oversee_colony_intent
+		intents = { oversee_colony_intent }
+	}
+
+	# Declared even though `max_guests = 0` means nobody can hold one. Every vanilla activity
+	# declares both blocks, and an absent one is the same shape of silent refusal as the absent host
+	# block was — not worth discovering a second time to save four lines.
+	guest_intents = {
+		default = oversee_colony_intent
+		intents = { oversee_colony_intent }
+	}
+
+	###################
 	# GUESTS
 	###################
 

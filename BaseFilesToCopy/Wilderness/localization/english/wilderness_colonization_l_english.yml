@@ -150,7 +150,7 @@
  WILDERNESS_PROMOTE_TEMPLE_BUTTON:0 "Consecrate a Temple"
  colonize_settle_button_effect_tt:0 "Send settlers into this country, and make it ours to hold — or to lose."
  colonize_obstacles_remain_tt:0 "Nothing may still be blocking the land"
- colonize_needs_development_tt:0 "The county must have reached #V 3 #! Development"
+ colonize_needs_development_tt:0 "The county must have reached #V 4 #! Development"
  colonize_needs_full_settlement_tt:0 "The colony must be fully established"
 
  # --- The emptied character and title windows ------------------------------------------------
@@ -268,6 +268,8 @@
  TRAVEL_NAME_FOR_activity_oversee_colony:0 "Journey to the Colony"
  activity_oversee_colony_desc:0 "A colony renders nothing to a lord who has never seen it. Ride out, live behind its palisade, and it will render something — for as long as we are standing in it.\n\nWe will not be at court. What happens there in our absence is not something anyone out here will be able to tell us."
  activity_oversee_colony_province_desc:0 "A colony of ours, and a long way from anywhere. There is no hall here and nowhere to put a court."
+ oversee_colony_intent:0 "Oversee the Work"
+ oversee_colony_intent_desc:0 "We are not here to be entertained. We are here so that the work is inspected by the man paying for it, and so that disputes are settled the same week they are raised."
  phase_overseeing:0 "Overseeing the Work"
  phase_overseeing_desc:0 "We stay until there is something here worth leaving behind."
  colonize_oversee_must_hold_tt:0 "We must hold this colony ourselves"
