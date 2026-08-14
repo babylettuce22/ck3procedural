@@ -7,6 +7,19 @@
 
  # --- Trait and government -----------------------------------------------------------------
  trait_wilderness:0 "Wilderness"
+
+ # The generated dummy that holds every unsettled county writes `name = "wilderness_holder_name"`,
+ # so this is what the county view shows where a lord's name would go. See Emit/HistoryWriter.cs.
+ wilderness_holder_name:0 "The Wild"
+
+ # The titular kingdom the dummy holds so its realm has a name — otherwise every unsettled county
+ # on the map is labelled after whichever county the dummy happened to hold first.
+ #
+ # This key is defined in C#, not here: WildernessMap.TitleKey in MapGen/Wilderness.cs. It is the
+ # only place a file in this set names something the generator owns, so if that constant changes
+ # this string silently stops resolving and the map shows the raw key.
+ k_gen_wilderness:0 "The Wilderness"
+ k_gen_wilderness_adj:0 "Wild"
  trait_wilderness_desc:0 "This land answers to no one."
 
  wilderness_government:0 "Wilderness"
@@ -20,6 +33,14 @@
 
  settlement_holding:0 "Colony"
  settlement_holding_desc:0 "A foothold rather than a holding — a palisade, a few families, and a great deal still to do."
+
+ # A holding type needs a SECOND name, not just the one above. Anywhere the UI says "$TYPE$
+ # Holding" it looks up `<key>_concept_key`, not `<key>`, and vanilla points that at a game
+ # concept (`castle_holding_concept_key` is "[castle|E]") so the phrase is clickable. These two
+ # holdings have no concept behind them, so they are plain strings — and without them the county
+ # window prints the raw key, which is what it was doing.
+ wilderness_holding_concept_key:0 "Wilderness"
+ settlement_holding_concept_key:0 "Colony"
 
  # --- The wilderness itself ----------------------------------------------------------------
  building_wilderness_01:0 "Untamed Land"
@@ -102,6 +123,12 @@
 
  # --- Toasts -------------------------------------------------------------------------------
  colonize_claimed_toast:0 "Settlers Depart"
+
+ # --- The settling event -------------------------------------------------------------------
+ # Placeholder text. scope:colony is the county just claimed.
+ wilderness_colonization.0010.t:0 "The Settlers Go Out"
+ wilderness_colonization.0010.desc:0 "They left before dawn, in carts and on foot — younger sons with no land coming to them, families a bad harvest had turned out, a handful of men who did not say why they were going.\n\nAhead of them is [colony.GetName], which is not a place yet so much as a direction. There is no road to it and no roof on it. What there is, they will have to make, through a winter that will not care whether they manage it.\n\nWhat comes back to us from that country now depends on people whose names we do not know."
+ wilderness_colonization.0010.a:0 "Let them make what they can of it."
  promote_colony_toast:0 "A Colony Comes of Age"
  colonize_obstacle_cleared_toast:0 "The Way Is Clear"
 
@@ -109,9 +136,31 @@
  colonize_at_settlement_limit_tt:0 "We hold as many colonies as we can support"
  colonize_must_border_realm_tt:0 "The land must border our realm"
  colonize_not_while_at_war_tt:0 "We cannot spare settlers while at war"
+ colonize_cannot_afford_tt:0 "We cannot afford to outfit an expedition"
+ colonize_cannot_afford_prestige_tt:0 "We lack the standing to call men out to empty country"
+ colonize_on_cooldown_tt:0 "Our settlers are still on the road; we cannot raise another party yet"
+
+ # --- The Settle button on the county view ---------------------------------------------------
+ # Emit/GuiWriter.cs injects a button carrying this text into a copy of vanilla's county window.
+ WILDERNESS_SETTLE_BUTTON:0 "Settle This Land"
+ # Promote buttons. These drive the promote_colony_* interactions directly, so their tooltips
+ # come from those interactions rather than from here — only the button faces are below.
+ WILDERNESS_PROMOTE_BUTTON:0 "Raise a Seat"
+ WILDERNESS_PROMOTE_CITY_BUTTON:0 "Charter a Town"
+ WILDERNESS_PROMOTE_TEMPLE_BUTTON:0 "Consecrate a Temple"
+ colonize_settle_button_effect_tt:0 "Send settlers into this country, and make it ours to hold — or to lose."
  colonize_obstacles_remain_tt:0 "Nothing may still be blocking the land"
- colonize_needs_development_tt:0 "The county must have reached #V 3 #! Development"
+ colonize_needs_development_tt:0 "The county must have reached #V 4 #! Development"
  colonize_needs_full_settlement_tt:0 "The colony must be fully established"
+ colonize_construction_in_progress_tt:0 "Nothing may still be under construction here"
+
+ # --- The emptied character and title windows ------------------------------------------------
+ # Emit/GuiWriter.cs hides the body of vanilla's character and title windows for the wilderness
+ # dummy and its titles, and splices in a panel showing one of these instead. Both are deliberately
+ # short: the windows were emptied because the engine was reporting invented facts about unheld
+ # land, and filling them back up with prettier invented facts would undo the point.
+ WILDERNESS_HOLDER_WINDOW:0 "No one holds this country.\n\nWhat lives here keeps no court and answers no summons."
+ WILDERNESS_TITLE_WINDOW:0 "Unclaimed land.\n\nIt has a name on the map and nothing else."
 
  # --- Cost breakdown -----------------------------------------------------------------------
  colonize_cost_tier_desc:0 "Rank"
@@ -136,3 +185,93 @@
  settlement_holding_holding_build_gold_cost:0 "Colony [holding|E] Construction Cost"
  settlement_holding_holding_build_piety_cost:0 "Colony [holding|E] Piety Cost"
  settlement_holding_holding_build_prestige_cost:0 "Colony [holding|E] Prestige Cost"
+
+ # --- The colonist's government ---------------------------------------------------------------
+ colony_government:0 "Colonial"
+ colony_government_adjective:0 "Colonial"
+ colony_government_realm:0 "Settlement"
+ colony_government_desc:0 "The open frontier; full of potential, but a developing colony will only be able to muster few men, and all capital produced goes directly into the colony; their liege will only receive few levies, and no taxes."
+ colony_opinion_of_liege_desc:0 "The Lord Who Sent Me Out"
+
+ colony_vassal:0 "Settlers' Terms"
+ colony_vassal_desc:0 "What a colonist owes the lord who sent him out. There is nothing in it to negotiate; it lapses the day there is a seat here."
+ colony_obligations:0 "Settlers' [obligations|E]"
+ settlers_obligations:0 "Men, Not Coin"
+ settlers_obligations_short:0 "Men, Not Coin"
+ settlers_obligations_desc:0 "The colony renders no tax — there is none to render. What it has is people, and they can be called out."
+
+ # --- Presence -----------------------------------------------------------------------------
+ overseeing_the_settlement:0 "Overseeing the Settlement"
+ overseeing_the_settlement_desc:0 "We are here. Not sending word, not reading reports — here, where the work is, for as long as we choose to stay."
+ settlement_overseen:0 "The Lord Is Here"
+ settlement_overseen_desc:0 "Their lord sleeps within the palisade. Disputes are settled the same week, the work is inspected by the man paying for it, and nobody is waiting on a rider."
+
+ # --- Opinion ------------------------------------------------------------------------------
+ colonist_raised_up_opinion:0 "Raised Me From Nothing"
+ colonist_sent_to_the_frontier_opinion:0 "Sent Me to the Frontier"
+ lost_a_colony_opinion:0 "Let a Frontier Walk Away"
+
+ TRUCE_COLONY_INDEPENDENCE:0 "settlement of the frontier"
+
+ # --- Going there, and coming back -----------------------------------------------------------
+ WILDERNESS_OVERSEE_BUTTON:0 "Go and Oversee It"
+
+
+ move_seat_to_colony_decision:0 "Move Our Seat Here"
+ move_seat_to_colony_decision_tooltip:0 "Move the court, the council and the whole apparatus of our rule to this colony."
+ move_seat_to_colony_decision_confirm:0 "Send for the Court"
+ move_seat_to_colony_decision_desc:0 "We could stop visiting and simply live here.\n\nIt would mean the court comes out — the council, the chancery, the whole weight of it — to a county that had no name on any map ten years ago. Our vassals would find that their liege now sits a very long way from anywhere they consider real. Our heir would be raised in it.\n\nAnd this land would stop being somewhere we go. It would be where we are from."
+ colonize_seat_moved_toast:0 "The Court Comes Out"
+
+ # --- The leak detector ----------------------------------------------------------------------
+ # Diagnostic, not flavour. Both strings name the county and the holder so the route can be
+ # identified from a screenshot or from game.log without reproducing it. Remove with
+ # wilderness_colonization.0099 once the route is closed at its source.
+ wilderness_leak_toast:0 "Wilderness in a Realm: [leak_county.GetName] was held by [leak_county.GetHolder.GetName] while still unsettled. It has been returned to the wild."
+ wilderness_leak_debug_log:0 "WILDERNESS LEAK: county [leak_county.GetName] entered the realm of [leak_county.GetHolder.GetName] with wilderness_holding intact; reverted."
+
+ colonize_already_present_tt:0 "We are already there"
+ colonize_already_travelling_tt:0 "We are already on the road"
+ colonize_seat_already_here_tt:0 "Our seat is already here"
+
+ # --- Granting a colony away -----------------------------------------------------------------
+ wilderness_colonization.0015.t:0 "A Man With Nothing"
+ wilderness_colonization.0015.desc:0 "[colonist.GetTitledFirstName] came to us with unlanded, and with no foreseen prospects of any. He now has a chance to forge his own land in my name.\n\nIt shall start with no more than tents and mere pallisades, and they know perfectly well; they knelt anyway.\n\nWhat they have that our other vassals do not is a reason for the place to succeed. They have nowhere else to go that they may call their own."
+ wilderness_colonization.0015.a:0 "Let him make something of it."
+
+ # --- A colony comes of age ------------------------------------------------------------------
+ wilderness_colonization.0020.t:0 "The Seat Is Raised"
+ wilderness_colonization.0020.desc:0 "Word from [finished_colony.GetName]: the hall is up.\n\n[colonist.GetTitledFirstName] has spent the better part of his life on this — the wolves, the winters, the years where nothing we sent made any difference and nothing came back. There is a road to it now. There are people in it who were born in it.\n\nThey have sent word rather than come themself, which is fair; the ride is long and there is a harvest. The word is that they remain ours."
+ wilderness_colonization.0020.a:0 "He has earned the seat. Let him keep it."
+ wilderness_colonization.0020.b:0 "It is finished now. We will take it back."
+
+ wilderness_colonization.0021.t:0 "He Does Not Send Word"
+ wilderness_colonization.0021.desc:0 "The infrastructure, housing, and main hall at [finished_colony.GetName] have all finished construction. We know this because a merchant told us, not because [colonist.GetTitledFirstName] did.\n\nThey have not renewed his oath, and do not intend to. Their answer, when it came, was courteous and short: they were given empty country and a charter, and what stands there now they and their neighbours built. They do not see what part of it is ours.\n\nIt is a long way off. Everyone who has heard is waiting to see whether that matters to us."
+ wilderness_colonization.0021.a:0 "Let him have it. It was never worth anything to us."
+ wilderness_colonization.0021.b:0 "The land is ours. We will remember that."
+
+ # --- The overseeing activity -----------------------------------------------------------------
+ # Replaces oversee_colony_interaction, which could not hold a lord anywhere — see the note at the
+ # top of common/activities/activity_types/00_oversee_colony_activity.txt.
+ # CK3 derives TEN keys per activity from its name, and it names none of them anywhere — a missing
+ # one shows the raw key in the planner rather than reporting anything. The list below is exactly
+ # what ck3-tiger asked for; if a future patch adds an eleventh, tiger will say so.
+ activity_oversee_colony:0 "Oversee a Colony"
+ activity_oversee_colony_name:0 "Oversee a Colony"
+ activity_oversee_colony_owner:0 "Overseen by [ROOT.Char.GetTitledFirstName]"
+ activity_oversee_colony_selection_tooltip:0 "Ride out to one of our colonies and live there until the work is done."
+ activity_oversee_colony_host_desc:0 "We will be living behind its palisade, not reading reports about it."
+ activity_oversee_colony_guest_desc:0 "Nobody is invited. This is not a gathering."
+ activity_oversee_colony_guest_help_text:0 "A lord overseeing a colony brings no company. There is nowhere to put them."
+ activity_oversee_colony_destination_selection:0 "Which of our colonies are we going to?"
+ activity_oversee_colony_predicted_cost:0 "Nothing in coin. The price is the years."
+ activity_oversee_colony_conclusion_desc:0 "The work here is done, or we are needed elsewhere. Either way the road home is a long one."
+ TRAVEL_NAME_FOR_activity_oversee_colony:0 "Journey to the Colony"
+ activity_oversee_colony_desc:0 "A colony renders nothing to a lord who has never seen it. Ride out, live behind its palisade, and it will render something — for as long as we are standing in it.\n\nWe will not be at court. What happens there in our absence is not something anyone out here will be able to tell us."
+ activity_oversee_colony_province_desc:0 "A colony of ours, and a long way from anywhere. There is no hall here and nowhere to put a court."
+ oversee_colony_intent:0 "Oversee the Work"
+ oversee_colony_intent_desc:0 "We are not here to be entertained. We are here so that the work is inspected by the man paying for it, and so that disputes are settled the same week they are raised."
+ phase_overseeing:0 "Overseeing the Work"
+ phase_overseeing_desc:0 "We stay until there is something here worth leaving behind."
+ colonize_oversee_must_hold_tt:0 "We must hold this colony ourselves"
+ colonize_oversee_button_effect_tt:0 "Ride out and live in this colony until the work is done."

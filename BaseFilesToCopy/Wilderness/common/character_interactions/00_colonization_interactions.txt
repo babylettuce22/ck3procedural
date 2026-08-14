@@ -45,6 +45,7 @@ claim_wilderness_interaction = {
 	is_valid_showing_failures_only = {
 		scope:actor = {
 			can_hold_another_colony_trigger = yes
+			colonization_off_cooldown_trigger = yes
 
 			custom_tooltip = {
 				text = colonize_not_while_at_war_tt
@@ -90,6 +91,10 @@ claim_wilderness_interaction = {
 			value = 0
 			add = scope:actor.colonize_cost
 		}
+		prestige = {
+			value = 0
+			add = scope:actor.colonize_prestige_cost
+		}
 	}
 
 	on_accept = {
@@ -112,6 +117,28 @@ claim_wilderness_interaction = {
 	# never reach for this: 0 means never considered.
 	ai_frequency = 0
 }
+
+
+# =====================================================================================
+#  Going there yourself
+# =====================================================================================
+#
+# There is no interaction here any more, and the empty space is worth a note.
+#
+# This was `oversee_colony_interaction`, which started a one-way travel plan to the colony. It could
+# not work, and not for a reason any amount of tuning would have reached: CK3 derives a landed
+# ruler's location from where he BELONGS, and when a one-way plan completes the engine applies its
+# own `return_home` effect, which rewrites the plan's destination to his capital. The lord arrived
+# and turned round in the same tick.
+#
+# What replaced it is `activity_oversee_colony` in common/activities/activity_types/, because an
+# activity is the one temporary home the engine recognises. See the note at the top of that file for
+# the full reasoning, including why the failure is a fact about the engine rather than a bug to
+# patch around.
+#
+# The county-view button survives — it now opens the activity planner rather than sending an
+# interaction. `Emit/GuiWriter.cs` drives it through the `wilderness_oversee` scripted_gui, which is
+# where the button's shown/enabled conditions live.
 
 
 # =====================================================================================
@@ -158,13 +185,20 @@ promote_colony_interaction = {
 	has_valid_target_showing_failures_only = {
 		scope:target = {
 			can_promote_colony_trigger = yes
-			title_province ?= { has_ongoing_construction = no }
+		}
+	}
+
+	cost = {
+		gold = {
+			value = 0
+			add = scope:actor.promote_colony_cost
 		}
 	}
 
 	on_accept = {
-		scope:actor = { save_scope_as = promoting_holder }
-
+		# No `save_scope_as = promoting_holder` here any more. promote_colony_effect now reads the
+		# county's own holder, which is a fact no caller can forget to pass — see the note there for
+		# what forgetting it cost.
 		promote_colony_effect = { COUNTY = scope:target }
 
 		scope:actor = {
@@ -212,16 +246,30 @@ promote_colony_to_city_interaction = {
 	has_valid_target_showing_failures_only = {
 		scope:target = {
 			can_promote_colony_trigger = yes
-			title_province ?= { has_ongoing_construction = no }
 		}
 		scope:actor = {
 			culture = { has_innovation = innovation_city_planning }
 		}
 	}
 
+	cost = {
+		gold = {
+			value = 0
+			add = scope:actor.promote_colony_cost
+		}
+	}
+
 	on_accept = {
 		scope:target = {
-			title_province ?= { set_holding_type = city_holding }
+			# Same teardown as promote_colony_effect: the settlement chain belongs to no holding
+			# once this stops being a colony, and left in place it holds the slot the new one
+			# needs, leaving a banner standing on nothing.
+			title_province ?= {
+				if = { limit = { has_building = settlement_01 }  remove_building = settlement_01 }
+				if = { limit = { has_building = settlement_02 }  remove_building = settlement_02 }
+				if = { limit = { has_building = settlement_03 }  remove_building = settlement_03 }
+				set_holding_type = city_holding
+			}
 			set_color_from_title = de_jure_liege
 		}
 
@@ -270,16 +318,30 @@ promote_colony_to_temple_interaction = {
 	has_valid_target_showing_failures_only = {
 		scope:target = {
 			can_promote_colony_trigger = yes
-			title_province ?= { has_ongoing_construction = no }
 		}
 		scope:actor = {
 			culture = { has_innovation = innovation_city_planning }
 		}
 	}
 
+	cost = {
+		gold = {
+			value = 0
+			add = scope:actor.promote_colony_cost
+		}
+	}
+
 	on_accept = {
 		scope:target = {
-			title_province ?= { set_holding_type = church_holding }
+			# Same teardown as promote_colony_effect: the settlement chain belongs to no holding
+			# once this stops being a colony, and left in place it holds the slot the new one
+			# needs, leaving a banner standing on nothing.
+			title_province ?= {
+				if = { limit = { has_building = settlement_01 }  remove_building = settlement_01 }
+				if = { limit = { has_building = settlement_02 }  remove_building = settlement_02 }
+				if = { limit = { has_building = settlement_03 }  remove_building = settlement_03 }
+				set_holding_type = church_holding
+			}
 			set_color_from_title = de_jure_liege
 		}
 

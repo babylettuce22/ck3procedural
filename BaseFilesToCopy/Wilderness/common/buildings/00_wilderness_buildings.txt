@@ -7,9 +7,19 @@
 # constructing over one — which means it costs time and gold, shows in the build queue, and can be
 # interrupted by a siege, all without a line of script.
 #
-# Both halves carry `flag = obstacle`. That flag is the whole interface: nothing downstream knows
-# the names below, it only ever asks `has_building_with_flag = { flag = obstacle count = 0 }`.
+# ONLY the `x` half carries `flag = obstacle`. That flag is the whole interface: nothing downstream
+# knows the names below, it only ever asks `has_building_with_flag = { flag = obstacle count = 0 }`.
 # Adding a seventh blocker therefore needs no change anywhere else in this system.
+#
+# The `x_cleared` half must NOT carry it, and this was originally wrong. When both halves had the
+# flag the count could never reach zero — upgrading a blocker replaced an obstacle with another
+# obstacle — so `county_obstacles_cleared_trigger` was false forever and no colony could be
+# promoted. The flag means "this is in the way"; ground somebody has cleared is not in the way.
+#
+# The cleared building stays rather than deleting itself, which is the other way to fix this (AGOT
+# removes it in on_complete). Keeping it means the county carries a visible record of what was done
+# to it, and gives each cleared blocker somewhere to hang a reward later — drained marsh is good
+# farmland, felled forest is timber — which a building that erases itself cannot do.
 #
 # The `x` half is never constructible (`can_construct = always no`) — it is placed by script when
 # the county is seeded. The `x_cleared` half is constructible by anyone EXCEPT the wilderness dummy,
@@ -94,7 +104,7 @@ beast_dens = {
 		tax_mult = -0.20
 		garrison_size = -0.15
 		levy_size = -0.10
-		travel_danger = 15
+		travel_danger = 50
 	}
 
 	next_building = beast_dens_cleared
@@ -111,7 +121,6 @@ beast_dens_cleared = {
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
 	type_icon = "icon_building_hunting_grounds.dds"
-	flag = obstacle
 	ai_value = { base = 100 }
 
 	on_complete = { wilderness_obstacle_cleared_effect = yes }
@@ -129,7 +138,7 @@ bandit_camps = {
 		supply_limit_mult = -0.30
 		tax_mult = -0.25
 		monthly_county_control_growth_add = -0.10
-		travel_danger = 15
+		travel_danger = 50
 	}
 
 	next_building = bandit_camps_cleared
@@ -146,7 +155,6 @@ bandit_camps_cleared = {
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
 	type_icon = "icon_building_warcamps.dds"
-	flag = obstacle
 	ai_value = { base = 100 }
 
 	on_complete = { wilderness_obstacle_cleared_effect = yes }
@@ -162,13 +170,13 @@ dense_growth = {
 	county_modifier = {
 		supply_limit_mult = -0.50
 		development_growth_factor = -0.25
-		travel_danger = 15
+		travel_danger = 25
 	}
 
 	province_modifier = {
 		# Slower to build in, but the timber is right there once you start.
-		holding_build_speed = -0.20
-		build_gold_cost = -0.10
+		holding_build_speed = 0.50
+		build_gold_cost = -0.05
 	}
 
 	next_building = dense_growth_cleared
@@ -185,7 +193,6 @@ dense_growth_cleared = {
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
 	type_icon = "icon_building_logging_camps.dds"
-	flag = obstacle
 	ai_value = { base = 100 }
 
 	on_complete = { wilderness_obstacle_cleared_effect = yes }
@@ -199,14 +206,14 @@ flooded_lands = {
 	can_construct_potential = { always = no }
 
 	county_modifier = {
-		development_growth_factor = -0.20
+		development_growth_factor = -0.50
 		county_opinion_add = -10
 		travel_danger = 15
 	}
 
 	province_modifier = {
 		build_gold_cost = 0.50
-		holding_build_speed = -0.25
+		holding_build_speed = 0.50
 	}
 
 	character_modifier = {
@@ -228,7 +235,6 @@ flooded_lands_cleared = {
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
 	type_icon = "icon_building_waterworks.dds"
-	flag = obstacle
 	ai_value = { base = 100 }
 
 	on_complete = { wilderness_obstacle_cleared_effect = yes }
@@ -242,14 +248,14 @@ scree_slopes = {
 	can_construct_potential = { always = no }
 
 	county_modifier = {
-		development_growth_factor = -0.25
+		development_growth_factor = -0.40
 		supply_limit_mult = -0.25
 		travel_danger = 15
 	}
 
 	province_modifier = {
 		build_gold_cost = 0.35
-		holding_build_speed = -0.20
+		holding_build_speed = 0.20
 		# Rock is at least worth something to a garrison.
 		fort_level = 1
 	}
@@ -268,7 +274,6 @@ scree_slopes_cleared = {
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
 	type_icon = "icon_building_hill_forts.dds"
-	flag = obstacle
 	ai_value = { base = 100 }
 
 	on_complete = { wilderness_obstacle_cleared_effect = yes }
@@ -282,7 +287,8 @@ killing_cold = {
 	can_construct_potential = { always = no }
 
 	county_modifier = {
-		development_growth_factor = -0.30
+		development_growth_factor = -0.65
+		holding_build_speed = 0.20
 		supply_limit_mult = -0.40
 		levy_size = -0.20
 		travel_danger = 20
@@ -307,7 +313,6 @@ killing_cold_cleared = {
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
 	type_icon = "icon_building_hillside_grazing.dds"
-	flag = obstacle
 	ai_value = { base = 100 }
 
 	on_complete = { wilderness_obstacle_cleared_effect = yes }

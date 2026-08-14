@@ -17,6 +17,7 @@ public static class Program
         int scale = 2;
         string? modDir = null;
         bool gui = args.Length == 0;
+        bool staticOnly = false; // Added to track the static-only flag
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -24,6 +25,10 @@ public static class Program
             {
                 case "--gui":
                     gui = true;
+                    break;
+
+                case "--static-only": // Parse the static-only flag
+                    staticOnly = true;
                     break;
 
                 case "--seed" when i + 1 < args.Length:
@@ -124,6 +129,25 @@ public static class Program
                     Console.Error.WriteLine($"Unknown argument: {args[i]}");
                     return 1;
             }
+        }
+
+        // Handle static-only copy before checking GUI or Heightmap constraints
+        if (staticOnly)
+        {
+            modDir ??= GenerationOptions.DefaultModDir;
+
+            Console.WriteLine($"Running in static-only mode. Destination: {modDir}");
+
+            var sets = new List<string> { Ck3MapGen.Emit.StaticFileWriter.Core };
+            if (cfg.EnableWilderness)
+            {
+                sets.Add(Ck3MapGen.Emit.StaticFileWriter.Wilderness);
+            }
+
+            // Using UtcNow as runStarted ensures all previously existing files in the target
+            // folder are considered older than this run and will be overwritten/refreshed.
+            Ck3MapGen.Emit.StaticFileWriter.WriteAll(modDir, sets, DateTime.UtcNow);
+            return 0;
         }
 
         if (gui)

@@ -10,6 +10,7 @@ a file's path below the set folder is its path in the mod.
         Wilderness/                                 copied only when MapConfig.EnableWilderness
             common/...
             events/...
+            gfx/interface/icons/holding_types_tab/
             localization/english/...
 
 Two rules:
@@ -37,6 +38,16 @@ What the generator emits alongside it, and which these files therefore assume ex
   - county title history handing every wild county to that character with
     `government = wilderness_government`
   - province history setting `holding = wilderness_holding` on each wild county's capital barony
+
+The four .dds under gfx/interface/{icons,illustrations} for the overseeing activity are likewise
+placeholders, and copies of vanilla's hunt art. CK3 derives an activity's icon paths from its key
+and has no field to point them elsewhere, so an activity that ships none of them renders as four
+checkerboards in the planner. They want replacing, but the mechanic does not wait on the art.
+
+The two .dds under gfx/ are placeholders: the county window's holding strip draws
+`gfx/interface/icons/holding_types_tab/<holding key>.dds` by convention, with no way to point a
+custom holding somewhere else, so a type that ships no file there renders as the missing-texture
+checkerboard. Both are copies of vanilla's tribal_holding.dds and want replacing with real art.
 
 Nothing in this set references a generated culture, faith or title key, and it must stay that way:
 these files ship identically for every seed, so a reference to `culture:something_generated` would

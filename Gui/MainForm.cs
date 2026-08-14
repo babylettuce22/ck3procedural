@@ -164,6 +164,7 @@ public sealed class MainForm : Form
         ("Kingdoms", PreviewRenderer.RenderKingdoms),
         ("Empires", PreviewRenderer.RenderEmpires),
         ("Government", PreviewRenderer.RenderGovernment),
+        ("Wilderness", PreviewRenderer.RenderWilderness),
     ];
 
     private readonly Dictionary<string, Button> _viewButtons = [];

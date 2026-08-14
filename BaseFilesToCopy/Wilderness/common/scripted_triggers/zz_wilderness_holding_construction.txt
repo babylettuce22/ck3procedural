@@ -1,0 +1,44 @@
+﻿# Overrides vanilla's single gate on building a new holding in an empty barony.
+#
+# `barony_cannot_construct_holding` is called from `can_construct_potential` on castle_01, city_01,
+# temple_01 and temple_citadel_01 — every holding a barony can be given — and from the AI's budget
+# effects and several decisions. Per _buildings.info, can_construct_potential decides "whether the
+# building even appears in the build menu", so this is the difference between an option that is
+# greyed out and one that is not offered.
+#
+# Overriding here rather than editing four buildings is the whole reason to use this lever: one
+# object, and every holding type and every AI path picks it up at once.
+#
+# Vanilla's own condition is preserved verbatim below — Saharan desert baronies cannot take a
+# holding — with ours added beside it.
+#
+# NOTE: this governs the *contents* of the build menu. Vanilla also draws a "Build New Holding"
+# button on an empty barony slot regardless of whether anything is constructible, so hiding that
+# prompt is done separately, in Emit/GuiWriter.cs. Both are needed: this one stops the AI and the
+# decisions, that one stops the player being offered a button that opens an empty list.
+
+barony_cannot_construct_holding = {
+	OR = {
+		# --- Vanilla's rule, unchanged ---------------------------------------------------------
+		barony.title_province = {
+			OR = {
+				terrain = desert
+				terrain = desert_mountains
+			}
+			geographical_region = world_africa_sahara
+		}
+
+		# --- Ours: nothing is built around an unfinished colonisation --------------------------
+		#
+		# Covers both halves of the mechanic. On wilderness it stops a county being developed from
+		# the outside without ever being settled, which would skip the mechanic entirely. On a
+		# colony it makes filling in the other baronies the reward for finishing, rather than
+		# something done instead of finishing.
+		county ?= {
+			OR = {
+				is_wilderness_county_trigger = yes
+				is_colony_county_trigger = yes
+			}
+		}
+	}
+}

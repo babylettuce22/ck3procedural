@@ -43,9 +43,20 @@ public static class StaticFileWriter
     public static string SetDirectory(string set)
         => Path.Combine(AppContext.BaseDirectory, SourceFolder, set);
 
-    public static void WriteAll(string modDir, IEnumerable<string> sets)
+    /// <param name="runStarted">
+    /// When this generation run began. It is what separates "a writer produced this file a moment
+    /// ago" from "a previous run left this file here", and without it the never-overwrite rule
+    /// below quietly becomes never-update.
+    ///
+    /// The mod directory is not cleaned between runs, so a file copied here on Monday is still
+    /// sitting in the mod on Friday. Skipping every destination that merely *exists* therefore
+    /// pinned the static sets to whatever they looked like the first time the mod was generated:
+    /// editing a script under BaseFilesToCopy changed nothing, forever, with no error and no
+    /// warning. That cost a full day of testing against scripts that were never shipped.
+    /// </param>
+    public static void WriteAll(string modDir, IEnumerable<string> sets, DateTime runStarted)
     {
-        int copied = 0, skipped = 0;
+        int copied = 0, skipped = 0, refreshed = 0;
         var written = new List<string>();
 
         foreach (string set in sets)
@@ -71,8 +82,17 @@ public static class StaticFileWriter
 
                 if (File.Exists(targetFile))
                 {
-                    skipped++;
-                    continue;
+                    // Written during THIS run means a generator owns it, and a generator always
+                    // wins — that is the rule this writer exists under. Anything older is debris
+                    // from a previous run and must be replaced, or the set can never be edited.
+                    if (File.GetLastWriteTimeUtc(targetFile) >= runStarted)
+                    {
+                        skipped++;
+                        continue;
+                    }
+
+                    File.Delete(targetFile);
+                    refreshed++;
                 }
 
                 Directory.CreateDirectory(Path.GetDirectoryName(targetFile)!);
@@ -85,6 +105,7 @@ public static class StaticFileWriter
         }
 
         Console.WriteLine($"  copied {copied} static files ({string.Join(", ", written)}; " +
+                          (refreshed > 0 ? $"{refreshed} refreshed from an earlier run; " : "") +
                           $"{skipped} left alone, already generated)");
     }
 }

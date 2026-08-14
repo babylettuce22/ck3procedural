@@ -13,3 +13,67 @@
 block_settlement_ability = {
 	icon = county_modifier_development_negative
 }
+
+
+# =====================================================================================
+#  Presence: what changes when the lord is actually there
+# =====================================================================================
+#
+# A colony produces nothing for an absentee lord. That is the rule the whole mechanic rests on, and
+# these two modifiers are the one honest way out of it that does not repeal it: you go and live in
+# the place.
+#
+# ---- Why two modifiers rather than one ----
+#
+# Because the two halves of "the lord is here" land in different places. What the lord gets is
+# income, and income is a character modifier. What the COUNTY gets is growth, control and a
+# willingness to be governed, and those are county modifiers. One object cannot be both, and
+# splitting them is also what lets the county half stay put for a moment while the character half
+# comes off — which is what happens on the day he rides home.
+#
+# They are applied and removed together by colony_refresh_presence_effect and by nothing else. If a
+# third thing ever needs to know whether a lord is present, it asks that effect's modifier, not its
+# own copy of the location test.
+#
+# ---- Why the numbers are not simply "cancel the penalty" ----
+#
+# They cannot be. The engine's wrong-holding-type penalty is hardcoded and no modifier repeals it;
+# what these do is put back, by a different route, roughly what it takes away. That is why the
+# income here is a flat monthly add rather than a tax multiplier — a multiplier on a colony's tax is
+# a multiplier on nothing.
+
+# Character scope, on the lord standing in his own colony.
+overseeing_the_settlement = {
+	# There is no `county_modifier_economy_*` in the icon set, whatever its name suggests it ought to
+	# contain — ck3-tiger catches the missing file, the game shows a blank square and says nothing.
+	icon = county_modifier_control_positive
+
+	# The colony renders something, because there is somebody there to render it to. Deliberately a
+	# real sum rather than a token: this is the whole reward for a lord being absent from his court
+	# for years, and if it does not beat sitting at home the choice is not a choice.
+	monthly_income = 1.5
+
+	# He is a lord in a palisade, not a lord in a hall. Nobody is impressed.
+	monthly_prestige = -0.5
+}
+
+# County scope, on the colony being overseen.
+settlement_overseen = {
+	icon = county_modifier_development_positive
+
+	# Exactly cancels settlement_01's -0.75. A colony with its lord in it develops like ordinary
+	# land; a colony without one does not. That is the cleanest statement of the rule this file
+	# exists to express, and it is why the number is a mirror rather than a round figure — if the
+	# malus in 00_settlement_buildings.txt is ever retuned, this has to move with it.
+	development_growth_factor = 0.15
+
+	monthly_county_control_growth_add = 0.5
+	county_opinion_add = 20
+
+	# Work goes faster when the man paying for it is watching it.
+	build_speed = -0.15
+
+	# The levies are still crippled by the holding type. Half again of very little is still not much,
+	# which is the honest amount.
+	levy_size = 0.5
+}

@@ -40,4 +40,19 @@ settlement_holding = {
 		killing_cold
 		killing_cold_cleared
 	}
+
+	# ---- There is no `can_be_built` here, and there cannot be ----
+	#
+	# CK3 holdings accept six fields: buildings, can_be_inherited,
+	# counts_toward_domain_limit_if_disabled, parameters, primary_building and
+	# required_heir_government_types. `can_be_built` is not one of them — it appears nowhere in the
+	# game files — so a block by that name is read, ignored, and reported by nothing except
+	# ck3-tiger. It was here, and on wilderness_holding, and on five holdings in a verbatim copy of
+	# vanilla's 00_holdings.txt, and none of it did anything.
+	#
+	# What it was reaching for is already true by a different route. No government lists
+	# settlement_holding in `required_county_holdings`, which is the engine's precondition for
+	# raising anything new in a county — so a county whose only holding is a colony never satisfies
+	# it and the empty baronies stay shut until the colony is promoted. See the long note in
+	# 00_wilderness_government.txt, which is where that rule is explained and where it belongs.
 }

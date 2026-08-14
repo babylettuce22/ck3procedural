@@ -480,7 +480,9 @@ public static class MapDataWriter
         int width = cfg.Width, height = cfg.Height;
         int grade = Math.Max(1, (int)Math.Round(cfg.Scaled(SeabedGradeReach)));
         int synthesis = Math.Max(1, (int)Math.Round(cfg.Scaled(SeabedSynthesisReach)));
-        int smooth = Math.Max(1, (int)Math.Round(cfg.Scaled(CoastSmoothReach)));
+        // EXPERIMENT — coastline smoothing is disabled. Restore by swapping these two lines back.
+        // int smooth = Math.Max(1, (int)Math.Round(cfg.Scaled(CoastSmoothReach)));
+        int smooth = 0;
 
         var distance = CoastDistance(full, width, height,
             Math.Max(Math.Max(grade, synthesis), smooth));
@@ -556,7 +558,7 @@ public static class MapDataWriter
                 // takes the land ring from 27.3/255 to 26.2 against a hinterland of 25.5 — a lip
                 // above the shore becoming a continuation of it — and the water ring from 19.0 to
                 // 18.2, where vanilla's own sits at 18.89.
-                if (distance[i] > smooth) continue;
+                if (smooth <= 0 || distance[i] > smooth) continue;
 
                 bool land = source[i] > WaterLevel16;
                 long sum = 0;

@@ -35,6 +35,7 @@ settle_the_wilderness_decision = {
 
 	is_valid = {
 		can_hold_another_colony_trigger = yes
+		colonization_off_cooldown_trigger = yes
 	}
 
 	is_valid_showing_failures_only = {
@@ -43,6 +44,7 @@ settle_the_wilderness_decision = {
 
 	cost = {
 		gold = colonize_cost
+		prestige = colonize_prestige_cost
 	}
 
 	effect = {
@@ -67,5 +69,105 @@ settle_the_wilderness_decision = {
 
 	# The AI reaches colonisation through its own yearly pulse, which can weigh gold and income
 	# properly; a decision check would duplicate that. 0 means never checked by the AI.
+	ai_check_interval = 0
+}
+
+
+# =====================================================================================
+#  Coming home again
+# =====================================================================================
+#
+# There is no decision here any more.
+#
+# `return_from_colony_decision` existed because a lord sent to a colony by a one-way travel plan had
+# no other way back — the residence was a variable this mod maintained, so this mod had to provide
+# the exit. activity_oversee_colony has an exit of its own: the activity window, which is where a
+# player already looks to leave an activity, and promote_colony_effect ends it outright the moment
+# the colony becomes a real holding.
+#
+# A decision that duplicated either would be a second authority on when a lord goes home, and the
+# two would eventually disagree.
+
+
+# =====================================================================================
+#  Committing to it
+# =====================================================================================
+
+# The heavy version of presence, offered to players who want it and to nobody else.
+#
+# Moving the realm capital to a colony is the historically resonant answer — the court, the council
+# and the whole apparatus of rule pick up and move to a palisade in country that had no name last
+# year — and the cost enforces itself: your seat is now a palisade. Capital buildings you no longer
+# have, vassals who now live a very long way from their liege, an heir raised on the frontier.
+#
+# It is deliberately not the default and deliberately not available to the AI. The knock-ons of a
+# capital change are large, mostly indirect, and exactly the kind of thing an AI weighting cannot
+# see; an AI that moved its capital to a colony because a script value said 40 would be a realm
+# quietly ruined by a decision nobody watched it take.
+#
+# Requiring presence is what keeps it from being a map-painting click. You have to have gone there.
+move_seat_to_colony_decision = {
+	picture = {
+		reference = "gfx/interface/illustrations/decisions/decision_found_kingdom.dds"
+	}
+
+	desc = move_seat_to_colony_decision_desc
+	selection_tooltip = move_seat_to_colony_decision_tooltip
+	sort_order = 140
+	decision_group_type = realm
+
+	# Presence is now simply where he is, so this asks that directly. The residence variable it used
+	# to read is gone with the travel plan that needed it — see colony_refresh_presence_effect.
+	is_shown = {
+		character_is_at_own_colony_trigger = yes
+		is_colonist_trigger = no
+	}
+
+	is_valid_showing_failures_only = {
+		custom_tooltip = {
+			text = colonize_seat_already_here_tt
+			NOT = { capital_county ?= location.county }
+		}
+		is_at_war = no
+	}
+
+	cost = {
+		prestige = major_prestige_value
+	}
+
+	effect = {
+		# The county he is standing in, which is_shown guarantees is a colony of his own.
+		#
+		# A decision has no target picker, so this derives its own target. Reading `location` is safe
+		# now in a way it was not before: while the activity runs, the engine keeps him at the
+		# activity location, so there is no window in which he has drifted back to his capital and
+		# this would quietly move his seat to where it already was.
+		location.county ?= {
+			save_scope_as = new_seat
+		}
+
+		if = {
+			limit = { exists = scope:new_seat }
+			# `set_realm_capital`, not `set_capital_county`. The second is a landed-title effect — it
+			# is how a duchy declares which of its counties is its seat — and calling it in character
+			# scope is the kind of thing that half-works and then reports nothing.
+			set_realm_capital = scope:new_seat
+
+			# The activity, if he is on one, is left running deliberately. He came out to oversee
+			# the work and has now decided to stay for good; ending it here would send him home to a
+			# capital that is this county, which is a journey to where he is standing.
+			# promote_colony_effect still ends it when the colony finishes.
+
+			add_legitimacy = miniscule_legitimacy_loss
+
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = colonize_seat_moved_toast
+				left_icon = root
+				right_icon = scope:new_seat
+			}
+		}
+	}
+
 	ai_check_interval = 0
 }

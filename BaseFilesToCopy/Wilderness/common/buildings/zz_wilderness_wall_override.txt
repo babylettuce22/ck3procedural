@@ -1,0 +1,111 @@
+﻿# Stops vanilla drawing a tribal palisade over empty country.
+#
+# ---- What this is ----
+#
+# A single-object override of vanilla's `walls_01_tribal` from
+# common/buildings/99_background_graphics_buildings.txt. Script is last-wins, so redefining the one
+# object here replaces vanilla's without touching the file it lives in. The filename sorts last so
+# the override cannot lose to another mod's copy of the same directory.
+#
+# Everything below is vanilla's own definition verbatim, with ONE line added — the
+# `NOT = { has_holding_type = wilderness_holding }` at the bottom of is_enabled.
+#
+# ---- Why it was needed ----
+#
+# `is_graphical_background = yes` buildings are drawn independently of a holding's primary building.
+# They are not buildings a ruler constructs; they are the engine deciding what the holding looks like
+# from the outside. So wilderness_01's own asset never competed with this — vanilla painted over it.
+#
+# Checked against a wilderness county capital, every clause of vanilla's gate passes:
+#
+#   is_county_capital = yes                     the wilderness holding sits on the capital
+#   NOR = { palisades_01, curtain_walls_01, … } a wilderness holding has none of them
+#   holder is not nomadic                       wilderness_government is not
+#
+# And `tribal_walls_01_a_mesh` is a holding BASE mesh: one model carrying the palisade, its banners
+# and the ground plate under it. That is why unsettled land came out with walls, flags and a patch of
+# settled-looking ground all at once — it is not three faults, it is one asset.
+#
+# ---- Why only this one ----
+#
+# There are six background wall buildings and this is the only one that can fire on a wilderness
+# holding. walls_00 requires `is_county_capital = no`, which a county capital fails by definition;
+# walls_01 through walls_04 each require a fort-level building the holding does not have. So one
+# condition on one object is the whole fix.
+#
+# AGOT takes a different route — it adds `has_holding_type = wilderness_holding` to walls_00's
+# is_enabled rather than excluding this one. That makes the no-walls graphic eligible without
+# stopping this one being eligible too, and western_walls_00_mesh is itself a base plate, so it
+# looks like a trade of palisades for bare ground rather than for nothing. Excluding here is the
+# smaller and more certain change.
+#
+# ---- A ck3-tiger error you should NOT fix ----
+#
+# On an install without the North Pacific attire DLC, tiger reports:
+#
+#     error(missing-item): pdxmesh building_emishi_wall_01_mesh not defined in gfx/models/
+#
+# That is a false positive and the block below is correct as written. The mesh ships with that DLC
+# and is genuinely absent from disk without it, which is exactly why vanilla guards it with
+# `requires_dlc_flag = north_pacific_attire` — the same line, in the same place, in the file this
+# overrides. Deleting the asset to silence tiger would strip the Emishi wall variant from every
+# tribal holding for players who DO own the DLC, to fix nothing for players who do not.
+#
+# ---- Maintenance ----
+#
+# This is a copy of vanilla data and will drift when Paradox edits the original. It is ~45 lines of
+# a block that changes rarely, and being script rather than GUI it is checked by ck3-tiger on every
+# edit — which is the trade that made a hand-kept copy the right call here and the wrong one for
+# window_county_view.gui. If the wall graphics ever stop matching vanilla's, diff this against
+# 99_background_graphics_buildings.txt.
+
+walls_01_tribal = {
+	is_graphical_background = yes
+
+	#Base Tribal Walls:
+	asset = {
+		type = pdxmesh
+		names = {
+			"tribal_walls_01_a_mesh"
+		}
+	}
+	#Specific Tribal Walls:
+	#Emishi:
+	asset = {
+		type = pdxmesh
+		names = {
+			"building_emishi_wall_01_mesh"
+		}
+		requires_dlc_flag = north_pacific_attire
+		#Emishi GFX:
+		graphical_cultures = { emishi_building_gfx amuric_building_gfx }
+	}
+
+	is_enabled = {
+		OR = {
+			is_county_capital = yes
+			fort_level > 0
+		}
+		NOR = {
+			# disabling this level of walled graphics for holdings with special walls and other fortifications so that they always look appropriately fortified.
+			has_building_or_higher = "palisades_01"
+			has_building_or_higher = "curtain_walls_01"
+			has_building_or_higher = "hill_forts_01"
+			has_building_or_higher = "ramparts_01"
+			has_building_or_higher = "watchtowers_01"
+			has_building_or_higher = "temple_citadel_01"
+			has_building_or_higher = "theodosian_walls_01"
+			has_building_or_higher = "walls_of_benin_01"
+			has_building_or_higher = "walls_of_genoa_01"
+			has_building_or_higher = "aurelian_walls_01"
+			has_building_or_higher = "city_wall_of_toledo_01"
+			has_building_or_higher = "roman_wall_of_lugo_01"
+		}
+		# Nomads use custom walls
+		scope:holder = { NOT = { government_has_flag = government_is_nomadic } }
+
+		# THE ONE ADDED LINE. Nobody has built anything here, so nothing should be drawn as though
+		# they had.
+		NOT = { has_holding_type = wilderness_holding }
+	}
+}

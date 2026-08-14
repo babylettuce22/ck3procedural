@@ -401,6 +401,57 @@ public static class Cultures
         };
     }
 
+    /// <summary>The culture wilderness counties carry. Fixed, so history and script can name it.</summary>
+    public const string UnsettledKey = "gen_culture_unsettled";
+
+    /// <summary>
+    /// The culture of land nobody lives on.
+    ///
+    /// It has to be a real culture and not a null, because CK3 requires one on every land province
+    /// and because the wilderness dummy that holds these counties is a character who needs one. But
+    /// it must not read as a *people*: the whole point of an empty county is that there is nobody
+    /// there, and a generated name like "Braemoth" would make the map claim the opposite — a
+    /// culture that happens to hold the mountains rather than mountains that hold nobody. Hence the
+    /// fixed name.
+    ///
+    /// Built off an existing heritage rather than its own pillar. A dedicated heritage would show
+    /// up in the culture tree as a branch of the world's peoples, which is exactly the impression
+    /// worth avoiding, and it would need its own language and loc for a culture nobody plays.
+    ///
+    /// Scored as arctic on purpose. It never influences any county's terrain, but the ethos and
+    /// traditions it picks are what a player sees if they open the culture screen, and the harsh
+    /// end of the table is the honest answer for ground that defeated everyone who tried.
+    /// </summary>
+    public static Culture CreateUnsettled(Heritage heritage, VanillaVocabulary vocab, Rng rng)
+    {
+        var language = heritage.Language;
+        var terrain = new Dictionary<TerrainClass, int> { [TerrainClass.Arctic] = 1 };
+
+        return new Culture
+        {
+            Key = UnsettledKey,
+            Name = "Unsettled",
+            Heritage = heritage,
+            Color = ((byte)108, (byte)104, (byte)96),
+            Ethos = PickEthos(TerrainClass.Arctic, 0, vocab, rng),
+            MartialCustom = PickMartialCustom(vocab, rng),
+            HeadDetermination = PickHeadDetermination(TerrainClass.Arctic, vocab, rng),
+            Traditions = PickTraditions(terrain, 0, vocab, rng),
+
+            // Short lists rather than none. Nobody is born into this culture, but the dummy holder
+            // belongs to it and CK3 will read a name for him; an empty list is a crash waiting for
+            // the one character that uses it.
+            MaleNames = Names(language, rng, 8, male: true, usedNames: null),
+            FemaleNames = Names(language, rng, 8, male: false, usedNames: null),
+            DynastyNames = Names(language, rng, 6, male: true, usedNames: null),
+
+            PatronymSuffixMale = Particle(language, rng),
+            PatronymSuffixFemale = Particle(language, rng),
+            LocationPrefix = Particle(language, rng),
+            AlwaysUsePatronym = false,
+        };
+    }
+
     private static string PickEthos(TerrainClass dominant, double development,
         VanillaVocabulary vocab, Rng rng)
     {

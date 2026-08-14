@@ -16,13 +16,37 @@ wilderness_government = {
 		legitimacy = no
 	}
 
+	# The engine populates a landed ruler's court on its own — commanders, guests, a royal court if
+	# the tier allows one — and the game-start sweep only runs once, so anything generated afterwards
+	# accumulates forever. These three stop most of it being generated at all; the yearly sweep in
+	# 00_colonization_on_actions.txt catches the rest.
+	#
+	# court_generate_commanders and royal_court are top-level fields, NOT government_rules entries.
+	# Putting them inside that block is silently ignored — see _governments.info, which documents
+	# court_generate_spouses at rule level and these two outside it.
+	court_generate_commanders = no
+	royal_court = none
+
 	primary_holding = wilderness_holding
 	valid_holdings = { wilderness_holding }
 
-	# Castle, city and church are listed so that a county the player has *finished* colonising still
-	# satisfies the county-holding requirement while the title is mid-transfer. Without them the
-	# engine can reject the handover of a county whose capital has already been upgraded.
-	required_county_holdings = { wilderness_holding castle_holding city_holding church_holding }
+	# `wilderness_holding` is deliberately ABSENT from this list.
+	#
+	# This field is the engine's precondition for building anything new in a county: per
+	# _governments.info, "which holdings must be present in a county before more of an existing type
+	# or others can be built". Listing wilderness_holding here made a wilderness county satisfy its
+	# own precondition, so the empty baronies around the capital offered "build new holding" —
+	# letting a county be developed from the outside without ever being settled, which skips the
+	# entire mechanic.
+	#
+	# Leaving it out means a county whose only holding is wilderness_holding never meets the
+	# requirement, and the button is gone until something real stands there. The same is true of a
+	# colony: settlement_holding appears in no government's list, vanilla's included, so the empty
+	# baronies stay shut until the colony is promoted to a castle, city or temple.
+	#
+	# Castle, city and church stay listed so a county the player has *finished* colonising still
+	# satisfies the requirement while the title is mid-transfer.
+	required_county_holdings = { castle_holding city_holding church_holding }
 
 	character_modifier = {
 		# The wilderness never raises anyone and never pays anyone.

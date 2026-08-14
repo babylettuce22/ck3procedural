@@ -11,14 +11,37 @@
 
 # --- What it costs to claim a county ---------------------------------------------------------
 
-@base_colonize_cost = 50
+# Founding a colony is close in price to building a holding outright (400, see
+# promote_colony_cost), and that is deliberate. At 50 + rank it came to 75-150, which any AI could
+# pay out of pocket in the first year — so every ruler bordering wilderness claimed everything they
+# could reach within a couple of years and the frontier stopped existing before the first
+# succession. The claim has to be an investment a ruler weighs, not loose change.
+#
+# What you get for it is far less than a holding: an empty county with obstacles on it and an
+# upkeep bill. The price is for the ground and the right to work it.
+@base_colonize_cost = 100
+
+# Tribal rulers pay in the currency they actually have.
+#
+# A tribal realm is prestige-rich and gold-poor by design, so a gold price that reads as steep for a
+# feudal count is prohibitive for a chief with the same land — and settling empty country is exactly
+# the thing a tribal realm should be BEST at. Charging them 300 prestige and a token 75 gold prices
+# the same act in the currency their whole government is built to accumulate.
+@tribal_colonize_gold = 75
+@tribal_colonize_prestige = 300
 
 # Scaled by rank, because a king claiming a county is committing a smaller share of his realm to it
 # than a count is, and should feel a proportionate bill.
 colonize_cost = {
 	value = @base_colonize_cost
 
+	# Tribal replaces the whole scale rather than adding to it — see colonize_prestige_cost, which
+	# is where a tribal ruler's real price lives.
 	if = {
+		limit = { government_has_flag = government_is_tribal }
+		value = @tribal_colonize_gold
+	}
+	else_if = {
 		limit = { highest_held_title_tier = tier_county }
 		add = { value = 25 desc = colonize_cost_tier_desc }
 	}
@@ -35,6 +58,15 @@ colonize_cost = {
 	}
 }
 
+# Zero for everyone but tribal rulers, who pay here instead of in gold.
+colonize_prestige_cost = {
+	value = 0
+
+	if = {
+		limit = { government_has_flag = government_is_tribal }
+		value = @tribal_colonize_prestige
+	}
+}
 
 # --- What it costs to clear an obstacle, and to grow a colony -------------------------------
 
@@ -43,6 +75,34 @@ wilderness_clear_cost_standard = 150
 wilderness_clear_cost_dear = 250
 
 settlement_upgrade_cost = 200
+
+# What it costs to turn a finished colony into a real holding.
+#
+# Deferred to vanilla's own new-holding price rather than given a number here. Raising a seat on a
+# colony puts the same castle, city or temple on the map that building one from scratch would, and
+# if the two prices differ then whichever is cheaper becomes the way everyone does it. Reading
+# vanilla's value also means a patch that rebalances holdings rebalances this with it — as of 1.19
+# it resolves to 400.
+#
+# A colonist pays a quarter of it, and the discount is not a kindness — it is the difference between
+# the granted-colony arc resolving and it deadlocking.
+#
+# A colonist's whole income is what presence pays him, which is about 1.5 a month. At full price he
+# would need most of a lifetime to promote his own colony, and an AI colonist who dies short of it
+# hands an unpromoted colony to an heir who starts the same count again. The arc would never close,
+# and nothing in the log would say why.
+#
+# It is also the more honest price. A lord buying a holding is paying masons on a market; a colonist
+# is finishing something he and his neighbours have been building for twenty years. What the gold
+# represents for him is the last of it — the gate, the hall, the seat — not the whole works.
+promote_colony_cost = {
+	value = main_building_tier_1_cost
+
+	if = {
+		limit = { is_colonist_trigger = yes }
+		multiply = 0.25
+	}
+}
 
 
 # --- How many colonies a ruler may hold at once ----------------------------------------------
@@ -68,6 +128,18 @@ wilderness_settlement_limit = {
 # lives on the buildings, so nothing has to *write* a count, and anything that wants to know one
 # asks here. Iterating held titles is cheap next to keeping a cache honest across inheritance,
 # revocation and conquest.
+# Colonies granted to a colonist count too, and that is the point of the second block.
+#
+# Without it the cap leaks in the worst possible place. `settlement_01`'s upkeep rides on the
+# building, so granting a colony away stops you paying for it; if granting also freed the cap slot,
+# then claim-grant-repeat would be an unbounded loop with no cost at either end, and it would become
+# the only sensible way to play the mechanic.
+#
+# The obligation's `liege_modifier` in 00_colony_contracts.txt restores the money side of that. This
+# restores the cap side. Between them, a colony you sponsored is still a colony you are answerable
+# for, whoever is standing on it — which is also the honest reading of what a colonist IS.
+#
+# Only direct vassals are counted. A colonist two levels down was somebody else's project.
 wilderness_settlement_count = {
 	value = 0
 
@@ -78,10 +150,101 @@ wilderness_settlement_count = {
 		}
 		add = 1
 	}
+
+	every_vassal = {
+		limit = { is_colonist_trigger = yes }
+		add = 1
+	}
 }
 
 # Headroom. Negative or zero means the ruler is at or over the cap.
 wilderness_settlement_headroom = {
 	value = wilderness_settlement_limit
 	subtract = wilderness_settlement_count
+}
+
+
+# --- What it costs to be the lord who sent somebody out --------------------------------------
+
+# Character scope: the COLONIST. The chance, in percent, that finishing his colony is the moment he
+# stops answering to anybody.
+#
+# ---- Why the roll happens here and not anywhere else ----
+#
+# A colonist spends a generation being useless to his liege — no tax, a county nobody visits, a
+# contract with one line in it. The day the colony is promoted is the first day he holds something
+# worth holding, and it is also the day he stops needing the man who sent him. Every other moment in
+# the arc is one where seceding would gain him a palisade.
+#
+# ---- Why it is small ----
+#
+# Because it has to be able to not happen. A frontier that always breaks away is not a risk the
+# player weighs, it is a tax on granting, and the correct response to a tax is never to grant. At
+# these numbers a typical colonist stays; a badly-chosen one, sent far away by a weak lord, is a
+# coin flip's cousin. That is the shape worth having.
+#
+# The modifiers are the whole content of the number. A liege reading this tooltip should be able to
+# see which of his own choices made it worse.
+colony_secession_chance = {
+	value = 8
+
+	# Standing. A colonist does not repudiate a man the world takes seriously.
+	if = {
+		limit = { exists = liege }
+		add = {
+			value = liege.prestige_level
+			multiply = -1.5
+		}
+	}
+
+	# Distance, cheaply expressed: a colony outside the kingdom its sponsor is seated in is a colony
+	# nobody is riding out to.
+	#
+	# Both de jure kingdoms are tested for existence first. A titular or unfinished map can leave a
+	# county with no de jure kingdom above it, and an unguarded comparison against a scope that does
+	# not exist is an error in the log rather than a `no`.
+	if = {
+		limit = {
+			exists = liege
+			exists = capital_county.kingdom
+			exists = liege.capital_county.kingdom
+			NOT = { capital_county.kingdom = liege.capital_county.kingdom }
+		}
+		add = 7
+	}
+
+	# How he was treated.
+	if = {
+		limit = {
+			exists = liege
+			opinion = { target = liege  value < 0 }
+		}
+		add = 6
+	}
+	if = {
+		limit = {
+			exists = liege
+			opinion = { target = liege  value >= 50 }
+		}
+		add = -5
+	}
+
+	# Who he is.
+	if = { limit = { has_trait = ambitious } add = 5 }
+	if = { limit = { has_trait = brave }     add = 2 }
+	if = { limit = { has_trait = craven }    add = -3 }
+	if = { limit = { has_trait = content }   add = -6 }
+	if = { limit = { has_trait = humble }    add = -3 }
+
+	# And whether anybody is watching. A liege with an army in the field somewhere else is a liege
+	# who cannot ride out to the frontier this year.
+	if = {
+		limit = { liege ?= { is_at_war = yes } }
+		add = 6
+	}
+
+	# Never a certainty and never nothing: the floor keeps the moment tense even for a strong lord,
+	# and the ceiling keeps granting from ever being a straightforward mistake.
+	min = 2
+	max = 35
 }
