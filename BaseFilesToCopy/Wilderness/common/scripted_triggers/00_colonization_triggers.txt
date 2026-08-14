@@ -88,7 +88,7 @@ can_hold_another_colony_trigger = {
 
 # Character scope. A ruler who is allowed to colonise at all — as opposed to one who merely wants
 # to. Landless adventurers, mercenaries and the wilderness dummy itself are all excluded here.
-# Deliberately does NOT test the claim cooldown — see colonization_off_cooldown_trigger below.
+# Deliberately does NOT test whether a party is already out — see no_expedition_underway_trigger.
 # Everything here is a permanent fact about the ruler, so it is safe in an `is_shown`: a character
 # who fails it will never pass it, and hiding a control that can never apply is correct.
 can_colonize_at_all_trigger = {
@@ -98,20 +98,35 @@ can_colonize_at_all_trigger = {
 	NOT = { government_has_flag = government_is_uninteractable }
 }
 
-# Character scope. Has enough time passed since the last claim?
+# Character scope. Is this ruler free to send a party out?
 #
-# Split out of the trigger above, and the split is the whole point. The cooldown used to live there,
-# which put it in every `is_shown` — so the Settle button silently VANISHED for two years after a
-# player settled anywhere, on every county, with nothing on screen to say why or for how long. A
-# temporary condition belongs in `is_valid`, where it greys the control and can explain itself.
+# Replaces a five-year `colonization_cooldown` variable, and the replacement is the point. A timer
+# was standing in for a thing that now actually happens: a party goes out, and for two years nobody
+# knows whether it took. One expedition at a time is a fact about what the ruler is doing rather
+# than a number waiting to expire, it explains itself in the tooltip, and it clears the moment the
+# thing it describes is over instead of on a schedule.
 #
-# The rule of thumb this is an instance of: `is_shown` is for what a ruler *is*, `is_valid` is for
-# what they *cannot do right now*. Anything that will change on its own belongs in the second.
-colonization_off_cooldown_trigger = {
+# Still an `is_valid` condition rather than an `is_shown` one, for the reason the cooldown taught:
+# a temporary state belongs where it can grey a control and say why, not where it makes the control
+# vanish with nothing on screen to explain it.
+no_expedition_underway_trigger = {
 	custom_tooltip = {
-		text = colonize_on_cooldown_tt
-		NOT = { has_variable = colonization_cooldown }
+		text = colonize_expedition_out_tt
+		NOT = { has_variable = expedition_underway }
 	}
+}
+
+
+# Title scope. Is this county one somebody could aim an expedition at?
+#
+# The three-part test — wilderness, not marked unsettlable, nobody already out there — written once.
+# It was previously spelled out at each of the five places that pick a target, and the third part
+# had to be added to all five when expeditions arrived, which is exactly the edit that gets made in
+# four places out of five.
+county_can_be_claimed_trigger = {
+	is_wilderness_county_trigger = yes
+	NOT = { has_county_modifier = block_settlement_ability }
+	NOT = { has_county_modifier = settling_expedition_underway }
 }
 
 # Title scope. Does this county touch land the given character's realm holds?

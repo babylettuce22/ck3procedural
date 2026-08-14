@@ -35,7 +35,7 @@ settle_the_wilderness_decision = {
 
 	is_valid = {
 		can_hold_another_colony_trigger = yes
-		colonization_off_cooldown_trigger = yes
+		no_expedition_underway_trigger = yes
 	}
 
 	is_valid_showing_failures_only = {
@@ -53,7 +53,7 @@ settle_the_wilderness_decision = {
 		if = {
 			limit = { exists = scope:wilderness }
 
-			colonize_county_effect = {
+			colony_launch_expedition_effect = {
 				COUNTY = scope:wilderness
 				COLONIZER = root
 			}

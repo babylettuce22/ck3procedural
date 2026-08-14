@@ -105,6 +105,79 @@ promote_colony_cost = {
 }
 
 
+# --- Whether the settling actually takes -----------------------------------------------------
+
+# Character scope: the EXPEDITION LEADER. Reads scope:colony for the ground they are going to.
+# Returns the percentage chance the colony survives its first years.
+#
+# ---- What this is for ----
+#
+# Claiming a county used to be the whole of colonisation: pay, and the colony exists. That made the
+# price the only decision, and a price is not a decision — it is a threshold. This is the second
+# half: you choose WHO goes, and then you find out.
+#
+# ---- Why the leader's stewardship dominates ----
+#
+# Because the thing that kills a new settlement is not wolves, it is arithmetic. Somebody has to
+# work out how much grain three hundred people eat between the last harvest and the first one, and
+# be right. Martial counts for less and is not nothing — there is genuinely something out there —
+# and the traits below are the difference between a man who checks the stores in November and one
+# who finds out in February.
+#
+# ---- Why the obstacles are named individually ----
+#
+# A count of what is in the way would treat scree slopes and a killing winter as the same weight of
+# problem, and they are not: one makes the carts slow and the other decides how many people are
+# alive in spring. Naming them also means a seventh blocker costs one line here rather than a
+# rewrite, which is the same bargain the rest of the system makes.
+colony_settling_chance = {
+	value = 50
+
+	# The man in charge.
+	add = { value = stewardship  multiply = 2.5 }
+	add = { value = martial      multiply = 1 }
+
+	if = { limit = { has_education_stewardship_trigger = yes } add = 6 }
+
+	# Who he is, which mostly means whether he plans ahead.
+	if = { limit = { has_trait = diligent }           add = 8 }
+	if = { limit = { has_trait = lazy }               add = -10 }
+	if = { limit = { has_trait = patient }            add = 5 }
+	if = { limit = { has_trait = impatient }          add = -6 }
+	if = { limit = { has_trait = brave }              add = 4 }
+	if = { limit = { has_trait = craven }             add = -5 }
+	if = { limit = { has_trait = temperate }          add = 4 }
+	if = { limit = { has_trait = gluttonous }         add = -5 }
+	if = { limit = { has_trait = lifestyle_traveler } add = 6 }
+	if = { limit = { has_trait = strong }             add = 3 }
+	if = { limit = { has_trait = weak }               add = -6 }
+	if = { limit = { has_trait = infirm }             add = -14 }
+	if = { limit = { has_trait = ill }                add = -12 }
+
+	# A child or a very old man is not going to manage this, whatever his numbers say.
+	if = { limit = { is_adult = no } add = -25 }
+	if = { limit = { age >= 60 }     add = -8 }
+
+	# The ground. Each of these is a different way for a first winter to go wrong.
+	scope:colony = {
+		title_province ?= {
+			if = { limit = { has_building = killing_cold }  add = -14 }
+			if = { limit = { has_building = flooded_lands } add = -9 }
+			if = { limit = { has_building = bandit_camps }  add = -8 }
+			if = { limit = { has_building = beast_dens }    add = -6 }
+			if = { limit = { has_building = dense_growth }  add = -5 }
+			if = { limit = { has_building = scree_slopes }  add = -4 }
+		}
+	}
+
+	# Never certain in either direction. A hopeless expedition can still come through and a
+	# well-found one can still be unlucky, because otherwise the choice above is arithmetic the
+	# player does once and never thinks about again.
+	min = 10
+	max = 90
+}
+
+
 # --- How many colonies a ruler may hold at once ----------------------------------------------
 
 # THE cap. Read by the AI event, the player decision and the warning alike — there is no second

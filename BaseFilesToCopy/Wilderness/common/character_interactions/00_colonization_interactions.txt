@@ -45,7 +45,7 @@ claim_wilderness_interaction = {
 	is_valid_showing_failures_only = {
 		scope:actor = {
 			can_hold_another_colony_trigger = yes
-			colonization_off_cooldown_trigger = yes
+			no_expedition_underway_trigger = yes
 
 			custom_tooltip = {
 				text = colonize_not_while_at_war_tt
@@ -61,8 +61,7 @@ claim_wilderness_interaction = {
 	can_be_picked_title = {
 		scope:target = {
 			tier = tier_county
-			is_wilderness_county_trigger = yes
-			NOT = { has_county_modifier = block_settlement_ability }
+			county_can_be_claimed_trigger = yes
 			county_borders_realm_trigger = { CHARACTER = scope:actor }
 		}
 	}
@@ -98,7 +97,7 @@ claim_wilderness_interaction = {
 	}
 
 	on_accept = {
-		colonize_county_effect = {
+		colony_launch_expedition_effect = {
 			COUNTY = scope:target
 			COLONIZER = scope:actor
 		}

@@ -15,6 +15,17 @@ block_settlement_ability = {
 }
 
 
+# On a wilderness county somebody has sent settlers to, for as long as nobody knows whether it took.
+#
+# Carries no effects at all, and that is correct: nothing has happened to the ground yet. It exists
+# to be READ — county_can_be_claimed_trigger tests it, so a county with a party already on the road
+# cannot be aimed at a second time, by its sponsor or by anybody else — and to be SEEN, so a player
+# looking at the map can tell that empty county is spoken for.
+settling_expedition_underway = {
+	icon = county_modifier_development_mixed
+}
+
+
 # =====================================================================================
 #  Presence: what changes when the lord is actually there
 # =====================================================================================

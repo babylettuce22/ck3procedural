@@ -113,7 +113,7 @@ wilderness_settle = {
 
 	is_valid = {
 		can_hold_another_colony_trigger = yes
-		colonization_off_cooldown_trigger = yes
+		no_expedition_underway_trigger = yes
 
 		custom_tooltip = {
 			text = colonize_not_while_at_war_tt
@@ -164,7 +164,7 @@ wilderness_settle = {
 		add_prestige = { value = colonize_prestige_cost  multiply = -1 }
 
 		hidden_effect = {
-			colonize_county_effect = {
+			colony_launch_expedition_effect = {
 				COUNTY = scope:wilderness.county
 				COLONIZER = root
 			}

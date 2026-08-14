@@ -78,7 +78,7 @@ wilderness_yearly_pulse = {
 	trigger = {
 		is_ai = yes
 		can_colonize_at_all_trigger = yes
-		NOT = { has_variable = colonization_cooldown }
+		NOT = { has_variable = expedition_underway }
 	}
 
 	effect = {
@@ -140,6 +140,16 @@ wilderness_yearly_pulse = {
 		# 17.5 is measured against observed play rather than reasoned from first principles, which
 		# is the right way round for a number like this.
 		#
+		# 30, since an attempt is no longer the same thing as a colony. wilderness_colonization.0011
+		# rolls colony_settling_chance two years after every claim, the AI's included, and a typical
+		# AI expedition — a courtier with middling stewardship, on ground with two obstacles on it —
+		# comes out near a coin flip. So roughly half of what the pulse starts now fails, and a
+		# failure still costs the gold and still burns the five-year cooldown.
+		#
+		# 30 is 17.5 grossed up for that, which keeps the frontier filling at about the rate it did
+		# before the expedition mechanic existed. It is the one number here that is derived rather
+		# than observed, so it is the first to revisit if the map fills too fast or too slow.
+		#
 		# The domain limit gate that used to sit alongside this has since been removed — it was the
 		# real constraint, not the chance, and it was rejecting rulers for a cost a colony does not
 		# have. See the note where it used to be, in wilderness_colonization.0001.
@@ -155,7 +165,7 @@ wilderness_yearly_pulse = {
 		# same position behave differently, which is most of what makes the frontier feel alive
 		# rather than scheduled.
 		random = {
-			chance = 17.5
+			chance = 30
 
 			modifier = { ai_greed > 50     add = 5 }
 			modifier = { ai_boldness > 50  add = 4 }
@@ -180,8 +190,9 @@ wilderness_yearly_pulse = {
 # --- Keeping the frontier honest -------------------------------------------------------------------
 
 # When a title changes hands there is nothing to reconcile, because nothing caches a colony count —
-# the upkeep rides on the settlement buildings and moves with the county by itself. This hook exists
-# only to clear the per-character claim cooldown, which is meaningless on a new holder.
+# the upkeep rides on the settlement buildings and moves with the county by itself. What this hook
+# does is the colonist work below; the claim-cooldown clearing it used to carry went with the
+# cooldown itself.
 #
 # (That absence is the design. See the note at the top of 00_settlement_buildings.txt for what the
 # alternative costs: AGOT reconciles a counter from eight call sites, two of them debug buttons.)
@@ -193,15 +204,6 @@ on_title_gain = {
 
 wilderness_on_title_gain = {
 	effect = {
-		if = {
-			limit = {
-				has_variable = colonization_cooldown
-				scope:title ?= { tier = tier_county }
-				scope:title ?= { is_colony_county_trigger = yes }
-			}
-			remove_variable = colonization_cooldown
-		}
-
 		# --- The leak detector -----------------------------------------------------------------
 		#
 		# A county whose capital is still wilderness_holding has arrived in somebody's realm. That

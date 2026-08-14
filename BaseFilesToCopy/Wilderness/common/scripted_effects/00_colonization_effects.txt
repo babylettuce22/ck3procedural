@@ -167,10 +167,7 @@ wilderness_setup_on_start_effect = {
 wilderness_pick_adjacent_effect = {
 	every_sub_realm_county = {
 		every_title_to_title_neighboring_and_across_water_county = {
-			limit = {
-				is_wilderness_county_trigger = yes
-				NOT = { has_county_modifier = block_settlement_ability }
-			}
+			limit = { county_can_be_claimed_trigger = yes }
 			add_to_list = adjacent_wilderness
 		}
 	}
@@ -205,6 +202,93 @@ wilderness_pick_adjacent_effect = {
 		}
 		position = 0
 		save_scope_as = wilderness
+	}
+}
+
+
+# =====================================================================================
+#  Before any of it: sending the expedition
+# =====================================================================================
+
+# Character scope. Sends a party out to a wilderness county WITHOUT claiming it.
+#
+#   $COUNTY$     the wilderness county being attempted
+#   $COLONIZER$  the ruler paying for it
+#
+# ---- Why nothing is created here ----
+#
+# The first build of this claimed the county immediately and then, two years later, took it back if
+# the settling failed. That produced a colony that existed, appeared on the map, drew a border and
+# levied upkeep, and then vanished — and the county had to be torn down and reseeded to undo it.
+#
+# A settlement that failed never existed. So now the claim IS the expedition: the county stays
+# wilderness, wearing a modifier that says somebody is out there, and only
+# wilderness_colonization.0011 succeeding turns it into a colony. Failure removes the modifier and
+# there is nothing else to undo.
+#
+# ---- What stops a second expedition ----
+#
+# The variable set on the coloniser below, read by no_expedition_underway_trigger. That replaced a
+# five-year cooldown, and it is a better rule for the same reason the above is: one party out at a
+# time is a fact about what the ruler is doing, where a timer was a number waiting to expire. It
+# also clears itself the moment the thing it describes is over.
+colony_launch_expedition_effect = {
+	$COUNTY$ = { save_scope_as = colony }
+	$COLONIZER$ = { save_scope_as = colonizer }
+
+	scope:colony = {
+		# Visible on the county, so a player looking at the map can see that ground is spoken for —
+		# and so no other ruler, and no other expedition of the same ruler, can aim at it.
+		add_county_modifier = settling_expedition_underway
+	}
+
+	scope:colonizer = {
+		set_variable = {
+			name = expedition_underway
+			value = scope:colony
+		}
+
+		# Picks the two candidates. The player is offered the choice in 0010 and may overwrite the
+		# default; an AI keeps it, which is how the AI gets a leader with no separate code path.
+		colony_pick_expedition_leader_effect = yes
+
+		trigger_event = wilderness_colonization.0010
+
+		# Two years for it to take or not. Long enough that the first winter has happened and the
+		# player has stopped watching, which is the point — the decision was made while the carts
+		# were being loaded, and this is when the news comes back.
+		#
+		# Fired on the coloniser, so if he dies in the interval there is no resolution at all and
+		# the ground stays wilderness. That is the honest outcome: the man who sent them is dead and
+		# nobody else was ever going to follow it up.
+		trigger_event = {
+			id = wilderness_colonization.0011
+			years = 2
+		}
+	}
+}
+
+
+# Character scope: the sponsor. Takes the expedition marks off both him and the county.
+#
+#   $COUNTY$  the county the expedition was aimed at
+#
+# One effect for both endings, because "the expedition is over" is one fact whether it succeeded,
+# failed, or was overtaken by something nobody predicted. Every branch calls this and none of them
+# has its own idea of what cleaning up means.
+colony_clear_expedition_effect = {
+	if = {
+		limit = { has_variable = expedition_underway }
+		remove_variable = expedition_underway
+	}
+
+	$COUNTY$ = {
+		if = {
+			limit = { has_county_modifier = settling_expedition_underway }
+			remove_county_modifier = settling_expedition_underway
+		}
+		if = { limit = { has_variable = colony_leader }         remove_variable = colony_leader }
+		if = { limit = { has_variable = colony_led_by_soldier } remove_variable = colony_led_by_soldier }
 	}
 }
 
@@ -282,12 +366,10 @@ colonize_county_effect = {
 		# the colony is promoted, which is the point at which it has stopped being new.
 	}
 
-	scope:colonizer = {
-		# The one player-facing moment of colonisation. Fired here rather than from each entry
-		# point so the button, the decision and the interaction all reach it; the event's own
-		# trigger keeps it away from the AI.
-		trigger_event = wilderness_colonization.0010
+	# The expedition is over, however it got here.
+	colony_clear_expedition_effect = { COUNTY = $COUNTY$ }
 
+	scope:colonizer = {
 		# NOTE: this effect does NOT charge for the claim. Every caller pays for itself.
 		#
 		# That looks like the duplication this file exists to avoid, and it is the one place the rule
@@ -298,17 +380,162 @@ colonize_county_effect = {
 		#
 		# So: the two player entry points declare `cost = { gold = ... }` and the engine handles it;
 		# wilderness_colonization.0001 deducts explicitly, one line, right where it fires.
+		#
+		# There is no claim cooldown here any more. A five-year timer was standing in for the thing
+		# that now actually happens: an expedition goes out, and for two years you do not know
+		# whether it took. That is a better limiter because it is a fact about the world rather than
+		# a number on the ruler, and it can fail. See colony_launch_expedition_effect.
+	}
+}
 
-		# One claim at a time, and not soon after the last. Two years was not nearly enough: with
-		# the old 40% pulse and a cheap claim, a wealthy AI could take a county every other year
-		# and clear a region inside a decade. Five means a ruler founds a couple of colonies in a
-		# reign rather than a province of them, and it applies to the player for the same reason —
-		# the pause is where a colony either takes hold or does not.
-		set_variable = {
-			name = colonization_cooldown
-			years = 5
+
+# =====================================================================================
+#  Who goes out with them
+# =====================================================================================
+
+# Character scope: the COLONISER. Sets scope:expedition_leader and stores it on the colony.
+#
+# The default pick, used as-is by the AI and offered as one of the choices to a player. Ordered on
+# the same colony_settling_chance the outcome is rolled against, so "the best man for it" means the
+# same thing to the script as it does to the player reading the odds — there is no second, private
+# notion of who is suitable.
+#
+# Stored on the COUNTY rather than on the character because the county is what the resolution is
+# about, and because a coloniser may have two expeditions out at once. A variable on him would have
+# the second overwrite the first.
+colony_pick_expedition_leader_effect = {
+	ordered_courtier_or_guest = {
+		limit = {
+			is_adult = yes
+			is_available_ai_adult = yes
+			NOT = { this = root }
+		}
+		order_by = colony_settling_chance
+		position = 0
+		save_scope_as = expedition_leader
+	}
+
+	if = {
+		limit = { exists = scope:expedition_leader }
+		scope:colony = {
+			set_variable = {
+				name = colony_leader
+				value = scope:expedition_leader
+			}
 		}
 	}
+
+	# The second candidate, offered as the other kind of bet in 0010. Ordered on prowess and martial
+	# rather than on colony_settling_chance, which is the whole point: he is chosen for being able to
+	# deal with what is out there, not for being able to run a granary, and the odds reflect it.
+	#
+	# May be the same man as above on a small court. That is allowed and reads correctly — sometimes
+	# the best you have is also the toughest you have — and the option simply becomes a second way of
+	# saying yes, with the obstacle payoff attached.
+	ordered_courtier_or_guest = {
+		limit = {
+			is_adult = yes
+			is_available_ai_adult = yes
+			NOT = { this = root }
+		}
+		order_by = {
+			value = prowess
+			add = martial
+		}
+		position = 0
+		save_scope_as = expedition_soldier
+	}
+}
+
+
+# =====================================================================================
+#  What the expedition came to
+# =====================================================================================
+
+# Character scope: the COLONISER. Called from wilderness_colonization.0011 with scope:colony set,
+# and scope:expedition_leader set if there was one.
+#
+# The colony holds. What is banked here is small on purpose — the reward for a successful settling
+# is that you still have a colony, which is quite enough. The obstacle clearance is the exception,
+# and it is the soldier's option paying out rather than a general bonus.
+colony_settling_success_effect = {
+	# THE claim. Nothing existed until this line — see the note on colony_launch_expedition_effect
+	# for why a colony is created by succeeding rather than un-created by failing.
+	colonize_county_effect = {
+		COUNTY = scope:colony
+		COLONIZER = root
+	}
+
+	if = {
+		limit = { exists = scope:expedition_leader }
+
+		scope:expedition_leader = {
+			add_prestige = medium_prestige_gain
+
+			# Marks him as the man who made this place. Nothing reads it yet — it is here so that a
+			# player looking for somebody to grant the colony to has an obvious answer, and so a
+			# later mechanic can find him without needing a second record of who went.
+			add_character_flag = founded_a_colony
+		}
+	}
+
+	# The soldier's payoff. Clearing the worst thing in the county by hand is worth 75 to 250 gold
+	# and years of construction, which is what makes his worse odds a bet rather than a mistake.
+	if = {
+		limit = { scope:colony ?= { has_variable = colony_led_by_soldier } }
+
+		scope:colony = {
+			remove_variable = colony_led_by_soldier
+
+			title_province ?= {
+				# Ordered worst-first, so the clearance lands on whatever was actually holding the
+				# place back rather than on whichever obstacle happened to be listed first.
+				if = { limit = { has_building = killing_cold }  remove_building = killing_cold }
+				else_if = { limit = { has_building = flooded_lands } remove_building = flooded_lands }
+				else_if = { limit = { has_building = bandit_camps }  remove_building = bandit_camps }
+				else_if = { limit = { has_building = beast_dens }    remove_building = beast_dens }
+				else_if = { limit = { has_building = dense_growth }  remove_building = dense_growth }
+				else_if = { limit = { has_building = scree_slopes }  remove_building = scree_slopes }
+			}
+		}
+	}
+
+	trigger_event = wilderness_colonization.0012
+}
+
+
+# Character scope: the COLONISER. The colony did not take.
+#
+# The county goes back to the wild through abandon_county_effect — the same effect an AI over the
+# cap uses to shed a colony — so the obstacles are reseeded and the ground is genuinely unclaimed
+# again rather than left as a husk with a special state nothing else understands.
+#
+# The gold does not come back. That is the entire weight behind the choice in 0010.
+colony_settling_failure_effect = {
+	if = {
+		limit = { exists = scope:expedition_leader }
+
+		scope:expedition_leader = {
+			# He was out there when it went wrong. Most of the time he comes home and is not the
+			# same; sometimes he does not come home. `death_starvation` rather than anything more
+			# dramatic because the thing that kills a first winter is the stores running out.
+			random = {
+				chance = 35
+				death = { death_reason = death_starved }
+			}
+
+			if = {
+				limit = { is_alive = yes }
+				add_stress = major_stress_gain
+			}
+		}
+	}
+
+	# Nothing to tear down: the county was never claimed, so it is already what it was. All that
+	# comes off is the marker saying somebody was trying.
+	colony_clear_expedition_effect = { COUNTY = scope:colony }
+
+	trigger_event = wilderness_colonization.0013
 }
 
 

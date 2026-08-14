@@ -134,6 +134,8 @@
  building_type_settlement_01_desc:0 "A foothold on ground nobody held."
 
  # --- Modifiers ----------------------------------------------------------------------------
+ settling_expedition_underway:0 "Settlers on the Road"
+ settling_expedition_underway_desc:0 "A party has gone out to this country. Whether anything comes of it will not be known for a year or two."
  block_settlement_ability:0 "Unsettlable"
  block_settlement_ability_desc:0 "Nobody will live here. Not for money, not for land, not for anything."
 
@@ -157,20 +159,38 @@
  colonize_claimed_toast:0 "Settlers Depart"
 
  # --- The settling event -------------------------------------------------------------------
- # Placeholder text. scope:colony is the county just claimed.
+ # --- The expedition ------------------------------------------------------------------------
+ # scope:colony is the county just claimed; scope:expedition_leader and scope:expedition_soldier are
+ # the two candidates. Written plainly: the drama is that the party may not come back, and text
+ # that shouts about it before anything has happened spends the moment early.
  wilderness_colonization.0010.t:0 "The Settlers Go Out"
- wilderness_colonization.0010.desc:0 "They left before dawn, in carts and on foot — younger sons with no land coming to them, families a bad harvest had turned out, a handful of men who did not say why they were going.\n\nAhead of them is [colony.GetName], which is not a place yet so much as a direction. There is no road to it and no roof on it. What there is, they will have to make, through a winter that will not care whether they manage it.\n\nWhat comes back to us from that country now depends on people whose names we do not know."
- wilderness_colonization.0010.a:0 "Let them make what they can of it."
+ wilderness_colonization.0010.desc:0 "They leave before dawn, in carts and on foot — younger sons with no land coming to them, families a bad harvest turned out, a few men who did not say why they were going.\n\nAhead of them is [colony.GetName], which is not a place yet so much as a direction. There is no road to it and no roof on it, and between the last of our grain and their first harvest is a winter that will not care how well we meant it.\n\nSomeone has to be in charge of that arithmetic."
+ wilderness_colonization.0010.a:0 "Send [expedition_leader.GetFirstName]. He can count."
+ wilderness_colonization.0010.b:0 "Send [expedition_soldier.GetFirstName]. It is not the winter I am worried about."
+ wilderness_colonization.0010.c:0 "They can choose their own man on the road."
+
+ colonize_expedition_odds_tt:0 "#V [expedition_leader.GetShortUIName]#! leads the expedition"
+ colonize_expedition_soldier_tt:0 "#V [expedition_soldier.GetShortUIName]#! leads the expedition. If the colony holds, one obstacle will already have been dealt with"
+ colonize_expedition_none_tt:0 "Nobody leads the expedition. Poorer odds, but no one of ours is out there when it goes wrong"
+
+ wilderness_colonization.0012.t:0 "Word from the Colony"
+ wilderness_colonization.0012.desc:0 "A rider from [colony.GetName], two years on.\n\nThey lost people — he is matter-of-fact about it, and does not give a number unless asked. But there are roofs, there is a palisade, and there was enough put by to get through the second winter without sending to us for it.\n\nIt is a place now. A poor one, but a place."
+ wilderness_colonization.0012.a:0 "Then it was worth the sending."
+
+ wilderness_colonization.0013.t:0 "Nothing Came Back"
+ wilderness_colonization.0013.desc:0 "What is left of the party came out of [colony.GetName] in ones and twos over the spring, and what they say does not entirely agree.\n\nThe stores went early. After that it is a matter of which thing got them — the cold, the water, the people who were already there — and by then it hardly mattered which.\n\nThe ground is as it was. So is the ledger, minus what we spent."
+ wilderness_colonization.0013.a:0 "It was not a good place for it."
+
  promote_colony_toast:0 "A Colony Comes of Age"
  colonize_obstacle_cleared_toast:0 "The Way Is Clear"
 
  # --- Requirement tooltips -----------------------------------------------------------------
+ colonize_expedition_out_tt:0 "We already have a party on the road; we will know how they fared before we send another"
  colonize_at_settlement_limit_tt:0 "We hold as many colonies as we can support"
  colonize_must_border_realm_tt:0 "The land must border our realm"
  colonize_not_while_at_war_tt:0 "We cannot spare settlers while at war"
  colonize_cannot_afford_tt:0 "We cannot afford to outfit an expedition"
  colonize_cannot_afford_prestige_tt:0 "We lack the standing to call men out to empty country"
- colonize_on_cooldown_tt:0 "Our settlers are still on the road; we cannot raise another party yet"
 
  # --- The Settle button on the county view ---------------------------------------------------
  # Emit/GuiWriter.cs injects a button carrying this text into a copy of vanilla's county window.

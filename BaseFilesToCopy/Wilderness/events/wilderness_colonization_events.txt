@@ -1,20 +1,29 @@
 ﻿namespace = wilderness_colonization
 
 
-# The moment a county is claimed. Player-facing, and deliberately thin.
+# The one moment of colonisation the player actually decides anything in.
 #
-# A placeholder, but a placeholder in the right SHAPE: it is fired from colonize_county_effect
-# rather than from any one entry point, so the button, the decision and the interaction all reach it
-# and a fourth way in would too. Anything built here later inherits that for free.
+# ---- What changed and why ----
 #
-# `scope:colony` is the county just claimed, saved by colonize_county_effect. Saved scopes carry
-# into events triggered from the same effect, which is what lets the text below name the place
-# without this event having to work out which county it is about.
+# This was a single-option acknowledgement. Paying was the whole of colonisation, and a price is not
+# a decision — it is a threshold you are either over or under. So the question moved from "can you
+# afford it" to "who do you send", and the answer is checked two years later by 0011.
 #
-# What it is for later: this is where the character of a colony gets decided. A founding party, a
-# reason these people left, a first winter that goes well or badly — the things that would make two
-# colonies differ from each other beyond their terrain. One option now, because a placeholder that
-# pretends to offer a choice teaches the player the choice does not matter.
+# ---- The three options ----
+#
+# They are not three flavours of the same thing. Each is a different bet:
+#
+#   The capable man   — best odds, and you are down your most useful courtier if it goes wrong.
+#   The soldier       — worse odds, but he deals with what is out there: on success one obstacle is
+#                       already cleared, which is 75 to 250 gold and years of construction saved.
+#   Nobody in charge  — mediocre and flat. No one is at risk and no one is owed anything.
+#
+# The third exists so that "I have nobody worth sending" is a position rather than a dead end, and
+# because a player who does not want to think about it should be able to not think about it.
+#
+# `colony_pick_expedition_leader_effect` has already chosen the capable man, so option one is a
+# confirmation and the other two overwrite him. That ordering means the AI — which never sees this
+# — gets the same default without a separate code path.
 wilderness_colonization.0010 = {
 	type = character_event
 	title = wilderness_colonization.0010.t
@@ -26,16 +35,170 @@ wilderness_colonization.0010 = {
 		animation = thinking
 	}
 
+	right_portrait = {
+		character = scope:expedition_leader
+		animation = personality_honorable
+	}
+
 	# Players only. The AI claims counties on its yearly pulse and must never be stopped by a
 	# window; the guard lives here rather than at the call site so every caller is covered by it.
 	trigger = {
 		is_ai = no
 	}
 
+	# --- The best man we have ------------------------------------------------------------------
 	option = {
 		name = wilderness_colonization.0010.a
+		trigger = { exists = scope:expedition_leader }
+
+		# Nothing to do: the effect that fired this event already picked him. Shown so the player
+		# can read the odds he is accepting.
+		custom_tooltip = colonize_expedition_odds_tt
+	}
+
+	# --- Somebody who can handle what is out there ---------------------------------------------
+	option = {
+		name = wilderness_colonization.0010.b
+		trigger = { exists = scope:expedition_soldier }
+
+		scope:colony = {
+			set_variable = {
+				name = colony_leader
+				value = scope:expedition_soldier
+			}
+
+			# The soldier's payoff, banked now and paid out by 0011 only if the colony survives.
+			# Stored rather than applied here because a cleared obstacle in a settlement that then
+			# fails is a reward for nothing.
+			set_variable = { name = colony_led_by_soldier }
+		}
+
+		custom_tooltip = colonize_expedition_soldier_tt
+	}
+
+	# --- Let them sort it out themselves -------------------------------------------------------
+	option = {
+		name = wilderness_colonization.0010.c
+
+		scope:colony = {
+			if = {
+				limit = { has_variable = colony_leader }
+				remove_variable = colony_leader
+			}
+		}
+
+		custom_tooltip = colonize_expedition_none_tt
 	}
 }
+
+
+# Whether it took. Hidden, and hidden is the point: this runs for the AI's colonies as well as the
+# player's, so the frontier fills at the same rate for everybody and for the same reasons.
+#
+# ---- Why the roll is here rather than at the moment of claiming ----
+#
+# Because two years is what makes it a story instead of a dice check. The choice in 0010 is made
+# while the carts are still being loaded and there is nothing to see; this is the letter that comes
+# back. It also means the player has stopped watching, which is when losing something stings.
+#
+# ---- What happens when it fails ----
+#
+# abandon_county_effect, which is the same effect that hands a county back when an AI sheds a colony
+# it cannot support. The county returns to the wild with its obstacles reseeded, and the gold is
+# gone. Nothing refunds, because the whole point of the choice above is that it could have gone
+# differently.
+wilderness_colonization.0011 = {
+	hidden = yes
+	scope = character
+
+	# Everything here is conditional on the world not having moved on. Two years is long enough for
+	# the county to have been promoted, granted away, conquered or abandoned, and none of those are
+	# this event's business.
+	trigger = {
+		exists = scope:colony
+		scope:colony = {
+			holder ?= { this = root }
+			is_colony_county_trigger = yes
+		}
+	}
+
+	immediate = {
+		scope:colony = {
+			if = {
+				limit = { has_variable = colony_leader }
+				var:colony_leader = { save_scope_as = expedition_leader }
+			}
+		}
+
+		# An expedition with nobody in charge is a flat, unimpressive prospect: no skills to read
+		# and no traits to help. 45 is deliberately a shade under a coin flip.
+		if = {
+			limit = { exists = scope:expedition_leader }
+			save_scope_value_as = {
+				name = settling_chance
+				value = scope:expedition_leader.colony_settling_chance
+			}
+		}
+		else = {
+			save_scope_value_as = { name = settling_chance  value = 45 }
+		}
+
+		random = {
+			chance = scope:settling_chance
+			set_variable = { name = settling_took }
+		}
+
+		if = {
+			limit = { has_variable = settling_took }
+			remove_variable = settling_took
+			colony_settling_success_effect = yes
+		}
+		else = {
+			colony_settling_failure_effect = yes
+		}
+	}
+}
+
+
+# It held. Player-facing half of 0011.
+wilderness_colonization.0012 = {
+	type = character_event
+	title = wilderness_colonization.0012.t
+	desc = wilderness_colonization.0012.desc
+	theme = realm
+
+	left_portrait = {
+		character = root
+		animation = happiness
+	}
+
+	trigger = { is_ai = no }
+
+	option = {
+		name = wilderness_colonization.0012.a
+	}
+}
+
+
+# It did not. Player-facing half of 0011.
+wilderness_colonization.0013 = {
+	type = character_event
+	title = wilderness_colonization.0013.t
+	desc = wilderness_colonization.0013.desc
+	theme = realm
+
+	left_portrait = {
+		character = root
+		animation = grief
+	}
+
+	trigger = { is_ai = no }
+
+	option = {
+		name = wilderness_colonization.0013.a
+	}
+}
+
 
 # A colony granted to somebody who had nothing.
 #
@@ -317,7 +480,7 @@ wilderness_colonization.0001 = {
 		is_ai = yes
 		is_landed = yes
 		can_colonize_at_all_trigger = yes
-		NOT = { has_variable = colonization_cooldown }
+		NOT = { has_variable = expedition_underway }
 		can_hold_another_colony_trigger = yes
 
 		# --- Who is actually in a position to do this ------------------------------------------
@@ -363,8 +526,7 @@ wilderness_colonization.0001 = {
 
 		any_sub_realm_county = {
 			any_title_to_title_neighboring_and_across_water_county = {
-				is_wilderness_county_trigger = yes
-				NOT = { has_county_modifier = block_settlement_ability }
+				county_can_be_claimed_trigger = yes
 			}
 		}
 	}
@@ -381,7 +543,7 @@ wilderness_colonization.0001 = {
 			remove_short_term_gold = colonize_cost
 			add_prestige = { value = colonize_prestige_cost  multiply = -1 }
 
-			colonize_county_effect = {
+			colony_launch_expedition_effect = {
 				COUNTY = scope:wilderness
 				COLONIZER = root
 			}
