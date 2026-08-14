@@ -1,0 +1,40 @@
+﻿# One define, raised, so that overseeing a colony can outlast a single year.
+#
+# ---- What was happening ----
+#
+# activity_oversee_colony asks its phase to run for fifty years, which is a backstop rather than a
+# duration — the colony finishing is what ends it. But `MAX_PHASE_YEARS_ACTIVE` defaults to 1, and
+# it is the engine invalidating an active phase that has been running too long. So the activity
+# ended after about a year, on its own, with nothing in the log: the lord rode home and the colony
+# was left half-overseen.
+#
+# `progress_activity_phase_after` never got a look in. No amount of tuning inside the activity could
+# have reached this, because the limit is not the activity's.
+#
+# ---- Why a global define is an acceptable price here, when DEVELOPMENT_SPREAD_NEIGHBOUR_FACTOR was
+#      not ----
+#
+# 00_settlement_buildings.txt argues at length against reaching for a defines override to solve a
+# colony problem, and that argument is right — switching development spread off would change every
+# county in the world every month to fix something that only goes wrong on colonies.
+#
+# This is a different shape. `MAX_PHASE_YEARS_ACTIVE` is a MAXIMUM, not a duration: it is the
+# engine's backstop for a phase that has got stuck. Every vanilla activity sets its own length far
+# below a year, so raising the ceiling changes nothing any of them do. What it changes is how long a
+# genuinely stuck vanilla phase lingers before the engine clears it — from a year to sixty. That is
+# a real cost and it is the whole cost, and it is worth naming rather than pretending it is zero.
+#
+# ---- Why 60 and not 50 ----
+#
+# So the activity's own fifty-year timer is always the thing that expires first. If the two were
+# equal it would be a race between a scripted ending and an engine invalidation, and which one won
+# would decide whether `on_complete` or `on_invalidated` ran. Both call the same refresh today, but
+# a coin-flip between two exit paths is not something to leave lying around.
+#
+# The alternative considered was a run of predefined one-year phases — self-contained, no global
+# change — and rejected because it caps the stay at however many phases were written, and draws a
+# strip of them across the activity window, which tells the player the visit has stages it does not.
+
+NActivity = {
+	MAX_PHASE_YEARS_ACTIVE = 60
+}
