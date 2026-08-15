@@ -1,0 +1,39 @@
+﻿morph_genes = {
+    gene_wilderness_hide = {
+        index = 96
+        can_have_portrait_extremity = no
+
+        visible_default = {
+            index = 0
+            male = {}
+            female = {}
+            boy = {}
+            girl = {}
+        }
+
+        hidden = {
+            index = 1
+            male = {
+                root = {
+                    # Drops the character 50 units below ground level
+                    position = { 0.0 -50.0 0.0 }
+                }
+            }
+            female = {
+                root = {
+                    position = { 0.0 -50.0 0.0 }
+                }
+            }
+            boy = {
+                root = {
+                    position = { 0.0 -50.0 0.0 }
+                }
+            }
+            girl = {
+                root = {
+                    position = { 0.0 -50.0 0.0 }
+                }
+            }
+        }
+    }
+}

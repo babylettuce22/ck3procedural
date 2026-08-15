@@ -67,7 +67,27 @@ wilderness_yearly_cleanup = {
 yearly_playable_pulse = {
 	on_actions = {
 		wilderness_yearly_pulse
+		wilderness_yearly_ai_promotion
 		wilderness_yearly_presence_refresh
+		wilderness_yearly_colony_events
+		wilderness_yearly_colonist_petition_check
+		wilderness_yearly_colonist_development_aid_check
+	}
+}
+
+wilderness_yearly_colony_events = {
+	trigger = {
+		# is_ai = no
+		has_character_modifier = overseeing_the_settlement
+		# Cooldown gate: won't trigger if you had an overseer event in the last 2 years
+		NOT = { has_variable = overseer_event_cooldown }
+	}
+
+	random_events = {
+		20 = wilderness_colonization.0030  # Winter crisis
+		8 = wilderness_colonization.0040   # Rich seam
+		8 = wilderness_colonization.0041   # Palisade ague
+		64 = 0
 	}
 }
 
@@ -78,7 +98,7 @@ wilderness_yearly_pulse = {
 	trigger = {
 		is_ai = yes
 		can_colonize_at_all_trigger = yes
-		NOT = { has_variable = colonization_cooldown }
+		NOT = { has_variable = expedition_underway }
 	}
 
 	effect = {
@@ -140,6 +160,16 @@ wilderness_yearly_pulse = {
 		# 17.5 is measured against observed play rather than reasoned from first principles, which
 		# is the right way round for a number like this.
 		#
+		# 30, since an attempt is no longer the same thing as a colony. wilderness_colonization.0011
+		# rolls colony_settling_chance two years after every claim, the AI's included, and a typical
+		# AI expedition — a courtier with middling stewardship, on ground with two obstacles on it —
+		# comes out near a coin flip. So roughly half of what the pulse starts now fails, and a
+		# failure still costs the gold and still burns the five-year cooldown.
+		#
+		# 30 is 17.5 grossed up for that, which keeps the frontier filling at about the rate it did
+		# before the expedition mechanic existed. It is the one number here that is derived rather
+		# than observed, so it is the first to revisit if the map fills too fast or too slow.
+		#
 		# The domain limit gate that used to sit alongside this has since been removed — it was the
 		# real constraint, not the chance, and it was rejecting rulers for a cost a colony does not
 		# have. See the note where it used to be, in wilderness_colonization.0001.
@@ -155,7 +185,7 @@ wilderness_yearly_pulse = {
 		# same position behave differently, which is most of what makes the frontier feel alive
 		# rather than scheduled.
 		random = {
-			chance = 17.5
+			chance = 30
 
 			modifier = { ai_greed > 50     add = 5 }
 			modifier = { ai_boldness > 50  add = 4 }
@@ -180,8 +210,9 @@ wilderness_yearly_pulse = {
 # --- Keeping the frontier honest -------------------------------------------------------------------
 
 # When a title changes hands there is nothing to reconcile, because nothing caches a colony count —
-# the upkeep rides on the settlement buildings and moves with the county by itself. This hook exists
-# only to clear the per-character claim cooldown, which is meaningless on a new holder.
+# the upkeep rides on the settlement buildings and moves with the county by itself. What this hook
+# does is the colonist work below; the claim-cooldown clearing it used to carry went with the
+# cooldown itself.
 #
 # (That absence is the design. See the note at the top of 00_settlement_buildings.txt for what the
 # alternative costs: AGOT reconciles a counter from eight call sites, two of them debug buttons.)
@@ -193,15 +224,6 @@ on_title_gain = {
 
 wilderness_on_title_gain = {
 	effect = {
-		if = {
-			limit = {
-				has_variable = colonization_cooldown
-				scope:title ?= { tier = tier_county }
-				scope:title ?= { is_colony_county_trigger = yes }
-			}
-			remove_variable = colonization_cooldown
-		}
-
 		# --- The leak detector -----------------------------------------------------------------
 		#
 		# A county whose capital is still wilderness_holding has arrived in somebody's realm. That
@@ -360,5 +382,112 @@ wilderness_yearly_presence_refresh = {
 
 	effect = {
 		colony_refresh_presence_effect = yes
+	}
+}
+
+wilderness_yearly_colonist_petition_check = {
+	trigger = {
+		is_ai = yes
+		is_colonist_trigger = yes
+		gold < promote_colony_cost
+		exists = liege
+		any_held_title = {
+			tier = tier_county
+			can_promote_colony_trigger = yes
+		}
+	}
+
+	effect = {
+		random_held_title = {
+			limit = {
+				tier = tier_county
+				can_promote_colony_trigger = yes
+			}
+			save_scope_as = ready_colony
+		}
+		save_scope_as = petitioning_colonist
+
+		# 50% chance each year to send a formal petition to their liege
+		random = {
+			chance = 50
+			liege = {
+				trigger_event = wilderness_colonization.0050
+			}
+		}
+	}
+}
+
+# Ensures any AI colonist or ruler who has finished clearing and upgrading their colony
+# immediately executes the promotion if they have enough gold.
+wilderness_yearly_ai_promotion = {
+	trigger = {
+		is_ai = yes
+		any_held_title = {
+			tier = tier_county
+			can_promote_colony_trigger = yes
+		}
+		gold >= promote_colony_cost
+	}
+
+	effect = {
+		remove_short_term_gold = promote_colony_cost
+		random_held_title = {
+			limit = {
+				tier = tier_county
+				can_promote_colony_trigger = yes
+			}
+			promote_colony_effect = { COUNTY = this }
+		}
+	}
+}
+
+# CHANGED TRIGGER DUE TO SETTLEMENT UPGRADES NOT WORKING RIGHT
+wilderness_yearly_colonist_development_aid_check = {
+	trigger = {
+		is_ai = yes
+		is_colonist_trigger = yes
+		gold < 100
+		exists = liege
+		NOT = { has_variable = development_aid_cooldown }
+
+		any_held_title = {
+			tier = tier_county
+			is_colony_county_trigger = yes
+			has_wilderness_obstacle_trigger = yes
+		}
+	}
+
+	effect = {
+		random_held_title = {
+			limit = {
+				tier = tier_county
+				is_colony_county_trigger = yes
+				has_wilderness_obstacle_trigger = yes
+			}
+			save_scope_as = struggling_colony
+		}
+
+		save_scope_as = petitioning_colonist
+
+		# 45% chance each year when broke to ask their liege
+		random = {
+			chance = 45
+
+			# Cooldown is ONLY applied when the petition actually fires
+			set_variable = {
+				name = development_aid_cooldown
+				years = 2
+			}
+
+			liege = {
+				trigger_event = {
+					id = wilderness_colonization.0051
+					scopes = {
+						petitioning_colonist = scope:petitioning_colonist
+						struggling_colony = scope:struggling_colony
+					}
+				}
+			}
+		}
 	}
 }

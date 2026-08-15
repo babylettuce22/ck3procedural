@@ -18,9 +18,15 @@ wilderness = {
 	# code, which would hand a continent of wilderness to whichever real ruler had the nearest claim.
 	immortal = yes
 	health = 100
-	fertility = -1
+	fertility = -100
 	inheritance_blocker = all
 	claim_inheritance_blocker = all
+
+	flag = is_immortal
+	flag = immortal_visuals
+	flag = immortal_fertility
+	flag = immortal_incapability
+	no_prowess_loss_from_age = yes
 
 	# Holds an unbounded domain, because it holds every unsettled county on the map at once.
 	domain_limit = 10000

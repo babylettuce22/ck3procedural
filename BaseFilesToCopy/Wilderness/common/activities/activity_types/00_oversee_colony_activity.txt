@@ -36,6 +36,11 @@
 #
 # CK3 has no open-ended phase, and no script effect creates an activity at all — they are started
 # only through the planner UI. Both of those shape what is below.
+#
+# The fifty years below is also not free: `MAX_PHASE_YEARS_ACTIVE` defaults to 1, so the engine was
+# invalidating the phase after about a year and ending the activity on its own, silently. That
+# ceiling is raised in common/defines/zz_wilderness_activity_defines.txt, which is where the cost of
+# doing so is argued.
 
 activity_oversee_colony = {
 	# Offered only to somebody who has a colony of his own to go to. A colonist is deliberately
@@ -125,6 +130,16 @@ activity_oversee_colony = {
 
 	# No gold cost. The price of this is the years, and charging for it as well would be pricing the
 	# same thing twice — see the note at the top on what absence already costs.
+
+
+	###################
+	# CUSTOM UI WIDGETS
+	###################
+
+	activity_window_widgets = {
+		oversee_colony_activity_widget = "activity_plugin_widgets_summary"
+	}
+
 
 	###################
 	# PHASES

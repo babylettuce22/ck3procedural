@@ -13,6 +13,11 @@ namespace Ck3MapGen.Emit;
 /// noise on screen. Click through to the dummy itself, or to the title it holds, and the engine goes
 /// further — a court, a council, a succession law — none of which anybody wrote.
 ///
+/// It also hides two vanilla controls that would let a player act on a colony in ways the rest of
+/// the system forbids: the build-holding prompt, and the move-capital button. Those are not lies to
+/// be suppressed but actions to be prevented, and the county view is the only place they are
+/// offered — the engine promotes behind them run no script, so there is nowhere else to say no.
+///
 /// **This never writes to the game directory.** It reads the installed <c>gui/*.gui</c> files,
 /// edits the text in memory, and writes the result into the mod,
 /// where CK3 loads it in preference to vanilla's. Disabling the mod restores vanilla with nothing to
@@ -44,6 +49,13 @@ public static class GuiWriter
     /// <param name="Scope">The PdxGui path to the object that scripted_gui expects as its root.</param>
     /// <param name="Extend">Widgets that already have a `visible`; ours is ANDed onto theirs.</param>
     /// <param name="Insert">Widgets with no `visible` of their own; ours is inserted after the anchor.</param>
+    /// <remarks>
+    /// The <c>Gui</c> on an <see cref="Extend"/> or <see cref="Insert"/> entry names a different
+    /// scripted_gui to ask instead of this target's own — null means ask <see cref="ScriptedGui"/>.
+    /// Both lists need it because "should this widget be hidden" is not one question: the panels
+    /// that lie about unheld land come back the moment a county is claimed, while the two widgets
+    /// that would let a player build on or move into a colony stay hidden until it is promoted.
+    /// </remarks>
     /// <param name="Add">
     /// Whole widgets to splice in after an anchor, rather than conditions to hide one. The text is
     /// indented to match the anchor, and <c>{SHOW}</c> in it is replaced with the wilderness test
@@ -53,7 +65,7 @@ public static class GuiWriter
         string File,
         string ScriptedGui,
         string Scope,
-        (string Anchor, string What)[] Extend,
+        (string Anchor, string What, string? Gui)[] Extend,
         (string Anchor, string What, string? Gui)[] Insert,
         (string Anchor, string What, string Block)[] Add);
 
@@ -83,7 +95,32 @@ public static class GuiWriter
                 // Vanilla's own Province.IsValid guard has to survive, so this one is extended
                 // rather than inserted — overwriting it would show the portrait on every county
                 // that currently hides it.
-                ("name = \"holder_info\"", "holder"),
+                ("name = \"holder_info\"", "holder", null),
+
+                // The move-capital icon on the holding's title row. Hidden through the colony
+                // phase for the same reason move_seat_to_colony_decision was deleted: a realm
+                // capital that is a colony makes the whole realm read as colonial, castles and
+                // all, because settlement_holding is the primary_holding of exactly one
+                // government. See the note at the top of 00_colonization_decisions.txt.
+                //
+                // This has to be done in the GUI and only in the GUI. `SetRealmCapital` is an
+                // engine promote on HoldingView, not a script effect, so no trigger of ours is
+                // consulted before it fires and there is nothing to gate in script. What makes
+                // that acceptable rather than a papered-over hole is that this file is the ONLY
+                // place in vanilla's whole gui/ folder that reaches it — no decision, no
+                // interaction, no other window — so hiding the button here closes the route
+                // rather than one door onto it.
+                //
+                // Extended rather than inserted: vanilla's own PotentialSetRealmCapital already
+                // decides whether the icon belongs on this holding at all, and replacing that
+                // would put a move-capital button on every barony in the game.
+                //
+                // The county-capital button beside it is deliberately left alone. It moves a
+                // county's seat between its own baronies, which cannot reach a colony: the colony
+                // is placed on `title_province` — the county capital barony — so it is already
+                // the seat, and the empty baronies around it have no holding to move it to.
+                ("name = \"set_realm_capital_button\"", "move-capital button",
+                    "wilderness_unfinished_county"),
             ],
             Insert:
             [
@@ -158,6 +195,16 @@ public static class GuiWriter
                 // property of the window here.
                 ("using = Window_Background_Sidebar", "placeholder", TitlePlaceholder),
             ]),
+        new Target(
+            File: Path.Combine("shared", "portraits.gui"),
+            ScriptedGui: "wilderness_holder",
+            Scope: "Character",
+            Extend: [],
+            Insert:
+            [
+                ("pop_out = no", "global portrait base template", null)
+            ],
+            Add: []),
     ];
 
     /// <summary>
@@ -203,8 +250,6 @@ public static class GuiWriter
         }
         """;
 
-    // Properties rather than fields: `Targets` above is a static field initialised in textual
-    // order, so a field declared down here would still be null when that array is built.
     private static string CharacterPlaceholder
         => Placeholder("WILDERNESS_HOLDER_WINDOW", "[CharacterWindow.Close]");
 
@@ -220,16 +265,7 @@ public static class GuiWriter
             "[TitleViewWindow.CloseClaimants]");
 
     /// <summary>
-    /// The Settle button, spliced into the county view.
-    ///
-    /// <c>{SHOW}</c> is replaced with the wilderness test — the button exists only on unsettled
-    /// land. Its enabled state and tooltip come from the <c>wilderness_settle</c> scripted_gui
-    /// rather than from anything here, so the conditions the player reads are the same ones the
-    /// effect checks; a GUI that decides for itself when to grey out is how a button ends up
-    /// disagreeing with what happens when you press it.
-    ///
-    /// The province goes across as <c>wilderness</c> via AddScope, which is the scope name
-    /// 00_wilderness_scripted_gui.txt reads.
+    /// The Settle, Oversee, Return Home, and Promote buttons spliced into the county view.
     /// </summary>
     private const string SettleButton = """
         vbox = {
@@ -238,26 +274,6 @@ public static class GuiWriter
             margin = { 5 10 }
             spacing = 4
 
-            # ---- Why the whole block is gated on GetPlayer.IsValid ----
-            #
-            # Because `GetPlayer` is not always a character. It is invalid in observer mode, across
-            # the frames around a load, and while a widget tree is being built before a player is
-            # attached — and PdxGui evaluates a widget's expressions whenever it updates it, not
-            # only when somebody is looking at it.
-            #
-            # The three promote buttons below survive that: their promotes are engine-side calls on
-            # the player object and the engine null-checks them itself. The settle button does not,
-            # because it is the only one that hands a scope INTO script — `SetRoot( GetPlayer... )`
-            # — and script has no null to check. An invalid root reached `wilderness_settle`'s
-            # is_shown, which is a plain `can_colonize_at_all_trigger`, and every character trigger
-            # in it failed with "Scoped object of type 'character' is not valid", once per
-            # evaluation, filling the log with thousands of them.
-            #
-            # Guarding the container rather than each expression is deliberate: an invisible widget
-            # is not updated, so nothing inside is evaluated at all, and that covers `tooltip` and
-            # `enabled` — neither of which can be wrapped in a boolean guard of its own. It is also
-            # exactly what vanilla does in hud.gui, which gates its own player-dependent blocks on
-            # `GetPlayer.IsValid` for the same reason.
             visible = "[GetPlayer.IsValid]"
 
             # --- Claiming unsettled land -------------------------------------------------------
@@ -272,45 +288,7 @@ public static class GuiWriter
                 visible = "[And( GetPlayer.IsValid, And( {SHOW_RAW}, GetScriptedGui('wilderness_settle').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End ) ) )]"
             }
 
-            # --- Promoting a finished colony ---------------------------------------------------
-            #
-            # These drive the promote_colony_* interactions rather than scripted GUIs of their own.
-            # The interactions already carry every condition — can_promote_colony_trigger, the
-            # innovation requirements, the government rules — so asking them directly means the
-            # button cannot drift from what pressing it does. It is also exactly how vanilla
-            # surfaces feudalize_holding_interaction in window_title.gui.
-            #
-            # There is no separate "make it a tribe" button because there is no separate choice:
-            # promote_colony_effect seats a tribal ruler on a tribal holding and everyone else on a
-            # castle. The button says "raise a seat"; the realm decides what kind of seat that is.
-            # --- Going out to a colony yourself ------------------------------------------------
-            #
-            # Sits above the promote buttons because it belongs to the part of a colony's life
-            # before promotion: a lord who is present is what makes an unfinished colony render
-            # anything at all.
-            #
-            # ---- Why this one is unlike every other button here ----
-            #
-            # The other four drive something directly — a scripted_gui's Execute, or an interaction.
-            # This one cannot, because CK3 has no effect that creates an activity: there is no
-            # `create_activity` anywhere in the game files, and activities begin only through the
-            # planner UI. So the onclick opens the planner instead, with
-            # `ToggleGameViewData( 'activity_list_detail_host_window', ... )` — the same call
-            # vanilla's own activity list uses to open a host window for a given type.
-            #
-            # That splits the button in two. Its conditions come from the `wilderness_oversee`
-            # scripted_gui, which answers "does this button belong on THIS county, and can the
-            # player act on it"; its action comes from the planner, which enforces the ownership
-            # rule itself through the activity's `is_location_valid`. The rule is not written twice,
-            # which is why the two cannot disagree.
-            #
-            # The practical cost: the player picks the colony again in the planner rather than the
-            # button aiming at the county they are looking at. That is how every activity in the
-            # game works, and `is_location_valid` means the list holds only their own colonies.
-            #
-            # There is no matching "come home" button, and no longer a decision either. The activity
-            # ends when the colony is promoted — see promote_colony_effect — or through the activity
-            # window, which is where a player already looks for the way out of an activity.
+            # --- Going out to a colony yourself (Shown when NOT overseeing here) ----------------
             button_standard = {
                 name = "wilderness_oversee_button"
                 size = { 280 40 }
@@ -322,6 +300,19 @@ public static class GuiWriter
                 onclick = "[ToggleGameViewData( 'activity_list_detail_host_window', GetActivityType( 'activity_oversee_colony' ).Self )]"
             }
 
+            # --- Returning home from a colony (Replaces Oversee when currently overseeing here) --
+            button_standard = {
+                name = "wilderness_return_home_button"
+                size = { 280 40 }
+                text = "WILDERNESS_RETURN_HOME_BUTTON"
+
+                visible = "[And( GetPlayer.IsValid, GetScriptedGui('wilderness_return_home').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End ) )]"
+                enabled = "[And( GetPlayer.IsValid, GetScriptedGui('wilderness_return_home').IsValid( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End ) )]"
+                tooltip = "[GetScriptedGui('wilderness_return_home').BuildTooltip( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End )]"
+                onclick = "[GetScriptedGui('wilderness_return_home').Execute( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End )]"
+            }
+
+            # --- Promoting a finished colony ---------------------------------------------------
             button_standard = {
                 name = "wilderness_promote_button"
                 size = { 280 40 }
@@ -381,13 +372,15 @@ public static class GuiWriter
         }
 
         string text = File.ReadAllText(source);
-        string hide = $"[Not( GetScriptedGui('{target.ScriptedGui}').IsShown( GuiScope.SetRoot( "
-                    + $"{target.Scope}.MakeScope ).End ) )]";
+
+        string Hide(string? gui)
+            => $"[Not( GetScriptedGui('{gui ?? target.ScriptedGui}').IsShown( GuiScope.SetRoot( "
+               + $"{target.Scope}.MakeScope ).End ) )]";
 
         var patched = new List<string>();
 
         // --- Widgets that already have a `visible` -------------------------------------------
-        foreach (var (anchor, what) in target.Extend)
+        foreach (var (anchor, what, gui) in target.Extend)
         {
             var match = Regex.Match(text,
                 Regex.Escape(anchor) + @"[\s\S]{0,400}?visible\s*=\s*""(\[[^""]*\])""");
@@ -395,7 +388,7 @@ public static class GuiWriter
             if (!match.Success) continue;
 
             var group = match.Groups[1];
-            string combined = $"[And( {Inner(group.Value)}, {Inner(hide)} )]";
+            string combined = $"[And( {Inner(group.Value)}, {Inner(Hide(gui))} )]";
 
             text = text.Remove(group.Index, group.Length).Insert(group.Index, combined);
             patched.Add(what);
@@ -407,25 +400,13 @@ public static class GuiWriter
             int at = text.IndexOf(anchor, StringComparison.Ordinal);
             if (at < 0) continue;
 
-            // Reuse the anchor's own indentation so the emitted file still reads like the original
-            // if anybody diffs it against vanilla — which, given this is a generated override of a
-            // hand-written file, somebody eventually will.
             int lineStart = text.LastIndexOf('\n', at) + 1;
             string indent = text[lineStart..at];
 
             int lineEnd = text.IndexOf('\n', at);
             if (lineEnd < 0) continue;
 
-            // Most entries hide on the target's own question; one asks a different one. The
-            // build-holding prompt has to stay hidden through the colony phase, while the panels
-            // beside it come back the moment the county is claimed, so it names its own
-            // scripted_gui rather than sharing this file's.
-            string condition = gui is null
-                ? hide
-                : $"[Not( GetScriptedGui('{gui}').IsShown( GuiScope.SetRoot( "
-                  + $"{target.Scope}.MakeScope ).End ) )]";
-
-            text = text.Insert(lineEnd + 1, $"{indent}visible = \"{condition}\"\n");
+            text = text.Insert(lineEnd + 1, $"{indent}visible = \"{Hide(gui)}\"\n");
             patched.Add(what);
         }
 
@@ -444,10 +425,6 @@ public static class GuiWriter
             int lineEnd = text.IndexOf('\n', at);
             if (lineEnd < 0) continue;
 
-            // Re-indent the block to sit where the anchor sits. Written against a fixed left margin
-            // in the constant above, so this shifts the whole thing rather than guessing per line.
-            // {SHOW} is the whole bracketed expression; {SHOW_RAW} is its innards, for splicing
-            // inside an And(...) that supplies its own brackets.
             string body = string.Join('\n',
                 block.Replace("{SHOW_RAW}", Inner(show))
                      .Replace("{SHOW}", show)
@@ -458,7 +435,6 @@ public static class GuiWriter
             patched.Add(what);
         }
 
-        // Refuse rather than half-patch. All of them or none.
         int expected = target.Extend.Length + target.Insert.Length + target.Add.Length;
         if (patched.Count != expected)
         {
@@ -468,17 +444,16 @@ public static class GuiWriter
             return;
         }
 
-        string dir = Path.Combine(modDir, "gui");
-        Directory.CreateDirectory(dir);
+        // In GuiWriter.cs inside Patch():
+        string dest = Path.Combine(modDir, "gui", target.File);
+        Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
 
-        // No BOM. GUI files are not script files and vanilla's ship without one.
-        ParadoxText.WriteNoBom(Path.Combine(dir, target.File), text);
+        ParadoxText.WriteNoBom(dest, text);
 
         Console.WriteLine($"  gui: {target.File} — hid {string.Join(", ", patched)} "
             + "(patched a copy; the game folder is untouched)");
     }
 
-    /// <summary>Strips the outer brackets from a PdxGui expression so it can be nested inside one.</summary>
     private static string Inner(string expression)
         => expression.StartsWith('[') && expression.EndsWith(']')
             ? expression[1..^1].Trim()

@@ -76,25 +76,15 @@ wilderness_clear_cost_dear = 250
 
 settlement_upgrade_cost = 200
 
+# --- Colony Infrastructure Building Costs ---------------------------------------------------
+
+settlement_cost_cheap_tier_1 = 75
+settlement_cost_tier_1 = 125
+settlement_cost_tier_2 = 225
+settlement_cost_tier_3 = 375
+settlement_cost_tier_4 = 550
+
 # What it costs to turn a finished colony into a real holding.
-#
-# Deferred to vanilla's own new-holding price rather than given a number here. Raising a seat on a
-# colony puts the same castle, city or temple on the map that building one from scratch would, and
-# if the two prices differ then whichever is cheaper becomes the way everyone does it. Reading
-# vanilla's value also means a patch that rebalances holdings rebalances this with it — as of 1.19
-# it resolves to 400.
-#
-# A colonist pays a quarter of it, and the discount is not a kindness — it is the difference between
-# the granted-colony arc resolving and it deadlocking.
-#
-# A colonist's whole income is what presence pays him, which is about 1.5 a month. At full price he
-# would need most of a lifetime to promote his own colony, and an AI colonist who dies short of it
-# hands an unpromoted colony to an heir who starts the same count again. The arc would never close,
-# and nothing in the log would say why.
-#
-# It is also the more honest price. A lord buying a holding is paying masons on a market; a colonist
-# is finishing something he and his neighbours have been building for twenty years. What the gold
-# represents for him is the last of it — the gate, the hall, the seat — not the whole works.
 promote_colony_cost = {
 	value = main_building_tier_1_cost
 
@@ -105,14 +95,323 @@ promote_colony_cost = {
 }
 
 
+# --- Whether the settling actually takes -----------------------------------------------------
+
+# Character scope: the EXPEDITION LEADER. Reads scope:colony for the ground they are going to.
+# Returns the percentage chance the colony survives its first years.
+colony_settling_chance = {
+	value = 50
+
+	# The man in charge.
+	add = { value = stewardship  multiply = 2.5 }
+	add = { value = martial      multiply = 1 }
+
+	if = { limit = { has_education_stewardship_trigger = yes } add = 6 }
+
+	# Who he is, which mostly means whether he plans ahead.
+	if = { limit = { has_trait = diligent }           add = 8 }
+	if = { limit = { has_trait = lazy }               add = -10 }
+	if = { limit = { has_trait = patient }            add = 5 }
+	if = { limit = { has_trait = impatient }          add = -6 }
+	if = { limit = { has_trait = brave }              add = 4 }
+	if = { limit = { has_trait = craven }             add = -5 }
+	if = { limit = { has_trait = temperate }          add = 4 }
+	if = { limit = { has_trait = gluttonous }         add = -5 }
+	if = { limit = { has_trait = lifestyle_traveler } add = 6 }
+	if = { limit = { has_trait = strong }             add = 3 }
+	if = { limit = { has_trait = weak }               add = -6 }
+	if = { limit = { has_trait = infirm }             add = -14 }
+	if = { limit = { has_trait = ill }                add = -12 }
+
+	# A child or a very old man is not going to manage this, whatever his numbers say.
+	if = { limit = { is_adult = no } add = -25 }
+	if = { limit = { age >= 60 }     add = -8 }
+
+	# The ground. Each of these is a different way for a first winter to go wrong.
+	scope:colony = {
+		title_province ?= {
+			if = { limit = { has_building = killing_cold }  add = -14 }
+			if = { limit = { has_building = flooded_lands } add = -9 }
+			if = { limit = { has_building = bandit_camps }  add = -8 }
+			if = { limit = { has_building = beast_dens }    add = -6 }
+			if = { limit = { has_building = dense_growth }  add = -5 }
+			if = { limit = { has_building = scree_slopes }  add = -4 }
+		}
+	}
+
+	# What happened on the road.
+	if = {
+		limit = { scope:colony ?= { has_variable = expedition_fortune } }
+		add = scope:colony.var:expedition_fortune
+	}
+
+	min = 10
+	max = 90
+}
+
+
+# --- What can go wrong on the road -----------------------------------------------------------
+
+colony_road_footing = {
+	value = 0
+
+	if = {
+		limit = { scope:colony ?= { has_variable = expedition_fortune } }
+		add = {
+			value = scope:colony.var:expedition_fortune
+			multiply = 0.5
+		}
+	}
+}
+
+colony_relief_column_chance = {
+	value = 55
+
+	add = { value = stewardship  multiply = 1.5 }
+
+	if = { limit = { has_trait = diligent } add = 6 }
+	if = { limit = { has_trait = lazy }     add = -8 }
+	if = { limit = { has_trait = generous } add = 4 }
+	if = { limit = { has_trait = greedy }   add = -6 }
+
+	if = {
+		limit = { exists = scope:expedition_leader }
+
+		scope:expedition_leader = {
+			add = stewardship
+			if = { limit = { has_trait = patient }           add = 4 }
+			if = { limit = { has_trait = impatient }         add = -5 }
+			if = { limit = { has_trait = lifestyle_traveler } add = 6 }
+		}
+	}
+	else = {
+		add = { value = -12  desc = colonize_no_leader_desc }
+	}
+
+	scope:colony = {
+		title_province ?= {
+			if = { limit = { has_building = bandit_camps }  add = -9 }
+			if = { limit = { has_building = flooded_lands } add = -6 }
+			if = { limit = { has_building = scree_slopes }  add = -6 }
+			if = { limit = { has_building = killing_cold }  add = -5 }
+			if = { limit = { has_building = dense_growth }  add = -4 }
+		}
+	}
+
+	add = colony_road_footing
+
+	min = 15
+	max = 95
+}
+
+colony_make_do_chance = {
+	value = 35
+
+	if = {
+		limit = { exists = scope:expedition_leader }
+
+		scope:expedition_leader = {
+			add = { value = stewardship  multiply = 2 }
+			add = { value = martial      multiply = 0.5 }
+
+			if = { limit = { has_trait = temperate }         add = 6 }
+			if = { limit = { has_trait = gluttonous }        add = -8 }
+			if = { limit = { has_trait = diligent }          add = 5 }
+			if = { limit = { has_trait = lazy }              add = -6 }
+			if = { limit = { has_trait = patient }           add = 5 }
+			if = { limit = { has_trait = impatient }         add = -5 }
+			if = { limit = { has_trait = lifestyle_traveler } add = 6 }
+			if = { limit = { has_trait = lifestyle_hunter }  add = 5 }
+		}
+	}
+	else = {
+		add = { value = -14  desc = colonize_no_leader_desc }
+	}
+
+	add = { value = dread  multiply = 0.08 }
+
+	scope:colony = {
+		title_province ?= {
+			if = { limit = { has_building = dense_growth } add = 5 }
+			if = { limit = { has_building = beast_dens }   add = 3 }
+			if = { limit = { has_building = killing_cold } add = -9 }
+			if = { limit = { has_building = bandit_camps } add = -6 }
+		}
+	}
+
+	add = colony_road_footing
+
+	min = 10
+	max = 85
+}
+
+colony_authority_chance = {
+	value = 45
+
+	add = { value = prestige_level  multiply = 5 }
+	add = { value = dread           multiply = 0.1 }
+
+	if = { limit = { has_trait = just }      add = 5 }
+	if = { limit = { has_trait = arbitrary } add = -6 }
+
+	if = {
+		limit = { exists = scope:expedition_leader }
+
+		scope:expedition_leader = {
+			add = { value = diplomacy  multiply = 1.5 }
+			add = { value = martial    multiply = 0.5 }
+
+			if = { limit = { has_trait = gregarious } add = 5 }
+			if = { limit = { has_trait = shy }        add = -4 }
+			if = { limit = { has_trait = humble }     add = 4 }
+			if = { limit = { has_trait = arrogant }   add = -6 }
+			if = { limit = { has_trait = brave }      add = 4 }
+			if = { limit = { has_trait = craven }     add = -6 }
+			if = { limit = { has_trait = just }       add = 4 }
+			if = { limit = { has_trait = stubborn }   add = -4 }
+		}
+	}
+
+	add = colony_road_footing
+
+	min = 15
+	max = 90
+}
+
+colony_handover_chance = {
+	value = 45
+
+	add = { value = prestige_level  multiply = 3 }
+
+	if = {
+		limit = { exists = scope:expedition_soldier }
+
+		scope:expedition_soldier = {
+			add = { value = martial  multiply = 1 }
+			add = { value = prowess  multiply = 0.5 }
+
+			if = { limit = { has_trait = brave }    add = 4 }
+			if = { limit = { has_trait = craven }   add = -6 }
+			if = { limit = { has_trait = just }     add = 4 }
+			if = { limit = { has_trait = wrathful } add = -5 }
+			if = { limit = { has_trait = arrogant } add = -4 }
+		}
+	}
+
+	if = {
+		limit = { exists = scope:expedition_leader }
+
+		scope:expedition_leader = {
+			if = { limit = { has_trait = content }   add = 6 }
+			if = { limit = { has_trait = ambitious } add = -9 }
+			if = { limit = { has_trait = humble }    add = 5 }
+			if = { limit = { has_trait = arrogant }  add = -7 }
+			if = { limit = { has_trait = wrathful }  add = -6 }
+			if = { limit = { has_trait = calm }      add = 4 }
+			if = { limit = { has_trait = stubborn }  add = -5 }
+		}
+	}
+	else = {
+		add = { value = -10  desc = colonize_riding_after_desc }
+	}
+
+	add = colony_road_footing
+
+	min = 15
+	max = 90
+}
+
+colony_self_rule_chance = {
+	value = 40
+
+	add = colony_road_footing
+
+	scope:colony = {
+		title_province ?= {
+			if = { limit = { has_building = bandit_camps } add = -6 }
+		}
+	}
+
+	min = 20
+	max = 60
+}
+
+colony_promise_chance = {
+	value = 50
+
+	add = { value = prestige_level  multiply = 5 }
+
+	if = { limit = { has_trait = honest }    add = 9 }
+	if = { limit = { has_trait = deceitful } add = -9 }
+	if = { limit = { has_trait = just }      add = 6 }
+	if = { limit = { has_trait = arbitrary } add = -7 }
+	if = { limit = { has_trait = generous }  add = 4 }
+	if = { limit = { has_trait = greedy }    add = -5 }
+
+	if = {
+		limit = { exists = scope:expedition_leader }
+
+		scope:expedition_leader = {
+			add = { value = diplomacy  multiply = 1.5 }
+
+			if = { limit = { has_trait = honest }     add = 5 }
+			if = { limit = { has_trait = deceitful }  add = -6 }
+			if = { limit = { has_trait = gregarious } add = 4 }
+			if = { limit = { has_trait = shy }        add = -4 }
+		}
+	}
+	else = {
+		add = { value = -12  desc = colonize_no_leader_desc }
+	}
+
+	add = colony_road_footing
+
+	min = 15
+	max = 90
+}
+
+colony_hold_them_chance = {
+	value = 40
+
+	add = { value = dread           multiply = 0.15 }
+	add = { value = prestige_level  multiply = 3 }
+
+	if = {
+		limit = { exists = scope:expedition_leader }
+
+		scope:expedition_leader = {
+			add = { value = martial  multiply = 1.5 }
+			add = { value = prowess  multiply = 0.5 }
+
+			if = { limit = { has_trait = brave }      add = 5 }
+			if = { limit = { has_trait = craven }     add = -7 }
+			if = { limit = { has_trait = just }       add = 4 }
+			if = { limit = { has_trait = arbitrary }  add = -4 }
+			if = { limit = { has_trait = wrathful }   add = -4 }
+			if = { limit = { has_trait = calm }       add = 4 }
+			if = { limit = { has_trait = gregarious } add = 3 }
+		}
+	}
+	else = {
+		add = { value = -16  desc = colonize_no_leader_desc }
+	}
+
+	scope:colony = {
+		title_province ?= {
+			if = { limit = { has_building = killing_cold } add = -7 }
+			if = { limit = { has_building = bandit_camps } add = -5 }
+		}
+	}
+
+	add = colony_road_footing
+
+	min = 10
+	max = 85
+}
+
+
 # --- How many colonies a ruler may hold at once ----------------------------------------------
 
-# THE cap. Read by the AI event, the player decision and the warning alike — there is no second
-# encoding of this rule anywhere in the system.
-#
-# Deliberately generous at the top: an emperor who wants to spend a reign filling in the map should
-# be able to, and the per-colony upkeep on settlement_01 is what actually restrains him. This is
-# here to stop a count claiming a continent, not to cap ambition.
 wilderness_settlement_limit = {
 	value = 1
 
@@ -122,24 +421,6 @@ wilderness_settlement_limit = {
 	if = { limit = { highest_held_title_tier = tier_hegemony } value = 5 }
 }
 
-# How many the ruler currently holds, counted from the world rather than from a stored variable.
-#
-# This is the read side of the design note in 00_settlement_buildings.txt: the cost of colonies
-# lives on the buildings, so nothing has to *write* a count, and anything that wants to know one
-# asks here. Iterating held titles is cheap next to keeping a cache honest across inheritance,
-# revocation and conquest.
-# Colonies granted to a colonist count too, and that is the point of the second block.
-#
-# Without it the cap leaks in the worst possible place. `settlement_01`'s upkeep rides on the
-# building, so granting a colony away stops you paying for it; if granting also freed the cap slot,
-# then claim-grant-repeat would be an unbounded loop with no cost at either end, and it would become
-# the only sensible way to play the mechanic.
-#
-# The obligation's `liege_modifier` in 00_colony_contracts.txt restores the money side of that. This
-# restores the cap side. Between them, a colony you sponsored is still a colony you are answerable
-# for, whoever is standing on it — which is also the honest reading of what a colonist IS.
-#
-# Only direct vassals are counted. A colonist two levels down was somebody else's project.
 wilderness_settlement_count = {
 	value = 0
 
@@ -157,7 +438,6 @@ wilderness_settlement_count = {
 	}
 }
 
-# Headroom. Negative or zero means the ruler is at or over the cap.
 wilderness_settlement_headroom = {
 	value = wilderness_settlement_limit
 	subtract = wilderness_settlement_count
@@ -166,29 +446,9 @@ wilderness_settlement_headroom = {
 
 # --- What it costs to be the lord who sent somebody out --------------------------------------
 
-# Character scope: the COLONIST. The chance, in percent, that finishing his colony is the moment he
-# stops answering to anybody.
-#
-# ---- Why the roll happens here and not anywhere else ----
-#
-# A colonist spends a generation being useless to his liege — no tax, a county nobody visits, a
-# contract with one line in it. The day the colony is promoted is the first day he holds something
-# worth holding, and it is also the day he stops needing the man who sent him. Every other moment in
-# the arc is one where seceding would gain him a palisade.
-#
-# ---- Why it is small ----
-#
-# Because it has to be able to not happen. A frontier that always breaks away is not a risk the
-# player weighs, it is a tax on granting, and the correct response to a tax is never to grant. At
-# these numbers a typical colonist stays; a badly-chosen one, sent far away by a weak lord, is a
-# coin flip's cousin. That is the shape worth having.
-#
-# The modifiers are the whole content of the number. A liege reading this tooltip should be able to
-# see which of his own choices made it worse.
 colony_secession_chance = {
 	value = 8
 
-	# Standing. A colonist does not repudiate a man the world takes seriously.
 	if = {
 		limit = { exists = liege }
 		add = {
@@ -197,12 +457,6 @@ colony_secession_chance = {
 		}
 	}
 
-	# Distance, cheaply expressed: a colony outside the kingdom its sponsor is seated in is a colony
-	# nobody is riding out to.
-	#
-	# Both de jure kingdoms are tested for existence first. A titular or unfinished map can leave a
-	# county with no de jure kingdom above it, and an unguarded comparison against a scope that does
-	# not exist is an error in the log rather than a `no`.
 	if = {
 		limit = {
 			exists = liege
@@ -213,7 +467,6 @@ colony_secession_chance = {
 		add = 7
 	}
 
-	# How he was treated.
 	if = {
 		limit = {
 			exists = liege
@@ -229,22 +482,17 @@ colony_secession_chance = {
 		add = -5
 	}
 
-	# Who he is.
 	if = { limit = { has_trait = ambitious } add = 5 }
 	if = { limit = { has_trait = brave }     add = 2 }
 	if = { limit = { has_trait = craven }    add = -3 }
 	if = { limit = { has_trait = content }   add = -6 }
 	if = { limit = { has_trait = humble }    add = -3 }
 
-	# And whether anybody is watching. A liege with an army in the field somewhere else is a liege
-	# who cannot ride out to the frontier this year.
 	if = {
 		limit = { liege ?= { is_at_war = yes } }
 		add = 6
 	}
 
-	# Never a certainty and never nothing: the floor keeps the moment tense even for a strong lord,
-	# and the ceiling keeps granting from ever being a straightforward mistake.
 	min = 2
 	max = 35
 }

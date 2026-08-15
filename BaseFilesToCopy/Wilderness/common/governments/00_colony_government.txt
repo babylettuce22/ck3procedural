@@ -92,14 +92,20 @@ colony_government = {
 	# `promote_colony_cost`. A colonist who can never finish his colony is a dead end with no error
 	# attached: the county simply sits there forever and the whole granted-colony arc never resolves.
 	#
-	# What pays him instead is the presence rule, and it pays him for free. A colonist LIVES in his
-	# colony — it is his capital and he has nowhere else to be — so
-	# `character_is_at_own_colony_trigger` passes for him permanently and he holds
-	# `overseeing_the_settlement` the way an absentee lord only holds it while he is standing there.
+	# An earlier draft said the presence rule pays him instead — that a colonist lives in his colony,
+	# so `character_is_at_own_colony_trigger` passes for him permanently. That is no longer true and
+	# the note is kept because the reasoning is the thing worth having, not the conclusion.
 	#
-	# That is not a special case bolted on; it is the same rule read straight. "A colony produces for
-	# whoever is actually in it" explains the travelling lord and the colonist with one sentence, and
-	# it is the reason granting works at all.
+	# colony_refresh_presence_effect now excludes colonists explicitly. `overseeing_the_settlement`
+	# says a LIEGE has come out to stand over the work; a colonist living in his own colony is not
+	# overseeing anything, he is the man being overseen, and giving him the modifier made the county
+	# read as having a visiting lord permanently in residence.
+	#
+	# So what he lives on is simply the colony's own income with no malus stacked on it, which is
+	# thin but not zero, and `promote_colony_cost` is quartered for him. Those two together are what
+	# keep the granted-colony arc reachable. If a colonist is ever observed unable to finish his
+	# colony in a lifetime, this is the pair to look at — and a small positive `monthly_income` here
+	# is the one-line answer.
 	character_modifier = {
 		# Nobody rides out to a frontier post looking for service.
 		knight_limit = -2

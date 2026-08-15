@@ -15,6 +15,30 @@ block_settlement_ability = {
 }
 
 
+# On a wilderness county somebody has sent settlers to, for as long as nobody knows whether it took.
+#
+# Carries no effects at all, and that is correct: nothing has happened to the ground yet. It exists
+# to be READ — county_can_be_claimed_trigger tests it, so a county with a party already on the road
+# cannot be aimed at a second time, by its sponsor or by anybody else — and to be SEEN, so a player
+# looking at the map can tell that empty county is spoken for.
+settling_expedition_underway = {
+	icon = county_modifier_development_mixed
+}
+
+
+# What it costs to have promised the settlers more than a lord ought to.
+#
+# The third interim event trades a better chance now for this later, and it only lands if the colony
+# actually survives — which is the point. Buying success with a debt you only owe if you succeed is
+# a real decision; buying it with gold you have already spent is just a price.
+settlers_promised_land = {
+	icon = county_modifier_control_negative
+
+	monthly_county_control_growth_add = -0.3
+	county_opinion_add = -15
+}
+
+
 # =====================================================================================
 #  Presence: what changes when the lord is actually there
 # =====================================================================================
@@ -37,10 +61,37 @@ block_settlement_ability = {
 #
 # ---- Why the numbers are not simply "cancel the penalty" ----
 #
-# They cannot be. The engine's wrong-holding-type penalty is hardcoded and no modifier repeals it;
-# what these do is put back, by a different route, roughly what it takes away. That is why the
-# income here is a flat monthly add rather than a tax multiplier — a multiplier on a colony's tax is
-# a multiplier on nothing.
+# They cannot be, and the reason is stronger than "the penalty is large".
+#
+# A government declares `primary_holding` and `valid_holdings`. settlement_holding is neither of
+# those for feudal_government — it is the primary_holding of colony_government and of nothing else —
+# so a feudal lord holding a colony directly trips the engine's wrong-holding-type rule. That rule
+# is not a reduction. Vanilla states it in gui/holding_view_l_english.yml:
+#
+#     GOVERNMENT_WRONG_HOLDING_TYPE: "...the holding produces no levies or taxes"
+#
+# No levies and no taxes: the holding's output is ZERO before any modifier in this file is consulted.
+# It is engine-side, it is keyed off the government rather than off anything scriptable, and there is
+# no escape hatch — holding `parameters` are inert (they exist to be read back by
+# has_holding_parameter and nothing else), and no define governs it.
+#
+# So a multiplier is useless here in both directions, and only ONE of the two halves can be
+# substituted:
+#
+#   Tax  — substitutable. `monthly_income` is a flat add on the CHARACTER, so it never passes through
+#          the holding and the zero never touches it. That is why the income below is a flat monthly
+#          sum and not a tax multiplier; a multiplier on a colony's tax is a multiplier on nothing.
+#
+#   Levy — NOT substitutable. Every levy modifier in the game is either a multiplier (`levy_size` and
+#          the per-terrain variants) or a vassal-contribution add (`*_levy_contribution_add`, which
+#          governs what vassals hand up, not what your own domain raises). There is no additive levy
+#          modifier for a holding you hold yourself, so there is no way to put men back into a
+#          holding the engine has emptied.
+#
+# The practical warning, which is the reason this note is this long: a `levy_size` line here LOOKS
+# like it works. It validates, it shows in the tooltip, and it changes nothing. One was here — see
+# the note in settlement_overseen — and it read as a deliberate, tuned half-measure for as long as
+# nobody counted the men. Do not add another.
 
 # Character scope, on the lord standing in his own colony.
 overseeing_the_settlement = {
@@ -51,7 +102,12 @@ overseeing_the_settlement = {
 	# The colony renders something, because there is somebody there to render it to. Deliberately a
 	# real sum rather than a token: this is the whole reward for a lord being absent from his court
 	# for years, and if it does not beat sitting at home the choice is not a choice.
-	monthly_income = 1.5
+	#
+	# 1.5 until the levy line came out of settlement_overseen. It is carrying both halves of presence
+	# now — the colony's coin and the men it cannot raise — because income is the only channel the
+	# engine leaves open. That makes it the tuning knob for the whole mechanic: if overseeing feels
+	# too weak or too strong, this is the number, and there is no second one to balance it against.
+	monthly_income = 2.0
 
 	# He is a lord in a palisade, not a lord in a hall. Nobody is impressed.
 	monthly_prestige = -0.5
@@ -70,10 +126,52 @@ settlement_overseen = {
 	monthly_county_control_growth_add = 0.5
 	county_opinion_add = 20
 
-	# Work goes faster when the man paying for it is watching it.
+	# Work goes faster when whoever is paying for it is watching it.
 	build_speed = -0.15
 
-	# The levies are still crippled by the holding type. Half again of very little is still not much,
-	# which is the honest amount.
-	levy_size = 0.5
+	# ---- There is no levy line here, and there cannot be ----
+	#
+	# `levy_size = 0.5` was, with the comment "half again of very little is still not much, which is
+	# the honest amount". It was half again of nothing. A colony held by a feudal lord raises exactly
+	# zero levies — see GOVERNMENT_WRONG_HOLDING_TYPE in the note at the top of this file — so the
+	# multiplier had nothing to multiply, and the tooltip said +50% Levy Size on a county that was
+	# producing no men at all.
+	#
+	# Nothing replaces it, because nothing can: there is no additive levy modifier for a holding you
+	# hold yourself. Presence is worth coin and it is not worth soldiers, and
+	# `overseeing_the_settlement.monthly_income` now carries what this was pretending to be worth.
+}
+
+# County scope: applied when the ruler pays for supplies
+settlement_well_provisioned = {
+	icon = county_modifier_development_positive
+
+	development_growth_factor = 0.10
+	monthly_county_control_growth_add = 0.25
+	county_opinion_add = 15
+}
+
+# County scope: applied when rationing strictly
+settlement_hardened_winter = {
+	icon = county_modifier_control_positive
+
+	monthly_county_control_growth_add = 0.4
+	county_opinion_add = -20
+}
+
+# County scope: quarry and iron vein found
+colony_rich_seam = {
+	icon = county_modifier_development_positive
+
+	development_growth_factor = 0.15
+	build_speed = -0.20
+	build_gold_cost = -0.15
+}
+
+# County scope: burned out shanties after sickness
+colony_purged_quarter = {
+	icon = county_modifier_control_negative
+
+	county_opinion_add = -25
+	development_growth_factor = -0.10
 }

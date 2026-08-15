@@ -1,0 +1,136 @@
+vbox = {
+	name = "oversee_colony_activity_widget"
+	layoutpolicy_horizontal = expanding
+	layoutpolicy_vertical = preferred
+	margin = { 8 4 }
+	spacing = 6
+
+	# --- FLOATING HEADER (Shield + County Title) ---
+	# Uses allow_outside = yes and negative Y position to move it up out of the bottom bar
+	widget = {
+		size = { 0 0 }
+		allow_outside = yes
+
+		widget = {
+			parentanchor = center
+			position = { 0 -550 } # <-- Adjust Y to move higher (-550) or lower (-70). Adjust X for left/right.
+			size = { 515 55 }
+			allow_outside = yes
+
+			background = {
+				using = Background_Area_Solid
+				alpha = 0.85
+				margin = { 12 6 }
+			}
+
+			hbox = {
+				layoutpolicy_horizontal = expanding
+				layoutpolicy_vertical = expanding
+				spacing = 10
+
+				coa_title_tiny_crown = {
+					datacontext = "[ActivityWindow.GetActivity.GetCurrentPhase.GetLocation.GetCounty.GetTitle]"
+				}
+
+				vbox = {
+					layoutpolicy_horizontal = expanding
+					layoutpolicy_vertical = preferred
+					spacing = 1
+
+					text_single = {
+						layoutpolicy_horizontal = expanding
+						datacontext = "[ActivityWindow.GetActivity.GetCurrentPhase.GetLocation.GetCounty.GetTitle]"
+						text = "[Title.GetNameNoTooltip]"
+						default_format = "#high"
+						using = Font_Size_Medium
+					}
+
+					text_single = {
+						layoutpolicy_horizontal = expanding
+						text = "OVERSEE_COLONY_ACTIVITY_STATUS"
+						default_format = "#flavor"
+						using = Font_Size_Small
+					}
+				}
+			}
+		}
+	}
+
+	# --- Compact Horizontal Modifiers Bar (Stays at Bottom) ---
+	hbox = {
+		layoutpolicy_horizontal = expanding
+		spacing = 8
+
+		# 1. Ruler's Presence Effect
+		widget = {
+			layoutpolicy_horizontal = expanding
+			size = { 0 32 }
+			tooltip = "OVERSEEING_THE_SETTLEMENT_TOOLTIP"
+
+			background = {
+				using = Background_Area_Dark
+				alpha = 0.6
+			}
+
+			hbox = {
+				layoutpolicy_horizontal = expanding
+				layoutpolicy_vertical = expanding
+				margin = { 6 0 }
+				spacing = 6
+
+				icon = {
+					size = { 22 22 }
+					texture = "[GetModifier('overseeing_the_settlement').GetIcon]"
+				}
+
+				text_single = {
+					layoutpolicy_horizontal = expanding
+					text = "@gold_icon! #positive +2.0#!  @prestige_icon! #negative -0.5#!"
+					using = Font_Size_Small
+				}
+			}
+		}
+
+		# 2. Colony Growth Effect
+		widget = {
+			layoutpolicy_horizontal = expanding
+			size = { 0 32 }
+			tooltip = "SETTLEMENT_OVERSEEN_TOOLTIP"
+
+			background = {
+				using = Background_Area_Dark
+				alpha = 0.6
+			}
+
+			hbox = {
+				layoutpolicy_horizontal = expanding
+				layoutpolicy_vertical = expanding
+				margin = { 6 0 }
+				spacing = 6
+
+				icon = {
+					size = { 22 22 }
+					texture = "[GetModifier('settlement_overseen').GetIcon]"
+				}
+
+				text_single = {
+					layoutpolicy_horizontal = expanding
+					text = "@development_icon! #positive +15%#!  @control_icon! #positive +0.5#!"
+					using = Font_Size_Small
+				}
+			}
+		}
+	}
+
+	# --- Return Home Button (Stays at Bottom) ---
+	button_standard = {
+		name = "colony_activity_return_home_button"
+		size = { 240 32 }
+		text = "WILDERNESS_RETURN_HOME_BUTTON"
+
+		visible = "[GetScriptedGui('wilderness_return_home_activitywindow').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+		enabled = "[GetScriptedGui('wilderness_return_home_activitywindow').IsValid( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+		tooltip = "[GetScriptedGui('wilderness_return_home_activitywindow').BuildTooltip( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+		onclick = "[GetScriptedGui('wilderness_return_home_activitywindow').Execute( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+	}
+}
