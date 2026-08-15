@@ -117,3 +117,4 @@ settle_the_wilderness_decision = {
 # by decision, and colony_government is exactly the right answer for him — he is not a feudal lord
 # with a strange capital, he is a man with one palisade. `can_get_government` in
 # 00_colony_government.txt reaches that state on its own and nothing here needs to offer it.
+

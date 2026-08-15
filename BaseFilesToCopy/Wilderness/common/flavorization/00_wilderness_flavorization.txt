@@ -1,0 +1,11 @@
+﻿
+blank_title_male = {
+    type = character
+    gender = male
+    tier = kingdom
+    priority = 1000  # High priority to override vanilla "King" flavorization
+
+    governments = {
+        wilderness_government  # Your custom government key
+    }
+}

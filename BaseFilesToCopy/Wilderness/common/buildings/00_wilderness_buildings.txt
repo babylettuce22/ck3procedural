@@ -121,9 +121,17 @@ beast_dens_cleared = {
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
 	type_icon = "icon_building_hunting_grounds.dds"
-	ai_value = { base = 100 }
-
-	on_complete = { wilderness_obstacle_cleared_effect = yes }
+	ai_value = {
+			base = 200
+			modifier = {
+				add = 1000
+				scope:holder ?= { is_colonist_trigger = yes }
+			}
+		}
+	on_complete = {
+		wilderness_obstacle_cleared_effect = yes
+		remove_building = beast_dens_cleared  # <-- Deletes the building and frees the slot
+	}
 }
 
 
@@ -155,9 +163,17 @@ bandit_camps_cleared = {
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
 	type_icon = "icon_building_warcamps.dds"
-	ai_value = { base = 100 }
-
-	on_complete = { wilderness_obstacle_cleared_effect = yes }
+	ai_value = {
+			base = 300
+			modifier = {
+				add = 1000
+				scope:holder ?= { is_colonist_trigger = yes }
+			}
+		}
+	on_complete = {
+		wilderness_obstacle_cleared_effect = yes
+		remove_building = bandit_camps_cleared
+	}
 }
 
 
@@ -193,9 +209,17 @@ dense_growth_cleared = {
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
 	type_icon = "icon_building_logging_camps.dds"
-	ai_value = { base = 100 }
-
-	on_complete = { wilderness_obstacle_cleared_effect = yes }
+	ai_value = {
+			base = 300
+			modifier = {
+				add = 1000
+				scope:holder ?= { is_colonist_trigger = yes }
+			}
+		}
+	on_complete = {
+		wilderness_obstacle_cleared_effect = yes
+		remove_building = dense_growth_cleared
+	}
 }
 
 
@@ -235,9 +259,17 @@ flooded_lands_cleared = {
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
 	type_icon = "icon_building_waterworks.dds"
-	ai_value = { base = 100 }
-
-	on_complete = { wilderness_obstacle_cleared_effect = yes }
+	ai_value = {
+			base = 300
+			modifier = {
+				add = 1000
+				scope:holder ?= { is_colonist_trigger = yes }
+			}
+		}
+	on_complete = {
+		wilderness_obstacle_cleared_effect = yes
+		remove_building = flooded_lands_cleared
+	}
 }
 
 
@@ -274,10 +306,19 @@ scree_slopes_cleared = {
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
 	type_icon = "icon_building_hill_forts.dds"
-	ai_value = { base = 100 }
-
-	on_complete = { wilderness_obstacle_cleared_effect = yes }
+	ai_value = {
+			base = 300
+			modifier = {
+				add = 1000
+				scope:holder ?= { is_colonist_trigger = yes }
+			}
+		}
+	on_complete = {
+		wilderness_obstacle_cleared_effect = yes
+		remove_building = scree_slopes_cleared
+	}
 }
+
 
 
 # --- Killing cold: arctic and high taiga. Never fully cleared, only endured. ---
@@ -313,7 +354,15 @@ killing_cold_cleared = {
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
 	type_icon = "icon_building_hillside_grazing.dds"
-	ai_value = { base = 100 }
-
-	on_complete = { wilderness_obstacle_cleared_effect = yes }
+	ai_value = {
+			base = 300
+			modifier = {
+				add = 1000
+				scope:holder ?= { is_colonist_trigger = yes }
+			}
+		}
+	on_complete = {
+		wilderness_obstacle_cleared_effect = yes
+		remove_building = killing_cold_cleared
+	}
 }

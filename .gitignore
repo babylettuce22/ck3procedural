@@ -491,3 +491,6 @@ sixlabors.lic
 # Local helper for dumping the source tree to a text file, and its output
 csfileprinter.py
 cs_files_list.txt
+
+# push bat
+sendtogit.bat

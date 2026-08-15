@@ -276,3 +276,16 @@ can_promote_colony_trigger = {
 		title_province ?= { has_ongoing_construction = no }
 	}
 }
+
+has_wilderness_obstacle_trigger = {
+	title_province ?= {
+		OR = {
+			has_building = beast_dens
+			has_building = bandit_camps
+			has_building = dense_growth
+			has_building = flooded_lands
+			has_building = scree_slopes
+			has_building = killing_cold
+		}
+	}
+}

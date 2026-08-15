@@ -25,10 +25,6 @@ public sealed class Faith
 
     public HeadOfFaith? Head { get; set; }
 
-    /// <summary>
-    /// If non-null, this faith is a heresy/branch of the main orthodoxy.
-    /// </summary>
-    public Faith? ParentFaith { get; set; }
     public bool IsOrganized { get; set; } = true;
 }
 
@@ -38,32 +34,20 @@ public sealed class Religion
     public required string Key { get; init; }
     public required string Name { get; init; }
 
-    /// <summary>
-    /// The tongue its gods are named in — deliberately not any culture's vernacular. A religion
-    /// crosses culture borders, so naming its gods in one member culture's language would make the
-    /// other members look like colonies of it.
-    /// </summary>
     public required Language Language { get; init; }
-
     public required string GraphicalFaith { get; init; }
     public required bool Monotheist { get; init; }
 
-    /// <summary>Doctrines shared by every faith in the religion, as `group = doctrine`.</summary>
     public required Dictionary<string, string> Doctrines { get; init; }
-
     public required List<string> Virtues { get; init; }
     public required List<string> Sins { get; init; }
 
-    /// <summary>The religion-level localization block, already resolved to key/value pairs.</summary>
     public required List<(string Tag, string Value)> Localization { get; init; }
-
-    /// <summary>Generated loc keys this religion introduces, and the text behind them.</summary>
     public required Dictionary<string, string> LocalizationText { get; init; }
 
     public List<Faith> Faiths { get; } = [];
 }
 
-/// <summary>The finished religious geography.</summary>
 public sealed class FaithMap
 {
     public required List<Religion> Religions { get; init; }
@@ -89,9 +73,6 @@ public sealed class FaithMap
     }
 }
 
-/// <summary>
-/// Grows religions and faiths over the same county graph the cultures used.
-/// </summary>
 public static class Faiths
 {
     private static readonly string[] FilledGroups =
@@ -105,15 +86,6 @@ public static class Faiths
         "doctrine_pilgrimage", "doctrine_funeral", "doctrine_coronation",
     ];
 
-    /// <summary>
-    /// Doctrines forced regardless of what the group offers.
-    ///
-    /// <c>doctrine_no_head</c> is the religion-level baseline. Faiths that mint a head of faith title
-    /// override this in their faith block with <c>doctrine_spiritual_head</c> and a <c>religious_head</c> title.
-    ///
-    /// The hostility doctrine is pinned to the pagan one to match the family; see
-    /// <see cref="Family"/>.
-    /// </summary>
     private static readonly Dictionary<string, string> ForcedDoctrines = new()
     {
         ["doctrine_head_of_faith"] = "doctrine_no_head",
@@ -166,16 +138,6 @@ public static class Faiths
 
                 var faith = CreateFaith(religion, faiths.Count + religionFaiths.Count, vocab, usedNames, rng);
 
-                // Wilderness counties are kept out of Counties, which is the list holy sites are
-                // normally drawn from — so a faith's ordinary sites all sit on land it actually
-                // holds. PlaceHolySites reaches past this deliberately for one site in
-                // WildernessHolySiteShare of faiths, and only for wilderness sharing a de jure
-                // parent with the faith's own land; that is the exception, and it is placed last so
-                // it can never become the head of faith's seat.
-                //
-                // They still get an entry in byCounty here — overwritten with the unsettled faith
-                // once the map is built — because a county missing from it falls back to a
-                // neighbour's faith.
                 faith.Counties.AddRange(owned.Where(c => !wilderness.Contains(c)));
                 foreach (var county in owned) byCounty[county] = faith;
 
@@ -187,26 +149,9 @@ public static class Faiths
             // Step 2: Determine Organization & Hierarchy
             var primaryFaith = religionFaiths.OrderByDescending(f => f.Counties.Count).First();
 
-            // Organization, from one number and no coin flip: a faith is organized when enough of
-            // its people are settled to sustain the apparatus of one — a priesthood, temples that
-            // earn, a hierarchy that can enforce doctrine. A faith whose adherents are mostly
-            // tribesmen has none of that.
-            //
-            // Deliberately not conditioned on monotheism as well. Monotheist religions are already
-            // biased toward settled land by CreateReligion, so they reach the same answer through
-            // this rule; a second path to it would just be somewhere else for the two to disagree.
-            foreach (var faith in religionFaiths)
-                faith.IsOrganized = TribalShare(faith.Counties) < cfg.UnreformedTribalShare;
-
             foreach (var faith in religionFaiths)
             {
-                // Heresy is a feature of organized religion. An unreformed faith is not a deviation
-                // from an orthodoxy — it is what came before one — and neither is it something a
-                // deviation can be measured against. Vanilla agrees: of the 36 religion files that
-                // declare unreformed_faith_doctrine, not one also declares a parent_faith.
-                if (faith != primaryFaith && faith.IsOrganized && primaryFaith.IsOrganized)
-                    faith.ParentFaith = primaryFaith;
-
+                faith.IsOrganized = TribalShare(faith.Counties) < cfg.UnreformedTribalShare;
                 religion.Faiths.Add(faith);
                 faiths.Add(faith);
             }
@@ -238,13 +183,12 @@ public static class Faiths
             }
         }
 
-        // Step 4: Place Holy Sites (Local, Shared "Jerusalems", and Foreign Targets)
+        // Step 4: Place Holy Sites
         foreach (var faith in faiths)
         {
             PlaceHolySites(faith, development, faiths, counties, cfg.HolySitesPerFaith,
                 wilderness, cfg.WildernessHolySiteShare, rng);
 
-            // Resolve Head of Faith seat to the primary holy site
             if (faith.Head is not null && faith.HolySites.Count > 0)
             {
                 faith.Head = new HeadOfFaith
@@ -259,10 +203,6 @@ public static class Faiths
         Report(religions, faiths, counties.Count, sw.ElapsedMilliseconds);
         return new FaithMap { Religions = religions, Faiths = faiths, ByCounty = byCounty };
 
-        // The share of a set of counties under tribal government — the one measure both religious
-        // organization and monotheism are read off. A set with nothing in it counts as wholly
-        // tribal, which is the conservative answer: it declines to organize a faith we know nothing
-        // about.
         double TribalShare(IEnumerable<Title> of)
         {
             int tribal = 0, total = 0;
@@ -275,6 +215,7 @@ public static class Faiths
             return total == 0 ? 1.0 : tribal / (double)total;
         }
     }
+
     private static string GenerateHeadTitleName(Religion religion, Rng rng)
     {
         string word = religion.Language.Word(rng, 2, 3);
@@ -292,6 +233,7 @@ public static class Faiths
 
         return $"{prefix} {word}";
     }
+
     private static RegionGrowth.Graph CountyGraph(List<Title> counties, ProvinceMap provinces,
         int[] order, int landCount, TerrainClass[] provinceTerrain, double terrainWeight)
     {
@@ -372,35 +314,8 @@ public static class Faiths
         _ => 1.0,
     };
 
-    /// <summary>
-    /// Mints a religion over land that is <paramref name="tribalShare"/> tribal.
-    ///
-    /// That share is what decides whether it worships one god. Rolled flat — as this did — the
-    /// result is monotheist steppe nomads with a papacy, because nothing connected theology to the
-    /// ground it stood on. Weighting the roll by how settled the land is puts monotheism where the
-    /// scribes and the temples are, while leaving enough noise that it is not simply a readout of
-    /// development.
-    /// </summary>
-    /// <summary>The faith wilderness counties carry. Fixed, so history and script can name it.</summary>
     public const string UnsettledFaithKey = "gen_faith_unsettled";
 
-    /// <summary>
-    /// The faith of land nobody lives on, and the religion that holds it.
-    ///
-    /// A whole religion for one faith, rather than another faith inside a generated one, because
-    /// doctrines live at religion level: hanging "Unsettled" off a generated religion would make
-    /// empty ground share that religion's hostility, marriage and clerical rules and count as its
-    /// co-religionist for every war and opinion check in the game.
-    ///
-    /// The doctrines themselves come from the ordinary generator rather than a hand-written list.
-    /// Doctrine groups are numerous, version-specific and individually mandatory — a religion
-    /// missing one loads with a broken faith rather than an error — so the safe way to get a valid
-    /// set is to ask the same code that produces every other one.
-    ///
-    /// It holds no holy sites, which is the one place this departs from a normal faith. Sites are
-    /// counties, and every county this faith owns is empty by definition; pointing a pilgrimage at
-    /// unclaimed wilderness would be worse than owning none.
-    /// </summary>
     public static (Religion Religion, Faith Faith) CreateUnsettled(VanillaVocabulary vocab,
         HashSet<string> usedNames, MapConfig cfg, Rng rng)
     {
@@ -422,20 +337,12 @@ public static class Faiths
         return (religion, faith);
     }
 
-    /// <param name="keyOverride">
-    /// Names the religion something other than <c>gen_religion_{index}</c>. Only the unsettled
-    /// religion uses it: its key has to be stable across seeds so history and script can name it,
-    /// and it must not occupy an index the numbered religions might later want.
-    /// </param>
     private static Religion CreateReligion(int index, double tribalShare, VanillaVocabulary vocab,
         HashSet<string> usedNames, MapConfig cfg, Rng rng, string? keyOverride = null)
     {
         var language = Language.Create($"religion_tongue_{keyOverride ?? index.ToString()}", rng);
         string key = keyOverride ?? $"gen_religion_{index}";
 
-        // 1.6x on wholly settled land down to 0.15x on wholly tribal. The map's own tribal share
-        // sits near a third, which lands the average multiplier close to 1 and keeps the map-wide
-        // rate near the configured one.
         double settled = 1.0 - tribalShare;
         bool monotheist = rng.Chance(Math.Clamp(cfg.MonotheistShare * (0.15 + 1.45 * settled), 0.0, 1.0));
 
@@ -539,20 +446,6 @@ public static class Faiths
         };
     }
 
-    /// <summary>
-    /// Places holy sites for a faith.
-    ///
-    /// Rather than putting all sites strictly inside the faith's own counties, this allocates:
-    ///   - Local sites (internal high-development counties)
-    ///   - Shared sites (re-using holy sites created by other faiths/religions, creating "Jerusalems")
-    ///   - Foreign sites (placed in major counties of OTHER religions, creating Crusade targets)
-    ///
-    /// At most one site leaves home, and the rest are the faith's own. Reforming an unreformed faith
-    /// needs three of its five sites in hand, so the older allocation — one shared *and* one foreign,
-    /// leaving three at home — put every unreformed faith exactly one lost county away from never
-    /// being able to reform at all. That cost nothing while nothing was unreformed; it is a trap now
-    /// that the tribal periphery genuinely is.
-    /// </summary>
     private static void PlaceHolySites(Faith faith, Dictionary<Title, int> development,
         List<Faith> allFaiths, List<Title> allCounties, int targetCount,
         WildernessMap wilderness, double wildShare, Rng rng)
@@ -560,7 +453,6 @@ public static class Faiths
         var chosenCounties = new List<Title>();
         int abroad = Math.Max(0, targetCount - 4);
 
-        // 1. Shared Holy Site ("Jerusalem"): Re-use a holy site declared by an existing faith
         var existingHolySites = allFaiths
             .Where(f => f != faith && f.HolySites.Count > 0)
             .SelectMany(f => f.HolySites.Select(hs => hs.County))
@@ -573,8 +465,6 @@ public static class Faiths
             chosenCounties.Add(rng.Pick(existingHolySites.Take(4).ToList()));
         }
 
-        // 2. Foreign / Heathen Holy Site: a high-dev county owned by a different religion, but only
-        // if the shared draw above did not already spend the one site allowed to sit abroad.
         var foreignCounties = allCounties
             .Where(c => !faith.Counties.Contains(c) && !chosenCounties.Contains(c))
             .OrderByDescending(c => development.GetValueOrDefault(c))
@@ -586,15 +476,6 @@ public static class Faiths
             chosenCounties.Add(rng.Pick(foreignCounties.Take(5).ToList()));
         }
 
-        // 3. Wilderness Holy Site: sacred ground out past the last farm.
-        //
-        // Decided BEFORE the local fill so a slot can be reserved for it, and appended AFTER so it
-        // can never land at index 0 — HolySites[0] is the head of faith's seat, and a head of faith
-        // cannot be seated on land nobody holds.
-        //
-        // "Nearby" is de jure rather than geometric: a wilderness county sharing a duchy, or failing
-        // that a kingdom, with land the faith already holds. That is what makes it read as *their*
-        // sacred ground rather than a county drawn out of a hat, and it needs no adjacency graph.
         Title? wildSite = null;
         bool wantWild = wilderness.Count > 0
             && faith.Counties.Count > 0
@@ -614,8 +495,6 @@ public static class Faiths
             if (nearby.Count > 0) wildSite = rng.Pick(nearby);
         }
 
-        // 4. Local Holy Sites: Fill remaining slots with faith's own highest-dev counties, leaving
-        // room for the wilderness site if one was found.
         int localTarget = wildSite is null ? targetCount : targetCount - 1;
 
         var localRanked = faith.Counties
@@ -629,12 +508,14 @@ public static class Faiths
             chosenCounties.Add(county);
         }
 
-        // Last, so it is never the seat. If the faith had no local counties to fill ahead of it the
-        // list is empty and the site is dropped rather than seated — a faith whose only holy site is
-        // unclaimed wilderness has nowhere to put its head.
         if (wildSite is not null && chosenCounties.Count > 0) chosenCounties.Add(wildSite);
 
-        // Register the sites using county-derived keys so shared sites share the key in script
+        // Fallback: If a faith has no counties at all (e.g. dummy/unsettled), ensure it gets at least 1 site
+        if (chosenCounties.Count == 0 && allCounties.Count > 0)
+        {
+            chosenCounties.Add(allCounties[0]);
+        }
+
         foreach (var county in chosenCounties)
         {
             faith.HolySites.Add(($"site_{county.Key}", county));

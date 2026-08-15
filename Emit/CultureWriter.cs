@@ -233,6 +233,11 @@ public static class CultureWriter
         string dir = Path.Combine(modDir, "history", "cultures");
         Directory.CreateDirectory(dir);
 
+        foreach (var file in Directory.GetFiles(dir, "gen_culture_*.txt"))
+        {
+            File.Delete(file);
+        }
+
         int total = 0;
 
         foreach (var culture in cultures.Cultures)

@@ -67,7 +67,27 @@ wilderness_yearly_cleanup = {
 yearly_playable_pulse = {
 	on_actions = {
 		wilderness_yearly_pulse
+		wilderness_yearly_ai_promotion
 		wilderness_yearly_presence_refresh
+		wilderness_yearly_colony_events
+		wilderness_yearly_colonist_petition_check
+		wilderness_yearly_colonist_development_aid_check
+	}
+}
+
+wilderness_yearly_colony_events = {
+	trigger = {
+		# is_ai = no
+		has_character_modifier = overseeing_the_settlement
+		# Cooldown gate: won't trigger if you had an overseer event in the last 2 years
+		NOT = { has_variable = overseer_event_cooldown }
+	}
+
+	random_events = {
+		20 = wilderness_colonization.0030  # Winter crisis
+		8 = wilderness_colonization.0040   # Rich seam
+		8 = wilderness_colonization.0041   # Palisade ague
+		64 = 0
 	}
 }
 
@@ -362,5 +382,112 @@ wilderness_yearly_presence_refresh = {
 
 	effect = {
 		colony_refresh_presence_effect = yes
+	}
+}
+
+wilderness_yearly_colonist_petition_check = {
+	trigger = {
+		is_ai = yes
+		is_colonist_trigger = yes
+		gold < promote_colony_cost
+		exists = liege
+		any_held_title = {
+			tier = tier_county
+			can_promote_colony_trigger = yes
+		}
+	}
+
+	effect = {
+		random_held_title = {
+			limit = {
+				tier = tier_county
+				can_promote_colony_trigger = yes
+			}
+			save_scope_as = ready_colony
+		}
+		save_scope_as = petitioning_colonist
+
+		# 50% chance each year to send a formal petition to their liege
+		random = {
+			chance = 50
+			liege = {
+				trigger_event = wilderness_colonization.0050
+			}
+		}
+	}
+}
+
+# Ensures any AI colonist or ruler who has finished clearing and upgrading their colony
+# immediately executes the promotion if they have enough gold.
+wilderness_yearly_ai_promotion = {
+	trigger = {
+		is_ai = yes
+		any_held_title = {
+			tier = tier_county
+			can_promote_colony_trigger = yes
+		}
+		gold >= promote_colony_cost
+	}
+
+	effect = {
+		remove_short_term_gold = promote_colony_cost
+		random_held_title = {
+			limit = {
+				tier = tier_county
+				can_promote_colony_trigger = yes
+			}
+			promote_colony_effect = { COUNTY = this }
+		}
+	}
+}
+
+# CHANGED TRIGGER DUE TO SETTLEMENT UPGRADES NOT WORKING RIGHT
+wilderness_yearly_colonist_development_aid_check = {
+	trigger = {
+		is_ai = yes
+		is_colonist_trigger = yes
+		gold < 100
+		exists = liege
+		NOT = { has_variable = development_aid_cooldown }
+
+		any_held_title = {
+			tier = tier_county
+			is_colony_county_trigger = yes
+			has_wilderness_obstacle_trigger = yes
+		}
+	}
+
+	effect = {
+		random_held_title = {
+			limit = {
+				tier = tier_county
+				is_colony_county_trigger = yes
+				has_wilderness_obstacle_trigger = yes
+			}
+			save_scope_as = struggling_colony
+		}
+
+		save_scope_as = petitioning_colonist
+
+		# 45% chance each year when broke to ask their liege
+		random = {
+			chance = 45
+
+			# Cooldown is ONLY applied when the petition actually fires
+			set_variable = {
+				name = development_aid_cooldown
+				years = 2
+			}
+
+			liege = {
+				trigger_event = {
+					id = wilderness_colonization.0051
+					scopes = {
+						petitioning_colonist = scope:petitioning_colonist
+						struggling_colony = scope:struggling_colony
+					}
+				}
+			}
+		}
 	}
 }

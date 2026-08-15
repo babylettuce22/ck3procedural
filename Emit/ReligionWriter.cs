@@ -5,18 +5,6 @@ using Ck3MapGen.MapGen;
 
 namespace Ck3MapGen.Emit;
 
-/// <summary>
-/// Declares the generated religions, their faiths, and the holy sites those faiths fight over.
-///
-/// Additive for the same reason <see cref="CultureWriter"/> is: vanilla script names faiths 2,135
-/// times and religions 2,373 times, none of it map-bound, so blanking would cost thousands of
-/// errors to buy nothing.
-///
-/// Holy sites are the exception and need care. They are the one part of a faith that reaches back
-/// into the map — a site names a county — so they cannot be additive in the same careless way, and
-/// they have to be written into the same directory <see cref="CompatibilityWriter.WriteHolySites"/>
-/// rewrites, after it has run.
-/// </summary>
 public static class ReligionWriter
 {
     public static void WriteAll(string modDir, FaithMap faiths)
@@ -30,18 +18,6 @@ public static class ReligionWriter
                           $"{faiths.Religions.Count} religions, {sites} holy sites");
     }
 
-    /// <summary>
-    /// Holy sites, each pinned to a generated county.
-    ///
-    /// Written as a separate file in the holy_site_types directory rather than merged into the
-    /// rewritten vanilla one, so the two stay independently readable — and so the ordering
-    /// requirement is visible: this must run *after* the vanilla rewrite, which recreates the whole
-    /// directory and would otherwise delete this file.
-    ///
-    /// The character modifier is not decoration. A holy site with no modifier is a site worth
-    /// nothing to hold, and CK3 shows its effect in the faith interface, so an empty one reads as
-    /// a bug to a player looking at it.
-    /// </summary>
     private static void WriteHolySites(string modDir, FaithMap faiths)
     {
         string dir = Path.Combine(modDir, "common", "religion", "holy_site_types");
@@ -50,14 +26,19 @@ public static class ReligionWriter
         var sb = new StringBuilder();
         sb.Append("# Generated holy sites, one per faith's richest counties.\n\n");
 
+        // Deduplicate across shared holy sites
+        var writtenSites = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var faith in faiths.Faiths)
         {
             foreach (var (key, county) in faith.HolySites)
             {
+                if (!writtenSites.Add(key)) continue;
+
                 sb.Append($"{key} = {{\n");
                 sb.Append($"\tcounty = {county.Key}\n\n");
                 sb.Append("\tcharacter_modifier = {\n");
-                sb.Append($"\t\tname = {key}_effect_name\n");
+                sb.Append($"\t\tname = holy_site_{key}_effect_name\n");
                 sb.Append("\t\tmonthly_piety_gain_mult = 0.1\n");
                 sb.Append("\t}\n");
                 sb.Append("}\n\n");
@@ -82,9 +63,6 @@ public static class ReligionWriter
             sb.Append($"\tgraphical_faith = {religion.GraphicalFaith}\n");
             sb.Append("\tpagan_roots = yes\n\n");
 
-            // Hostility included: it is pinned to the pagan one for the whole religion (see
-            // MapGen.Faiths.ForcedDoctrines), which is where vanilla declares it too, so there is
-            // nothing left for a faith to override.
             foreach (var (_, doctrine) in religion.Doctrines)
                 sb.Append($"\tdoctrine = {doctrine}\n");
             sb.Append('\n');
@@ -105,19 +83,15 @@ public static class ReligionWriter
                 var (r, g, b) = faith.Color;
                 sb.Append($"\t\t{faith.Key} = {{\n");
                 sb.Append($"\t\t\tcolor = {{ {F(r)} {F(g)} {F(b)} }}\n");
-                sb.Append($"\t\t\ticon = {faith.Icon}\n\n");
+                sb.Append($"\t\t\ticon = {faith.Icon}\n");
 
-                // There is no "organized" doctrine to name: vanilla's `unreformed_faith` group holds
-                // only unreformed_faith_doctrine and its West African variant, and a faith that
-                // names neither *is* the organized case. Writing an invented opposite silently
-                // dropped the whole distinction, so unorganized faiths came out reformed.
+                // Unreformed faiths require reformed_icon, otherwise Reformation/Holy Site view causes CTD
                 if (!faith.IsOrganized)
-                    sb.Append("\t\t\tdoctrine = unreformed_faith_doctrine\n");
-
-                if (faith.ParentFaith is not null)
                 {
-                    sb.Append($"\t\t\tparent_faith = {faith.ParentFaith.Key}\n");
+                    sb.Append("\t\t\tdoctrine = unreformed_faith_doctrine\n");
+                    sb.Append($"\t\t\treformed_icon = {faith.Icon}\n");
                 }
+                sb.Append('\n');
 
                 if (faith.Head is not null && faith.IsOrganized)
                 {
@@ -125,8 +99,18 @@ public static class ReligionWriter
                     sb.Append($"\t\t\treligious_head = {faith.Head.TitleKey}\n");
                 }
 
-                foreach (var (key, _) in faith.HolySites)
-                    sb.Append($"\t\t\tholy_site = {key}\n");
+                // Ensure every faith has at least one holy site
+                if (faith.HolySites.Count > 0)
+                {
+                    foreach (var (key, _) in faith.HolySites)
+                        sb.Append($"\t\t\tholy_site = {key}\n");
+                }
+                else if (faiths.Faiths.Any(f => f.HolySites.Count > 0))
+                {
+                    // Fallback to avoid fatal error on empty dummy faiths
+                    var fallbackSite = faiths.Faiths.First(f => f.HolySites.Count > 0).HolySites[0];
+                    sb.Append($"\t\t\tholy_site = {fallbackSite.Key}\n");
+                }
                 sb.Append('\n');
 
                 foreach (string tenet in faith.Tenets)
@@ -141,6 +125,7 @@ public static class ReligionWriter
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_religions.txt"), sb.ToString());
     }
+
     private static void WriteLocalisation(string modDir, FaithMap faiths)
     {
         string dir = Path.Combine(modDir, "localization", "english");
@@ -167,12 +152,25 @@ public static class ReligionWriter
             entries[$"{faith.Key}_adj"] = faith.Name;
             entries[$"{faith.Key}_adherent"] = faith.Name;
             entries[$"{faith.Key}_adherent_plural"] = faith.Name + "s";
+            entries[$"{faith.Key}_desc"] = $"The teachings of {faith.Name}.";
+
+            // Localization required for unreformed faiths when reforming
+            if (!faith.IsOrganized)
+            {
+                entries[$"{faith.Key}_old"] = $"Old {faith.Name}";
+                entries[$"{faith.Key}_old_adj"] = $"Old {faith.Name}";
+                entries[$"{faith.Key}_old_adherent"] = $"Old {faith.Name}";
+                entries[$"{faith.Key}_old_adherent_plural"] = $"Old {faith.Name}s";
+            }
 
             if (faith.Head is not null)
                 entries[faith.Head.TitleKey] = faith.Head.Name;
 
             foreach (var (key, county) in faith.HolySites)
-                entries[$"{key}_effect_name"] = $"Holy Site of {county.Name}";
+            {
+                entries[$"holy_site_{key}_name"] = county.Name;
+                entries[$"holy_site_{key}_effect_name"] = $"From [holy_site|E] #weak ($holy_site_{key}_name$)#!";
+            }
         }
 
         var sb = new StringBuilder();
@@ -181,6 +179,6 @@ public static class ReligionWriter
 
         ParadoxText.WriteBom(Path.Combine(dir, "gen_faiths_l_english.yml"), sb.ToString());
     }
-    private static string F(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
 
+    private static string F(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
 }

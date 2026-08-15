@@ -197,42 +197,64 @@ wilderness_settle = {
 # actually runs when it builds its location list; this only decides whether a button appears on the
 # panel you are looking at. Writing the rule twice is how the button and the planner end up
 # disagreeing about what is allowed.
-wilderness_oversee = {
-	scope = character
 
-	# The AI never hosts this — see the ai_will_do note on the activity — and must never reach a
-	# button.
-	ai_is_valid = { always = no }
+wilderness_oversee = {
+    scope = character
+    saved_scopes = { wilderness }
+
+    is_shown = {
+        scope:wilderness.county ?= {
+            is_colony_county_trigger = yes
+            holder = root
+        }
+        is_colonist_trigger = no
+        # Correct way to check if already in the activity:
+        NOT = {
+            exists = involved_activity
+            involved_activity = {
+                has_activity_type = activity_oversee_colony
+                activity_location.county ?= scope:wilderness.county
+            }
+        }
+    }
+
+    is_valid = {
+        is_available = yes
+        is_travelling = no
+    }
+}
+
+wilderness_return_home = {
+	scope = character
+	saved_scopes = { wilderness }
 
 	is_shown = {
 		scope:wilderness.county ?= {
-			holder = root
 			is_colony_county_trigger = yes
+			holder = root
 		}
-
-		# A colonist lives in his colony already. Offering him a journey to where he is standing is
-		# the button explaining itself badly.
 		is_colonist_trigger = no
+		exists = involved_activity
+		involved_activity = {
+			has_activity_type = activity_oversee_colony
+			activity_host = root
+			activity_location.county ?= scope:wilderness.county
+		}
 	}
 
 	is_valid = {
-		custom_tooltip = {
-			text = colonize_already_present_tt
-			NOT = { has_character_modifier = overseeing_the_settlement }
-		}
-		custom_tooltip = {
-			text = colonize_not_while_at_war_tt
-			is_at_war = no
-		}
-		custom_tooltip = {
-			text = colonize_already_travelling_tt
-			is_travelling = no
-		}
-		is_available = yes
+		always = yes
 	}
 
 	effect = {
-		custom_tooltip = colonize_oversee_button_effect_tt
+		custom_tooltip = colonize_return_home_button_effect_tt
+		hidden_effect = {
+			if = {
+				limit = { exists = involved_activity }
+				invalidate_activity = involved_activity
+			}
+			colony_refresh_presence_effect = yes
+		}
 	}
 }
 
@@ -256,6 +278,35 @@ wilderness_unfinished_county = {
 				holder ?= { government_has_flag = government_is_wilderness }
 				title_province ?= { has_holding_type = settlement_holding }
 			}
+		}
+	}
+}
+
+# Character scope (GetPlayer). Called from oversee_colony_activity_widget.gui
+wilderness_return_home_activitywindow = {
+	scope = character
+
+	is_shown = {
+		is_colonist_trigger = no
+		exists = involved_activity
+		involved_activity = {
+			has_activity_type = activity_oversee_colony
+			activity_host = root
+		}
+	}
+
+	is_valid = {
+		always = yes
+	}
+
+	effect = {
+		custom_tooltip = colonize_return_home_button_effect_tt
+		hidden_effect = {
+			if = {
+				limit = { exists = involved_activity }
+				invalidate_activity = involved_activity
+			}
+			colony_refresh_presence_effect = yes
 		}
 	}
 }

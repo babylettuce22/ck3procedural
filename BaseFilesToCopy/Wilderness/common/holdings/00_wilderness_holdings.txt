@@ -39,6 +39,13 @@ settlement_holding = {
 		scree_slopes_cleared
 		killing_cold
 		killing_cold_cleared
+		colony_timber_works_01
+		colony_timber_works_02
+		colony_pallisade_01
+		colony_pallisade_02
+		colony_office_01
+		colony_office_02
+		colony_office_03
 	}
 
 	# ---- There is no `can_be_built` here, and there cannot be ----

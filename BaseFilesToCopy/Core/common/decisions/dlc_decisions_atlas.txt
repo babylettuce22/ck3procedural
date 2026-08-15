@@ -1,0 +1,15 @@
+#fp_1 = Northern Lords (Flavor Pack 1)
+
+#fp_3 = Legacy of Persia (Flavor Pack 3)
+
+#ep_1 = Royal Court (Expansion Pack 1)
+
+#ep_2 = Tours & Tournaments (Expansion Pack 2)
+
+#ep_3 = Roads to Power (Expansion Pack 3)
+
+#ce_1 = Legends of the Dead (Core Expansion 1)
+
+#bp_2 / bp3 = Wards & Wardens / Wandering Nobles (Event Packs)
+
+#tgp / mpo = Pre-order / Cosmetic packs

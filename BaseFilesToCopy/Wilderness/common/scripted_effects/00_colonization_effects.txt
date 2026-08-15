@@ -284,6 +284,41 @@ colony_launch_expedition_effect = {
 }
 
 
+# Character scope: the SPONSOR. One roll on the road, and nothing else.
+#
+#   $CHANCE$  a script value, the percentage it goes well
+#
+# ---- Why the dice and the consequences are separated ----
+#
+# Every option in 0016, 0017 and 0018 rolls, and every one of them does something different with the
+# answer — gold already spent, a man replaced, stress, a promise that is owed whichever way it lands.
+# Passing all of that in as parameters would mean a scripted effect with four effect-blocks in its
+# signature, which is a worse thing to read than the eight call sites it saves.
+#
+# So this owns the dice and nothing else. The caller reads `road_roll_took` in an if/else and states
+# its own consequences in plain script, which is the form where a reader can see what an option does
+# without holding a parameter list in their head.
+#
+# ---- Why the variable is cleared here and not by the caller ----
+#
+# `random` has no else branch, so the result has to be a variable rather than a branch, and a
+# variable that a caller is expected to tidy up is a variable that will one day be read stale by the
+# next event in the chain. Clearing on the way IN means the flag is only ever true because this call
+# set it. colony_clear_expedition_effect clears it again at the end of the expedition so nothing is
+# left on the character afterwards.
+colony_road_roll_effect = {
+	if = {
+		limit = { has_variable = road_roll_took }
+		remove_variable = road_roll_took
+	}
+
+	random = {
+		chance = $CHANCE$
+		set_variable = { name = road_roll_took }
+	}
+}
+
+
 # Character scope: the sponsor. Takes the expedition marks off both him and the county.
 #
 #   $COUNTY$  the county the expedition was aimed at
@@ -295,6 +330,13 @@ colony_clear_expedition_effect = {
 	if = {
 		limit = { has_variable = expedition_underway }
 		remove_variable = expedition_underway
+	}
+
+	# The last road roll, if there was one. See colony_road_roll_effect for why it is cleared at both
+	# ends rather than by whoever read it.
+	if = {
+		limit = { has_variable = road_roll_took }
+		remove_variable = road_roll_took
 	}
 
 	$COUNTY$ = {

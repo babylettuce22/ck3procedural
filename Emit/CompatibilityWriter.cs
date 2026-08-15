@@ -199,7 +199,6 @@ public static class CompatibilityWriter
               	PANNING_HEIGHT = {{panHeight.ToString(Invariant)}}
               	START_LOOK_AT = { {{lookX.ToString("F1", Invariant)}} 0 {{lookZ.ToString("F1", Invariant)}} }
               	START_ZOOM_STEP = {{startStep}}
-              	FLAT_MAP_ZOOM_STEP = {{flatStep}}
               }
 
               """);

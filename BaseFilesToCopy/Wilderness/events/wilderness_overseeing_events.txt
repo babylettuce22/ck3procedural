@@ -1,0 +1,584 @@
+﻿namespace = wilderness_colonization
+
+# =====================================================================================
+#  Lord in Residence: Crisis at the Palisade
+# =====================================================================================
+wilderness_colonization.0030 = {
+	type = character_event
+	title = wilderness_colonization.0030.t
+	theme = physical_health
+	override_background = { reference = army_camp }
+
+	cooldown = { years = 5 }
+
+	# Left: Ruler in travel gear
+	left_portrait = {
+		character = root
+		animation = shiver
+		triggered_animation = {
+			trigger = { has_trait = brave }
+			animation = personality_bold
+		}
+		triggered_outfit = {
+			trigger = { always = yes }
+			outfit_tags = { travel_outfit }
+		}
+	}
+
+	# Right: Local foreman
+	right_portrait = {
+		character = scope:colony_foreman
+		animation = lantern
+		triggered_outfit = {
+			trigger = { always = yes }
+			outfit_tags = { travel_outfit }
+		}
+	}
+
+	# Lower Center: Distressed settler
+	lower_center_portrait = {
+		trigger = { exists = scope:distressed_settler }
+		character = scope:distressed_settler
+		animation = fear
+	}
+
+	# --- Dynamic Reactive Description ---
+	desc = {
+		desc = wilderness_colonization.0030.desc.intro
+
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:colony.title_province ?= { has_building = beast_dens } }
+				desc = wilderness_colonization.0030.desc.beasts
+			}
+			triggered_desc = {
+				trigger = { scope:colony.title_province ?= { has_building = bandit_camps } }
+				desc = wilderness_colonization.0030.desc.bandits
+			}
+			triggered_desc = {
+				trigger = { scope:colony.title_province ?= { has_building = killing_cold } }
+				desc = wilderness_colonization.0030.desc.cold
+			}
+			triggered_desc = {
+				trigger = { scope:colony.title_province ?= { has_building = flooded_lands } }
+				desc = wilderness_colonization.0030.desc.floods
+			}
+			desc = wilderness_colonization.0030.desc.fallback
+		}
+
+		desc = wilderness_colonization.0030.desc.outro
+	}
+
+	trigger = {
+		has_character_modifier = overseeing_the_settlement
+		any_held_title = {
+			tier = tier_county
+			has_county_modifier = settlement_overseen
+		}
+	}
+
+	immediate = {
+		set_variable = {
+			name = overseer_event_cooldown
+			years = 2
+		}
+
+		random_held_title = {
+			limit = {
+				tier = tier_county
+				has_county_modifier = settlement_overseen
+			}
+			save_scope_as = colony
+		}
+
+		if = {
+			limit = {
+				scope:colony = { has_variable = colony_leader }
+				scope:colony.var:colony_leader ?= { is_alive = yes }
+			}
+			scope:colony.var:colony_leader = { save_scope_as = colony_foreman }
+		}
+		else = {
+			ordered_courtier_or_guest = {
+				limit = { is_available_ai_adult = yes }
+				order_by = stewardship
+				position = 0
+				save_scope_as = colony_foreman
+			}
+		}
+
+		random_courtier_or_guest = {
+			limit = {
+				is_available_ai_adult = yes
+				NOT = { this = scope:colony_foreman }
+			}
+			save_scope_as = distressed_settler
+		}
+	}
+
+	# --- Option A: Organize rationing & relief -----------------------------------------------
+	option = {
+		name = wilderness_colonization.0030.a
+		skill = stewardship
+		add_internal_flag = special
+		highlight_portrait = scope:colony_foreman
+
+		trigger = { gold >= 30 }
+		remove_short_term_gold = 30
+
+		scope:colony = {
+			change_development_progress = 15
+			add_county_modifier = {
+				modifier = settlement_well_provisioned
+				years = 5
+			}
+		}
+
+		stress_impact = {
+			generous = minor_stress_impact_loss
+			greedy = medium_stress_impact_gain
+			lazy = minor_stress_impact_gain
+		}
+
+		trigger_event = wilderness_colonization.0031
+
+		ai_chance = {
+			base = 40
+			modifier = { add = 30  has_trait = generous }
+			modifier = { add = 20  gold > 100 }
+			modifier = { add = -40 gold < 45 }
+		}
+	}
+
+	# --- Option B: Lead a sortie / Take direct charge -----------------------------------------
+	option = {
+		name = wilderness_colonization.0030.b
+		skill = martial
+		add_internal_flag = dangerous
+
+		duel = {
+			skill = prowess
+			value = 12
+
+			50 = {
+				desc = wilderness_sortie_success_desc
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.5
+				}
+				trigger_event = {
+					id = wilderness_colonization.0032
+				}
+			}
+			50 = {
+				desc = wilderness_sortie_fail_desc
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.5
+				}
+				trigger_event = {
+					id = wilderness_colonization.0033
+				}
+			}
+		}
+
+		stress_impact = {
+			brave = medium_stress_impact_loss
+			craven = major_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 40
+			modifier = { add = 40  has_trait = brave }
+			modifier = { add = 30  prowess >= 12 }
+			modifier = { factor = 0 has_trait = craven }
+		}
+	}
+
+	# --- Option C: Bar the gates and preserve stores ------------------------------------------
+	option = {
+		name = wilderness_colonization.0030.c
+		trait = callous
+
+		scope:colony = {
+			add_county_modifier = {
+				modifier = settlement_hardened_winter
+				years = 5
+			}
+			change_county_control = 10
+		}
+
+		stress_impact = {
+			compassionate = major_stress_impact_gain
+			callous = minor_stress_impact_loss
+			sadistic = minor_stress_impact_loss
+		}
+
+		trigger_event = wilderness_colonization.0034
+
+		ai_chance = {
+			base = 20
+			modifier = { add = 50  has_trait = callous }
+			modifier = { add = 30  ai_compassion < 25 }
+			modifier = { add = 30  gold < 30 }
+		}
+	}
+}
+
+# =====================================================================================
+#  Follow-up A: Relief Succeeded
+# =====================================================================================
+wilderness_colonization.0031 = {
+	type = character_event
+	title = wilderness_colonization.0031.t
+	desc = wilderness_colonization.0031.desc
+	theme = realm
+	override_background = { reference = farmland }
+
+	left_portrait = {
+		character = root
+		animation = happiness
+	}
+	right_portrait = {
+		character = scope:colony_foreman
+		animation = personality_honorable
+	}
+
+	option = {
+		name = wilderness_colonization.0031.a
+		add_prestige = minor_prestige_gain
+	}
+}
+
+# =====================================================================================
+#  Follow-up B (Success): The Sortie Triumphed
+# =====================================================================================
+wilderness_colonization.0032 = {
+	type = character_event
+	title = wilderness_colonization.0032.t
+	desc = wilderness_colonization.0032.desc
+	theme = war
+	override_background = { reference = army_camp }
+
+	left_portrait = {
+		character = root
+		animation = marshal_shield
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { armor } }
+	}
+
+	immediate = {
+		if = {
+			limit = { NOT = { exists = scope:colony } }
+			random_held_title = {
+				limit = {
+					tier = tier_county
+					has_county_modifier = settlement_overseen
+				}
+				save_scope_as = colony
+			}
+		}
+
+		scope:colony ?= {
+			change_county_control = 25
+		}
+		add_prestige = medium_prestige_gain
+	}
+
+	option = {
+		name = wilderness_colonization.0032.a
+	}
+}
+
+# =====================================================================================
+#  Follow-up B (Failure): Blood on the Snow
+# =====================================================================================
+wilderness_colonization.0033 = {
+	type = character_event
+	title = wilderness_colonization.0033.t
+	desc = wilderness_colonization.0033.desc
+	theme = physical_health
+	override_background = { reference = wilderness }
+
+	left_portrait = {
+		character = root
+		animation = pain
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { armor } }
+	}
+
+	immediate = {
+		if = {
+			limit = { NOT = { exists = scope:colony } }
+			random_held_title = {
+				limit = {
+					tier = tier_county
+					has_county_modifier = settlement_overseen
+				}
+				save_scope_as = colony
+			}
+		}
+
+		increase_wounds_effect = { REASON = fight }
+		scope:colony ?= {
+			change_county_control = -15
+		}
+	}
+
+	option = {
+		name = wilderness_colonization.0033.a
+	}
+}
+
+# =====================================================================================
+#  Follow-up C: The Grim Spring
+# =====================================================================================
+wilderness_colonization.0034 = {
+	type = character_event
+	title = wilderness_colonization.0034.t
+	desc = wilderness_colonization.0034.desc
+	theme = death
+	override_background = { reference = farmland }
+
+	left_portrait = {
+		character = root
+		animation = personality_cynical
+	}
+
+	option = {
+		name = wilderness_colonization.0034.a
+	}
+}
+
+# =====================================================================================
+#  Rare Good: A Seam in the Strata
+# =====================================================================================
+wilderness_colonization.0040 = {
+	type = character_event
+	title = wilderness_colonization.0040.t
+	desc = wilderness_colonization.0040.desc
+	theme = stewardship
+	override_background = { reference = wilderness }
+
+	left_portrait = {
+		character = root
+		animation = happiness
+	}
+
+	right_portrait = {
+		character = scope:colony_foreman
+		animation = survey_staff
+	}
+
+	trigger = {
+		has_character_modifier = overseeing_the_settlement
+		any_held_title = {
+			tier = tier_county
+			has_county_modifier = settlement_overseen
+			NOT = { has_variable = discovered_rich_seam }
+		}
+	}
+
+	immediate = {
+		random_held_title = {
+			limit = {
+				tier = tier_county
+				has_county_modifier = settlement_overseen
+			}
+			save_scope_as = colony
+		}
+
+		set_variable = { name = overseer_event_cooldown years = 2 }
+
+		scope:colony = {
+			set_variable = discovered_rich_seam
+		}
+
+		ordered_courtier_or_guest = {
+			limit = { is_available_ai_adult = yes }
+			order_by = stewardship
+			position = 0
+			save_scope_as = colony_foreman
+		}
+	}
+
+	# Option A: Reinvest the discovery into local construction
+	option = {
+		name = wilderness_colonization.0040.a
+		skill = stewardship
+		add_internal_flag = special
+
+		scope:colony = {
+			add_county_modifier = {
+				modifier = colony_rich_seam
+				years = 10
+			}
+			change_development_progress = 30
+		}
+
+		stress_impact = {
+			generous = minor_stress_impact_loss
+			ambitious = minor_stress_impact_loss
+		}
+
+		ai_chance = {
+			base = 60
+			modifier = { add = 30  has_trait = diligent }
+			modifier = { add = 20  ai_greed < 40 }
+		}
+	}
+
+	# Option B: Haul the ore/stone back to the treasury as bullion
+	option = {
+		name = wilderness_colonization.0040.b
+		trait = greedy
+
+		add_gold = 120
+
+		stress_impact = {
+			greedy = medium_stress_impact_loss
+			generous = medium_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 40
+			modifier = { add = 50  has_trait = greedy }
+			modifier = { add = 30  gold < 50 }
+		}
+	}
+}
+
+# =====================================================================================
+#  Rare Bad: Ague in the Palisade
+# =====================================================================================
+wilderness_colonization.0041 = {
+	type = character_event
+	title = wilderness_colonization.0041.t
+	desc = wilderness_colonization.0041.desc
+	theme = physical_health
+	override_background = { reference = army_camp }
+
+	cooldown = { years = 5 }
+
+	left_portrait = {
+		character = root
+		animation = worry
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	lower_center_portrait = {
+		trigger = { exists = scope:sick_colonist }
+		character = scope:sick_colonist
+		animation = sick
+	}
+
+	trigger = {
+		has_character_modifier = overseeing_the_settlement
+		any_held_title = {
+			tier = tier_county
+			has_county_modifier = settlement_overseen
+		}
+	}
+
+	immediate = {
+		set_variable = {
+			name = overseer_event_cooldown
+			years = 2
+		}
+
+		random_held_title = {
+			limit = {
+				tier = tier_county
+				has_county_modifier = settlement_overseen
+			}
+			save_scope_as = colony
+		}
+
+		random_courtier_or_guest = {
+			limit = { is_available_ai_adult = yes }
+			save_scope_as = sick_colonist
+		}
+	}
+
+	# Option A: Buy apothecary herbs and enforce quarantine (Money)
+	option = {
+		name = wilderness_colonization.0041.a
+		trigger = { gold >= 40 }
+		remove_short_term_gold = 40
+
+		add_prestige = minor_prestige_gain
+
+		stress_impact = {
+			compassionate = minor_stress_impact_loss
+			greedy = medium_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 50
+			modifier = { add = 30  has_trait = compassionate }
+			modifier = { add = -40 gold < 50 }
+		}
+	}
+
+	# Option B: Endure the fever and pray (Health gamble)
+	option = {
+		name = wilderness_colonization.0041.b
+		add_internal_flag = dangerous
+
+		random_list = {
+			45 = {
+				desc = wilderness_fever_contracted_desc
+				add_trait = ill
+				scope:colony = {
+					change_county_control = -15
+				}
+			}
+			55 = {
+				desc = wilderness_fever_resisted_desc
+				scope:colony = {
+					change_county_control = -10
+				}
+			}
+		}
+
+		stress_impact = {
+			brave = minor_stress_impact_loss
+			craven = major_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 35
+			modifier = { add = 30  has_trait = brave }
+			modifier = { add = 20  gold < 40 }
+		}
+	}
+
+	# Option C: Burn the infected shanties and bar the ditch (Ruthless)
+	option = {
+		name = wilderness_colonization.0041.c
+		trait = callous
+		add_internal_flag = dangerous
+
+		add_dread = minor_dread_gain
+
+		scope:colony = {
+			change_county_control = 10
+			change_development_progress = -20
+			add_county_modifier = {
+				modifier = colony_purged_quarter
+				years = 5
+			}
+		}
+
+		stress_impact = {
+			callous = minor_stress_impact_loss
+			compassionate = major_stress_impact_gain
+			just = medium_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 15
+			modifier = { add = 50  has_trait = callous }
+			modifier = { add = 40  has_trait = sadistic }
+			modifier = { factor = 0 has_trait = compassionate }
+		}
+	}
+}
