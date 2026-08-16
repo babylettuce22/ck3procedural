@@ -1,0 +1,65 @@
+﻿# The two holdings colonisation moves a county between.
+#
+#     wilderness_holding  ->  settlement_holding  ->  castle / city / church / tribal
+#
+# The blocker buildings appear in BOTH lists on purpose. A blocker is a fact about the ground, not
+# about who owns it, so claiming a county does not clear its wolves — it inherits them. That single
+# decision is what makes colonisation a project rather than a purchase.
+
+wilderness_holding = {
+	primary_building = wilderness_01
+
+	buildings = {
+		beast_dens
+		bandit_camps
+		dense_growth
+		flooded_lands
+		scree_slopes
+		killing_cold
+	}
+
+	# The dummy holder is immortal and blocks inheritance anyway, but saying it here means a
+	# wilderness barony cannot leak into a real succession even if the dummy is somehow removed.
+	can_be_inherited = no
+}
+
+settlement_holding = {
+	primary_building = settlement_01
+
+	buildings = {
+		beast_dens
+		beast_dens_cleared
+		bandit_camps
+		bandit_camps_cleared
+		dense_growth
+		dense_growth_cleared
+		flooded_lands
+		flooded_lands_cleared
+		scree_slopes
+		scree_slopes_cleared
+		killing_cold
+		killing_cold_cleared
+		colony_timber_works_01
+		colony_timber_works_02
+		colony_pallisade_01
+		colony_pallisade_02
+		colony_office_01
+		colony_office_02
+		colony_office_03
+	}
+
+	# ---- There is no `can_be_built` here, and there cannot be ----
+	#
+	# CK3 holdings accept six fields: buildings, can_be_inherited,
+	# counts_toward_domain_limit_if_disabled, parameters, primary_building and
+	# required_heir_government_types. `can_be_built` is not one of them — it appears nowhere in the
+	# game files — so a block by that name is read, ignored, and reported by nothing except
+	# ck3-tiger. It was here, and on wilderness_holding, and on five holdings in a verbatim copy of
+	# vanilla's 00_holdings.txt, and none of it did anything.
+	#
+	# What it was reaching for is already true by a different route. No government lists
+	# settlement_holding in `required_county_holdings`, which is the engine's precondition for
+	# raising anything new in a county — so a county whose only holding is a colony never satisfies
+	# it and the empty baronies stay shut until the colony is promoted. See the long note in
+	# 00_wilderness_government.txt, which is where that rule is explained and where it belongs.
+}

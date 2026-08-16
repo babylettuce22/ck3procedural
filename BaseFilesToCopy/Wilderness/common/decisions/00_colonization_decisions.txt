@@ -1,0 +1,120 @@
+﻿# The player's way into colonisation.
+#
+# A decision rather than a scripted GUI, deliberately. AGOT puts its colonise button on the county
+# view through a scripted_gui, which needs a widget injected into vanilla's window_character.gui and
+# ties the whole mechanic to a file that every other UI mod also wants to touch. A decision needs no
+# GUI work at all, survives every patch, and is one of the few places a player reliably looks.
+#
+# The cost is that a decision cannot be aimed at a county the way a GUI button can, so this picks
+# the target itself — the same ordered_in_list scoring the AI uses, shared through
+# wilderness_pick_adjacent_effect so the player and the AI cannot end up preferring different
+# counties. County-targeted colonisation can be added later as a second entry point; nothing in
+# 00_colonization_effects.txt would change.
+
+settle_the_wilderness_decision = {
+	picture = {
+		reference = "gfx/interface/illustrations/decisions/decision_found_kingdom.dds"
+	}
+
+	desc = settle_the_wilderness_decision_desc
+	selection_tooltip = settle_the_wilderness_decision_tooltip
+	sort_order = 150
+	decision_group_type = realm
+
+	is_shown = {
+		can_colonize_at_all_trigger = yes
+
+		# Only offer it to somebody who has wilderness within reach — otherwise it sits greyed out
+		# in the list of every ruler in a fully settled part of the map.
+		any_sub_realm_county = {
+			any_title_to_title_neighboring_and_across_water_county = {
+				is_wilderness_county_trigger = yes
+			}
+		}
+	}
+
+	is_valid = {
+		can_hold_another_colony_trigger = yes
+		no_expedition_underway_trigger = yes
+	}
+
+	is_valid_showing_failures_only = {
+		is_at_war = no
+	}
+
+	cost = {
+		gold = colonize_cost
+		prestige = colonize_prestige_cost
+	}
+
+	effect = {
+		wilderness_pick_adjacent_effect = yes
+
+		if = {
+			limit = { exists = scope:wilderness }
+
+			colony_launch_expedition_effect = {
+				COUNTY = scope:wilderness
+				COLONIZER = root
+			}
+
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = colonize_claimed_toast
+				left_icon = root
+				right_icon = scope:wilderness
+			}
+		}
+	}
+
+	# The AI reaches colonisation through its own yearly pulse, which can weigh gold and income
+	# properly; a decision check would duplicate that. 0 means never checked by the AI.
+	ai_check_interval = 0
+}
+
+
+# =====================================================================================
+#  Coming home again
+# =====================================================================================
+#
+# There is no decision here any more.
+#
+# `return_from_colony_decision` existed because a lord sent to a colony by a one-way travel plan had
+# no other way back — the residence was a variable this mod maintained, so this mod had to provide
+# the exit. activity_oversee_colony has an exit of its own: the activity window, which is where a
+# player already looks to leave an activity, and promote_colony_effect ends it outright the moment
+# the colony becomes a real holding.
+#
+# A decision that duplicated either would be a second authority on when a lord goes home, and the
+# two would eventually disagree.
+
+
+# =====================================================================================
+#  Committing to it
+# =====================================================================================
+#
+# There is no decision here, and there should not be one.
+#
+# `move_seat_to_colony_decision` let a ruler move his realm capital to a colony, on the reasoning
+# that it was the honest heavy version of presence: the court, the council and the whole apparatus
+# of rule pick up and move to a palisade. It was removed because the engine does not read it that
+# way.
+#
+# A ruler's capital holding and his government are not independent. settlement_holding is the
+# primary_holding of exactly one government — colony_government — so a capital that is a colony
+# makes the whole realm read as colonial, top liege and all, for a lord who still holds a dozen
+# castles. That is not a knock-on to be tuned around; it is the engine correctly concluding
+# something about a state that should never have been reachable.
+#
+# It also never made much sense. A king does not move his seat to a stockade in country that had no
+# name last year while his actual seat still stands. What he does is go and live there for a while,
+# which is what activity_oversee_colony is for, and it does not require lying to the engine about
+# where his realm is governed from.
+#
+# ---- The one case where a colony IS a capital, and why it is fine ----
+#
+# A colonist's. His colony is the only land he holds, so it is his capital by arithmetic rather than
+# by decision, and colony_government is exactly the right answer for him — he is not a feudal lord
+# with a strange capital, he is a man with one palisade. `can_get_government` in
+# 00_colony_government.txt reaches that state on its own and nothing here needs to offer it.
+

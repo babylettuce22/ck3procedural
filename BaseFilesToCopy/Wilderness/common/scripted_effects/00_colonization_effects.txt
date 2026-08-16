@@ -1,0 +1,754 @@
+﻿# Everything that MOVES a county between wilderness, colony and settled.
+#
+# There are exactly three such transitions and each has exactly one effect below. Every entry point
+# — the AI pulse, the player decision, the promote interactions — calls one of them and adds
+# nothing of its own.
+
+# =====================================================================================
+#  Seeding: what is in the way
+# =====================================================================================
+
+wilderness_seed_obstacle_effect = {
+	random_list = {
+		# Cold kills before anything else does.
+		10 = {
+			trigger = {
+				NOT = { has_building = killing_cold }
+				OR = { terrain = taiga  terrain = mountains  terrain = desert_mountains }
+			}
+			modifier = { terrain = taiga  add = 20 }
+			add_building = killing_cold
+		}
+
+		# Standing water: marsh, delta, river bottom, and any low coast.
+		10 = {
+			trigger = {
+				NOT = { has_building = flooded_lands }
+				OR = {
+					terrain = wetlands
+					terrain = floodplains
+					AND = { is_riverside_province = yes  NOT = { terrain = mountains } }
+				}
+			}
+			modifier = { terrain = wetlands  add = 25 }
+			add_building = flooded_lands
+		}
+
+		# Ground you cannot get a cart across.
+		10 = {
+			trigger = {
+				NOT = { has_building = scree_slopes }
+				OR = { terrain = mountains  terrain = desert_mountains  terrain = hills }
+			}
+			modifier = { terrain = mountains  add = 20 }
+			modifier = { terrain = desert_mountains  add = 20 }
+			add_building = scree_slopes
+		}
+
+		# Trees, and what lives in them.
+		10 = {
+			trigger = {
+				NOT = { has_building = dense_growth }
+				OR = { terrain = forest  terrain = jungle  terrain = taiga }
+			}
+			modifier = { terrain = jungle  add = 25 }
+			add_building = dense_growth
+		}
+		10 = {
+			trigger = {
+				NOT = { has_building = beast_dens }
+				OR = { terrain = forest  terrain = taiga  terrain = hills  terrain = jungle }
+			}
+			add_building = beast_dens
+		}
+
+		# People. Anywhere at all, but likeliest on open ground somebody could live off.
+		10 = {
+			trigger = { NOT = { has_building = bandit_camps } }
+			modifier = {
+				OR = { terrain = plains  terrain = steppe  terrain = drylands  terrain = farmlands }
+				add = 15
+			}
+			add_building = bandit_camps
+		}
+	}
+}
+
+wilderness_seed_province_effect = {
+	wilderness_seed_obstacle_effect = yes
+	wilderness_seed_obstacle_effect = yes
+
+	if = {
+		limit = { always = yes }
+		random = {
+			chance = 40 # 40% chance of a third blocker
+			wilderness_seed_obstacle_effect = yes
+		}
+	}
+}
+
+wilderness_setup_on_start_effect = {
+	clear_traits = yes
+	add_trait = wilderness
+	add_trait = incapable
+
+	every_courtier_or_guest = {
+		death = { death_reason = death_vanished }
+	}
+
+	every_held_title = {
+		limit = { tier = tier_county }
+
+		title_province ?= {
+			if = {
+				limit = { has_holding_type = wilderness_holding }
+				wilderness_seed_province_effect = yes
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Choosing where to go
+# =====================================================================================
+
+wilderness_pick_adjacent_effect = {
+	every_sub_realm_county = {
+		every_title_to_title_neighboring_and_across_water_county = {
+			limit = { county_can_be_claimed_trigger = yes }
+			add_to_list = adjacent_wilderness
+		}
+	}
+
+	ordered_in_list = {
+		list = adjacent_wilderness
+		order_by = {
+			value = 0
+
+			every_neighboring_county = {
+				limit = { holder = root }
+				add = 2
+			}
+			every_neighboring_county = {
+				limit = { holder = root  duchy ?= prev.duchy }
+				add = 16
+			}
+			every_neighboring_county = {
+				limit = { holder = root  kingdom ?= prev.kingdom }
+				add = 8
+			}
+			every_neighboring_county = {
+				limit = { holder = root  empire ?= prev.empire }
+				add = 4
+			}
+		}
+		position = 0
+		save_scope_as = wilderness
+	}
+}
+
+
+# =====================================================================================
+#  Before any of it: sending the expedition
+# =====================================================================================
+
+colony_launch_expedition_effect = {
+	$COUNTY$ = { save_scope_as = colony }
+	$COLONIZER$ = { save_scope_as = colonizer }
+
+	scope:colony = {
+		add_county_modifier = settling_expedition_underway
+		set_variable = { name = expedition_fortune  value = 0 }
+	}
+
+	scope:colonizer = {
+		set_variable = {
+			name = expedition_underway
+			value = scope:colony
+		}
+
+		colony_pick_expedition_leader_effect = yes
+
+		trigger_event = wilderness_colonization.0010
+
+		trigger_event = {
+			id = wilderness_colonization.0014
+			months = 3
+		}
+
+		trigger_event = {
+			id = wilderness_colonization.0011
+			months = 7
+		}
+	}
+}
+
+colony_road_roll_effect = {
+	if = {
+		limit = { has_variable = road_roll_took }
+		remove_variable = road_roll_took
+	}
+
+	random = {
+		chance = $CHANCE$
+		set_variable = { name = road_roll_took }
+	}
+}
+
+# Takes the temporary expedition marks off both the character and the county.
+# NOTE: settlers_were_promised is deliberately preserved here so it survives to mature promotion.
+colony_clear_expedition_effect = {
+	if = {
+		limit = { has_variable = expedition_underway }
+		remove_variable = expedition_underway
+	}
+
+	if = {
+		limit = { has_variable = road_roll_took }
+		remove_variable = road_roll_took
+	}
+
+	$COUNTY$ = {
+		if = {
+			limit = { has_county_modifier = settling_expedition_underway }
+			remove_county_modifier = settling_expedition_underway
+		}
+		if = { limit = { has_variable = colony_leader }         remove_variable = colony_leader }
+		if = { limit = { has_variable = colony_led_by_soldier } remove_variable = colony_led_by_soldier }
+		if = { limit = { has_variable = expedition_fortune }    remove_variable = expedition_fortune }
+	}
+}
+
+
+# =====================================================================================
+#  Transition 1: wilderness -> colony
+# =====================================================================================
+
+colonize_county_effect = {
+	$COUNTY$ = { save_scope_as = colony }
+	$COLONIZER$ = { save_scope_as = colonizer }
+
+	scope:colony = {
+		create_title_and_vassal_change = {
+			type = returned
+			save_scope_as = change
+		}
+		change_title_holder = {
+			holder = scope:colonizer
+			change = scope:change
+			take_baronies = yes
+		}
+		resolve_title_and_vassal_change = scope:change
+
+		set_county_faith = scope:colonizer.faith
+		set_county_culture = scope:colonizer.culture
+
+		generate_coa = yes
+
+		every_county_province = {
+			limit = {
+				has_holding = yes
+				has_holding_type = wilderness_holding
+				is_county_capital = yes
+			}
+			set_holding_type = settlement_holding
+		}
+		every_county_province = {
+			limit = {
+				has_holding = yes
+				has_holding_type = wilderness_holding
+				is_county_capital = no
+			}
+			remove_holding = yes
+		}
+		every_county_province = {
+			barony ?= { generate_coa = yes }
+		}
+
+		# --- Set Baseline Authority & Rebound Protection ---
+		if = {
+			limit = { county_control < 50 }
+			change_county_control  = 50
+		}
+
+		set_variable = {
+			name = colony_just_founded
+			years = 3
+		}
+	}
+
+	# The expedition marks come off
+	colony_clear_expedition_effect = { COUNTY = $COUNTY$ }
+}
+
+
+# =====================================================================================
+#  Who goes out with them
+# =====================================================================================
+
+colony_pick_expedition_leader_effect = {
+	ordered_courtier_or_guest = {
+		limit = {
+			is_adult = yes
+			is_available_ai_adult = yes
+			NOT = { this = root }
+		}
+		order_by = colony_settling_chance
+		position = 0
+		save_scope_as = expedition_leader
+	}
+
+	if = {
+		limit = { exists = scope:expedition_leader }
+		scope:colony = {
+			set_variable = {
+				name = colony_leader
+				value = scope:expedition_leader
+			}
+		}
+	}
+
+	ordered_courtier_or_guest = {
+		limit = {
+			is_adult = yes
+			is_available_ai_adult = yes
+			NOT = { this = root }
+		}
+		order_by = {
+			value = prowess
+			add = martial
+		}
+		position = 0
+		save_scope_as = expedition_soldier
+	}
+}
+
+
+# =====================================================================================
+#  What the expedition came to
+# =====================================================================================
+
+colony_settling_success_effect = {
+	# THE claim
+	colonize_county_effect = {
+		COUNTY = scope:colony
+		COLONIZER = root
+	}
+
+	# NOTE: If settlers_were_promised is on scope:colony, we leave it untouched.
+	# It will silently sit on the county until promotion triggers Event 0025.
+
+	if = {
+		limit = { exists = scope:expedition_leader }
+
+		scope:expedition_leader = {
+			add_prestige = medium_prestige_gain
+			add_character_flag = founded_a_colony
+		}
+	}
+
+	# The soldier's payoff
+	if = {
+		limit = { scope:colony ?= { has_variable = colony_led_by_soldier } }
+
+		scope:colony = {
+			remove_variable = colony_led_by_soldier
+			change_county_control = 15
+
+			title_province ?= {
+				if = { limit = { has_building = killing_cold }  remove_building = killing_cold }
+				else_if = { limit = { has_building = flooded_lands } remove_building = flooded_lands }
+				else_if = { limit = { has_building = bandit_camps }  remove_building = bandit_camps }
+				else_if = { limit = { has_building = beast_dens }    remove_building = beast_dens }
+				else_if = { limit = { has_building = dense_growth }  remove_building = dense_growth }
+				else_if = { limit = { has_building = scree_slopes }  remove_building = scree_slopes }
+			}
+		}
+	}
+
+	trigger_event = wilderness_colonization.0012
+}
+
+colony_settling_failure_effect = {
+	if = {
+		limit = { exists = scope:expedition_leader }
+
+		scope:expedition_leader = {
+			random = {
+				chance = 35
+				death = { death_reason = death_starved }
+			}
+
+			if = {
+				limit = { is_alive = yes }
+				add_stress = major_stress_gain
+			}
+		}
+	}
+
+	# Clean up promise if the expedition never took root
+	scope:colony = {
+		if = { limit = { has_variable = settlers_were_promised } remove_variable = settlers_were_promised }
+	}
+
+	colony_clear_expedition_effect = { COUNTY = scope:colony }
+
+	trigger_event = wilderness_colonization.0013
+}
+
+
+# =====================================================================================
+#  Transition 2: colony -> settled
+# =====================================================================================
+
+promote_colony_effect = {
+	$COUNTY$ = {
+		holder ?= { save_scope_as = colony_promoter }
+		save_scope_as = finished_colony
+
+		if = {
+			limit = { has_county_modifier = settlement_overseen }
+			remove_county_modifier = settlement_overseen
+		}
+
+		title_province ?= {
+			if = { limit = { has_building = settlement_01 }  remove_building = settlement_01 }
+			if = { limit = { has_building = settlement_02 }  remove_building = settlement_02 }
+			if = { limit = { has_building = settlement_03 }  remove_building = settlement_03 }
+
+			if = {
+				limit = { colony_promotes_to_tribe_trigger = yes }
+				set_holding_type = tribal_holding
+			}
+			else = {
+				set_holding_type = castle_holding
+			}
+		}
+		set_color_from_title = de_jure_liege
+	}
+
+	# End lord in residence activity if present
+	scope:colony_promoter ?= {
+		if = {
+			limit = {
+				exists = involved_activity
+				involved_activity = {
+					has_activity_type = activity_oversee_colony
+					activity_host = prev
+					activity_location.county ?= scope:finished_colony
+				}
+			}
+			invalidate_activity = involved_activity
+		}
+	}
+
+	# Transition government for colonist vassals
+	if = {
+		limit = {
+			exists = scope:colony_promoter
+			scope:finished_colony = { is_colony_county_trigger = no }
+			scope:colony_promoter = {
+				is_colonist_trigger = yes
+				exists = liege
+			}
+		}
+		scope:colony_promoter = {
+			colony_completion_effect = yes
+		}
+	}
+
+	# --- Settlers' Promised Land Reckoning (Payoff Event 0025) ---
+	if = {
+		limit = {
+			scope:finished_colony = { has_variable = settlers_were_promised }
+		}
+
+		if = {
+			limit = { exists = scope:colony_promoter.liege }
+			scope:colony_promoter.liege = {
+				trigger_event = wilderness_colonization.0025
+			}
+		}
+		# If completed directly in personal domain
+		else_if = {
+			limit = { exists = scope:colony_promoter }
+			scope:colony_promoter = {
+				trigger_event = wilderness_colonization.0025
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Transition 2b: colonist -> ordinary lord, or colonist -> nobody's man
+# =====================================================================================
+
+colony_completion_effect = {
+	save_scope_as = colonist
+	liege = { save_scope_as = colony_liege }
+
+	if = {
+		limit = { colony_promotes_to_tribe_trigger = yes }
+		change_government = tribal_government
+	}
+	else = {
+		change_government = feudal_government
+	}
+
+	# Roll or check for forced test variable
+	if = {
+		limit = { has_variable = force_colony_secession }
+		remove_variable = force_colony_secession
+		set_variable = { name = colony_secedes }
+	}
+	else = {
+		random = {
+			chance = colony_secession_chance
+			set_variable = { name = colony_secedes }
+		}
+	}
+
+	if = {
+		limit = { has_variable = colony_secedes }
+		remove_variable = colony_secedes
+
+		# --- Clean Engine Independence Execution ---
+		create_title_and_vassal_change = {
+			type = independency
+			save_scope_as = change
+		}
+		becomes_independent = {
+			change = scope:change
+		}
+		resolve_title_and_vassal_change = scope:change
+
+		add_truce_both_ways = {
+			character = scope:colony_liege
+			years = 5
+			name = TRUCE_COLONY_INDEPENDENCE
+		}
+
+		add_prestige = major_prestige_gain
+		scope:colony_liege = {
+			add_prestige = major_prestige_loss
+
+			every_vassal = {
+				limit = { NOT = { this = scope:colonist } }
+				add_opinion = {
+					target = scope:colony_liege
+					modifier = lost_a_colony_opinion
+					opinion = -10
+				}
+			}
+
+			trigger_event = wilderness_colonization.0021
+		}
+	}
+	else = {
+		scope:colony_liege = {
+			trigger_event = wilderness_colonization.0020
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Granting a colony away
+# =====================================================================================
+
+colonization_make_colonist_effect = {
+	if = {
+		limit = {
+			is_colonist_trigger = no
+			NOT = {
+				any_held_title = {
+					tier = tier_county
+					is_settled_county_trigger = yes
+				}
+			}
+		}
+
+		change_government = colony_government
+	}
+}
+
+colonization_grant_reaction_effect = {
+	if = {
+		limit = { exists = liege }
+
+		$COUNTY$ = { save_scope_as = granted_colony }
+		liege = { save_scope_as = granting_liege }
+
+		if = {
+			limit = { is_colonist_trigger = yes }
+
+			add_opinion = {
+				target = scope:granting_liege
+				modifier = colonist_raised_up_opinion
+				opinion = 40
+			}
+
+			save_scope_as = colonist
+			scope:granting_liege = {
+				if = { limit = { is_ai = no }  trigger_event = wilderness_colonization.0015 }
+			}
+		}
+		else_if = {
+			limit = { highest_held_title_tier >= tier_kingdom }
+			add_opinion = {
+				target = scope:granting_liege
+				modifier = colonist_sent_to_the_frontier_opinion
+				opinion = -40
+			}
+		}
+		else_if = {
+			limit = { highest_held_title_tier = tier_duchy }
+			add_opinion = {
+				target = scope:granting_liege
+				modifier = colonist_sent_to_the_frontier_opinion
+				opinion = -25
+			}
+		}
+		else = {
+			add_opinion = {
+				target = scope:granting_liege
+				modifier = colonist_sent_to_the_frontier_opinion
+				opinion = -12
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Presence: the lord is here, or he is not
+# =====================================================================================
+
+colony_refresh_presence_effect = {
+	if = {
+		limit = { has_character_modifier = overseeing_the_settlement }
+		remove_character_modifier = overseeing_the_settlement
+	}
+
+	every_held_title = {
+		limit = {
+			tier = tier_county
+			has_county_modifier = settlement_overseen
+		}
+		remove_county_modifier = settlement_overseen
+	}
+
+	if = {
+		limit = {
+			character_is_at_own_colony_trigger = yes
+			is_colonist_trigger = no
+		}
+
+		add_character_modifier = overseeing_the_settlement
+
+		location.county ?= {
+			add_county_modifier = settlement_overseen
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Transition 3: colony -> wilderness
+# =====================================================================================
+
+abandon_county_effect = {
+	$COUNTY$ = {
+		save_scope_as = abandoned
+
+		random_ruler = {
+			limit = { has_trait = wilderness }
+			save_scope_as = wilderness_holder
+		}
+
+		if = {
+			limit = { has_county_modifier = settlement_overseen }
+			remove_county_modifier = settlement_overseen
+		}
+
+		# Clean up any persistent colony variables
+		if = { limit = { has_variable = settlers_were_promised } remove_variable = settlers_were_promised }
+		if = { limit = { has_variable = colony_just_founded }    remove_variable = colony_just_founded }
+
+		if = {
+			limit = { exists = scope:wilderness_holder }
+
+			hidden_effect = {
+				create_title_and_vassal_change = {
+					type = revoked
+					save_scope_as = change
+				}
+				change_title_holder = {
+					holder = scope:wilderness_holder
+					change = scope:change
+					take_baronies = yes
+				}
+				resolve_title_and_vassal_change = scope:change
+
+				change_development_level = -100
+
+				every_county_province = {
+					limit = { has_holding = yes  is_county_capital = no }
+					remove_holding = yes
+				}
+				every_county_province = {
+					limit = { has_holding = yes  is_county_capital = yes }
+					if = {
+						limit = { NOT = { has_holding_type = wilderness_holding } }
+						set_holding_type = wilderness_holding
+					}
+					wilderness_seed_province_effect = yes
+				}
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Upkeep & AI Housekeeping
+# =====================================================================================
+
+wilderness_obstacle_cleared_effect = {
+	save_scope_as = cleared_province
+
+	county ?= {
+		holder ?= {
+			send_interface_toast = {
+				title = colonize_obstacle_cleared_toast
+				left_icon = scope:cleared_province.county
+			}
+		}
+	}
+}
+
+release_excess_colony_effect = {
+	if = {
+		limit = {
+			is_ai = yes
+			wilderness_settlement_headroom < 0
+		}
+
+		ordered_held_title = {
+			limit = {
+				tier = tier_county
+				is_colony_county_trigger = yes
+				NOT = { this = root.capital_county }
+			}
+			order_by = {
+				value = development_level
+				multiply = -1
+			}
+			position = 0
+
+			abandon_county_effect = { COUNTY = this }
+		}
+	}
+}

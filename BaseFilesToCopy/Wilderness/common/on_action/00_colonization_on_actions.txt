@@ -1,0 +1,547 @@
+﻿# Where the system hooks into the running game.
+#
+# Every hook below APPENDS a custom on_action to a vanilla one rather than redefining the vanilla
+# one's effect. That is the single most important compatibility rule in CK3 modding: redefining
+# `on_game_start_after_lobby = { effect = ... }` would silently delete every other mod's — and
+# several of vanilla's own — game-start work.
+
+# --- Setup ---------------------------------------------------------------------------------------
+
+on_game_start_after_lobby = {
+	on_actions = {
+		wilderness_on_game_start
+	}
+}
+
+# Seeds obstacles across every wilderness county.
+#
+# After the lobby, not during history load. Adding buildings to a holding that history is still
+# assembling errors; AGOT hit this and worked around it by commenting the call out of its game-start
+# block, leaving the dead code in place with a note. Running it here is the fix rather than the
+# workaround.
+#
+# The generator has already done the expensive half — deciding which counties are wild, and writing
+# them into history — so this is one pass over one character's titles, not a world scan.
+wilderness_on_game_start = {
+	effect = {
+		every_ruler = {
+			limit = { has_trait = wilderness }
+			wilderness_setup_on_start_effect = yes
+		}
+	}
+}
+
+
+# --- Keeping the dummy from becoming a household --------------------------------------------------
+
+yearly_global_pulse = {
+	on_actions = {
+		wilderness_yearly_cleanup
+	}
+}
+
+# The game-start cleanup runs once; the engine keeps generating courtiers and guests for a landed
+# ruler forever after. Without a recurring sweep the dummy slowly accumulates a court of hundreds —
+# each one a portrait, an opinion, and a claim on land nobody should inherit.
+#
+# The government fields in 00_wilderness_government.txt stop most of that being generated; this is
+# the backstop for whatever the engine does anyway. One character per year, found by trait, so the
+# cost is a single pass over rulers rather than anything per-county.
+wilderness_yearly_cleanup = {
+	effect = {
+		every_ruler = {
+			limit = {
+				has_trait = wilderness
+				any_courtier_or_guest = { always = yes }
+			}
+			every_courtier_or_guest = {
+				death = { death_reason = death_vanished }
+			}
+		}
+	}
+}
+
+
+# --- The AI's yearly look at the frontier ---------------------------------------------------------
+
+yearly_playable_pulse = {
+	on_actions = {
+		wilderness_yearly_pulse
+		wilderness_yearly_ai_promotion
+		wilderness_yearly_presence_refresh
+		wilderness_yearly_colony_events
+		wilderness_yearly_colonist_petition_check
+		wilderness_yearly_colonist_development_aid_check
+		wilderness_yearly_control_check
+	}
+}
+
+wilderness_yearly_colony_events = {
+	trigger = {
+		# is_ai = no
+		has_character_modifier = overseeing_the_settlement
+		# Cooldown gate: won't trigger if you had an overseer event in the last 2 years
+		NOT = { has_variable = overseer_event_cooldown }
+	}
+
+	random_events = {
+		20 = wilderness_colonization.0030  # Winter crisis
+		8 = wilderness_colonization.0040   # Rich seam
+		8 = wilderness_colonization.0041   # Palisade ague
+		64 = 0
+	}
+}
+
+wilderness_yearly_pulse = {
+	# Gated hard at the top. `trigger` here means the effect below never runs for the great majority
+	# of rulers, which is what keeps a yearly pulse off the performance budget — the list iteration
+	# in wilderness_pick_adjacent_effect is only reached by someone who actually borders wilderness.
+	trigger = {
+		is_ai = yes
+		can_colonize_at_all_trigger = yes
+		NOT = { has_variable = expedition_underway }
+	}
+
+	effect = {
+		# An AI over the cap sheds its worst colony before considering another.
+		release_excess_colony_effect = yes
+
+		# --- Finish what it started ------------------------------------------------------------
+		#
+		# Promotion runs here rather than through the promote_colony_* interactions, and that is not
+		# a shortcut — the AI genuinely cannot reach those. CK3 only drives a hidden interaction for
+		# the AI when it carries a `special_interaction` tag the engine knows, which is why vanilla's
+		# own feudalize reaches the AI and any mod's conversion interaction does not. Ours have
+		# ai_will_do weights that nothing ever reads.
+		#
+		# Without this an AI colonises, clears its blockers, builds up to settlement_03 — and then
+		# sits on a permanent colony forever, paying upkeep and taking the wrong-holding penalty,
+		# because the last step was the one step it had no way to take.
+		#
+		# Same effect the player's buttons call, and the same price, so the AI is not quietly on a
+		# cheaper path than the player.
+		if = {
+			limit = {
+				gold > promote_colony_cost
+				any_held_title = {
+					tier = tier_county
+					can_promote_colony_trigger = yes
+				}
+			}
+
+			# Charged BEFORE the promotion, not after, and the order is load-bearing.
+			#
+			# promote_colony_cost is a quarter price for a colonist. promote_colony_effect converts a
+			# colonist out of colony_government as its last act — so read afterwards, the value has
+			# already gone back to full, and an AI colonist who was checked against 100 gold was then
+			# billed 400. The gate and the bill have to read the same number, which means reading it
+			# on the same side of the promotion.
+			remove_short_term_gold = promote_colony_cost
+
+			random_held_title = {
+				limit = {
+					tier = tier_county
+					can_promote_colony_trigger = yes
+				}
+				promote_colony_effect = { COUNTY = this }
+			}
+		}
+
+		# --- And consider starting another -----------------------------------------------------
+		#
+		# 17.5%, having been 40, then 6, then 10.
+		#
+		# The history is worth keeping because each move was answering a different thing. 40 was a
+		# land rush: every AI bordering wilderness claimed everything in reach inside two or three
+		# years and the frontier was gone before the first succession. 6 over-corrected. 10 was
+		# raised once wars against the wilderness were closed — most of what had looked like a
+		# colonisation rush was actually CONQUEST through de jure and claim CBs, which no tuning
+		# here would ever have touched.
+		#
+		# 17.5 is measured against observed play rather than reasoned from first principles, which
+		# is the right way round for a number like this.
+		#
+		# 30, since an attempt is no longer the same thing as a colony. wilderness_colonization.0011
+		# rolls colony_settling_chance two years after every claim, the AI's included, and a typical
+		# AI expedition — a courtier with middling stewardship, on ground with two obstacles on it —
+		# comes out near a coin flip. So roughly half of what the pulse starts now fails, and a
+		# failure still costs the gold and still burns the five-year cooldown.
+		#
+		# 30 is 17.5 grossed up for that, which keeps the frontier filling at about the rate it did
+		# before the expedition mechanic existed. It is the one number here that is derived rather
+		# than observed, so it is the first to revisit if the map fills too fast or too slow.
+		#
+		# The domain limit gate that used to sit alongside this has since been removed — it was the
+		# real constraint, not the chance, and it was rejecting rulers for a cost a colony does not
+		# have. See the note where it used to be, in wilderness_colonization.0001.
+		#
+		# The remaining ceiling is the five-year claim cooldown: at 17.5% a ruler waits about six
+		# years for a first claim and is then locked for five more, so no chance value here produces
+		# more than roughly one colony per ruler per decade. That is the number to move next if the
+		# frontier still fills too slowly.
+		#
+		# The modifiers are what stop 17.5% being merely slow-and-uniform. A greedy or bold ruler with
+		# money to spare is several times likelier to try than a cautious one, so which realms push
+		# into the wilderness says something about who is running them — and two neighbours in the
+		# same position behave differently, which is most of what makes the frontier feel alive
+		# rather than scheduled.
+		random = {
+			chance = 30
+
+			modifier = { ai_greed > 50     add = 5 }
+			modifier = { ai_boldness > 50  add = 4 }
+			modifier = { has_trait = ambitious  add = 5 }
+
+			# Genuinely rich, not merely solvent. A ruler sitting on ten times the price is one for
+			# whom this is pocket money, and those are the ones who historically did it.
+			modifier = {
+				gold > { value = colonize_cost  multiply = 10 }
+				add = 6
+			}
+
+			# Nothing better to do with the men.
+			modifier = { is_at_war = no  add = 2 }
+
+			trigger_event = wilderness_colonization.0001
+		}
+	}
+}
+
+wilderness_yearly_control_check = {
+	trigger = {
+		any_held_title = {
+			tier = tier_county
+			is_colony_county_trigger = yes
+			county_control <= 0
+			NOT = { has_variable = colony_collapse_event_fired }
+			NOT = { has_variable = colony_just_founded }
+		}
+	}
+
+	effect = {
+		random_held_title = {
+			limit = {
+				tier = tier_county
+				is_colony_county_trigger = yes
+				county_control <= 0
+				NOT = { has_variable = colony_collapse_event_fired }
+				NOT = { has_variable = colony_just_founded }
+			}
+			save_scope_as = colony
+		}
+
+		scope:colony = {
+			set_variable = {
+				name = colony_collapse_event_fired
+				years = 2
+			}
+		}
+
+		trigger_event = wilderness_colonization.0060
+	}
+}
+
+# --- Keeping the frontier honest -------------------------------------------------------------------
+
+# When a title changes hands there is nothing to reconcile, because nothing caches a colony count —
+# the upkeep rides on the settlement buildings and moves with the county by itself. What this hook
+# does is the colonist work below; the claim-cooldown clearing it used to carry went with the
+# cooldown itself.
+#
+# (That absence is the design. See the note at the top of 00_settlement_buildings.txt for what the
+# alternative costs: AGOT reconciles a counter from eight call sites, two of them debug buttons.)
+on_title_gain = {
+	on_actions = {
+		wilderness_on_title_gain
+	}
+}
+
+wilderness_on_title_gain = {
+	effect = {
+		# --- The leak detector -----------------------------------------------------------------
+		#
+		# A county whose capital is still wilderness_holding has arrived in somebody's realm. That
+		# should be impossible — colonize_county_effect converts the capital in the same effect that
+		# moves the title — so this is either the unidentified route that put uncolonised wilderness
+		# in an AI realm, or a new one.
+		#
+		# Deferred, because on_title_gain fires BEFORE colonize_county_effect converts the holding
+		# and an immediate check would flag every legitimate colonisation in the game. See
+		# wilderness_colonization.0099 for the rest of the reasoning, including why it reverts.
+		if = {
+			limit = {
+				NOT = { has_trait = wilderness }
+				scope:title ?= { tier = tier_county }
+				scope:title ?= { title_province ?= { has_holding_type = wilderness_holding } }
+			}
+
+			scope:title = { save_scope_as = leak_county }
+			trigger_event = {
+				id = wilderness_colonization.0099
+				days = 7
+			}
+		}
+
+		# --- A colony changing hands -----------------------------------------------------------
+		#
+		# This is where granting a colony away becomes a mechanic, and it is deliberately hung off
+		# the gain rather than off an interaction of its own. Vanilla's Grant Title already moves
+		# counties, and the AI already uses it to shed surplus holdings — so hooking here means the
+		# player's grant, the AI's own housekeeping, an inheritance and a war all arrive at the same
+		# place, and none of them needed to know this system exists.
+		if = {
+			limit = {
+				OR = {
+					scope:transfer_type = flag:granted
+					scope:transfer_type = flag:inheritance
+				}
+				scope:title ?= { tier = tier_county }
+				scope:title ?= { is_colony_county_trigger = yes }
+				NOT = { has_trait = wilderness }
+			}
+
+			# Whoever was overseeing this county is not overseeing it now. Cleared from the county
+			# side because the previous holder's own refresh can no longer see a title they have
+			# lost — see the note on colony_refresh_presence_effect.
+			scope:title = {
+				if = {
+					limit = { has_county_modifier = settlement_overseen }
+					remove_county_modifier = settlement_overseen
+				}
+			}
+
+			# Becoming a colonist follows from the facts on the ground and applies to an heir as
+			# readily as to a grantee. Having feelings about it does not — see the note above the
+			# two effects for why they are separate.
+			colonization_make_colonist_effect = yes
+
+			if = {
+				limit = { scope:transfer_type = flag:granted }
+				colonization_grant_reaction_effect = { COUNTY = scope:title }
+
+				# Clean up the liege who gave the colony away
+				if = {
+					limit = { exists = scope:granting_liege }
+					scope:granting_liege = {
+						colony_refresh_presence_effect = yes
+					}
+				}
+			}
+
+			# And the new holder may well be standing in it — a colonist always is.
+			colony_refresh_presence_effect = yes
+		}
+	}
+}
+
+
+# --- Presence: keeping "the lord is here" honest ---------------------------------------------------
+#
+# Four hooks and a backstop, all calling the same refresh. See the note on
+# colony_refresh_presence_effect for why every one of them calls the identical effect rather than a
+# grant here and a revoke there: the effect recomputes from where the character actually is, so it
+# is correct whatever happened in between, including the cases nobody enumerated.
+#
+# Every hook is gated on the character having something to do with a colony at all, which is what
+# keeps this off the performance budget — travel on_actions fire constantly and the great majority of
+# travellers have never seen a frontier.
+
+on_travel_plan_start = {
+	on_actions = {
+		wilderness_travel_presence_refresh
+	}
+}
+
+on_travel_plan_arrival = {
+	on_actions = {
+		wilderness_travel_presence_refresh
+	}
+}
+
+on_travel_plan_complete = {
+	on_actions = {
+		wilderness_travel_presence_refresh
+	}
+}
+
+on_travel_plan_abort = {
+	on_actions = {
+		wilderness_travel_presence_refresh
+	}
+}
+
+on_travel_plan_cancel = {
+	on_actions = {
+		wilderness_travel_presence_refresh
+	}
+}
+
+wilderness_travel_presence_refresh = {
+	# The travel on_actions run in the travelling character's scope. The gate is deliberately
+	# generous on the second branch: somebody who HAS the modifier must always be re-evaluated, even
+	# if they no longer hold a colony at all, or it would stick to them forever.
+	trigger = {
+		OR = {
+			has_character_modifier = overseeing_the_settlement
+			any_held_title = {
+				tier = tier_county
+				is_colony_county_trigger = yes
+			}
+		}
+	}
+
+	effect = {
+		colony_refresh_presence_effect = yes
+	}
+}
+
+# The backstop, appended to the yearly pulse declared at the top of this file rather than declaring
+# `yearly_playable_pulse` a second time — two definitions of the same on_action key do not merge,
+# and the later one silently wins, which would have deleted the AI's whole frontier look.
+#
+# The five hooks above catch every ordinary way of arriving and leaving. This catches the rest —
+# imprisonment, a county lost in a war, a colony promoted out from under a lord who was standing in
+# it, and whatever the next patch adds. Yearly is frequent enough for a mechanic measured in years
+# and cheap enough to be invisible.
+wilderness_yearly_presence_refresh = {
+	trigger = {
+		OR = {
+			has_character_modifier = overseeing_the_settlement
+			any_held_title = {
+				tier = tier_county
+				is_colony_county_trigger = yes
+			}
+		}
+	}
+
+	effect = {
+		colony_refresh_presence_effect = yes
+	}
+}
+
+wilderness_yearly_colonist_petition_check = {
+	trigger = {
+		is_ai = yes
+		is_colonist_trigger = yes
+		gold < promote_colony_cost
+		exists = liege
+		any_held_title = {
+			tier = tier_county
+			can_promote_colony_trigger = yes
+		}
+	}
+
+	effect = {
+		random_held_title = {
+			limit = {
+				tier = tier_county
+				can_promote_colony_trigger = yes
+			}
+			save_scope_as = ready_colony
+		}
+		save_scope_as = petitioning_colonist
+
+		# 50% chance each year to send a formal petition to their liege
+		random = {
+			chance = 50
+			liege = {
+				trigger_event = wilderness_colonization.0050
+			}
+		}
+	}
+}
+
+# Ensures any AI colonist or ruler who has finished clearing and upgrading their colony
+# immediately executes the promotion if they have enough gold.
+wilderness_yearly_ai_promotion = {
+	trigger = {
+		is_ai = yes
+		any_held_title = {
+			tier = tier_county
+			can_promote_colony_trigger = yes
+		}
+		gold >= promote_colony_cost
+	}
+
+	effect = {
+		remove_short_term_gold = promote_colony_cost
+		random_held_title = {
+			limit = {
+				tier = tier_county
+				can_promote_colony_trigger = yes
+			}
+			promote_colony_effect = { COUNTY = this }
+		}
+	}
+}
+
+wilderness_yearly_colonist_development_aid_check = {
+	trigger = {
+		is_ai = yes
+		is_colonist_trigger = yes
+		gold < 100
+		exists = liege
+		NOT = { has_variable = development_aid_cooldown }
+
+		any_held_title = {
+			tier = tier_county
+			is_colony_county_trigger = yes
+			OR = {
+				# Either obstacles still need clearing...
+				has_wilderness_obstacle_trigger = yes
+				# ...or obstacles are cleared and the settlement is ready for its next upgrade
+				AND = {
+					county_obstacles_cleared_trigger = yes
+					title_province ?= {
+						OR = {
+							has_building = settlement_01
+							has_building = settlement_02
+						}
+						NOT = { has_building = settlement_03 }
+						has_ongoing_construction = no
+					}
+				}
+			}
+		}
+	}
+
+	effect = {
+		random_held_title = {
+			limit = {
+				tier = tier_county
+				is_colony_county_trigger = yes
+				OR = {
+					has_wilderness_obstacle_trigger = yes
+					AND = {
+						county_obstacles_cleared_trigger = yes
+						title_province ?= {
+							OR = {
+								has_building = settlement_01
+								has_building = settlement_02
+							}
+							NOT = { has_building = settlement_03 }
+							has_ongoing_construction = no
+						}
+					}
+				}
+			}
+			save_scope_as = struggling_colony
+		}
+
+		save_scope_as = petitioning_colonist
+
+		# 45% chance each year when broke to ask their liege
+		random = {
+			chance = 45
+
+			set_variable = {
+				name = development_aid_cooldown
+				years = 2
+			}
+
+			liege = {
+				trigger_event = wilderness_colonization.0051
+			}
+		}
+	}
+}

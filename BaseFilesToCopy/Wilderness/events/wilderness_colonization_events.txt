@@ -1,0 +1,2952 @@
+﻿namespace = wilderness_colonization
+
+
+# The one moment of colonisation the player actually decides anything in.
+#
+# ---- What changed and why ----
+#
+# This was a single-option acknowledgement. Paying was the whole of colonisation, and a price is not
+# a decision — it is a threshold you are either over or under. So the question moved from "can you
+# afford it" to "who do you send", and the answer is checked two years later by 0011.
+#
+# ---- The three options ----
+#
+# They are not three flavours of the same thing. Each is a different bet:
+#
+#   The capable man   — best odds, and you are down your most useful courtier if it goes wrong.
+#   The soldier       — worse odds, but he deals with what is out there: on success one obstacle is
+#                       already cleared, which is 75 to 250 gold and years of construction saved.
+#   Nobody in charge  — mediocre and flat. No one is at risk and no one is owed anything.
+#
+# The third exists so that "I have nobody worth sending" is a position rather than a dead end, and
+# because a player who does not want to think about it should be able to not think about it.
+#
+# `colony_pick_expedition_leader_effect` has already chosen the capable man, so option one is a
+# confirmation and the other two overwrite him. That ordering means the AI — which never sees this
+# — gets the same default without a separate code path.
+wilderness_colonization.0010 = {
+	type = character_event
+	title = wilderness_colonization.0010.t
+	desc = wilderness_colonization.0010.desc
+	theme = realm
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+
+	right_portrait = {
+		character = scope:expedition_leader
+		animation = personality_honorable
+	}
+
+	# Players only. The AI claims counties on its yearly pulse and must never be stopped by a
+	# window; the guard lives here rather than at the call site so every caller is covered by it.
+	trigger = {
+		is_ai = no
+	}
+
+	# --- The best man we have ------------------------------------------------------------------
+	option = {
+		name = wilderness_colonization.0010.a
+		trigger = { exists = scope:expedition_leader }
+		skill = stewardship
+		highlight_portrait = scope:expedition_leader
+		scope:colony = {
+			set_variable = {
+				name = colony_leader
+				value = scope:expedition_leader
+			}
+		}
+		custom_tooltip = colonize_expedition_odds_tt
+	}
+
+	# --- Somebody who can handle what is out there ---------------------------------------------
+	option = {
+		name = wilderness_colonization.0010.b
+		trigger = { exists = scope:expedition_soldier }
+		skill = martial
+		scope:colony = {
+			set_variable = {
+				name = colony_leader
+				value = scope:expedition_soldier
+			}
+
+			# The soldier's payoff, banked now and paid out by 0011 only if the colony survives.
+			# Stored rather than applied here because a cleared obstacle in a settlement that then
+			# fails is a reward for nothing.
+			set_variable = { name = colony_led_by_soldier }
+		}
+
+		custom_tooltip = colonize_expedition_soldier_tt
+	}
+
+	# --- Let them sort it out themselves -------------------------------------------------------
+	option = {
+		name = wilderness_colonization.0010.c
+
+		scope:colony = {
+			if = {
+				limit = { has_variable = colony_leader }
+				remove_variable = colony_leader
+			}
+		}
+
+		custom_tooltip = colonize_expedition_none_tt
+	}
+	
+# --- Lead the column yourself -------------------------------------------------------------
+	option = {
+		name = wilderness_colonization.0010.d
+		trigger = {
+			is_imprisoned = no
+			NOT = { has_character_modifier = overseeing_the_settlement }
+			NOT = {
+				any_held_title = {
+					tier = tier_county
+					title_province ?= {
+						has_holding_type = settlement_holding
+					}
+				}
+			}
+		}
+
+		scope:colony = {
+			set_variable = {
+				name = colony_leader
+				value = root
+			}
+		}
+
+		custom_tooltip = colonize_expedition_self_tt
+	}
+}
+
+
+# Whether it took. Hidden, and hidden is the point: this runs for the AI's colonies as well as the
+# player's, so the frontier fills at the same rate for everybody and for the same reasons.
+wilderness_colonization.0011 = {
+	hidden = yes
+	scope = character
+
+	trigger = {
+		expedition_still_out_trigger = yes
+	}
+
+	immediate = {
+		# Alive as well as named. A leader who died on the road is not a leader with bad numbers,
+		# it is nobody in charge — and every branch below would otherwise be reading a corpse: stats
+		# off the dead, a prestige award on success, a death roll on failure.
+		scope:colony = {
+			if = {
+				limit = {
+					has_variable = colony_leader
+					var:colony_leader ?= { is_alive = yes }
+				}
+				var:colony_leader = { save_scope_as = expedition_leader }
+			}
+		}
+
+		# An expedition with nobody in charge is a flat, unimpressive prospect: no skills to read
+		# and no traits to help. 45 is deliberately a shade under a coin flip.
+		if = {
+			limit = { exists = scope:expedition_leader }
+			save_scope_value_as = {
+				name = settling_chance
+				value = scope:expedition_leader.colony_settling_chance
+			}
+		}
+		else = {
+			save_scope_value_as = { name = settling_chance  value = 45 }
+		}
+
+		random = {
+			chance = scope:settling_chance
+			set_variable = { name = settling_took }
+		}
+
+		if = {
+			limit = { has_variable = settling_took }
+			remove_variable = settling_took
+
+			# --- Set Baseline Authority & Rebound Protection ---
+			scope:colony = {
+				# Set a minimum floor so early setbacks don't trigger immediate collapse
+				if = {
+					limit = { county_control < 50 }
+					change_county_control  = 50
+				}
+
+				# Bonus if led by the soldier: military discipline establishes firmer order
+				if = {
+					limit = { has_variable = colony_led_by_soldier }
+					change_county_control = 15 # Starts at 65 control
+				}
+
+				# Grace period flag: protects the fresh settlement from collapse checks during its first 3 years
+				set_variable = {
+					name = colony_just_founded
+					years = 3
+				}
+			}
+
+			colony_settling_success_effect = yes
+		}
+		else = {
+			# If the player personally led the expedition and it failed, trigger the life-or-death crisis event
+			# rather than applying silent background death.
+			if = {
+				limit = {
+					is_ai = no
+					exists = scope:expedition_leader
+					scope:expedition_leader = root
+				}
+				trigger_event = wilderness_colonization.0029
+			}
+			else = {
+				colony_settling_failure_effect = yes
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  Player-Led Crisis: The Starving Winter (Mortal Danger)
+# =====================================================================================
+wilderness_colonization.0029 = {
+	type = character_event
+	title = wilderness_colonization.0029.t
+	desc = wilderness_colonization.0029.desc
+	theme = physical_health
+	override_background = { reference = wilderness }
+
+	left_portrait = {
+		character = root
+		animation = pain
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	trigger = {
+		is_ai = no
+		exists = scope:colony
+	}
+
+	# --- Option A: Butcher the draft beasts and retreat (Guaranteed Survival) ---
+	option = {
+		name = wilderness_colonization.0029.a
+		add_internal_flag = special
+
+		custom_tooltip = colonize_starvation_retreat_tt
+
+		increase_wounds_effect = { REASON = fight }
+
+		add_prestige = medium_prestige_loss
+
+		hidden_effect = {
+			colony_settling_failure_effect = yes
+		}
+
+		stress_impact = {
+			craven = minor_stress_impact_loss
+			brave = medium_stress_impact_gain
+			ambitious = medium_stress_impact_gain
+		}
+	}
+
+	# --- Option B: Defy the blizzard and press on (Mortal Risk) ---
+	option = {
+		name = wilderness_colonization.0029.b
+		trait = brave
+		add_internal_flag = dangerous
+
+		custom_tooltip = colonize_starvation_gamble_tt
+
+		duel = {
+			skill = prowess
+			value = 14
+
+			70 = {
+				desc = wilderness_starvation_survival_desc
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.0
+				}
+				increase_wounds_effect = { REASON = fight }
+				add_trait = ill
+				colony_settling_failure_effect = yes
+			}
+			30 = {
+				desc = wilderness_starvation_death_desc
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.0
+				}
+				colony_settling_failure_effect = yes
+				death = {
+					death_reason = death_accident
+				}
+			}
+		}
+
+		stress_impact = {
+			brave = medium_stress_impact_loss
+			craven = major_stress_impact_gain
+		}
+	}
+}
+# Word from the road, three months out. Hidden, and a dispatcher rather than an event in its own
+# right: it picks which of the three things happened and fires that.
+#
+# ---- Why there is a middle at all ----
+#
+# The first build had the party leave and the news arrive two years later with nothing in between.
+# That is not suspense, it is a delay — the decision in 0010 is made and then forgotten, and the
+# outcome lands on a player who no longer remembers choosing anything.
+#
+# So there is one letter from the road, and it asks for something. Each of the three trades a
+# different currency, which is what keeps them from being the same event with different text:
+#
+#   0016  gold        — they are short, and it costs money now to fix
+#   0017  command     — who is in charge out there, and whether that holds
+#   0018  a promise   — a better chance now against a debt owed only if they survive
+#
+# The AI answers these too. Character events resolve for AI on `ai_chance`, so an AI expedition has
+# the same middle as a player's and its odds move for the same reasons.
+#
+# ---- Every option out there is a roll, and every roll shows its number ----
+#
+# The first version of these three applied flat, certain changes to expedition_fortune: pay 50 gold,
+# receive +15, guaranteed. That is not a decision on a road three months from anywhere, it is a
+# purchase — and a purchase whose price is fixed makes the party's leader, the whole subject of
+# 0010, irrelevant to everything that happens between leaving and arriving.
+#
+# So each option now rolls against a script value in 00_colonization_values.txt, each value reads the
+# stats and the personality of the man out there (and of the lord answering the letter), and each
+# option prints the percentage in its tooltip the way vanilla prints a duel's or a hunt's. The odds
+# are the content: the same letter answered the same way is a different bet depending on who you
+# sent, and the player can see that it is before choosing.
+#
+# ---- And all three fire whoever went ----
+#
+# 0017 used to be gated on there being a leader, which meant "they can choose their own leader on the
+# road" quietly deleted a third of the middle of the journey — the one answer to 0010 that most needs
+# something to happen, since nothing else in the run depends on a man who does not exist. It now
+# fires either way and asks the leaderless column its own question, which is who has been giving the
+# orders and whether we are going to make that official.
+wilderness_colonization.0014 = {
+	hidden = yes
+	scope = character
+
+	trigger = {
+		expedition_still_out_trigger = yes
+	}
+
+	immediate = {
+		scope:colony = {
+			if = {
+				limit = {
+					has_variable = colony_leader
+					var:colony_leader ?= { is_alive = yes }
+				}
+				var:colony_leader = { save_scope_as = expedition_leader }
+			}
+		}
+
+		# --- Branch: Personal Leadership vs Distant Expedition ---
+		if = {
+			limit = {
+				exists = scope:expedition_leader
+				scope:expedition_leader = root
+			}
+			random_list = {
+				10 = { trigger_event = wilderness_colonization.0026 }
+				10 = { trigger_event = wilderness_colonization.0027 }
+				10 = { trigger_event = wilderness_colonization.0028 }
+			}
+		}
+		else = {
+			random_list = {
+				10 = { trigger_event = wilderness_colonization.0016 }
+				10 = { trigger_event = wilderness_colonization.0017 }
+				10 = { trigger_event = wilderness_colonization.0018 }
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Player-Led Road Event 1: The Bottom of the Barrel (Short Rations)
+# =====================================================================================
+wilderness_colonization.0026 = {
+	type = character_event
+	title = wilderness_colonization.0026.t
+	desc = wilderness_colonization.0026.desc
+	theme = realm
+	override_background = { reference = army_camp }
+
+	left_portrait = {
+		character = root
+		animation = worry
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	right_portrait = {
+		trigger = { exists = scope:camp_quartermaster }
+		character = scope:camp_quartermaster
+		animation = stress
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	trigger = {
+		expedition_still_out_trigger = yes
+		exists = scope:expedition_leader
+		scope:expedition_leader = root
+	}
+
+	immediate = {
+		random_courtier_or_guest = {
+			limit = { is_available_ai_adult = yes }
+			save_scope_as = camp_quartermaster
+		}
+	}
+
+	# Option A: Buy emergency provisions from passing trappers/outposts
+	option = {
+		name = wilderness_colonization.0026.a
+		skill = stewardship
+		add_internal_flag = special
+
+		trigger = { gold >= 50 }
+		remove_short_term_gold = 50
+
+		custom_tooltip = colonize_relief_column_breakdown_tt
+
+		hidden_effect = {
+			colony_road_roll_effect = { CHANCE = colony_relief_column_chance }
+
+			if = {
+				limit = { has_variable = road_roll_took }
+				scope:colony = { change_variable = { name = expedition_fortune add = 20 } }
+			}
+			else = {
+				scope:colony = { change_variable = { name = expedition_fortune add = 2 } }
+			}
+		}
+
+		stress_impact = {
+			generous = minor_stress_impact_loss
+			greedy = medium_stress_impact_gain
+		}
+	}
+
+	# Option B: Lead a hunting party into the brush personally
+	option = {
+		name = wilderness_colonization.0026.b
+		skill = martial
+
+		custom_tooltip = colonize_forage_breakdown_tt
+
+		hidden_effect = {
+			colony_road_roll_effect = { CHANCE = colony_self_rule_chance }
+
+			if = {
+				limit = { has_variable = road_roll_took }
+				scope:colony = { change_variable = { name = expedition_fortune add = 12 } }
+			}
+			else = {
+				scope:colony = { change_variable = { name = expedition_fortune add = -8 } }
+			}
+		}
+
+		stress_impact = {
+			brave = minor_stress_impact_loss
+			craven = minor_stress_impact_gain
+		}
+	}
+
+	# Option C: Enforce strict half-rations and push through
+	option = {
+		name = wilderness_colonization.0026.c
+		trait = callous
+		add_internal_flag = dangerous
+
+		custom_tooltip = colonize_make_do_breakdown_tt
+
+		hidden_effect = {
+			colony_road_roll_effect = { CHANCE = colony_make_do_chance }
+
+			if = {
+				limit = { has_variable = road_roll_took }
+				scope:colony = { change_variable = { name = expedition_fortune add = 5 } }
+			}
+			else = {
+				scope:colony = { change_variable = { name = expedition_fortune add = -18 } }
+			}
+		}
+
+		stress_impact = {
+			greedy = minor_stress_impact_loss
+			compassionate = major_stress_impact_gain
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Player-Led Road Event 2: Murmurs in the Mud (Command & The Trail)
+# =====================================================================================
+wilderness_colonization.0027 = {
+	type = character_event
+	title = wilderness_colonization.0027.t
+	desc = wilderness_colonization.0027.desc
+	theme = realm
+	override_background = { reference = army_camp }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	right_portrait = {
+		trigger = { exists = scope:expedition_soldier }
+		character = scope:expedition_soldier
+		animation = marshal_shield
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { armor } }
+	}
+
+	trigger = {
+		expedition_still_out_trigger = yes
+		exists = scope:expedition_leader
+		scope:expedition_leader = root
+	}
+
+	# Option A: Demand absolute obedience through lordly authority
+	option = {
+		name = wilderness_colonization.0027.a
+		skill = diplomacy
+
+		custom_tooltip = colonize_authority_breakdown_tt
+
+		hidden_effect = {
+			colony_road_roll_effect = { CHANCE = colony_authority_chance }
+
+			if = {
+				limit = { has_variable = road_roll_took }
+				scope:colony = { change_variable = { name = expedition_fortune add = 14 } }
+			}
+			else = {
+				scope:colony = { change_variable = { name = expedition_fortune add = -10 } }
+				add_stress = minor_stress_gain
+			}
+		}
+
+		stress_impact = {
+			arrogant = minor_stress_impact_loss
+			shy = minor_stress_impact_gain
+		}
+	}
+
+	# Option B: Defer trailcraft and route-finding to the veteran soldier
+	option = {
+		name = wilderness_colonization.0027.b
+		trigger = {
+			exists = scope:expedition_soldier
+			scope:expedition_soldier = { is_alive = yes }
+		}
+
+		skill = martial
+		highlight_portrait = scope:expedition_soldier
+
+		custom_tooltip = colonize_handover_breakdown_tt
+
+		hidden_effect = {
+			scope:colony = {
+				set_variable = { name = colony_leader value = scope:expedition_soldier }
+				set_variable = { name = colony_led_by_soldier }
+			}
+
+			colony_road_roll_effect = { CHANCE = colony_handover_chance }
+
+			if = {
+				limit = { has_variable = road_roll_took }
+				scope:colony = { change_variable = { name = expedition_fortune add = 8 } }
+			}
+			else = {
+				scope:colony = { change_variable = { name = expedition_fortune add = -12 } }
+			}
+		}
+
+		stress_impact = {
+			humble = minor_stress_impact_loss
+			arrogant = medium_stress_impact_gain
+		}
+	}
+
+	# Option C: Open a council by the fires and let the wagonmasters speak
+	option = {
+		name = wilderness_colonization.0027.c
+
+		custom_tooltip = colonize_self_rule_breakdown_tt
+
+		hidden_effect = {
+			colony_road_roll_effect = { CHANCE = colony_self_rule_chance }
+
+			if = {
+				limit = { has_variable = road_roll_took }
+				scope:colony = { change_variable = { name = expedition_fortune add = 6 } }
+			}
+			else = {
+				scope:colony = { change_variable = { name = expedition_fortune add = -14 } }
+			}
+		}
+
+		stress_impact = {
+			gregarious = minor_stress_impact_loss
+			arrogant = medium_stress_impact_gain
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Player-Led Road Event 3: Eyes Turned Backward (Morale & Desertion)
+# =====================================================================================
+wilderness_colonization.0028 = {
+	type = character_event
+	title = wilderness_colonization.0028.t
+	desc = wilderness_colonization.0028.desc
+	theme = realm
+	override_background = { reference = army_camp }
+
+	left_portrait = {
+		character = root
+		animation = personality_bold
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	right_portrait = {
+		trigger = { exists = scope:distressed_settler }
+		character = scope:distressed_settler
+		animation = worry
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	trigger = {
+		expedition_still_out_trigger = yes
+		exists = scope:expedition_leader
+		scope:expedition_leader = root
+	}
+
+	immediate = {
+		random_courtier_or_guest = {
+			limit = { is_available_ai_adult = yes }
+			save_scope_as = distressed_settler
+		}
+	}
+
+	# Option A: Swear to them in person that every family will have land
+	option = {
+		name = wilderness_colonization.0028.a
+
+		custom_tooltip = colonize_promise_tt
+		custom_tooltip = colonize_settlers_promised_tt
+
+		hidden_effect = {
+			scope:colony = { set_variable = { name = settlers_were_promised } }
+
+			colony_road_roll_effect = { CHANCE = colony_promise_chance }
+
+			if = {
+				limit = { has_variable = road_roll_took }
+				scope:colony = { change_variable = { name = expedition_fortune add = 18 } }
+			}
+			else = {
+				scope:colony = { change_variable = { name = expedition_fortune add = 3 } }
+			}
+		}
+
+		stress_impact = {
+			honest = minor_stress_impact_loss
+			cynical = minor_stress_impact_gain
+		}
+	}
+
+	# Option B: Hold the line by discipline and iron will
+	option = {
+		name = wilderness_colonization.0028.b
+
+		custom_tooltip = colonize_hold_them_tt
+
+		hidden_effect = {
+			colony_road_roll_effect = { CHANCE = colony_hold_them_chance }
+
+			if = {
+				limit = { has_variable = road_roll_took }
+				scope:colony = { change_variable = { name = expedition_fortune add = -2 } }
+			}
+			else = {
+				scope:colony = { change_variable = { name = expedition_fortune add = -16 } }
+			}
+		}
+
+		stress_impact = {
+			brave = minor_stress_impact_loss
+			craven = medium_stress_impact_gain
+		}
+	}
+}
+
+# =====================================================================================
+#  Word from the Road: Short Rations
+# =====================================================================================
+wilderness_colonization.0016 = {
+	type = character_event
+	title = wilderness_colonization.0016.t
+	desc = wilderness_colonization.0016.desc
+	theme = realm
+	override_background = { reference = army_camp }
+
+	# Left: The ruler considering the logistics
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+
+	# Right: The expedition leader on the frozen trail
+	right_portrait = {
+		trigger = { exists = scope:expedition_leader }
+		character = scope:expedition_leader
+		animation = shiver
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	# Lower Center: The exhausted, gaunt messenger who rode back
+	lower_center_portrait = {
+		trigger = { exists = scope:road_messenger }
+		character = scope:road_messenger
+		animation = stress
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	trigger = { expedition_still_out_trigger = yes }
+
+	immediate = {
+		# Pick a courtier to represent the exhausted rider
+		random_courtier_or_guest = {
+			limit = {
+				is_available_ai_adult = yes
+				NOT = { this = scope:expedition_leader }
+			}
+			save_scope_as = road_messenger
+		}
+	}
+
+	# --- Option A: Dispatch emergency relief carts (Stewardship / Gold) ----------------------
+	option = {
+		name = wilderness_colonization.0016.a
+		skill = stewardship
+		add_internal_flag = special
+		highlight_portrait = scope:expedition_leader
+
+		trigger = { gold >= 50 }
+		remove_short_term_gold = 50
+
+		custom_tooltip = colonize_relief_column_breakdown_tt
+
+		hidden_effect = {
+			colony_road_roll_effect = { CHANCE = colony_relief_column_chance }
+
+			if = {
+				limit = { has_variable = road_roll_took }
+				scope:colony = { change_variable = { name = expedition_fortune  add = 20 } }
+			}
+			else = {
+				# Late arrival
+				scope:colony = { change_variable = { name = expedition_fortune  add = 2 } }
+			}
+		}
+
+		stress_impact = {
+			generous = minor_stress_impact_loss
+			greedy = medium_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 60
+			modifier = { add = -50  gold < 150 }
+			modifier = { add = 25   ai_greed < 25 }
+			modifier = { add = 25   colony_relief_column_chance > 65 }
+			modifier = { add = -30  colony_relief_column_chance < 40 }
+		}
+	}
+
+	# --- Option B: Order them to live off the land (Martial / Foraging) -----------------------
+	option = {
+		name = wilderness_colonization.0016.c
+		skill = martial
+		highlight_portrait = scope:expedition_leader
+
+		custom_tooltip = colonize_forage_breakdown_tt
+
+		hidden_effect = {
+			# Evaluated against party's martial / leader prowess
+			colony_road_roll_effect = { CHANCE = colony_self_rule_chance }
+
+			if = {
+				limit = { has_variable = road_roll_took }
+				scope:colony = { change_variable = { name = expedition_fortune  add = 12 } }
+			}
+			else = {
+				scope:colony = { change_variable = { name = expedition_fortune  add = -8 } }
+			}
+		}
+
+		stress_impact = {
+			brave = minor_stress_impact_loss
+			craven = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 30
+			modifier = { add = 30  has_trait = lifestyle_hunter }
+			modifier = { add = 25  martial > 12 }
+		}
+	}
+
+	# --- Option C: Deny help; make do with existing stores (Stingy / Callous) ----------------
+	option = {
+		name = wilderness_colonization.0016.b
+		trait = callous
+		add_internal_flag = dangerous
+		highlight_portrait = scope:expedition_leader
+
+		custom_tooltip = colonize_make_do_breakdown_tt
+
+		hidden_effect = {
+			colony_road_roll_effect = { CHANCE = colony_make_do_chance }
+
+			if = {
+				limit = { has_variable = road_roll_took }
+				scope:colony = { change_variable = { name = expedition_fortune  add = 5 } }
+			}
+			else = {
+				scope:colony = { change_variable = { name = expedition_fortune  add = -18 } }
+			}
+		}
+
+		stress_impact = {
+			greedy = minor_stress_impact_loss
+			compassionate = major_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 30
+			modifier = { add = 60  gold < 50 }
+			modifier = { add = 25  colony_make_do_chance > 60 }
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Word from the Road: Crisis of Command
+# =====================================================================================
+wilderness_colonization.0017 = {
+	type = character_event
+
+	title = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:expedition_leader }
+				desc = wilderness_colonization.0017.t
+			}
+			desc = wilderness_colonization.0017.t.nobody
+		}
+	}
+
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:expedition_leader }
+				desc = wilderness_colonization.0017.desc
+			}
+			desc = wilderness_colonization.0017.desc.nobody
+		}
+	}
+
+	theme = realm
+	override_background = { reference = army_camp }
+
+	# Left: Ruler weighing the message
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+
+	# Right: The struggling expedition leader
+	right_portrait = {
+		trigger = { exists = scope:expedition_leader }
+		character = scope:expedition_leader
+		animation = stress
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	# Lower Center: The soldier waiting in the wings
+	lower_center_portrait = {
+		trigger = {
+			exists = scope:expedition_soldier
+			NOT = { scope:expedition_soldier = scope:expedition_leader }
+		}
+		character = scope:expedition_soldier
+		animation = marshal_shield
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { armor } }
+	}
+
+	trigger = {
+		expedition_still_out_trigger = yes
+	}
+
+	# --- Option A: Double down and assert royal backing ---------------------------------------
+	option = {
+		name = {
+			text = {
+				first_valid = {
+					triggered_desc = {
+						trigger = { exists = scope:expedition_leader }
+						desc = wilderness_colonization.0017.a
+					}
+					desc = wilderness_colonization.0017.a.nobody
+				}
+			}
+		}
+
+		skill = diplomacy
+		highlight_portrait = scope:expedition_leader
+
+		custom_tooltip = colonize_authority_breakdown_tt
+
+		hidden_effect = {
+			colony_road_roll_effect = { CHANCE = colony_authority_chance }
+
+			if = {
+				limit = { has_variable = road_roll_took }
+				scope:colony = { change_variable = { name = expedition_fortune  add = 14 } }
+			}
+			else = {
+				scope:colony = { change_variable = { name = expedition_fortune  add = -10 } }
+
+				if = {
+					limit = { exists = scope:expedition_leader }
+					scope:expedition_leader = { add_stress = minor_stress_gain }
+				}
+			}
+		}
+
+		stress_impact = {
+			arrogant = minor_stress_impact_loss
+			shy = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 50
+			modifier = { add = 30   colony_authority_chance > 60 }
+			modifier = { add = -25  colony_authority_chance < 35 }
+		}
+	}
+
+	# --- Option B: Put the Soldier in command (With an existing leader) -----------------------
+	option = {
+		name = wilderness_colonization.0017.b
+		trigger = {
+			exists = scope:expedition_leader
+			exists = scope:expedition_soldier
+			scope:expedition_soldier = { is_alive = yes }
+			NOT = { scope:expedition_soldier = scope:expedition_leader }
+		}
+
+		skill = martial
+		add_internal_flag = dangerous
+		highlight_portrait = scope:expedition_soldier
+
+		custom_tooltip = colonize_handover_breakdown_tt
+
+		hidden_effect = {
+			# Command changes immediately
+			scope:colony = {
+				set_variable = { name = colony_leader  value = scope:expedition_soldier }
+				set_variable = { name = colony_led_by_soldier }
+			}
+
+			colony_road_roll_effect = { CHANCE = colony_handover_chance }
+
+			if = {
+				limit = { has_variable = road_roll_took }
+				scope:colony = { change_variable = { name = expedition_fortune  add = 8 } }
+			}
+			else = {
+				scope:colony = { change_variable = { name = expedition_fortune  add = -12 } }
+
+				# Disgraced former leader resentment
+				scope:expedition_leader = {
+					add_stress = medium_stress_gain
+					add_opinion = {
+						target = root
+						modifier = colonist_sent_to_the_frontier_opinion
+						opinion = -20
+					}
+				}
+			}
+		}
+
+		stress_impact = {
+			callous = minor_stress_impact_loss
+			compassionate = medium_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 30
+			modifier = { add = 35  colony_handover_chance > 60 }
+		}
+	}
+
+	# --- Option B (Nobody form): Send the Soldier to take over a leaderless column ------------
+	option = {
+		name = wilderness_colonization.0017.b.nobody
+		trigger = {
+			NOT = { exists = scope:expedition_leader }
+			exists = scope:expedition_soldier
+			scope:expedition_soldier = { is_alive = yes }
+		}
+
+		skill = martial
+		add_internal_flag = special
+		highlight_portrait = scope:expedition_soldier
+
+		custom_tooltip = colonize_ride_after_breakdown_tt
+
+		hidden_effect = {
+			colony_road_roll_effect = { CHANCE = colony_handover_chance }
+
+			if = {
+				limit = { has_variable = road_roll_took }
+				scope:colony = {
+					set_variable = { name = colony_leader  value = scope:expedition_soldier }
+					set_variable = { name = colony_led_by_soldier }
+					change_variable = { name = expedition_fortune  add = 10 }
+				}
+			}
+			else = {
+				scope:colony = { change_variable = { name = expedition_fortune  add = -6 } }
+			}
+		}
+
+		ai_chance = {
+			base = 40
+			modifier = { add = 35  colony_handover_chance > 60 }
+		}
+	}
+
+	# --- Option C: Stay out of it / Abstain ---------------------------------------------------
+	option = {
+		name = {
+			text = {
+				first_valid = {
+					triggered_desc = {
+						trigger = { exists = scope:expedition_leader }
+						desc = wilderness_colonization.0017.c
+					}
+					desc = wilderness_colonization.0017.c.nobody
+				}
+			}
+		}
+
+		add_internal_flag = dangerous
+
+		custom_tooltip = colonize_self_rule_breakdown_tt
+
+		hidden_effect = {
+			colony_road_roll_effect = { CHANCE = colony_self_rule_chance }
+
+			if = {
+				limit = { has_variable = road_roll_took }
+				scope:colony = { change_variable = { name = expedition_fortune  add = 6 } }
+			}
+			else = {
+				scope:colony = { change_variable = { name = expedition_fortune  add = -14 } }
+			}
+		}
+
+		stress_impact = {
+			lazy = minor_stress_impact_loss
+			cynical = minor_stress_impact_loss
+			diligent = medium_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 20
+			modifier = { add = 40  ai_compassion < 25 }
+			modifier = { add = 40  NOT = { exists = scope:expedition_soldier } }
+		}
+	}
+}
+
+
+# They want to turn back. The currency is a promise, and it is the only one of the three whose cost
+# lands after the fact — see settlers_promised_land for why that is the point.
+#
+# ---- Why the debt is not part of the gamble ----
+#
+# The promise is recorded whether or not they believe it. What the roll decides is whether it MOVES
+# them, and that is the sharper version of the choice: a lord with a name for keeping his word buys a
+# column that walks on, and a lord without one buys the same debt for nothing. Making the debt itself
+# conditional would turn "they did not believe me" into a refund, which is not what happens when men
+# on a road decide their lord's word is worth what it usually is.
+wilderness_colonization.0018 = {
+	type = character_event
+	title = wilderness_colonization.0018.t
+	desc = wilderness_colonization.0018.desc
+	theme = realm
+
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+
+	right_portrait = {
+		trigger = { exists = scope:expedition_leader }
+		character = scope:expedition_leader
+		animation = worry
+	}
+
+	trigger = { expedition_still_out_trigger = yes }
+
+	# --- Promise them land ---------------------------------------------------------------------
+	option = {
+		name = wilderness_colonization.0018.a
+
+		custom_tooltip = colonize_promise_tt
+		custom_tooltip = colonize_settlers_promised_tt
+
+		hidden_effect = {
+			scope:colony = { set_variable = { name = settlers_were_promised } }
+
+			colony_road_roll_effect = { CHANCE = colony_promise_chance }
+
+			if = {
+				limit = { has_variable = road_roll_took }
+				scope:colony = { change_variable = { name = expedition_fortune  add = 18 } }
+			}
+			else = {
+				# They take the promise and go on walking, which is not the same as being moved by it.
+				scope:colony = { change_variable = { name = expedition_fortune  add = 3 } }
+			}
+		}
+
+		ai_chance = {
+			base = 50
+			modifier = { add = 30  ai_honor < 25 }
+			modifier = { add = 25  colony_promise_chance > 60 }
+		}
+	}
+
+	# --- They knew what they were signing for --------------------------------------------------
+	option = {
+		name = wilderness_colonization.0018.b
+
+		custom_tooltip = colonize_hold_them_tt
+
+		hidden_effect = {
+			colony_road_roll_effect = { CHANCE = colony_hold_them_chance }
+
+			if = {
+				limit = { has_variable = road_roll_took }
+				scope:colony = { change_variable = { name = expedition_fortune  add = -2 } }
+			}
+			else = {
+				# Some of them go home. The ones who stay know exactly how far they are from anywhere.
+				scope:colony = { change_variable = { name = expedition_fortune  add = -16 } }
+			}
+		}
+
+		ai_chance = {
+			base = 50
+			modifier = { add = 30  ai_honor > 60 }
+			modifier = { add = 25  colony_hold_them_chance > 60 }
+		}
+	}
+}
+
+
+# It held. Player-facing half of 0011.
+wilderness_colonization.0012 = {
+	type = character_event
+	title = wilderness_colonization.0012.t
+	theme = realm
+
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:expedition_leader
+					scope:expedition_leader = root
+				}
+				desc = wilderness_colonization.0012.desc.self
+			}
+			desc = wilderness_colonization.0012.desc
+		}
+	}
+
+	left_portrait = {
+		character = root
+		animation = happiness
+	}
+
+	right_portrait = {
+		trigger = {
+			exists = scope:expedition_leader
+			NOT = { scope:expedition_leader = root }
+		}
+		character = scope:expedition_leader
+		animation = personality_honorable
+	}
+
+	trigger = { is_ai = no }
+
+	immediate = {
+		# Safety fallback: find colony if scope wasn't directly passed
+		if = {
+			limit = { NOT = { exists = scope:colony } }
+			random_held_title = {
+				limit = {
+					tier = tier_county
+					title_province ?= {
+						has_holding_type = settlement_holding
+					}
+				}
+				save_scope_as = colony
+			}
+		}
+
+		if = {
+			limit = {
+				exists = scope:colony
+				scope:colony = {
+					has_variable = colony_leader
+					var:colony_leader ?= { is_alive = yes }
+				}
+			}
+			scope:colony.var:colony_leader = { save_scope_as = expedition_leader }
+		}
+	}
+
+	# --- Option A: Keep Direct Domain Control ---
+	option = {
+		name = wilderness_colonization.0012.a
+		trigger = {
+			OR = {
+				# If you led it yourself or no courtier led, Option A is always available
+				NOT = { exists = scope:expedition_leader }
+				scope:expedition_leader = root
+				can_hold_another_colony_trigger = yes
+				highest_held_title_tier < tier_duchy
+			}
+		}
+
+		custom_tooltip = colonize_keep_direct_control_tt
+	}
+
+	# --- Option B: Grant Title to Expedition Leader as Vassal (Dukes & above) ---
+	option = {
+		name = wilderness_colonization.0012.b
+		trigger = {
+			highest_held_title_tier >= tier_duchy
+			exists = scope:expedition_leader
+			scope:expedition_leader = {
+				is_alive = yes
+				NOT = { this = root }
+			}
+		}
+
+		highlight_portrait = scope:expedition_leader
+
+		# 1. Initialize title change in character scope
+		create_title_and_vassal_change = {
+			type = granted
+			save_scope_as = colony_grant_change
+		}
+
+		# 2. Transfer the title to the leader
+		scope:colony = {
+			change_title_holder = {
+				holder = scope:expedition_leader
+				change = scope:colony_grant_change
+				take_baronies = yes
+			}
+
+			# Safeguard: ensure control doesn't get wiped by the engine on title transfer
+			if = {
+				limit = { county_control < 50 }
+				change_county_control  = 50
+			}
+		}
+
+		# 3. Resolve the change in character scope
+		resolve_title_and_vassal_change = scope:colony_grant_change
+
+		scope:expedition_leader = {
+			add_opinion = {
+				target = root
+				modifier = colonist_raised_up_opinion
+				opinion = 40
+			}
+		}
+
+		custom_tooltip = colonize_grant_to_leader_tt
+	}
+}
+
+
+# It did not. Player-facing half of 0011.
+wilderness_colonization.0013 = {
+	type = character_event
+	title = wilderness_colonization.0013.t
+	desc = wilderness_colonization.0013.desc
+	theme = realm
+
+	left_portrait = {
+		character = root
+		animation = grief
+	}
+
+	trigger = { is_ai = no }
+
+	option = {
+		name = wilderness_colonization.0013.a
+	}
+}
+
+
+# A colony granted to somebody who had nothing.
+#
+# Fires to the LIEGE, and only to a player liege — colonization_grant_reaction_effect gates it —
+# because the AI granting land to a courtier is ordinary housekeeping and does not need a window.
+#
+# It exists to make the asymmetry legible at the moment it happens. The player has just handed a
+# county to a man with no land, and the opinion bonus he picked up is not something anyone reads in
+# a tooltip while it is being applied. This is where it gets said out loud.
+wilderness_colonization.0015 = {
+	type = character_event
+	title = wilderness_colonization.0015.t
+	desc = wilderness_colonization.0015.desc
+	theme = realm
+
+	left_portrait = {
+		character = scope:colonist
+		animation = happiness
+	}
+
+	trigger = {
+		is_ai = no
+		exists = scope:colonist
+	}
+
+	option = {
+		name = wilderness_colonization.0015.a
+	}
+}
+
+
+# =====================================================================================
+#  A colony comes of age
+# =====================================================================================
+#
+# ---- Why there are two events and not one with a branch ----
+#
+# Because they are two different pieces of news and the difference is the whole point. Folding them
+# into one event with a conditional desc would put the most important line the mechanic ever prints
+# behind a `first_valid` block, where it reads as a variation rather than as a turn.
+#
+# Both are narration. colony_completion_effect has already changed the world by the time either
+# fires — see the note there for why the mechanical work does not live inside an event. What the
+# player chooses here is what to do NEXT, which is the only kind of choice an event can safely own.
+
+# The ordinary ending, and the one the player should mostly get: the colonist finishes, and stays.
+wilderness_colonization.0020 = {
+	type = character_event
+	title = wilderness_colonization.0020.t
+	desc = wilderness_colonization.0020.desc
+	theme = realm
+
+	left_portrait = {
+		character = scope:colonist
+		animation = personality_honorable
+	}
+	right_portrait = {
+		character = root
+		animation = thinking
+	}
+
+	trigger = {
+		exists = scope:colonist
+		exists = scope:finished_colony
+	}
+
+	option = {
+		name = wilderness_colonization.0020.a
+
+		# He has been useless to you for a generation and has just stopped being useless. Saying so
+		# costs nothing and is worth something to a man who spent twenty years in a palisade.
+		add_prestige = minor_prestige_gain
+
+		reverse_add_opinion = {
+			target = scope:colonist
+			modifier = colonist_raised_up_opinion
+			opinion = 15
+		}
+
+		# Heavily weighted, because the alternative below is a tyranny hit for a county that is worth
+		# one county. An AI that revoked here half the time — which is what two unweighted options
+		# would give it — would make every AI-granted colony a trap and teach the player that
+		# colonists are never allowed to keep anything.
+		ai_chance = {
+			base = 100
+		}
+	}
+
+	option = {
+		name = wilderness_colonization.0020.b
+
+		# Or take the county back now that it is finally worth having. It is legal, it is what the
+		# contract lets you do, and everyone will see exactly what you did.
+		trigger = {
+			scope:finished_colony = { holder ?= { this = scope:colonist } }
+		}
+
+		scope:colonist = {
+			add_opinion = {
+				target = root
+				modifier = colonist_sent_to_the_frontier_opinion
+				opinion = -60
+			}
+		}
+
+		every_vassal = {
+			limit = { NOT = { this = scope:colonist } }
+			add_opinion = {
+				target = root
+				modifier = lost_a_colony_opinion
+				opinion = -15
+			}
+		}
+
+		scope:finished_colony = {
+			create_title_and_vassal_change = {
+				type = revoked
+				save_scope_as = seizure
+			}
+			change_title_holder = {
+				holder = root
+				change = scope:seizure
+				take_baronies = yes
+			}
+			resolve_title_and_vassal_change = scope:seizure
+		}
+
+		add_tyranny = medium_tyranny_gain
+
+		ai_chance = {
+			base = 5
+			modifier = { add = 20  ai_greed > 75 }
+			modifier = { factor = 0  has_trait = just }
+		}
+	}
+}
+
+# The other ending. A generation of being nobody's concern, and on the day the seat goes up he
+# decides he does not need a lord for it.
+#
+# See colony_secession_chance for why the odds are small and what moves them. The short version is
+# that a frontier which always breaks away is a tax on granting rather than a risk, and the correct
+# response to a tax is never to grant.
+wilderness_colonization.0021 = {
+	type = character_event
+	title = wilderness_colonization.0021.t
+	desc = wilderness_colonization.0021.desc
+	theme = realm
+
+	left_portrait = {
+		character = scope:colonist
+		animation = personality_bold
+	}
+	right_portrait = {
+		character = root
+		animation = anger
+	}
+
+	trigger = {
+		exists = scope:colonist
+		exists = scope:finished_colony
+	}
+
+	# Let him go. There is a five-year truce on the table already and the county was never worth
+	# anything to you; what you lose is the admission.
+	option = {
+		name = wilderness_colonization.0021.a
+
+		add_stress = medium_stress_impact_gain
+
+		# Weighted explicitly rather than left to the default, because an unweighted option and a
+		# weighted one are not comparable and the AI's split between these two would be whatever the
+		# engine's default happens to be this patch. Most lords write off a county they never saw.
+		ai_chance = {
+			base = 60
+		}
+	}
+
+	# Or decide that this is not finished. A claim is not an army, and the truce means it will keep
+	# for five years — which is the honest shape of the choice: you are agreeing to remember.
+	option = {
+		name = wilderness_colonization.0021.b
+
+		add_pressed_claim = scope:finished_colony
+
+		add_stress = minor_stress_impact_gain
+
+		ai_chance = {
+			base = 40
+			modifier = { add = 40  ai_vengefulness > 50 }
+			modifier = { add = -30  is_at_war = yes }
+		}
+	}
+}
+
+# =====================================================================================
+#  The Pioneer's Charter: The Debt of the Road (Promised Land Payoff)
+# =====================================================================================
+wilderness_colonization.0025 = {
+	type = character_event
+	title = wilderness_colonization.0025.t
+	desc = wilderness_colonization.0025.desc
+	theme = stewardship
+	override_background = { reference = throne_room }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+
+	right_portrait = {
+		trigger = { exists = scope:settler_elder }
+		character = scope:settler_elder
+		animation = bow_idle
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	trigger = {
+		exists = scope:finished_colony
+		scope:finished_colony = {
+			has_variable = settlers_were_promised
+		}
+	}
+
+	immediate = {
+		# Find an existing adult courtier, or generate a frontier representative if court is empty
+		if = {
+			limit = {
+				any_courtier_or_guest = {
+					is_available_ai_adult = yes
+				}
+			}
+			random_courtier_or_guest = {
+				limit = { is_available_ai_adult = yes }
+				save_scope_as = settler_elder
+			}
+		}
+		else = {
+			create_character = {
+						location = root.location
+						age = { 50 65 }
+						gender_female_chance = 30
+						save_scope_as = settler_elder
+					}
+		}
+	}
+
+	# --- Option A: Honor the Charter (Freeholder Rights / Yeomanry) ---
+	option = {
+		name = wilderness_colonization.0025.a
+		skill = diplomacy
+		add_internal_flag = special
+
+		custom_tooltip = colonize_honor_charter_tt
+
+		scope:finished_colony = {
+			remove_variable = settlers_were_promised
+			add_county_modifier = {
+				modifier = settlers_freeholder_charter
+				years = 25
+			}
+		}
+
+		add_prestige = medium_prestige_gain
+
+		stress_impact = {
+			honest = medium_stress_impact_loss
+			just = medium_stress_impact_loss
+			generous = minor_stress_impact_loss
+			greedy = medium_stress_impact_gain
+			arbitrary = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 50
+			modifier = { add = 40 has_trait = honest }
+			modifier = { add = 30 has_trait = just }
+			modifier = { add = 25 ai_honor > 50 }
+			modifier = { add = -40 ai_greed > 60 }
+		}
+	}
+
+	# --- Option B: Commute the Debt with Gold (A Purse for Every Hearth) ---
+	option = {
+		name = wilderness_colonization.0025.b
+		skill = stewardship
+
+		trigger = { gold >= 100 }
+		remove_short_term_gold = 100
+
+		custom_tooltip = colonize_commute_charter_tt
+
+		scope:finished_colony = {
+			remove_variable = settlers_were_promised
+			add_county_modifier = {
+				modifier = settlers_commuted_settlement
+				years = 15
+			}
+		}
+
+		add_prestige = minor_prestige_gain
+
+		stress_impact = {
+			generous = minor_stress_impact_loss
+			greedy = medium_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 35
+			modifier = { add = 30 gold >= 200 }
+			modifier = { add = 25 ai_rationality > 50 }
+		}
+	}
+
+	# --- Option C: Enserf Them / Break the Promise (Every Acre is the Crown's) ---
+	option = {
+		name = wilderness_colonization.0025.c
+		trait = callous
+		add_internal_flag = dangerous
+
+		custom_tooltip = colonize_break_charter_tt
+
+		scope:finished_colony = {
+			remove_variable = settlers_were_promised
+			change_county_control = -30
+			add_county_modifier = {
+				modifier = settlers_betrayed_unrest
+				years = 15
+			}
+		}
+
+		add_tyranny = minor_tyranny_gain
+		add_dread = minor_dread_gain
+
+		stress_impact = {
+			honest = major_stress_impact_gain
+			just = major_stress_impact_gain
+			compassionate = major_stress_impact_gain
+			deceitful = minor_stress_impact_loss
+			callous = minor_stress_impact_loss
+			greedy = minor_stress_impact_loss
+		}
+
+		ai_chance = {
+			base = 15
+			modifier = { add = 50 has_trait = deceitful }
+			modifier = { add = 40 has_trait = arbitrary }
+			modifier = { add = 40 ai_greed > 75 }
+			modifier = { factor = 0 has_trait = honest }
+		}
+	}
+}
+# =====================================================================================
+#  The leak detector
+# =====================================================================================
+#
+# ---- What this is for ----
+#
+# An AI realm was observed holding UNCOLONISED wilderness — a county whose capital still carries
+# wilderness_holding, in somebody's realm, with no colonisation having happened. Nothing in this
+# file set can produce that: colonize_county_effect converts the capital in the same effect that
+# moves the title, so a county that is ours is never still wild.
+#
+# Static analysis closed off the obvious routes and found none of them open. All 121 casus belli in
+# the generated mod carry the `allowed_against_character` guard, so no war can be declared on the
+# dummy. Holy wars, de jure wars and faction seizures all filter their county transfers on the
+# defender's realm, and the dummy is independent, so it is never in one. The `wilderness` trait
+# carries `immortal`, `inheritance_blocker = all` and `claim_inheritance_blocker = all`, so nothing
+# arrives by succession. A fabricated or bought claim is only usable through claim_cb, which is
+# guarded like the rest.
+#
+# Which means the route is something not yet enumerated — and enumerating it by reading files has
+# reached its limit. So instead of guessing again, this catches it in the act and says what it was.
+#
+# ---- Why it is deferred by a week ----
+#
+# on_title_gain fires when the title moves, and colonize_county_effect moves the title BEFORE it
+# converts the holding. Checked immediately, every legitimate colonisation in the game would look
+# like a leak. Seven days later the conversion has long since happened, so a county still carrying
+# wilderness_holding under a real ruler is unambiguously wrong.
+#
+# ---- Why it reverts as well as reports ----
+#
+# Because the state is broken either way. A wilderness county in a realm has no upkeep, no colony,
+# no promotion path and no way back — it is a county that skipped the entire mechanic. Handing it
+# to the dummy is what abandon_county_effect exists for and puts the world back somewhere the rest
+# of the system understands.
+#
+# Remove this once the route is known and closed at its source. It is a net, not a fix.
+wilderness_colonization.0099 = {
+	hidden = yes
+	scope = character
+
+	trigger = {
+		exists = scope:leak_county
+		scope:leak_county = {
+			tier = tier_county
+			title_province ?= { has_holding_type = wilderness_holding }
+			holder ?= { NOT = { has_trait = wilderness } }
+		}
+	}
+
+	immediate = {
+		debug_log = wilderness_leak_debug_log
+
+		# Every human player, not just this county's neighbours — whoever is testing needs to see it
+		# whether or not it happened anywhere near them.
+		every_player = {
+			send_interface_toast = {
+				type = event_toast_effect_bad
+				title = wilderness_leak_toast
+				left_icon = scope:leak_county.holder
+				right_icon = scope:leak_county
+			}
+		}
+
+		abandon_county_effect = { COUNTY = scope:leak_county }
+	}
+}
+
+
+# The AI's decision to claim a county.
+#
+# Hidden and immediate: this is a branch of the yearly pulse, not something anybody sees. It is an
+# event rather than more on_action script only because an event gets its own scope and can be fired
+# for testing from the console (`event wilderness_colonization.0001`).
+#
+# The gate below is the AI's affordability check, which is deliberately stricter than the player's:
+# a player who wants to bankrupt himself settling a swamp is entitled to, but an AI that spends its
+# last fifty gold on a colony it then cannot develop just makes the map worse.
+wilderness_colonization.0001 = {
+	hidden = yes
+	scope = character
+
+	trigger = {
+		is_ai = yes
+		is_landed = yes
+		can_colonize_at_all_trigger = yes
+		NOT = { has_variable = expedition_underway }
+		can_hold_another_colony_trigger = yes
+
+		# --- Who is actually in a position to do this ------------------------------------------
+		#
+		# These were far too loose. `gold > colonize_cost` with a cost of 75-150 meant any ruler
+		# who had not just fought a war qualified, so the pulse's job of making colonisation rare
+		# was being done by the dice alone. Rarity that comes only from a low chance is uniform —
+		# every realm equally unlikely, forever. Rarity that comes from conditions means the realms
+		# that DO push outward are the ones it makes sense for, which is the version worth having.
+		#
+		# Three times the price in hand, not merely the price. A ruler who would be broke the
+		# moment the claim went through cannot carry a colony through its first winter, and a
+		# colony that fails is worse than one never founded.
+		gold > { value = colonize_cost  multiply = 3 }
+		prestige >= colonize_prestige_cost
+
+		# Enough income to absorb the upkeep settlement_01 starts charging on the day it appears.
+		monthly_character_income > 4
+
+		# Not while fighting. Settlers and soldiers come out of the same villages, and an AI that
+		# colonises mid-war is one that does it while its army is dying somewhere else.
+		is_at_war = no
+
+		# NO domain limit check here, and its absence is deliberate.
+		#
+		# `domain_size < domain_limit` used to sit here on the reasoning that a ruler already over
+		# their limit should not take more land. Two things make that wrong rather than merely
+		# strict.
+		#
+		# A colony carries its own domain slot: every tier of settlement_01/02/03 grants
+		# `domain_limit = 1`, so claiming one does not consume domain space — it brings space with
+		# it. The gate was rejecting rulers for a cost the thing does not have.
+		#
+		# And it was the binding constraint on the whole system. A great many AI rulers sit exactly
+		# at their domain limit, because they take land until they hit it; testing for strictly
+		# under it excluded most of the map's rulers permanently, whatever the pulse chance said.
+		#
+		# What happens to a ruler who ends up genuinely overextended is vanilla's problem and vanilla
+		# already solves it: the AI grants surplus holdings out to vassals. A colony handed to a
+		# vassal keeps working — the upkeep rides on the building and moves with the county, and the
+		# vassal runs this same pulse, so they inherit the job of promoting it. A realm pushing a
+		# frontier and settling vassals on it is a better outcome than one that never pushes at all.
+
+		any_sub_realm_county = {
+			any_title_to_title_neighboring_and_across_water_county = {
+				county_can_be_claimed_trigger = yes
+			}
+		}
+	}
+
+	immediate = {
+		wilderness_pick_adjacent_effect = yes
+
+		if = {
+			limit = { exists = scope:wilderness }
+
+			# The AI's half of the payment rule. The two player entry points declare a `cost` block
+			# and let the engine deduct; an event has no such block, so it pays here. See the note in
+			# colonize_county_effect for why the charge is not inside the effect itself.
+			remove_short_term_gold = colonize_cost
+			add_prestige = { value = colonize_prestige_cost  multiply = -1 }
+
+			colony_launch_expedition_effect = {
+				COUNTY = scope:wilderness
+				COLONIZER = root
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  The Colonist's Petition: Funding the Final Promotion
+# =====================================================================================
+# Fires for a player liege when a colonist vassal has a ready colony but lacks the gold.
+wilderness_colonization.0050 = {
+	type = character_event
+	title = wilderness_colonization.0050.t
+	desc = wilderness_colonization.0050.desc
+	theme = realm
+	override_background = { reference = throne_room }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+
+	right_portrait = {
+		character = scope:petitioning_colonist
+		animation = bow_idle
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	trigger = {
+		# Removed is_ai = no
+		exists = scope:petitioning_colonist
+		exists = scope:ready_colony
+	}
+
+	# --- Option A: Fund the seat completely (Generous) ---
+	option = {
+		name = wilderness_colonization.0050.a
+		skill = stewardship
+		add_internal_flag = special
+		highlight_portrait = scope:petitioning_colonist
+
+		trigger = { gold >= promote_colony_cost }
+		remove_short_term_gold = promote_colony_cost
+
+		scope:ready_colony = {
+			promote_colony_effect = { COUNTY = this }
+		}
+
+		scope:petitioning_colonist = {
+			add_opinion = {
+				target = root
+				modifier = colonist_raised_up_opinion
+				opinion = 35
+			}
+		}
+
+		stress_impact = {
+			generous = minor_stress_impact_loss
+			greedy = medium_stress_impact_gain
+		}
+
+		custom_tooltip = colonize_petition_funded_tt
+
+		ai_chance = {
+			base = 50
+			modifier = { add = 35  ai_compassion > 50 }
+			modifier = { add = 30  has_trait = generous }
+			modifier = { add = 25  gold > { value = promote_colony_cost multiply = 3 } } # Wealthy liege
+			modifier = { add = -30 ai_greed > 50 }
+		}
+	}
+
+	# --- Option B: Fund it with a Hook (Pragmatic) ---
+	option = {
+		name = wilderness_colonization.0050.b
+		add_internal_flag = special
+		highlight_portrait = scope:petitioning_colonist
+
+		trigger = { gold >= promote_colony_cost }
+		remove_short_term_gold = promote_colony_cost
+
+		scope:ready_colony = {
+			promote_colony_effect = { COUNTY = this }
+		}
+
+		add_hook = {
+			target = scope:petitioning_colonist
+			type = favor_hook
+		}
+
+		scope:petitioning_colonist = {
+			add_opinion = {
+				target = root
+				modifier = colonist_raised_up_opinion
+				opinion = 15
+			}
+		}
+
+		stress_impact = {
+			cynical = minor_stress_impact_loss
+			greedy = minor_stress_impact_gain
+		}
+
+		custom_tooltip = colonize_petition_hook_tt
+
+		ai_chance = {
+			base = 35
+			modifier = { add = 40  ai_rationality > 50 }
+			modifier = { add = 30  has_trait = ambitious }
+			modifier = { add = 25  has_trait = cynical }
+		}
+	}
+
+	# --- Option C: Refuse ---
+	option = {
+		name = wilderness_colonization.0050.c
+		trait = greedy
+		add_internal_flag = dangerous
+		highlight_portrait = scope:petitioning_colonist
+
+		scope:petitioning_colonist = {
+			add_opinion = {
+				target = root
+				modifier = colonist_sent_to_the_frontier_opinion
+				opinion = -30
+			}
+			add_stress = minor_stress_gain
+		}
+
+		stress_impact = {
+			greedy = minor_stress_impact_loss
+			generous = medium_stress_impact_gain
+			compassionate = medium_stress_impact_gain
+		}
+
+		custom_tooltip = colonize_petition_refused_tt
+
+		ai_chance = {
+			base = 15
+			modifier = { add = 60  ai_greed > 60 }
+			modifier = { add = 40  gold < { value = promote_colony_cost multiply = 1.5 } } # Broke liege
+			modifier = { factor = 0 has_trait = generous }
+		}
+	}
+}
+
+# =====================================================================================
+#  The Colonist's Plea: Aid for the Frontier (Obstacles & Upgrades)
+# =====================================================================================
+wilderness_colonization.0051 = {
+	type = character_event
+	title = wilderness_colonization.0051.t
+	theme = realm
+	override_background = { reference = throne_room }
+
+	desc = {
+		desc = wilderness_colonization.0051.desc.intro
+
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:struggling_colony = { has_variable = clearing_beast_dens } }
+				desc = wilderness_colonization.0051.desc.beasts
+			}
+			triggered_desc = {
+				trigger = { scope:struggling_colony = { has_variable = clearing_bandit_camps } }
+				desc = wilderness_colonization.0051.desc.bandits
+			}
+			triggered_desc = {
+				trigger = { scope:struggling_colony = { has_variable = clearing_dense_growth } }
+				desc = wilderness_colonization.0051.desc.growth
+			}
+			triggered_desc = {
+				trigger = { scope:struggling_colony = { has_variable = clearing_flooded_lands } }
+				desc = wilderness_colonization.0051.desc.floods
+			}
+			triggered_desc = {
+				trigger = { scope:struggling_colony = { has_variable = clearing_scree_slopes } }
+				desc = wilderness_colonization.0051.desc.scree
+			}
+			triggered_desc = {
+				trigger = { scope:struggling_colony = { has_variable = clearing_killing_cold } }
+				desc = wilderness_colonization.0051.desc.cold
+			}
+			triggered_desc = {
+				trigger = { scope:struggling_colony = { has_variable = upgrading_settlement_01 } }
+				desc = wilderness_colonization.0051.desc.upgrade_01
+			}
+			triggered_desc = {
+				trigger = { scope:struggling_colony = { has_variable = upgrading_settlement_02 } }
+				desc = wilderness_colonization.0051.desc.upgrade_02
+			}
+			desc = wilderness_colonization.0051.desc.fallback
+		}
+
+		desc = wilderness_colonization.0051.desc.outro
+	}
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+
+	right_portrait = {
+		character = scope:petitioning_colonist
+		animation = worry
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	# Available for both human players and AI lieges
+	trigger = {
+		exists = scope:petitioning_colonist
+		exists = scope:struggling_colony
+	}
+
+	immediate = {
+		# --- Console / Debug Fallbacks ---
+		if = {
+			limit = { NOT = { exists = scope:petitioning_colonist } }
+			random_vassal = {
+				limit = {
+					any_held_title = {
+						tier = tier_county
+						is_colony_county_trigger = yes
+					}
+				}
+				save_scope_as = petitioning_colonist
+			}
+		}
+
+		if = {
+			limit = {
+				exists = scope:petitioning_colonist
+				NOT = { exists = scope:struggling_colony }
+			}
+			scope:petitioning_colonist = {
+				random_held_title = {
+					limit = {
+						tier = tier_county
+						is_colony_county_trigger = yes
+					}
+					save_scope_as = struggling_colony
+				}
+			}
+		}
+
+		# --- Blocker / Upgrade Diagnosis ---
+		# Obstacles are evaluated first; settlement growth is evaluated once land is clear.
+		if = {
+			limit = { exists = scope:struggling_colony }
+			scope:struggling_colony = {
+				if = {
+					limit = { title_province ?= { has_building = beast_dens } }
+					set_variable = { name = colony_aid_cost value = wilderness_clear_cost_cheap }
+					set_variable = { name = clearing_beast_dens }
+				}
+				else_if = {
+					limit = { title_province ?= { has_building = bandit_camps } }
+					set_variable = { name = colony_aid_cost value = wilderness_clear_cost_standard }
+					set_variable = { name = clearing_bandit_camps }
+				}
+				else_if = {
+					limit = { title_province ?= { has_building = dense_growth } }
+					set_variable = { name = colony_aid_cost value = wilderness_clear_cost_standard }
+					set_variable = { name = clearing_dense_growth }
+				}
+				else_if = {
+					limit = { title_province ?= { has_building = flooded_lands } }
+					set_variable = { name = colony_aid_cost value = wilderness_clear_cost_dear }
+					set_variable = { name = clearing_flooded_lands }
+				}
+				else_if = {
+					limit = { title_province ?= { has_building = scree_slopes } }
+					set_variable = { name = colony_aid_cost value = wilderness_clear_cost_dear }
+					set_variable = { name = clearing_scree_slopes }
+				}
+				else_if = {
+					limit = { title_province ?= { has_building = killing_cold } }
+					set_variable = { name = colony_aid_cost value = wilderness_clear_cost_dear }
+					set_variable = { name = clearing_killing_cold }
+				}
+				else_if = {
+					limit = {
+						title_province ?= {
+							has_building = settlement_01
+							NOT = { has_building = settlement_02 }
+						}
+					}
+					set_variable = { name = colony_aid_cost value = settlement_upgrade_cost }
+					set_variable = { name = upgrading_settlement_01 }
+				}
+				else_if = {
+					limit = {
+						title_province ?= {
+							has_building = settlement_02
+							NOT = { has_building = settlement_03 }
+						}
+					}
+					set_variable = { name = colony_aid_cost value = settlement_upgrade_cost }
+					set_variable = { name = upgrading_settlement_02 }
+				}
+			}
+		}
+	}
+
+	# --- Option A: Fund the Work Completely (Generous) ---
+	option = {
+		name = wilderness_colonization.0051.a
+		skill = stewardship
+		add_internal_flag = special
+		highlight_portrait = scope:petitioning_colonist
+
+		trigger = {
+			exists = scope:struggling_colony
+			scope:struggling_colony = { has_variable = colony_aid_cost }
+			gold >= scope:struggling_colony.var:colony_aid_cost
+		}
+		remove_short_term_gold = scope:struggling_colony.var:colony_aid_cost
+
+		scope:petitioning_colonist = {
+			add_opinion = {
+				target = root
+				modifier = colonist_raised_up_opinion
+				opinion = 25
+			}
+		}
+
+		scope:struggling_colony = {
+			title_province = {
+				if = {
+					limit = { scope:struggling_colony = { has_variable = clearing_beast_dens } }
+					remove_building = beast_dens
+					wilderness_obstacle_cleared_effect = yes
+				}
+				else_if = {
+					limit = { scope:struggling_colony = { has_variable = clearing_bandit_camps } }
+					remove_building = bandit_camps
+					wilderness_obstacle_cleared_effect = yes
+				}
+				else_if = {
+					limit = { scope:struggling_colony = { has_variable = clearing_dense_growth } }
+					remove_building = dense_growth
+					wilderness_obstacle_cleared_effect = yes
+				}
+				else_if = {
+					limit = { scope:struggling_colony = { has_variable = clearing_flooded_lands } }
+					remove_building = flooded_lands
+					wilderness_obstacle_cleared_effect = yes
+				}
+				else_if = {
+					limit = { scope:struggling_colony = { has_variable = clearing_scree_slopes } }
+					remove_building = scree_slopes
+					wilderness_obstacle_cleared_effect = yes
+				}
+				else_if = {
+					limit = { scope:struggling_colony = { has_variable = clearing_killing_cold } }
+					remove_building = killing_cold
+					wilderness_obstacle_cleared_effect = yes
+				}
+				else_if = {
+					limit = { scope:struggling_colony = { has_variable = upgrading_settlement_01 } }
+					add_building = settlement_02
+				}
+				else_if = {
+					limit = { scope:struggling_colony = { has_variable = upgrading_settlement_02 } }
+					add_building = settlement_03
+				}
+			}
+
+			remove_variable = clearing_beast_dens
+			remove_variable = clearing_bandit_camps
+			remove_variable = clearing_dense_growth
+			remove_variable = clearing_flooded_lands
+			remove_variable = clearing_scree_slopes
+			remove_variable = clearing_killing_cold
+			remove_variable = upgrading_settlement_01
+			remove_variable = upgrading_settlement_02
+			remove_variable = colony_aid_cost
+		}
+
+		stress_impact = {
+			generous = minor_stress_impact_loss
+			greedy = medium_stress_impact_gain
+		}
+
+		custom_tooltip = colonize_aid_funded_tt
+
+		ai_chance = {
+			base = 50
+			modifier = { add = 35 has_trait = generous }
+			modifier = { add = 25 ai_compassion > 50 }
+			modifier = { add = 20 gold > { value = scope:struggling_colony.var:colony_aid_cost multiply = 3 } }
+			modifier = { add = -30 ai_greed > 60 }
+		}
+	}
+
+	# --- Option B: Fund It with a Hook (Pragmatic) ---
+	option = {
+		name = wilderness_colonization.0051.b
+		add_internal_flag = special
+		highlight_portrait = scope:petitioning_colonist
+
+		trigger = {
+			exists = scope:struggling_colony
+			scope:struggling_colony = { has_variable = colony_aid_cost }
+			gold >= scope:struggling_colony.var:colony_aid_cost
+		}
+		remove_short_term_gold = scope:struggling_colony.var:colony_aid_cost
+
+		scope:petitioning_colonist = {
+			add_opinion = {
+				target = root
+				modifier = colonist_raised_up_opinion
+				opinion = 15
+			}
+		}
+
+		add_hook = {
+			target = scope:petitioning_colonist
+			type = favor_hook
+		}
+
+		scope:struggling_colony = {
+			title_province = {
+				if = {
+					limit = { scope:struggling_colony = { has_variable = clearing_beast_dens } }
+					remove_building = beast_dens
+					wilderness_obstacle_cleared_effect = yes
+				}
+				else_if = {
+					limit = { scope:struggling_colony = { has_variable = clearing_bandit_camps } }
+					remove_building = bandit_camps
+					wilderness_obstacle_cleared_effect = yes
+				}
+				else_if = {
+					limit = { scope:struggling_colony = { has_variable = clearing_dense_growth } }
+					remove_building = dense_growth
+					wilderness_obstacle_cleared_effect = yes
+				}
+				else_if = {
+					limit = { scope:struggling_colony = { has_variable = clearing_flooded_lands } }
+					remove_building = flooded_lands
+					wilderness_obstacle_cleared_effect = yes
+				}
+				else_if = {
+					limit = { scope:struggling_colony = { has_variable = clearing_scree_slopes } }
+					remove_building = scree_slopes
+					wilderness_obstacle_cleared_effect = yes
+				}
+				else_if = {
+					limit = { scope:struggling_colony = { has_variable = clearing_killing_cold } }
+					remove_building = killing_cold
+					wilderness_obstacle_cleared_effect = yes
+				}
+				else_if = {
+					limit = { scope:struggling_colony = { has_variable = upgrading_settlement_01 } }
+					add_building = settlement_02
+				}
+				else_if = {
+					limit = { scope:struggling_colony = { has_variable = upgrading_settlement_02 } }
+					add_building = settlement_03
+				}
+			}
+
+			remove_variable = clearing_beast_dens
+			remove_variable = clearing_bandit_camps
+			remove_variable = clearing_dense_growth
+			remove_variable = clearing_flooded_lands
+			remove_variable = clearing_scree_slopes
+			remove_variable = clearing_killing_cold
+			remove_variable = upgrading_settlement_01
+			remove_variable = upgrading_settlement_02
+			remove_variable = colony_aid_cost
+		}
+
+		stress_impact = {
+			cynical = minor_stress_impact_loss
+			greedy = minor_stress_impact_gain
+		}
+
+		custom_tooltip = colonize_aid_hook_tt
+
+		ai_chance = {
+			base = 35
+			modifier = { add = 30 has_trait = cynical }
+			modifier = { add = 25 has_trait = ambitious }
+			modifier = { add = 25 ai_rationality > 50 }
+		}
+	}
+
+	# --- Option C: Deny Aid ---
+	option = {
+		name = wilderness_colonization.0051.c
+		trait = callous
+		add_internal_flag = dangerous
+		highlight_portrait = scope:petitioning_colonist
+
+		if = {
+			limit = { exists = scope:petitioning_colonist }
+			scope:petitioning_colonist = {
+				add_opinion = {
+					target = root
+					modifier = colonist_sent_to_the_frontier_opinion
+					opinion = -20
+				}
+				add_stress = minor_stress_gain
+			}
+		}
+
+		if = {
+			limit = { exists = scope:struggling_colony }
+			scope:struggling_colony = {
+				remove_variable = clearing_beast_dens
+				remove_variable = clearing_bandit_camps
+				remove_variable = clearing_dense_growth
+				remove_variable = clearing_flooded_lands
+				remove_variable = clearing_scree_slopes
+				remove_variable = clearing_killing_cold
+				remove_variable = upgrading_settlement_01
+				remove_variable = upgrading_settlement_02
+				remove_variable = colony_aid_cost
+			}
+		}
+
+		stress_impact = {
+			greedy = minor_stress_impact_loss
+			compassionate = medium_stress_impact_gain
+		}
+
+		custom_tooltip = colonize_aid_refused_tt
+
+		ai_chance = {
+			base = 15
+			modifier = { add = 50 ai_greed > 65 }
+			modifier = { add = 40 gold < { value = scope:struggling_colony.var:colony_aid_cost multiply = 1.5 } }
+			modifier = { factor = 0 has_trait = generous }
+		}
+	}
+}
+
+# =====================================================================================
+#  Colony Crisis: Order Collapses (Control Reaches Zero)
+# =====================================================================================
+wilderness_colonization.0060 = {
+	type = character_event
+	title = wilderness_colonization.0060.t
+	desc = wilderness_colonization.0060.desc
+	theme = physical_health
+	override_background = { reference = army_camp }
+
+	left_portrait = {
+		character = root
+		animation = fear
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	trigger = {
+		exists = scope:colony
+		scope:colony = {
+			county_control <= 0
+			is_colony_county_trigger = yes
+		}
+	}
+
+	# --- Option A: Marshal the Garrison / Put Down the Chaos (Martial) ---
+	option = {
+		name = wilderness_colonization.0060.a
+		skill = martial
+		add_internal_flag = dangerous
+
+		duel = {
+			skill = martial
+			value = 12
+
+			60 = {
+				desc = wilderness_control_salvaged_desc
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.0
+				}
+
+				# --- Colony Law Duel Modifiers ---
+				modifier = {
+					add = 25
+					has_realm_law = colony_law_garrison
+					desc = colony_law_garrison_duel_desc
+				}
+				modifier = {
+					add = -20
+					has_realm_law = colony_law_corvee
+					desc = colony_law_corvee_duel_desc
+				}
+
+				trigger_event = wilderness_colonization.0061
+			}
+			40 = {
+				desc = wilderness_control_lost_desc
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.0
+				}
+
+				modifier = {
+					add = 20
+					has_realm_law = colony_law_corvee
+				}
+				modifier = {
+					add = -25
+					has_realm_law = colony_law_garrison
+				}
+
+				trigger_event = wilderness_colonization.0062
+			}
+		}
+
+		stress_impact = {
+			brave = minor_stress_impact_loss
+			craven = medium_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 50
+			modifier = { add = 30 has_trait = brave }
+			modifier = { add = 20 martial >= 12 }
+			modifier = { add = 30 has_realm_law = colony_law_garrison }
+			modifier = { add = -25 has_realm_law = colony_law_corvee }
+		}
+	}
+
+	# --- Option B: Flood the Outpost with Gold & Mercenaries (Stewardship) ---
+	option = {
+		name = wilderness_colonization.0060.b
+		skill = stewardship
+
+		# Dynamic cost scaling based on economic law
+		trigger = {
+			trigger_if = {
+				limit = { has_realm_law = colony_law_extraction }
+				gold >= 50
+			}
+			trigger_else_if = {
+				limit = { has_realm_law = colony_law_homestead }
+				gold >= 60
+			}
+			trigger_else = {
+				gold >= 80
+			}
+		}
+
+		if = {
+			limit = { has_realm_law = colony_law_extraction }
+			remove_short_term_gold = 50
+		}
+		else_if = {
+			limit = { has_realm_law = colony_law_homestead }
+			remove_short_term_gold = 60
+		}
+		else = {
+			remove_short_term_gold = 80
+		}
+
+		custom_tooltip = colonize_control_bought_tt
+
+		trigger_event = wilderness_colonization.0063
+
+		stress_impact = {
+			greedy = medium_stress_impact_gain
+			generous = minor_stress_impact_loss
+		}
+
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 gold >= 150 }
+			modifier = { add = 25 has_realm_law = colony_law_extraction }
+			modifier = { add = 20 has_realm_law = colony_law_homestead }
+			modifier = { add = -30 ai_greed > 50 }
+		}
+	}
+
+	# --- Option C: Sound the Retreat and Abandon the Outpost ---
+	option = {
+		name = wilderness_colonization.0060.c
+		trait = craven
+
+		custom_tooltip = colonize_abandon_colony_tt
+
+		trigger_event = wilderness_colonization.0064
+
+		stress_impact = {
+			ambitious = major_stress_impact_gain
+			arrogant = medium_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 10
+			modifier = { add = 40 has_trait = craven }
+			modifier = { add = 30 gold < 60 }
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Follow-up A (Success): Order Restored by Steel
+# =====================================================================================
+wilderness_colonization.0061 = {
+	type = character_event
+	title = wilderness_colonization.0061.t
+	desc = wilderness_colonization.0061.desc
+	theme = war
+	override_background = { reference = army_camp }
+
+	left_portrait = {
+		character = root
+		animation = marshal_shield
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { armor } }
+	}
+
+	immediate = {
+		# Safety fallback: grab the colony if scope wasn't passed directly
+		if = {
+			limit = { NOT = { exists = scope:colony } }
+			random_held_title = {
+				limit = {
+					tier = tier_county
+					is_colony_county_trigger = yes
+				}
+				save_scope_as = colony
+			}
+		}
+
+		scope:colony ?= {
+			change_county_control = 35
+			add_county_modifier = {
+				modifier = settlement_hardened_winter
+				years = 3
+			}
+		}
+
+		add_prestige = medium_prestige_gain
+	}
+
+	option = {
+		name = wilderness_colonization.0061.a
+	}
+}
+
+
+# =====================================================================================
+#  Follow-up A (Failure): Overrun & Routed
+# =====================================================================================
+wilderness_colonization.0062 = {
+	type = character_event
+	title = wilderness_colonization.0062.t
+	desc = wilderness_colonization.0062.desc
+	theme = physical_health
+	override_background = { reference = wilderness }
+
+	left_portrait = {
+		character = root
+		animation = pain
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { armor } }
+	}
+
+	immediate = {
+		if = {
+			limit = { NOT = { exists = scope:colony } }
+			random_held_title = {
+				limit = {
+					tier = tier_county
+					is_colony_county_trigger = yes
+				}
+				save_scope_as = colony
+			}
+		}
+
+		# --- Debug Toast (Fires only in Debug Mode) ---
+		if = {
+			limit = { debug_only = yes }
+			debug_log = "Colony in [colony.GetNameNoTier] collapsed from 0 control (Military Defeat)"
+			every_player = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = colony_control_collapse_debug_toast_title
+					left_icon = root
+					right_icon = scope:colony
+				}
+			}
+		}
+
+		increase_wounds_effect = { REASON = fight }
+
+		scope:colony ?= {
+			abandon_county_effect = { COUNTY = this }
+		}
+
+		add_prestige = medium_prestige_loss
+	}
+
+	option = {
+		name = wilderness_colonization.0062.a
+	}
+}
+
+
+# =====================================================================================
+#  Follow-up B: Order Bought with Coin & Swords
+# =====================================================================================
+wilderness_colonization.0063 = {
+	type = character_event
+	title = wilderness_colonization.0063.t
+	desc = wilderness_colonization.0063.desc
+	theme = stewardship
+	override_background = { reference = army_camp }
+
+	left_portrait = {
+		character = root
+		animation = personality_honorable
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	immediate = {
+		if = {
+			limit = { NOT = { exists = scope:colony } }
+			random_held_title = {
+				limit = {
+					tier = tier_county
+					is_colony_county_trigger = yes
+				}
+				save_scope_as = colony
+			}
+		}
+
+		scope:colony ?= {
+			change_county_control = 40
+		}
+
+		add_prestige = minor_prestige_gain
+	}
+
+	option = {
+		name = wilderness_colonization.0063.a
+	}
+}
+
+
+# =====================================================================================
+#  Follow-up C: Smoke and Retreat
+# =====================================================================================
+wilderness_colonization.0064 = {
+	type = character_event
+	title = wilderness_colonization.0064.t
+	desc = wilderness_colonization.0064.desc
+	theme = realm
+	override_background = { reference = wilderness }
+
+	left_portrait = {
+		character = root
+		animation = grief
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	immediate = {
+		if = {
+			limit = { NOT = { exists = scope:colony } }
+			random_held_title = {
+				limit = {
+					tier = tier_county
+					is_colony_county_trigger = yes
+				}
+				save_scope_as = colony
+			}
+		}
+
+		# --- Debug Toast (Fires only in Debug Mode) ---
+		if = {
+			limit = { debug_only = yes }
+			debug_log = "Colony in [colony.GetNameNoTier] collapsed from 0 control (Voluntary Abandonment)"
+			every_player = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = colony_control_collapse_debug_toast_title
+					left_icon = root
+					right_icon = scope:colony
+				}
+			}
+		}
+
+		scope:colony ?= {
+			abandon_county_effect = { COUNTY = this }
+		}
+
+		add_prestige = major_prestige_loss
+	}
+
+	option = {
+		name = wilderness_colonization.0064.a
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# =====================================================================================
+#  DEBUG / CHEAT: Upgrade & Manage All Realm Colonies
+#  Console Command: event wilderness_colonization.9999
+# =====================================================================================
+wilderness_colonization.9999 = {
+	type = character_event
+	title = "DEBUG: Upgrade Realm Colonies"
+	desc = "Choose how to advance all colony holdings currently situated within your sub-realm."
+	theme = realm
+	override_background = { reference = study }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+
+	# --- Option A: Repair Broken Holdings & Advance to Tier 2 ---
+	option = {
+		name = "Advance / Upgrade Colonies to Tier 2"
+
+		every_sub_realm_county = {
+			limit = {
+				is_colony_county_trigger = yes
+			}
+
+			change_county_control = 25
+			change_development_progress = 50
+
+			title_province = {
+				# Clear raw obstacles
+				if = { limit = { has_building = beast_dens } remove_building = beast_dens }
+				if = { limit = { has_building = bandit_camps } remove_building = bandit_camps }
+				if = { limit = { has_building = dense_growth } remove_building = dense_growth }
+				if = { limit = { has_building = flooded_lands } remove_building = flooded_lands }
+				if = { limit = { has_building = scree_slopes } remove_building = scree_slopes }
+				if = { limit = { has_building = killing_cold } remove_building = killing_cold }
+
+				# Remove misplaced secondary slot settlement buildings if previously bugged
+				if = { limit = { has_building = settlement_03 } remove_building = settlement_03 }
+				if = { limit = { has_building = settlement_02 } remove_building = settlement_02 }
+
+				# If primary building was removed/broken, reset holding to restore settlement_01
+				if = {
+					limit = { NOT = { has_building = settlement_01 } }
+					set_holding_type = settlement_holding
+				}
+
+				# Upgrade in-place to Tier 2 (WITHOUT remove_building)
+				add_building = settlement_02
+			}
+		}
+	}
+
+	# --- Option B: Max Out All Colonies (Tier 3, Dev 5, Ready for Promotion) ---
+	option = {
+		name = "Max out all colonies (Tier 3, Dev 5, Obstacles Cleared)"
+
+		every_sub_realm_county = {
+			limit = {
+				is_colony_county_trigger = yes
+			}
+
+			change_county_control  = 100
+			if = {
+				limit = { development_level < 5 }
+				change_development_level = 5
+			}
+
+			title_province = {
+				# Strip all obstacles
+				if = { limit = { has_building = beast_dens } remove_building = beast_dens }
+				if = { limit = { has_building = bandit_camps } remove_building = bandit_camps }
+				if = { limit = { has_building = dense_growth } remove_building = dense_growth }
+				if = { limit = { has_building = flooded_lands } remove_building = flooded_lands }
+				if = { limit = { has_building = scree_slopes } remove_building = scree_slopes }
+				if = { limit = { has_building = killing_cold } remove_building = killing_cold }
+
+				# Clean up any bugged secondary slots
+				if = { limit = { has_building = settlement_03 } remove_building = settlement_03 }
+				if = { limit = { has_building = settlement_02 } remove_building = settlement_02 }
+
+				# Ensure primary slot exists
+				if = {
+					limit = { NOT = { has_building = settlement_01 } }
+					set_holding_type = settlement_holding
+				}
+
+				# Advance primary chain straight to settlement_03
+				add_building = settlement_03
+			}
+		}
+	}
+
+	# --- Option C: Reset / Repair Holding Type ---
+	option = {
+		name = "Repair Corrupted Holding Slots"
+
+		every_sub_realm_county = {
+			limit = {
+				is_colony_county_trigger = yes
+			}
+
+			title_province = {
+				set_holding_type = settlement_holding
+			}
+		}
+	}
+
+	# --- Option D: Instantly Promote to Castle/Tribal ---
+	option = {
+		name = "Instantly promote all colonies to full holdings"
+
+		every_sub_realm_county = {
+			limit = {
+				is_colony_county_trigger = yes
+			}
+
+			promote_colony_effect = { COUNTY = this }
+		}
+	}
+
+	# --- Option: Test Vassal Colony Secession (100% Guaranteed) ---
+	option = {
+		name = "TEST: Force a Vassal Colony to Max & Secede (Event 0021)"
+
+		# 1. Find a colonist vassal in realm (or pick any colony county holder)
+		random_vassal = {
+			limit = {
+				is_colonist_trigger = yes
+				any_held_title = {
+					tier = tier_county
+					is_colony_county_trigger = yes
+				}
+			}
+			save_scope_as = test_colonist
+		}
+
+		if = {
+			limit = { exists = scope:test_colonist }
+			scope:test_colonist = {
+				# Set flag to force 100% secession roll
+				set_variable = { name = force_colony_secession }
+
+				random_held_title = {
+					limit = {
+						tier = tier_county
+						is_colony_county_trigger = yes
+					}
+					save_scope_as = test_county
+				}
+
+				scope:test_county = {
+					# Clear blockers & set max building
+					title_province = {
+						if = { limit = { has_building = beast_dens } remove_building = beast_dens }
+						if = { limit = { has_building = bandit_camps } remove_building = bandit_camps }
+						if = { limit = { has_building = dense_growth } remove_building = dense_growth }
+						if = { limit = { has_building = flooded_lands } remove_building = flooded_lands }
+						if = { limit = { has_building = scree_slopes } remove_building = scree_slopes }
+						if = { limit = { has_building = killing_cold } remove_building = killing_cold }
+
+						remove_building = settlement_01
+						remove_building = settlement_02
+						add_building = settlement_03
+					}
+					change_development_level = 5
+
+					# Trigger promotion
+					promote_colony_effect = { COUNTY = this }
+				}
+			}
+		}
+	}
+}

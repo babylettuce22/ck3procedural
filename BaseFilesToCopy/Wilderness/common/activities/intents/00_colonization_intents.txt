@@ -1,0 +1,30 @@
+﻿# What the lord is there to do.
+#
+# ---- Why this file has to exist at all ----
+#
+# `host_intents` is not optional. An activity type with no intents block offers the planner nothing
+# to select, and the planner refuses to start with "invalid intent" — the Start button greys out and
+# the Intent panel shows a bare `_desc`, which is the game looking up `<no intent>_desc`. Nothing in
+# the log says so; the activity simply cannot be begun.
+#
+# ---- Why there is exactly one ----
+#
+# Because there is exactly one reason to go. Vanilla activities carry three or four intents because a
+# feast is a room full of people you might want something from — befriend one, woo another, murder a
+# third. A colony is a palisade, some families, and a great deal of work, and the lord who rode out
+# there did it for the work. An intent list that offered "seduce" would be the planner inventing
+# content the place does not have.
+#
+# `auto_complete = yes` follows from the same fact: the intent is fulfilled by being there, so there
+# is nothing to resolve at the end and no failure state to write.
+#
+# The icon is vanilla's own `overseer_intent`, which is what its survey activity uses for the same
+# idea. Reusing it costs nothing and means this ships no art it would then be waiting on.
+
+oversee_colony_intent = {
+	icon = overseer_intent
+
+	auto_complete = yes
+
+	scripted_animation = { animation = personality_honorable }
+}

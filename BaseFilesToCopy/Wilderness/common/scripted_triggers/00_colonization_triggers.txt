@@ -1,0 +1,291 @@
+﻿# Every condition the colonisation system tests, defined once.
+#
+# The convention throughout: a trigger asking about a COUNTY runs in title scope, a trigger asking
+# about a RULER runs in character scope, and neither reaches into the other except through an
+# explicit `holder` or `title_province`. Mixing the two is how AGOT's `agot_upgrade_settlement_to_
+# full_holding_effect` ended up taking a $COUNTY$ parameter it never reads and silently operating on
+# whatever scope happened to be current.
+
+
+# --- County state ------------------------------------------------------------------------------
+
+# Title scope. Is this county unclaimed wilderness?
+#
+# Asks the government flag rather than `has_government = wilderness_government` so that a second
+# uninteractable government — ruins, an off-limits region — can be added without editing this.
+is_wilderness_county_trigger = {
+	holder ?= { government_has_flag = government_is_wilderness }
+}
+
+# Title scope. Is this county a colony that has not yet grown into a real holding?
+is_colony_county_trigger = {
+	title_province ?= { has_holding_type = settlement_holding }
+}
+
+# Title scope. Neither wild nor a colony — i.e. finished, a normal county like any other.
+is_settled_county_trigger = {
+	title_province ?= {
+		NOR = {
+			has_holding_type = wilderness_holding
+			has_holding_type = settlement_holding
+		}
+	}
+}
+
+# Title scope. Has every obstacle in this county's capital been cleared?
+#
+# The `obstacle` flag is the entire interface between this trigger and the six blocker pairs in
+# 00_wilderness_buildings.txt — no blocker is named here, so adding a seventh needs no edit.
+county_obstacles_cleared_trigger = {
+	title_province ?= {
+		has_building_with_flag = { flag = obstacle count = 0 }
+	}
+}
+
+
+# --- Colonists ---------------------------------------------------------------------------------
+
+# Character scope. Is this a ruler whose only land is a colony?
+#
+# Asks the flag rather than `has_government = colony_government`, for the same reason
+# is_wilderness_county_trigger asks a flag: a second frontier government — a chartered company, a
+# monastic foundation — could be added later without editing anything that tests this.
+is_colonist_trigger = {
+	government_has_flag = government_is_colony
+}
+
+# Character scope. Is this character standing in a colony they themselves hold?
+#
+# THE presence test. Everything about "the lord is here" reduces to this one line, which is why it
+# is written once: the refresh effect asks it, the oversee interaction asks it, and the capital-move
+# decision asks it, and none of them may disagree about what being somewhere means.
+#
+# Phrased from the character's held titles rather than from `location.county.holder`, which would
+# need a two-step `prev.prev` to get back to the character being asked about. One `prev` is a thing
+# a reader can check; two is where scope bugs live. It is also the cheaper direction — a ruler holds
+# a handful of counties, and only the colonies among them are compared.
+character_is_at_own_colony_trigger = {
+	any_held_title = {
+		tier = tier_county
+		is_colony_county_trigger = yes
+		title_province = prev.location
+	}
+}
+
+
+# --- Ruler state -------------------------------------------------------------------------------
+
+# Character scope. Room for one more colony?
+#
+# The single reading of the cap. See wilderness_settlement_limit in 00_colonization_values.txt for
+# why there is exactly one.
+can_hold_another_colony_trigger = {
+	custom_tooltip = {
+		text = colonize_at_settlement_limit_tt
+		wilderness_settlement_headroom > 0
+	}
+}
+
+# Character scope. A ruler who is allowed to colonise at all — as opposed to one who merely wants
+# to. Landless adventurers, mercenaries and the wilderness dummy itself are all excluded here.
+# Deliberately does NOT test whether a party is already out — see no_expedition_underway_trigger.
+# Everything here is a permanent fact about the ruler, so it is safe in an `is_shown`: a character
+# who fails it will never pass it, and hiding a control that can never apply is correct.
+can_colonize_at_all_trigger = {
+	is_landed = yes
+	is_adult = yes
+	is_alive = yes
+	NOT = { government_has_flag = government_is_uninteractable }
+}
+
+# Character scope. Is this ruler free to send a party out?
+#
+# Replaces a five-year `colonization_cooldown` variable, and the replacement is the point. A timer
+# was standing in for a thing that now actually happens: a party goes out, and for two years nobody
+# knows whether it took. One expedition at a time is a fact about what the ruler is doing rather
+# than a number waiting to expire, it explains itself in the tooltip, and it clears the moment the
+# thing it describes is over instead of on a schedule.
+#
+# Still an `is_valid` condition rather than an `is_shown` one, for the reason the cooldown taught:
+# a temporary state belongs where it can grey a control and say why, not where it makes the control
+# vanish with nothing on screen to explain it.
+no_expedition_underway_trigger = {
+	custom_tooltip = {
+		text = colonize_expedition_out_tt
+		NOT = { has_variable = expedition_underway }
+	}
+}
+
+
+# Character scope, with scope:colony set to the county an expedition was aimed at. Is that
+# expedition still a going concern?
+#
+# Every event in the expedition chain opens with this, and it is written once because the chain is
+# where a stale check does the most damage: an event whose trigger silently fails does not report,
+# it simply never happens, and the expedition hangs unresolved forever with the county wearing a
+# marker nothing will ever take off.
+#
+# That is not hypothetical. wilderness_colonization.0011 asked whether the county was a COLONY held
+# by root — which was true when the claim happened up front, and became permanently false when the
+# claim moved to the success branch. Nothing fired, for any expedition, and there was no error.
+expedition_still_out_trigger = {
+	has_variable = expedition_underway
+	exists = scope:colony
+	var:expedition_underway = scope:colony
+	scope:colony = { has_county_modifier = settling_expedition_underway }
+}
+
+
+# Title scope. Is this county one somebody could aim an expedition at?
+#
+# The three-part test — wilderness, not marked unsettlable, nobody already out there — written once.
+# It was previously spelled out at each of the five places that pick a target, and the third part
+# had to be added to all five when expeditions arrived, which is exactly the edit that gets made in
+# four places out of five.
+county_can_be_claimed_trigger = {
+	is_wilderness_county_trigger = yes
+	NOT = { has_county_modifier = block_settlement_ability }
+	NOT = { has_county_modifier = settling_expedition_underway }
+}
+
+# Title scope. Does this county touch land the given character's realm holds?
+#
+#   $CHARACTER$  the would-be coloniser
+#
+# Adjacency is the rule that makes colonisation read as a frontier advancing rather than as a land
+# grab: you may only claim ground you can already reach from somewhere you hold. `title_to_title`
+# neighbouring includes across-water, so an island chain is still colonisable.
+#
+# Asked from the COUNTY's side, not the ruler's, and that is a performance decision rather than a
+# stylistic one. The same question phrased as `any_sub_realm_county = { any_neighboring... }` walks
+# the whole realm once per candidate; phrased this way it walks a county's six-or-so neighbours.
+# `can_be_picked_title` runs this once for every title the recipient holds, and the wilderness dummy
+# holds every unsettled county on the map — so the realm-side phrasing would be a world scan per
+# right-click. The interaction schema is explicit that can_be_picked_title "should be a fast way of
+# deciding what can end up in the list".
+county_borders_realm_trigger = {
+	any_title_to_title_neighboring_and_across_water_county = {
+		holder ?= {
+			OR = {
+				this = $CHARACTER$
+				target_is_liege_or_above = $CHARACTER$
+			}
+		}
+	}
+}
+
+# Character scope, with scope:wilderness set to a candidate county. The tooltipped wrapper the
+# decision and the AI gate use; the rule itself lives once, above.
+can_reach_wilderness_trigger = {
+	custom_tooltip = {
+		text = colonize_must_border_realm_tt
+		scope:wilderness = { county_borders_realm_trigger = { CHARACTER = root } }
+	}
+}
+
+
+# --- Building gates ----------------------------------------------------------------------------
+
+# Province scope, from a building's can_construct. Anyone but the wilderness dummy.
+#
+# Its AI is disabled anyway, so this is about the build menu of an unclaimed county reading as empty
+# rather than as full of things that cannot be started.
+wilderness_can_clear_obstacle_trigger = {
+	scope:holder ?= {
+		NOT = { government_has_flag = government_is_wilderness }
+	}
+}
+
+# Province scope, from settlement_02/03's can_construct.
+#
+# A colony grows by being worked on, and the obstacles come first: there is no point raising a
+# second row of houses while the wolves are still taking the livestock.
+wilderness_can_grow_settlement_trigger = {
+	scope:holder ?= {
+		NOT = { government_has_flag = government_is_wilderness }
+	}
+	custom_tooltip = {
+		text = colonize_obstacles_remain_tt
+		has_building_with_flag = { flag = obstacle count = 0 }
+	}
+}
+
+
+# --- Promotion ---------------------------------------------------------------------------------
+
+# Title scope. Is this colony ready to stop being one?
+#
+# Three conditions, and each is doing separate work: the obstacles gate the land, the development
+# gates the people, and settlement_03 gates the investment. A colony that meets all three has
+# stopped being a frontier post and become a place.
+# Any scope. Should the seat raised on this colony be a tribe rather than a castle?
+#
+# Reads `scope:colony_promoter`, which promote_colony_effect saves from the county's own holder — so
+# unlike the `scope:promoting_holder` this replaces, there is no caller that can fail to set it.
+#
+# The second branch is the case the old code had no answer for. A colonist is neither feudal nor
+# tribal — colony_government is its own thing — so a colonist's promotion fell through to castle
+# whatever realm he came out of. The rule that fixes it is that a colonist raises the kind of seat
+# his SPONSOR would have raised: a chief's settlers build a hall, not a keep. The design sketch
+# reached for the county's culture instead, but culture has no tribal/feudal axis in CK3 — the
+# liege's government is the fact that actually exists.
+colony_promotes_to_tribe_trigger = {
+	scope:colony_promoter ?= {
+		OR = {
+			government_has_flag = government_is_tribal
+			AND = {
+				is_colonist_trigger = yes
+				liege ?= { government_has_flag = government_is_tribal }
+			}
+		}
+	}
+}
+
+can_promote_colony_trigger = {
+	is_colony_county_trigger = yes
+
+	custom_tooltip = {
+		text = colonize_obstacles_remain_tt
+		county_obstacles_cleared_trigger = yes
+	}
+	custom_tooltip = {
+		text = colonize_needs_development_tt
+		development_level >= 4
+	}
+	custom_tooltip = {
+		text = colonize_needs_full_settlement_tt
+		title_province ?= { has_building = settlement_03 }
+	}
+
+	# ---- Why the construction check moved in here ----
+	#
+	# It used to live in each of the three promote interactions, as its own line, three times — and
+	# nowhere else. The AI does not promote through those interactions; it calls
+	# promote_colony_effect straight from the yearly pulse, gated on this trigger alone. So the AI
+	# was the one caller allowed to promote a colony with a building still going up.
+	#
+	# That is worse than untidy, because promotion is not atomic: promote_colony_effect tears down
+	# the settlement chain, swaps the holding type, and THEN converts a colonist out of
+	# colony_government. If the teardown or the swap is refused mid-construction, the government
+	# change still happens — and what is left is a county that is still a colony held by a ruler who
+	# is now feudal or tribal, which no longer matches any promotion path and never matures.
+	#
+	# One home for the rule means the AI and the three buttons cannot disagree about it again.
+	custom_tooltip = {
+		text = colonize_construction_in_progress_tt
+		title_province ?= { has_ongoing_construction = no }
+	}
+}
+
+has_wilderness_obstacle_trigger = {
+	title_province ?= {
+		OR = {
+			has_building = beast_dens
+			has_building = bandit_camps
+			has_building = dense_growth
+			has_building = flooded_lands
+			has_building = scree_slopes
+			has_building = killing_cold
+		}
+	}
+}

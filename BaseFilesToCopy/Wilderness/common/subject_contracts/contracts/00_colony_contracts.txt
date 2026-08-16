@@ -1,0 +1,72 @@
+﻿colony_sponsorship = {
+	display_mode = tree
+
+	obligation_levels = {
+		# --- Position 0: Neglected Outpost ---
+		colony_subsidy_neglected = {
+			position = { 0 0 }
+			flag = colony_subsidy_neglected
+
+			levies = 0.5
+			tax = 0
+
+			subject_modifier = {
+				development_growth_factor = -0.20
+				build_gold_cost = 0.20
+				monthly_county_control_growth_add = -0.15
+			}
+
+			subject_opinion = -15
+			score = -10
+
+			ai_liege_desire = 1
+			ai_subject_desire = 10
+		}
+
+		# --- Position 1: Standard Subsidy (Default) ---
+		colony_subsidy_standard = {
+			default = yes
+			parent = colony_subsidy_neglected
+			position = { 1 0 }
+
+			levies = 1.0
+			tax = 0
+
+			liege_modifier = {
+				monthly_income = -0.3
+			}
+
+			subject_opinion = -5
+			score = 0
+
+			ai_liege_desire = 5
+			ai_subject_desire = 5
+		}
+
+		# --- Position 2: Heavy Crown Patronage ---
+		colony_subsidy_heavy = {
+			parent = colony_subsidy_standard
+			position = { 2 0 }
+			flag = colony_subsidy_heavy
+
+			levies = 1.0
+			tax = 0
+
+			liege_modifier = {
+				monthly_income = -0.75
+			}
+
+			subject_modifier = {
+				development_growth_factor = 0.25
+				build_gold_cost = -0.20
+				monthly_county_control_growth_add = 0.20
+			}
+
+			subject_opinion = 25
+			score = 10
+
+			ai_liege_desire = 10
+			ai_subject_desire = 1
+		}
+	}
+}

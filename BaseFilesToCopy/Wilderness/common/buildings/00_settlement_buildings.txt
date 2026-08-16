@@ -1,0 +1,356 @@
+﻿# The colony. Three levels between claiming a county and it becoming a real holding.
+
+settlement_01 = {
+	# Placed by script when a county is colonised, never built directly.
+	can_construct = { always = no }
+	can_construct_potential = { always = no }
+
+	next_building = settlement_02
+
+	asset = {
+		type = pdxmesh
+		names = { "building_western_tribal_01_a_mesh" }
+		illustration = "gfx/interface/illustrations/holding_types/tribe_grass.dds"
+		soundeffect = {
+			soundeffect = "event:/SFX/Ambience/3DMapEmitters/Holdings/City/tribal_city"
+			soundparameter = { "Tier" = 0 }
+		}
+	}
+
+	levy = 25
+	max_garrison = 100
+	garrison_reinforcement_factor = 0.01
+
+	province_modifier = {
+		building_slot_add = -1
+	}
+
+	county_modifier = {
+		travel_danger = 20
+		development_growth_factor = -0.95
+	}
+
+	character_modifier = {
+		domain_tax_mult = -0.06
+	}
+
+	type_icon = "icon_building_outposts.dds"
+	ai_value = { base = 100 }
+}
+
+settlement_02 = {
+	construction_time = slow_construction_time
+	cost = { gold = settlement_upgrade_cost }
+
+	can_construct = { wilderness_can_grow_settlement_trigger = yes }
+	can_construct_potential = { wilderness_can_grow_settlement_trigger = yes }
+
+	next_building = settlement_03
+
+	asset = {
+		type = pdxmesh
+		names = { "building_western_tribal_01_a_mesh" }
+		illustration = "gfx/interface/illustrations/holding_types/tribe_grass.dds"
+		soundeffect = {
+			soundeffect = "event:/SFX/Ambience/3DMapEmitters/Holdings/City/tribal_city"
+			soundparameter = { "Tier" = 1 }
+		}
+	}
+
+	levy = 75
+	max_garrison = 200
+	garrison_reinforcement_factor = 0.02
+
+	province_modifier = {
+		building_slot_add = -1
+	}
+
+	county_modifier = {
+		travel_danger = 10
+		development_growth_factor = -0.85
+	}
+
+	character_modifier = {
+		domain_tax_mult = -0.03
+	}
+
+	type_icon = "icon_building_outposts.dds"
+	ai_value = {
+		base = 300
+		modifier = {
+			add = 1000
+			scope:holder ?= { is_colonist_trigger = yes }
+		}
+	}
+}
+
+settlement_03 = {
+	construction_time = very_slow_construction_time
+	cost = { gold = settlement_upgrade_cost }
+
+	can_construct = { wilderness_can_grow_settlement_trigger = yes }
+	can_construct_potential = { wilderness_can_grow_settlement_trigger = yes }
+
+	asset = {
+		type = pdxmesh
+		names = { "building_western_tribal_01_a_mesh" }
+		illustration = "gfx/interface/illustrations/holding_types/tribe_grass.dds"
+		soundeffect = {
+			soundeffect = "event:/SFX/Ambience/3DMapEmitters/Holdings/City/tribal_city"
+			soundparameter = { "Tier" = 2 }
+		}
+	}
+
+	levy = 150
+	max_garrison = 300
+	garrison_reinforcement_factor = 0.03
+
+	county_modifier = {
+		development_growth_factor = -0.80
+	}
+
+	character_modifier = {
+	}
+
+	type_icon = "icon_building_outposts.dds"
+	ai_value = {
+		base = 300
+		modifier = {
+			add = 1000
+			scope:holder ?= { is_colonist_trigger = yes }
+		}
+	}
+}
+
+# =====================================================================================
+#  Colony-Specific Infrastructure: Timber & Masonry Works
+# =====================================================================================
+
+colony_timber_works_01 = {
+	construction_time = quick_construction_time
+	cost = { gold = settlement_cost_cheap_tier_1 }
+
+	can_construct_potential = {
+		has_holding_type = settlement_holding
+	}
+	can_construct = {
+		has_holding_type = settlement_holding
+	}
+
+	next_building = colony_timber_works_02
+
+	province_modifier = {
+		build_gold_cost = -0.1
+		holding_build_speed = -0.05
+	}
+
+	county_modifier = {
+		development_growth_factor = 0.08
+	}
+
+	type_icon = "icon_building_logging_camps.dds"
+
+	ai_value = {
+		base = 1800
+		modifier = {
+			add = 700
+			scope:holder ?= { is_colonist_trigger = yes }
+		}
+	}
+}
+
+colony_timber_works_02 = {
+	construction_time = standard_construction_time
+	cost = { gold = settlement_cost_tier_1 }
+
+	can_construct_potential = {
+		has_holding_type = settlement_holding
+	}
+	can_construct = {
+		has_holding_type = settlement_holding
+	}
+
+	province_modifier = {
+		build_gold_cost = -0.15
+		holding_build_speed = -0.15
+	}
+
+	county_modifier = {
+		development_growth_factor = 0.15
+	}
+
+	type_icon = "icon_building_logging_camps.dds"
+
+	ai_value = {
+		base = 2200
+		modifier = {
+			add = 800
+			scope:holder ?= { is_colonist_trigger = yes }
+		}
+	}
+}
+
+# =====================================================================================
+#  Colony-Specific Infrastructure: Palisade & Outpost Defenses
+# =====================================================================================
+
+colony_pallisade_01 = {
+	construction_time = quick_construction_time
+	cost = { gold = settlement_cost_tier_1 }
+
+	can_construct_potential = {
+		has_holding_type = settlement_holding
+	}
+	can_construct = {
+		has_holding_type = settlement_holding
+	}
+
+	next_building = colony_pallisade_02
+
+	province_modifier = {
+		defender_holding_advantage = normal_building_advantage_tier_1
+		fort_level = normal_building_fort_level_tier_1
+		travel_danger = -25
+	}
+
+	type_icon = "icon_structure_kano_walls.dds"
+
+	ai_value = {
+		base = 1800
+		modifier = {
+			add = 700
+			scope:holder ?= { is_colonist_trigger = yes }
+		}
+	}
+}
+
+colony_pallisade_02 = {
+	construction_time = standard_construction_time
+	cost = { gold = settlement_cost_tier_2 }
+
+	max_garrison = normal_building_max_garrison_tier_1
+
+	can_construct_potential = {
+		has_holding_type = settlement_holding
+	}
+	can_construct = {
+		has_holding_type = settlement_holding
+	}
+
+	province_modifier = {
+		defender_holding_advantage = normal_building_advantage_tier_2
+		fort_level = normal_building_fort_level_tier_2
+		travel_danger = -50
+	}
+
+	type_icon = "icon_structure_kano_walls.dds"
+
+	ai_value = {
+		base = 1800
+		modifier = {
+			add = 700
+			scope:holder ?= { is_colonist_trigger = yes }
+		}
+	}
+}
+
+# =====================================================================================
+#  Colony-Specific Infrastructure: Colonial Administration
+# =====================================================================================
+
+colony_office_01 = {
+	construction_time = quick_construction_time
+	cost = { gold = settlement_cost_tier_2 }
+
+	can_construct_potential = {
+		has_holding_type = settlement_holding
+	}
+	can_construct = {
+		has_holding_type = settlement_holding
+	}
+
+	next_building = colony_office_02
+
+	province_modifier = {
+		monthly_income = 0.25
+	}
+	
+	county_modifier = {
+		development_growth_factor = 0.15
+		development_growth = 0.1
+	}
+
+	type_icon = "icon_structure_ghana_palace.dds"
+
+	ai_value = {
+		base = 1800
+		modifier = {
+			add = 700
+			scope:holder ?= { is_colonist_trigger = yes }
+		}
+	}
+}
+
+colony_office_02 = {
+	construction_time = standard_construction_time
+	cost = { gold = settlement_cost_tier_3 }
+
+	can_construct_potential = {
+		has_holding_type = settlement_holding
+	}
+	can_construct = {
+		has_holding_type = settlement_holding
+	}
+
+	next_building = colony_office_03
+
+	province_modifier = {
+		monthly_income = 0.5
+	}
+
+	county_modifier = {
+		development_growth_factor = 0.30
+		development_growth = 0.3
+	}
+
+	type_icon = "icon_structure_ghana_palace.dds"
+
+	ai_value = {
+		base = 1800
+		modifier = {
+			add = 700
+			scope:holder ?= { is_colonist_trigger = yes }
+		}
+	}
+}
+
+colony_office_03 = {
+	construction_time = standard_construction_time
+	cost = { gold = settlement_cost_tier_4 }
+
+	can_construct_potential = {
+		has_holding_type = settlement_holding
+	}
+	can_construct = {
+		has_holding_type = settlement_holding
+	}
+
+	province_modifier = {
+		monthly_income = 1.5
+	}
+
+	county_modifier = {
+		development_growth_factor = 0.80
+		development_growth = 1.5
+	}
+
+	type_icon = "icon_structure_ghana_palace.dds"
+
+	ai_value = {
+		base = 1800
+		modifier = {
+			add = 700
+			scope:holder ?= { is_colonist_trigger = yes }
+		}
+	}
+}

@@ -1,0 +1,70 @@
+﻿# Keeps the wilderness dummy out of the activity system.
+#
+# ---- What this is ----
+#
+# A single-object override of vanilla's `can_be_activity_guest` from
+# common/scripted_rules/00_rules.txt. Script is last-wins, so redefining the one rule here replaces
+# vanilla's without touching the file it lives in. The filename sorts last so the override cannot
+# lose to another mod's copy of the same directory.
+#
+# Everything below is vanilla's own definition verbatim, with ONE line added — the
+# `NOT = { has_trait = wilderness }` at the top.
+#
+# ---- Why one rule instead of ten files ----
+#
+# AGOT solves this by editing every activity type it ships — feast, hunt, tour, pilgrimage, wedding,
+# tournament, university visit and the rest — each checking `government_is_uninteractable` in its own
+# `is_shown`. That is ten hand-kept copies of vanilla files to express one idea.
+#
+# This rule is the chokepoint all of them pass through: root is the character being considered as a
+# guest, scope:host is whoever is holding the thing. Fail it here and the dummy is invisible to every
+# activity in the game at once, including any a future patch or another mod adds.
+#
+# ---- On government_is_uninteractable ----
+#
+# That flag is NOT what this checks, deliberately. It is an AGOT invention — vanilla has no reference
+# to it anywhere in common/ — so nothing in the base game respects it and a mod that declares it is
+# only talking to itself. We declare it on the wilderness government for readability and check the
+# TRAIT here, because the trait is what the character actually carries and is the same thing every
+# other part of this system keys on.
+
+can_be_activity_guest = {
+	# THE ONE ADDED LINE. The dummy is bookkeeping, not a person, and should never appear in a guest
+	# list, an invitation, or the pool an activity draws attendees from.
+	NOT = { has_trait = wilderness }
+
+	is_available_allow_travelling = yes
+	OR = {
+		is_travelling = no
+		# If travelling then it must be already to this activity after it has been created
+		AND = {
+			exists = scope:host.involved_activity
+			exists = current_travel_plan.travel_plan_activity
+			scope:host.involved_activity = current_travel_plan.travel_plan_activity
+		}
+	}
+	# Diarchs with official responsibilities can't come out to play, unless within their liege's realm.
+	trigger_if = {
+		limit = {
+			exists = liege
+			OR = {
+				is_diarch = yes
+				is_designated_diarch = yes
+			}
+			#If you have promised a grand wedding, you must be able to go through with it!
+			NOR = {
+				has_promised_a_grand_wedding = yes
+				has_been_promised_grand_wedding = yes
+				liege = {
+					has_diarchy_type = grand_secretariat
+				}
+			}
+		}
+		scope:host.involved_activity.activity_location.county.holder ?= {
+			OR = {
+				this = root.liege
+				any_liege_or_above = { this = root.liege }
+			}
+		}
+	}
+}

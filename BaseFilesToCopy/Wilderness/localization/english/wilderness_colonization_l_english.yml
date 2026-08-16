@@ -1,0 +1,682 @@
+﻿l_english:
+
+ # Key prefixes are not decoration: CK3 looks up a building as `building_<key>`, the label above its
+ # icon as `building_type_<key>`, and a trait as `trait_<key>`. A bare key here shows the raw string
+ # in-game and reports nothing, which is why every one of these was caught by ck3-tiger rather than
+ # by playing.
+
+ # --- Trait and government -----------------------------------------------------------------
+ trait_wilderness:0 "Wilderness"
+ blank_title_male:0 ""
+ # The generated dummy that holds every unsettled county writes `name = "wilderness_holder_name"`,
+ # so this is what the county view shows where a lord's name would go. See Emit/HistoryWriter.cs.
+ wilderness_holder_name:0 "The Wilds"
+
+ # The titular kingdom the dummy holds so its realm has a name — otherwise every unsettled county
+ # on the map is labelled after whichever county the dummy happened to hold first.
+ #
+ # This key is defined in C#, not here: WildernessMap.TitleKey in MapGen/Wilderness.cs. It is the
+ # only place a file in this set names something the generator owns, so if that constant changes
+ # this string silently stops resolving and the map shows the raw key.
+ k_gen_wilderness:0 "Wilderness"
+ k_gen_wilderness_adj:0 "Wild"
+ trait_wilderness_desc:0 "Vast and untamed nothingness."
+
+ wilderness_government:0 "Wilderness"
+ wilderness_government_adjective:0 "Untamed"
+ wilderness_government_realm:0 "Wilderness"
+ wilderness_government_desc:0 "Empty country. No lord holds it, no levy comes from it, and crossing it is a risk in itself."
+
+ # --- What a title of ours is CALLED ------------------------------------------------------
+ #
+ # CK3 builds a title's full name from `TITLE_TIERED_NAME`, which is "$TIER|U$ of $NAME$" — so
+ # "County of Braemar" is the tier word plus the title. The tier word is looked up as
+ # `<tier>_<government>`, where <government> is the government key with `_government` stripped:
+ # feudal_government gives `county_feudal` ("County"), clan_government gives `county_clan`
+ # ("Chiefdom"), theocracy_government gives `county_theocracy` ("Great Temple").
+ #
+ # NOT `mechanic_type`, which is the tempting reading and is wrong: republic_government and
+ # tribal_government declare no mechanic_type at all, and still resolve `county_republic` and
+ # `county_tribal`.
+ #
+ # Both of this mod's governments were therefore asking for keys nobody had written. A missing
+ # tier key is not a silent failure — it shows the raw key — so a colonist's county was liable to
+ # read "County_colony of Braemar" anywhere the full name is drawn.
+ #
+ # IMPORTANT, because it limits what this buys: the tier word is a fact about the HOLDER's
+ # government, not about the holding. A colony held by an ordinary feudal lord — which is every
+ # colony the player founds and keeps — still reads "County of X", because that lord is still
+ # feudal. Only a colony held by a colonist reads "Colony of X". Making the county window say
+ # "Colony" regardless of who holds it needs a GUI change in Emit/GuiWriter.cs, not a string here.
+ barony_colony:0 "Colony"
+ county_colony:0 "Colony"
+ duchy_colony:0 "Colonies"
+
+ # The wilderness dummy has the same gap. "Wilderness of Braemar" is also the honest phrasing for
+ # ground nobody holds, which is a happier accident than it sounds.
+ barony_wilderness:0 "Wilderness"
+ county_wilderness:0 "Wilderness"
+ duchy_wilderness:0 "Wilderness"
+ kingdom_wilderness:0 "Wilderness"
+
+ # --- Holdings -----------------------------------------------------------------------------
+ wilderness_holding:0 "Wilderness"
+ wilderness_holding_desc:0 "Unsettled land. Somebody could live here, given years and money and a tolerance for what already does."
+
+ settlement_holding:0 "Colony"
+ settlement_holding_desc:0 "A foothold rather than a holding — a palisade, a few families, and a great deal still to do."
+
+ # A holding type needs a SECOND name, not just the one above. Anywhere the UI says "$TYPE$
+ # Holding" it looks up `<key>_concept_key`, not `<key>`, and vanilla points that at a game
+ # concept (`castle_holding_concept_key` is "[castle|E]") so the phrase is clickable. These two
+ # holdings have no concept behind them, so they are plain strings — and without them the county
+ # window prints the raw key, which is what it was doing.
+ wilderness_holding_concept_key:0 "Wilderness"
+ settlement_holding_concept_key:0 "Colony"
+
+ # --- The wilderness itself ----------------------------------------------------------------
+ building_wilderness_01:0 "Untamed Land"
+ building_wilderness_01_desc:0 "No road, no field, no roof. Whatever wealth is here is still in the ground or on the hoof."
+ building_type_wilderness_01:0 "Wilderness"
+ building_type_wilderness_01_desc:0 "Land nobody has taken in hand."
+
+ # --- Obstacles ----------------------------------------------------------------------------
+ building_beast_dens:0 "Beast Dens"
+ building_beast_dens_desc:0 "Wolves, bear, or worse. The herds thin every winter and the shepherds will not go out alone."
+ building_beast_dens_cleared:0 "Clear the Dens"
+ building_beast_dens_cleared_desc:0 "Hunt them out, or drive them far enough that they become somebody else's trouble."
+ building_type_beast_dens:0 "Beasts"
+ building_type_beast_dens_desc:0 "Something with teeth has the run of this county."
+
+ building_bandit_camps:0 "Bandit Camps"
+ building_bandit_camps_desc:0 "Somebody was already here, and they have no use for a tax collector."
+ building_bandit_camps_cleared:0 "Break the Camps"
+ building_bandit_camps_cleared_desc:0 "Root them out of the hills. Some will hang; some will take the coin and enlist."
+ building_type_bandit_camps:0 "Bandits"
+ building_type_bandit_camps_desc:0 "Men who were here first and intend to stay."
+
+ building_dense_growth:0 "Dense Growth"
+ building_dense_growth_desc:0 "Old forest, close-grown. Nothing can be built here until a good deal of it comes down."
+ building_dense_growth_cleared:0 "Clear the Growth"
+ building_dense_growth_cleared_desc:0 "Fell it, burn the stumps, and sell what timber the work does not eat."
+ building_type_dense_growth:0 "Dense Growth"
+ building_type_dense_growth_desc:0 "Forest that has to come down before anything goes up."
+
+ building_flooded_lands:0 "Flooded Lands"
+ building_flooded_lands_desc:0 "Standing water half the year. The ground will not hold a foundation and the air carries fever."
+ building_flooded_lands_cleared:0 "Drain the Lowlands"
+ building_flooded_lands_cleared_desc:0 "Ditch it, dyke it, and hope the river agrees."
+ building_type_flooded_lands:0 "Flooded Lands"
+ building_type_flooded_lands_desc:0 "Ground that is under water more often than not."
+
+ building_scree_slopes:0 "Scree Slopes"
+ building_scree_slopes_desc:0 "Loose rock and no level ground. Every cart that comes up is unloaded twice."
+ building_scree_slopes_cleared:0 "Cut Terraces"
+ building_scree_slopes_cleared_desc:0 "Cut benches into the slope until there is somewhere flat enough to stand a building on."
+ building_type_scree_slopes:0 "Broken Ground"
+ building_type_scree_slopes_desc:0 "Rock and rubble where level ground should be."
+
+ building_killing_cold:0 "Killing Cold"
+ building_killing_cold_desc:0 "The winters here take people. Not a hardship — a cause of death."
+ building_killing_cold_cleared:0 "Build Against the Winter"
+ building_killing_cold_cleared_desc:0 "Deep stores, banked walls, and fuel enough to last. The cold does not leave; you simply stop losing to it."
+ building_type_killing_cold:0 "Killing Cold"
+ building_type_killing_cold_desc:0 "Winters that are a cause of death rather than a season."
+
+ # --- The colony ---------------------------------------------------------------------------
+ building_settlement_01:0 "Colony"
+ building_settlement_01_desc:0 "A palisade and a few dozen souls. It costs more than it earns and will for years."
+ building_settlement_02:0 "Growing Colony"
+ building_settlement_02_desc:0 "Fields cleared, a mill, a road worth the name. It very nearly pays for itself."
+ building_settlement_03:0 "Established Colony"
+ building_settlement_03_desc:0 "No longer an outpost. Give it a lord's seat and it will pass for anywhere else."
+ building_type_settlement_01:0 "Colony"
+ building_type_settlement_01_desc:0 "A foothold on ground nobody held."
+
+ # --- Modifiers ----------------------------------------------------------------------------
+ settling_expedition_underway:0 "Settlers on the Road"
+ settling_expedition_underway_desc:0 "A party has gone out to this country. Whether anything comes of it will not be known for a year or two."
+ block_settlement_ability:0 "Unsettlable"
+ block_settlement_ability_desc:0 "Nobody will live here. Not for money, not for land, not for anything."
+
+ # --- Decision -----------------------------------------------------------------------------
+ settle_the_wilderness_decision:0 "Settle the Wilderness"
+ settle_the_wilderness_decision_tooltip:0 "Send settlers into the empty country on our borders."
+ settle_the_wilderness_decision_confirm:0 "Send Them Out"
+ settle_the_wilderness_decision_desc:0 "There is land beyond our borders that no lord holds and no map names.\n\nSettling it is not a conquest. It is an expense — men who must be fed through a first winter, a palisade against whatever already lives there, and years before any of it shows in the ledger. What it buys is a county that did not exist before.\n\nThe steward has a place in mind."
+
+ # --- Interactions -------------------------------------------------------------------------
+ claim_wilderness_interaction:0 "Claim the Land"
+ claim_wilderness_interaction_desc:0 "No lord holds this country and no map names it. Send settlers, and it becomes ours to make something of — or to lose."
+ promote_colony_interaction:0 "Raise To Proper Holding"
+ promote_colony_interaction_desc:0 "The colony has grown past its palisade. Build a proper seat here and let it stand as any other county does."
+ promote_colony_to_city_interaction:0 "Charter a Town"
+ promote_colony_to_city_interaction_desc:0 "Grant the colony a charter and let it grow as a town rather than a fortress."
+ promote_colony_to_temple_interaction:0 "Consecrate a Temple"
+ promote_colony_to_temple_interaction_desc:0 "Give the colony over to the faith, and let its temple be the seat here."
+
+ # --- Toasts -------------------------------------------------------------------------------
+ colonize_claimed_toast:0 "Settlers Depart"
+
+ # --- The settling event -------------------------------------------------------------------
+ # --- The expedition ------------------------------------------------------------------------
+ # scope:colony is the county just claimed; scope:expedition_leader and scope:expedition_soldier are
+ # the two candidates. Written plainly: the drama is that the party may not come back, and text
+ # that shouts about it before anything has happened spends the moment early.
+ #
+ # PRONOUNS. Every character these events name is picked by ordered_courtier_or_guest or is an
+ # existing vassal — nothing anywhere restricts them to men — so a hard-coded "he" is wrong roughly
+ # half the time. Where a character is in scope the text uses the engine's own gendered promotes,
+ # which are built in and need no customizable_localization of ours:
+ #   [x.GetSheHe] she/he · [x.GetHerHis] her/his · [x.GetHerHim] her/him
+ #   [x.GetHerselfHimself] herself/himself · [x.GetWomanMan] woman/man
+ # Add |U to capitalise for the start of a sentence: [x.GetSheHe|U].
+ # Where no character is in scope — modifier and contract descriptions, the riders who carry news —
+ # the phrasing avoids a pronoun instead. Collective "men" for a levy or a band of settlers is left
+ # alone; it is a period noun for a crowd, not a claim about one person.
+ wilderness_colonization.0010.t:0 "The Settlers Go Out"
+ wilderness_colonization.0010.desc:0 "They leave before dawn, in carts and on foot — younger sons with no land coming to them, families a bad harvest turned out, a few men who did not say why they were going.\n\nAhead of them is [colony.GetName], which is not a place yet so much as a direction. There is no road to it and no roof on it, and between the last of our grain and their first harvest is a winter that will not care how well we meant it.\n\nSomeone has to be in charge of that arithmetic."
+ wilderness_colonization.0010.a:0 "Send [expedition_leader.GetFirstName]. [expedition_leader.GetSheHe|U] knows a thing or two about management."
+ wilderness_colonization.0010.b:0 "Send [expedition_soldier.GetFirstName]. It is not the winter I am worried about."
+ wilderness_colonization.0010.c:0 "They can choose their own leader on the road."
+
+ colonize_expedition_odds_tt:0 "#V [expedition_leader.GetShortUIName]#! leads the expedition"
+ colonize_expedition_soldier_tt:0 "#V [expedition_soldier.GetShortUIName]#! leads the expedition. If the colony holds, one obstacle will already have been dealt with"
+ colonize_expedition_none_tt:0 "Nobody leads the expedition. Poorer odds, but no one of ours is out there when it goes wrong"
+
+ # --- Word from the road ---------------------------------------------------------------------
+ # Three months out, one of these arrives. Each asks for a different thing: money, a decision
+ # about who is in charge, or a promise that only costs anything if they live.
+ #
+ # THE ODDS. Every option out there is a roll, and every one of them prints its chance the way
+ # vanilla prints a duel's or a hunt's:
+ #     [SCOPE.ScriptValue('some_value')|0]%
+ # SCOPE is the scope the tooltip is evaluated in, which for an event option is the lord reading
+ # the letter — which is why the values in 00_colonization_values.txt are written for HIS scope and
+ # reach the party through scope:expedition_leader. A value written in the leader's scope could be
+ # rolled against but not shown, and being shown is the point.
+ wilderness_colonization.0016.t:0 "Short Rations"
+ wilderness_colonization.0016.desc:0 "A rider from the column, who has not eaten well.\n\nThey are further from [colony.GetName] than the maps allowed for, and the carts are lighter than they were. It is not a disaster yet. It becomes one in about six weeks, and by then there will be nothing to send that would arrive in time."
+ wilderness_colonization.0016.a:0 "Send carts after them."
+ wilderness_colonization.0016.b:0 "They will have to make do."
+
+# --- Short Rations 0016 Text & Tooltips ---
+ wilderness_colonization.0016.c:0 "Order the hunters to fan out and live off the wild."
+
+ colonize_relief_column_breakdown_tt:0 "#bold Dispatch Relief Wagons#! (#N -50 Gold#!):\n• #V [SCOPE.ScriptValue('colony_relief_column_chance')|0]%#! Chance Carts Arrive in Time (based on Realm Stewardship)\n• #P Success#!: Supplies reach the column (#P +20#! Expedition Fortune)\n• #N Failure#!: Carts arrive late or lose wagons in drifts (#P +2#! Fortune; gold spent)"
+
+ colonize_forage_breakdown_tt:0 "#bold Forage & Hunt the Wilderness#!:\n• #V [SCOPE.ScriptValue('colony_self_rule_chance')|0]%#! Chance of Bountiful Game\n• #P Success#!: Scouts bring down wild game (#P +12#! Expedition Fortune)\n• #N Failure#!: Game is scarce; scouts suffer frostbite (#N -8#! Expedition Fortune)"
+
+ colonize_make_do_breakdown_tt:0 "#bold Enforce Harsh Rationing#!:\n• #V [SCOPE.ScriptValue('colony_make_do_chance')|0]%#! Chance Existing Stores Last\n• #P Success#!: Discipline stretches grain to the border (#P +5#! Expedition Fortune)\n• #N Failure#!: Bitter starvation and dead pack animals (#N -18#! Expedition Fortune)"
+
+ colonize_relief_column_tt:0 "#V [SCOPE.ScriptValue('colony_relief_column_chance')|0]%#! that the carts find them in time. The gold goes either way"
+ colonize_make_do_tt:0 "#V [SCOPE.ScriptValue('colony_make_do_chance')|0]%#! that they make what they have last"
+
+ # 0017 has two forms of one question, chosen by whether anybody was put in charge in 0010. The
+ # leaderless wording is the .nobody keys below; nothing names a character in them, because there is
+ # no character to name — see the pronoun note above for why the phrasing works around it rather
+ # than inventing a "he".
+ wilderness_colonization.0017.t:0 "The [expedition_leader.GetWomanMan|U] We Sent"
+ wilderness_colonization.0017.desc:0 "The rider is careful about how to put it, which tells us most of it.\n\n[expedition_leader.GetFirstName] is not sleeping. [expedition_leader.GetSheHe|U] has been overruling men who know the country better than [expedition_leader.GetSheHe] does, and twice now has been wrong in front of everybody. Nobody has said the word yet. They are all thinking about who would be in charge if [expedition_leader.GetSheHe] were not."
+ wilderness_colonization.0017.a:0 "[expedition_leader.GetSheHe|U] has our authority. Say so, loudly."
+ wilderness_colonization.0017.b:0 "Put [expedition_soldier.GetFirstName] over [expedition_leader.GetHerHim]."
+ wilderness_colonization.0017.c:0 "They can sort it out among themselves."
+
+ wilderness_colonization.0017.t.nobody:0 "Somebody Has Been Deciding"
+ wilderness_colonization.0017.desc.nobody:0 "There is no name at the top of the message, which is most of the news.\n\nSomebody out there has been deciding things — where to ford, what to leave on the road, who eats when the carts run light — and has mostly been deciding right. Nobody appointed that. The column has started saying so, and the ones saying it loudest are the ones who have been overruled.\n\nThey are three months out and arguing about who is in charge of the argument."
+ wilderness_colonization.0017.a.nobody:0 "Whoever has been leading them leads them. Say so, loudly."
+ wilderness_colonization.0017.b.nobody:0 "Send [expedition_soldier.GetFirstName] after them to take command."
+ wilderness_colonization.0017.c.nobody:0 "It is their road. Let them settle it."
+
+
+ # --- Option A Tooltip ---
+ colonize_authority_breakdown_tt:0 "#bold Standing on Royal Authority#!:\n• #V [SCOPE.ScriptValue('colony_authority_chance')|0]%#! Chance of Success\n• #P Success#!: Authority restored (#P +14#! Expedition Fortune)\n• #N Failure#!: Words ignored from afar (#N -10#! Expedition Fortune, Leader gains Stress)"
+
+ # --- Option B Tooltips ---
+ colonize_handover_breakdown_tt:0 "#bold Force Change of Command#!:\n#V [expedition_soldier.GetShortUIName]#! assumes leadership immediately.\n• #V [SCOPE.ScriptValue('colony_handover_chance')|0]%#! Chance of Clean Handover\n• #P Success#!: Martial order established (#P +8#! Fortune, obstacle clearance active)\n• #N Failure#!: Factional mutiny on the road (#N -12#! Fortune, [expedition_leader.GetShortUIName] loses #N 20 Opinion#! and gains Stress)"
+
+ colonize_ride_after_breakdown_tt:0 "#bold Send a Military Leader#!:\n[expedition_soldier.GetShortUIName] rides out to take command of the leaderless carts.\n• #V [SCOPE.ScriptValue('colony_handover_chance')|0]%#! Chance to Overtake & Assume Command\n• #P Success#!: Column rallied under strong leadership (#P +10#! Fortune)\n• #N Failure#!: Arrives late to a distrustful column (#N -6#! Fortune)"
+
+ # --- Option C Tooltip ---
+ colonize_self_rule_breakdown_tt:0 "#bold Abstain from the Dispute#!:\n• #V [SCOPE.ScriptValue('colony_self_rule_chance')|0]%#! Chance of Sensible Resolution\n• #P Success#!: Grassroots consensus emerges (#P +6#! Fortune)\n• #N Failure#!: Brawls and wagon desertions on the trail (#N -14#! Fortune)"
+ wilderness_colonization.0018.t:0 "They Want to Turn Back"
+ wilderness_colonization.0018.desc:0 "It has stopped being a journey and become a thing they are enduring, and some of them have started counting the days back rather than forward.\n\nWhat they want is to know what they get. Not wages — land. Their own, held of us and not worked for somebody else, which is the only thing that was ever going to move people this far from anywhere.\n\nWe can promise that. It is not ours to promise until there is a colony to cut it out of."
+ wilderness_colonization.0018.a:0 "Promise them land of their own."
+ wilderness_colonization.0018.b:0 "They knew what they were signing for."
+
+ colonize_promise_tt:0 "#V [SCOPE.ScriptValue('colony_promise_chance')|0]%#! that they believe it"
+ colonize_hold_them_tt:0 "#V [SCOPE.ScriptValue('colony_hold_them_chance')|0]%#! that the column holds together"
+ colonize_settlers_promised_tt:0 "If the colony holds, its settlers will hold us to it — promised or merely told, and believed or not"
+
+ # Lines in the odds breakdown, from `desc` on an add in 00_colonization_values.txt.
+ colonize_no_leader_desc:0 "Nobody in charge of them"
+ colonize_riding_after_desc:0 "Three months of road to make up"
+ settlers_promised_land:0 "Promised Their Own Land"
+ settlers_promised_land_desc:0 "They were told, on a bad road a long way from here, that this country would be theirs. Some of it will have to be."
+
+ wilderness_colonization.0012.t:0 "Word from the Colony"
+ wilderness_colonization.0012.desc:0 "A rider from [colony.GetName], 7 months on.\n\nThey lost people — the rider is matter-of-fact about it, and does not give a number unless asked. But there are roofs, there is a palisade, and there was enough put by to get through the second winter without sending to us for it.\n\nIt is a place now. A poor one, but a place."
+
+wilderness_colonization.0012.desc.self:0 "After days and days of ragged, rough terrain, sleepless nights behind the palisade have finally yielded fruit.\n\n[colony.GetName] is no longer just carts in the snow—there are solid hearths, cleared perimeter ditches, and fields ready for the spring planting. We have carved a county out of the wild with our own hands.\n\nIt is a place now. Our place."
+
+wilderness_colonization.0029.t:0 "The Starving Winter"
+ wilderness_colonization.0029.desc:0 "The blizzard has sealed the passes behind us, and the last grain barrel was scraped clean three days ago.\n\nThe expedition to [colony.GetName] has collapsed. Settlers are burning wagon spokes just to stay alive through the night, and frozen cattle lie half-buried in the snowdrifts.\n\nWithout an immediate, brutal decision, this road will be our grave."
+ wilderness_colonization.0029.a:0 "Butcher the horses, ditch the wagons, and march home on foot."
+ wilderness_colonization.0029.b:0 "Press forward through the whiteout! We reach the palisade or die trying!"
+
+ colonize_starvation_retreat_tt:0 "#P Guaranteed Survival#!:\n• You abandon the expedition and limp back to court.\n• Suffer wounds and #N Malnutrition#!, but you #P survive#!."
+ colonize_starvation_gamble_tt:0 "#bold Desperate Defiance#!:\n• #N High risk of death by freezing/starvation!#!\n• Evaluated against your #V Prowess#! and constitution."
+ wilderness_starvation_survival_desc:0 "You drag yourself out of the drifts frostbitten and battered, but breathing."
+ wilderness_starvation_death_desc:0 "The cold seeps into your bones. Your march ends in the snow."
+ wilderness_colonization.0013.t:0 "Nothing Came Back"
+ wilderness_colonization.0013.desc:0 "What is left of the party came out of [colony.GetName] in ones and twos over the spring, and what they say does not entirely agree.\n\nThe stores went early. After that it is a matter of which thing got them — the cold, the water, the people who were already there — and by then it hardly mattered which.\n\nThe ground is as it was. So is the ledger, minus what we spent."
+ wilderness_colonization.0013.a:0 "It was not a good place for it."
+
+ promote_colony_toast:0 "A Colony Comes of Age"
+ colonize_obstacle_cleared_toast:0 "The Way Is Clear"
+
+ # --- Requirement tooltips -----------------------------------------------------------------
+ colonize_expedition_out_tt:0 "We already have a party on the road; we will know how they fared before long..."
+ colonize_at_settlement_limit_tt:0 "We hold as many colonies as we can support"
+ colonize_must_border_realm_tt:0 "The land must border our realm"
+ colonize_not_while_at_war_tt:0 "We cannot spare settlers while at war"
+ colonize_cannot_afford_tt:0 "We cannot afford to outfit an expedition"
+ colonize_cannot_afford_prestige_tt:0 "We lack the standing to call men out to empty country"
+
+ # --- The Settle button on the county view ---------------------------------------------------
+ # Emit/GuiWriter.cs injects a button carrying this text into a copy of vanilla's county window.
+ WILDERNESS_SETTLE_BUTTON:0 "Settle This Land"
+ # Promote buttons. These drive the promote_colony_* interactions directly, so their tooltips
+ # come from those interactions rather than from here — only the button faces are below.
+ WILDERNESS_PROMOTE_BUTTON:0 "Raise To Proper Holding"
+ WILDERNESS_PROMOTE_CITY_BUTTON:0 "Charter a Town"
+ WILDERNESS_PROMOTE_TEMPLE_BUTTON:0 "Consecrate a Temple"
+ colonize_settle_button_effect_tt:0 "Send settlers into this country, and make it ours to hold — or to lose."
+ colonize_obstacles_remain_tt:0 "Nothing may still be blocking the land"
+ colonize_needs_development_tt:0 "The county must have reached #V 4 #! Development"
+ colonize_needs_full_settlement_tt:0 "The colony must be fully established"
+ colonize_construction_in_progress_tt:0 "Nothing may still be under construction here"
+
+ # --- The emptied character and title windows ------------------------------------------------
+ # Emit/GuiWriter.cs hides the body of vanilla's character and title windows for the wilderness
+ # dummy and its titles, and splices in a panel showing one of these instead. Both are deliberately
+ # short: the windows were emptied because the engine was reporting invented facts about unheld
+ # land, and filling them back up with prettier invented facts would undo the point.
+ WILDERNESS_HOLDER_WINDOW:0 "No one holds this country.\n\nWhat lives here keeps no court and answers no summons."
+ WILDERNESS_TITLE_WINDOW:0 "Unclaimed land.\n\nIt has a name on the map and nothing else."
+
+ # --- Cost breakdown -----------------------------------------------------------------------
+ colonize_cost_tier_desc:0 "Rank"
+
+ # --- Auto-generated holding modifiers -------------------------------------------------------
+ # CK3 creates these eight names per holding type on its own; these are the strings they display
+ # under. Worded to match vanilla's own block in localization/english/modifiers/modifiers_l_english.yml.
+ wilderness_holding_build_speed:0 "Wilderness [buildings|E] Construction Time"
+ wilderness_holding_build_gold_cost:0 "Wilderness [buildings|E] Construction Cost"
+ wilderness_holding_build_piety_cost:0 "Wilderness [buildings|E] Piety Cost"
+ wilderness_holding_build_prestige_cost:0 "Wilderness [buildings|E] Prestige Cost"
+ wilderness_holding_holding_build_speed:0 "Wilderness [holding|E] Construction Time"
+ wilderness_holding_holding_build_gold_cost:0 "Wilderness [holding|E] Construction Cost"
+ wilderness_holding_holding_build_piety_cost:0 "Wilderness [holding|E] Piety Cost"
+ wilderness_holding_holding_build_prestige_cost:0 "Wilderness [holding|E] Prestige Cost"
+
+ settlement_holding_build_speed:0 "Colony [buildings|E] Construction Time"
+ settlement_holding_build_gold_cost:0 "Colony [buildings|E] Construction Cost"
+ settlement_holding_build_piety_cost:0 "Colony [buildings|E] Piety Cost"
+ settlement_holding_build_prestige_cost:0 "Colony [buildings|E] Prestige Cost"
+ settlement_holding_holding_build_speed:0 "Colony [holding|E] Construction Time"
+ settlement_holding_holding_build_gold_cost:0 "Colony [holding|E] Construction Cost"
+ settlement_holding_holding_build_piety_cost:0 "Colony [holding|E] Piety Cost"
+ settlement_holding_holding_build_prestige_cost:0 "Colony [holding|E] Prestige Cost"
+
+ # --- The colonist's government ---------------------------------------------------------------
+ colony_government:0 "Colonial"
+ colony_government_adjective:0 "Colonial"
+ colony_government_realm:0 "Settlement"
+ colony_government_desc:0 "The open frontier; full of potential, but a developing colony will only be able to muster few men, and all capital produced goes directly into the colony; their liege will only receive few levies, and no taxes."
+ colony_opinion_of_liege_desc:0 "The Lord Who Sent Me Out"
+
+ colony_vassal:0 "Settlers' Terms"
+ colony_vassal_desc:0 "What a colonist owes the lord who sent them out. There is nothing in it to negotiate; it lapses the day there is a seat here."
+ colony_obligations:0 "Settlers' [obligations|E]"
+ settlers_obligations:0 "Men, Not Coin"
+ settlers_obligations_short:0 "Men, Not Coin"
+ settlers_obligations_desc:0 "The colony renders no tax — there is none to render. What it has is people, and they can be called out."
+
+ # --- Presence -----------------------------------------------------------------------------
+ overseeing_the_settlement:0 "Overseeing the Settlement"
+ overseeing_the_settlement_desc:0 "We are here. Not sending word, not reading reports — here, where the work is, for as long as we choose to stay."
+ settlement_overseen:0 "The Lord Is Here"
+ settlement_overseen_desc:0 "Their lord sleeps within the palisade. Disputes are settled the same week, the work is inspected by whoever is paying for it, and nobody is waiting on a rider."
+
+ # --- Opinion ------------------------------------------------------------------------------
+ colonist_raised_up_opinion:0 "Raised Me From Nothing"
+ colonist_sent_to_the_frontier_opinion:0 "Sent Me to the Frontier"
+ lost_a_colony_opinion:0 "Let a Frontier Walk Away"
+
+ TRUCE_COLONY_INDEPENDENCE:0 "settlement of the frontier"
+
+ # --- Going there, and coming back -----------------------------------------------------------
+ WILDERNESS_OVERSEE_BUTTON:0 "Go and Oversee It"
+
+
+
+ # --- The leak detector ----------------------------------------------------------------------
+ # Diagnostic, not flavour. Both strings name the county and the holder so the route can be
+ # identified from a screenshot or from game.log without reproducing it. Remove with
+ # wilderness_colonization.0099 once the route is closed at its source.
+ wilderness_leak_toast:0 "Wilderness in a Realm: [leak_county.GetName] was held by [leak_county.GetHolder.GetName] while still unsettled. It has been returned to the wild."
+ wilderness_leak_debug_log:0 "WILDERNESS LEAK: county [leak_county.GetName] entered the realm of [leak_county.GetHolder.GetName] with wilderness_holding intact; reverted."
+
+ colonize_already_present_tt:0 "We are already there"
+ colonize_already_travelling_tt:0 "We are already on the road"
+
+ # --- Granting a colony away -----------------------------------------------------------------
+ wilderness_colonization.0015.t:0 "A [colonist.GetWomanMan|U] With Nothing"
+ wilderness_colonization.0015.desc:0 "[colonist.GetTitledFirstName] came to us with unlanded, and with no foreseen prospects of any. [colonist.GetSheHe|U] now has a chance to forge [colonist.GetHerHis] own land in my name.\n\nIt shall start with no more than tents and mere pallisades, and [colonist.GetSheHe] knows perfectly well; [colonist.GetSheHe] knelt anyway.\n\nWhat [colonist.GetSheHe] has that our other vassals do not is a reason for the place to succeed. [colonist.GetSheHe|U] has nowhere else to go that [colonist.GetSheHe] may call [colonist.GetHerHis] own."
+ wilderness_colonization.0015.a:0 "Let [colonist.GetHerHim] make something of it."
+
+wilderness_colonization.0010.d:0 "I will lead the column myself. No one else has more at stake."
+ colonize_expedition_self_tt:0 "#V You#! lead the expedition personally. Your own attributes and traits determine its odds of survival."
+
+ wilderness_colonization.0012.a:0 "Integrate [colony.GetName] into our personal domain."
+ wilderness_colonization.0012.b:0 "Invest [expedition_leader.GetFirstName] as the new ruler of [colony.GetName]."
+ colonize_keep_direct_control_tt:0 "You retain direct possession of [colony.GetName] as part of your domain."
+ colonize_grant_to_leader_tt:0 "#V [expedition_leader.GetShortUIName]#! is granted [colony.GetName] and becomes your colonial vassal."
+
+ # --- A colony comes of age ------------------------------------------------------------------
+ wilderness_colonization.0020.t:0 "The Seat Is Raised"
+ wilderness_colonization.0020.desc:0 "Word from [finished_colony.GetName]: the hall is up.\n\n[colonist.GetTitledFirstName] has spent the better part of [colonist.GetHerHis] life on this — the wolves, the winters, the years where nothing we sent made any difference and nothing came back. There is a road to it now. There are people in it who were born in it.\n\n[colonist.GetSheHe|U] has sent word rather than come [colonist.GetHerselfHimself], which is fair; the ride is long and there is a harvest. The word is that [colonist.GetSheHe] remains ours."
+ wilderness_colonization.0020.a:0 "[colonist.GetSheHe|U] has earned the seat. Let [colonist.GetHerHim] keep it."
+ wilderness_colonization.0020.b:0 "It is finished now. We will take it back."
+
+ wilderness_colonization.0021.t:0 "[colonist.GetSheHe|U] Does Not Send Word"
+ wilderness_colonization.0021.desc:0 "The infrastructure, housing, and main hall at [finished_colony.GetName] have all finished construction. We know this because a merchant told us, not because [colonist.GetTitledFirstName] did.\n\n[colonist.GetSheHe|U] has not renewed [colonist.GetHerHis] oath, and does not intend to. [colonist.GetHerHis|U] answer, when it came, was courteous and short: [colonist.GetSheHe] was given empty country and a charter, and what stands there now [colonist.GetSheHe] and [colonist.GetHerHis] neighbours built. [colonist.GetSheHe|U] does not see what part of it is ours.\n\nIt is a long way off. Everyone who has heard is waiting to see whether that matters to us."
+ wilderness_colonization.0021.a:0 "Let [colonist.GetHerHim] have it. It was never worth anything to us."
+ wilderness_colonization.0021.b:0 "The land is ours. We will remember that."
+
+# Plea for aid
+
+wilderness_colonization.0051.t:0 "A Plea from the Palisade"
+ wilderness_colonization.0051.desc.intro:0 "A dust-caked messenger from [struggling_colony.GetName] presents a letter signed with the rough hand of [petitioning_colonist.GetTitledFirstName].\n\nProgress on the frontier has ground to a halt."
+ 
+ wilderness_colonization.0051.desc.beasts:0 "\n\nPacks of wolves and predators have surrounded the perimeter. Woodsmen refuse to fell timber without armed escorts, and hunting the beasts out of the hills requires wages for trackers and hunters."
+ wilderness_colonization.0051.desc.bandits:0 "\n\nOutlaw camps in the nearby ridges have ambushed the supply carts. [petitioning_colonist.GetFirstNameNoTooltip] needs funds to hire local armsmen and root them out."
+ wilderness_colonization.0051.desc.growth:0 "\n\nThe dense, ancient growth will not yield to blunt axes. Additional teams of loggers and draft oxen must be hired from bordering towns to fell and burn the stumps."
+ wilderness_colonization.0051.desc.floods:0 "\n\nStanding marshwater has flooded the lower compound. Digging drainage ditches and dyking the river will require specialized ditchers and timber cribs."
+ wilderness_colonization.0051.desc.scree:0 "\n\nThe steep scree slopes constantly collapse into the ditches. Cutting stone benches and terraces requires masons and iron picks."
+ wilderness_colonization.0051.desc.cold:0 "\n\nThe bitter frost has frozen the work yards solid. Deep winter storehouses and banked walls must be erected before men can work safely."
+ wilderness_colonization.0051.desc.upgrade_01:0 "\n\nThe initial palisade is bursting at the seams. Expanding into a growing settlement with fields and proper cartways requires timber and building materials."
+ wilderness_colonization.0051.desc.upgrade_02:0 "\n\nThe colony is poised on the brink of full establishment, but lacks the coin to raise the final stone foundations and roads."
+ wilderness_colonization.0051.desc.fallback:0 "\n\nThe local settlement chest is empty and tools are broken."
+ 
+ wilderness_colonization.0051.desc.outro:0 "\n\n[petitioning_colonist.GetSheHe|U] asks for #bold [struggling_colony.MakeScope.Var('colony_aid_cost').GetValue|0] gold#! to immediately give assistance and resume work."
+
+ wilderness_colonization.0051.a:0 "Send the wagons with gold. Clear the way immediately."
+ wilderness_colonization.0051.b:0 "We will pay, but [petitioning_colonist.GetFirstNameNoTooltip] will owe us a heavy debt."
+ wilderness_colonization.0051.c:0 "They were granted land, not an endless draft on our treasury."
+
+ colonize_aid_funded_tt:0 "#P The gold is dispatched; the obstacle is cleared and work on [struggling_colony.GetName] advances immediately.#!"
+ colonize_aid_hook_tt:0 "#P You fund the clearance immediately and gain a Hook on [petitioning_colonist.GetShortUIName].#!"
+ colonize_aid_refused_tt:0 "#N [petitioning_colonist.GetShortUIName] is denied funds, leaving the obstacle in place.#!"
+ 
+ # --- The overseeing activity -----------------------------------------------------------------
+ # Replaces oversee_colony_interaction, which could not hold a lord anywhere — see the note at the
+ # top of common/activities/activity_types/00_oversee_colony_activity.txt.
+ # CK3 derives TEN keys per activity from its name, and it names none of them anywhere — a missing
+ # one shows the raw key in the planner rather than reporting anything. The list below is exactly
+ # what ck3-tiger asked for; if a future patch adds an eleventh, tiger will say so.
+ activity_oversee_colony:0 "Oversee a Colony"
+ activity_oversee_colony_name:0 "Oversee a Colony"
+ activity_oversee_colony_owner:0 "Overseen by [ROOT.Char.GetTitledFirstName]"
+ activity_oversee_colony_selection_tooltip:0 "Ride out to one of our colonies and live there until the work is done."
+ activity_oversee_colony_host_desc:0 "We will be living behind its palisade, not reading reports about it."
+ activity_oversee_colony_guest_desc:0 "Nobody is invited. This is not a gathering."
+ activity_oversee_colony_guest_help_text:0 "A lord overseeing a colony brings no company. There is nowhere to put them."
+ activity_oversee_colony_destination_selection:0 "Which of our colonies are we going to?"
+ activity_oversee_colony_predicted_cost:0 "Nothing in coin. The price is the years."
+ activity_oversee_colony_conclusion_desc:0 "The work here is done, or we are needed elsewhere. Either way the road home is a long one."
+ TRAVEL_NAME_FOR_activity_oversee_colony:0 "Journey to the Colony"
+ activity_oversee_colony_desc:0 "A colony renders nothing to a lord who has never seen it. Ride out, live behind its palisade, and it will render something — for as long as we are standing in it.\n\nWe will not be at court. What happens there in our absence is not something anyone out here will be able to tell us."
+ activity_oversee_colony_province_desc:0 "A colony of ours, and a long way from anywhere. There is no hall here and nowhere to put a court."
+ oversee_colony_intent:0 "Oversee the Work"
+ oversee_colony_intent_desc:0 "We are not here to be entertained. We are here so that the work is inspected by whoever is paying for it, and so that disputes are settled the same week they are raised."
+ phase_overseeing:0 "Overseeing the Work"
+ phase_overseeing_desc:0 "We stay until there is something here worth leaving behind."
+ colonize_oversee_must_hold_tt:0 "We must hold this colony ourselves"
+ colonize_oversee_button_effect_tt:0 "Ride out and live in this colony until the work is done."
+
+
+
+# --- Colony Buildings ---
+
+# Logging/"Infrastructure"
+ building_colony_timber_works_01:0 "Frontier Timber Works"
+ building_colony_timber_works_01_desc:0 "A rudimentary logging camp and pit-saw shed. Working local timber on-site dramatically eases the burden of hauling dressed wood across the roadless wastes."
+ building_type_colony_timber_works_01:0 "Timber Works"
+ building_type_colony_timber_works_01_desc:0 "Local logging and stoneworks reducing settlement construction costs."
+ building_colony_timber_works_02:0 "Colonial Sawmill & Masonry"
+ building_colony_timber_works_02_desc:0 "Water-driven saws, drying racks, and lime kilns. The settlement no longer imports basic building materials, allowing steady growth and durable construction."
+ building_type_colony_timber_works_02:0 "Timber Works"
+ building_type_colony_timber_works_02_desc:0 "Local logging and stoneworks reducing settlement construction costs."
+
+# Walls
+building_colony_pallisade_01:0 "Frontier Palisade"
+ building_colony_pallisade_01_desc:0 "Stakes cut from the nearest treeline, sharpened and driven deep into a shallow ditch. It will not stop an army, but it turns a raid into a decision, and a wolf pack into someone else's problem. The settlers sleep behind it because sleeping in front of it is worse."
+ building_type_colony_pallisade_01:0 "Palisade"
+ building_type_colony_pallisade_01_desc:0 "A wall of timber and earth thrown up around a young settlement. Cheap, quick, and temporary — when the colony grows into something worth defending properly, the palisade comes down and stone goes up in its place."
+ building_colony_pallisade_02:0 "Colonial Palisade"
+ building_colony_pallisade_02_desc:0 "The stakes have been replaced twice over, the ditch dug wider, and a walkway now runs the inner face so a handful of men can watch every approach. Gates are barred at dusk by habit rather than by order. What began as a fence has become the edge of somewhere."
+ building_type_colony_pallisade_02:0 "Palisade"
+ building_type_colony_pallisade_02_desc:0 "A wall of timber and earth thrown up around a young settlement. Cheap, quick, and temporary — when the colony grows into something worth defending properly, the palisade comes down and stone goes up in its place."
+
+# Office
+building_colony_office_01:0 "Colonial Bailiff's Office"
+ building_colony_office_01_desc:0 "A modest timber office housing surveyors, tax scribes, and clerks to register claims, coordinate labor, and enforce the settlement's charter."
+ building_type_colony_office_01:0 "Colonial Administration"
+ building_type_colony_office_01_desc:0 "Administrative offices that oversee taxation, legal registry, and organized settlement growth."
+ building_colony_office_02:0 "Colonial Magistrate & Registry"
+ building_colony_office_02_desc:0 "A dedicated administrative seat with land registries, revenue ledgers, and court chambers to govern local commerce and drive regional development."
+ building_type_colony_office_02:0 "Colonial Administration"
+ building_type_colony_office_02_desc:0 "Administrative offices that oversee taxation, legal registry, and organized settlement growth."
+ building_colony_office_03:0 "Grand Colonial Chancery"
+ building_colony_office_03_desc:0 "A sprawling administrative complex housing ministries, exchequer clerks, and civil courts. By subsidizing incoming settlers and coordinating large-scale public works, the colony finally breaks through frontier stagnation to become a thriving regional capital."
+ building_type_colony_office_03:0 "Colonial Administration"
+ building_type_colony_office_03_desc:0 "Administrative offices that oversee taxation, legal registry, and organized settlement growth."
+
+  # --- wilderness event 30 -----------------------------------------------------------------
+ wilderness_colonization.0030.t:0 "Winter at the Palisade"
+ 
+ wilderness_colonization.0030.desc.intro:0 "The wind howling through the timbers of [colony.GetName] brings no warmth from our halls at home. Outside the ditch, the frontier is turning white and merciless."
+ 
+ wilderness_colonization.0030.desc.beasts:0 "\n\nHowls echo from the treeline every dusk. Driven by hunger, the beasts have grown bold enough to test the perimeter stakes, dragging off livestock and scattering our pickets."
+ wilderness_colonization.0030.desc.bandits:0 "\n\nSmoke rises from the ridge where outlaws watch our gates. With our wagons stalled in the snow, they know our supplies are thin and have started harassing our woodcutters."
+ wilderness_colonization.0030.desc.cold:0 "\n\nThe ground has frozen so deep that iron picks shatter against it. Without fuel enough to bank the longhouses through the dark weeks, frostbite is taking fingers and toes."
+ wilderness_colonization.0030.desc.floods:0 "\n\nThe sleet and freezing melt have turned the lower compound into knee-deep black slurry. Foundations are sinking, and damp rot threatens what little grain remains."
+ wilderness_colonization.0030.desc.fallback:0 "\n\nStores are running leaner than planned, and the settlers look to our quarters with anxious, hollow eyes."
+ 
+ wilderness_colonization.0030.desc.outro:0 "\n\n[colony_foreman.GetTitledFirstName] stands by the brazier with grease-stained tally slates. #EMP 'We can spend our way through it, fight what’s outside, or bolt the doors and let the weak fall away.'#!"
+
+ wilderness_colonization.0030.a:0 "Empty the treasury chests. No one freezes on our watch."
+ wilderness_colonization.0030.b:0 "Rally the guard. We ride out to secure the perimeter ourselves!"
+ wilderness_colonization.0030.c:0 "Bolt the granaries. The colony must survive, whatever the toll."
+
+ wilderness_rationing_success_tt:0 "#P Supplies are distributed fairly, boosting development growth and loyalty.#!"
+ wilderness_sortie_success_desc:0 "You drive off the threat, earning the awe of the settlers!"
+ wilderness_sortie_fail_desc:0 "The sortie turns into a chaotic rout in the snow, leaving you battered."
+ wilderness_hard_winter_tt:0 "#N Sacrifices are made; control is maintained at the cost of settler resentment.#!"
+
+ settlement_well_provisioned:0 "Well-Provisioned Palisade"
+ settlement_well_provisioned_desc:0 "Generous stores and relief funds kept this frontier settlement thriving through the deep cold."
+ settlement_hardened_winter:0 "Grim Winter Discipline"
+ settlement_hardened_winter_desc:0 "Strict rationing and iron discipline preserved the garrison, though the settlers remember who went without."
+
+ # Follow-up A (Relief)
+ wilderness_colonization.0031.t:0 "Warmth in the Deep Cold"
+ wilderness_colonization.0031.desc:0 "The wagons made it through the drifts. Sacks of salted oats, cured meat, and dry split cordwood are unloaded into the palisade’s storehouses.\n\nFor the first time since the first snow fell, hearth-smoke rises from every chimney in [colony.GetName]. The settlers raise a cheer as we inspect the yards."
+ wilderness_colonization.0031.a:0 "They will remember who fed them."
+
+ # Follow-up B Success (Victory)
+ wilderness_colonization.0032.t:0 "Horns in the Snow"
+ wilderness_colonization.0032.desc:0 "The ambush caught them off guard. Steel bit into the gloom, and within an hour the perimeter was swept clean.\n\nWe return through the timber gates bloodied but triumphant, bearing trophies through the palisade. No one will test these walls again before spring."
+ wilderness_colonization.0032.a:0 "Let the wild fear our banner."
+
+ # Follow-up B Failure (Defeat)
+ wilderness_colonization.0033.t:0 "Dragged from the Fray"
+ wilderness_colonization.0033.desc:0 "The drifts were deeper than the scouts reported. The lines shattered, and in the freezing confusion the skirmish became a desperate retreat.\n\nOur guards drag us back behind the bolted timbers, gashed and feverish, while jeers and howls linger just beyond arrow-shot."
+ wilderness_colonization.0033.a:0 "Bar the gates... call the healer."
+
+ # Follow-up C (Grim Winter)
+ wilderness_colonization.0034.t:0 "The Thaw"
+ wilderness_colonization.0034.desc:0 "Spring arrives not with song, but with melting slush and silent graves. The granaries held, but the settlement has grown quieter.\n\nThose who survived look upon our quarters with cold, dutiful deference. The colony lives, but trust has been buried in the permafrost."
+ wilderness_colonization.0034.a:0 "Order has a price."
+
+  # --- Good Event 0040 ---
+ wilderness_colonization.0040.t:0 "A Seam in the Strata"
+ wilderness_colonization.0040.desc:0 "While digging drainage ditches beneath the northern palisade, pickaxes struck stone that rang like an anvil.\n\n[colony_foreman.GetTitledFirstName] brings samples to our tent: dense gray ashlar and veins of dark, workable iron ore. In country where every nail and cornerstone must be carted across roadless wastes, this is a fortune sleeping beneath our boots."
+ wilderness_colonization.0040.a:0 "Quarry it all for the colony's walls and roads."
+ wilderness_colonization.0040.b:0 "Smelt the ore into ingots for our realm treasury."
+
+ # --- Bad Event 0041 ---
+ wilderness_colonization.0041.t:0 "Ague in the Palisade"
+ wilderness_colonization.0041.desc:0 "A foul gray damp has settled over the compound ditch, and with it comes the shuddering fever. Settlers lie bundled in damp wool, coughing blood and delirious with cold sweat.\n\nLiving in such cramped quarters, the contagion is only days away from reaching our personal guard."
+ wilderness_colonization.0041.a:0 "Send for bark and wine remedies; isolate the sick."
+ wilderness_colonization.0041.b:0 "Trust in God and our own blood to weather the season."
+ wilderness_colonization.0041.c:0 "Torches to the infested huts. Drive the sick beyond the perimeter."
+
+ wilderness_fever_contracted_desc:0 "The contagion takes hold in your chest, leaving you feverish and bedridden."
+ wilderness_fever_resisted_desc:0 "Your robust constitution throws off the chill, though the camp suffers."
+
+ colony_rich_seam:0 "Rich Stone & Ore Vein"
+ colony_rich_seam_desc:0 "Local deposits of workable stone and iron make construction dramatically faster and cheaper."
+ colony_purged_quarter:0 "Charred Quarters"
+ colony_purged_quarter_desc:0 "The ruthless burning of infected huts curbed the fever, but left bitter resentment among surviving families."
+
+ # vassal asks for money to complete colony
+ wilderness_colonization.0050.t:0 "A Seat on the Frontier"
+ wilderness_colonization.0050.desc:0 "A dust-stained messenger kneels before our dais, bearing a letter bearing the seal of [petitioning_colonist.GetTitledFirstName].\n\nThe ditch is cleared at [ready_colony.GetName], the palisade is reinforced, and the land is ready to support a proper fortress. Yet [petitioning_colonist.GetTitledFirstName] has exhausted their local levies and granaries reaching this threshold.\n\nThey ask for #bold [SCOPE.ScriptValue('promote_colony_cost')|0] gold#! to raise the castle walls and complete the colony's coming-of-age."
+ 
+ wilderness_colonization.0050.a:0 "Send the gold. The seat shall be raised in our name."
+ wilderness_colonization.0050.b:0 "We will pay, but [petitioning_colonist.GetFirstNameNoTooltip] will owe us a heavy debt."
+ wilderness_colonization.0050.c:0 "If [petitioning_colonist.GetSheHe] cannot afford a hall, [petitioning_colonist.GetSheHe] can sleep in the palisade."
+
+ colonize_petition_funded_tt:0 "#P [ready_colony.GetName] is immediately promoted to a full holding, earning deep vassal gratitude.#!"
+ colonize_petition_hook_tt:0 "#P [ready_colony.GetName] is promoted, and you gain a Hook on [petitioning_colonist.GetTitledFirstName].#!"
+ colonize_petition_refused_tt:0 "#N [petitioning_colonist.GetTitledFirstName] is left without funds, breeding resentment on the frontier.#!"
+ 
+ # return home
+return_home_from_colony_decision:0 "Return Home from the Colony"
+ return_home_from_colony_decision_desc:0 "We have inspected the palisade, heard local disputes, and seen the ditch cleared. The frontier can manage without us for a time; it is time to return to our realm capital."
+ return_home_from_colony_decision_tooltip:0 "Conclude your stay at the colony and journey back to court."
+ return_home_from_colony_decision_confirm:0 "Pack the Carts"
+ 
+ WILDERNESS_RETURN_HOME_BUTTON:0 "Return Home"
+ colonize_return_home_button_effect_tt:0 "Conclude overseeing this settlement and journey back to your capital."
+ 
+OVERSEE_COLONY_ACTIVITY_STATUS:0 "You are dwelling among the settlers, directing the expansion firsthand."
+ OVERSEEING_THE_SETTLEMENT_TOOLTIP:0 "#T Overseeing the Settlement#!\n#positive @gold_icon! +2.0#! Monthly Income\n#negative @prestige_icon! -0.5#! Monthly Prestige\n\n#flavor The lord dwells in the palisade, directing the work firsthand.#!"
+ SETTLEMENT_OVERSEEN_TOOLTIP:0 "#T Colony Growth#!\n#positive @development_icon! +15%#! Development Growth\n#positive @control_icon! +0.5#! Monthly Control Growth\n#positive +20#! County Opinion\n#positive -15%#! Construction Time\n\n#flavor A colony develops rapidly when its lord is present to govern it.#!"
+ 
+ # --- Was promised colony, now what
+ wilderness_colonization.0025.t: "The Pioneer's Charter"
+ wilderness_colonization.0025.desc: "Years ago, when wagon axles cracked in the frozen mud and the expedition stood on the brink of turning back, a solemn pledge was sworn: #italic every family that endured the march would hold their own land in fee and freedom.#! \n\nToday, [finished_colony.GetNameNoTier] is wild no longer. Its palisades have been replaced by stone ramparts, and smoke rises from hundreds of steady hearths. A delegation of the original settlers—graybeards and the grown children of those who perished clearing the brush—now stands before the dais. \n\nIn their calloused hands, they hold the dispatch bearing your seal."
+ wilderness_colonization.0025.a: "A lord's oath is the realm's bedrock. Grant them their charter."
+ wilderness_colonization.0025.b: "Offer a purse of silver to every family in exchange for the charter."
+ wilderness_colonization.0025.c: "They were hired laborers, not lords. Enforce standard feudal tithes."
+
+ colonize_honor_charter_tt: "You grant freeholder rights to the pioneer families:\n$EFFECT_LIST_BULLET$Lightens holding taxes by #negative_value 15%#!\n$EFFECT_LIST_BULLET$Boosts Development Growth by #positive_value 25%#!\n$EFFECT_LIST_BULLET$Grants #positive_value +20#! Popular Opinion for 25 years"
+ colonize_commute_charter_tt: "You buy out the settlers' charters with coin, avoiding popular unrest without sacrificing future tax rights."
+ colonize_break_charter_tt: "You extract full feudal taxes, but betraying your word causes #negative_value severe unrest#!, drops Control by #negative_value 30#!, and gains #negative_value Tyranny#!."
+
+ # Personally leading expedition
+ # --- Player-Led Expedition Events ---
+ wilderness_colonization.0026.t:0 "Scraping the Barrel"
+ wilderness_colonization.0026.desc:0 "The wagons groan through the ruts, but they ride higher than they did three weeks ago.\n\nWe have miscalculated the road to [colony.GetName]. The damp has ruined two sacks of meal, the oxen are faltering, and the camp kettle yields only thin, watery broth.\n\nNobody has starved yet, but every eye in the camp watches our tent to see what their lord intends to do about it."
+ wilderness_colonization.0026.a:0 "Pay local trappers from our campaign chest for dry stores."
+ wilderness_colonization.0026.b:0 "Rouse the hunters. We will track and take game ourselves."
+ wilderness_colonization.0026.c:0 "Tighten the belts. We march through it on half-rations."
+
+ wilderness_colonization.0027.t:0 "Murmurs in the Mud"
+ wilderness_colonization.0027.desc:0 "Three axletrees have snapped in two days, and the column has stalled before a rain-swollen crossing.\n\nA few of the older teamsters have begun arguing over the bearings, their voices rising over the rain. When a lord sleeps in the same mud as their wagoners, the distance that kept court quiet vanishes.\n\nThey are three months from home, cold to the marrow, and questioning who knows the way forward."
+ wilderness_colonization.0027.a:0 "Remind them who leads this column—and whose banner they follow."
+ wilderness_colonization.0027.b:0 "Step back. Let [expedition_soldier.GetFirstName] take command of the march."
+ wilderness_colonization.0027.c:0 "Sit by their fire and hear out their council."
+
+ wilderness_colonization.0028.t:0 "The Fires Turn Back"
+ wilderness_colonization.0028.desc:0 "The night is bitter, and outside our tent a deputation of settlers waits in the frost.\n\nThey did not bring weapons, but they brought hollow faces and cold determination. A journey is one thing; marching toward a frozen bog where nothing waits for them is another.\n\n#EMP 'We are losing cattle every night, my [ROOT.Char.GetLadyLord],'#! their spokesman murmurs. #EMP 'If we die out here, what was it for? What is ours when we arrive?'#!"
+ wilderness_colonization.0028.a:0 "Swear to them: every family who reaches the palisade receives their own freehold land."
+ wilderness_colonization.0028.b:0 "Draw steel and bar the road back. You took an oath—you walk until we arrive."
+ colonize_cannot_lead_already_holding_tt:0 "You cannot personally lead an expedition into the wilderness while already holding or overseeing a frontier colony."
+ colonize_must_grant_colony_tt:0 "You hold as many direct colonies as you can support; you must invest [expedition_leader.GetShortUIName] with the title."
+ 
+ # --- Crisis Root (0060) ---
+ wilderness_colonization.0060.t: "Frontier in Chaos"
+ wilderness_colonization.0060.desc: "Disaster has overtaken the outpost in [colony.GetNameNoTier]. The palisades stand undermanned, winter stores have been ransacked, and open mutiny brews among the cold, desperate settlers. \n\nWithout immediate intervention, the entire settlement will disintegrate and the wild will swallow what we spent years building."
+ wilderness_colonization.0060.a: "Take command in person and enforce order with an iron fist!"
+ wilderness_colonization.0060.b: "Dispatch supply wagons and hired mercenaries at once."
+ wilderness_colonization.0060.c: "It is finished. Sound the retreat and abandon the post."
+ 
+ wilderness_control_salvaged_desc: "You break the mutineers, rally the survivors, and secure the palisade."
+ wilderness_control_lost_desc: "Your men are routed in the chaos, and the settlement burns around you."
+ colonize_control_bought_tt: "Restores #positive_value 40#! County Control through relief stores and mercenary guards."
+ colonize_abandon_colony_tt: "The outpost is abandoned and reverts to unclaimed wilderness."
+
+ # --- Follow-up 0061 (Martial Success) ---
+ wilderness_colonization.0061.t: "Iron Discipline"
+ wilderness_colonization.0061.desc: "Steel solved what words could not. After making an example of the ringleaders and organizing daily patrols along the perimeter, fear and purpose have returned to [colony.GetNameNoTier]. The fires burn again, the watchtowers are manned, and the settlement stands firm."
+ wilderness_colonization.0061.a: "Let none doubt our hold on this frontier."
+
+ # --- Follow-up 0062 (Martial Defeat) ---
+ wilderness_colonization.0062.t: "Blood in the Mud"
+ wilderness_colonization.0062.desc: "The attempt to quell the disorder failed completely. Desperate deserters and wolves broke the cordon under the cover of night. Wounded and outmatched, the remnants of our forces had no choice but to join the retreat. [colony.GetNameNoTier] has been reclaimed by the wild."
+ wilderness_colonization.0062.a: "A bitter and shameful defeat."
+
+ # --- Follow-up 0063 (Gold / Mercenaries) ---
+ wilderness_colonization.0063.t: "Relief and Steel"
+ wilderness_colonization.0063.desc: "Grain carts escorted by hardened mercenaries rode into [colony.GetNameNoTier] just before the final collapse. Full bellies and armed guards quickly quieted the mutineers, putting the settlers back to work repairing the fences and digging ditches."
+ wilderness_colonization.0063.a: "Coin well spent."
+
+ # --- Follow-up 0064 (Abandonment) ---
+ wilderness_colonization.0064.t: "The Abandoned Gate"
+ wilderness_colonization.0064.desc: "The carts were packed, the stores burnt to deny them to bandits, and the exhausted settlers marched back to civilized lands. Behind them, the rotting timber palisade of [colony.GetNameNoTier] stands silent in the encroaching brush."
+ wilderness_colonization.0064.a: "We leave it to the wolves."
+
+ # colony laws
+  colony_governance_laws: "Colony Administration"
+ 
+ colony_law_balanced: "Balanced Administration"
+ colony_law_balanced_effects: "The outpost balances labor evenly between security patrols, clearing the brush, and sowing crops."
+
+ colony_law_garrison: "Martial Vigilance"
+ colony_law_garrison_effects: "Armed patrols escort work crews and sentinels man the ditch day and night:\n$EFFECT_LIST_BULLET$Control Growth: #positive_value +0.35/month#!\n$EFFECT_LIST_BULLET$Garrison Size: #positive_value +40%#!\n$EFFECT_LIST_BULLET$Defender Advantage: #positive_value +6#!\n$EFFECT_LIST_BULLET$Development Growth: #negative_value -15%#!\n$EFFECT_LIST_BULLET$Building Costs: #negative_value +15%#!"
+
+ colony_law_corvee: "Corvée Clearance Gangs"
+ colony_law_corvee_effects: "Settlers and laborers are worked relentlessly to clear the wilderness at maximum speed:\n$EFFECT_LIST_BULLET$Construction Speed: #positive_value +30%#!\n$EFFECT_LIST_BULLET$Building & Clearance Cost: #positive_value -20%#!\n$EFFECT_LIST_BULLET$Popular Opinion: #negative_value -25#!\n$EFFECT_LIST_BULLET$Health Penalty: #negative_value -0.15#!\n$EFFECT_LIST_BULLET$Stress Gain: #negative_value +20%#!"
+
+ colony_law_homestead: "Pioneer Homesteading"
+ colony_law_homestead_effects: "Settlers are granted private plots, warm cabins, and grain reserves:\n$EFFECT_LIST_BULLET$Development Growth: #positive_value +30%#!\n$EFFECT_LIST_BULLET$Popular Opinion: #positive_value +20#!\n$EFFECT_LIST_BULLET$Stress Loss: #positive_value +15%#!\n$EFFECT_LIST_BULLET$Holding Taxes: #negative_value -25%#!\n$EFFECT_LIST_BULLET$Garrison Size: #negative_value -20%#!"
+
+ colony_law_extraction: "Commercial Extraction"
+ colony_law_extraction_effects: "The outpost is dedicated to harvesting furs, hardwood timber, and surface minerals for immediate sale:\n$EFFECT_LIST_BULLET$Holding Revenue: #positive_value +35%#!\n$EFFECT_LIST_BULLET$Control Growth: #negative_value -0.15/month#!\n$EFFECT_LIST_BULLET$Popular Opinion: #negative_value -10#!\n$EFFECT_LIST_BULLET$Defender Advantage: #negative_value -3#!"
+
+  colony_law_garrison_duel_desc: "Martial Vigilance: Palisade sentinels and patrols are prepared for combat"
+ colony_law_corvee_duel_desc: "Corvée Clearance: Brutalized laborers fight back with mutinous fury"
+ colony_law_extraction_duel_desc: "Commercial Extraction: The outpost is built for storage rather than defense"
+
+ # obligations/contracts
+ colony_sponsorship: "Crown Sponsorship & Subsidies"
+ 
+ # Level 0
+ colony_subsidy_neglected: "Neglected Outpost"
+ colony_subsidy_neglected_short: "Neglected"
+ colony_subsidy_neglected_desc: "The Crown provides zero financial upkeep to the settlement, forcing the pioneers to survive on their own:\n$EFFECT_LIST_BULLET$Liege Upkeep: #positive_value 0.0 gold/month#!\n$EFFECT_LIST_BULLET$Development Growth: #negative_value -20%#!\n$EFFECT_LIST_BULLET$Building & Clearance Cost: #negative_value +20%#!\n$EFFECT_LIST_BULLET$Secession Risk: #negative_value +15%#!\n$EFFECT_LIST_BULLET$Vassal Opinion: #negative_value -15#!"
+
+ # Level 1
+ colony_subsidy_standard: "Standard Subsidy"
+ colony_subsidy_standard_short: "Standard"
+ colony_subsidy_standard_desc: "The Crown sends regular relief wagons and tools to maintain basic infrastructure:\n$EFFECT_LIST_BULLET$Liege Upkeep: #negative_value -0.3 gold/month#!\n$EFFECT_LIST_BULLET$Standard Development & Clearance rates\n$EFFECT_LIST_BULLET$Vassal Opinion: #negative_value -5#!"
+
+ # Level 2
+ colony_subsidy_heavy: "Heavy Patronage"
+ colony_subsidy_heavy_short: "Heavy Patronage"
+ colony_subsidy_heavy_desc: "The Crown heavily funds the colony with gold, masonry, and armed escorts:\n$EFFECT_LIST_BULLET$Liege Upkeep: #negative_value -0.75 gold/month#!\n$EFFECT_LIST_BULLET$Development Growth: #positive_value +25%#!\n$EFFECT_LIST_BULLET$Building & Clearance Cost: #positive_value -20%#!\n$EFFECT_LIST_BULLET$Control Growth: #positive_value +0.20/month#!\n$EFFECT_LIST_BULLET$Secession Risk: #positive_value -10%#!\n$EFFECT_LIST_BULLET$Vassal Opinion: #positive_value +25#!"

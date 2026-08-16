@@ -1,0 +1,123 @@
+﻿# Display formats for the modifiers CK3 generates automatically from our two holding types.
+#
+# Declaring a holding in common/holdings/ silently creates eight modifiers named after it
+# (<holding>_build_speed, <holding>_holding_build_gold_cost, and so on — see the Modifiers section
+# of common/holdings/_holdings.info). They work whether or not anything here exists, but without a
+# format entry they render unlabelled and unsigned in tooltips.
+#
+# Vanilla declares all eight for every one of its holding types in
+# common/modifier_definition_formats/00_holding_definitions.txt; this is the same block for ours,
+# with the same values, because there is no reason for a wilderness build cost to display
+# differently from a castle one.
+
+wilderness_holding_build_speed = {
+	decimals = 0
+	color = bad
+	percent = yes
+	prefix = MOD_TIME_PREFIX
+}
+
+wilderness_holding_build_gold_cost = {
+	decimals = 0
+	color = bad
+	percent = yes
+	prefix = MOD_COST_PREFIX
+}
+
+wilderness_holding_build_piety_cost = {
+	decimals = 0
+	color = bad
+	percent = yes
+	prefix = MOD_PIETY_PREFIX
+}
+
+wilderness_holding_build_prestige_cost = {
+	decimals = 0
+	color = bad
+	percent = yes
+	prefix = MOD_PRESTIGE_PREFIX
+}
+
+wilderness_holding_holding_build_speed = {
+	decimals = 0
+	color = bad
+	percent = yes
+	prefix = MOD_TIME_PREFIX
+}
+
+wilderness_holding_holding_build_gold_cost = {
+	decimals = 0
+	color = bad
+	percent = yes
+	prefix = MOD_COST_PREFIX
+}
+
+wilderness_holding_holding_build_piety_cost = {
+	decimals = 0
+	color = bad
+	percent = yes
+	prefix = MOD_PIETY_PREFIX
+}
+
+wilderness_holding_holding_build_prestige_cost = {
+	decimals = 0
+	color = bad
+	percent = yes
+	prefix = MOD_PRESTIGE_PREFIX
+}
+
+settlement_holding_build_speed = {
+	decimals = 0
+	color = bad
+	percent = yes
+	prefix = MOD_TIME_PREFIX
+}
+
+settlement_holding_build_gold_cost = {
+	decimals = 0
+	color = bad
+	percent = yes
+	prefix = MOD_COST_PREFIX
+}
+
+settlement_holding_build_piety_cost = {
+	decimals = 0
+	color = bad
+	percent = yes
+	prefix = MOD_PIETY_PREFIX
+}
+
+settlement_holding_build_prestige_cost = {
+	decimals = 0
+	color = bad
+	percent = yes
+	prefix = MOD_PRESTIGE_PREFIX
+}
+
+settlement_holding_holding_build_speed = {
+	decimals = 0
+	color = bad
+	percent = yes
+	prefix = MOD_TIME_PREFIX
+}
+
+settlement_holding_holding_build_gold_cost = {
+	decimals = 0
+	color = bad
+	percent = yes
+	prefix = MOD_COST_PREFIX
+}
+
+settlement_holding_holding_build_piety_cost = {
+	decimals = 0
+	color = bad
+	percent = yes
+	prefix = MOD_PIETY_PREFIX
+}
+
+settlement_holding_holding_build_prestige_cost = {
+	decimals = 0
+	color = bad
+	percent = yes
+	prefix = MOD_PRESTIGE_PREFIX
+}

@@ -1,0 +1,312 @@
+﻿# The bridge between the UI and the colonisation system.
+#
+# A scripted_gui is the only way a .gui file can ask a question about game state: PdxGui can read
+# data-model promotes like `County.GetFaith`, but it cannot run a trigger. `IsShown` is that trigger,
+# callable from a widget's `visible`.
+#
+# Emit/GuiWriter.cs is the only caller. It injects references to `wilderness_county` into a copy of
+# vanilla's window_county_view.gui, so the name below is a contract with that writer — renaming it
+# here silently stops the injection working, because a .gui file that names a scripted_gui which
+# does not exist logs nothing and simply evaluates false.
+
+# Province scope. Is the county this province belongs to unsettled?
+#
+# Province rather than title scope because that is what the county view has to hand:
+# `HoldingView.GetProvince` is available everywhere in that window, while the county title is not
+# reachable from every widget that needs the answer.
+#
+# ---- The one duplicated condition in this system, and why ----
+#
+# Everywhere else, "is this county wilderness" is asked through is_wilderness_county_trigger, so the
+# rule has exactly one definition. Here it is written out instead, and that is a concession rather
+# than a preference.
+#
+# `county = { is_wilderness_county_trigger = yes }` is valid CK3 — both vanilla
+# (tgp_scripted_guis.txt: `coronation_trigger = yes`) and AGOT (`agot_is_pirate_domicile_title_trigger
+# = yes`) call scripted triggers from inside a scripted_gui. But ck3-tiger reports it as an unknown
+# token in this position, and a validator that cries wolf on one line trains you to ignore it on the
+# next. The inline form validates clean and behaves identically.
+#
+# The cost is real: if the definition of wilderness ever changes, it has to change in two places.
+# Both are one line, both say the same thing, and this comment is the pointer between them. Revisit
+# if tiger learns to resolve this — the delegating form is the better code.
+wilderness_county = {
+	scope = province
+
+	is_shown = {
+		county.holder ?= { government_has_flag = government_is_wilderness }
+	}
+}
+
+
+# Character scope. Is this character the dummy that holds the wilderness?
+#
+# The character window's counterpart to the above. Clicking a wilderness county's shield on the map
+# opens its holder like any other ruler, and the engine has no idea the holder is a bookkeeping
+# device: it draws a portrait, a court, a faith and a culture, all of them invented to satisfy
+# requirements rather than to be read.
+#
+# Asks the trait rather than the government because this is a question about a CHARACTER, and the
+# trait is what the character carries. A landless heir of the dummy — which should never exist, but
+# the trait blocks inheritance precisely because "should never" is not "cannot" — would still answer
+# yes here, which is the safe direction to be wrong in.
+wilderness_holder = {
+	scope = character
+
+	is_shown = {
+		has_trait = wilderness
+	}
+}
+
+
+# Landed title scope. Is this title part of the wilderness rather than of somebody's realm?
+#
+# The title window's counterpart to the two above, and the third window Emit/GuiWriter.cs empties.
+# Clicking an unsettled county — or the titular kingdom the dummy holds so the map has something to
+# label the wild with — opens the same panel a real duchy gets: a succession law, a council, a list
+# of vassals, a de jure drift timer. None of that is false exactly, which is the problem; it is the
+# engine reporting bookkeeping as though it were politics.
+#
+# Asks the HOLDER's government rather than the title's own key, for two reasons. The titular kingdom
+# is named by the generator (WildernessMap.TitleKey), and nothing in this file set is allowed to
+# reference a generated key — see BaseFilesToCopy/README.txt. And going through the holder means one
+# rule covers the kingdom, every wilderness county under it, and every barony under those, without
+# enumerating tiers.
+#
+# Note this goes false the instant a county is colonised, unlike `wilderness_unfinished_county`. A
+# colony has a real holder with real politics; it should get the real window.
+wilderness_title = {
+	scope = landed_title
+
+	is_shown = {
+		holder ?= { government_has_flag = government_is_wilderness }
+	}
+}
+
+
+# Character scope, with scope:wilderness set to the province the county view is showing.
+#
+# The Settle button on the county view. This is the third way into colonisation and the only one
+# that lets the player choose the county by looking at it — the decision picks its own target, and
+# the interaction lists titles rather than showing them on the map.
+#
+# Emit/GuiWriter.cs injects the button that calls this, and passes the province as `wilderness` via
+# AddScope. The name, and that scope name, are a contract with that writer.
+#
+# ---- On paying for it ----
+#
+# This charges explicitly, like the AI event and unlike the decision and the interaction. Those two
+# declare `cost = { gold = ... }` and let the engine deduct, because on a decision or an interaction
+# `cost` is not merely a payment — it is what prints the price and greys the button out. A
+# scripted_gui has no such block, so the tooltip below states the price and the effect takes it.
+# See the note in colonize_county_effect.
+wilderness_settle = {
+	scope = character
+
+	# The AI colonises through its yearly pulse, which can weigh gold and income properly. It must
+	# never reach for a GUI button.
+	ai_is_valid = { always = no }
+
+	is_shown = {
+		can_colonize_at_all_trigger = yes
+	}
+
+	is_valid = {
+		can_hold_another_colony_trigger = yes
+		no_expedition_underway_trigger = yes
+
+		custom_tooltip = {
+			text = colonize_not_while_at_war_tt
+			is_at_war = no
+		}
+
+		custom_tooltip = {
+			text = colonize_must_border_realm_tt
+			scope:wilderness.county ?= { county_borders_realm_trigger = { CHARACTER = root } }
+		}
+
+		custom_tooltip = {
+			text = colonize_cannot_afford_tt
+			gold >= colonize_cost
+		}
+
+		# Tribal rulers pay most of the price here rather than in gold; zero for everyone else, so
+		# this passes trivially for them.
+		custom_tooltip = {
+			text = colonize_cannot_afford_prestige_tt
+			prestige >= colonize_prestige_cost
+		}
+	}
+
+	effect = {
+		custom_tooltip = colonize_settle_button_effect_tt
+
+		# ---- Why the two payment lines are NOT in the hidden_effect below ----
+		#
+		# A scripted_gui has no `cost` block. On a decision or an interaction that block is what
+		# prints the price — the engine reads it, shows "−125 Gold", greys the button out, and then
+		# deducts. Here the only thing that can print a price is the effect tooltip, which is built
+		# from the effects themselves, and `hidden_effect` is precisely the instruction not to show
+		# them.
+		#
+		# So these two sat inside it and the button charged the player 125 gold while telling them
+		# nothing at all — the is_valid tooltip below says "we cannot afford to outfit an expedition"
+		# when the money is short and says nothing whatever when it is not, which is a button whose
+		# price you learn by pressing it.
+		#
+		# Out here they render as two lines of the tooltip, in the same red the rest of the game uses,
+		# and the number comes from the same colonize_cost the check reads.
+		#
+		# Everything below stays hidden because it is not a price, it is the whole transition — a
+		# title transfer, a culture and faith set, four holding changes and a coat of arms. Tooltipped
+		# it would be forty lines describing machinery.
+		remove_short_term_gold = colonize_cost
+		add_prestige = { value = colonize_prestige_cost  multiply = -1 }
+
+		hidden_effect = {
+			colony_launch_expedition_effect = {
+				COUNTY = scope:wilderness.county
+				COLONIZER = root
+			}
+		}
+
+		send_interface_toast = {
+			type = event_toast_effect_good
+			title = colonize_claimed_toast
+			left_icon = root
+			right_icon = scope:wilderness.county
+		}
+	}
+}
+
+
+# Character scope, with scope:wilderness set to the province the county view is showing.
+#
+# The "Go and Oversee It" button on the county view. Unlike every other scripted_gui in this file it
+# has NO effect block, and that is not an omission.
+#
+# CK3 has no script effect that creates an activity — there is no `create_activity` anywhere in the
+# game files. Activities start only through the planner UI. So the button cannot *do* anything: its
+# onclick opens the planner for `activity_oversee_colony`, via `ToggleGameViewData`, which is how
+# vanilla's own activity list opens a host window. What this scripted_gui provides is the two things
+# a .gui file cannot work out for itself — whether the button belongs on THIS county, and whether the
+# player can act on it — and the tooltip that explains a no.
+#
+# The ownership rule is deliberately NOT duplicated as a gate here. `is_location_valid` on the
+# activity is what enforces "a colony you hold yourself", because that is the check the planner
+# actually runs when it builds its location list; this only decides whether a button appears on the
+# panel you are looking at. Writing the rule twice is how the button and the planner end up
+# disagreeing about what is allowed.
+
+wilderness_oversee = {
+    scope = character
+    saved_scopes = { wilderness }
+
+    is_shown = {
+        scope:wilderness.county ?= {
+            is_colony_county_trigger = yes
+            holder = root
+        }
+        is_colonist_trigger = no
+        # Correct way to check if already in the activity:
+        NOT = {
+            exists = involved_activity
+            involved_activity = {
+                has_activity_type = activity_oversee_colony
+                activity_location.county ?= scope:wilderness.county
+            }
+        }
+    }
+
+    is_valid = {
+        is_available = yes
+        is_travelling = no
+    }
+}
+
+wilderness_return_home = {
+	scope = character
+	saved_scopes = { wilderness }
+
+	is_shown = {
+		scope:wilderness.county ?= {
+			is_colony_county_trigger = yes
+			holder = root
+		}
+		is_colonist_trigger = no
+		exists = involved_activity
+		involved_activity = {
+			has_activity_type = activity_oversee_colony
+			activity_host = root
+			activity_location.county ?= scope:wilderness.county
+		}
+	}
+
+	is_valid = {
+		always = yes
+	}
+
+	effect = {
+		custom_tooltip = colonize_return_home_button_effect_tt
+		hidden_effect = {
+			if = {
+				limit = { exists = involved_activity }
+				invalidate_activity = involved_activity
+			}
+			colony_refresh_presence_effect = yes
+		}
+	}
+}
+
+
+# Province scope. Is this county unsettled OR a colony that has not finished growing?
+#
+# Broader than `wilderness_county` above, and the two are not interchangeable. That one strips the
+# county window down to nothing, which must only happen on land nobody holds. This one answers "is
+# there still a colonisation in progress here", which stays true through the whole colony phase and
+# only goes false when the county is promoted to a real holding.
+#
+# Used by Emit/GuiWriter.cs to hide vanilla's "Build New Holding" prompt on the empty baronies of a
+# county that has not been settled yet. Filling in a county's other baronies is the reward for
+# finishing the colony, not something to be done around it.
+wilderness_unfinished_county = {
+	scope = province
+
+	is_shown = {
+		county ?= {
+			OR = {
+				holder ?= { government_has_flag = government_is_wilderness }
+				title_province ?= { has_holding_type = settlement_holding }
+			}
+		}
+	}
+}
+
+# Character scope (GetPlayer). Called from oversee_colony_activity_widget.gui
+wilderness_return_home_activitywindow = {
+	scope = character
+
+	is_shown = {
+		is_colonist_trigger = no
+		exists = involved_activity
+		involved_activity = {
+			has_activity_type = activity_oversee_colony
+			activity_host = root
+		}
+	}
+
+	is_valid = {
+		always = yes
+	}
+
+	effect = {
+		custom_tooltip = colonize_return_home_button_effect_tt
+		hidden_effect = {
+			if = {
+				limit = { exists = involved_activity }
+				invalidate_activity = involved_activity
+			}
+			colony_refresh_presence_effect = yes
+		}
+	}
+}

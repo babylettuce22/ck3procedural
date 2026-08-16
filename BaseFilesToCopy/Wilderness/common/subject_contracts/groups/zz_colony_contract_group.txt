@@ -1,0 +1,5 @@
+﻿colony_vassal = {
+	contracts = {
+		colony_sponsorship
+	}
+}

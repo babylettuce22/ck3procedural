@@ -1,0 +1,358 @@
+﻿# =====================================================================================
+#  Claiming a county: the county-targeted route
+# =====================================================================================
+
+# Colonisation aimed at a county the player picks, with no GUI work at all.
+#
+# The trick is that `target_filter = recipient_domain_titles` populates the title picker from the
+# RECIPIENT's domain — and the wilderness dummy's domain is every unsettled county on the map. So
+# opening this on the dummy lists the wilderness, and `can_be_picked_title` prunes that list to the
+# counties this particular ruler can actually reach. No widget, no override of vanilla's county view,
+# no scripted GUI: it is the same machinery vanilla uses for Grant Title and Revoke Title.
+#
+# What it costs, honestly: the player reaches it by clicking a wilderness county, then its holder,
+# then the interaction — one step more than a button sitting on the county panel. And the picker is
+# a list of county names rather than a map selection. Both are real, and both are the price of not
+# shipping a copy of window_county_view.gui that goes stale on the next patch.
+#
+# settle_the_wilderness_decision stays as the no-picker fallback: it aims itself, so a player who
+# never finds this still has a way in, and the AI never uses either.
+
+claim_wilderness_interaction = {
+	category = interaction_category_diplomacy
+	icon = purchase_land_interaction
+
+	desc = claim_wilderness_interaction_desc
+
+	target_type = title
+	target_filter = recipient_domain_titles
+
+	# The dummy is incapable and has no AI worth consulting. Nothing about this is a negotiation.
+	auto_accept = yes
+
+	# The wilderness is not in anybody's diplomatic range and never will be. 122 vanilla interactions
+	# turn this off; this is one more.
+	use_diplomatic_range = no
+
+	is_shown = {
+		scope:recipient = { has_trait = wilderness }
+		scope:actor = {
+			NOT = { this = scope:recipient }
+			can_colonize_at_all_trigger = yes
+		}
+	}
+
+	is_valid_showing_failures_only = {
+		scope:actor = {
+			can_hold_another_colony_trigger = yes
+			no_expedition_underway_trigger = yes
+
+			custom_tooltip = {
+				text = colonize_not_while_at_war_tt
+				is_at_war = no
+			}
+		}
+	}
+
+	# Runs once per title the recipient holds — which here means once per wilderness county in the
+	# world. Ordered cheapest test first for that reason: tier, then holding type, then the bounded
+	# neighbour walk. See county_borders_realm_trigger for why the adjacency test is phrased from
+	# the county's side.
+	can_be_picked_title = {
+		scope:target = {
+			tier = tier_county
+			county_can_be_claimed_trigger = yes
+			county_borders_realm_trigger = { CHARACTER = scope:actor }
+		}
+	}
+
+	# The same conditions again, tooltipped. can_be_picked_title silently filters the list; this is
+	# what explains a greyed-out button once something IS picked, and the schema is explicit that the
+	# two are separate checks rather than one.
+	has_valid_target_showing_failures_only = {
+		scope:target = {
+			tier = tier_county
+			is_wilderness_county_trigger = yes
+
+			custom_tooltip = {
+				text = colonize_must_border_realm_tt
+				county_borders_realm_trigger = { CHARACTER = scope:actor }
+			}
+		}
+	}
+
+	# Explicitly scoped to the actor. The implicit scope inside a cost block is not reliably the
+	# actor — vanilla's adoption interactions write `scope:actor.dynasty.medium_dynasty_prestige_value`
+	# for the same reason — and colonize_cost reads highest_held_title_tier, so an unscoped read here
+	# would price the claim off the wrong character.
+	cost = {
+		gold = {
+			value = 0
+			add = scope:actor.colonize_cost
+		}
+		prestige = {
+			value = 0
+			add = scope:actor.colonize_prestige_cost
+		}
+	}
+
+	on_accept = {
+		colony_launch_expedition_effect = {
+			COUNTY = scope:target
+			COLONIZER = scope:actor
+		}
+
+		scope:actor = {
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = colonize_claimed_toast
+				left_icon = scope:actor
+				right_icon = scope:target
+			}
+		}
+	}
+
+	# The AI colonises through its yearly pulse, which can weigh gold and income properly. It must
+	# never reach for this: 0 means never considered.
+	ai_frequency = 0
+}
+
+
+# =====================================================================================
+#  Going there yourself
+# =====================================================================================
+#
+# There is no interaction here any more, and the empty space is worth a note.
+#
+# This was `oversee_colony_interaction`, which started a one-way travel plan to the colony. It could
+# not work, and not for a reason any amount of tuning would have reached: CK3 derives a landed
+# ruler's location from where he BELONGS, and when a one-way plan completes the engine applies its
+# own `return_home` effect, which rewrites the plan's destination to his capital. The lord arrived
+# and turned round in the same tick.
+#
+# What replaced it is `activity_oversee_colony` in common/activities/activity_types/, because an
+# activity is the one temporary home the engine recognises. See the note at the top of that file for
+# the full reasoning, including why the failure is a fact about the engine rather than a bug to
+# patch around.
+#
+# The county-view button survives — it now opens the activity planner rather than sending an
+# interaction. `Emit/GuiWriter.cs` drives it through the `wilderness_oversee` scripted_gui, which is
+# where the button's shown/enabled conditions live.
+
+
+# =====================================================================================
+#  Promoting a finished colony into a real holding
+# =====================================================================================
+
+#
+# Hidden interactions on the holder's own titles, which is how vanilla and AGOT both do holding
+# conversion: `target_type = title` with `target_filter = actor_domain_titles` puts the button in
+# the county view without any GUI work.
+#
+# There are three of these because there are three holding types a promoted colony can become, and
+# CK3 has no interaction inheritance to factor them with. What CAN be factored is everything they
+# have in common, and it is: `can_promote_colony_trigger` carries all three gates, and
+# `promote_colony_effect` carries the government rules. Each interaction below is therefore its
+# target filter, its one extra requirement, and its one `set_holding_type` line — about thirty
+# lines each, against AGOT's four near-identical hundred-and-fifty-line copies.
+
+# --- The default: a castle, or a tribe for a tribal ruler ---------------------------------------
+
+promote_colony_interaction = {
+	category = interaction_category_uncategorized
+	hidden = yes
+
+	desc = promote_colony_interaction_desc
+
+	target_type = title
+	target_filter = actor_domain_titles
+
+	auto_accept = yes
+
+	is_shown = {
+		scope:actor = { this = scope:recipient }
+	}
+
+	can_be_picked_title = {
+		scope:target = {
+			holder = scope:actor
+			tier = tier_county
+			is_colony_county_trigger = yes
+		}
+	}
+
+	has_valid_target_showing_failures_only = {
+		scope:target = {
+			can_promote_colony_trigger = yes
+		}
+	}
+
+	cost = {
+		gold = {
+			value = 0
+			add = scope:actor.promote_colony_cost
+		}
+	}
+
+	on_accept = {
+		# No `save_scope_as = promoting_holder` here any more. promote_colony_effect now reads the
+		# county's own holder, which is a fact no caller can forget to pass — see the note there for
+		# what forgetting it cost.
+		promote_colony_effect = { COUNTY = scope:target }
+
+		scope:actor = {
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = promote_colony_toast
+				left_icon = scope:actor
+				right_icon = scope:target
+			}
+		}
+	}
+
+	ai_will_do = { base = 150 }
+}
+
+
+# --- A city, where the holder's culture knows how to plan one ----------------------------------
+
+promote_colony_to_city_interaction = {
+	category = interaction_category_uncategorized
+	hidden = yes
+
+	desc = promote_colony_to_city_interaction_desc
+
+	target_type = title
+	target_filter = actor_domain_titles
+
+	auto_accept = yes
+
+	is_shown = {
+		scope:actor = {
+			this = scope:recipient
+			NOT = { government_has_flag = government_is_tribal }
+		}
+	}
+
+	can_be_picked_title = {
+		scope:target = {
+			holder = scope:actor
+			tier = tier_county
+			is_colony_county_trigger = yes
+		}
+	}
+
+	has_valid_target_showing_failures_only = {
+		scope:target = {
+			can_promote_colony_trigger = yes
+		}
+		scope:actor = {
+			culture = { has_innovation = innovation_city_planning }
+		}
+	}
+
+	cost = {
+		gold = {
+			value = 0
+			add = scope:actor.promote_colony_cost
+		}
+	}
+
+	on_accept = {
+		scope:target = {
+			# Same teardown as promote_colony_effect: the settlement chain belongs to no holding
+			# once this stops being a colony, and left in place it holds the slot the new one
+			# needs, leaving a banner standing on nothing.
+			title_province ?= {
+				if = { limit = { has_building = settlement_01 }  remove_building = settlement_01 }
+				if = { limit = { has_building = settlement_02 }  remove_building = settlement_02 }
+				if = { limit = { has_building = settlement_03 }  remove_building = settlement_03 }
+				set_holding_type = city_holding
+			}
+			set_color_from_title = de_jure_liege
+		}
+
+		scope:actor = {
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = promote_colony_toast
+				left_icon = scope:actor
+				right_icon = scope:target
+			}
+		}
+	}
+
+	ai_will_do = { base = 100 }
+}
+
+
+# --- A temple, likewise ------------------------------------------------------------------------
+
+promote_colony_to_temple_interaction = {
+	category = interaction_category_uncategorized
+	hidden = yes
+
+	desc = promote_colony_to_temple_interaction_desc
+
+	target_type = title
+	target_filter = actor_domain_titles
+
+	auto_accept = yes
+
+	is_shown = {
+		scope:actor = {
+			this = scope:recipient
+			NOT = { government_has_flag = government_is_tribal }
+		}
+	}
+
+	can_be_picked_title = {
+		scope:target = {
+			holder = scope:actor
+			tier = tier_county
+			is_colony_county_trigger = yes
+		}
+	}
+
+	has_valid_target_showing_failures_only = {
+		scope:target = {
+			can_promote_colony_trigger = yes
+		}
+		scope:actor = {
+			culture = { has_innovation = innovation_city_planning }
+		}
+	}
+
+	cost = {
+		gold = {
+			value = 0
+			add = scope:actor.promote_colony_cost
+		}
+	}
+
+	on_accept = {
+		scope:target = {
+			# Same teardown as promote_colony_effect: the settlement chain belongs to no holding
+			# once this stops being a colony, and left in place it holds the slot the new one
+			# needs, leaving a banner standing on nothing.
+			title_province ?= {
+				if = { limit = { has_building = settlement_01 }  remove_building = settlement_01 }
+				if = { limit = { has_building = settlement_02 }  remove_building = settlement_02 }
+				if = { limit = { has_building = settlement_03 }  remove_building = settlement_03 }
+				set_holding_type = church_holding
+			}
+			set_color_from_title = de_jure_liege
+		}
+
+		scope:actor = {
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = promote_colony_toast
+				left_icon = scope:actor
+				right_icon = scope:target
+			}
+		}
+	}
+
+	ai_will_do = { base = 80 }
+}

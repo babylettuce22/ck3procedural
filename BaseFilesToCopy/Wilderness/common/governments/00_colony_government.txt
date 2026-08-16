@@ -1,0 +1,85 @@
+﻿# The government of a ruler whose only land is a colony.
+
+colony_government = {
+	government_rules = {
+		# A colonist keeps a name and passes it on. Everything else that makes a court is stripped:
+		create_cadet_branches = no
+		rulers_should_have_dynasty = yes
+		dynasty_named_realms = no
+		council = no
+		legitimacy = no
+		allow_accolades = no
+		court_generate_spouses = no
+	}
+
+	court_generate_commanders = no
+
+	primary_holding = settlement_holding
+	valid_holdings = { settlement_holding }
+
+	# Empty baronies around a colony stay shut until it is promoted.
+	required_county_holdings = { castle_holding city_holding church_holding }
+
+	vassal_contract_group = colony_vassal
+
+	can_get_government = {
+		any_held_title = {
+			tier = tier_county
+			is_colony_county_trigger = yes
+		}
+		NOT = {
+			any_held_title = {
+				tier = tier_county
+				is_settled_county_trigger = yes
+			}
+		}
+	}
+
+	character_modifier = {
+		# Nobody rides out to a frontier post looking for service.
+		knight_limit = -2
+
+		# Hard living, honestly priced: it kills slowly and it wears on a man.
+		health = -0.1
+		stress_gain_mult = 0.15
+
+		# Quick control recovery on virgin ground
+		monthly_county_control_growth_add = 0.05
+
+		# --- Frontier Palisade Resilience ---
+		garrison_size = 0.35                 # Every settler grabs a spear when attacked
+		defender_holding_advantage = 5       # Deep knowledge of the local trails and woods
+		hostile_county_attrition  = 0.25 # Invaders suffer in the untamed brush
+	}
+
+	# Respects high-prestige lieges; resents weak/absentee lords
+	opinion_of_liege = {
+		value = -5
+		scope:liege = {
+			add = {
+				value = prestige_level
+				multiply = 2
+			}
+		}
+	}
+	opinion_of_liege_desc = colony_opinion_of_liege_desc
+
+	ai = {
+		use_lifestyle = yes
+		arrange_marriage = yes
+		use_goals = yes
+		use_decisions = yes
+		use_scripted_guis = yes
+		use_legends = no
+		perform_religious_reformation = no
+
+	}
+
+	flags = {
+		government_is_colony
+		government_is_settled
+	}
+
+	# Pale earth. Reads as a place on the map rather than as a power on it.
+	color = hsv{ 0.09 0.35 0.55 }
+}
