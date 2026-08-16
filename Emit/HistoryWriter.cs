@@ -8,23 +8,32 @@ using System.Text.RegularExpressions;
 
 namespace Ck3MapGen.Emit;
 
-/// <summary>
-/// Populates the world with rulers and gives it a start date.
-/// </summary>
 public static class HistoryWriter
 {
-    public const string BookmarkCharacter = "bookmark_generated_ruler";
-    public const string ChallengeCharacter = "challenge_character_generated";
+    public static void WriteAll(
+        string modDir, MapConfig cfg, List<Title> empires,
+        RealmMap realms, Dictionary<Title, int> development,
+        CultureMap cultures, FaithMap faiths, GovernmentMap governments,
+        WildernessMap wilderness, IReadOnlyDictionary<Title, string>? bookmarkDnaMap = null)
+    {
+        var all = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
+        if (all.Count == 0) return;
 
-    /// <summary>
-    /// The name a ruler and their house carry, drawn from their own culture's stock.
-    ///
-    /// Both come out of the pools <see cref="CultureWriter"/> has already written into the culture's
-    /// name list and localised, so a count is named the same way his culture names anyone else and
-    /// no extra localisation is needed here. Seeded off the county index rather than off a shared
-    /// stream so the same county yields the same ruler between runs.
-    /// </summary>
-    private static (string FirstName, string DynastyName) RulerNames(Title county, Culture culture)
+        var counties = all.Where(c => !wilderness.Contains(c)).ToList();
+        var wild = all.Where(wilderness.Contains).ToList();
+
+        if (counties.Count == 0) return;
+
+        var dnaMap = bookmarkDnaMap ?? new Dictionary<Title, string>();
+
+        WriteDynasties(modDir, counties, cultures);
+        WriteCharacters(modDir, cfg, counties, cultures, faiths, realms, governments, dnaMap);
+        WriteHeadOfFaithCharacters(modDir, cfg, faiths, cultures, counties);
+        WriteWildernessHolder(modDir, cfg, wild);
+        WriteTitleHistory(modDir, cfg, empires, development, realms, governments, faiths, wild);
+    }
+
+    public static (string FirstName, string DynastyName) RulerNames(Title county, Culture culture)
     {
         var rng = new Rng(county.Index ^ 0x5A17);
 
@@ -39,98 +48,30 @@ public static class HistoryWriter
         return (first, dynasty);
     }
 
-    public static void WriteAll(string modDir, MapConfig cfg, List<Title> empires,
-        Dictionary<Title, int> development, CultureMap cultures, FaithMap faiths,
-        GovernmentMap governments, WildernessMap wilderness)
-    {
-        var all = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
-        if (all.Count == 0) return;
-
-        // Split once, here, and never look at the combined list again.
-        //
-        // Everything below this line means "counties with people in them": a generated ruler, a
-        // house for him to belong to, a government, a bookmark he could be played from. A
-        // wilderness county has none of those and is written separately at the bottom — one dummy
-        // holder for all of them, and no character, dynasty or realm entry at all.
-        var counties = all.Where(c => !wilderness.Contains(c)).ToList();
-        var wild = all.Where(wilderness.Contains).ToList();
-
-        // Guard against a config that leaves nobody. A map that is entirely wilderness has no
-        // rulers to write and no bookmark to open on, and every step below assumes at least one.
-        if (counties.Count == 0)
-        {
-            Console.WriteLine("  history: SKIPPED (every county is wilderness — lower WildernessShare)");
-            return;
-        }
-
-        // Who wears which of the de jure titles, and who owes whom. Seeded off the config rather
-        // than a live stream so the same seed always produces the same political map.
-        var realms = Realms.Build(empires, development, wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17));
-
-        // The bookmark and the challenge character go to the two greatest rulers rather than to
-        // whichever counties happened to be first — a start screen offering a random count while
-        // an emperor sits elsewhere on the map advertises the wrong game.
-        //
-        // Greatest-but-playable, though. A republic or a theocracy has no heir a player could
-        // become and CK3 offers neither on the start screen; putting one behind the bookmark would
-        // advertise a realm the game will not let anybody take. The unfiltered list is still the
-        // fallback, because a world where every great ruler is a doge is a world that has to open
-        // on *something*.
-        var playable = realms.Greatest.Where(c => IsPlayable(governments.For(c))).ToList();
-        if (playable.Count == 0) playable = realms.Greatest;
-
-        var bookmarkCounty = playable.Count > 0 ? playable[0] : counties[0];
-        var challengeCounty = playable.Count > 1 ? playable[1] : bookmarkCounty;
-
-        WriteDynasties(modDir, counties, cultures);
-        WriteCharacters(modDir, cfg, counties, cultures, faiths, realms, governments);
-        WriteWildernessHolder(modDir, cfg, wild);
-        WriteTitleHistory(modDir, cfg, empires, development, realms, governments, faiths, wild);
-        WriteBookmark(modDir, cfg, bookmarkCounty, realms, cultures, faiths, governments);
-        WriteChallengeCharacter(modDir, challengeCounty, realms, cfg, cultures, faiths, governments);
-        WriteBookmarkLocalisation(modDir, bookmarkCounty, challengeCounty, cultures);
-
-        Console.WriteLine($"  history: {counties.Count} rulers, " +
-                          $"{counties.Count} dynasties, " +
-                          (wild.Count > 0 ? $"{wild.Count} wilderness counties, " : "") +
-                          $"1 bookmark at {cfg.StartDate} on {Primary(bookmarkCounty, realms).Key}");
-    }
-
-    /// <summary>
-    /// Whether a government is one a player can be handed at the start screen. The dynastic three
-    /// are; a republic passes its seat by election among its patricians and a theocracy among its
-    /// clergy, so neither has an heir the player continues as.
-    /// </summary>
-    private static bool IsPlayable(string government) => government
-        is GovernmentMap.Feudal or GovernmentMap.Clan or GovernmentMap.Tribal;
-
-    /// <summary>The highest title a county's ruler wears, which is the title they are known by.</summary>
-    private static Title Primary(Title county, RealmMap realms)
+    public static Title Primary(Title county, RealmMap realms)
     {
         var best = county;
         foreach (var (title, holder) in realms.HolderCounty)
+        {
             if (holder == county && Rank(title) > Rank(best)) best = title;
+        }
 
         return best;
     }
 
-    private static int Rank(Title title) => title.Tier switch
+    public static int Rank(Title title) => title.Tier switch
     {
-        "e" => 4, "k" => 3, "d" => 2, "c" => 1, _ => 0,
+        "e" => 4,
+        "k" => 3,
+        "d" => 2,
+        "c" => 1,
+        _ => 0,
     };
 
-    private static string CharacterId(Title county) => $"gen_char_{county.Index}";
+    public static string CharacterId(Title county) => $"gen_char_{county.Index}";
 
-    private static string DynastyId(Title county) => $"gen_dynasty_{county.Index}";
+    public static string DynastyId(Title county) => $"gen_dynasty_{county.Index}";
 
-    /// <summary>
-    /// One house per county, named from its culture's dynasty stock.
-    ///
-    /// The `name` is the localisation key `dynn_&lt;Name&gt;`, which <see cref="CultureWriter"/>
-    /// already emits for every dynasty name in every culture's list — so unlike the previous
-    /// scheme there is no per-dynasty localisation to write here, and two counties that draw the
-    /// same house name correctly share one displayed name.
-    /// </summary>
     private static void WriteDynasties(string modDir, List<Title> counties, CultureMap cultures)
     {
         string dir = Path.Combine(modDir, "common", "dynasties");
@@ -142,7 +83,6 @@ public static class HistoryWriter
             var culture = cultures.For(county);
             var (_, dynastyName) = RulerNames(county, culture);
 
-            // NEW: Clean the dynasty name for the internal key, but leave the visual one alone.
             string safeKey = CleanKey(dynastyName);
 
             sb.Append($"{DynastyId(county)} = {{\n");
@@ -156,19 +96,15 @@ public static class HistoryWriter
 
     private static string CleanKey(string input)
     {
-        // Convert spaces and hyphens to underscores (e.g. Al-Fariq -> al_fariq)
         string cleaned = input.ToLowerInvariant().Replace(" ", "_").Replace("-", "_");
-
-        // Flatten accents (e.g. ö -> o, á -> a) so keys remain standard a-z ASCII
         cleaned = RemoveDiacritics(cleaned);
-
-        // Strip out anything else (like apostrophes)
         return Regex.Replace(cleaned, "[^a-z0-9_]", "");
     }
+
     private static string RemoveDiacritics(string text)
     {
-        var normalizedString = text.Normalize(System.Text.NormalizationForm.FormD);
-        var stringBuilder = new System.Text.StringBuilder(capacity: normalizedString.Length);
+        var normalizedString = text.Normalize(NormalizationForm.FormD);
+        var stringBuilder = new StringBuilder(capacity: normalizedString.Length);
 
         for (int i = 0; i < normalizedString.Length; i++)
         {
@@ -180,11 +116,12 @@ public static class HistoryWriter
             }
         }
 
-        return stringBuilder.ToString().Normalize(System.Text.NormalizationForm.FormC);
+        return stringBuilder.ToString().Normalize(NormalizationForm.FormC);
     }
 
     private static void WriteCharacters(string modDir, MapConfig cfg, List<Title> counties,
-                CultureMap cultures, FaithMap faiths, RealmMap realms, GovernmentMap governments)
+        CultureMap cultures, FaithMap faiths, RealmMap realms, GovernmentMap governments,
+        IReadOnlyDictionary<Title, string> bookmarkDnaMap)
     {
         string dir = Path.Combine(modDir, "history", "characters");
         Directory.CreateDirectory(dir);
@@ -194,9 +131,8 @@ public static class HistoryWriter
         {
             var culture = cultures.For(county);
             var (firstName, _) = RulerNames(county, culture);
-
-            var rng = new Rng(county.Index ^ 0x3E2D);
             var primaryTitle = Primary(county, realms);
+            var rng = new Rng(county.Index ^ 0x3E2D);
 
             int gold = primaryTitle.Tier switch
             {
@@ -205,7 +141,6 @@ public static class HistoryWriter
                 "d" => rng.Int(120, 180),
                 _ => rng.Int(60, 90)
             };
-
             int prestige = primaryTitle.Tier switch
             {
                 "e" => rng.Int(300, 500),
@@ -213,7 +148,6 @@ public static class HistoryWriter
                 "d" => rng.Int(80, 120),
                 _ => rng.Int(35, 65)
             };
-
             int renown = primaryTitle.Tier switch
             {
                 "e" => rng.Int(3500, 6500),
@@ -224,6 +158,13 @@ public static class HistoryWriter
 
             sb.Append($"{CharacterId(county)} = {{\n");
             sb.Append($"\tname = \"{firstName}\"\n");
+
+            // Direct in-game DNA reference
+            if (bookmarkDnaMap.TryGetValue(county, out string? dnaKey))
+            {
+                sb.Append($"\tdna = {dnaKey}\n");
+            }
+
             sb.Append($"\tdynasty = {DynastyId(county)}\n");
             sb.Append($"\treligion = {faiths.For(county).Key}\n");
             sb.Append($"\tculture = {culture.Key}\n");
@@ -238,7 +179,6 @@ public static class HistoryWriter
                     gold = (int)(gold * 0.45);
                     prestige = (int)(prestige * 1.6);
                     break;
-
                 case GovernmentMap.Republic:
                     gold = (int)(gold * 1.8);
                     prestige = (int)(prestige * 0.7);
@@ -253,6 +193,17 @@ public static class HistoryWriter
                 sb.Append($"\t\t\tdynasty = {{ add_dynasty_prestige = {renown} }}\n");
             }
 
+            bool isIndependent = !realms.Liege.ContainsKey(primaryTitle);
+            bool isHigherTier = primaryTitle.Tier is "d" or "k" or "e";
+
+            if (isIndependent || isHigherTier)
+            {
+                sb.Append("\t\t\tadd_character_modifier = {\n");
+                sb.Append("\t\t\t\tmodifier = gen_early_realm_stability\n");
+                sb.Append("\t\t\t\tyears = 3\n");
+                sb.Append("\t\t\t}\n");
+            }
+
             sb.Append("\t\t}\n");
             sb.Append("\t}\n");
 
@@ -260,67 +211,47 @@ public static class HistoryWriter
             sb.Append("}\n");
         }
 
+        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_characters.txt"), sb.ToString());
+    }
+
+    private static void WriteHeadOfFaithCharacters(string modDir, MapConfig cfg,
+        FaithMap faiths, CultureMap cultures, List<Title> counties)
+    {
+        string dir = Path.Combine(modDir, "history", "characters");
+        Directory.CreateDirectory(dir);
+
+        var sb = new StringBuilder();
         int hofIndex = 0;
+
         foreach (var faith in faiths.Faiths)
         {
             if (faith.Head is null) continue;
 
-            bool isFemale = faith.Religion.Doctrines.GetValueOrDefault("doctrine_clerical_gender")
-                == "doctrine_clerical_gender_female_only";
-            var seatCulture = cultures.For(faith.Head.Seat);
-            var rng = new Rng(faith.Head.TitleKey.GetHashCode() ^ 0x40F1);
-            string firstName = isFemale
-                ? (seatCulture.FemaleNames.Count > 0 ? rng.Pick(seatCulture.FemaleNames) : seatCulture.Name)
-                : (seatCulture.MaleNames.Count > 0 ? rng.Pick(seatCulture.MaleNames) : seatCulture.Name);
+            var sampleCounty = counties.FirstOrDefault(c => faiths.For(c) == faith) ?? counties[0];
+            var culture = cultures.For(sampleCounty);
+            var (firstName, _) = RulerNames(sampleCounty, culture);
 
             sb.Append($"gen_hof_{hofIndex++} = {{\n");
             sb.Append($"\tname = \"{firstName}\"\n");
             sb.Append($"\treligion = {faith.Key}\n");
-            sb.Append($"\tculture = {seatCulture.Key}\n");
-            if (isFemale) sb.Append("\tfemale = yes\n");
+            sb.Append($"\tculture = {culture.Key}\n");
             sb.Append($"\t{cfg.BirthDate} = {{ birth = yes }}\n");
+            sb.Append($"\t{cfg.StartDate} = {{\n");
+            sb.Append("\t\teffect = {\n");
+            sb.Append("\t\t\tadd_gold = 150\n");
+            sb.Append("\t\t\tadd_piety = 250\n");
+            sb.Append("\t\t}\n");
+            sb.Append("\t}\n");
             sb.Append($"\t{cfg.DeathDate} = {{ death = yes }}\n");
             sb.Append("}\n");
         }
 
-        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_characters.txt"), sb.ToString());
+        if (hofIndex > 0)
+        {
+            ParadoxText.WriteBom(Path.Combine(dir, "02_generated_head_of_faith.txt"), sb.ToString());
+        }
     }
 
-    /// <summary>
-    /// Who holds each title at the start date, and whose vassal they are.
-    ///
-    /// Only titles somebody actually wears appear here. A de jure duchy with no duke is simply
-    /// absent, which is what leaves its counties standing as independent counts — writing it with
-    /// no holder would be the same thing said at greater length.
-    ///
-    /// <c>liege</c> is what makes a vassal, not the de jure nesting: two characters can sit one
-    /// inside the other's duchy all game and remain strangers until this line says otherwise.
-    ///
-    /// <c>government</c> belongs here too, on the title rather than on the character, which is where
-    /// vanilla puts it and on every tier — <c>history/titles/e_china.txt</c> sets it on counties and
-    /// duchies alike. Feudal is left unwritten, since <c>feudal_government</c> carries
-    /// <c>fallback = 1</c> and an unstated government is already feudal.
-    ///
-    /// It is read off the *holder's own county*, not off the title: a duke's government is the one
-    /// he holds in his capital, and writing the duchy without it would seat him in two governments
-    /// at once.
-    /// </summary>
-    /// <summary>
-    /// The single character every wilderness county is held by.
-    ///
-    /// One for the whole map, not one per county. It exists so the titles are not ownerless — CK3
-    /// treats a held-by-nobody county very differently from an empty one, and the scripts in
-    /// BaseFilesToCopy all reach the county through <c>holder</c>. Its trait does the rest: the
-    /// <c>wilderness</c> trait in the Wilderness file set makes it immortal, infertile, unschemable
-    /// and unable to inherit or be inherited from, and raises its domain limit past any real map.
-    ///
-    /// Born a thousand years before the start date so it is never a minor and never comes of age
-    /// into anything. No dynasty, because <c>rulers_should_have_dynasty = no</c> on the wilderness
-    /// government and a house would put empty land in the dynasty tree.
-    ///
-    /// Written even when there is no wilderness, so the file exists and nothing dangles if a county
-    /// later points at it.
-    /// </summary>
     private static void WriteWildernessHolder(string modDir, MapConfig cfg, List<Title> wild)
     {
         if (wild.Count == 0) return;
@@ -329,7 +260,7 @@ public static class HistoryWriter
         Directory.CreateDirectory(dir);
 
         var sb = new StringBuilder();
-        sb.Append($"# The holder of every unsettled county. See MapGen/Wilderness.cs.\n\n");
+        sb.Append("# The holder of every unsettled county. See MapGen/Wilderness.cs.\n\n");
         sb.Append($"{WildernessMap.HolderId} = {{\n");
         sb.Append("\tname = \"wilderness_holder_name\"\n");
         sb.Append($"\treligion = {MapGen.Faiths.UnsettledFaithKey}\n");
@@ -337,7 +268,6 @@ public static class HistoryWriter
         sb.Append("\tdisallow_random_traits = yes\n");
         sb.Append("\tsexuality = asexual\n");
 
-        // A millennium before the start, so no start date can make it a child.
         sb.Append($"\t{Math.Max(1, cfg.StartYear - 1000)}.1.1 = {{\n");
         sb.Append("\t\tbirth = yes\n");
         sb.Append("\t\ttrait = wilderness\n");
@@ -356,27 +286,40 @@ public static class HistoryWriter
 
         var sb = new StringBuilder();
 
+        int reignStartYear = Math.Max(1, cfg.StartYear - 5);
+        string titleGrantDate = $"{reignStartYear}.1.1";
+
         foreach (var title in Titles.Flatten(empires))
         {
             if (!realms.HolderCounty.TryGetValue(title, out var holder)) continue;
 
             int level = title.Tier == "c" ? development.GetValueOrDefault(title) : 0;
             realms.Liege.TryGetValue(title, out var liege);
+            string government = governments.For(holder);
 
             sb.Append($"{title.Key} = {{\n");
-            sb.Append($"\t{cfg.StartDate} = {{\n");
+            sb.Append($"\t{titleGrantDate} = {{\n");
             sb.Append($"\t\tholder = {CharacterId(holder)}\n");
-            string government = governments.For(holder);
-            if (government != GovernmentMap.Feudal) sb.Append($"\t\tgovernment = {government}\n");
-            if (liege is not null) sb.Append($"\t\tliege = {liege.Key}\n");
-            if (level > 0) sb.Append($"\t\tchange_development_level = {level}\n");
+
+            if (government != GovernmentMap.Feudal)
+            {
+                sb.Append($"\t\tgovernment = {government}\n");
+            }
+
+            if (liege is not null)
+            {
+                sb.Append($"\t\tliege = {liege.Key}\n");
+            }
+
+            if (level > 0)
+            {
+                sb.Append($"\t\tchange_development_level = {level}\n");
+            }
+
             sb.Append("\t}\n");
             sb.Append("}\n");
         }
 
-        // The titular wilderness kingdom, held from the same date. It outranks every county the
-        // dummy holds, so it becomes the primary title and gives the realm its name — without it
-        // every unsettled county on the map is labelled after whichever county came first.
         if (wild.Count > 0)
         {
             sb.Append($"{WildernessMap.TitleKey} = {{\n");
@@ -387,13 +330,6 @@ public static class HistoryWriter
             sb.Append("}\n");
         }
 
-        // Wilderness counties, all on the one dummy.
-        //
-        // No liege and no development. A liege would make empty ground somebody's vassal and put it
-        // inside a realm; development would give it a number the wilderness holding's -100% growth
-        // then fights against. The government is what the scripts actually test — every trigger in
-        // the Wilderness file set asks `government_has_flag = government_is_wilderness` rather than
-        // naming this holder, so the two halves stay independent.
         foreach (var county in wild)
         {
             sb.Append($"{county.Key} = {{\n");
@@ -410,121 +346,13 @@ public static class HistoryWriter
             if (faith.Head is null) continue;
 
             sb.Append($"{faith.Head.TitleKey} = {{\n");
-            sb.Append($"\t{cfg.StartDate} = {{\n");
+            sb.Append($"\t{titleGrantDate} = {{\n");
             sb.Append($"\t\tholder = gen_hof_{hofIndex++}\n");
-            sb.Append($"\t\tgovernment = theocracy_government\n");
+            sb.Append("\t\tgovernment = theocracy_government\n");
             sb.Append("\t}\n");
             sb.Append("}\n");
         }
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_titles.txt"), sb.ToString());
-    }
-
-    /// <summary>
-    /// The two frontend characters keep fixed identifiers because
-    /// <see cref="PortraitWriter"/> names their portrait files after them, so their displayed names
-    /// have to be localised here rather than coming out of a culture's name list.
-    /// </summary>
-    private static void WriteBookmarkLocalisation(string modDir, Title bookmarkCounty,
-        Title challengeCounty, CultureMap cultures)
-    {
-        string dir = Path.Combine(modDir, "localization", "english");
-        Directory.CreateDirectory(dir);
-
-        var (bookmarkName, _) = RulerNames(bookmarkCounty, cultures.For(bookmarkCounty));
-        var (challengeName, _) = RulerNames(challengeCounty, cultures.For(challengeCounty));
-
-        ParadoxText.WriteBom(Path.Combine(dir, "gen_history_l_english.yml"),
-            $"""
-             l_english:
-              {BookmarkCharacter}:0 "{bookmarkName}"
-              {ChallengeCharacter}:0 "{challengeName}"
-
-             """);
-    }
-
-
-
-    private static void WriteChallengeCharacter(string modDir, Title county, RealmMap realms, MapConfig cfg,
-        CultureMap cultures, FaithMap faiths, GovernmentMap governments)
-    {
-        string dir = Path.Combine(modDir, "common", "bookmarks", "challenge_characters");
-        Directory.CreateDirectory(dir);
-
-        string culture = cultures.For(county).Key;
-        string faith = faiths.For(county).Key;
-        string government = governments.For(county);
-        var title = Primary(county, realms);
-
-        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_challenge.txt"),
-            $$"""
-              {{ChallengeCharacter}} = {
-              	start_date = {{cfg.StartDate}}
-
-              	character = {
-              		name = "{{ChallengeCharacter}}"
-              		dynasty = {{DynastyId(county)}}
-              		dynasty_splendor_level = 1
-              		type = male
-              		birth = {{cfg.BirthDate}}
-              		title = {{title.Key}}
-              		government = {{government}}
-              		culture = {{culture}}
-              		religion = {{faith}}
-              		difficulty = "BOOKMARK_CHARACTER_DIFFICULTY_MEDIUM"
-              		history_id = {{CharacterId(county)}}
-              	}
-              }
-
-              """);
-    }
-
-    /// <summary>
-    /// Unlike title history, the two frontend characters cannot leave their government unwritten —
-    /// the bookmark screen names one explicitly — so feudal is spelled out here too. Both read the
-    /// same <see cref="GovernmentMap"/> the title history did, or the start screen promises a
-    /// feudal realm the save then loads as a tribe.
-    /// </summary>
-    private static void WriteBookmark(string modDir, MapConfig cfg, Title county, RealmMap realms,
-        CultureMap cultures, FaithMap faiths, GovernmentMap governments)
-    {
-        string dir = Path.Combine(modDir, "common", "bookmarks", "bookmarks");
-        Directory.CreateDirectory(dir);
-
-        string culture = cultures.For(county).Key;
-        string faith = faiths.For(county).Key;
-        string government = governments.For(county);
-        var title = Primary(county, realms);
-        int x = cfg.ProvinceWidth / 2;
-        int y = cfg.ProvinceHeight / 2;
-
-        ParadoxText.WriteBom(Path.Combine(dir, "00_bookmarks.txt"),
-            $$"""
-              bm_generated = {
-              	start_date = {{cfg.StartDate}}
-              	is_playable = yes
-              	group = bm_group_867
-
-              	weight = {
-              		value = 100
-              	}
-
-              	character = {
-              		name = "{{BookmarkCharacter}}"
-              		dynasty = {{DynastyId(county)}}
-              		dynasty_splendor_level = 1
-              		type = male
-              		birth = {{cfg.BirthDate}}
-              		title = {{title.Key}}
-              		government = {{government}}
-              		culture = {{culture}}
-              		religion = {{faith}}
-              		difficulty = "BOOKMARK_CHARACTER_DIFFICULTY_MEDIUM"
-              		history_id = {{CharacterId(county)}}
-              		position = { {{x}} {{y}} }
-              	}
-              }
-
-              """);
     }
 }

@@ -10,11 +10,6 @@ namespace Ck3MapGen.Emit;
 /// colonisation system is enabled, and adding a second optional system means adding a folder and a
 /// bool, not editing this class.
 ///
-/// It exists because replace_path is all-or-nothing: declaring gfx/map/map_object_data drops
-/// every vanilla file under it, including the ones we do not generate and have no reason to
-/// (the map_table_* meshes, say). Those have to come back from somewhere, and copying a file we
-/// keep beats teaching a writer to reproduce something it does not own.
-///
 /// Runs last, and never overwrites: anything the pipeline generated wins over anything kept
 /// here, so dropping a file in this folder can add to the mod but cannot silently replace part
 /// of it.
@@ -31,33 +26,29 @@ public static class StaticFileWriter
     public const string Wilderness = "Wilderness";
 
     /// <summary>
-    /// Files that document a set rather than belong in a mod. Copying README.txt would put it in
-    /// the mod root, where CK3 ignores it and the next person to look wonders what wrote it.
+    /// Files that document or configure a set rather than belong in a mod.
     /// </summary>
-    private static readonly string[] NotModContent = ["README.txt"];
+    private static readonly string[] NotModContent = ["README.txt", "ignore.txt", ".ignore.txt"];
 
     /// <summary>
-    /// Where a set lives beside the executable. Beside it rather than in the repo because the
-    /// csproj copies the folder to the output directory, so a published build carries it too.
+    /// Where a set lives beside the executable.
     /// </summary>
     public static string SetDirectory(string set)
         => Path.Combine(AppContext.BaseDirectory, SourceFolder, set);
 
-    /// <param name="runStarted">
-    /// When this generation run began. It is what separates "a writer produced this file a moment
-    /// ago" from "a previous run left this file here", and without it the never-overwrite rule
-    /// below quietly becomes never-update.
-    ///
-    /// The mod directory is not cleaned between runs, so a file copied here on Monday is still
-    /// sitting in the mod on Friday. Skipping every destination that merely *exists* therefore
-    /// pinned the static sets to whatever they looked like the first time the mod was generated:
-    /// editing a script under BaseFilesToCopy changed nothing, forever, with no error and no
-    /// warning. That cost a full day of testing against scripts that were never shipped.
-    /// </param>
+    /// <summary>
+    /// Root directory containing all file sets (BaseFilesToCopy).
+    /// </summary>
+    public static string BaseDirectory
+        => Path.Combine(AppContext.BaseDirectory, SourceFolder);
+
     public static void WriteAll(string modDir, IEnumerable<string> sets, DateTime runStarted)
     {
-        int copied = 0, skipped = 0, refreshed = 0;
+        int copied = 0, skipped = 0, refreshed = 0, ignored = 0;
         var written = new List<string>();
+
+        // 1. Load global ignore patterns from BaseFilesToCopy/ignore.txt (if present)
+        var globalIgnores = LoadIgnoreRules(BaseDirectory);
 
         foreach (string set in sets)
         {
@@ -70,21 +61,32 @@ public static class StaticFileWriter
                 continue;
             }
 
+            // 2. Load set-specific ignore patterns from BaseFilesToCopy/<set>/ignore.txt (if present)
+            var setIgnores = LoadIgnoreRules(sourceDir);
+            var activeIgnores = globalIgnores.Concat(setIgnores).ToList();
+
             int setCopied = 0;
 
             foreach (string sourceFile in Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories))
             {
                 string relativePath = Path.GetRelativePath(sourceDir, sourceFile);
-                if (NotModContent.Contains(Path.GetFileName(relativePath), StringComparer.OrdinalIgnoreCase))
+                string fileName = Path.GetFileName(relativePath);
+
+                // Skip READMEs and ignore lists
+                if (NotModContent.Contains(fileName, StringComparer.OrdinalIgnoreCase))
                     continue;
+
+                // Check against ignore rules
+                if (IsFileIgnored(relativePath, fileName, activeIgnores))
+                {
+                    ignored++;
+                    continue;
+                }
 
                 string targetFile = Path.Combine(modDir, relativePath);
 
                 if (File.Exists(targetFile))
                 {
-                    // Written during THIS run means a generator owns it, and a generator always
-                    // wins — that is the rule this writer exists under. Anything older is debris
-                    // from a previous run and must be replaced, or the set can never be edited.
                     if (File.GetLastWriteTimeUtc(targetFile) >= runStarted)
                     {
                         skipped++;
@@ -106,6 +108,62 @@ public static class StaticFileWriter
 
         Console.WriteLine($"  copied {copied} static files ({string.Join(", ", written)}; " +
                           (refreshed > 0 ? $"{refreshed} refreshed from an earlier run; " : "") +
+                          (ignored > 0 ? $"{ignored} excluded via ignore.txt; " : "") +
                           $"{skipped} left alone, already generated)");
+    }
+
+    /// <summary>
+    /// Reads ignore patterns from ignore.txt or .ignore.txt in the target directory.
+    /// Supports comments (#) and trims whitespace.
+    /// </summary>
+    private static List<string> LoadIgnoreRules(string directory)
+    {
+        var rules = new List<string>();
+        if (!Directory.Exists(directory)) return rules;
+
+        foreach (string candidate in new[] { "ignore.txt", ".ignore.txt" })
+        {
+            string path = Path.Combine(directory, candidate);
+            if (!File.Exists(path)) continue;
+
+            foreach (string rawLine in File.ReadAllLines(path))
+            {
+                string line = rawLine.Trim();
+
+                // Skip empty lines and comments
+                if (string.IsNullOrWhiteSpace(line) || line.StartsWith('#'))
+                    continue;
+
+                // Normalize slashes to forward slashes for consistent matching
+                rules.Add(line.Replace('\\', '/').Trim('/'));
+            }
+        }
+
+        return rules;
+    }
+
+    /// <summary>
+    /// Checks if a file matches any of the ignore rules (by exact relative path, filename, or directory prefix).
+    /// </summary>
+    private static bool IsFileIgnored(string relativePath, string fileName, List<string> rules)
+    {
+        string normalizedRelPath = relativePath.Replace('\\', '/');
+
+        foreach (string rule in rules)
+        {
+            // 1. Exact filename match (e.g. "wilderness_genes.txt")
+            if (fileName.Equals(rule, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // 2. Exact relative path match (e.g. "gui/window_character.gui")
+            if (normalizedRelPath.Equals(rule, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // 3. Directory / prefix match (e.g. "gui/unused" or "common/buildings/")
+            if (normalizedRelPath.StartsWith(rule + "/", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
     }
 }

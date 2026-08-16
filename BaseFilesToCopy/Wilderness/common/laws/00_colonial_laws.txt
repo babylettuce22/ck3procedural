@@ -1,0 +1,202 @@
+﻿colony_governance_laws = {
+	default = colony_law_balanced
+	flag = realm_law
+
+	# =====================================================================================
+	#  1. Balanced Administration (Default)
+	# =====================================================================================
+	colony_law_balanced = {
+		can_have = {
+			OR = {
+				is_colonist_trigger = yes
+				any_held_title = {
+					tier = tier_county
+					is_colony_county_trigger = yes
+				}
+			}
+		}
+
+		can_keep = { always = yes }
+		can_pass = { is_landed = yes }
+
+		pass_cost = { prestige = minor_prestige_value }
+
+		modifier = {
+			monthly_county_control_growth_add = 0.1
+		}
+
+		ai_will_do = {
+			value = 50
+		}
+	}
+
+	# =====================================================================================
+	#  2. Martial Vigilance & Fortified Watch (Defense & Control)
+	# =====================================================================================
+	colony_law_garrison = {
+		can_have = {
+			OR = {
+				is_colonist_trigger = yes
+				any_held_title = {
+					tier = tier_county
+					is_colony_county_trigger = yes
+				}
+			}
+		}
+
+		can_keep = { always = yes }
+		can_pass = {
+			is_landed = yes
+			martial >= 8
+		}
+
+		pass_cost = { prestige = minor_prestige_value }
+
+		modifier = {
+			monthly_county_control_growth_add = 0.35
+			garrison_size = 0.40
+			defender_holding_advantage = 6
+			development_growth_factor = -0.15
+			build_gold_cost = 0.15
+		}
+
+		ai_will_do = {
+			value = 30
+			if = { limit = { has_trait = brave } add = 40 }
+			if = { limit = { martial >= 12 } add = 30 }
+			if = { limit = { prowess >= 12 } add = 25 }
+			if = { limit = { has_trait = craven } add = -30 }
+		}
+	}
+
+	# =====================================================================================
+	#  3. Corvée Clearance & Forced Labor (Speed & Cheap Clearance)
+	# =====================================================================================
+	colony_law_corvee = {
+		can_have = {
+			OR = {
+				is_colonist_trigger = yes
+				any_held_title = {
+					tier = tier_county
+					is_colony_county_trigger = yes
+				}
+			}
+		}
+
+		can_keep = { always = yes }
+		can_pass = {
+			is_landed = yes
+			OR = {
+				has_trait = callous
+				has_trait = diligent
+				has_trait = sadistic
+				dread >= 15
+			}
+		}
+
+		pass_cost = {
+			prestige = minor_prestige_value
+			piety = minor_piety_value
+		}
+
+		modifier = {
+			build_speed = 0.30
+			build_gold_cost = -0.20
+			county_opinion_add = -15
+			health = -0.15
+			stress_gain_mult = 0.20
+		}
+
+		ai_will_do = {
+			value = 20
+			if = { limit = { has_trait = callous } add = 50 }
+			if = { limit = { has_trait = diligent } add = 40 }
+			if = { limit = { has_trait = sadistic } add = 30 }
+			if = {
+				limit = {
+					OR = {
+						has_trait = compassionate
+						has_trait = just
+					}
+				}
+				multiply = 0
+			}
+		}
+	}
+
+	# =====================================================================================
+	#  4. Pioneer Homesteading & Freeholds (Morale & Growth)
+	# =====================================================================================
+	colony_law_homestead = {
+		can_have = {
+			OR = {
+				is_colonist_trigger = yes
+				any_held_title = {
+					tier = tier_county
+					is_colony_county_trigger = yes
+				}
+			}
+		}
+
+		can_keep = { always = yes }
+		can_pass = {
+			is_landed = yes
+			stewardship >= 8
+		}
+
+		pass_cost = { prestige = minor_prestige_value }
+
+		modifier = {
+			development_growth_factor = 0.30
+			county_opinion_add = 20
+			stress_loss_mult = 0.15
+			tax_mult = -0.25
+			garrison_size = -0.20
+		}
+
+		ai_will_do = {
+			value = 30
+			if = { limit = { has_trait = compassionate } add = 40 }
+			if = { limit = { has_trait = generous } add = 30 }
+			if = { limit = { stewardship >= 12 } add = 25 }
+			if = { limit = { has_trait = greedy } add = -40 }
+		}
+	}
+
+	# =====================================================================================
+	#  5. Commercial Extraction & Fur Trapping (Immediate Revenue)
+	# =====================================================================================
+	colony_law_extraction = {
+		can_have = {
+			OR = {
+				is_colonist_trigger = yes
+				any_held_title = {
+					tier = tier_county
+					is_colony_county_trigger = yes
+				}
+			}
+		}
+
+		can_keep = { always = yes }
+		can_pass = {
+			is_landed = yes
+			stewardship >= 6
+		}
+
+		pass_cost = { prestige = minor_prestige_value }
+
+		modifier = {
+			tax_mult = 0.35
+			monthly_county_control_growth_add = -0.15
+			county_opinion_add = -10
+			defender_holding_advantage = -3
+		}
+
+		ai_will_do = {
+			value = 25
+			if = { limit = { has_trait = greedy } add = 50 }
+			if = { limit = { gold < 50 } add = 30 }
+			if = { limit = { has_trait = generous } add = -30 }
+		}
+	}
+}

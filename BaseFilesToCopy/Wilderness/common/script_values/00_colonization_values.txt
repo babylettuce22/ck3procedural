@@ -457,6 +457,22 @@ colony_secession_chance = {
 		}
 	}
 
+# If the liege starved the colony of funds for 20 years, they will want independence
+	if = {
+		limit = {
+			vassal_contract_has_flag = colony_subsidy_neglected
+		}
+		add = 15 # +15% Secession Chance!
+	}
+
+# If the liege heavily patronized and protected them, they remain loyal
+	if = {
+		limit = {
+			vassal_contract_has_flag = colony_subsidy_heavy
+		}
+		add = -10 # -10% Secession Chance
+	}
+
 	if = {
 		limit = {
 			exists = liege

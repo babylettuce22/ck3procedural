@@ -72,6 +72,7 @@ yearly_playable_pulse = {
 		wilderness_yearly_colony_events
 		wilderness_yearly_colonist_petition_check
 		wilderness_yearly_colonist_development_aid_check
+		wilderness_yearly_control_check
 	}
 }
 
@@ -206,6 +207,39 @@ wilderness_yearly_pulse = {
 	}
 }
 
+wilderness_yearly_control_check = {
+	trigger = {
+		any_held_title = {
+			tier = tier_county
+			is_colony_county_trigger = yes
+			county_control <= 0
+			NOT = { has_variable = colony_collapse_event_fired }
+			NOT = { has_variable = colony_just_founded }
+		}
+	}
+
+	effect = {
+		random_held_title = {
+			limit = {
+				tier = tier_county
+				is_colony_county_trigger = yes
+				county_control <= 0
+				NOT = { has_variable = colony_collapse_event_fired }
+				NOT = { has_variable = colony_just_founded }
+			}
+			save_scope_as = colony
+		}
+
+		scope:colony = {
+			set_variable = {
+				name = colony_collapse_event_fired
+				years = 2
+			}
+		}
+
+		trigger_event = wilderness_colonization.0060
+	}
+}
 
 # --- Keeping the frontier honest -------------------------------------------------------------------
 
@@ -441,7 +475,6 @@ wilderness_yearly_ai_promotion = {
 	}
 }
 
-# CHANGED TRIGGER DUE TO SETTLEMENT UPGRADES NOT WORKING RIGHT
 wilderness_yearly_colonist_development_aid_check = {
 	trigger = {
 		is_ai = yes
@@ -453,7 +486,22 @@ wilderness_yearly_colonist_development_aid_check = {
 		any_held_title = {
 			tier = tier_county
 			is_colony_county_trigger = yes
-			has_wilderness_obstacle_trigger = yes
+			OR = {
+				# Either obstacles still need clearing...
+				has_wilderness_obstacle_trigger = yes
+				# ...or obstacles are cleared and the settlement is ready for its next upgrade
+				AND = {
+					county_obstacles_cleared_trigger = yes
+					title_province ?= {
+						OR = {
+							has_building = settlement_01
+							has_building = settlement_02
+						}
+						NOT = { has_building = settlement_03 }
+						has_ongoing_construction = no
+					}
+				}
+			}
 		}
 	}
 
@@ -462,7 +510,20 @@ wilderness_yearly_colonist_development_aid_check = {
 			limit = {
 				tier = tier_county
 				is_colony_county_trigger = yes
-				has_wilderness_obstacle_trigger = yes
+				OR = {
+					has_wilderness_obstacle_trigger = yes
+					AND = {
+						county_obstacles_cleared_trigger = yes
+						title_province ?= {
+							OR = {
+								has_building = settlement_01
+								has_building = settlement_02
+							}
+							NOT = { has_building = settlement_03 }
+							has_ongoing_construction = no
+						}
+					}
+				}
 			}
 			save_scope_as = struggling_colony
 		}
@@ -473,20 +534,13 @@ wilderness_yearly_colonist_development_aid_check = {
 		random = {
 			chance = 45
 
-			# Cooldown is ONLY applied when the petition actually fires
 			set_variable = {
 				name = development_aid_cooldown
 				years = 2
 			}
 
 			liege = {
-				trigger_event = {
-					id = wilderness_colonization.0051
-					scopes = {
-						petitioning_colonist = scope:petitioning_colonist
-						struggling_colony = scope:struggling_colony
-					}
-				}
+				trigger_event = wilderness_colonization.0051
 			}
 		}
 	}

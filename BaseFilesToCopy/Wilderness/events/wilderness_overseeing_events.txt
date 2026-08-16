@@ -11,7 +11,6 @@ wilderness_colonization.0030 = {
 
 	cooldown = { years = 5 }
 
-	# Left: Ruler in travel gear
 	left_portrait = {
 		character = root
 		animation = shiver
@@ -25,7 +24,6 @@ wilderness_colonization.0030 = {
 		}
 	}
 
-	# Right: Local foreman
 	right_portrait = {
 		character = scope:colony_foreman
 		animation = lantern
@@ -35,14 +33,12 @@ wilderness_colonization.0030 = {
 		}
 	}
 
-	# Lower Center: Distressed settler
 	lower_center_portrait = {
 		trigger = { exists = scope:distressed_settler }
 		character = scope:distressed_settler
 		animation = fear
 	}
 
-	# --- Dynamic Reactive Description ---
 	desc = {
 		desc = wilderness_colonization.0030.desc.intro
 
@@ -116,18 +112,43 @@ wilderness_colonization.0030 = {
 		}
 	}
 
-	# --- Option A: Organize rationing & relief -----------------------------------------------
+	# --- Option A: Organize Rationing & Relief ---
 	option = {
 		name = wilderness_colonization.0030.a
 		skill = stewardship
 		add_internal_flag = special
 		highlight_portrait = scope:colony_foreman
 
-		trigger = { gold >= 30 }
-		remove_short_term_gold = 30
+	trigger = {
+			trigger_if = {
+				limit = { has_realm_law = colony_law_homestead }
+				gold >= 15
+			}
+			trigger_else_if = {
+				limit = { has_realm_law = colony_law_corvee }
+				gold >= 45
+			}
+			trigger_else = {
+				gold >= 30
+			}
+		}	
+
+		if = {
+			limit = { has_realm_law = colony_law_homestead }
+			remove_short_term_gold = 15
+			scope:colony = { change_development_progress = 25 }
+		}
+		else_if = {
+			limit = { has_realm_law = colony_law_corvee }
+			remove_short_term_gold = 45
+			scope:colony = { change_development_progress = 10 }
+		}
+		else = {
+			remove_short_term_gold = 30
+			scope:colony = { change_development_progress = 15 }
+		}
 
 		scope:colony = {
-			change_development_progress = 15
 			add_county_modifier = {
 				modifier = settlement_well_provisioned
 				years = 5
@@ -144,13 +165,14 @@ wilderness_colonization.0030 = {
 
 		ai_chance = {
 			base = 40
-			modifier = { add = 30  has_trait = generous }
-			modifier = { add = 20  gold > 100 }
-			modifier = { add = -40 gold < 45 }
+			modifier = { add = 30 has_trait = generous }
+			modifier = { add = 25 has_realm_law = colony_law_homestead }
+			modifier = { add = 20 gold > 100 }
+			modifier = { add = -30 has_realm_law = colony_law_corvee }
 		}
 	}
 
-	# --- Option B: Lead a sortie / Take direct charge -----------------------------------------
+	# --- Option B: Lead a Sortie / Direct Combat Charge ---
 	option = {
 		name = wilderness_colonization.0030.b
 		skill = martial
@@ -166,9 +188,20 @@ wilderness_colonization.0030 = {
 					value = scope:duel_value
 					multiplier = 3.5
 				}
-				trigger_event = {
-					id = wilderness_colonization.0032
+
+				# --- Law Duel Modifiers ---
+				modifier = {
+					add = 30
+					has_realm_law = colony_law_garrison
+					desc = colony_law_garrison_duel_desc
 				}
+				modifier = {
+					add = -25
+					has_realm_law = colony_law_extraction
+					desc = colony_law_extraction_duel_desc
+				}
+
+				trigger_event = wilderness_colonization.0032
 			}
 			50 = {
 				desc = wilderness_sortie_fail_desc
@@ -176,9 +209,17 @@ wilderness_colonization.0030 = {
 					value = scope:duel_value
 					multiplier = -3.5
 				}
-				trigger_event = {
-					id = wilderness_colonization.0033
+
+				modifier = {
+					add = 25
+					has_realm_law = colony_law_extraction
 				}
+				modifier = {
+					add = -30
+					has_realm_law = colony_law_garrison
+				}
+
+				trigger_event = wilderness_colonization.0033
 			}
 		}
 
@@ -189,13 +230,15 @@ wilderness_colonization.0030 = {
 
 		ai_chance = {
 			base = 40
-			modifier = { add = 40  has_trait = brave }
-			modifier = { add = 30  prowess >= 12 }
+			modifier = { add = 40 has_trait = brave }
+			modifier = { add = 30 prowess >= 12 }
+			modifier = { add = 30 has_realm_law = colony_law_garrison }
+			modifier = { add = -30 has_realm_law = colony_law_extraction }
 			modifier = { factor = 0 has_trait = craven }
 		}
 	}
 
-	# --- Option C: Bar the gates and preserve stores ------------------------------------------
+	# --- Option C: Bar the Gates & Preserve Stores ---
 	option = {
 		name = wilderness_colonization.0030.c
 		trait = callous
@@ -205,7 +248,13 @@ wilderness_colonization.0030 = {
 				modifier = settlement_hardened_winter
 				years = 5
 			}
-			change_county_control = 10
+			if = {
+				limit = { has_realm_law = colony_law_corvee }
+				change_county_control = 15
+			}
+			else = {
+				change_county_control = 10
+			}
 		}
 
 		stress_impact = {
@@ -218,9 +267,10 @@ wilderness_colonization.0030 = {
 
 		ai_chance = {
 			base = 20
-			modifier = { add = 50  has_trait = callous }
-			modifier = { add = 30  ai_compassion < 25 }
-			modifier = { add = 30  gold < 30 }
+			modifier = { add = 50 has_trait = callous }
+			modifier = { add = 35 has_realm_law = colony_law_corvee }
+			modifier = { add = 30 ai_compassion < 25 }
+			modifier = { add = 30 gold < 30 }
 		}
 	}
 }

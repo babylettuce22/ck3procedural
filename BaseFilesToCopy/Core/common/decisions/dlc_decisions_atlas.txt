@@ -1,4 +1,4 @@
-#fp_1 = Northern Lords (Flavor Pack 1)
+﻿#fp_1 = Northern Lords (Flavor Pack 1)
 
 #fp_3 = Legacy of Persia (Flavor Pack 3)
 

@@ -272,12 +272,12 @@ colony_office_01 = {
 	next_building = colony_office_02
 
 	province_modifier = {
+		monthly_income = 0.25
 	}
 	
 	county_modifier = {
 		development_growth_factor = 0.15
 		development_growth = 0.1
-		monthly_income = 0.25
 	}
 
 	type_icon = "icon_structure_ghana_palace.dds"
@@ -305,12 +305,12 @@ colony_office_02 = {
 	next_building = colony_office_03
 
 	province_modifier = {
+		monthly_income = 0.5
 	}
 
 	county_modifier = {
 		development_growth_factor = 0.30
 		development_growth = 0.3
-		monthly_income = 0.5
 	}
 
 	type_icon = "icon_structure_ghana_palace.dds"
@@ -336,12 +336,12 @@ colony_office_03 = {
 	}
 
 	province_modifier = {
+		monthly_income = 1.5
 	}
 
 	county_modifier = {
 		development_growth_factor = 0.80
 		development_growth = 1.5
-		monthly_income = 1.5
 	}
 
 	type_icon = "icon_structure_ghana_palace.dds"

@@ -577,6 +577,17 @@ OVERSEE_COLONY_ACTIVITY_STATUS:0 "You are dwelling among the settlers, directing
  OVERSEEING_THE_SETTLEMENT_TOOLTIP:0 "#T Overseeing the Settlement#!\n#positive @gold_icon! +2.0#! Monthly Income\n#negative @prestige_icon! -0.5#! Monthly Prestige\n\n#flavor The lord dwells in the palisade, directing the work firsthand.#!"
  SETTLEMENT_OVERSEEN_TOOLTIP:0 "#T Colony Growth#!\n#positive @development_icon! +15%#! Development Growth\n#positive @control_icon! +0.5#! Monthly Control Growth\n#positive +20#! County Opinion\n#positive -15%#! Construction Time\n\n#flavor A colony develops rapidly when its lord is present to govern it.#!"
  
+ # --- Was promised colony, now what
+ wilderness_colonization.0025.t: "The Pioneer's Charter"
+ wilderness_colonization.0025.desc: "Years ago, when wagon axles cracked in the frozen mud and the expedition stood on the brink of turning back, a solemn pledge was sworn: #italic every family that endured the march would hold their own land in fee and freedom.#! \n\nToday, [finished_colony.GetNameNoTier] is wild no longer. Its palisades have been replaced by stone ramparts, and smoke rises from hundreds of steady hearths. A delegation of the original settlers—graybeards and the grown children of those who perished clearing the brush—now stands before the dais. \n\nIn their calloused hands, they hold the dispatch bearing your seal."
+ wilderness_colonization.0025.a: "A lord's oath is the realm's bedrock. Grant them their charter."
+ wilderness_colonization.0025.b: "Offer a purse of silver to every family in exchange for the charter."
+ wilderness_colonization.0025.c: "They were hired laborers, not lords. Enforce standard feudal tithes."
+
+ colonize_honor_charter_tt: "You grant freeholder rights to the pioneer families:\n$EFFECT_LIST_BULLET$Lightens holding taxes by #negative_value 15%#!\n$EFFECT_LIST_BULLET$Boosts Development Growth by #positive_value 25%#!\n$EFFECT_LIST_BULLET$Grants #positive_value +20#! Popular Opinion for 25 years"
+ colonize_commute_charter_tt: "You buy out the settlers' charters with coin, avoiding popular unrest without sacrificing future tax rights."
+ colonize_break_charter_tt: "You extract full feudal taxes, but betraying your word causes #negative_value severe unrest#!, drops Control by #negative_value 30#!, and gains #negative_value Tyranny#!."
+
  # Personally leading expedition
  # --- Player-Led Expedition Events ---
  wilderness_colonization.0026.t:0 "Scraping the Barrel"
@@ -597,3 +608,75 @@ OVERSEE_COLONY_ACTIVITY_STATUS:0 "You are dwelling among the settlers, directing
  wilderness_colonization.0028.b:0 "Draw steel and bar the road back. You took an oath—you walk until we arrive."
  colonize_cannot_lead_already_holding_tt:0 "You cannot personally lead an expedition into the wilderness while already holding or overseeing a frontier colony."
  colonize_must_grant_colony_tt:0 "You hold as many direct colonies as you can support; you must invest [expedition_leader.GetShortUIName] with the title."
+ 
+ # --- Crisis Root (0060) ---
+ wilderness_colonization.0060.t: "Frontier in Chaos"
+ wilderness_colonization.0060.desc: "Disaster has overtaken the outpost in [colony.GetNameNoTier]. The palisades stand undermanned, winter stores have been ransacked, and open mutiny brews among the cold, desperate settlers. \n\nWithout immediate intervention, the entire settlement will disintegrate and the wild will swallow what we spent years building."
+ wilderness_colonization.0060.a: "Take command in person and enforce order with an iron fist!"
+ wilderness_colonization.0060.b: "Dispatch supply wagons and hired mercenaries at once."
+ wilderness_colonization.0060.c: "It is finished. Sound the retreat and abandon the post."
+ 
+ wilderness_control_salvaged_desc: "You break the mutineers, rally the survivors, and secure the palisade."
+ wilderness_control_lost_desc: "Your men are routed in the chaos, and the settlement burns around you."
+ colonize_control_bought_tt: "Restores #positive_value 40#! County Control through relief stores and mercenary guards."
+ colonize_abandon_colony_tt: "The outpost is abandoned and reverts to unclaimed wilderness."
+
+ # --- Follow-up 0061 (Martial Success) ---
+ wilderness_colonization.0061.t: "Iron Discipline"
+ wilderness_colonization.0061.desc: "Steel solved what words could not. After making an example of the ringleaders and organizing daily patrols along the perimeter, fear and purpose have returned to [colony.GetNameNoTier]. The fires burn again, the watchtowers are manned, and the settlement stands firm."
+ wilderness_colonization.0061.a: "Let none doubt our hold on this frontier."
+
+ # --- Follow-up 0062 (Martial Defeat) ---
+ wilderness_colonization.0062.t: "Blood in the Mud"
+ wilderness_colonization.0062.desc: "The attempt to quell the disorder failed completely. Desperate deserters and wolves broke the cordon under the cover of night. Wounded and outmatched, the remnants of our forces had no choice but to join the retreat. [colony.GetNameNoTier] has been reclaimed by the wild."
+ wilderness_colonization.0062.a: "A bitter and shameful defeat."
+
+ # --- Follow-up 0063 (Gold / Mercenaries) ---
+ wilderness_colonization.0063.t: "Relief and Steel"
+ wilderness_colonization.0063.desc: "Grain carts escorted by hardened mercenaries rode into [colony.GetNameNoTier] just before the final collapse. Full bellies and armed guards quickly quieted the mutineers, putting the settlers back to work repairing the fences and digging ditches."
+ wilderness_colonization.0063.a: "Coin well spent."
+
+ # --- Follow-up 0064 (Abandonment) ---
+ wilderness_colonization.0064.t: "The Abandoned Gate"
+ wilderness_colonization.0064.desc: "The carts were packed, the stores burnt to deny them to bandits, and the exhausted settlers marched back to civilized lands. Behind them, the rotting timber palisade of [colony.GetNameNoTier] stands silent in the encroaching brush."
+ wilderness_colonization.0064.a: "We leave it to the wolves."
+
+ # colony laws
+  colony_governance_laws: "Colony Administration"
+ 
+ colony_law_balanced: "Balanced Administration"
+ colony_law_balanced_effects: "The outpost balances labor evenly between security patrols, clearing the brush, and sowing crops."
+
+ colony_law_garrison: "Martial Vigilance"
+ colony_law_garrison_effects: "Armed patrols escort work crews and sentinels man the ditch day and night:\n$EFFECT_LIST_BULLET$Control Growth: #positive_value +0.35/month#!\n$EFFECT_LIST_BULLET$Garrison Size: #positive_value +40%#!\n$EFFECT_LIST_BULLET$Defender Advantage: #positive_value +6#!\n$EFFECT_LIST_BULLET$Development Growth: #negative_value -15%#!\n$EFFECT_LIST_BULLET$Building Costs: #negative_value +15%#!"
+
+ colony_law_corvee: "Corvée Clearance Gangs"
+ colony_law_corvee_effects: "Settlers and laborers are worked relentlessly to clear the wilderness at maximum speed:\n$EFFECT_LIST_BULLET$Construction Speed: #positive_value +30%#!\n$EFFECT_LIST_BULLET$Building & Clearance Cost: #positive_value -20%#!\n$EFFECT_LIST_BULLET$Popular Opinion: #negative_value -25#!\n$EFFECT_LIST_BULLET$Health Penalty: #negative_value -0.15#!\n$EFFECT_LIST_BULLET$Stress Gain: #negative_value +20%#!"
+
+ colony_law_homestead: "Pioneer Homesteading"
+ colony_law_homestead_effects: "Settlers are granted private plots, warm cabins, and grain reserves:\n$EFFECT_LIST_BULLET$Development Growth: #positive_value +30%#!\n$EFFECT_LIST_BULLET$Popular Opinion: #positive_value +20#!\n$EFFECT_LIST_BULLET$Stress Loss: #positive_value +15%#!\n$EFFECT_LIST_BULLET$Holding Taxes: #negative_value -25%#!\n$EFFECT_LIST_BULLET$Garrison Size: #negative_value -20%#!"
+
+ colony_law_extraction: "Commercial Extraction"
+ colony_law_extraction_effects: "The outpost is dedicated to harvesting furs, hardwood timber, and surface minerals for immediate sale:\n$EFFECT_LIST_BULLET$Holding Revenue: #positive_value +35%#!\n$EFFECT_LIST_BULLET$Control Growth: #negative_value -0.15/month#!\n$EFFECT_LIST_BULLET$Popular Opinion: #negative_value -10#!\n$EFFECT_LIST_BULLET$Defender Advantage: #negative_value -3#!"
+
+  colony_law_garrison_duel_desc: "Martial Vigilance: Palisade sentinels and patrols are prepared for combat"
+ colony_law_corvee_duel_desc: "Corvée Clearance: Brutalized laborers fight back with mutinous fury"
+ colony_law_extraction_duel_desc: "Commercial Extraction: The outpost is built for storage rather than defense"
+
+ # obligations/contracts
+ colony_sponsorship: "Crown Sponsorship & Subsidies"
+ 
+ # Level 0
+ colony_subsidy_neglected: "Neglected Outpost"
+ colony_subsidy_neglected_short: "Neglected"
+ colony_subsidy_neglected_desc: "The Crown provides zero financial upkeep to the settlement, forcing the pioneers to survive on their own:\n$EFFECT_LIST_BULLET$Liege Upkeep: #positive_value 0.0 gold/month#!\n$EFFECT_LIST_BULLET$Development Growth: #negative_value -20%#!\n$EFFECT_LIST_BULLET$Building & Clearance Cost: #negative_value +20%#!\n$EFFECT_LIST_BULLET$Secession Risk: #negative_value +15%#!\n$EFFECT_LIST_BULLET$Vassal Opinion: #negative_value -15#!"
+
+ # Level 1
+ colony_subsidy_standard: "Standard Subsidy"
+ colony_subsidy_standard_short: "Standard"
+ colony_subsidy_standard_desc: "The Crown sends regular relief wagons and tools to maintain basic infrastructure:\n$EFFECT_LIST_BULLET$Liege Upkeep: #negative_value -0.3 gold/month#!\n$EFFECT_LIST_BULLET$Standard Development & Clearance rates\n$EFFECT_LIST_BULLET$Vassal Opinion: #negative_value -5#!"
+
+ # Level 2
+ colony_subsidy_heavy: "Heavy Patronage"
+ colony_subsidy_heavy_short: "Heavy Patronage"
+ colony_subsidy_heavy_desc: "The Crown heavily funds the colony with gold, masonry, and armed escorts:\n$EFFECT_LIST_BULLET$Liege Upkeep: #negative_value -0.75 gold/month#!\n$EFFECT_LIST_BULLET$Development Growth: #positive_value +25%#!\n$EFFECT_LIST_BULLET$Building & Clearance Cost: #positive_value -20%#!\n$EFFECT_LIST_BULLET$Control Growth: #positive_value +0.20/month#!\n$EFFECT_LIST_BULLET$Secession Risk: #positive_value -10%#!\n$EFFECT_LIST_BULLET$Vassal Opinion: #positive_value +25#!"
