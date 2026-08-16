@@ -79,7 +79,7 @@ public static class FrontendWriter
                 end = i;
                 break;
             }
-
+            //
             if (end < 0)
             {
                 Console.WriteLine("  frontend: block never closes, stopping");
