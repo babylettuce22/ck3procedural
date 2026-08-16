@@ -271,6 +271,7 @@ public static class HistoryWriter
         sb.Append($"\t{Math.Max(1, cfg.StartYear - 1000)}.1.1 = {{\n");
         sb.Append("\t\tbirth = yes\n");
         sb.Append("\t\ttrait = wilderness\n");
+        sb.Append("\t\ttrait = immortal\n");
         sb.Append("\t}\n");
         sb.Append("}\n");
 
