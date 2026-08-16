@@ -1,0 +1,15 @@
+﻿gen_early_realm_stability = {
+	icon = "icon_realm_stability"
+
+	# Opinion bonuses that keep vassals below the 80% faction joining threshold
+	vassal_opinion = 20
+	direct_vassal_opinion = 10
+	powerful_vassal_opinion = 30
+
+	# Halves the duration of short reign malus
+	short_reign_duration_mult = -0.5
+
+	# Correct legitimacy keys (DLC / 1.12+ engine support)
+	monthly_legitimacy_add = 0.5
+	legitimacy_gain_mult = 0.25
+}

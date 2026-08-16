@@ -56,7 +56,11 @@ public sealed class Rng
         return min + (int)(NextUInt64() % span);
     }
 
-    /// <summary>Port of getRandomDecimal(min, max) — two decimal places, as the JS does.</summary>
+    /// <summary>Uniform double in [0, 1). Alias for NextDouble().</summary>
+    public double Double() => NextDouble();
+
+    /// <summary>Uniform double in [min, max).</summary>
+    public double Double(double min, double max) => NextDouble() * (max - min) + min;    /// <summary>Port of getRandomDecimal(min, max) — two decimal places, as the JS does.</summary>
     public double Decimal(double min, double max)
         => Math.Round(NextDouble() * (max - min) + min, 2);
 

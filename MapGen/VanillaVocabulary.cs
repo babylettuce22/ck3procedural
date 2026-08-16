@@ -66,6 +66,13 @@ public sealed class VanillaVocabulary
     /// </summary>
     public Dictionary<string, double> InnovationFrequency { get; } = [];
 
+    public sealed record InnovationDef(string Key, string Era, string Group);
+
+    public Dictionary<string, InnovationDef> InnovationDefs { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Stores (discoveryYear, innovationKey) per vanilla culture history.</summary>
+    public List<List<(int Year, string Innovation)>> CultureHistories { get; } = [];
+
     /// <summary>Doctrine group key to the doctrines that satisfy it.</summary>
     public Dictionary<string, List<string>> DoctrineGroups { get; } = [];
 
@@ -90,20 +97,22 @@ public sealed class VanillaVocabulary
         v.ReadCultures(Path.Combine(gameDir, "common", "culture", "cultures"));
         v.ReadDoctrines(Path.Combine(gameDir, "common", "religion", "doctrine_group_types"));
         v.ReadReligions(Path.Combine(gameDir, "common", "religion", "religion_types"));
+        v.ReadInnovationDefs(Path.Combine(gameDir, "common", "culture", "innovations"));
         v.ReadInnovations(Path.Combine(gameDir, "history", "cultures"));
 
-        // Every list here is drawn from with a seeded Rng, so its *order* is part of the seed's
-        // meaning. Leaving it as whatever order the filesystem enumerated would make the same seed
-        // produce different cultures on a different machine.
         v.Ethos.Sort(StringComparer.Ordinal);
         v.MartialCustoms.Sort(StringComparer.Ordinal);
         v.HeadDeterminations.Sort(StringComparer.Ordinal);
         v.LanguageColors.Sort(StringComparer.Ordinal);
 
-        Console.WriteLine($"  vocabulary: {v.Ethos.Count} ethos, {v.Traditions.Count} traditions, " +
-                          $"{v.Looks.Count} looks, {v.FaithIcons.Count} faith icons, " +
-                          $"{v.DoctrineGroups.Count} doctrine groups, {v.Tenets.Count} tenets, " +
-                          $"{v.InnovationFrequency.Count} starting innovations");
+        int tribal = v.InnovationDefs.Values.Count(d => d.Era == "culture_era_tribal");
+        int early = v.InnovationDefs.Values.Count(d => d.Era == "culture_era_early_medieval");
+        int high = v.InnovationDefs.Values.Count(d => d.Era == "culture_era_high_medieval");
+        int late = v.InnovationDefs.Values.Count(d => d.Era == "culture_era_late_medieval");
+
+        Console.WriteLine($"  vocabulary: {v.Ethos.Count} ethos, {v.Traditions.Count} traditions, {v.Looks.Count} looks");
+        Console.WriteLine($"  innovations harvested: {tribal} tribal, {early} early medieval, {high} high medieval, {late} late medieval");
+
         return v;
     }
 
@@ -111,7 +120,7 @@ public sealed class VanillaVocabulary
     public bool IsUsable =>
         Ethos.Count > 0 && MartialCustoms.Count > 0 && HeadDeterminations.Count > 0
         && Traditions.Count > 0 && Looks.Count > 0 && FaithIcons.Count > 0 && Tenets.Count > 0
-        && InnovationFrequency.Count > 0;
+        && (CultureHistories.Count > 0 || InnovationDefs.Count > 0);
 
     private void ReadPillars(string dir)
     {
@@ -259,38 +268,117 @@ public sealed class VanillaVocabulary
             ReligionLocTemplate.Add((m.Groups[1].Value, m.Groups[2].Value.Trim()));
     }
 
-    /// <summary>Reads what vanilla cultures have already discovered by the 867 start.</summary>
+    private void ReadInnovationDefs(string dir)
+    {
+        if (!Directory.Exists(dir)) return;
+
+        foreach (string path in Directory.GetFiles(dir, "*.txt", SearchOption.AllDirectories))
+        {
+            string filename = Path.GetFileName(path).ToLowerInvariant();
+
+            string defaultEra = "culture_era_tribal";
+            if (filename.Contains("late_medieval")) defaultEra = "culture_era_late_medieval";
+            else if (filename.Contains("high_medieval")) defaultEra = "culture_era_high_medieval";
+            else if (filename.Contains("early_medieval")) defaultEra = "culture_era_early_medieval";
+            else if (filename.Contains("tribal")) defaultEra = "culture_era_tribal";
+
+            string text = File.ReadAllText(path);
+            foreach (var (key, body) in TopLevelBlocks(text))
+            {
+                if (key.StartsWith('@')) continue;
+
+                // Skip innovations with hardcoded heritage/culture restrictions (e.g. Longboats, Mubarizun)
+                // as generated cultures will fail the engine's potential triggers.
+                if (body.Contains("potential =")) continue;
+
+                var eraMatch = Regex.Match(body, @"\bculture_era\s*=\s*(\w+)");
+                var groupMatch = Regex.Match(body, @"\bgroup\s*=\s*(\w+)");
+
+                if (!groupMatch.Success && !eraMatch.Success && !filename.Contains("innovation"))
+                    continue;
+
+                string era = eraMatch.Success ? eraMatch.Groups[1].Value : defaultEra;
+                string group = groupMatch.Success ? groupMatch.Groups[1].Value : "culture_group_civic";
+
+                InnovationDefs[key] = new InnovationDef(key, era, group);
+            }
+        }
+    }
+
     private void ReadInnovations(string dir)
     {
         if (!Directory.Exists(dir)) return;
 
-        var counts = new Dictionary<string, int>(StringComparer.Ordinal);
-        int files = 0;
-
-        foreach (string path in Directory.GetFiles(dir, "*.txt").OrderBy(p => p, StringComparer.Ordinal))
+        foreach (string path in Directory.GetFiles(dir, "*.txt", SearchOption.AllDirectories).OrderBy(p => p, StringComparer.Ordinal))
         {
             string text = File.ReadAllText(path).Replace("\r\n", "\n");
+            var cultureHistory = new List<(int Year, string Innovation)>();
 
-            // Only blocks dated at or before the start date; later ones are the culture's future,
-            // not its starting position.
-            var startBlock = Regex.Match(text, @"\b8[0-6]\d\.\d+\.\d+\s*=\s*\{");
-            if (!startBlock.Success) continue;
+            // Match dated blocks, e.g. "867.1.1 = { ... }" or "1066.9.15 = { ... }"
+            var dateBlocks = Regex.Matches(text, @"(?:^|\s)(\d{3,4})\.\d+\.\d+\s*=\s*\{");
+            for (int i = 0; i < dateBlocks.Count; i++)
+            {
+                int year = int.Parse(dateBlocks[i].Groups[1].Value);
+                int start = dateBlocks[i].Index;
+                int end = (i + 1 < dateBlocks.Count) ? dateBlocks[i + 1].Index : text.Length;
+                string block = text[start..end];
 
-            files++;
-            var seen = new HashSet<string>(StringComparer.Ordinal);
+                foreach (Match m in Regex.Matches(block, @"discover_innovation\s*=\s*([a-zA-Z0-9_]+)"))
+                {
+                    cultureHistory.Add((year, m.Groups[1].Value));
+                }
+            }
 
-            foreach (Match m in Regex.Matches(text[..IndexOfLaterDate(text)],
-                         @"discover_innovation\s*=\s*(\w+)"))
-                seen.Add(m.Groups[1].Value);
+            // Fallback for undated history declarations
+            if (dateBlocks.Count == 0)
+            {
+                foreach (Match m in Regex.Matches(text, @"discover_innovation\s*=\s*([a-zA-Z0-9_]+)"))
+                {
+                    cultureHistory.Add((867, m.Groups[1].Value));
+                }
+            }
 
-            foreach (string innovation in seen)
-                counts[innovation] = counts.GetValueOrDefault(innovation) + 1;
+            if (cultureHistory.Count > 0)
+            {
+                CultureHistories.Add(cultureHistory);
+            }
+        }
+    }
+
+    public (Dictionary<string, double> Frequencies, double AverageCount) GetFrequenciesAtYear(int targetYear)
+    {
+        if (CultureHistories.Count == 0) return ([], 0);
+
+        var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+        int totalDiscovered = 0;
+        int validCultures = 0;
+
+        foreach (var history in CultureHistories)
+        {
+            var discovered = history
+                .Where(h => h.Year <= targetYear)
+                .Select(h => h.Innovation)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            if (discovered.Count == 0) continue;
+
+            validCultures++;
+            totalDiscovered += discovered.Count;
+            foreach (string inn in discovered)
+            {
+                counts[inn] = counts.GetValueOrDefault(inn) + 1;
+            }
         }
 
-        if (files == 0) return;
+        if (validCultures == 0) return ([], 0);
 
-        foreach (var (innovation, count) in counts.OrderBy(kv => kv.Key, StringComparer.Ordinal))
-            InnovationFrequency[innovation] = (double)count / files;
+        var freqs = counts.ToDictionary(
+            kv => kv.Key,
+            kv => (double)kv.Value / validCultures,
+            StringComparer.Ordinal);
+
+        return (freqs, (double)totalDiscovered / validCultures);
     }
 
     /// <summary>Where the 867-and-earlier part of a culture history file stops.</summary>

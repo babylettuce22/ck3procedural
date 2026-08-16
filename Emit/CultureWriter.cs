@@ -225,10 +225,17 @@ public static class CultureWriter
     /// culture ends up with a plausible number of them and the common ones stay common — without
     /// every culture starting from an identical technological position.
     /// </summary>
-    private static void WriteHistory(string modDir, MapConfig cfg, CultureMap cultures, VanillaVocabulary vocab,
-        Rng rng)
+    // In CultureWriter.cs
+
+    // In CultureWriter.cs
+
+    // In CultureWriter.cs
+
+    // In CultureWriter.cs
+
+    private static void WriteHistory(string modDir, MapConfig cfg, CultureMap cultures, VanillaVocabulary vocab, Rng rng)
     {
-        if (vocab.InnovationFrequency.Count == 0) return;
+        if (vocab.InnovationDefs.Count == 0) return;
 
         string dir = Path.Combine(modDir, "history", "cultures");
         Directory.CreateDirectory(dir);
@@ -238,29 +245,191 @@ public static class CultureWriter
             File.Delete(file);
         }
 
-        int total = 0;
+        int startYear = ParseStartYear(cfg.StartDate);
+        var (frequencies, _) = vocab.GetFrequenciesAtYear(startYear);
+
+        var eraMilestones = new (string EraKey, int StartYear, int EndYear, string DateStr)[]
+        {
+        ("culture_era_tribal", 0, 900, "1.1.1"),
+        ("culture_era_early_medieval", 900, 1050, "900.1.1"),
+        ("culture_era_high_medieval", 1050, 1200, "1050.1.1"),
+        ("culture_era_late_medieval", 1200, 1453, "1200.1.1")
+        };
+
+        int currentEraIndex = startYear switch
+        {
+            < 900 => 0,
+            < 1050 => 1,
+            < 1200 => 2,
+            _ => 3
+        };
+
+        int totalAssigned = 0;
 
         foreach (var culture in cultures.Cultures)
         {
-            var chosen = vocab.InnovationFrequency
-                .Where(kv => rng.Chance(kv.Value))
-                .Select(kv => kv.Key)
-                .OrderBy(k => k, StringComparer.Ordinal)
+            var chosenByEra = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+            for (int i = 0; i <= currentEraIndex; i++)
+            {
+                chosenByEra[eraMilestones[i].EraKey] = [];
+            }
+
+            // Normalized development factor: 0.0 (backwater/wilderness) to 1.0 (metropolis)
+            double devNormalized = Math.Clamp(culture.MeanDevelopment / 30.0, 0.0, 1.0);
+
+            // 1. Process Past Completed Eras
+            for (int e = 0; e < currentEraIndex; e++)
+            {
+                string pastEra = eraMilestones[e].EraKey;
+                var pastEraPool = vocab.InnovationDefs.Values
+                    .Where(def => def.Era == pastEra)
+                    .Select(def => def.Key)
+                    .ToList();
+
+                if (pastEraPool.Count == 0) continue;
+
+                // CK3 requires at least 8 innovations (or 50%) of the era to qualify for the next era
+                int minRequired = Math.Min(pastEraPool.Count, Math.Max(8, (int)Math.Ceiling(pastEraPool.Count * 0.5)));
+
+                // Completion share: ~55%-65% for poor ground, up to ~85%-95% for wealthy ground
+                double completionRate = 0.55 + 0.35 * devNormalized + (rng.NextDouble() * 0.1 - 0.05);
+                int targetPastCount = (int)Math.Round(pastEraPool.Count * Math.Clamp(completionRate, 0.50, 0.95));
+                targetPastCount = Math.Clamp(targetPastCount, minRequired, pastEraPool.Count);
+
+                SampleWeightedInnovations(chosenByEra[pastEra], pastEraPool, targetPastCount, culture, vocab, frequencies, rng);
+            }
+
+            // 2. Process Current Active Era
+            var currentMilestone = eraMilestones[currentEraIndex];
+            var currentEraPool = vocab.InnovationDefs.Values
+                .Where(def => def.Era == currentMilestone.EraKey)
+                .Select(def => def.Key)
                 .ToList();
 
-            var sb = new StringBuilder();
-            sb.Append($"# {culture.Name}, of the {culture.Heritage.Name} heritage.\n\n");
-            sb.Append($"{cfg.StartDate} = {{\n");
-            foreach (string innovation in chosen)
-                sb.Append($"\tdiscover_innovation = {innovation}\n");
-            sb.Append("}\n");
+            if (currentEraPool.Count > 0)
+            {
+                int targetCurrentCount;
 
-            total += chosen.Count;
+                if (currentEraIndex == 0)
+                {
+                    // In Tribal era: Scale from Year 1 (1-2 techs) up to Year 867-899 (7-9 techs)
+                    double timeProgress = Math.Clamp(startYear / 900.0, 0.0, 1.0);
+                    double baseTribal = 1.0 + timeProgress * 7.0; // 1 at yr 0, ~8 at yr 900
+                    double devBonus = (culture.MeanDevelopment - 8.0) * 0.2;
+                    targetCurrentCount = (int)Math.Round(baseTribal + devBonus + (rng.NextDouble() * 2.0 - 1.0));
+                    targetCurrentCount = Math.Clamp(targetCurrentCount, 1, currentEraPool.Count);
+                }
+                else
+                {
+                    // In a Medieval era: Scale by how far into the era's time window the bookmark is
+                    double eraDuration = Math.Max(1, currentMilestone.EndYear - currentMilestone.StartYear);
+                    double eraProgress = Math.Clamp((startYear - currentMilestone.StartYear) / eraDuration, 0.0, 1.0);
+
+                    double baseMedieval = 2.0 + eraProgress * 6.0; // 2 at era start, 8 near era end
+                    double devBonus = (culture.MeanDevelopment - 10.0) * 0.25;
+                    targetCurrentCount = (int)Math.Round(baseMedieval + devBonus + (rng.NextDouble() * 2.0 - 1.0));
+                    targetCurrentCount = Math.Clamp(targetCurrentCount, 1, currentEraPool.Count);
+                }
+
+                SampleWeightedInnovations(chosenByEra[currentMilestone.EraKey], currentEraPool, targetCurrentCount, culture, vocab, frequencies, rng);
+            }
+
+            // 3. Write History Output
+            var sb = new StringBuilder();
+            sb.Append($"# {culture.Name}, of the {culture.Heritage.Name} heritage (Mean Dev: {culture.MeanDevelopment:F1}).\n\n");
+
+            for (int i = 0; i <= currentEraIndex; i++)
+            {
+                var (eraKey, eraStart, _, dateStr) = eraMilestones[i];
+                var eraInns = chosenByEra[eraKey];
+
+                string blockDate = (i == currentEraIndex && startYear >= eraStart)
+                    ? cfg.StartDate
+                    : dateStr;
+
+                sb.Append($"{blockDate} = {{\n");
+
+                foreach (string inn in eraInns.OrderBy(k => k, StringComparer.Ordinal))
+                {
+                    sb.Append($"\tdiscover_innovation = {inn}\n");
+                }
+
+                // Promote to next era at the end of the completed era block
+                if (i < currentEraIndex)
+                {
+                    string nextEra = eraMilestones[i + 1].EraKey;
+                    sb.Append($"\tjoin_era = {nextEra}\n");
+                }
+
+                sb.Append("}\n\n");
+                totalAssigned += eraInns.Count;
+            }
+
             ParadoxText.WriteBom(Path.Combine(dir, $"{culture.Key}.txt"), sb.ToString());
         }
 
-        Console.WriteLine($"  culture history: {(double)total / cultures.Cultures.Count:F1} " +
-                          $"starting innovations per culture (vanilla averages 6.7)");
+        Console.WriteLine($"  culture history: {(double)totalAssigned / cultures.Cultures.Count:F1} " +
+                          $"starting innovations per culture across {currentEraIndex + 1} eras");
+    }
+
+    private static void SampleWeightedInnovations(
+        List<string> destination,
+        List<string> candidatePool,
+        int targetCount,
+        Culture culture,
+        VanillaVocabulary vocab,
+        Dictionary<string, double> frequencies,
+        Rng rng)
+    {
+        var weightedCandidates = new Dictionary<string, double>(StringComparer.Ordinal);
+
+        foreach (string key in candidatePool)
+        {
+            if (destination.Contains(key)) continue;
+
+            double baseWeight = frequencies.TryGetValue(key, out double freq) ? Math.Max(0.15, freq) : 0.35;
+
+            double ethosWeight = 1.0;
+            if (vocab.InnovationDefs.TryGetValue(key, out var def))
+            {
+                if (culture.Ethos == "ethos_bellicose" && def.Group == "culture_group_military") ethosWeight = 1.6;
+                else if (culture.Ethos is "ethos_bureaucratic" or "ethos_courtly" or "ethos_spiritual" && def.Group == "culture_group_civic") ethosWeight = 1.4;
+            }
+
+            weightedCandidates[key] = baseWeight * ethosWeight;
+        }
+
+        while (destination.Count < targetCount && weightedCandidates.Count > 0)
+        {
+            double totalWeight = weightedCandidates.Values.Sum();
+            if (totalWeight <= 0) break;
+
+            double roll = rng.NextDouble() * totalWeight;
+            double cumulative = 0.0;
+            string? selected = null;
+
+            foreach (var (key, weight) in weightedCandidates)
+            {
+                cumulative += weight;
+                if (roll <= cumulative)
+                {
+                    selected = key;
+                    break;
+                }
+            }
+
+            if (selected is not null)
+            {
+                destination.Add(selected);
+                weightedCandidates.Remove(selected);
+            }
+            else break;
+        }
+    }
+    private static int ParseStartYear(string startDate)
+    {
+        var m = Regex.Match(startDate, @"^\s*(\d+)");
+        return m.Success && int.TryParse(m.Groups[1].Value, out int year) ? year : 867;
     }
 
     /// <summary>

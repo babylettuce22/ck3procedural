@@ -176,9 +176,6 @@ public static class ContentWriter
         // copy into the mod; the game folder is never written to. See Emit/GuiWriter.cs.
         Core.Stage.Time("county view", () => GuiWriter.WriteAll(modDir, gameDir, cfg));
 
-        // The main menu renders live 3D portraits, which is the step right after history load.
-        Core.Stage.Time("frontend", () => FrontendWriter.WriteFrontend(modDir, gameDir));
-
         // Without these, vanilla's terrain painting is stretched across our continents.
         Core.Stage.Time("terrain textures", () => TerrainTextureWriter.WriteAll(modDir, cfg, terrain,
             classified.Climate, provinceElevation, rng));
@@ -199,18 +196,24 @@ public static class ContentWriter
         // StaticFileWriter, which copies the unscaled originals only where nothing generated one.
         Core.Stage.Time("map table", () => MapTableWriter.WriteAll(modDir, cfg));
 
-        // Give the world rulers and a start date. Skippable so a load failure can be bisected
-        // into "map and titles" versus "characters, dynasties and the bookmark".
         if (writeHistory)
         {
-            Core.Stage.Time("history and portraits", () =>
+            Core.Stage.Time("history and bookmarks", () =>
             {
-                HistoryWriter.WriteAll(modDir, cfg, empires, development, cultures, faiths, governments, wilderness);
+                var realms = Realms.Build(empires, development, wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17));
 
-                // Every bookmark and challenge character needs a portrait entry or the engine holds
-                // a null one.
-                PortraitWriter.WriteAll(modDir, gameDir,
-                    [HistoryWriter.BookmarkCharacter, HistoryWriter.ChallengeCharacter]);
+                // 1. Process bookmarks, highlight overlays, UI coordinates, and graphics
+                var bookmarkResult = BookmarkWriter.WriteAll(
+                    modDir, gameDir, cfg, provinces, order, empires,
+                    realms, development, cultures, faiths, governments, wilderness);
+
+                // 2. Write character records (linking bookmark DNA), dynasties, and title histories
+                HistoryWriter.WriteAll(
+                    modDir, cfg, empires, realms, development,
+                    cultures, faiths, governments, wilderness, bookmarkResult.BookmarkDnaMap);
+
+                // 3. Generate 3D portrait definitions for bookmark characters and in-game DNA
+                PortraitWriter.WriteAll(modDir, gameDir, bookmarkResult.PortraitRequests, cfg.Seed);
             });
         }
         else Console.WriteLine("  history: SKIPPED (--no-history)");

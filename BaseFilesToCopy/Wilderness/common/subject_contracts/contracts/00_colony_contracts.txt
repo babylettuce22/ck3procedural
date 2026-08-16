@@ -1,47 +1,72 @@
-﻿# What a colonist owes, and what it still costs the lord who sent him.
-#
-# ---- The obligation ----
-#
-# No tax, all levies. Settlers are armed — a frontier post is half a garrison by necessity — they
-# simply are not producing anything yet. A colony that paid its liege tax would contradict the one
-# rule the whole mechanic rests on, which is that a colony produces nothing until it stops being a
-# colony.
-#
-# ---- The liege_modifier, and why it is the important half of this file ----
-#
-# `settlement_01`'s upkeep sits on the holder. Grant the colony away and you stop paying it — so the
-# brake on hoarding colonies would vanish at exactly the moment granting became the obvious move,
-# and the cap would be left as the only limiter, which is a weak one.
-#
-# `liege_modifier` closes that. It is applied to the liege in the contract, one copy per colonist
-# vassal, maintained by the engine for the same reason the building malus is: nothing script writes
-# it and nothing has to reconcile it when a vassal dies, revolts or is taken in a war.
-#
-# It is deliberately a little cheaper than holding the colony yourself. Granting should be a relief;
-# it should not be free. What you are still paying for is the fact that a colony you sponsored is
-# still a colony, and it is still yours in every sense the map cares about.
-#
-# Only one obligation level, so there is nothing to negotiate and `display_mode = hidden` keeps it
-# out of a contract UI that would otherwise show a single unclickable row.
-
-colony_obligations = {
-	display_mode = hidden
+﻿colony_sponsorship = {
+	display_mode = tree
 
 	obligation_levels = {
-		settlers_obligations = {
-			# Armed, and not producing.
+		# --- Position 0: Neglected Outpost ---
+		colony_subsidy_neglected = {
+			position = { 0 0 }
+			flag = colony_subsidy_neglected
+
+			levies = 0.5
+			tax = 0
+
+			subject_modifier = {
+				development_growth_factor = -0.20
+				build_gold_cost = 0.20
+				monthly_county_control_growth_add = -0.15
+			}
+
+			subject_opinion = -15
+			score = -10
+
+			ai_liege_desire = 1
+			ai_subject_desire = 10
+		}
+
+		# --- Position 1: Standard Subsidy (Default) ---
+		colony_subsidy_standard = {
+			default = yes
+			parent = colony_subsidy_neglected
+			position = { 1 0 }
+
 			levies = 1.0
 			tax = 0
 
-			# The sponsor keeps paying. See the note above.
 			liege_modifier = {
 				monthly_income = -0.3
 			}
 
-			# He knows what he was given and roughly what it was worth.
 			subject_opinion = -5
-
 			score = 0
+
+			ai_liege_desire = 5
+			ai_subject_desire = 5
+		}
+
+		# --- Position 2: Heavy Crown Patronage ---
+		colony_subsidy_heavy = {
+			parent = colony_subsidy_standard
+			position = { 2 0 }
+			flag = colony_subsidy_heavy
+
+			levies = 1.0
+			tax = 0
+
+			liege_modifier = {
+				monthly_income = -0.75
+			}
+
+			subject_modifier = {
+				development_growth_factor = 0.25
+				build_gold_cost = -0.20
+				monthly_county_control_growth_add = 0.20
+			}
+
+			subject_opinion = 25
+			score = 10
+
+			ai_liege_desire = 10
+			ai_subject_desire = 1
 		}
 	}
 }

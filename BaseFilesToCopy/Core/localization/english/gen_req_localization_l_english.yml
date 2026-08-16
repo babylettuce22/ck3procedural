@@ -1,0 +1,6 @@
+﻿l_english:
+ gen_early_realm_stability:0 "A Stable Realm"
+ gen_early_realm_stability_desc:0 "This realm is in a period of internal alignment."
+
+  MOD_GITHUB_BUTTON_TEXT: "Check Mod Updates"
+ MOD_GITHUB_BUTTON_TOOLTIP: "View the latest releases, changelogs, and bugfixes on GitHub"

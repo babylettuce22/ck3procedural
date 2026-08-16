@@ -74,7 +74,7 @@ walls_01_tribal = {
 	asset = {
 		type = pdxmesh
 		names = {
-			"building_emishi_wall_01_mesh"
+			"tribal_walls_01_a_mesh"
 		}
 		requires_dlc_flag = north_pacific_attire
 		#Emishi GFX:

@@ -27,6 +27,7 @@ public sealed class Heritage
 /// </summary>
 public sealed class Culture
 {
+    public required double MeanDevelopment { get; init; }
     public required string Key { get; init; }
     public required string Name { get; init; }
     public required Heritage Heritage { get; init; }
@@ -386,6 +387,7 @@ public static class Cultures
             Key = $"gen_culture_{index}",
             Name = name,
             Heritage = heritage,
+            MeanDevelopment = meanDevelopment,
             Color = ((byte)rng.Int(30, 225), (byte)rng.Int(30, 225), (byte)rng.Int(30, 225)),
             Ethos = PickEthos(dominant, meanDevelopment, vocab, rng),
             MartialCustom = PickMartialCustom(vocab, rng),
@@ -432,6 +434,7 @@ public static class Cultures
             Key = UnsettledKey,
             Name = "Unsettled",
             Heritage = heritage,
+            MeanDevelopment = 0,
             Color = ((byte)108, (byte)104, (byte)96),
             Ethos = PickEthos(TerrainClass.Arctic, 0, vocab, rng),
             MartialCustom = PickMartialCustom(vocab, rng),
