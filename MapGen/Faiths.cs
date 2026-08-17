@@ -12,13 +12,15 @@ public sealed class HeadOfFaith
 
 public sealed class Faith
 {
+    /// <summary>Frozen. Every other file references a faith by this.</summary>
     public required string Key { get; init; }
-    public required string Name { get; init; }
-    public required Religion Religion { get; init; }
-    public required (double R, double G, double B) Color { get; init; }
-    public required string Icon { get; init; }
 
-    public required List<string> Tenets { get; init; }
+    public required string Name { get; set; }
+    public required Religion Religion { get; init; }
+    public required (double R, double G, double B) Color { get; set; }
+    public required string Icon { get; set; }
+
+    public required List<string> Tenets { get; set; }
 
     public List<Title> Counties { get; } = [];
     public List<(string Key, Title County)> HolySites { get; } = [];
@@ -32,8 +34,10 @@ public sealed class Faith
 /// <summary>A generated religion: a liturgical language, a doctrine baseline, and its faiths.</summary>
 public sealed class Religion
 {
+    /// <summary>Frozen, for the same reason a faith's is.</summary>
     public required string Key { get; init; }
-    public required string Name { get; init; }
+
+    public required string Name { get; set; }
 
     public required Language Language { get; init; }
     public required string GraphicalFaith { get; init; }

@@ -35,6 +35,19 @@ public sealed class ImageView : Control
     /// <summary>Fires on any view change and on mouse movement, for the status readout.</summary>
     public event Action<float, Point?>? ViewChanged;
 
+    /// <summary>
+    /// A click on a place, in image pixels — not a drag that happened to end.
+    ///
+    /// Left-drag pans, so a plain mouse-up cannot be a click on its own: without the movement test
+    /// below, every pan would select whatever it finished over. The threshold is in control pixels
+    /// so it is a physical distance regardless of zoom.
+    /// </summary>
+    public event Action<Point>? PixelClicked;
+
+    private const int ClickSlop = 3;
+    private Point _pressAt;
+    private bool _moved;
+
     public ImageView()
     {
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint
@@ -214,6 +227,8 @@ public sealed class ImageView : Control
         if (e.Button != MouseButtons.Left || _image is null) return;
         _dragging = true;
         _dragFrom = e.Location;
+        _pressAt = e.Location;
+        _moved = false;
         Cursor = Cursors.SizeAll;
     }
 
@@ -223,6 +238,9 @@ public sealed class ImageView : Control
 
         if (_dragging)
         {
+            if (Math.Abs(e.X - _pressAt.X) > ClickSlop || Math.Abs(e.Y - _pressAt.Y) > ClickSlop)
+                _moved = true;
+
             _origin.X += e.X - _dragFrom.X;
             _origin.Y += e.Y - _dragFrom.Y;
             _dragFrom = e.Location;
@@ -237,8 +255,17 @@ public sealed class ImageView : Control
     protected override void OnMouseUp(MouseEventArgs e)
     {
         base.OnMouseUp(e);
+
+        bool clicked = _dragging && !_moved && e.Button == MouseButtons.Left;
+
         _dragging = false;
         Cursor = Cursors.Default;
+
+        if (!clicked || _image is null) return;
+
+        var p = ToImage(e.Location);
+        if (p.X >= 0 && p.Y >= 0 && p.X < _image.Width && p.Y < _image.Height)
+            PixelClicked?.Invoke(new Point((int)p.X, (int)p.Y));
     }
 
     protected override void OnMouseLeave(EventArgs e)

@@ -27,6 +27,18 @@ internal static class Theme
     public static readonly Color AccentText = Color.FromArgb(255, 255, 255);
     public static readonly Color Danger = Color.FromArgb(200, 65, 55);
 
+    /// <summary>
+    /// A soft amber wash for the "there is something unsaved" bar.
+    ///
+    /// Deliberately not <see cref="Accent"/>: that blue already means "selected" on the view strip
+    /// and in the title tree, and a notice painted in it would read as another selected thing
+    /// rather than as a state the window is in.
+    /// </summary>
+    public static readonly Color Notice = Color.FromArgb(255, 247, 219);
+
+    public static readonly Color NoticeBorder = Color.FromArgb(230, 203, 122);
+    public static readonly Color NoticeText = Color.FromArgb(94, 71, 16);
+
     public static readonly Font Ui = new("Segoe UI", 9f);
     /// <summary>Consolas rather than anything newer: it is on every Windows install, and a font
     /// family that is not silently falls back to a proportional face, which is worse than plain.</summary>
@@ -119,6 +131,45 @@ internal static class Theme
             ForeColor = Text,
             Font = Ui,
         };
+
+    /// <summary>
+    /// A tab strip that matches the view buttons rather than the Windows default.
+    ///
+    /// <see cref="TabControl"/> is the fourth control that ignores BackColor: the strip is drawn by
+    /// the OS theme and comes out as a raised grey ridge regardless of what the palette says. Owner
+    /// drawing is the only way to get a flat tab, and once it is on, *both* states have to be
+    /// painted by hand — an unhandled DrawItem leaves the unselected tabs blank.
+    ///
+    /// Only the tab headers are owner-drawn. The page body is a normal container and takes its
+    /// BackColor like anything else.
+    /// </summary>
+    public static TabControl MakeTabs()
+    {
+        var tabs = new TabControl
+        {
+            Dock = DockStyle.Fill,
+            Font = Ui,
+            DrawMode = TabDrawMode.OwnerDrawFixed,
+            ItemSize = new Size(96, 26),
+            SizeMode = TabSizeMode.Fixed,
+            Padding = new Point(0, 0),
+        };
+
+        tabs.DrawItem += (_, e) =>
+        {
+            var page = tabs.TabPages[e.Index];
+            bool selected = e.Index == tabs.SelectedIndex;
+
+            using var back = new SolidBrush(selected ? Accent : SurfaceHigh);
+            e.Graphics.FillRectangle(back, e.Bounds);
+
+            TextRenderer.DrawText(e.Graphics, page.Text, Ui, e.Bounds,
+                selected ? AccentText : Text,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        };
+
+        return tabs;
+    }
 
     private sealed class LightColours : ProfessionalColorTable
     {

@@ -5,195 +5,38 @@ using Ck3MapGen.MapGen;
 
 namespace Ck3MapGen.Emit;
 
-/// <summary>
-/// Paints the terrain material textures — gfx/map/terrain/detail_index.tga and
-/// detail_intensity.tga — plus the colormap and flatmap.
-///
-/// Without these, vanilla's load. They are the right *size* at vanilla dimensions, so nothing
-/// errors; they simply carry vanilla's material painting and land Anatolian scrub and Alpine rock
-/// on wherever our continents happen to be.
-///
-/// Format, measured from vanilla rather than assumed:
-///   32-bit uncompressed TGA (image type 2), province resolution, descriptor 0x08 — 8 alpha bits
-///   and a **bottom-left origin**, so rows are stored bottom-up.
-///   Channels are stored B,G,R,A. Four material layers blend per pixel; layer 0 is the R channel,
-///   then G, then B, then A.
-///
-/// This used to paint one material per province, sampled at the province's seed cell, with the
-/// other three layers disabled. Measured against vanilla, that gave 7 distinct materials and a
-/// single layer on 100% of pixels, where vanilla blends 2-4 layers on 98.85% across ~101
-/// materials — and it meant one river pixel under a seed painted a whole county as floodplains.
-/// Terrain is now resolved per pixel (see <see cref="TerrainClassifier"/>) and blended by
-/// <see cref="TerrainPalette"/>.
-/// </summary>
 public static class TerrainTextureWriter
 {
-    /// <summary>
-    /// How far, in *vanilla* province pixels, a biome's materials bleed across its boundary into
-    /// the next. Scaled by <see cref="MapConfig.Scaled"/>, so the transition is the same fraction
-    /// of a continent at every map size — as a flat pixel count it was a third of a percent of the
-    /// map wide at vanilla and seven times that at tiny.
-    /// </summary>
-    private const int BlendReachAtVanilla = 110;
-
-    /// <summary>Orthogonal step cost in the chamfer distance transform; diagonal is 4.</summary>
-    private const int ChamferOrthogonal = 3;
-    private const int ChamferDiagonal = 4;
-
-    /// <summary>
-    /// What a pixel is painted from, packed into one byte: the terrain class in the low nibble and
-    /// the climate family in the high one.
-    ///
-    /// The two are packed together because the transition band below has to be drawn around
-    /// *either* changing. Once the climate picks the material family, two stretches of the same
-    /// terrain class in different climates are as different on the ground as two terrain classes
-    /// are — a plain running from mediterranean into central scrub swaps its whole palette — and a
-    /// band that only knew about terrain classes would leave that edge as a hard seam.
-    /// </summary>
-    private static byte Label(TerrainClass terrain, KoppenClass zone)
-        => (byte)((int)terrain | ((int)TerrainPalette.ClimateOf(zone) << 4));
-
-    private static TerrainClass TerrainOf(byte label) => (TerrainClass)(label & 0x0F);
-
-    private static TerrainPalette.Climate ClimateOf(byte label)
-        => (TerrainPalette.Climate)(label >> 4);
-
-    /// <summary>
-    /// For every pixel: the distance to the nearest ground of a *different* label, measured
-    /// without leaving its own, and which label that is.
-    ///
-    /// A two-pass chamfer transform, so it is linear in the pixel count rather than one dilation
-    /// pass per unit of reach — at a 110-pixel reach over a 42-million-pixel province map, dilation
-    /// would be some ten billion neighbour tests.
-    ///
-    /// Propagation is restricted to same-class neighbours on purpose. Letting it cross a boundary
-    /// would carry a label from the far side back into the region it came from, and a pixel would
-    /// end up blending toward its own class.
-    /// </summary>
-    private static (ushort[] Distance, byte[] Other) BoundaryField(
-        byte[] label, int width, int height)
-    {
-        int n = width * height;
-        var distance = new ushort[n];
-        var other = new byte[n];
-        const ushort Far = ushort.MaxValue;
-
-        Parallel.For(0, height, y =>
-        {
-            for (int x = 0; x < width; x++)
-            {
-                int i = y * width + x;
-                byte self = label[i];
-                distance[i] = Far;
-                other[i] = self;
-
-                for (int dy = -1; dy <= 1; dy++)
-                {
-                    int yy = y + dy;
-                    if (yy < 0 || yy >= height) continue;
-                    for (int dx = -1; dx <= 1; dx++)
-                    {
-                        int xx = x + dx;
-                        if (xx < 0 || xx >= width || (dx == 0 && dy == 0)) continue;
-
-                        byte neighbour = label[yy * width + xx];
-                        if (neighbour == self) continue;
-
-                        distance[i] = 0;
-                        other[i] = neighbour;
-                        dy = 2;
-                        break;
-                    }
-                }
-            }
-        });
-
-        // Forward scan, then backward. Sequential by nature — each pass depends on the one before.
-        for (int y = 0; y < height; y++)
-            for (int x = 0; x < width; x++)
-            {
-                int i = y * width + x;
-                if (distance[i] == 0) continue;
-                Relax(i, x - 1, y, ChamferOrthogonal);
-                Relax(i, x - 1, y - 1, ChamferDiagonal);
-                Relax(i, x, y - 1, ChamferOrthogonal);
-                Relax(i, x + 1, y - 1, ChamferDiagonal);
-            }
-
-        for (int y = height - 1; y >= 0; y--)
-            for (int x = width - 1; x >= 0; x--)
-            {
-                int i = y * width + x;
-                if (distance[i] == 0) continue;
-                Relax(i, x + 1, y, ChamferOrthogonal);
-                Relax(i, x + 1, y + 1, ChamferDiagonal);
-                Relax(i, x, y + 1, ChamferOrthogonal);
-                Relax(i, x - 1, y + 1, ChamferDiagonal);
-            }
-
-        return (distance, other);
-
-        void Relax(int target, int x, int y, int cost)
-        {
-            if (x < 0 || y < 0 || x >= width || y >= height) return;
-
-            int from = y * width + x;
-            if (label[from] != label[target] || distance[from] == Far) return;
-
-            int candidate = distance[from] + cost;
-            if (candidate >= distance[target]) return;
-
-            distance[target] = (ushort)candidate;
-            other[target] = other[from];
-        }
-    }
-
-    /// <summary>
-    /// Which materials the painting actually used. Indexed by material id; the mask writer needs
-    /// it so it can paint exactly those and blank everything else vanilla ships.
-    /// </summary>
     public static bool[] UsedMaterials { get; private set; } = new bool[256];
 
     public static void WriteAll(string modDir, MapConfig cfg, TerrainClass[] terrain,
-        KoppenClass[] climate, float[] provinceElevation, Rng rng)
+        KoppenClass[] climate, float[] elevation, Rng rng)
     {
         string dir = Path.Combine(modDir, "gfx", "map", "terrain");
         Directory.CreateDirectory(dir);
 
-        int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
+        int width = cfg.Width, height = cfg.Height;
+        int pWidth = cfg.ProvinceWidth, pHeight = cfg.ProvinceHeight;
         int sea = cfg.Limits.SeaLevelUpper;
         int mountains = cfg.Limits.Mountains.Lower;
 
-        // Three decorrelated fields. Using one noise for every choice makes the lowland variants
-        // switch together, which reads as banding rather than as texture.
         var nAField = new SimplexNoise(rng);
         var nBField = new SimplexNoise(rng);
         var nCField = new SimplexNoise(rng);
-        var bandField = new SimplexNoise(rng);
-        var interlockField = new SimplexNoise(rng);
-        var shareField = new SimplexNoise(rng);
+        var warpField = new SimplexNoise(rng);
+        var broadWarp = new SimplexNoise(rng);
 
-        // Referenced to vanilla's province map, so material patches are a fixed pixel size.
         const int reference = MapConfig.ReferenceProvinceWidth;
-        double fA = 55.0 / reference, fB = 130.0 / reference, fC = 300.0 / reference;
+        double fA = 45.0 / reference, fB = 110.0 / reference, fC = 260.0 / reference;
+        double fWarp = 20.0 / reference;
+        double fBroad = 6.0 / reference;
 
-        // The transition band, and the scale at which its edge wanders. Deliberately much coarser
-        // than the material noise: it decides where one biome fingers into the next, which happens
-        // over kilometres, not metres. The interlock frequency is the opposite end — fine enough to
-        // dither the last few pixels of the band so its outer edge is not a drawable contour.
-        float blendReach = BlendReachAtVanilla;
-        double bandFrequency = 170.0 / reference;
-        double interlockFrequency = fA * 4;
+        double scaleX = (double)pWidth / width;
+        double scaleY = (double)pHeight / height;
 
-        var label = new byte[terrain.Length];
-        Parallel.For(0, terrain.Length, i => label[i] = Label(terrain[i], climate[i]));
+        // Wide blend radius (~50-100 heightmap pixels) to guarantee smooth photographic transitions
+        double blendRadius = cfg.Scaled(52.0);
 
-        var (boundaryDistance, boundaryOther) = BoundaryField(label, width, height);
-
-        // Each map-sized buffer is 162 MB at vanilla resolution, so they are allocated, written and
-        // released one at a time. Holding index, intensity, colormap and flatmap simultaneously —
-        // 648 MB on top of the elevation and province rasters — was enough to end the process with
-        // an out-of-memory kill and no managed exception.
         var used = new bool[256];
         object gate = new();
 
@@ -203,30 +46,108 @@ public static class TerrainTextureWriter
 
             Parallel.For(0, height, () => new bool[256], (y, _, localUsed) =>
             {
-                // Bottom-left origin: the first row written is the bottom row of the image.
                 int srcY = height - 1 - y;
                 long row = (long)y * width * 4;
 
+                Span<byte> candidateMats = stackalloc byte[16];
+                Span<float> candidateWeights = stackalloc float[16];
+
+                ReadOnlySpan<float> probeWeights = [0.36f, 0.16f, 0.16f, 0.16f, 0.16f];
+                ReadOnlySpan<float> probeDx = [0f, 1f, -1f, 0f, 0f];
+                ReadOnlySpan<float> probeDy = [0f, 0f, 0f, 1f, -1f];
+
                 for (int x = 0; x < width; x++)
                 {
-                    var blend = BlendAt(x, srcY);
+                    long fullSrc = (long)srcY * width + x;
+                    double relief = (elevation[fullSrc] - sea) / (double)Math.Max(1, mountains - sea);
+
+                    // Multi-scale domain warping
+                    double qx = warpField.Noise2D(x * fWarp, srcY * fWarp) * 14.0
+                              + broadWarp.Noise2D(x * fBroad, srcY * fBroad) * 32.0;
+                    double qy = warpField.Noise2D(x * fWarp + 17.1, srcY * fWarp - 11.3) * 14.0
+                              + broadWarp.Noise2D(x * fBroad + 23.4, srcY * fBroad - 41.8) * 32.0;
+
+                    double wx = x + qx;
+                    double wy = srcY + qy;
+
+                    double nA = Math.Clamp(Field.Fbm(nAField, wx * fA, wy * fA, 3) * 0.5 + 0.5, 0, 1);
+                    double nB = Math.Clamp(Field.Fbm(nBField, wx * fB + 31.7, wy * fB - 19.3, 3) * 0.5 + 0.5, 0, 1);
+                    double nC = Math.Clamp(Field.Fbm(nCField, wx * fC - 11.2, wy * fC + 43.1, 2) * 0.5 + 0.5, 0, 1);
+
+                    int count = 0;
+
+                    // Wide 5-probe continuous stencil (Center + 4 cardinal probes at blend radius)
+                    for (int p = 0; p < 5; p++)
+                    {
+                        double px = wx + probeDx[p] * blendRadius;
+                        double py = wy + probeDy[p] * blendRadius;
+
+                        int sx = Math.Clamp((int)Math.Round(px * scaleX), 0, pWidth - 1);
+                        int sy = Math.Clamp((int)Math.Round(py * scaleY), 0, pHeight - 1);
+                        int pSrc = sy * pWidth + sx;
+
+                        var b = TerrainPalette.For(terrain[pSrc], TerrainPalette.ClimateOf(climate[pSrc]), relief, nA, nB, nC);
+                        AccumulateBlend(b, probeWeights[p], candidateMats, candidateWeights, ref count);
+                    }
+
+                    // Extract top 4 materials
+                    byte m0 = 0, m1 = 0, m2 = 0, m3 = 0;
+                    float cw0 = 0, cw1 = 0, cw2 = 0, cw3 = 0;
+
+                    for (int k = 0; k < 4; k++)
+                    {
+                        int bestIdx = -1;
+                        float bestW = 0;
+                        for (int i = 0; i < count; i++)
+                        {
+                            if (candidateWeights[i] > bestW)
+                            {
+                                bestW = candidateWeights[i];
+                                bestIdx = i;
+                            }
+                        }
+                        if (bestIdx < 0) break;
+
+                        byte mat = candidateMats[bestIdx];
+                        candidateWeights[bestIdx] = 0;
+
+                        if (k == 0) { m0 = mat; cw0 = bestW; }
+                        else if (k == 1) { m1 = mat; cw1 = bestW; }
+                        else if (k == 2) { m2 = mat; cw2 = bestW; }
+                        else if (k == 3) { m3 = mat; cw3 = bestW; }
+                    }
+
+                    if (m1 == 0) m1 = m0;
+                    if (m2 == 0) m2 = m0;
+                    if (m3 == 0) m3 = m0;
+
+                    // Normalize weights to 255 total intensity
+                    float total = cw0 + cw1 + cw2 + cw3;
+                    byte outW0 = 255, outW1 = 0, outW2 = 0, outW3 = 0;
+                    if (total > 0.001f)
+                    {
+                        float inv = 255f / total;
+                        outW0 = (byte)Math.Clamp((int)Math.Round(cw0 * inv), 0, 255);
+                        outW1 = (byte)Math.Clamp((int)Math.Round(cw1 * inv), 0, 255);
+                        outW2 = (byte)Math.Clamp((int)Math.Round(cw2 * inv), 0, 255);
+                        outW3 = (byte)Math.Clamp(255 - outW0 - outW1 - outW2, 0, 255);
+                    }
+
                     long o = row + x * 4;
+                    index[o + 2] = m0;
+                    index[o + 1] = m1;
+                    index[o + 0] = m2;
+                    index[o + 3] = m3;
 
-                    // B, G, R, A — layer 0 is R, then G, then B, then A.
-                    index[o + 2] = blend.M0;
-                    index[o + 1] = blend.M1;
-                    index[o + 0] = blend.M2;
-                    index[o + 3] = blend.M3;
+                    intensity[o + 2] = outW0;
+                    intensity[o + 1] = outW1;
+                    intensity[o + 0] = outW2;
+                    intensity[o + 3] = outW3;
 
-                    intensity[o + 2] = blend.W0;
-                    intensity[o + 1] = blend.W1;
-                    intensity[o + 0] = blend.W2;
-                    intensity[o + 3] = blend.W3;
-
-                    if (blend.W0 > 0) localUsed[blend.M0] = true;
-                    if (blend.W1 > 0) localUsed[blend.M1] = true;
-                    if (blend.W2 > 0) localUsed[blend.M2] = true;
-                    if (blend.W3 > 0) localUsed[blend.M3] = true;
+                    if (outW0 > 0) localUsed[m0] = true;
+                    if (outW1 > 0) localUsed[m1] = true;
+                    if (outW2 > 0) localUsed[m2] = true;
+                    if (outW3 > 0) localUsed[m3] = true;
                 }
                 return localUsed;
             }, localUsed => { lock (gate) for (int i = 0; i < 256; i++) if (localUsed[i]) used[i] = true; });
@@ -238,40 +159,59 @@ public static class TerrainTextureWriter
         used[TerrainPalette.Unused] = false;
         UsedMaterials = used;
 
-        int distinct = used.Count(u => u);
-        Console.WriteLine($"  terrain: detail_index + detail_intensity {width}x{height}, " +
-                          $"{distinct} materials blended");
+        Console.WriteLine($"  terrain: detail_index + detail_intensity {width}x{height}, wide-kernel splatting active");
 
-        // The DDS files are top-down, unlike the bottom-up TGAs above.
+        // Bilinear continuous colormap.dds
         {
             var colormap = new byte[(long)width * height * 4];
             Parallel.For(0, height, y =>
             {
                 long row = (long)y * width * 4;
+                double gy = y * scaleY;
+                int y0 = Math.Clamp((int)Math.Floor(gy), 0, pHeight - 1);
+                int y1 = Math.Clamp(y0 + 1, 0, pHeight - 1);
+                double fy = gy - y0;
+
                 for (int x = 0; x < width; x++)
                 {
-                    int src = y * width + x;
-                    double relief = (provinceElevation[src] - sea) / (double)Math.Max(1, mountains - sea);
+                    double gx = x * scaleX;
+                    int x0 = Math.Clamp((int)Math.Floor(gx), 0, pWidth - 1);
+                    int x1 = Math.Clamp(x0 + 1, 0, pWidth - 1);
+                    double fx = gx - x0;
+
+                    long fullSrc = (long)y * width + x;
+                    double relief = (elevation[fullSrc] - sea) / (double)Math.Max(1, mountains - sea);
                     double nC = Selector(nCField, x * fC - 7.3, y * fC + 29.4);
 
-                    var (r, g, b) = GroundColor(terrain[src], relief, nC);
+                    var c00 = GroundColor(terrain[y0 * pWidth + x0], relief, nC);
+                    var c10 = GroundColor(terrain[y0 * pWidth + x1], relief, nC);
+                    var c01 = GroundColor(terrain[y1 * pWidth + x0], relief, nC);
+                    var c11 = GroundColor(terrain[y1 * pWidth + x1], relief, nC);
+
+                    double r = (1 - fx) * (1 - fy) * c00.R + fx * (1 - fy) * c10.R + (1 - fx) * fy * c01.R + fx * fy * c11.R;
+                    double g = (1 - fx) * (1 - fy) * c00.G + fx * (1 - fy) * c10.G + (1 - fx) * fy * c01.G + fx * fy * c11.G;
+                    double b = (1 - fx) * (1 - fy) * c00.B + fx * (1 - fy) * c10.B + (1 - fx) * fy * c01.B + fx * fy * c11.B;
+
                     long o = row + x * 4;
-                    colormap[o] = b; colormap[o + 1] = g; colormap[o + 2] = r; colormap[o + 3] = 255;
+                    colormap[o] = (byte)Math.Clamp((int)Math.Round(b), 0, 255);
+                    colormap[o + 1] = (byte)Math.Clamp((int)Math.Round(g), 0, 255);
+                    colormap[o + 2] = (byte)Math.Clamp((int)Math.Round(r), 0, 255);
+                    colormap[o + 3] = 255;
                 }
             });
             DdsWriter.WriteBgra(Path.Combine(dir, "colormap.dds"), width, height, colormap);
         }
 
-        // Vanilla ships flatmap.dds and flatmap_tgp.dds; leaving either behind puts vanilla's
-        // papyrus Europe back on the zoomed-out map.
         {
             var flatmap = new byte[(long)width * height * 4];
             Parallel.For(0, height, y =>
             {
+                int py = Math.Clamp((int)((long)y * pHeight / height), 0, pHeight - 1);
                 long row = (long)y * width * 4;
                 for (int x = 0; x < width; x++)
                 {
-                    var (pr, pg, pb) = terrain[y * width + x] == TerrainClass.Sea
+                    int px = Math.Clamp((int)((long)x * pWidth / width), 0, pWidth - 1);
+                    var (pr, pg, pb) = terrain[py * pWidth + px] == TerrainClass.Sea
                         ? (172, 164, 138)
                         : (214, 195, 155);
                     long o = row + x * 4;
@@ -287,95 +227,40 @@ public static class TerrainTextureWriter
         }
 
         Console.WriteLine($"  terrain: colormap + flatmap {width}x{height}");
-        return;
-
-        TerrainPalette.Blend BlendAt(int x, int y)
-        {
-            int src = y * width + x;
-            double relief = (provinceElevation[src] - sea) / (double)Math.Max(1, mountains - sea);
-
-            double nA = Selector(nAField, x * fA, y * fA);
-            double nB = Selector(nBField, x * fB + 41.7, y * fB - 13.1);
-            double nC = Selector(nCField, x * fC - 7.3, y * fC + 29.4);
-
-            byte self = label[src];
-            var home = TerrainPalette.For(TerrainOf(self), ClimateOf(self), relief, nA, nB, nC);
-
-            // Distance from this pixel to the nearest ground of a different class, measured inside
-            // its own region, plus which class that is. A smooth function of a real distance is
-            // what makes a transition read as a gradient.
-            //
-            // This replaced a scheme that probed three fixed reaches along a warp direction and
-            // counted how many landed on a different class. Counting three probes yields four
-            // possible mix strengths, so every transition was a four-step staircase — which is most
-            // of why the boundaries looked splotchy — and the reach was a flat 30 pixels at every
-            // map size, which at vanilla's 9216-wide province map is a transition band three
-            // tenths of one percent of the map wide, i.e. invisible.
-            float edge = boundaryDistance[src] * (1f / ChamferOrthogonal);
-            if (edge >= blendReach) return home;
-
-            // Push the band in and out along its length so it is not a uniform ribbon. Several
-            // octaves rather than one: a single frequency displaces the edge in smooth lobes a few
-            // hundred pixels across, which is a shape the eye reads as a blotch. Stacked octaves
-            // give it fingers at every scale down to the material textures, which is what a biome
-            // boundary does on the ground.
-            double ragged = Field.Fbm(bandField, x * bandFrequency, y * bandFrequency, 4);
-            edge += (float)(ragged * blendReach * 0.35);
-
-            // And a fine dither on top, at texture scale. Without it the band still ends on a clean
-            // iso-line: the outermost pixels carry a small but uniform share of the neighbouring
-            // palette, so its materials all switch on together along one curve.
-            double interlock = Field.Fbm(interlockField, x * interlockFrequency, y * interlockFrequency, 2);
-            edge += (float)(interlock * blendReach * 0.14);
-
-            if (edge >= blendReach) return home;
-            if (edge < 0) edge = 0;
-
-            double t = 1.0 - edge / blendReach;
-            t = t * t * (3.0 - 2.0 * t);
-
-            // Half at the boundary itself, falling to nothing at the far edge of the band. Half is
-            // the ceiling on purpose: at an even split the two sides are symmetric, so the seam
-            // disappears rather than reversing across one pixel.
-            //
-            // The strength wobbles on its own field. Modulating it by nB — the same noise that
-            // picks the second lowland variant — tied how much of the neighbour showed through to
-            // which texture was under it, so the two changed along the same contours and reinforced
-            // each other into patches.
-            double share = 0.5 * t * (0.78 + 0.44 * shareField.Unit(x * fB - 88.2, y * fB + 5.6));
-
-            byte winner = boundaryOther[src];
-            var neighbour = TerrainPalette.For(TerrainOf(winner), ClimateOf(winner), relief,
-                nA, nB, nC);
-
-            return TerrainPalette.Merge(home, neighbour, share);
-        }
-
     }
 
-    /// <summary>
-    /// One of the fields the palette picks textures with, in 0..1.
-    ///
-    /// Several octaves rather than one, because the palette quantises these: a lowland variant is
-    /// chosen by which quarter of the range the value falls in, and an accent by a threshold. A
-    /// single octave of simplex noise has smooth, rounded contours, so a threshold on it cuts a
-    /// smooth, rounded patch — a dozen or so map-scale blobs of one texture, hard-edged against the
-    /// next. Folding in finer octaves leaves the same large-scale distribution but makes every
-    /// contour fractal, so the same switch reads as two textures interleaving at texture scale.
-    /// </summary>
-    /// <remarks>
-    /// The 1.5 restores the spread. Averaging three independent octaves shrinks the standard
-    /// deviation to about two thirds of one octave's, and these values are read against fixed
-    /// thresholds — so left alone it would quietly stop reaching the buckets at the ends of the
-    /// range and drop the outer lowland variants and the rarer accents off the map entirely.
-    /// </remarks>
+    private static void AccumulateBlend(TerrainPalette.Blend b, float factor,
+        Span<byte> candidateMats, Span<float> candidateWeights, ref int count)
+    {
+        AccumulateLayer(b.M0, b.W0 * factor, candidateMats, candidateWeights, ref count);
+        AccumulateLayer(b.M1, b.W1 * factor, candidateMats, candidateWeights, ref count);
+        AccumulateLayer(b.M2, b.W2 * factor, candidateMats, candidateWeights, ref count);
+        AccumulateLayer(b.M3, b.W3 * factor, candidateMats, candidateWeights, ref count);
+    }
+
+    private static void AccumulateLayer(byte mat, float w,
+        Span<byte> candidateMats, Span<float> candidateWeights, ref int count)
+    {
+        if (mat == TerrainPalette.Unused || w <= 0.01f) return;
+        for (int i = 0; i < count; i++)
+        {
+            if (candidateMats[i] == mat)
+            {
+                candidateWeights[i] += w;
+                return;
+            }
+        }
+        if (count < 16)
+        {
+            candidateMats[count] = mat;
+            candidateWeights[count] = w;
+            count++;
+        }
+    }
+
     private static double Selector(SimplexNoise field, double x, double y)
         => Math.Clamp(Field.Fbm(field, x, y, 3) * 0.75 + 0.5, 0, 1);
 
-    /// <summary>
-    /// Ground tint per terrain class, nudged by relief and noise so the colormap is not flat
-    /// inside a class — it is what the terrain reads as before the detail materials resolve.
-    /// </summary>
     private static (byte R, byte G, byte B) GroundColor(TerrainClass t, double relief, double n)
     {
         var (r, g, b) = t switch
@@ -399,27 +284,24 @@ public static class TerrainTextureWriter
             _ => (94, 112, 62),
         };
 
-        // Slight darkening with altitude and a little per-pixel variation.
         double shade = 1.0 - Math.Clamp(relief, 0, 1) * 0.12 + (n - 0.5) * 0.08;
         return ((byte)Math.Clamp(r * shade, 0, 255),
                 (byte)Math.Clamp(g * shade, 0, 255),
                 (byte)Math.Clamp(b * shade, 0, 255));
     }
 
-    /// <summary>Uncompressed 32-bit TGA, bottom-left origin, matching vanilla byte for byte.</summary>
     private static void WriteTga(string path, int width, int height, byte[] bgra)
     {
         var header = new byte[18];
-        header[2] = 2;                          // uncompressed true-colour
+        header[2] = 2;
         header[12] = (byte)(width & 0xFF);
         header[13] = (byte)(width >> 8);
         header[14] = (byte)(height & 0xFF);
         header[15] = (byte)(height >> 8);
-        header[16] = 32;                        // bits per pixel
-        header[17] = 0x08;                      // 8 alpha bits, bottom-left origin
+        header[16] = 32;
+        header[17] = 0x08;
 
-        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None,
-            1 << 20);
+        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 20);
         stream.Write(header);
         stream.Write(bgra);
     }

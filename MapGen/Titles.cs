@@ -708,6 +708,20 @@ public static class Titles
         }
     }
 
+    /// <summary>
+    /// Re-derives every descendant's colour from this title's current one, exactly as generation
+    /// would have.
+    ///
+    /// The generated palette is hierarchical — a duchy's counties are shades of the duchy, spread
+    /// within a tolerance that narrows with each tier — so a hand-picked colour leaves its children
+    /// as shades of a colour that is no longer there. This puts them back in step.
+    ///
+    /// Deliberately not automatic on every edit: it discards any hand-picked colour below the
+    /// title it is called on, which is not something a recolour should do without being asked.
+    /// </summary>
+    public static void RecolorChildren(Title parent, Rng rng)
+        => DistributeChildren(parent, Hsl.FromRgb(parent.Color), rng);
+
     private static void AssignColors(List<Title> empires, Rng rng)
     {
         if (empires.Count == 0) return;
@@ -727,44 +741,50 @@ public static class Titles
 
             DistributeChildren(empires[i], empireHsl, rng);
         }
+    }
 
-        void DistributeChildren(Title parent, Hsl parentHsl, Rng rng)
+    /// <summary>
+    /// Spreads a parent's colour over its children and down the tree.
+    ///
+    /// A static method rather than a local function inside <see cref="AssignColors"/> because
+    /// <see cref="RecolorChildren"/> re-runs it against a hand-picked colour long afterwards.
+    /// </summary>
+    private static void DistributeChildren(Title parent, Hsl parentHsl, Rng rng)
+    {
+        int count = parent.Children.Count;
+        if (count == 0) return;
+
+        // Define variation tolerances based on hierarchy depth
+        var (maxHueShift, maxLitShift, maxSatShift) = parent.Tier switch
         {
-            int count = parent.Children.Count;
-            if (count == 0) return;
+            "e" => (28f, 0.14f, 0.12f), // Kingdoms under Empire
+            "k" => (16f, 0.11f, 0.10f), // Duchies under Kingdom
+            "d" => (8f, 0.07f, 0.06f),  // Counties under Duchy
+            _ => (2f, 0.03f, 0.03f),  // Baronies under County
+        };
 
-            // Define variation tolerances based on hierarchy depth
-            var (maxHueShift, maxLitShift, maxSatShift) = parent.Tier switch
-            {
-                "e" => (28f, 0.14f, 0.12f), // Kingdoms under Empire
-                "k" => (16f, 0.11f, 0.10f), // Duchies under Kingdom
-                "d" => (8f, 0.07f, 0.06f),  // Counties under Duchy
-                _ => (2f, 0.03f, 0.03f),  // Baronies under County
-            };
+        // Stratify sibling colors to prevent two neighboring siblings getting the same shade
+        for (int i = 0; i < count; i++)
+        {
+            var child = parent.Children[i];
 
-            // Stratify sibling colors to prevent two neighboring siblings getting the same shade
-            for (int i = 0; i < count; i++)
-            {
-                var child = parent.Children[i];
+            // Spread sibling hues evenly within [-maxHueShift, +maxHueShift]
+            float t = count == 1 ? 0f : (float)i / (count - 1) * 2f - 1f; // [-1.0 .. +1.0]
+            float hueDelta = t * maxHueShift + rng.Float(-3f, 3f);
 
-                // Spread sibling hues evenly within [-maxHueShift, +maxHueShift]
-                float t = count == 1 ? 0f : (float)i / (count - 1) * 2f - 1f; // [-1.0 .. +1.0]
-                float hueDelta = t * maxHueShift + rng.Float(-3f, 3f);
+            // Alternate lightness so neighboring titles alternate lighter / darker
+            float litDirection = (i % 2 == 0) ? 1f : -1f;
+            float litDelta = litDirection * rng.Float(0.04f, maxLitShift);
+            float satDelta = (i % 3 == 0 ? 1f : -1f) * rng.Float(0.02f, maxSatShift);
 
-                // Alternate lightness so neighboring titles alternate lighter / darker
-                float litDirection = (i % 2 == 0) ? 1f : -1f;
-                float litDelta = litDirection * rng.Float(0.04f, maxLitShift);
-                float satDelta = (i % 3 == 0 ? 1f : -1f) * rng.Float(0.02f, maxSatShift);
+            var childHsl = new Hsl(
+                parentHsl.H + hueDelta,
+                parentHsl.S + satDelta,
+                parentHsl.L + litDelta
+            );
 
-                var childHsl = new Hsl(
-                    parentHsl.H + hueDelta,
-                    parentHsl.S + satDelta,
-                    parentHsl.L + litDelta
-                );
-
-                child.Color = childHsl.ToRgb();
-                DistributeChildren(child, childHsl, rng);
-            }
+            child.Color = childHsl.ToRgb();
+            DistributeChildren(child, childHsl, rng);
         }
     }
 
@@ -782,6 +802,33 @@ public static class Titles
             H = ((h % 360f) + 360f) % 360f;
             S = Math.Clamp(s, 0.25f, 0.90f);
             L = Math.Clamp(l, 0.22f, 0.78f);
+        }
+
+        /// <summary>
+        /// The inverse of <see cref="ToRgb"/>, for re-deriving children from a hand-picked colour.
+        ///
+        /// Not an exact round trip: the constructor clamps saturation and lightness into the band
+        /// the generated palette lives in, so a colour picked at the extremes comes back pulled
+        /// toward that band. That is the wanted behaviour here — the children should sit in the
+        /// same range as every other title on the map, whatever the parent was set to.
+        /// </summary>
+        public static Hsl FromRgb((byte R, byte G, byte B) rgb)
+        {
+            float r = rgb.R / 255f, g = rgb.G / 255f, b = rgb.B / 255f;
+            float max = Math.Max(r, Math.Max(g, b));
+            float min = Math.Min(r, Math.Min(g, b));
+            float l = (max + min) / 2f;
+
+            if (Math.Abs(max - min) < 1e-6f) return new Hsl(0f, 0f, l);
+
+            float d = max - min;
+            float s = l > 0.5f ? d / (2f - max - min) : d / (max + min);
+
+            float h = max == r ? (g - b) / d + (g < b ? 6f : 0f)
+                    : max == g ? (b - r) / d + 2f
+                    : (r - g) / d + 4f;
+
+            return new Hsl(h * 60f, s, l);
         }
 
         public (byte R, byte G, byte B) ToRgb()
@@ -832,6 +879,39 @@ public static class Titles
     /// world. Drawing from the local culture's own phonology means the map's names carry the same
     /// information its colours do.
     /// </summary>
+    /// <summary>
+    /// One name for one title, in the language of whoever lives there.
+    ///
+    /// Public because the title editor rerolls a single name with it long after
+    /// <see cref="AssignNames"/> has run. Kept as the one definition of what each tier sounds like:
+    /// a second copy in the editor would drift, and a rerolled name that no longer matched the
+    /// naming of its neighbours is precisely the thing the editor exists to avoid.
+    /// </summary>
+    public static string GenerateName(Title title, CultureMap cultures, Rng rng)
+    {
+        var language = cultures.For(title).Language;
+
+        if (title.Tier == "e")
+            return language.CompoundName(rng); // Empires always get grand compound names
+
+        if (title.Tier == "k")
+        {
+            // Kingdoms are 50/50: either a compound name or an affixed place name
+            return rng.Chance(0.5)
+                ? language.CompoundName(rng)
+                : language.PlaceName(rng, language.KingdomAffixes);
+        }
+
+        var affixes = title.Tier switch
+        {
+            "d" => language.DuchyAffixes,
+            "c" => language.CountyAffixes,
+            _ => language.BaronyAffixes,
+        };
+
+        return language.PlaceName(rng, affixes);
+    }
+
     public static void AssignNames(List<Title> roots, CultureMap cultures, Rng rng)
     {
         var usedKeys = new HashSet<string>(StringComparer.Ordinal);
@@ -839,31 +919,9 @@ public static class Titles
 
         void Visit(Title title)
         {
-            var language = cultures.For(title).Language;
-
-            // Local function to generate names dynamically based on tier
-            string GenerateName()
-            {
-                if (title.Tier == "e")
-                    return language.CompoundName(rng); // Empires always get grand compound names
-
-                if (title.Tier == "k")
-                {
-                    // Kingdoms are 50/50: either a compound name or an affixed place name
-                    return rng.Chance(0.5)
-                        ? language.CompoundName(rng)
-                        : language.PlaceName(rng, language.KingdomAffixes);
-                }
-
-                var affixes = title.Tier switch
-                {
-                    "d" => language.DuchyAffixes,
-                    "c" => language.CountyAffixes,
-                    _ => language.BaronyAffixes,
-                };
-
-                return language.PlaceName(rng, affixes);
-            }
+            // Qualified: an unqualified call would bind to this local function rather than to the
+            // static above it, and recurse until the stack ran out.
+            string GenerateName() => Titles.GenerateName(title, cultures, rng);
 
             string name = GenerateName();
             string key = $"{title.Tier}_gen_{CleanKey(name)}_{title.Index}";

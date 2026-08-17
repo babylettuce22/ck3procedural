@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
@@ -126,7 +126,11 @@ public static class ReligionWriter
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_religions.txt"), sb.ToString());
     }
 
-    private static void WriteLocalisation(string modDir, FaithMap faiths)
+    /// <summary>
+    /// Not private: holy site names read <c>county.Name</c> off the live title, so renaming a
+    /// county after the write means re-running exactly this. See <see cref="WorldOverwrite"/>.
+    /// </summary>
+    internal static void WriteLocalisation(string modDir, FaithMap faiths)
     {
         string dir = Path.Combine(modDir, "localization", "english");
         Directory.CreateDirectory(dir);
@@ -175,7 +179,7 @@ public static class ReligionWriter
 
         var sb = new StringBuilder();
         sb.Append("l_english:\n");
-        foreach (var (key, value) in entries) sb.Append($" {key}:0 \"{value}\"\n");
+        foreach (var (key, value) in entries) sb.Append($" {key}:0 \"{ParadoxText.Loc(value)}\"\n");
 
         ParadoxText.WriteBom(Path.Combine(dir, "gen_faiths_l_english.yml"), sb.ToString());
     }

@@ -81,7 +81,11 @@ public static class CultureWriter
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_pillars.txt"), sb.ToString());
     }
 
-    private static void WriteCultures(string modDir, CultureMap cultures)
+    /// <summary>
+    /// Not private: a culture's name, colour, ethos and traditions all live in this file, so
+    /// editing one after the mod is written re-runs exactly this. See <see cref="WorldOverwrite"/>.
+    /// </summary>
+    internal static void WriteCultures(string modDir, CultureMap cultures)
     {
         string dir = Path.Combine(modDir, "common", "culture", "cultures");
         Directory.CreateDirectory(dir);
@@ -445,7 +449,8 @@ public static class CultureWriter
     /// short word both want the same displayed text, so the key is emitted once and they share it —
     /// which is what vanilla does too, where several cultures list the same given name.
     /// </summary>
-    private static void WriteLocalisation(string modDir, CultureMap cultures)
+    /// <inheritdoc cref="WriteCultures"/>
+    internal static void WriteLocalisation(string modDir, CultureMap cultures)
     {
         string dir = Path.Combine(modDir, "localization", "english");
         Directory.CreateDirectory(dir);

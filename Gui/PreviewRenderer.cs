@@ -8,6 +8,18 @@ public static class PreviewRenderer
     public readonly record struct Image(byte[] Rgb, int Width, int Height);
     private const int MaxWidth = 2048;
 
+    /// <summary>
+    /// How many source pixels one rendered pixel covers, for mapping a click on the preview back to
+    /// a place on the map.
+    ///
+    /// The renders are downsampled, so a click has to be multiplied back up before it means
+    /// anything to <see cref="ProvinceMap.Label"/>. Ranked views additionally pick the most
+    /// interesting pixel in each block rather than its top-left one, which means a click within a
+    /// step of a border can land on the neighbour — immaterial against a step of about four at
+    /// vanilla size, and the alternative is keeping a full-resolution index of forty million ints.
+    /// </summary>
+    public static int StepFor(int width) => Math.Max(1, (width + MaxWidth - 1) / MaxWidth);
+
     public static Image RenderTerrain(GenerationResult result)
     {
         var cfg = result.Config;
@@ -155,6 +167,206 @@ public static class PreviewRenderer
                 return t >= 0 && Edge(i, t) ? 1 : 0;
             });
     }
+
+    /// <summary>
+    /// Who actually holds what at the bookmark date, as opposed to who holds it de jure.
+    ///
+    /// The de jure views above are the map CK3 draws its borders from; this is the map a player
+    /// sees on the first day. They are routinely nothing alike — a de jure kingdom is normally
+    /// several independent realms, and a strong emperor's realm sprawls across kingdoms that are
+    /// not his — and telling them apart is most of what makes a generated start date readable.
+    ///
+    /// Each county takes the colour of its ultimate liege's primary title, so an emperor's whole
+    /// realm reads in the empire's own colour and the two maps share a palette. That is the reason
+    /// for borrowing the de jure colours rather than generating contrasting ones: flipping between
+    /// the two views should let you see which crowns actually got realised.
+    ///
+    /// Needs a realm map, which only exists if the mod was written with history. Falls back to the
+    /// de jure county view rather than failing, so the button is never dead.
+    /// </summary>
+    public static Image RenderRealms(GenerationResult result, MapGen.RealmMap? realms,
+        MapGen.WildernessMap? wilderness)
+    {
+        if (realms is null) return RenderTitles(result, "c");
+
+        var map = result.Provinces;
+        var order = result.ProvinceOrder;
+        int width = map.Width, height = map.Height;
+        int baronyCount = result.BaronyCount, landCount = result.LandCount;
+
+        var counties = Titles.Flatten(result.Titles).Where(t => t.Tier == "c").ToList();
+
+        // The highest-ranked title each holder holds, built once. HistoryWriter.Primary answers the
+        // same question by scanning the whole realm map, which is fine for one county and quadratic
+        // across every county on the map.
+        var primaryOf = new Dictionary<Title, Title>();
+        foreach (var (title, holder) in realms.HolderCounty)
+        {
+            if (!primaryOf.TryGetValue(holder, out var best)
+                || Emit.HistoryWriter.Rank(title) > Emit.HistoryWriter.Rank(best))
+                primaryOf[holder] = title;
+        }
+
+        // Colour per county: walk from its holder up the liege chain to whoever is independent.
+        var colour = new (byte R, byte G, byte B)[counties.Count];
+        var wild = new bool[counties.Count];
+
+        for (int c = 0; c < counties.Count; c++)
+        {
+            var county = counties[c];
+
+            if (wilderness?.Contains(county) == true) { wild[c] = true; continue; }
+
+            var holder = realms.HolderCounty.GetValueOrDefault(county, county);
+            var top = primaryOf.GetValueOrDefault(holder, county);
+
+            while (realms.Liege.TryGetValue(top, out var liege)) top = liege;
+
+            colour[c] = top.Color;
+        }
+
+        var countyOf = new int[baronyCount + 1];
+        Array.Fill(countyOf, NoCounty);
+        for (int c = 0; c < counties.Count; c++)
+            foreach (var barony in counties[c].Children)
+                if (barony.ProvinceId >= 1 && barony.ProvinceId <= baronyCount)
+                    countyOf[barony.ProvinceId] = c;
+
+        int At(int i)
+        {
+            int id = order[map.Label[i]];
+            return id <= baronyCount ? countyOf[id] : id <= landCount ? Impassable : Water;
+        }
+
+        // Borders between *realms*, not between counties: two counties of the same realm are one
+        // block of colour, which is what makes the political shape legible.
+        bool Edge(int i, int county)
+        {
+            int x = i % width, y = i / width;
+            return (x + 1 < width && Differs(At(i + 1), county))
+                || (y + 1 < height && Differs(At(i + width), county));
+
+            bool Differs(int other, int here)
+            {
+                if (other == here) return false;
+                if (other < 0 || here < 0) return true;
+                return wild[other] != wild[here] || colour[other] != colour[here];
+            }
+        }
+
+        return Downsample(width, height,
+            i =>
+            {
+                int c = At(i);
+                if (c == Water) return ((byte)38, (byte)62, (byte)96);
+                if (c == Impassable) return ((byte)92, (byte)92, (byte)100);
+                if (c == NoCounty) return ((byte)255, (byte)0, (byte)255);
+
+                if (Edge(i, c)) return ((byte)22, (byte)24, (byte)28);
+                return wild[c] ? ((byte)168, (byte)120, (byte)48) : colour[c];
+            },
+            i =>
+            {
+                int c = At(i);
+                return c >= 0 && Edge(i, c) ? 1 : 0;
+            });
+    }
+
+    /// <summary>
+    /// Land coloured by whatever a county belongs to — its culture, its faith — with borders drawn
+    /// between the regions rather than between counties.
+    ///
+    /// Shared by the culture and faith views because the two differ only in the lookup: both paint
+    /// per county, both want a block of one colour where neighbours agree, and both need the same
+    /// wilderness and water handling. <paramref name="colourOf"/> returning null means the county
+    /// has no such thing, which is what unsettled land is.
+    /// </summary>
+    private static Image RenderByCounty(GenerationResult result, MapGen.WildernessMap? wilderness,
+        Func<Title, (byte R, byte G, byte B)?> colourOf)
+    {
+        var map = result.Provinces;
+        var order = result.ProvinceOrder;
+        int width = map.Width, height = map.Height;
+        int baronyCount = result.BaronyCount, landCount = result.LandCount;
+
+        var counties = Titles.Flatten(result.Titles).Where(t => t.Tier == "c").ToList();
+
+        var colour = new (byte R, byte G, byte B)[counties.Count];
+        var wild = new bool[counties.Count];
+
+        for (int c = 0; c < counties.Count; c++)
+        {
+            if (wilderness?.Contains(counties[c]) == true) { wild[c] = true; continue; }
+
+            if (colourOf(counties[c]) is { } found) colour[c] = found;
+            else wild[c] = true;
+        }
+
+        var countyOf = new int[baronyCount + 1];
+        Array.Fill(countyOf, NoCounty);
+        for (int c = 0; c < counties.Count; c++)
+            foreach (var barony in counties[c].Children)
+                if (barony.ProvinceId >= 1 && barony.ProvinceId <= baronyCount)
+                    countyOf[barony.ProvinceId] = c;
+
+        int At(int i)
+        {
+            int id = order[map.Label[i]];
+            return id <= baronyCount ? countyOf[id] : id <= landCount ? Impassable : Water;
+        }
+
+        bool Edge(int i, int county)
+        {
+            int x = i % width, y = i / width;
+            return (x + 1 < width && Differs(At(i + 1), county))
+                || (y + 1 < height && Differs(At(i + width), county));
+
+            bool Differs(int other, int here)
+            {
+                if (other == here) return false;
+                if (other < 0 || here < 0) return true;
+                return wild[other] != wild[here] || colour[other] != colour[here];
+            }
+        }
+
+        return Downsample(width, height,
+            i =>
+            {
+                int c = At(i);
+                if (c == Water) return ((byte)38, (byte)62, (byte)96);
+                if (c == Impassable) return ((byte)92, (byte)92, (byte)100);
+                if (c == NoCounty) return ((byte)255, (byte)0, (byte)255);
+
+                if (Edge(i, c)) return ((byte)22, (byte)24, (byte)28);
+                return wild[c] ? ((byte)168, (byte)120, (byte)48) : colour[c];
+            },
+            i =>
+            {
+                int c = At(i);
+                return c >= 0 && Edge(i, c) ? 1 : 0;
+            });
+    }
+
+    /// <summary>Who lives where. Falls back to the county view before a write, when no culture
+    /// map exists yet.</summary>
+    public static Image RenderCultures(GenerationResult result, MapGen.CultureMap? cultures,
+        MapGen.WildernessMap? wilderness)
+        => cultures is null
+            ? RenderTitles(result, "c")
+            : RenderByCounty(result, wilderness,
+                county => cultures.ByCounty.TryGetValue(county, out var c) ? c.Color : null);
+
+    /// <summary>What they believe. Faith colours are stored as the 0..1 triple CK3 script uses.</summary>
+    public static Image RenderFaiths(GenerationResult result, MapGen.FaithMap? faiths,
+        MapGen.WildernessMap? wilderness)
+        => faiths is null
+            ? RenderTitles(result, "c")
+            : RenderByCounty(result, wilderness, county =>
+                faiths.ByCounty.TryGetValue(county, out var f)
+                    ? ((byte)Math.Clamp(f.Color.R * 255, 0, 255),
+                       (byte)Math.Clamp(f.Color.G * 255, 0, 255),
+                       (byte)Math.Clamp(f.Color.B * 255, 0, 255))
+                    : null);
 
     public static Image RenderCounties(GenerationResult result) => RenderTitles(result, "c");
     public static Image RenderDuchies(GenerationResult result) => RenderTitles(result, "d");

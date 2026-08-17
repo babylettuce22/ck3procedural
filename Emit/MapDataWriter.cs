@@ -211,7 +211,10 @@ public static class MapDataWriter
         for (int id = 1; id <= provinces.Count; id++)
         {
             var (r, g, b) = ProvinceColor(id);
-            string name = provinces.Seeds[byId[id]].IsLand ? $"prov_{id}" : $"sea_{id}";
+            var seed = provinces.Seeds[byId[id]];
+            string name = seed.IsLand ? $"prov_{id}"
+                        : seed.IsMajorRiver ? $"river_{id}"
+                        : $"sea_{id}";
             sb.Append($"{id};{r};{g};{b};{name};x;\n");
         }
         ParadoxText.WriteNoBom(path, sb.ToString());

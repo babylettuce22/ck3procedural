@@ -162,27 +162,98 @@ public sealed class MainForm : Form
     /// a vanilla-size map is seven renders of 42 million pixels each and only one of them is ever
     /// on screen, so building all seven per click paid for six nobody looked at.
     /// </summary>
-    private static readonly (string Name, Func<GenerationResult, PreviewRenderer.Image> Render)[] Views =
+    /// <param name="Render">
+    /// Takes the write's capture as well as the run, because the landed-realm view is drawn from
+    /// something only a write produces. Null for every other view, and for Realms before a write.
+    /// </param>
+    private static readonly (string Name,
+        Func<GenerationResult, Emit.WrittenContent?, PreviewRenderer.Image> Render)[] Views =
         [
-        ("Relief", PreviewRenderer.RenderRelief),
-        ("Heightmap", PreviewRenderer.RenderHeightmap),
-        ("Terrain", PreviewRenderer.RenderTerrain),
-        ("Climate", PreviewRenderer.RenderClimate),
-        ("Drainage", PreviewRenderer.RenderDrainage),
-        ("Rivers", PreviewRenderer.RenderRivers),
-        ("Provinces", PreviewRenderer.RenderProvinces),
-        ("Counties", PreviewRenderer.RenderCounties),
-        ("Duchies", PreviewRenderer.RenderDuchies),
-        ("Kingdoms", PreviewRenderer.RenderKingdoms),
-        ("Empires", PreviewRenderer.RenderEmpires),
-        ("Government", PreviewRenderer.RenderGovernment),
-        ("Wilderness", PreviewRenderer.RenderWilderness),
+        ("Relief", (r, _) => PreviewRenderer.RenderRelief(r)),
+        ("Heightmap", (r, _) => PreviewRenderer.RenderHeightmap(r)),
+        ("Terrain", (r, _) => PreviewRenderer.RenderTerrain(r)),
+        ("Climate", (r, _) => PreviewRenderer.RenderClimate(r)),
+        ("Drainage", (r, _) => PreviewRenderer.RenderDrainage(r)),
+        ("Rivers", (r, _) => PreviewRenderer.RenderRivers(r)),
+        ("Provinces", (r, _) => PreviewRenderer.RenderProvinces(r)),
+        ("Counties", (r, _) => PreviewRenderer.RenderCounties(r)),
+        ("Duchies", (r, _) => PreviewRenderer.RenderDuchies(r)),
+        ("Kingdoms", (r, _) => PreviewRenderer.RenderKingdoms(r)),
+        ("Empires", (r, _) => PreviewRenderer.RenderEmpires(r)),
+        ("Realms", (r, w) => PreviewRenderer.RenderRealms(r, w?.Realms, w?.Wilderness)),
+        ("Cultures", (r, w) => PreviewRenderer.RenderCultures(r, w?.Cultures, w?.Wilderness)),
+        ("Faiths", (r, w) => PreviewRenderer.RenderFaiths(r, w?.Faiths, w?.Wilderness)),
+        ("Government", (r, _) => PreviewRenderer.RenderGovernment(r)),
+        ("Wilderness", (r, _) => PreviewRenderer.RenderWilderness(r)),
     ];
+
+    /// <summary>What clicking a view selects.</summary>
+    private enum Pick { Title, Culture, Faith }
+
+    /// <summary>
+    /// The views a click selects something on, and the ones an edit can make stale.
+    ///
+    /// Every one paints land by a colour that is editable, so its cached render has to be dropped
+    /// when that colour moves. The tier is the one the view draws — clicking the Duchies map picks
+    /// a duchy — and is the county for anything looked up per county.
+    /// </summary>
+    private static readonly Dictionary<string, (Pick Kind, string Tier)> ClickableViews = new()
+    {
+        ["Counties"] = (Pick.Title, "c"),
+        ["Duchies"] = (Pick.Title, "d"),
+        ["Kingdoms"] = (Pick.Title, "k"),
+        ["Empires"] = (Pick.Title, "e"),
+        ["Realms"] = (Pick.Title, "c"),
+        ["Cultures"] = (Pick.Culture, "c"),
+        ["Faiths"] = (Pick.Faith, "c"),
+    };
+
+    /// <summary>Whether an edit of this kind changes what a view paints.</summary>
+    private static bool Repaints(Pick kind, Emit.WorldAspect touched) => kind switch
+    {
+        Pick.Title => touched.HasFlag(Emit.WorldAspect.TitleColors),
+        Pick.Culture => touched.HasFlag(Emit.WorldAspect.Cultures),
+        _ => touched.HasFlag(Emit.WorldAspect.Faiths),
+    };
 
     private readonly Dictionary<string, Button> _viewButtons = [];
     private readonly Dictionary<string, Bitmap> _rendered = [];
     private GenerationResult? _result;
     private string _view = "Counties";
+
+    /// <summary>
+    /// The edit session over the mod last written, shared by the tree and the inspector.
+    ///
+    /// Gated on a write rather than on a preview because a title has no name until one is written —
+    /// see <see cref="TitleEditor"/>. <see cref="ShowResult"/> detaches it on every finished run, so
+    /// a preview after a write correctly locks it again; <see cref="WriteModAsync"/> is the only
+    /// thing that ever attaches it.
+    /// </summary>
+    private readonly WorldEdits _edits = new();
+
+    private readonly TitleEditor _titles;
+
+    /// <summary>Hidden until something is pending. See <see cref="BuildPendingBar"/>.</summary>
+    private readonly Panel _pendingBar = new()
+    {
+        Dock = DockStyle.Top,
+        Height = 34,
+        BackColor = Theme.Notice,
+        Visible = false,
+    };
+
+    private readonly Button _overwrite = Theme.MakeButton("Overwrite mod", 116, primary: true);
+    private readonly Button _revertAll = Theme.MakeButton("Revert all", 84);
+
+    private readonly Label _pendingText = new()
+    {
+        Dock = DockStyle.Fill,
+        TextAlign = ContentAlignment.MiddleLeft,
+        ForeColor = Theme.NoticeText,
+        Font = Theme.Ui,
+        Padding = new Padding(8, 0, 0, 0),
+    };
+
 
     /// <summary>
     /// The last heightmap decoded from disk, kept so previewing a settings change does not pay to
@@ -196,6 +267,13 @@ public sealed class MainForm : Form
     /// UI thread once it has finished, which is the same handoff <see cref="_loaded"/> uses.
     /// </summary>
     private IReadOnlyList<MapGen.HeightmapWarning> _warnings = [];
+
+    /// <summary>
+    /// What the last write produced, for the title editor. Null after a preview, which writes
+    /// nothing there is anything to edit in. Same worker-to-UI handoff as <see cref="_warnings"/>.
+    /// </summary>
+    private Emit.WrittenContent? _written;
+
     private string? _heightmapPath;
     private bool _busy;
     private CancellationTokenSource? _cancellation;
@@ -246,7 +324,7 @@ public sealed class MainForm : Form
 
         _browse.Click += (_, _) => PickHeightmap();
         _roll.Click += (_, _) => _seed.Value = Random.Shared.Next(1, int.MaxValue);
-        _preview.Click += async (_, _) => await BuildAsync(null);
+        _preview.Click += async (_, _) => await PreviewAsync();
         _writeMod.Click += async (_, _) => await WriteModAsync();
         _cancel.Click += (_, _) => RequestCancel();
         _openMod.Click += (_, _) => OpenModFolder();
@@ -255,11 +333,17 @@ public sealed class MainForm : Form
         _savePreset.Click += (_, _) => SavePreset();
         _loadPreset.Click += (_, _) => LoadPreset();
 
+        _titles = new TitleEditor(_edits) { Dock = DockStyle.Fill };
+
         _viewer.ViewChanged += ShowReadout;
+        _viewer.PixelClicked += PickTitleAt;
+        _titles.SelectionChanged += titles => { if (titles.Count > 0) Inspect([.. titles]); };
+        _edits.Changed += OnEditsChanged;
 
         if (_state.View is { } remembered && Views.Any(v => v.Name == remembered)) _view = remembered;
 
         Controls.Add(BuildBody());
+        Controls.Add(BuildPendingBar());
         Controls.Add(BuildToolbar());
         Controls.Add(BuildStatusBar());
 
@@ -309,6 +393,45 @@ public sealed class MainForm : Form
         return bar;
     }
 
+    /// <summary>
+    /// The unsaved-changes bar: absent entirely until an edit is pending, then impossible to miss.
+    ///
+    /// This replaces an Overwrite button that lived permanently on the toolbar and spent almost all
+    /// of its life greyed out — a disabled button in a row of a dozen is furniture, and nothing
+    /// about it said whether there was anything to press it for. A strip that does not exist until
+    /// there is something to do costs no chrome and states the count.
+    ///
+    /// Revert all lives here too rather than in the Titles tab, where it was before. It is a global
+    /// action over the whole edit session — titles, cultures and faiths — and it belongs next to
+    /// the other one, not inside one of the surfaces that feeds it.
+    /// </summary>
+    private Control BuildPendingBar()
+    {
+        _overwrite.Click += (_, _) => OverwriteTitles();
+        _revertAll.Click += (_, _) => RevertAll();
+
+        var buttons = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Left,
+            AutoSize = true,
+            Padding = new Padding(6, 3, 0, 0),
+            BackColor = Color.Transparent,
+        };
+        buttons.Controls.Add(_overwrite);
+        buttons.Controls.Add(_revertAll);
+
+        _pendingBar.Controls.Add(_pendingText);
+        _pendingBar.Controls.Add(buttons);
+        _pendingBar.Controls.Add(new Panel
+        {
+            Dock = DockStyle.Bottom,
+            Height = 1,
+            BackColor = Theme.NoticeBorder,
+        });
+
+        return _pendingBar;
+    }
+
     private Control BuildBody()
     {
         var presets = new FlowLayoutPanel
@@ -336,6 +459,20 @@ public sealed class MainForm : Form
         viewer.Controls.Add(_viewer);
         viewer.Controls.Add(_viewStrip);
 
+        // The tabs wrap only the map pane, not the whole right-hand side, so the log stays visible
+        // under both of them — an overwrite reports into it, and watching that happen is the only
+        // confirmation the mod on disk actually changed.
+        var tabs = Theme.MakeTabs();
+
+        var mapTab = new TabPage("Map") { BackColor = Theme.Background };
+        mapTab.Controls.Add(viewer);
+
+        var titleTab = new TabPage("Titles") { BackColor = Theme.Background };
+        titleTab.Controls.Add(_titles);
+
+        tabs.TabPages.Add(mapTab);
+        tabs.TabPages.Add(titleTab);
+
         var logPane = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
         logPane.Controls.Add(_log);
         logPane.Controls.Add(BuildLogHeader());
@@ -349,7 +486,7 @@ public sealed class MainForm : Form
             Orientation = Orientation.Horizontal,
             BackColor = Theme.Border,
         };
-        _right.Panel1.Controls.Add(viewer);
+        _right.Panel1.Controls.Add(tabs);
         _right.Panel2.Controls.Add(logPane);
 
         _body = new SplitContainer
@@ -667,7 +804,7 @@ public sealed class MainForm : Form
         switch (key)
         {
             case Keys.F5 when _preview.Enabled:
-                _ = BuildAsync(null);
+                _ = PreviewAsync();
                 return true;
 
             case Keys.Control | Keys.S when _writeMod.Enabled:
@@ -841,6 +978,23 @@ public sealed class MainForm : Form
     {
         if (_busy || _heightmapPath is null) return;
 
+        // A wider test than the preview's, and deliberately. Writing regenerates the world and
+        // rewrites every file an edit could have reached, so edits already pushed with Overwrite
+        // are destroyed on disk too — being saved is no protection here, which is the opposite of
+        // what "saved" usually implies and so worth saying out loud.
+        if (_edits.EditedCount > 0)
+        {
+            var discard = MessageBox.Show(this,
+                $"Writing the mod rebuilds the world from the current settings, so all "
+                + $"{Count(_edits.EditedCount, "edit")} go back to generated values.\n\n"
+                + "This includes edits already pushed with Overwrite: the files holding them are "
+                + "rewritten as part of the run.\n\n"
+                + "Write the mod anyway?",
+                "Edits will be regenerated", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning);
+
+            if (discard != DialogResult.OK) return;
+        }
+
         // Before the dialog rather than after: being asked to name a mod and only then told the
         // game is missing is two dead ends where one would do.
         if (!EnsureGameFolder()) return;
@@ -858,7 +1012,55 @@ public sealed class MainForm : Form
         // Only if it is actually there. A cancelled or failed write must not leave the button
         // pointing at a folder that was never created.
         if (Directory.Exists(modDir)) _lastModDir = modDir;
+
+        // After BuildAsync, not inside it: ShowResult unloads the editor on every finished run,
+        // including this one, so loading any earlier would be undone a moment later.
+        if (_result is not null && _written is not null && Directory.Exists(modDir))
+        {
+            _edits.Attach(_result, _written, modDir);
+            Console.WriteLine();
+            Console.WriteLine("The world can now be edited — click any title, culture or faith map.");
+        }
+
         ApplySource();
+    }
+
+    /// <summary>
+    /// Pushes renamed titles back into the mod on disk.
+    ///
+    /// Runs on the UI thread rather than through <see cref="RunAsync"/>: this is two localisation
+    /// files, which is milliseconds even at vanilla size, and borrowing the progress machinery for
+    /// it would put a bar and an ETA on screen for less time than they take to appear.
+    /// </summary>
+    private void OverwriteTitles()
+    {
+        if (_busy || !_edits.HasPending || _edits.Target is not { } target) return;
+
+        var aspects = _edits.Pending;
+        int edited = _edits.EditedCount;
+
+        try
+        {
+            using (new WaitCursorFor(this))
+                Emit.WorldOverwrite.Apply(target.ModDir, target.Result, target.Written, aspects);
+
+            // Only on success: a throw must leave the edits pending so they can be tried again.
+            _edits.MarkWritten();
+            Emit.WorldOverwrite.Report(aspects, edited, target.ModDir);
+            _status.Text = $"Edits written to {target.ModDir}";
+        }
+        catch (Exception ex)
+        {
+            // Same rule as a failed run: the message is worth more in the log next to what caused
+            // it than in a dialog that takes the window with it.
+            Console.WriteLine();
+            Console.WriteLine(ex);
+            _status.Text = "Overwrite failed — see log";
+
+            MessageBox.Show(this,
+                $"The mod could not be updated:\n\n{ex.Message}",
+                "Overwrite failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     // --- Running --------------------------------------------------------------------------------
@@ -877,6 +1079,38 @@ public sealed class MainForm : Form
     /// deriving TerrainData and the cache never let that run again. A cache that can make a setting
     /// do nothing is worse than no cache; this one can only ever save the decode.
     /// </summary>
+    /// <summary>
+    /// Previews, having first checked that nothing unsaved is about to be thrown away.
+    ///
+    /// The check lives here rather than in <see cref="BuildAsync"/> so the write path can ask its
+    /// own, differently worded question *before* the mod naming dialog rather than after it.
+    /// </summary>
+    private async Task PreviewAsync()
+    {
+        // Only what is genuinely at risk. A preview never touches the mod folder, so edits that
+        // have already been overwritten survive it on disk — asking about those would be crying
+        // wolf, and a confirmation people learn to click through protects nothing.
+        if (_edits.HasPending)
+        {
+            int edited = _edits.EditedCount;
+
+            var answer = MessageBox.Show(this,
+                $"Previewing rebuilds the world from the current settings, which discards "
+                + $"{Count(edited, "unsaved edit")}.\n\n"
+                + "The mod folder keeps whatever you last pressed Overwrite for — only the unsaved "
+                + "changes are lost.\n\n"
+                + "Preview anyway?",
+                "Unsaved edits", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning);
+
+            if (answer != DialogResult.OK) return;
+        }
+
+        await BuildAsync(null);
+    }
+
+    private static string Count(int n, string noun)
+        => n == 1 ? $"1 {noun}" : $"{n} {noun}s";
+
     private async Task BuildAsync(string? modDir)
     {
         var (result, cancelled) = await RunAsync(
@@ -904,7 +1138,12 @@ public sealed class MainForm : Form
                     () => MapGen.TerrainData.FromElevation(_loaded!.ToElevation(cfg), cfg));
 
                 var r = Generator.FromTerrain(terra, cfg);
-                if (modDir is not null) Generator.WriteMod(r, _options, modDir);
+
+                // Set on the worker and read on the UI thread once it has finished, the same
+                // handoff _loaded and _warnings use. Cleared first so a failed write cannot leave
+                // the previous run's capture behind for the title editor to load.
+                _written = null;
+                if (modDir is not null) _written = Generator.WriteMod(r, _options, modDir);
                 return r;
             },
             writing: modDir is not null);
@@ -1112,6 +1351,11 @@ public sealed class MainForm : Form
         _launchGame.Enabled = enabled;
         _cancel.Enabled = !enabled;
 
+        // The editor holds the titles a run is about to rebuild, so it must not be edited while
+        // one is in flight. It gates itself on having a written mod on top of this.
+        _titles.Enabled = enabled;
+        ShowPending();
+
         bool ready = enabled && _heightmapPath is not null;
         _writeMod.Enabled = ready;
         _preview.Enabled = ready;
@@ -1147,17 +1391,21 @@ public sealed class MainForm : Form
         => $"{char.ToUpperInvariant(name[0])}{name[1..]}";
 
     /// <summary>Runs an action on the UI thread, tolerating the window having gone away.</summary>
-    private void Post(Action action)
+    /// <returns>Whether it was actually queued. Callers holding a "already pending" flag need to
+    /// know, or a post that never lands leaves the flag set and suppresses every later one.</returns>
+    private bool Post(Action action)
     {
-        if (IsDisposed || !IsHandleCreated) return;
+        if (IsDisposed || !IsHandleCreated) return false;
 
         try
         {
             BeginInvoke(action);
+            return true;
         }
         catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException)
         {
             // The window went away between the check above and the post. Nothing to update.
+            return false;
         }
     }
 
@@ -1167,6 +1415,11 @@ public sealed class MainForm : Form
     private void ShowResult(GenerationResult result)
     {
         _result = result;
+
+        // Whatever the editor was holding belongs to a run that is no longer on screen, and its
+        // titles may not even be named — a preview leaves every one of them blank. WriteModAsync
+        // loads it again immediately afterwards on the one path where there is a mod to edit.
+        _edits.Detach();
 
         // A Bitmap is unmanaged memory the collector is in no hurry about, and preview is meant to
         // be clicked repeatedly while a setting is tuned; leaking one per view per click adds up.
@@ -1200,12 +1453,213 @@ public sealed class MainForm : Form
         if (!_rendered.TryGetValue(name, out var bitmap))
         {
             var render = Views.First(v => v.Name == name).Render;
-            using (new WaitCursorFor(this)) bitmap = ToBitmap(render(_result));
+            using (new WaitCursorFor(this)) bitmap = ToBitmap(render(_result, _written));
             _rendered[name] = bitmap;
         }
 
         _viewer.SetImage(bitmap);
         ShowReadout(_viewer.Zoom, null);
+    }
+
+    /// <summary>
+    /// Turns a click on the preview into the title that was clicked.
+    ///
+    /// Four hops: undo the downsample to get a source pixel, read the province label there, map the
+    /// label through the write order to a province id, and walk up from that barony to the tier the
+    /// current view draws. Only meaningful on a view that draws titles at all — clicking the
+    /// climate map selects nothing, which is right.
+    /// </summary>
+    private void PickTitleAt(Point pixel)
+    {
+        if (_busy || _edits.Target is not { } target || _result is null) return;
+        if (!ClickableViews.TryGetValue(_view, out var view)) return;
+
+        var map = _result.Provinces;
+        int step = PreviewRenderer.StepFor(map.Width);
+
+        int x = Math.Clamp(pixel.X * step, 0, map.Width - 1);
+        int y = Math.Clamp(pixel.Y * step, 0, map.Height - 1);
+
+        int id = _result.ProvinceOrder[map.Label[y * map.Width + x]];
+        if (id < 1 || id > _result.BaronyCount)
+        {
+            // Water, or the impassable land above the last barony. Neither has anything on it.
+            _status.Text = "Nothing there — that is water or impassable";
+            return;
+        }
+
+        var barony = MapGen.Titles.Flatten(_result.Titles)
+            .FirstOrDefault(t => t.Tier == "b" && t.ProvinceId == id);
+        if (barony is null) return;
+
+        var title = barony;
+        while (title is not null && title.Tier != view.Tier) title = title.Parent;
+        if (title is null) return;
+
+        switch (view.Kind)
+        {
+            case Pick.Title:
+                // Through the tree, so both surfaces agree on what is selected and the tree scrolls
+                // to show it. Reveal raises SelectionChanged, which is what opens the inspector.
+                _titles.Reveal(title);
+                _status.Text = $"{TitleInspector.TierName(title)} {title.Name}";
+                break;
+
+            case Pick.Culture:
+                var culture = target.Written.Cultures.For(title);
+                Inspect([culture]);
+                _status.Text = $"Culture {culture.Name} — {title.Name}";
+                break;
+
+            case Pick.Faith:
+                var faith = target.Written.Faiths.For(title);
+                Inspect([faith]);
+                _status.Text = $"Faith {faith.Name} — {title.Name}";
+                break;
+        }
+    }
+
+    /// <summary>
+    /// The inspectors, one per kind of thing, built on first use and reused thereafter.
+    ///
+    /// Keyed by type rather than by instance: a window per object becomes window soup within a
+    /// minute, and a single window that navigated between kinds would lose the thing the split is
+    /// for — having a county and the culture living in it open at once.
+    /// </summary>
+    private readonly Dictionary<Type, InspectorForm> _inspectors = [];
+
+    /// <summary>Shows the right inspector for whatever is selected, creating it the first time.</summary>
+    private void Inspect(IReadOnlyList<object> targets)
+    {
+        if (targets.Count == 0) return;
+
+        var kind = targets[0].GetType();
+
+        if (!_inspectors.TryGetValue(kind, out var inspector) || inspector.IsDisposed)
+        {
+            inspector = kind.Name switch
+            {
+                nameof(MapGen.Culture) => new CultureInspector(_edits),
+                nameof(MapGen.Faith) => new FaithInspector(_edits),
+                _ => new TitleInspector(_edits),
+            };
+
+            inspector.Navigate += Inspect;
+            _inspectors[kind] = inspector;
+
+            inspector.Show(this);
+            PlaceInspector(inspector);
+        }
+
+        inspector.Inspect(targets);
+
+        if (!inspector.Visible) inspector.Show(this);
+        inspector.BringToFront();
+    }
+
+    /// <summary>
+    /// Keeps the unsaved-changes bar honest, and hides it the moment there is nothing to say.
+    /// </summary>
+    private void ShowPending()
+    {
+        _pendingBar.Visible = _edits.HasPending;
+        if (!_edits.HasPending) return;
+
+        int edited = _edits.EditedCount;
+
+        // Zero edited with something still pending is the revert-after-overwrite case: the objects
+        // match what was generated again, but the files on disk are still holding the edit.
+        _pendingText.Text = edited switch
+        {
+            0 => "Edits reverted — the mod on disk has not caught up",
+            1 => "1 unsaved edit — the mod on disk still has the generated value",
+            _ => $"{edited} unsaved edits — the mod on disk still has the generated values",
+        };
+
+        _overwrite.Enabled = !_busy;
+        _revertAll.Enabled = !_busy && edited > 0;
+    }
+
+    private void RevertAll()
+    {
+        if (_edits.EditedCount == 0) return;
+
+        var answer = MessageBox.Show(this,
+            "Put everything edited — titles, cultures and faiths — back to how it was generated?",
+            "Revert all", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
+
+        if (answer == DialogResult.OK) _edits.RevertAll();
+    }
+
+    /// <summary>Routes a navigation from one inspector to the one that owns that kind.</summary>
+    private void Inspect(object target) => Inspect([target]);
+
+    /// <summary>
+    /// Opens the inspector beside the window rather than on top of it, falling back to inside it
+    /// where there is no room — the map is the thing being clicked and covering it defeats the
+    /// point of a separate window.
+    /// </summary>
+    private void PlaceInspector(Form inspector)
+    {
+        var screen = Screen.FromControl(this).WorkingArea;
+        int right = Bounds.Right + 8;
+
+        inspector.Location = right + inspector.Width <= screen.Right
+            ? new Point(right, Bounds.Top + 80)
+            : new Point(Math.Max(screen.Left, Bounds.Right - inspector.Width - 24), Bounds.Top + 80);
+    }
+
+    /// <summary>
+    /// Keeps the window in step with the edit session: the Overwrite button, and the cached renders
+    /// that a recolour has just made wrong.
+    /// </summary>
+    private void OnEditsChanged(Emit.WorldAspect touched)
+    {
+        ShowPending();
+
+        if (_redrawQueued || !ClickableViews.Values.Any(v => Repaints(v.Kind, touched))) return;
+
+        // Deferred rather than done here, and coalesced. This is raised from inside a PropertyGrid
+        // value commit — freeing the bitmap under the viewer and spending a full-map render while
+        // the grid is still mid-edit is asking for trouble — and one user action can raise it more
+        // than once, which would otherwise queue a redundant render of forty million pixels.
+        // Accumulated rather than replaced: a second edit before the post lands must not narrow
+        // what the first one invalidated.
+        _staleAspects |= touched;
+        _redrawQueued = Post(RedrawTitleViews);
+    }
+
+    private bool _redrawQueued;
+    private Emit.WorldAspect _staleAspects;
+
+    /// <summary>Drops the renders an edit has invalidated and rebuilds whichever is on screen.</summary>
+    private void RedrawTitleViews()
+    {
+        _redrawQueued = false;
+
+        var stale = _staleAspects;
+        _staleAspects = Emit.WorldAspect.None;
+
+        bool showing = ClickableViews.TryGetValue(_view, out var current)
+                       && Repaints(current.Kind, stale);
+
+        // Detached before anything is disposed, and this order is not optional. The viewer is
+        // almost certainly holding one of these bitmaps, and a Bitmap freed out from under it does
+        // not fault where it was freed — it throws GDI+ "Parameter is not valid" out of the next
+        // paint or mouse move, in a stack that has nothing to do with colours. ShowResult clears
+        // the viewer before emptying the same cache, for exactly this reason.
+        if (showing) _viewer.SetImage(null);
+
+        // Only the views this edit actually made wrong, and only those already rendered. A title
+        // recolour has no bearing on the culture map, and dropping it would cost a needless
+        // full-map pass the next time that button was pressed.
+        foreach (var (name, view) in ClickableViews)
+        {
+            if (!Repaints(view.Kind, stale)) continue;
+            if (_rendered.Remove(name, out var dead)) dead.Dispose();
+        }
+
+        if (showing) SelectView(_view);
     }
 
     private void ShowReadout(float zoom, Point? pixel)

@@ -128,7 +128,12 @@ public static class Generator
         return mask;
     }
 
-    public static void WriteMod(GenerationResult result, GenerationOptions options, string modDir)
+    /// <returns>
+    /// What a later edit to the mod needs to re-emit part of it without generating again — see
+    /// <see cref="Emit.WrittenContent"/>. The command line ignores it.
+    /// </returns>
+    public static Emit.WrittenContent WriteMod(GenerationResult result, GenerationOptions options,
+        string modDir)
     {
         var cfg = result.Config;
         var rng = new Rng(cfg.Seed);
@@ -148,12 +153,14 @@ public static class Generator
                         result.BaronyCount, result.LandCount, result.RiverCount, options.WritePacked,
                         result.Terra, result.Drainage));
 
-        Emit.ContentWriter.WriteAll(
-            modDir, options.GameDir, cfg, result.Provinces, result.ProvinceOrder, result.LandCount,
-            result.Titles, result.ProvinceElevation, result.Terrain, rng,
-            options.WriteHistory);
+        var written = Emit.ContentWriter.WriteAll(
+                            modDir, options.GameDir, cfg, result.Provinces, result.ProvinceOrder,
+                            result.BaronyCount, result.LandCount,
+                            result.RiverCount, result.Titles, result.Terra, result.Terrain, rng,
+                            options.WriteHistory);
 
         Console.WriteLine($"  done in {sw.ElapsedMilliseconds} ms");
+        return written;
     }
 
     public static void WriteDebugImages(GenerationResult result, string outDir, int scale)

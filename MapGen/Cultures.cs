@@ -28,16 +28,20 @@ public sealed class Heritage
 public sealed class Culture
 {
     public required double MeanDevelopment { get; init; }
+    /// <summary>Frozen. Every other file references a culture by this.</summary>
     public required string Key { get; init; }
-    public required string Name { get; init; }
+
+    public required string Name { get; set; }
+
+    /// <summary>Frozen: it owns the language every name here is drawn from.</summary>
     public required Heritage Heritage { get; init; }
     public Language Language => Heritage.Language;
 
-    public required (byte R, byte G, byte B) Color { get; init; }
-    public required string Ethos { get; init; }
-    public required string MartialCustom { get; init; }
-    public required string HeadDetermination { get; init; }
-    public required List<string> Traditions { get; init; }
+    public required (byte R, byte G, byte B) Color { get; set; }
+    public required string Ethos { get; set; }
+    public required string MartialCustom { get; set; }
+    public required string HeadDetermination { get; set; }
+    public required List<string> Traditions { get; set; }
 
     public string NameListKey => $"name_list_{Key}";
 

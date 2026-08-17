@@ -178,8 +178,8 @@ public static class ArtifactWriter
 
         foreach (var art in artifacts.AllArtifacts)
         {
-            string safeName = art.LocalizedName.Replace("\"", "\\\"");
-            string safeDesc = art.LocalizedDescription.Replace("\"", "\\\"");
+            string safeName = ParadoxText.Loc(art.LocalizedName);
+            string safeDesc = ParadoxText.Loc(art.LocalizedDescription);
             sb.Append($" {art.NameKey}:0 \"{safeName}\"\n");
             sb.Append($" {art.DescriptionKey}:0 \"{safeDesc}\"\n");
         }

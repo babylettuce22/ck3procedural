@@ -6,28 +6,13 @@ namespace Ck3MapGen.Emit;
 
 /// <summary>
 /// Writes gfx/map/terrain/masks and gfx/map/terrain/masks_gen — one 8-bit greyscale coverage
-/// image per material, at province resolution, matching vanilla's format exactly.
-///
-/// **masks_gen was never being written at all, and that is why vanilla geography kept showing
-/// through.** Vanilla ships 52 files there and materials.settings references the directory 50
-/// times: they are the masks for the gen_* climate/landform family (indices 55-104). We shipped
-/// none of them, so every one of vanilla's — painted for Europe and Asia — stayed loaded.
-///
-/// Blanking all of them is not an option either; that was tried and rendered the map as
-/// missing-texture purple, because a material whose mask is empty everywhere has nothing to
-/// sample. So they are generated, from exactly the same blend the detail textures were painted
-/// from — each mask is that material's blend weight at each pixel. The two therefore cannot
-/// disagree about what is where, by construction.
-///
-/// Materials the painting never used still get a file, written empty, so the vanilla copy is
-/// displaced rather than left in place. A constant image compresses to a few KB, so the cost of
-/// the unused ones is negligible.
+/// image per material at full map resolution with Gaussian anti-aliasing.
 /// </summary>
 public static class TerrainMaskWriter
 {
     public static void WriteAll(string modDir, string gameDir, MapConfig cfg)
     {
-        int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
+        int width = cfg.Width, height = cfg.Height;
 
         string terrainDir = Path.Combine(modDir, "gfx", "map", "terrain");
         var index = ReadTga(Path.Combine(terrainDir, "detail_index.tga"));
@@ -38,10 +23,7 @@ public static class TerrainMaskWriter
             return;
         }
 
-        // Material name -> id, in materials.settings file order. That order *is* the index, which
-        // is why vanilla warns against reordering it.
-        var names = ReadMaterialOrder(Path.Combine(gameDir, "gfx", "map", "terrain",
-            "materials.settings"));
+        var names = ReadMaterialOrder(Path.Combine(gameDir, "gfx", "map", "terrain", "materials.settings"));
         if (names.Count == 0)
         {
             Console.WriteLine("  terrain masks: SKIPPED (materials.settings unreadable)");
@@ -51,7 +33,6 @@ public static class TerrainMaskWriter
         var used = TerrainTextureWriter.UsedMaterials;
         int painted = 0, blanked = 0, carried = 0;
 
-        // Both directories, so neither vanilla set survives.
         foreach (string sub in (string[])["masks", "masks_gen"])
         {
             string source = Path.Combine(gameDir, "gfx", "map", "terrain", sub);
@@ -59,11 +40,6 @@ public static class TerrainMaskWriter
             if (!Directory.Exists(source)) continue;
             Directory.CreateDirectory(destination);
 
-            // Not everything in these folders is a mask. Vanilla keeps one material *texture*
-            // here — gfx/map/terrain/masks/drylands_01_grassy_diffuse.dds, named by
-            // materials.settings line 182 — and `replace_path="gfx/map/terrain/masks"` deletes
-            // the whole directory, so without this the material loses its diffuse texture. Copy
-            // anything that is not a .png through untouched; masks are always .png.
             foreach (string path in Directory.GetFiles(source))
             {
                 if (path.EndsWith(".png", StringComparison.OrdinalIgnoreCase)) continue;
@@ -71,12 +47,6 @@ public static class TerrainMaskWriter
                 carried++;
             }
 
-            // Parallel across *files*, not across rows within one.
-            //
-            // Most of the cost here is the PNG deflate, one per mask, and there are over a hundred
-            // masks — so parallelising the pixel loop inside each one left the compression running
-            // a hundred times in a row on a single thread. The files are independent and each
-            // allocates its own buffer, so this is the loop that wanted the threads.
             Parallel.ForEach(Directory.GetFiles(source, "*.png"), path =>
             {
                 string file = Path.GetFileName(path);
@@ -89,8 +59,7 @@ public static class TerrainMaskWriter
                 {
                     byte target = (byte)id;
 
-                    // The TGAs are stored bottom-up; the masks are top-down like every other PNG,
-                    // so the row is flipped back on the way out.
+                    // TGAs are stored bottom-up; PNG masks are top-down
                     for (int y = 0; y < height; y++)
                     {
                         long srcRow = (long)(height - 1 - y) * width * 4;
@@ -100,7 +69,6 @@ public static class TerrainMaskWriter
                         {
                             long o = srcRow + x * 4;
 
-                            // Layer order within the pixel: R, G, B, A -> bytes 2, 1, 0, 3.
                             byte weight = 0;
                             if (index[o + 2] == target) weight = Math.Max(weight, intensity[o + 2]);
                             if (index[o + 1] == target) weight = Math.Max(weight, intensity[o + 1]);
@@ -111,21 +79,81 @@ public static class TerrainMaskWriter
                         }
                     }
 
+                    // 5-tap Gaussian blur to eliminate the 4-layer cutoff staircases
+                    coverage = SmoothCoverage(coverage, width, height);
                     Interlocked.Increment(ref painted);
                 }
-                else Interlocked.Increment(ref blanked);
+                else
+                {
+                    Interlocked.Increment(ref blanked);
+                }
 
                 PngWriter.WriteGray8(Path.Combine(destination, file), width, height, coverage);
             });
         }
 
-        Console.WriteLine($"  terrain masks: {painted} painted from the blend, {blanked} blanked " +
-                          $"(masks + masks_gen), {carried} non-mask files carried through");
+        Console.WriteLine($"  terrain masks: {painted} smoothed from blend, {blanked} blanked (masks + masks_gen), {carried} non-mask files carried");
     }
 
     /// <summary>
-    /// Material id by name, taken from the order <c>name = "..."</c> appears in materials.settings.
+    /// Separable 5-tap Gaussian smoothing filter [1, 4, 6, 4, 1] / 16.
+    /// Eliminates sharp 1-pixel cutoff edges where materials enter/leave the top 4 blend slots.
     /// </summary>
+    private static byte[] SmoothCoverage(byte[] src, int width, int height)
+    {
+        var temp = new byte[src.Length];
+        var dst = new byte[src.Length];
+
+        // Horizontal Pass
+        Parallel.For(0, height, y =>
+        {
+            long row = (long)y * width;
+            for (int x = 0; x < width; x++)
+            {
+                int xm2 = Math.Max(0, x - 2);
+                int xm1 = Math.Max(0, x - 1);
+                int xp1 = Math.Min(width - 1, x + 1);
+                int xp2 = Math.Min(width - 1, x + 2);
+
+                int val = (src[row + xm2] * 1 +
+                           src[row + xm1] * 4 +
+                           src[row + x] * 6 +
+                           src[row + xp1] * 4 +
+                           src[row + xp2] * 1) >> 4;
+
+                temp[row + x] = (byte)val;
+            }
+        });
+
+        // Vertical Pass
+        Parallel.For(0, height, y =>
+        {
+            int ym2 = Math.Max(0, y - 2);
+            int ym1 = Math.Max(0, y - 1);
+            int yp1 = Math.Min(height - 1, y + 1);
+            int yp2 = Math.Min(height - 1, y + 2);
+
+            long rowM2 = (long)ym2 * width;
+            long rowM1 = (long)ym1 * width;
+            long row = (long)y * width;
+            long rowP1 = (long)yp1 * width;
+            long rowP2 = (long)yp2 * width;
+
+            for (int x = 0; x < width; x++)
+            {
+                int val = (temp[rowM2 + x] * 1 +
+                           temp[rowM1 + x] * 4 +
+                           temp[row + x] * 6 +
+                           temp[rowP1 + x] * 4 +
+                           temp[rowP2 + x] * 1) >> 4;
+
+                dst[row + x] = (byte)val;
+            }
+        });
+
+        return dst;
+    }
+
     private static Dictionary<string, int> ReadMaterialOrder(string path)
     {
         var order = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -148,7 +176,6 @@ public static class TerrainMaskWriter
         return order;
     }
 
-    /// <summary>Reads back the pixel payload of an uncompressed 32-bit TGA we just wrote.</summary>
     private static byte[]? ReadTga(string path)
     {
         if (!File.Exists(path)) return null;

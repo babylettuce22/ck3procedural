@@ -130,6 +130,18 @@ public static class HeightmapSource
                 "provinces.png and rivers.png are exactly half the heightmap's resolution.");
 
         var raw = ReadRaw(image);
+        var histogram = Histogram(raw);
+
+        int distinct = 0;
+        foreach (int count in histogram) if (count != 0) distinct++;
+
+        // Auto-interpolate 8-bit heightmaps to true 16-bit
+        if (distinct < 1000)
+        {
+            raw = Upscale8To16Bit(raw, image.Width, image.Height, distinct);
+            histogram = Histogram(raw); // Update histogram with the new smooth values
+        }
+
         var info = new FileInfo(path);
         var loaded = new HeightmapImage
         {
@@ -139,7 +151,7 @@ public static class HeightmapSource
             Width = image.Width,
             Height = image.Height,
             Raw = raw,
-            Histogram = Histogram(raw),
+            Histogram = histogram, // Reuse the updated histogram
         };
 
         Apply(loaded, cfg);
@@ -393,5 +405,93 @@ public static class HeightmapSource
             Console.WriteLine("  A heightmap drawn outside this program almost certainly is not. " +
                               "Set Normalization to Stretch and give SourceSeaLevel the 0-255 " +
                               "value its own coastline sits at — 51 for an Azgaar export.");
+    }
+
+    // Add this helper to HeightmapSource.cs
+    public static ushort[] Upscale8To16Bit(ushort[] raw, int width, int height, int distinct)
+    {
+        if (distinct >= 1000) return raw; // Already true 16-bit data
+
+        Console.WriteLine($"  -> Auto-interpolating 8-bit heightmap ({distinct} levels) into smooth 16-bit gradients...");
+
+        const int water16 = Emit.MapDataWriter.WaterLevel16;
+        var smoothed = new ushort[raw.Length];
+
+        // Multi-pass separable Gaussian blur (radius 2.5px) in 16-bit floating point space
+        var temp = new float[raw.Length];
+
+        // 1. Horizontal Pass
+        Parallel.For(0, height, y =>
+        {
+            long row = (long)y * width;
+            for (int x = 0; x < width; x++)
+            {
+                long idx = row + x;
+                ushort center = raw[idx];
+
+                // Don't blur across the ocean coastline
+                if (center <= water16)
+                {
+                    temp[idx] = center;
+                    continue;
+                }
+
+                float sum = 0f;
+                float weightSum = 0f;
+
+                for (int dx = -3; dx <= 3; dx++)
+                {
+                    int nx = Math.Clamp(x + dx, 0, width - 1);
+                    ushort val = raw[row + nx];
+
+                    // Only blur with land pixels to prevent eroding shores
+                    if (val > water16)
+                    {
+                        float w = MathF.Exp(-0.5f * (dx * dx) / (1.8f * 1.8f));
+                        sum += val * w;
+                        weightSum += w;
+                    }
+                }
+
+                temp[idx] = weightSum > 0f ? (sum / weightSum) : center;
+            }
+        });
+
+        // 2. Vertical Pass
+        Parallel.For(0, height, y =>
+        {
+            long row = (long)y * width;
+            for (int x = 0; x < width; x++)
+            {
+                long idx = row + x;
+                ushort center = raw[idx];
+
+                if (center <= water16)
+                {
+                    smoothed[idx] = center;
+                    continue;
+                }
+
+                float sum = 0f;
+                float weightSum = 0f;
+
+                for (int dy = -3; dy <= 3; dy++)
+                {
+                    int ny = Math.Clamp(y + dy, 0, height - 1);
+                    float val = temp[(long)ny * width + x];
+
+                    if (val > water16)
+                    {
+                        float w = MathF.Exp(-0.5f * (dy * dy) / (1.8f * 1.8f));
+                        sum += val * w;
+                        weightSum += w;
+                    }
+                }
+
+                smoothed[idx] = (ushort)Math.Clamp(MathF.Round(weightSum > 0f ? (sum / weightSum) : center), 0, 65535);
+            }
+        });
+
+        return smoothed;
     }
 }
