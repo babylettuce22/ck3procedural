@@ -9,6 +9,7 @@ namespace Ck3MapGen.Emit;
 public static class BookmarkWriter
 {
     public const string ChallengeCharacter = "challenge_character_generated";
+    private const double MinPortraitDistance = 260.0; // Minimum pixel separation on 1920x1080 screen
 
     public record BookmarkSlot(
         string Key,
@@ -30,7 +31,7 @@ public static class BookmarkWriter
         ProvinceMap provinces, int[] order, List<Title> empires,
         RealmMap realms, Dictionary<Title, int> development,
         CultureMap cultures, FaithMap faiths, GovernmentMap governments,
-        WildernessMap wilderness)
+        WildernessMap wilderness, PrehistoryMap prehistory)
     {
         var allCounties = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
         var playableCounties = allCounties.Where(c => !wilderness.Contains(c)).ToList();
@@ -52,17 +53,23 @@ public static class BookmarkWriter
         }
         bookmarkDnaMap[challengeSlot.County] = $"dna_{ChallengeCharacter}";
 
-        WriteBookmarks(modDir, cfg, bookmarks, realms, cultures, faiths, governments);
-        WriteChallengeCharacter(modDir, challengeSlot.County, realms, cfg, cultures, faiths, governments);
+        WriteBookmarks(modDir, cfg, bookmarks, realms, cultures, faiths, governments, prehistory);
+        WriteChallengeCharacter(modDir, challengeSlot.County, realms, cfg, cultures, faiths, governments, prehistory);
         WriteBookmarkLocalisation(modDir, bookmarks, challengeSlot, cultures);
         WriteBookmarkGraphics(modDir, gameDir);
         WriteRealmHighlights(modDir, cfg, provinces, order, bookmarks, realms, empires);
 
+        // Build age-synced portrait requests
         var requests = new List<PortraitWriter.CharacterPortraitRequest>();
         foreach (var b in bookmarks)
         {
+            int birthYear = HistoryWriter.GetRulerBirthYear(b.County.Index, cfg.StartYear);
+            int age = cfg.StartYear - birthYear;
             requests.Add(new PortraitWriter.CharacterPortraitRequest(b.Key, cultures.For(b.County)));
         }
+
+        int challengeBirthYear = HistoryWriter.GetRulerBirthYear(challengeSlot.County.Index, cfg.StartYear);
+        int challengeAge = cfg.StartYear - challengeBirthYear;
         requests.Add(new PortraitWriter.CharacterPortraitRequest(ChallengeCharacter, cultures.For(challengeSlot.County)));
 
         return new BookmarkResult(requests, bookmarkDnaMap);
@@ -135,84 +142,158 @@ public static class BookmarkWriter
         if (playable.Count == 0) playable = counties;
 
         // 1. The Hegemon
-        var hegemon = playable.FirstOrDefault(c => !usedCounties.Contains(c)) ?? counties[0];
-        usedCounties.Add(hegemon);
-        var (hx, hy) = positions.GetValueOrDefault(hegemon, (960, 540));
-        chosen.Add(new BookmarkSlot(
+        var hegemon = PickSpacedCandidate(playable, usedCounties, chosen, positions, MinPortraitDistance) ?? playable[0];
+        AddSlot(chosen, usedCounties, positions, hegemon,
             "bm_char_hegemon",
             "Master of the Realm",
             "Controls the greatest dominion on the continent, balancing ambitious vassals and external rivals.",
-            "BOOKMARK_CHARACTER_DIFFICULTY_EASY",
-            hegemon, hx, hy
-        ));
+            "BOOKMARK_CHARACTER_DIFFICULTY_EASY");
 
         // 2. The Frontier Warden
-        var frontier = playable.FirstOrDefault(c => !usedCounties.Contains(c) && wilderness.Counties.Any(w => AreAdjacent(c, w)))
-                       ?? playable.FirstOrDefault(c => !usedCounties.Contains(c))
-                       ?? counties.FirstOrDefault(c => !usedCounties.Contains(c));
+        var frontierPool = playable.Where(c => wilderness.Counties.Any(w => AreAdjacent(c, w)))
+                                   .Concat(playable)
+                                   .ToList();
+        var frontier = PickSpacedCandidate(frontierPool, usedCounties, chosen, positions, MinPortraitDistance);
         if (frontier != null)
         {
-            usedCounties.Add(frontier);
-            var (fx, fy) = positions.GetValueOrDefault(frontier, (450, 480));
-            chosen.Add(new BookmarkSlot(
+            AddSlot(chosen, usedCounties, positions, frontier,
                 "bm_char_frontier",
                 "Guardian of the Frontier",
                 "Guards the boundary between civilization and the untamed wilds, primed for colonization and holy conquest.",
-                "BOOKMARK_CHARACTER_DIFFICULTY_MEDIUM",
-                frontier, fx, fy
-            ));
+                "BOOKMARK_CHARACTER_DIFFICULTY_MEDIUM");
         }
 
         // 3. The Ambitious Vassal
-        var vassal = counties.FirstOrDefault(c => !usedCounties.Contains(c) && IsPlayable(governments.For(c)) && realms.Liege.ContainsKey(HistoryWriter.Primary(c, realms)))
-                     ?? playable.FirstOrDefault(c => !usedCounties.Contains(c));
+        var vassalPool = counties.Where(c => IsPlayable(governments.For(c)) && realms.Liege.ContainsKey(HistoryWriter.Primary(c, realms)))
+                                 .Concat(playable)
+                                 .ToList();
+        var vassal = PickSpacedCandidate(vassalPool, usedCounties, chosen, positions, MinPortraitDistance);
         if (vassal != null)
         {
-            usedCounties.Add(vassal);
-            var (vx, vy) = positions.GetValueOrDefault(vassal, (1150, 420));
-            chosen.Add(new BookmarkSlot(
+            AddSlot(chosen, usedCounties, positions, vassal,
                 "bm_char_vassal",
                 "Power Behind the Throne",
                 "A cunning noble serving beneath an overlord, ready to scheme, usurp, or break free.",
-                "BOOKMARK_CHARACTER_DIFFICULTY_MEDIUM",
-                vassal, vx, vy
-            ));
+                "BOOKMARK_CHARACTER_DIFFICULTY_MEDIUM");
         }
 
         // 4. The Wealthy Magnate
-        var magnate = counties.Where(c => !usedCounties.Contains(c) && IsPlayable(governments.For(c)))
-                              .OrderByDescending(c => development.GetValueOrDefault(c, 0))
-                              .FirstOrDefault();
+        var magnatePool = counties.Where(c => IsPlayable(governments.For(c)))
+                                  .OrderByDescending(c => development.GetValueOrDefault(c, 0))
+                                  .ToList();
+        var magnate = PickSpacedCandidate(magnatePool, usedCounties, chosen, positions, MinPortraitDistance);
         if (magnate != null)
         {
-            usedCounties.Add(magnate);
-            var (mx, my) = positions.GetValueOrDefault(magnate, (720, 680));
-            chosen.Add(new BookmarkSlot(
+            AddSlot(chosen, usedCounties, positions, magnate,
                 "bm_char_magnate",
                 "Keeper of the Trade Routes",
                 "Governs an exceedingly wealthy urban center, commanding vast treasuries and mercenary armies.",
-                "BOOKMARK_CHARACTER_DIFFICULTY_EASY",
-                magnate, mx, my
-            ));
+                "BOOKMARK_CHARACTER_DIFFICULTY_EASY");
         }
 
         // 5. The Untamed Warlord
-        var warlord = counties.FirstOrDefault(c => !usedCounties.Contains(c) && governments.For(c) == GovernmentMap.Tribal)
-                      ?? counties.FirstOrDefault(c => !usedCounties.Contains(c));
+        var warlordPool = counties.Where(c => governments.For(c) == GovernmentMap.Tribal)
+                                  .Concat(counties)
+                                  .ToList();
+        var warlord = PickSpacedCandidate(warlordPool, usedCounties, chosen, positions, MinPortraitDistance);
         if (warlord != null)
         {
-            usedCounties.Add(warlord);
-            var (wx, wy) = positions.GetValueOrDefault(warlord, (1350, 620));
-            chosen.Add(new BookmarkSlot(
+            AddSlot(chosen, usedCounties, positions, warlord,
                 "bm_char_warlord",
                 "A Trial of Blood and Iron",
                 "Leads a martial clan surrounded by fierce competition, where only strength commands loyalty.",
-                "BOOKMARK_CHARACTER_DIFFICULTY_HARD",
-                warlord, wx, wy
-            ));
+                "BOOKMARK_CHARACTER_DIFFICULTY_HARD");
         }
 
+        // Apply final physics repulsion pass to ensure zero overlaps
+        RelaxScreenPositions(chosen);
+
         return chosen;
+    }
+
+    private static Title? PickSpacedCandidate(
+        IEnumerable<Title> pool,
+        HashSet<Title> used,
+        List<BookmarkSlot> chosen,
+        Dictionary<Title, (int X, int Y)> positions,
+        double minDistance)
+    {
+        double minDistanceSq = minDistance * minDistance;
+
+        // 1. First choice: pick an unused candidate that is at least minDistance away from all existing selections
+        var idealCandidates = pool.Where(c => !used.Contains(c) && chosen.All(s => DistanceSq(positions.GetValueOrDefault(c, (960, 540)), (s.ScreenX, s.ScreenY)) >= minDistanceSq))
+                                  .ToList();
+
+        if (idealCandidates.Count > 0) return idealCandidates[0];
+
+        // 2. Fallback: pick the candidate that maximizes distance to the nearest existing bookmark
+        return pool.Where(c => !used.Contains(c))
+                   .OrderByDescending(c => chosen.Count == 0 ? 0 : chosen.Min(s => DistanceSq(positions.GetValueOrDefault(c, (960, 540)), (s.ScreenX, s.ScreenY))))
+                   .FirstOrDefault();
+    }
+
+    private static void AddSlot(
+        List<BookmarkSlot> chosen,
+        HashSet<Title> used,
+        Dictionary<Title, (int X, int Y)> positions,
+        Title county,
+        string key,
+        string subheading,
+        string description,
+        string difficulty)
+    {
+        used.Add(county);
+        var (x, y) = positions.GetValueOrDefault(county, (960, 540));
+        chosen.Add(new BookmarkSlot(key, subheading, description, difficulty, county, x, y));
+    }
+
+    /// <summary>
+    /// Repels overlapping bookmark character coordinates so models and shields never collide.
+    /// </summary>
+    private static void RelaxScreenPositions(List<BookmarkSlot> slots)
+    {
+        const double separation = MinPortraitDistance;
+        const int minX = 240, maxX = 1550;
+        const int minY = 180, maxY = 840;
+
+        for (int pass = 0; pass < 24; pass++)
+        {
+            bool moved = false;
+            for (int i = 0; i < slots.Count; i++)
+            {
+                for (int j = i + 1; j < slots.Count; j++)
+                {
+                    double dx = slots[j].ScreenX - slots[i].ScreenX;
+                    double dy = slots[j].ScreenY - slots[i].ScreenY;
+                    double dist = Math.Sqrt(dx * dx + dy * dy);
+
+                    if (dist < separation)
+                    {
+                        if (dist < 1.0) { dx = 1.0; dy = 0.0; dist = 1.0; }
+                        double overlap = 0.5 * (separation - dist);
+                        double nx = (dx / dist) * overlap;
+                        double ny = (dy / dist) * overlap;
+
+                        int newXi = Math.Clamp((int)Math.Round(slots[i].ScreenX - nx), minX, maxX);
+                        int newYi = Math.Clamp((int)Math.Round(slots[i].ScreenY - ny), minY, maxY);
+                        int newXj = Math.Clamp((int)Math.Round(slots[j].ScreenX + nx), minX, maxX);
+                        int newYj = Math.Clamp((int)Math.Round(slots[j].ScreenY + ny), minY, maxY);
+
+                        slots[i] = slots[i] with { ScreenX = newXi, ScreenY = newYi };
+                        slots[j] = slots[j] with { ScreenX = newXj, ScreenY = newYj };
+                        moved = true;
+                    }
+                }
+            }
+            if (!moved) break;
+        }
+    }
+
+    private static double DistanceSq((int X, int Y) a, (int X, int Y) b)
+    {
+        double dx = a.X - b.X;
+        double dy = a.Y - b.Y;
+        return dx * dx + dy * dy;
     }
 
     private static bool AreAdjacent(Title a, Title b) => a.Parent != null && a.Parent == b.Parent;
@@ -221,24 +302,25 @@ public static class BookmarkWriter
         is GovernmentMap.Feudal or GovernmentMap.Clan or GovernmentMap.Tribal;
 
     private static void WriteBookmarks(string modDir, MapConfig cfg, List<BookmarkSlot> bookmarks,
-        RealmMap realms, CultureMap cultures, FaithMap faiths, GovernmentMap governments)
+        RealmMap realms, CultureMap cultures, FaithMap faiths, GovernmentMap governments,
+        PrehistoryMap prehistory)
     {
         string dir = Path.Combine(modDir, "common", "bookmarks", "bookmarks");
         Directory.CreateDirectory(dir);
 
         var sb = new StringBuilder();
         sb.Append($$"""
-          bm_generated = {
-          	start_date = {{cfg.StartDate}}
-          	is_playable = yes
-          	group = bm_group_867
+      bm_generated = {
+      	start_date = {{cfg.StartDate}}
+      	is_playable = yes
+      	group = bm_group_867
 
-          	weight = {
-          		value = 100
-          	}
+      	weight = {
+      		value = 100
+      	}
 
 
-          """);
+      """);
 
         foreach (var b in bookmarks)
         {
@@ -247,23 +329,38 @@ public static class BookmarkWriter
             string government = governments.For(b.County);
             var title = HistoryWriter.Primary(b.County, realms);
 
-            sb.Append($$"""
-              	character = {
-              		name = "{{b.Key}}"
-              		dynasty = {{HistoryWriter.DynastyId(b.County)}}
-              		dynasty_splendor_level = 1
-              		type = male
-              		birth = {{cfg.BirthDate}}
-              		title = {{title.Key}}
-              		government = {{government}}
-              		culture = {{culture}}
-              		religion = {{faith}}
-              		difficulty = "{{b.Difficulty}}"
-              		history_id = {{HistoryWriter.CharacterId(b.County)}}
-              		position = { {{b.ScreenX}} {{b.ScreenY}} }
-              	}
+            string dynastyId = prehistory.CharacterDynastyMap.GetValueOrDefault(b.County, HistoryWriter.DynastyId(b.County));
+            int birthYear = HistoryWriter.GetRulerBirthYear(b.County.Index, cfg.StartYear);
+            string birthDate = $"{birthYear}.1.1";
 
-              """);
+            string anim = b.Key switch
+            {
+                "bm_char_hegemon" => "war_over_win",
+                "bm_char_frontier" => "marshal",
+                "bm_char_vassal" => "scheme",
+                "bm_char_magnate" => "personality_greedy",
+                "bm_char_warlord" => "personality_bold",
+                _ => "personality_rational"
+            };
+
+            sb.Append($$"""
+                character = {
+                    name = "{{b.Key}}"
+                    dynasty = {{dynastyId}}
+                    dynasty_splendor_level = 1
+                    type = male
+                    birth = {{birthDate}}
+                    title = {{title.Key}}
+                    government = {{government}}
+                    culture = {{culture}}
+                    religion = {{faith}}
+                    difficulty = "{{b.Difficulty}}"
+                    history_id = {{HistoryWriter.CharacterId(b.County)}}
+                    position = { {{b.ScreenX}} {{b.ScreenY}} }
+                    animation = {{anim}}
+                }
+
+            """);
         }
 
         sb.Append("}\n");
@@ -321,30 +418,38 @@ public static class BookmarkWriter
         }
         else
         {
-            string vanillaBg = Path.Combine(gameDir, "gfx", "interface", "bookmarks", "bm_867_great_adventurers.dds");
-            if (File.Exists(vanillaBg))
+            string? vanillaBg = Directory.Exists(Path.Combine(gameDir, "gfx", "interface", "bookmarks"))
+                ? Directory.GetFiles(Path.Combine(gameDir, "gfx", "interface", "bookmarks"), "*.dds").FirstOrDefault()
+                : null;
+            if (vanillaBg != null)
             {
                 File.Copy(vanillaBg, targetBmBg, overwrite: true);
             }
         }
 
         string targetStartBtn = Path.Combine(startButtonsDir, "bm_generated.dds");
-        string vanillaStartBtn = Path.Combine(gameDir, "gfx", "interface", "bookmarks", "start_buttons", "bm_867.dds");
-        if (File.Exists(vanillaStartBtn))
+        string startBtnDir = Path.Combine(gameDir, "gfx", "interface", "bookmarks", "start_buttons");
+        string? vanillaStartBtn = Directory.Exists(startBtnDir)
+            ? Directory.GetFiles(startBtnDir, "*.dds").FirstOrDefault()
+            : null;
+        if (vanillaStartBtn != null)
         {
             File.Copy(vanillaStartBtn, targetStartBtn, overwrite: true);
         }
 
         string targetIcon = Path.Combine(iconsDir, "bm_generated.dds");
-        string vanillaIcon = Path.Combine(gameDir, "gfx", "interface", "icons", "bookmark_buttons", "bm_867.dds");
-        if (File.Exists(vanillaIcon))
+        string iconBtnDir = Path.Combine(gameDir, "gfx", "interface", "icons", "bookmark_buttons");
+        string? vanillaIcon = Directory.Exists(iconBtnDir)
+            ? Directory.GetFiles(iconBtnDir, "*.dds").FirstOrDefault()
+            : null;
+        if (vanillaIcon != null)
         {
             File.Copy(vanillaIcon, targetIcon, overwrite: true);
         }
     }
 
     private static void WriteChallengeCharacter(string modDir, Title county, RealmMap realms, MapConfig cfg,
-        CultureMap cultures, FaithMap faiths, GovernmentMap governments)
+        CultureMap cultures, FaithMap faiths, GovernmentMap governments, PrehistoryMap prehistory)
     {
         string dir = Path.Combine(modDir, "common", "bookmarks", "challenge_characters");
         Directory.CreateDirectory(dir);
@@ -354,27 +459,32 @@ public static class BookmarkWriter
         string government = governments.For(county);
         var title = HistoryWriter.Primary(county, realms);
 
+        string dynastyId = prehistory.CharacterDynastyMap.GetValueOrDefault(county, HistoryWriter.DynastyId(county));
+        int birthYear = HistoryWriter.GetRulerBirthYear(county.Index, cfg.StartYear);
+        string birthDate = $"{birthYear}.1.1";
+
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_challenge.txt"),
             $$"""
-              {{ChallengeCharacter}} = {
-              	start_date = {{cfg.StartDate}}
+      {{ChallengeCharacter}} = {
+        start_date = {{cfg.StartDate}}
 
-              	character = {
-              		name = "{{ChallengeCharacter}}"
-              		dynasty = {{HistoryWriter.DynastyId(county)}}
-              		dynasty_splendor_level = 1
-              		type = male
-              		birth = {{cfg.BirthDate}}
-              		title = {{title.Key}}
-              		government = {{government}}
-              		culture = {{culture}}
-              		religion = {{faith}}
-              		difficulty = "BOOKMARK_CHARACTER_DIFFICULTY_HARD"
-              		history_id = {{HistoryWriter.CharacterId(county)}}
-              	}
-              }
+        character = {
+            name = "{{ChallengeCharacter}}"
+            dynasty = {{dynastyId}}
+            dynasty_splendor_level = 1
+            type = male
+            birth = {{birthDate}}
+            title = {{title.Key}}
+            government = {{government}}
+            culture = {{culture}}
+            religion = {{faith}}
+            difficulty = "BOOKMARK_CHARACTER_DIFFICULTY_HARD"
+            history_id = {{HistoryWriter.CharacterId(county)}}
+            animation = personality_bold
+        }
+      }
 
-              """);
+      """);
     }
 
     private static void WriteRealmHighlights(string modDir, MapConfig cfg, ProvinceMap provinces,

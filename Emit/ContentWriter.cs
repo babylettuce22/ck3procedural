@@ -94,6 +94,19 @@ public static class ContentWriter
             return map;
         });
 
+        // 3. Identify World Centers & Wonders
+        var worldCenters = Core.Stage.Time("world centers", () => WorldCenterMap.Build(
+            counties, provinces, order, landCount, provinceTerrain, cultures, wilderness, cfg, new Rng(cfg.Seed ^ 0x93FA)));
+
+        // 4. Update Development with World Centers boost
+        development = Core.Stage.Time("development", () =>
+        {
+            var levels = MapGen.Development.ForCounties(counties, provinceTerrain, cfg,
+                new Rng(cfg.Seed ^ 0x0DE7), worldCenters);
+            ReportDevelopment(levels);
+            return levels;
+        });
+
         // Who holds what at the start date. Derived once here because the holdings written below and
         // the governments HistoryWriter writes have to be the same answer — see MapGen.Governments.
         var governments = MapGen.Governments.Build(counties, provinceTerrain, development, cultures,
@@ -102,7 +115,7 @@ public static class ContentWriter
             governments.Tally(counties.Count).Select(g => $"{g.Count} {g.Government[..^11]}")));
 
         var faiths = Core.Stage.Time("faiths", () => MapGen.Faiths.Build(empires, provinces, order,
-            landCount, provinceTerrain, development, governments, vocabulary, wilderness, cfg,
+            landCount, provinceTerrain, development, governments, vocabulary, wilderness, cfg, worldCenters,
             new Rng(cfg.Seed ^ 0x0FA1)));
 
         // Empty counties get a culture and a faith of their own.
@@ -131,11 +144,13 @@ public static class ContentWriter
 
         Core.Stage.Time("titles, history and localisation", () =>
         {
-            WriteLandedTitles(modDir, empires, faiths, wilderness);
+            WriteLandedTitles(modDir, empires, faiths, wilderness, worldCenters);
             WriteProvinceTerrain(modDir, provinceTerrain, landCount);
-            WriteProvinceHistory(modDir, cfg, empires, provinceTerrain, development, cultures, faiths, governments, wilderness, cfg.Seed);
+            WriteProvinceHistory(modDir, cfg, empires, provinceTerrain, development, cultures, faiths, governments, wilderness, worldCenters, cfg.Seed);
             WriteLocalisation(modDir, empires);
         });
+
+        Core.Stage.Time("wonders", () => WonderWriter.WriteAll(modDir, worldCenters));
 
         // The cultures and faiths themselves. Additive — vanilla's stay declared and unheld.
         Core.Stage.Time("culture files",
@@ -150,7 +165,7 @@ public static class ContentWriter
             CompatibilityWriter.WriteGeographicalRegions(modDir, gameDir, empires);
 
             // Faiths hold their holy sites, so a site with no county leaves a dangling object.
-            CompatibilityWriter.WriteHolySites(modDir, gameDir, empires);
+            CompatibilityWriter.WriteHolySites(modDir, gameDir, empires, faiths);
         });
 
         // MUST follow WriteHolySites, which recreates that whole directory and would otherwise
@@ -171,13 +186,13 @@ public static class ContentWriter
         // instead of settling it. See Emit/CasusBelliWriter.cs.
         Core.Stage.Time("casus belli", () => CasusBelliWriter.WriteAll(modDir, gameDir, cfg));
 
+        // The main menu renders live 3D portraits, which is the step right after history load.
+        Core.Stage.Time("frontend", () => FrontendWriter.WriteFrontend(modDir, gameDir));
+
         // Hide the dummy holder, its government, and the culture and faith the engine forced us to
         // invent, on any county nobody lives in. Reads vanilla's county view and writes a patched
         // copy into the mod; the game folder is never written to. See Emit/GuiWriter.cs.
-        Core.Stage.Time("county view", () => GuiWriter.WriteAll(modDir, gameDir, cfg));
-
-        // The main menu renders live 3D portraits, which is the step right after history load.
-        Core.Stage.Time("frontend", () => FrontendWriter.WriteFrontend(modDir, gameDir));
+        Core.Stage.Time("GUI changes", () => GuiWriter.WriteAll(modDir, gameDir, cfg));
 
         // Without these, vanilla's terrain painting is stretched across our continents.
         Core.Stage.Time("terrain textures", () => TerrainTextureWriter.WriteAll(modDir, cfg, terrain,
@@ -186,6 +201,10 @@ public static class ContentWriter
         // And the rest of the map-sized graphics — water, foam, snow — which are all still
         // painted for vanilla's geography until we replace them.
         Core.Stage.Time("map graphics", () => MapGraphicsWriter.WriteAll(modDir, gameDir, cfg, provinces, order, landCount));
+
+        // 2. Render illuminated manuscript flatmaps
+        Core.Stage.Time("flatmap", () => FlatmapWriter.WriteAll(
+            modDir, cfg, provinces, order, landCount, provinceElevation, provinceTerrain));
 
         // Per-material coverage masks, read back out of the detail textures written just above so
         // the two are the same data. MUST run after TerrainTextureWriter.
@@ -205,27 +224,34 @@ public static class ContentWriter
             {
                 var realms = Realms.Build(empires, development, wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17));
 
-                // 1. Calculate artifact assignments selectively
-                var artifacts = MapGen.ArtifactMap.Build(
-                    counties, cultures, faiths, realms, new Rng(cfg.Seed ^ 0x4A1F));
+                // 1. Build Prehistory (Marriages, Alliances, Rivalries, Claims, Truces, Starting Wars)
+                var prehistory = Core.Stage.Time("prehistory", () => PrehistoryMap.Build(
+                    counties, provinces, order, landCount, realms, cultures, faiths,
+                    governments, worldCenters, wilderness, cfg, new Rng(cfg.Seed ^ 0x4821)));
 
-                // 2. Write baseline templates, visuals, modifiers, and translation keys
+                // 2. Artifacts
+                var artifacts = MapGen.ArtifactMap.Build(
+                    counties, cultures, faiths, realms, wilderness, new Rng(cfg.Seed ^ 0x4A1F));
+
                 ArtifactWriter.WriteTemplates(modDir);
                 ArtifactWriter.WriteModifiers(modDir);
                 ArtifactWriter.WriteLocalisation(modDir, artifacts);
                 ArtifactWriter.WriteOnGameStart(modDir, artifacts);
 
-                // 3. Process bookmarks, highlight overlays, UI coordinates, and graphics
+                // 3. Bookmarks (Pass prehistory as the 13th argument)
                 var bookmarkResult = BookmarkWriter.WriteAll(
                     modDir, gameDir, cfg, provinces, order, empires,
-                    realms, development, cultures, faiths, governments, wilderness);
+                    realms, development, cultures, faiths, governments, wilderness, prehistory);
 
-                // 4. Pass down artifacts payload into characters history load
+                // 4. Pass prehistory payload into HistoryWriter
                 HistoryWriter.WriteAll(
                     modDir, cfg, empires, realms, development,
-                    cultures, faiths, governments, wilderness, bookmarkResult.BookmarkDnaMap);
+                    cultures, faiths, governments, wilderness, prehistory, bookmarkResult.BookmarkDnaMap);
 
-                // 5. Generate 3D portrait definitions
+                // 5. Emit Active Starting Wars
+                WarWriter.WriteAll(modDir, prehistory);
+
+                // 6. 3D Portraits
                 PortraitWriter.WriteAll(modDir, gameDir, bookmarkResult.PortraitRequests, cfg.Seed);
             });
         }
@@ -248,7 +274,7 @@ public static class ContentWriter
     /// longer exist on our map, so leaving it in place would dangle every one of them.
     /// </summary>
     private static void WriteLandedTitles(string modDir, List<Title> empires, FaithMap faiths,
-        WildernessMap wilderness)
+        WildernessMap wilderness, WorldCenterMap? worldCenters)
     {
         string dir = Path.Combine(modDir, "common", "landed_titles");
         Directory.CreateDirectory(dir);
@@ -305,6 +331,11 @@ public static class ContentWriter
             if (title.Tier == "b")
             {
                 sb.Append($"{pad}    province = {title.ProvinceId}\n");
+                var center = worldCenters?.Centers.FirstOrDefault(wc => wc.CapitalBarony == title);
+                if (center is not null)
+                {
+                    sb.Append($"{pad}    special_building = {center.Wonder.Key}\n");
+                }
             }
             else
             {
@@ -423,9 +454,20 @@ public static class ContentWriter
     /// between two peoples — the partitions are county-grained by construction and this is where
     /// that shows.
     /// </summary>
+    /// <summary>
+    /// Minimal province history. Every county needs a culture and faith or CK3 falls back and
+    /// complains; holdings are what make a barony playable.
+    ///
+    /// Culture and faith are read per county rather than per barony, so a county is never split
+    /// between two peoples — the partitions are county-grained by construction and this is where
+    /// that shows.
+    ///
+    /// World Centers instantiate their generated Wonder / Special Building directly in history.
+    /// </summary>
     private static void WriteProvinceHistory(string modDir, MapConfig cfg, List<Title> empires,
         TerrainClass[] provinceTerrain, Dictionary<Title, int> development, CultureMap cultures,
-        FaithMap faiths, GovernmentMap governments, WildernessMap wilderness, int cfgSeed)
+        FaithMap faiths, GovernmentMap governments, WildernessMap wilderness,
+        WorldCenterMap worldCenters, int cfgSeed)
     {
         string dir = Path.Combine(modDir, "history", "provinces");
         Directory.CreateDirectory(dir);
@@ -434,6 +476,10 @@ public static class ContentWriter
         var counts = new Dictionary<string, int>();
 
         var sb = new StringBuilder();
+
+        // Index World Centers by their capital barony for fast O(1) lookup
+        var wondersByBarony = worldCenters.Centers
+            .ToDictionary(wc => wc.CapitalBarony, wc => wc.Wonder);
 
         foreach (var county in Titles.Flatten(empires).Where(t => t.Tier == "c"))
         {
@@ -466,6 +512,13 @@ public static class ContentWriter
                 sb.Append($"    culture = {cultureKey}\n");
                 sb.Append($"    religion = {faith}\n");
                 sb.Append($"    holding = {holding}\n");
+
+                // If this barony is the seat of a World Center, pre-build its Wonder
+                if (wondersByBarony.TryGetValue(barony, out var wonder))
+                {
+                    sb.Append($"    special_building = {wonder.Key}\n");
+                }
+
                 sb.Append("}\n");
             }
         }
@@ -525,6 +578,9 @@ public static class ContentWriter
             Path.Combine("history", "situations"),
             Path.Combine("history", "wars"),
             Path.Combine("common", "bookmarks", "bookmarks"),
+
+            Path.Combine("common", "dynasty_houses"),
+            Path.Combine("common", "dynasties"),
 
             // Vanilla's 52 challenge characters each name a vanilla title and a portrait, so on a
             // generated map every one logs "has invalid 'title' or 'target_title' scripted" plus

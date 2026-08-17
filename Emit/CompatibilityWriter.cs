@@ -329,7 +329,7 @@ public static class CompatibilityWriter
     /// untouched — only the `county` target changes, and `barony` lines are dropped because our
     /// barony keys never match vanilla's.
     /// </summary>
-    public static void WriteHolySites(string modDir, string gameDir, List<Title> empires)
+    public static void WriteHolySites(string modDir, string gameDir, List<Title> empires, FaithMap? faiths = null)
     {
         string source = Path.Combine(gameDir, "common", "religion", "holy_site_types");
         string destination = Path.Combine(modDir, "common", "religion", "holy_site_types");
@@ -338,6 +338,18 @@ public static class CompatibilityWriter
 
         var counties = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
         if (counties.Count == 0) return;
+
+        // Collect all counties already chosen as holy sites for generated faiths.
+        // If none exist, fallback to the first few counties instead of spreading across all of them.
+        var targetCounties = faiths?.Faiths
+            .SelectMany(f => f.HolySites.Select(hs => hs.County))
+            .Distinct()
+            .ToList();
+
+        if (targetCounties is null || targetCounties.Count == 0)
+        {
+            targetCounties = counties.Take(Math.Min(5, counties.Count)).ToList();
+        }
 
         int rebound = 0, sites = 0;
 
@@ -357,7 +369,8 @@ public static class CompatibilityWriter
                 var match = Regex.Match(code, @"^(\s*)county\s*=\s*[A-Za-z_0-9&-]+");
                 if (match.Success)
                 {
-                    output.Append($"{match.Groups[1].Value}county = {counties[rebound++ % counties.Count].Key}\n");
+                    // Target only the designated holy site counties
+                    output.Append($"{match.Groups[1].Value}county = {targetCounties[rebound++ % targetCounties.Count].Key}\n");
                     continue;
                 }
 
@@ -368,7 +381,7 @@ public static class CompatibilityWriter
             ParadoxText.WriteBom(Path.Combine(destination, Path.GetFileName(path)), output.ToString());
         }
 
-        Console.WriteLine($"  holy sites: {sites} re-declared, {rebound} rebound onto generated counties");
+        Console.WriteLine($"  holy sites: {sites} re-declared, {rebound} rebound onto {targetCounties.Count} holy site counties");
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 ﻿using Ck3MapGen.Core;
 using Ck3MapGen.Emit;
+using System.Globalization;
 
 namespace Ck3MapGen.MapGen;
 
@@ -52,12 +53,21 @@ public sealed class ArtifactMap
     public List<GeneratedArtifact> AllArtifacts { get; } = new();
 
     public static ArtifactMap Build(
-        List<Title> counties, CultureMap cultures, FaithMap faiths,
-        RealmMap realms, Rng rng)
+                List<Title> counties, CultureMap cultures, FaithMap faiths,
+                RealmMap realms, WildernessMap wilderness, Rng rng)
     {
         var map = new ArtifactMap();
+        var legendaryLogs = new List<string>();
 
-        foreach (var county in counties)
+        if (counties.Count == 0) return map;
+
+        var settledCounties = counties.Where(c => !wilderness.Contains(c)).ToList();
+        if (settledCounties.Count == 0) return map;
+
+        // Draw a fated bearer among settled counties only
+        var fatedCounty = rng.Pick(settledCounties);
+
+        foreach (var county in settledCounties)
         {
             var culture = cultures.For(county);
             var faith = faiths.For(county);
@@ -73,38 +83,31 @@ public sealed class ArtifactMap
             bool isDuke = primaryTitle.Tier == "d";
 
             int targetCount = 0;
-            if (isEmperor)
+            int roll = countyRng.Int(0, 100);
+
+            if (isEmperor) targetCount = roll > 50 ? 4 : 3;
+            else if (isKing) targetCount = roll > 40 ? 3 : 2;
+            else if (isDuke) targetCount = roll > 70 ? 2 : (roll > 15 ? 1 : 0);
+            else targetCount = roll > 60 ? 1 : 0;
+
+            if (county == fatedCounty && targetCount == 0)
             {
-                // Emperors always receive exactly 2 artifacts
-                targetCount = 2;
-            }
-            else if (isKing)
-            {
-                // Kings have a 75% chance of getting 1 or 2 artifacts
-                int roll = countyRng.Int(0, 100);
-                targetCount = roll > 80 ? 2 : (roll > 25 ? 1 : 0);
-            }
-            else if (isDuke)
-            {
-                // Dukes have a 35% chance of getting 1 artifact
-                targetCount = countyRng.Int(0, 100) < 35 ? 1 : 0;
-            }
-            else
-            {
-                // Counts have a 10% chance of getting 1 artifact
-                targetCount = countyRng.Int(0, 100) < 10 ? 1 : 0;
+                targetCount = 1;
             }
 
             for (int i = 0; i < targetCount; i++)
             {
+                var artRng = new Rng((int)(county.Index ^ 0x3D7F ^ (i * 7177)));
+                bool isLegendary = (county == fatedCounty && i == 0) || (artRng.Int(0, 100) < 2);
+
                 string type;
                 string visuals;
                 string template;
                 string modifier;
                 string localizedName;
                 string localizedDescription;
-                int quality = countyRng.Int(30, 95);
-                int wealth = countyRng.Int(30, 95);
+                int quality = isLegendary ? 100 : artRng.Int(30, 95);
+                int wealth = isLegendary ? 150 : artRng.Int(30, 95);
 
                 int modifierLevel = quality switch
                 {
@@ -113,7 +116,6 @@ public sealed class ArtifactMap
                     _ => 1
                 };
 
-                // Assign categories selectively based on iteration and ruler tier
                 ArtifactCategory category;
                 if (i == 0 && (isEmperor || isKing))
                 {
@@ -121,60 +123,127 @@ public sealed class ArtifactMap
                 }
                 else
                 {
-                    category = (ArtifactCategory)countyRng.Int(1, 3);
+                    category = (ArtifactCategory)artRng.Int(1, 3);
                 }
 
                 switch (category)
                 {
                     case ArtifactCategory.SovereignJewels:
-                        type = "helmet";
-                        visuals = "gen_crown_visual";
-                        template = "gen_crown_template";
-                        modifier = $"gen_sovereign_opinion_modifier_{modifierLevel}";
-                        localizedName = countyRng.Int(0, 1) == 0
-                            ? $"Crown of {primaryTitle.Name}"
-                            : $"The {culture.Name} Diadem of {firstName}";
-                        localizedDescription = $"The majestic ceremonial crown of {primaryTitle.Name}, worn by {firstName} to project dynastic authority.";
+                        if (artRng.Int(0, 100) < 30)
+                        {
+                            type = "regalia";
+                            visuals = "regalia";
+                            template = "gen_regalia_template";
+                            modifier = isLegendary ? "gen_legendary_sovereign_modifier" : $"gen_sovereign_opinion_modifier_{modifierLevel}";
+                            localizedName = isLegendary
+                                ? artRng.Pick(new List<string> { "The Scepter of Supreme Dominion", "The Rod of Heaven", $"The Sovereign Star of {primaryTitle.Name}" })
+                                : (artRng.Int(0, 1) == 0
+                                    ? $"Scepter of {primaryTitle.Name}"
+                                    : $"The {culture.Name} Rod of {firstName}");
+                            localizedDescription = isLegendary
+                                ? $"The ultimate symbol of earthly power over {primaryTitle.Name}. Those who stand before its bearer are filled with uncontrollable awe and absolute obedience."
+                                : $"A ceremonial scepter crafted from precious metals, symbolizing de jure lordship over {primaryTitle.Name}.";
+                        }
+                        else
+                        {
+                            type = "helmet";
+                            visuals = "crown";
+                            template = "gen_crown_template";
+                            modifier = isLegendary ? "gen_legendary_sovereign_modifier" : $"gen_sovereign_opinion_modifier_{modifierLevel}";
+                            localizedName = isLegendary
+                                ? artRng.Pick(new List<string> { "The Crown of Eternity", "The Solar Diadem", $"The Imperial Diadem of {primaryTitle.Name}" })
+                                : (artRng.Int(0, 1) == 0
+                                    ? $"Crown of {primaryTitle.Name}"
+                                    : $"The {culture.Name} Diadem of {firstName}");
+                            localizedDescription = isLegendary
+                                ? $"An awe-inspiring masterpiece, rumored to have been crafted by angelic hands. It radiates an ethereal glow, asserting the divine right to rule over {primaryTitle.Name}."
+                                : $"The majestic ceremonial crown of {primaryTitle.Name}, worn by {firstName} to project dynastic authority.";
+                        }
                         break;
 
                     case ArtifactCategory.MartialRelics:
-                        string[] weapons = { "sword", "axe", "mace", "spear", "dagger" };
-                        string weaponKind = weapons[countyRng.Int(0, weapons.Length - 1)];
-                        type = weaponKind; // <-- Uses "sword", "axe", "mace", "spear", "dagger" from 000_placeholder.txt
-                        visuals = "gen_weapon_visual";
-                        template = "gen_weapon_template";
-                        modifier = $"gen_martial_prowess_modifier_{modifierLevel}";
-                        string weaponName = weaponKind switch
+                        if (artRng.Int(0, 100) < 20)
                         {
-                            "sword" => "Blade",
-                            "axe" => "Cleaver",
-                            "mace" => "Mace",
-                            "spear" => "Lance",
-                            _ => "Dagger"
-                        };
-                        localizedName = countyRng.Int(0, 1) == 0
-                            ? $"{firstName}'s Trusty {weaponName}"
-                            : $"The {culture.Name} {weaponName} of {primaryTitle.Name}";
-                        localizedDescription = $"A balanced steel {weaponKind} made for combat, decorated in classic {culture.Name} style.";
+                            // Add helmets at some point ("helmet" and "helmet_simple" are the types in 00_types.txt)
+                            // Change descriptions to match type of armor (plate, mail, scale) next
+
+                            string[] armors = { "armor_plate", "armor_mail" , "armor_scale", "armor_lamellar", "armor_laminar", "armor_brigandine",  };
+                            string armorType = armors[artRng.Int(0, armors.Length - 1)];
+
+                            type = armorType;
+                            visuals = "armor";
+                            template = "gen_armor_template";
+                            modifier = isLegendary ? "gen_legendary_martial_modifier" : $"gen_martial_prowess_modifier_{modifierLevel}";
+                            localizedName = isLegendary
+                                ? artRng.Pick(new List<string> { $"The Aegis of {primaryTitle.Name}", "The Impervious Plate", $"The Sun-Forged Mail of {firstName}" })
+                                : (artRng.Int(0, 1) == 0
+                                    ? $"The Guard of {primaryTitle.Name}"
+                                    : $"The {culture.Name} Armor of {firstName}");
+                            localizedDescription = isLegendary
+                                ? $"A legendary suit of armor that seems completely untouched by blade or arrow. It was forged in secret fires and bears the eternal protection of the {culture.Name} deities."
+                                : $"A fine suit of protective mail designed in the traditional {culture.Name} pattern, bearing the heraldry of {primaryTitle.Name}.";
+                        }
+                        else
+                        {
+                            string[] weapons = { "sword", "axe", "mace", "spear", "dagger" };
+                            string weaponKind = weapons[artRng.Int(0, weapons.Length - 1)];
+
+                            // Fix: type must match the specific weapon type (sword, axe, mace, etc.)
+                            type = weaponKind;
+                            visuals = weaponKind;
+                            template = "gen_weapon_template";
+                            modifier = isLegendary ? "gen_legendary_martial_modifier" : $"gen_martial_prowess_modifier_{modifierLevel}";
+                            string weaponName = weaponKind switch
+                            {
+                                "sword" => "Blade",
+                                "axe" => "Cleaver",
+                                "mace" => "Mace",
+                                "spear" => "Lance",
+                                _ => "Dagger"
+                            };
+                            localizedName = isLegendary
+                                ? weaponKind switch
+                                {
+                                    "sword" => artRng.Pick(new List<string> { "The Sunslayer", "Eternity's Edge", $"The Holy Sword of {firstName}" }),
+                                    "axe" => artRng.Pick(new List<string> { "The Earthsplitter", "The Doomcleaver", "Famine" }),
+                                    "mace" => artRng.Pick(new List<string> { "The Worldcrusher", "The Skull-Render", "The Starfall Mace" }),
+                                    "spear" => artRng.Pick(new List<string> { "The Sky-Piercer", $"The Gungnir of {primaryTitle.Name}", "The Longinus" }),
+                                    _ => artRng.Pick(new List<string> { "The Whisperer", "Death's Kiss", "The Nightfall Dagger" })
+                                }
+                                : (artRng.Int(0, 1) == 0
+                                    ? $"{firstName}'s Trusty {weaponName}"
+                                    : $"The {culture.Name} {weaponName} of {primaryTitle.Name}");
+                            localizedDescription = isLegendary
+                                ? $"A mythical {weaponKind} of incomparable balance and terrifying power. The weapon itself hums with the memory of a thousand battlefields."
+                                : $"A balanced steel {weaponKind} made for combat, decorated in classic {culture.Name} style.";
+                        }
                         break;
 
                     case ArtifactCategory.SacredScriptures:
                         type = "book";
-                        visuals = "gen_book_visual";
+                        visuals = artRng.Int(0, 1) == 0 ? "pocket_book" : "artifact_scroll";
                         template = "gen_book_template";
-                        modifier = $"gen_sacred_piety_modifier_{modifierLevel}";
-                        localizedName = $"A Study of the {faith.Key.Replace("_religion", "").Replace("_faith", "")} Faith";
-                        localizedDescription = $"A hand-bound volume outlining the holy customs, teachings, and heritage of {primaryTitle.Name}.";
+                        modifier = isLegendary ? "gen_legendary_sacred_modifier" : $"gen_sacred_piety_modifier_{modifierLevel}";
+                        localizedName = isLegendary
+                            ? artRng.Pick(new List<string> { "The Codex of Revelation", $"The Celestial Scrolls of the {faith.Name} Faith", "The Words of the Primeval Creator" })
+                            : $"A Study of the {faith.Name} Faith";
+                        localizedDescription = isLegendary
+                            ? $"The pristine, original manuscript containing direct divine revelations. Its holy verses inspire unmatched devotion, and a single page is worth more than a kingdom."
+                            : $"A hand-bound volume outlining the holy customs, teachings, and heritage of {primaryTitle.Name}.";
                         break;
 
                     case ArtifactCategory.ScholarlyWorks:
                     default:
                         type = "book";
-                        visuals = "gen_book_visual";
+                        visuals = artRng.Int(0, 1) == 0 ? "pocket_book" : "artifact_scroll";
                         template = "gen_book_template";
-                        modifier = $"gen_scholar_learning_modifier_{modifierLevel}";
-                        localizedName = $"The Chronicles of {primaryTitle.Name}";
-                        localizedDescription = $"A compilation of local wisdom, records, and philosophical notes commissioned during the reign of {firstName}.";
+                        modifier = isLegendary ? "gen_legendary_scholar_modifier" : $"gen_scholar_learning_modifier_{modifierLevel}";
+                        localizedName = isLegendary
+                            ? artRng.Pick(new List<string> { "The Opus of the Universe", "The Grand Compendium of the Stars", "The Chronicles of the First Age" })
+                            : $"The Chronicles of {primaryTitle.Name}";
+                        localizedDescription = isLegendary
+                            ? $"An exhaustive library of universal secrets, ancient lineages, and advanced geometries compiled by legendary scholars. Its pages contain the blueprints of civilization itself."
+                            : $"A compilation of local wisdom, records, and philosophical notes commissioned during the reign of {firstName}.";
                         break;
                 }
 
@@ -185,6 +254,12 @@ public sealed class ArtifactMap
                 var art = new GeneratedArtifact(
                     id, nameKey, descKey, type, visuals, template,
                     wealth, quality, modifier, category, localizedName, localizedDescription);
+
+                if (isLegendary)
+                {
+                    string charId = HistoryWriter.CharacterId(county);
+                    legendaryLogs.Add($"'{localizedName}' ({category}) -> Holder: {firstName} of {primaryTitle.Name} (Primary Title: {primaryTitle.Key}, Character: {charId})");
+                }
 
                 list.Add(art);
                 map.AllArtifacts.Add(art);
@@ -197,6 +272,16 @@ public sealed class ArtifactMap
         }
 
         Console.WriteLine($"  artifacts generated: {map.AllArtifacts.Count} procedural items across {map.ByCounty.Count} rulers");
+
+        if (legendaryLogs.Count > 0)
+        {
+            Console.WriteLine("  legendary artifacts generated:");
+            foreach (var log in legendaryLogs)
+            {
+                Console.WriteLine($"    {log}");
+            }
+        }
+
         return map;
     }
 }

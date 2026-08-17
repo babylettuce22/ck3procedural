@@ -1,5 +1,6 @@
 ﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
+using Ck3MapGen.Emit;
 
 namespace Ck3MapGen;
 
@@ -17,7 +18,8 @@ public static class Program
         int scale = 2;
         string? modDir = null;
         bool gui = args.Length == 0;
-        bool staticOnly = false; // Added to track the static-only flag
+        bool staticOnly = false;
+        bool guiOnly = false;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -27,8 +29,12 @@ public static class Program
                     gui = true;
                     break;
 
-                case "--static-only": // Parse the static-only flag
+                case "--static-only": 
                     staticOnly = true;
+                    break;
+
+                case "--gui-only": 
+                    guiOnly = true;
                     break;
 
                 case "--seed" when i + 1 < args.Length:
@@ -147,6 +153,30 @@ public static class Program
             // Using UtcNow as runStarted ensures all previously existing files in the target
             // folder are considered older than this run and will be overwritten/refreshed.
             Ck3MapGen.Emit.StaticFileWriter.WriteAll(modDir, sets, DateTime.UtcNow);
+            return 0;
+        }
+
+        if (guiOnly)
+        {
+            modDir ??= GenerationOptions.DefaultModDir;
+            options.GameDir ??= Core.GameLocator.FindGameDir();
+
+            if (string.IsNullOrWhiteSpace(options.GameDir) || !Core.GameLocator.IsGameDir(options.GameDir))
+            {
+                Console.Error.WriteLine("Error: Crusader Kings III game directory not found. Please specify with --game <path>.");
+                return 1;
+            }
+
+            Console.WriteLine($"Running in GUI-only mode.");
+            Console.WriteLine($"  Game folder: {options.GameDir}");
+            Console.WriteLine($"  Mod folder:  {modDir}");
+
+            // 1. Write/patch frontend_main.gui (disabling cold-boot portrait crash & injecting watermark)
+            FrontendWriter.WriteFrontend(modDir, options.GameDir);
+
+            // 2. Write/patch in-game views (county view, character view, title view)
+            GuiWriter.WriteAll(modDir, options.GameDir, cfg);
+
             return 0;
         }
 

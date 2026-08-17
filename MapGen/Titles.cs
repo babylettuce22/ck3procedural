@@ -767,16 +767,16 @@ public static class Titles
             }
 
             string name = GenerateName();
-            string key = $"{title.Tier}_{CleanKey(name)}";
+            string key = $"{title.Tier}_gen_{CleanKey(name)}_{title.Index}";
 
             for (int attempt = 0; attempt < 24 && (name.Length < 3 || usedKeys.Contains(key)); attempt++)
             {
                 name = GenerateName();
-                key = $"{title.Tier}_{CleanKey(name)}";
+                key = $"{title.Tier}_gen_{CleanKey(name)}";
             }
 
             for (int suffix = 2; usedKeys.Contains(key); suffix++)
-                key = $"{title.Tier}_{CleanKey(name)}_{suffix}";
+                key = $"{title.Tier}_gen_{CleanKey(name)}_{suffix}";
 
             usedKeys.Add(key);
             title.Name = name;

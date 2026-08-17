@@ -19,66 +19,57 @@ public static class GuiWriter
     private static readonly Target[] Targets =
     [
         new Target(
-            File: "window_county_view.gui",
-            ScriptedGui: "wilderness_county",
-            Scope: "HoldingView.GetProvince",
-            Extend:
-            [
-                ("name = \"holder_info\"", "holder", null),
-                ("name = \"set_realm_capital_button\"", "move-capital button", "wilderness_unfinished_county"),
-            ],
-            Insert:
-            [
-                ("name = \"county_stats\"", "stats", null),
-                ("name = \"county_modifiers_grid\"", "modifiers", null),
-                ("name = \"holding_info\"", "holdings", null),
-                ("name = \"construct_holding\"", "build-holding prompt", "wilderness_unfinished_county"),
-            ],
-            Add:
-            [
-                ("name = \"county_info\"", "settle button", SettleButton),
-            ]),
+        File: "window_county_view.gui",
+        ScriptedGui: "wilderness_county",
+        Scope: "HoldingView.GetProvince",
+        Extend:
+        [
+            ("name = \"holder_info\"", "holder", null),
+            ("name = \"set_realm_capital_button\"", "move-capital button", "wilderness_unfinished_county"),
+            ("name = \"tutorial_highlight_holding_view_taxes_box\"", "holding taxes", null),
+            ("name = \"tutorial_highlight_holding_view_loot_box\"", "holding loot", null),
+        ],
+        Insert:
+        [
+            ("name = \"county_stats\"", "stats", null),
+            ("name = \"county_modifiers_grid\"", "modifiers", null),
+            ("name = \"construct_holding\"", "build-holding prompt", "wilderness_unfinished_county"),
+        ],
+        Add:
+        [
+            ("name = \"county_info\"", "settle button", SettleButton),
+        ]),
 
-        new Target(
-            File: "window_character.gui",
-            ScriptedGui: "wilderness_holder",
-            Scope: "CharacterWindow.GetCharacter",
-            Extend: [],
-            Insert:
-            [
-                ("name = \"main_content\"", "window body", null),
-            ],
-            Add:
-            [
-                ("using = Window_Size_Sidebar", "placeholder", CharacterPlaceholder),
-            ]),
+    new Target(
+        File: "window_character.gui",
+        ScriptedGui: "wilderness_holder",
+        Scope: "CharacterWindow.GetCharacter",
+        Extend: [],
+        Insert:
+        [
+            ("name = \"main_content\"", "window body", null),
+        ],
+        Add:
+        [
+            ("using = Window_Size_Sidebar", "placeholder", CharacterPlaceholder),
+        ]),
 
-        new Target(
-            File: "window_title.gui",
-            ScriptedGui: "wilderness_title",
-            Scope: "TitleViewWindow.GetTitle",
-            Extend: [],
-            Insert:
-            [
-                ("name = \"title_view_main_tab\"", "window body", null),
-            ],
-            Add:
-            [
-                ("using = Window_Background_Sidebar", "placeholder", TitlePlaceholder),
-            ]),
+    new Target(
+        File: "window_title.gui",
+        ScriptedGui: "wilderness_title",
+        Scope: "TitleViewWindow.GetTitle",
+        Extend: [],
+        Insert:
+        [
+            ("name = \"title_view_main_tab\"", "window body", null),
+        ],
+        Add:
+        [
+            ("using = Window_Background_Sidebar", "placeholder", TitlePlaceholder),
+        ]),
 
-        new Target(
-            File: "frontend_main.gui",
-            ScriptedGui: "",
-            Scope: "",
-            Extend: [],
-            Insert: [],
-            Add:
-            [
-                ("clickable_version_number = {", "generator info text", GeneratorInfoText),
-            ]),
-    ];
-
+    // REMOVED frontend_main.gui TARGET HERE
+];
     private static string Placeholder(string text, params string[] onclick) => $$"""
         widget = {
             name = "wilderness_placeholder"
@@ -193,33 +184,6 @@ public static class GuiWriter
         }
         """;
 
-    private const string GeneratorInfoText = """
-        vbox = {
-            name = "generator_info_box"
-            parentanchor = bottom|right
-            position = { -15 -55 }
-            spacing = 2
-
-            text_single = {
-                parentanchor = right
-                fontsize = 13
-                text = "CK3 Procedural Generator by BabyLettuce22"
-            }
-
-            text_single = {
-                parentanchor = right
-                fontsize = 12
-                text = "Check regularly for updates:"
-            }
-
-            text_single = {
-                parentanchor = right
-                fontsize = 12
-                text = "https://github.com/babylettuce22/ck3procedural"
-            }
-        }
-        """;
-
     public static void WriteAll(string modDir, string gameDir, Config.MapConfig cfg)
     {
         foreach (var target in Targets) Patch(modDir, gameDir, target);
@@ -228,9 +192,10 @@ public static class GuiWriter
     private static void Patch(string modDir, string gameDir, Target target)
     {
         string source = Path.Combine(gameDir, "gui", target.File);
+
         if (!File.Exists(source))
         {
-            Console.WriteLine($"  gui: SKIPPED ({target.File} not found in the game folder)");
+            Console.WriteLine($"  gui: SKIPPED ({target.File} not found in game or mod folder)");
             return;
         }
 

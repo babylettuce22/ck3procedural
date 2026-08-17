@@ -52,6 +52,11 @@ public static class PortraitWriter
         {
             string templatePath = PickMatchingTemplate(req.Culture, templates, rng);
             string body = File.ReadAllText(templatePath);
+
+            // Sanitize invalid/obsolete modifiers that vanilla templates sometimes retain
+            body = Regex.Replace(body, @"[ \t]*custom_headgear\s*=\s*male_empty\r?\n?", "");
+            body = Regex.Replace(body, @"[ \t]*custom_headgear\s*=\s*female_empty\r?\n?", "");
+
             string renamedBookmark = IdentityRegex.Replace(body, $"{req.Key} = {{", 1);
 
             // 1. Write for Bookmark Screen (common/bookmark_portraits/)

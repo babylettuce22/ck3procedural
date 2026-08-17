@@ -1,37 +1,60 @@
-﻿using System.Text;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using Ck3MapGen.Io;
 
 namespace Ck3MapGen.Emit;
 
 /// <summary>
-/// Disables the main menu's 3D character portraits.
-///
-/// CK3's frontend renders live portraits for the bookmark's main character, its secondary
-/// character, its heir and the challenge character. That happens in the step immediately after
-/// history loading — `gameapplication.cpp:558 Setting idler 'Frontend'` — which is exactly where
-/// a generated map stops with no log output and two worker threads spinning.
-///
-/// ck2rpg's shipped template does the same thing: its `gui/frontend_main.gui` has the whole
-/// portrait widget commented out, leaving 2 active portrait-related lines where vanilla has 102.
-/// A working generator would not carry that edit by accident.
-///
-/// Rather than ship a copy of vanilla's file (which would pin us to one game version), we read
-/// the installed one and comment out the offending block, anchored on a distinctive expression
-/// instead of a line number so it survives patches.
+/// Disables vanilla's main-menu 3D character portrait widgets in frontend_main.gui
+/// to prevent cold-boot CTDs when running on procedural maps, and injects generator metadata.
 /// </summary>
 public static class FrontendWriter
 {
     /// <summary>
-    /// Anything that makes the frontend build a character portrait. There are two such places in
-    /// 1.19: the widget positioned by whether a challenge character is shown (which holds the
-    /// main, secondary and heir portraits plus their drop shadows), and a standalone
-    /// portrait_button for the challenge character itself.
+    /// Anything that triggers the frontend to construct a 3D character portrait.
     /// </summary>
     private static readonly string[] Triggers =
         ["ShouldShowChallengeCharacter", "Portrait("];
 
-    /// <summary>Block headers we are willing to comment out wholesale.</summary>
+    /// <summary>Block headers to comment out wholesale.</summary>
     private static readonly string[] Openers = ["widget = {", "portrait_button = {"];
+
+    private const string GeneratorInfoText = """
+        flowcontainer = {
+            name = "generator_info_box"
+            parentanchor = bottom|right
+            position = { -15 -60 }
+            direction = vertical
+            ignoreinvisible = yes
+
+            text_single = {
+                parentanchor = right
+                fontsize = 13
+                raw_text = "CK3 Procedural Generator by BabyLettuce22"
+                default_format = "#high"
+            }
+
+            text_single = {
+                parentanchor = right
+                fontsize = 12
+                raw_text = "Check regularly for updates:"
+                default_format = "#low"
+            }
+
+            button_group = {
+                parentanchor = right
+                tooltip = "https://github.com/babylettuce22/ck3procedural"
+
+                text_single = {
+                    fontsize = 12
+                    raw_text = "https://github.com/babylettuce22/ck3procedural"
+                    default_format = "#clickable"
+                }
+            }
+        }
+    """;
 
     public static void WriteFrontend(string modDir, string gameDir)
     {
@@ -45,8 +68,7 @@ public static class FrontendWriter
         var lines = File.ReadAllLines(source).ToList();
         var disabled = new List<string>();
 
-        // Each pass disables one block. Re-scanning from the top afterwards is what lets a later
-        // portrait block be found once an earlier one is commented out.
+        // 1. Comment out all main-menu portrait widgets wholesale
         while (true)
         {
             int anchor = lines.FindIndex(IsLiveTrigger);
@@ -63,7 +85,7 @@ public static class FrontendWriter
 
             if (start < 0)
             {
-                Console.WriteLine("  frontend: enclosing block not found, stopping");
+                Console.WriteLine("  frontend: enclosing portrait block not found, stopping scan");
                 break;
             }
 
@@ -79,11 +101,10 @@ public static class FrontendWriter
                 end = i;
                 break;
             }
-            //
-            //
+
             if (end < 0)
             {
-                Console.WriteLine("  frontend: block never closes, stopping");
+                Console.WriteLine("  frontend: portrait block never closes, stopping scan");
                 break;
             }
 
@@ -91,13 +112,20 @@ public static class FrontendWriter
             disabled.Add($"{start + 1}-{end + 1}");
         }
 
+        // 2. Inject Generator Info Text right before clickable_version_number
+        string fullText = string.Join('\n', lines);
+        int versionIdx = fullText.IndexOf("clickable_version_number = {", StringComparison.Ordinal);
+        if (versionIdx >= 0)
+        {
+            fullText = fullText.Insert(versionIdx, GeneratorInfoText + "\n\n\t");
+        }
+
         string dir = Path.Combine(modDir, "gui");
         Directory.CreateDirectory(dir);
-        ParadoxText.WriteBom(Path.Combine(dir, "frontend_main.gui"),
-            string.Join('\n', lines) + "\n");
+        ParadoxText.WriteBom(Path.Combine(dir, "frontend_main.gui"), fullText + "\n");
 
         Console.WriteLine($"  frontend: disabled main-menu portraits " +
-                          $"(commented lines {string.Join(", ", disabled)} of frontend_main.gui)");
+                          $"(commented lines {string.Join(", ", disabled)} of frontend_main.gui), info box injected");
         return;
 
         bool IsLiveTrigger(string line) =>

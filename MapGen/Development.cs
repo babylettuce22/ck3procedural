@@ -63,7 +63,7 @@ public static class Development
     /// Constantinoples above a great many backwaters.
     /// </summary>
     public static Dictionary<Title, int> ForCounties(List<Title> counties,
-        TerrainClass[] provinceTerrain, MapConfig cfg, Rng rng)
+        TerrainClass[] provinceTerrain, MapConfig cfg, Rng rng, WorldCenterMap? worldCenters = null)
     {
         var scored = new List<(Title County, double Score)>(counties.Count);
 
@@ -106,6 +106,12 @@ public static class Development
 
             double baseLevel = cfg.DevelopmentBase + yearDevBonus;
             int level = (int)Math.Round(baseLevel + curved * cfg.DevelopmentSpread * cfg.DevelopmentScale);
+
+            // Boost World Centers to make them true metropolises
+            if (worldCenters is not null && worldCenters.IsCenter(scored[i].County))
+            {
+                level += cfg.WorldCenterDevBoost;
+            }
 
             result[scored[i].County] = Math.Clamp(level, 0, 100);
         }

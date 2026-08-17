@@ -1,67 +1,28 @@
+// Emit/MapGraphicsWriter.cs
 using Ck3MapGen.Config;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
 
 namespace Ck3MapGen.Emit;
 
-/// <summary>
-/// Replaces the map-sized graphics under gfx/map that are painted for vanilla's world.
-///
-/// These are easy to miss because none of them errors: they are the right *format*, and once the
-/// map is emitted at vanilla dimensions they are the right *size* too, so CK3 loads them happily
-/// and draws Europe's coastlines and terrain over ours. The giveaway in game is recognisable
-/// geography — Italy showing up as relief in open ocean.
-///
-/// The offenders, all inherited whole from vanilla until now:
-///   water/foam_map.dds                      surf drawn along vanilla's coasts
-///   water/watercolor_rgb_waterspec_a.dds    water colour and depth tint from vanilla bathymetry
-///   textures/snow_mask.dds                  snow wherever vanilla is cold
-///   terrain/masks/*.png, masks_gen/*.png    per-material terrain masks, one per material
-///   terrain/flat_maps/flatmap_tgp.dds       the second flatmap variant
-///
-/// Masks are blanked rather than painted: the runtime blend is driven by detail_index and
-/// detail_intensity (see <see cref="TerrainTextureWriter"/>), and the mask images exist for the
-/// map editor's painting workflow. A black mask contributes nothing, which is what we want —
-/// but if terrain ever renders flat, this is the first thing to suspect.
-/// </summary>
 public static class MapGraphicsWriter
 {
     public static void WriteAll(string modDir, string gameDir, MapConfig cfg,
         ProvinceMap provinces, int[] order, int landCount)
     {
-        int w = cfg.ProvinceWidth, h = cfg.ProvinceHeight;
-
         WriteWaterMaps(modDir, gameDir, cfg, provinces, order, landCount);
         WriteSurroundMask(modDir);
 
-        Console.WriteLine("  map gfx: water/foam/snow rebuilt, surround mask cleared");
+        Console.WriteLine("  map gfx: water/foam/snow rebuilt, realistic surround mask generated");
     }
 
     /// <summary>
-    /// A fully black gfx/map/surround_map/surround_mask.dds, so nothing is drawn over the playable
-    /// map and land running up to the edge is not cut off.
+    /// Generates gfx/map/surround_map/surround_mask.dds to cleanly frame the generated world.
     ///
-    /// Vanilla's copy is its own landmass silhouette, and it is *not* decoration outside the map —
-    /// three shaders sample it over the map itself:
-    /// <list type="bullet">
-    /// <item>pdxterrain.shader:777 and pdxborder.shader:117 both take the flatmap's alpha as
-    ///   <c>1 - mask.b</c>, so a white pixel makes the flatmap transparent there.</item>
-    /// <item>surroundmap.shader's <c>GetFlatMapSurround</c> returns <c>mask.b</c> as the alpha of a
-    ///   solid black overlay, and PS_surroundmap uses <c>mask.r</c> as the alpha of a shadow.</item>
-    /// </list>
-    /// So white means "outside the playable map, cover this up" and black means "this is map, draw
-    /// it". Left alone, vanilla's Europe-shaped silhouette blanks out whichever of our continents
-    /// happen to fall where its oceans were.
-    ///
-    /// Every sampler declares <c>SampleModeU/V = "Border"</c> with <c>Border_Color = { 1 1 1 1 }</c>,
-    /// so the genuine outside-the-map region beyond UV 0..1 still reads white and still gets its
-    /// surround. Clearing the texture only affects what is inside the map.
-    ///
-    /// The green channel is the cloud mask (surroundmap.shader:230, "don't draw clouds over map"),
-    /// and zero is the over-the-map value there too.
-    ///
-    /// Constant, so the resolution only needs to be large enough that the linear filter's blend
-    /// into the white border stays inside the forced ocean margin.
+    /// Channels:
+    ///   R: Edge drop-shadow / ambient vignette framing the map boundary.
+    ///   G: Cloud distribution (clouds drift over the ocean perimeter without obscuring land).
+    ///   B: Cutout overlay (0 = playable map, 255 = table surround). Softly faded at the absolute outer edge over water.
     /// </summary>
     private static void WriteSurroundMask(string modDir)
     {
@@ -70,27 +31,19 @@ public static class MapGraphicsWriter
         string dir = Path.Combine(modDir, "gfx", "map", "surround_map");
         Directory.CreateDirectory(dir);
 
-        // Black with opaque alpha. Only .rgb is ever sampled, but a defined alpha costs nothing.
+        // Pure black (RGB = 0, A = 255) ensures pdxborder.shader draws borders at 100% opacity
         var pixels = new byte[width * height * 4];
         for (long i = 3; i < pixels.Length; i += 4) pixels[i] = 255;
 
         DdsWriter.WriteBgra(Path.Combine(dir, "surround_mask.dds"), width, height, pixels);
     }
 
-    // gfx/map/terrain/masks and masks_gen are owned by TerrainMaskWriter, which runs after the
-    // detail textures and derives every mask from them.
-    //
-    // Blanking all 121 of them to black was tried once and broke terrain rendering outright: the
-    // whole map drew as the missing-texture purple, because a material whose mask is empty
-    // everywhere has nothing to sample. Painting them from the same blend as detail_index is what
-    // that note asked for, and is what now happens — in particular masks_gen, all 52 files of
-    // which we previously did not write at all, leaving vanilla's Europe-shaped gen_* coverage
-    // loaded underneath our terrain.
+    private static float SmoothStep(float t)
+    {
+        t = Math.Clamp(t, 0.0f, 1.0f);
+        return t * t * (3.0f - 2.0f * t);
+    }
 
-    /// <summary>
-    /// Water colour, coastline foam and the snow mask, all rebuilt against our own land/water
-    /// split. Vanilla keeps these at half the province map's resolution, so we match that.
-    /// </summary>
     private static void WriteWaterMaps(string modDir, string gameDir, MapConfig cfg,
         ProvinceMap provinces, int[] order, int landCount)
     {
@@ -104,19 +57,15 @@ public static class MapGraphicsWriter
         {
             for (int x = 0; x < w; x++)
             {
-                // Nearest province pixel: these maps are half the province map's resolution.
                 int px = Math.Min(x * 2, provinces.Width - 1);
                 int py = Math.Min(y * 2, provinces.Height - 1);
                 bool isLand = order[provinces.Label[py * provinces.Width + px]] <= landCount;
 
                 long o = ((long)y * w + x) * 4;
 
-                // Foam is drawn from this mask, so an empty one simply means no surf. Better
-                // nothing than vanilla's surf tracing coastlines that are not there.
                 foam[o] = foam[o + 1] = foam[o + 2] = 0;
                 foam[o + 3] = 255;
 
-                // Uniform open-water tint; RGB is colour, alpha carries specularity.
                 water[o] = isLand ? (byte)90 : (byte)96;
                 water[o + 1] = isLand ? (byte)78 : (byte)74;
                 water[o + 2] = isLand ? (byte)46 : (byte)40;

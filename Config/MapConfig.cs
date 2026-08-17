@@ -72,6 +72,36 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// county is always placed, because a wilderness system with no wilderness in it is
     /// indistinguishable from a broken one and there would be nothing to test against.
     /// </summary>
+    /// 
+    [Category("02 World State")]
+    [Description("Shatter the world: no empires, kingdoms, or duchies exist at start. Every count is an independent ruler.")]
+    public bool ShatteredWorld { get; set; } = false;
+
+    [Category("02 World State")]
+    [Description("Enable procedural Centers of the World: focal metropolises with monumental wonders, hyper-development, and primary holy sites.")]
+    public bool EnableWorldCenters { get; set; } = true;
+
+    [Category("02 World State")]
+    [Description("Target number of World Center metropolises across the globe.")]
+    public int WorldCentersCount { get; set; } = 5;
+
+    [AdvancedSetting]
+    [Category("02 World State")]
+    [Description("Minimum spacing between World Centers in approximate county units.")]
+    public int MinCenterDistanceCounties { get; set; } = 12;
+
+    [Category("02 World State")]
+    [Description("Enable active wars raging at game start between rival rulers, contested holy sites, and disputed borders.")]
+    public bool EnableStartingWars { get; set; } = true;
+
+    [Category("02 World State")]
+    [Description("Target number of active ongoing wars on Day 1.")]
+    public int StartingWarsCount { get; set; } = 3;
+
+    [Category("13 Development")]
+    [Description("Bonus development granted to World Center metropolises.")]
+    public int WorldCenterDevBoost { get; set; } = 32;
+
     [Category("16 Wilderness")]
     [Description("Share of counties left as unsettled wilderness. A target, not a guarantee — clumps too small to read as a region are discarded, so the delivered share lands slightly under this.")]
     public double WildernessShare { get; set; } = 0.12;

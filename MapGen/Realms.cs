@@ -3,104 +3,157 @@ using Ck3MapGen.Core;
 
 namespace Ck3MapGen.MapGen;
 
-/// <summary>
-/// Who actually holds what at the start date, and who owes whom.
-/// </summary>
 public sealed class RealmMap
 {
-    /// <summary>
-    /// Every held title, mapped to the county whose ruler holds it. Counties map to themselves.
-    ///
-    /// Keyed this way because there is exactly one generated character per county, so a county is
-    /// the identity of its ruler — two titles pointing at the same county are two titles on one
-    /// head, which is how a duke also holds his capital and an emperor also holds his duchy.
-    /// </summary>
     public required Dictionary<Title, Title> HolderCounty { get; init; }
-
-    /// <summary>
-    /// Liege per title, set only on each ruler's highest title.
-    ///
-    /// A character has one liege in CK3, so writing <c>liege</c> on every title they hold would
-    /// state the same fact several times and contradict itself as soon as two of those titles sit
-    /// under different lords. Vanilla sets it on the primary title and so do we.
-    /// </summary>
     public required Dictionary<Title, Title> Liege { get; init; }
-
-    /// <summary>Counties whose rulers are the greatest in the world, strongest first. The bookmark
-    /// and the challenge character come off the front of this.</summary>
     public required List<Title> Greatest { get; init; }
 }
 
-/// <summary>
-/// Decides which of the de jure titles are actually worn by somebody in 867.
-///
-/// The de jure hierarchy exists from the moment <see cref="Titles"/> draws it, but that is a map of
-/// claims rather than of power: leaving every duchy, kingdom and empire vacant gives a world of
-/// several hundred equal, independent counts, which is not a start date any Crusader Kings game has
-/// ever shipped and reads as an unfinished map. Handing them all out is worse — a world with no
-/// independent counts has nowhere for the game's own ambition mechanics to point.
-///
-/// So a share of each tier is realised, and the chain below a realised title is realised with it:
-/// an emperor is also a king, a duke and a count, holding his capital all the way down. That is
-/// both what CK3 expects and what stops an emperor owning a continent while personally holding one
-/// county in the corner of it.
-/// </summary>
 public static class Realms
 {
-    /// <param name="wilderness">
-    /// Counties nobody lives in. They are held by the wilderness dummy rather than by a generated
-    /// ruler, so they must not appear here at all: not as their own holder, not as the seat of a
-    /// duchy, and not as anybody's liege. Pass <see cref="WildernessMap.Empty"/> when the feature
-    /// is off.
-    /// </param>
     public static RealmMap Build(List<Title> empires, Dictionary<Title, int> development,
         WildernessMap wilderness, MapConfig cfg, Rng rng)
     {
         var all = Titles.Flatten(empires).ToList();
         var weight = Weigh(empires, development, wilderness);
 
-        // Which titles somebody wears. Iterated in the fixed order Flatten produces so the same
-        // seed always promotes the same titles.
         var realized = new HashSet<Title>();
-        foreach (var title in all)
-        {
-            double share = title.Tier switch
-            {
-                "e" => cfg.EmpireTitleShare,
-                "k" => cfg.KingdomTitleShare,
-                "d" => cfg.DuchyTitleShare,
-                _ => 0,
-            };
+        var holderCounty = new Dictionary<Title, Title>();
 
-            // Weight 0 means every county beneath it is wilderness — a duchy of empty mountains.
-            // Realising it would seat a duke on land nobody lives on, so it stays unheld and
-            // becomes something a coloniser can eventually claim by filling the counties in.
-            if (share > 0 && weight.GetValueOrDefault(title) > 0 && rng.Chance(share))
-                Realize(title, realized, weight);
+        if (cfg.ShatteredWorld)
+        {
+            var shatteredHolders = new Dictionary<Title, Title>();
+            var shatteredPrimary = new Dictionary<Title, Title>();
+
+            foreach (var county in all.Where(t => t.Tier == "c" && !wilderness.Contains(t)))
+            {
+                shatteredHolders[county] = county;
+                shatteredPrimary[county] = county;
+            }
+
+            var shatteredGreatest = shatteredPrimary.Keys
+                .OrderByDescending(c => weight.GetValueOrDefault(c))
+                .ThenBy(c => c.Index)
+                .ToList();
+
+            Console.WriteLine($"  realms: SHATTERED WORLD — {shatteredHolders.Count} independent counts (0 vassals)");
+
+            return new RealmMap
+            {
+                HolderCounty = shatteredHolders,
+                Liege = [], // Empty: everyone is independent
+                Greatest = shatteredGreatest,
+            };
         }
 
-        // A title's holder is the ruler of the richest county under it, found by following the
-        // strongest child down. Two titles that pick the same county are two titles on one ruler.
-        //
-        // Wilderness counties are skipped rather than given a holder: the dummy holds them, and
-        // HistoryWriter writes that separately. A county missing from here produces no generated
-        // character, no dynasty and no title history — which is exactly right for empty ground.
-        var holderCounty = new Dictionary<Title, Title>();
+        // All non-wilderness counties start with their own count holder
         foreach (var county in all.Where(t => t.Tier == "c" && !wilderness.Contains(t)))
             holderCounty[county] = county;
-        foreach (var title in realized) holderCounty[title] = Capital(title, weight);
 
-        // The highest title each ruler wears, which is where their liege is recorded.
+        // --- Step 1: Realize Empires ---
+        var validEmpires = empires.Where(e => weight.GetValueOrDefault(e) > 0).ToList();
+        int targetEmpires = cfg.EmpireTitleShare <= 0 ? 0
+            : Math.Max(1, (int)Math.Round(validEmpires.Count * cfg.EmpireTitleShare));
+
+        var chosenEmpires = validEmpires
+            .OrderByDescending(e => weight.GetValueOrDefault(e))
+            .Take(targetEmpires)
+            .ToList();
+
+        foreach (var emp in chosenEmpires)
+        {
+            // Emperor holds: Empire -> Capital Kingdom -> Capital Duchy -> Capital County
+            RealizeChain(emp, realized, holderCounty, weight);
+        }
+
+        // --- Step 2: Realize Kingdoms ---
+        var realizedKingdoms = new HashSet<Title>();
+
+        // 2A. Subordinate Kingdoms under Empires (Vassal Kings)
+        foreach (var emp in chosenEmpires)
+        {
+            var empCap = holderCounty[emp];
+
+            foreach (var k in emp.Children)
+            {
+                if (weight.GetValueOrDefault(k) <= 0) continue;
+
+                // The Emperor's personal capital kingdom is already realized
+                if (holderCounty.TryGetValue(k, out var kHolder) && kHolder == empCap)
+                {
+                    realizedKingdoms.Add(k);
+                    continue;
+                }
+
+                // Subordinate kingdoms under the Emperor: 75% become Vassal Kingdoms
+                if (rng.Chance(0.75))
+                {
+                    RealizeChain(k, realized, holderCounty, weight);
+                    realizedKingdoms.Add(k);
+                }
+            }
+        }
+
+        // 2B. Independent Kingdoms outside of Empires
+        var independentKingdoms = empires
+            .Where(e => !chosenEmpires.Contains(e))
+            .SelectMany(e => e.Children)
+            .Where(k => weight.GetValueOrDefault(k) > 0)
+            .ToList();
+
+        int targetIndepKingdoms = cfg.KingdomTitleShare <= 0 ? 0
+            : Math.Max(1, (int)Math.Round(independentKingdoms.Count * cfg.KingdomTitleShare));
+
+        var chosenIndepKingdoms = independentKingdoms
+            .OrderByDescending(k => weight.GetValueOrDefault(k))
+            .Take(targetIndepKingdoms)
+            .ToList();
+
+        foreach (var king in chosenIndepKingdoms)
+        {
+            RealizeChain(king, realized, holderCounty, weight);
+            realizedKingdoms.Add(king);
+        }
+
+        // --- Step 3: Feudal Vassal Consolidation (Duchies) ---
+        // 3A. Duchies inside active Kingdoms/Empires (95% realized so counts answer to Dukes)
+        foreach (var emp in chosenEmpires)
+        {
+            foreach (var k in emp.Children)
+            {
+                EnsureKingdomDuchiesRealized(k, realized, holderCounty, weight, rng, isUnderActiveRealm: true);
+            }
+        }
+
+        foreach (var k in chosenIndepKingdoms)
+        {
+            EnsureKingdomDuchiesRealized(k, realized, holderCounty, weight, rng, isUnderActiveRealm: true);
+        }
+
+        // 3B. Shattered/Stateless Regions (Petty Kings / Independent Duchies)
+        var unruledKingdoms = empires
+            .Where(e => !chosenEmpires.Contains(e))
+            .SelectMany(e => e.Children)
+            .Where(k => !chosenIndepKingdoms.Contains(k))
+            .ToList();
+
+        foreach (var k in unruledKingdoms)
+        {
+            EnsureKingdomDuchiesRealized(k, realized, holderCounty, weight, rng, isUnderActiveRealm: false, cfg.DuchyTitleShare);
+        }
+
+        // --- Step 4: Resolve Primary Titles and Lieges ---
         var primary = new Dictionary<Title, Title>();
         foreach (var (title, county) in holderCounty)
+        {
             if (!primary.TryGetValue(county, out var current) || Rank(title) > Rank(current))
                 primary[county] = title;
+        }
 
         var liege = new Dictionary<Title, Title>();
         foreach (var (county, top) in primary)
         {
-            // The nearest held title above, skipping any held by this same ruler — those are their
-            // own titles, not their lord's.
             for (var above = top.Parent; above is not null; above = above.Parent)
             {
                 if (!holderCounty.TryGetValue(above, out var lord) || lord == county) continue;
@@ -126,26 +179,56 @@ public static class Realms
         };
     }
 
-    /// <summary>
-    /// Marks a title held, and with it the strongest title beneath it, all the way to a county.
-    ///
-    /// Stopping at the first title already realised is what keeps this cheap and also correct: if
-    /// the chain below was realised by an earlier call it is the same chain, because the strongest
-    /// child does not depend on who asked.
-    /// </summary>
-    private static void Realize(Title title, HashSet<Title> realized, Dictionary<Title, int> weight)
+    private static void EnsureKingdomDuchiesRealized(
+        Title kingdom,
+        HashSet<Title> realized,
+        Dictionary<Title, Title> holderCounty,
+        Dictionary<Title, int> weight,
+        Rng rng,
+        bool isUnderActiveRealm,
+        double independentDuchyShare = 0.5)
     {
-        while (title.Tier != "c")
-        {
-            if (!realized.Add(title)) return;
+        bool kingdomHeld = holderCounty.TryGetValue(kingdom, out var kingCap);
 
-            var next = Strongest(title, weight);
-            if (next is null) return;
-            title = next;
+        foreach (var duchy in kingdom.Children)
+        {
+            if (weight.GetValueOrDefault(duchy) <= 0) continue;
+
+            // Never overwrite the King's/Emperor's personal capital duchy
+            if (kingdomHeld && holderCounty.TryGetValue(duchy, out var dHolder) && dHolder == kingCap)
+                continue;
+
+            // Inside an active kingdom/empire: 95% of duchies are realized to bundle counts under Dukes!
+            // In shattered regions: roll the independent duchy share (~50%)
+            double chance = isUnderActiveRealm ? 0.95 : independentDuchyShare;
+
+            if (rng.Chance(chance))
+            {
+                RealizeChain(duchy, realized, holderCounty, weight);
+            }
         }
     }
 
-    /// <summary>The county a title is ruled from: the richest one under it.</summary>
+    private static void RealizeChain(
+        Title title,
+        HashSet<Title> realized,
+        Dictionary<Title, Title> holderCounty,
+        Dictionary<Title, int> weight)
+    {
+        var capital = Capital(title, weight);
+        var current = title;
+
+        while (current.Tier != "c")
+        {
+            realized.Add(current);
+            holderCounty[current] = capital;
+
+            var next = Strongest(current, weight);
+            if (next is null) break;
+            current = next;
+        }
+    }
+
     private static Title Capital(Title title, Dictionary<Title, int> weight)
     {
         while (title.Tier != "c")
@@ -154,7 +237,6 @@ public static class Realms
             if (next is null) break;
             title = next;
         }
-
         return title;
     }
 
@@ -164,24 +246,10 @@ public static class Realms
             : title.Children.OrderByDescending(c => weight.GetValueOrDefault(c))
                             .ThenBy(c => c.Index).First();
 
-    /// <summary>
-    /// How much a title is worth: the development of every county beneath it.
-    ///
-    /// Counted with a floor of one per county so that a large poor duchy still outweighs a tiny
-    /// one — otherwise a map whose development came out flat would pick capitals arbitrarily.
-    /// </summary>
-    /// <remarks>
-    /// A wilderness county weighs nothing, and that one value carries the whole exclusion: it keeps
-    /// <see cref="Strongest"/> from ever descending into empty ground while a settled sibling
-    /// exists, and it makes a title's weight zero exactly when everything under it is wilderness,
-    /// which is the test <see cref="Build"/> uses to leave such titles unheld. A *settled* county
-    /// with no development still weighs 1, so the two cases stay distinguishable.
-    /// </remarks>
     private static Dictionary<Title, int> Weigh(List<Title> empires,
         Dictionary<Title, int> development, WildernessMap wilderness)
     {
         var weight = new Dictionary<Title, int>();
-
         foreach (var root in empires) Visit(root);
         return weight;
 
@@ -209,17 +277,25 @@ public static class Realms
     private static void Report(HashSet<Title> realized, Dictionary<Title, Title> primary,
         Dictionary<Title, Title> liege, List<Title> all)
     {
-        int emperors = realized.Count(t => t.Tier == "e");
-        int kings = realized.Count(t => t.Tier == "k");
-        int dukes = realized.Count(t => t.Tier == "d");
+        // Total count of each ruler rank by primary title
+        int emperors = primary.Values.Count(t => t.Tier == "e");
+        int kings = primary.Values.Count(t => t.Tier == "k");
+        int dukes = primary.Values.Count(t => t.Tier == "d");
+        int counts = primary.Values.Count(t => t.Tier == "c");
 
-        // A ruler with no liege answers to nobody, which is the number that decides whether the
-        // map plays as a patchwork or as a handful of great powers.
-        int independent = primary.Values.Count(t => !liege.ContainsKey(t));
-        int counties = all.Count(t => t.Tier == "c");
+        // Independent rulers per tier (top lieges with no liege above them)
+        int indepEmperors = primary.Count(kv => kv.Value.Tier == "e" && !liege.ContainsKey(kv.Value));
+        int indepKings = primary.Count(kv => kv.Value.Tier == "k" && !liege.ContainsKey(kv.Value));
+        int indepDukes = primary.Count(kv => kv.Value.Tier == "d" && !liege.ContainsKey(kv.Value));
+        int indepCounts = primary.Count(kv => kv.Value.Tier == "c" && !liege.ContainsKey(kv.Value));
 
-        Console.WriteLine($"  realms: {emperors} empires, {kings} kingdoms and {dukes} duchies held " +
-                          $"over {counties} counties — {independent} independent rulers, " +
-                          $"{primary.Count - independent} vassals");
+        int totalIndependent = primary.Values.Count(t => !liege.ContainsKey(t));
+        int totalVassals = primary.Count - totalIndependent;
+
+        Console.WriteLine($"  rulers: {emperors} emperors ({indepEmperors} indep), " +
+                          $"{kings} kings ({indepKings} indep), " +
+                          $"{dukes} dukes ({indepDukes} petty kings), " +
+                          $"{counts} counts ({indepCounts} indep) " +
+                          $"— {totalIndependent} independent realms, {totalVassals} vassals total");
     }
 }

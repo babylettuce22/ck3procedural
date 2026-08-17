@@ -26,6 +26,7 @@ public sealed class Faith
     public HeadOfFaith? Head { get; set; }
 
     public bool IsOrganized { get; set; } = true;
+    public bool IsDominant { get; set; } = false;
 }
 
 /// <summary>A generated religion: a liturgical language, a doctrine baseline, and its faiths.</summary>
@@ -97,7 +98,7 @@ public static class Faiths
     public static FaithMap Build(List<Title> empires, ProvinceMap provinces, int[] order,
         int landCount, TerrainClass[] provinceTerrain, Dictionary<Title, int> development,
         GovernmentMap governments, VanillaVocabulary vocab, WildernessMap wilderness,
-        MapConfig cfg, Rng rng)
+        MapConfig cfg, WorldCenterMap? worldCenters, Rng rng)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -122,21 +123,59 @@ public static class Faiths
             var members = all.Where(i => religionOf[i] == r).ToList();
             if (members.Count == 0) continue;
 
-            var religion = CreateReligion(religions.Count, TribalShare(members.Select(i => counties[i])),
-                vocab, usedNames, cfg, rng);
+            double tribalShare = TribalShare(members.Select(i => counties[i]));
+            var religion = CreateReligion(religions.Count, tribalShare, vocab, usedNames, cfg, rng);
             religions.Add(religion);
 
-            int within = Math.Max(1, (int)Math.Round(members.Count / cfg.CountiesPerFaith));
-            var faithOf = RegionGrowth.Partition(graph, members, within, rng, out _);
+            // Determine Faith Distribution Archetype
+            // Archetype Roll: 0 = Hegemonic Dominant Orthodoxy, 1 = Monolithic (Single Faith), 2 = Pluralistic
+            double archetypeRoll = rng.NextDouble();
+            int faithCount;
+            bool hasDominantFaith = false;
+
+            if (members.Count <= 6 || tribalShare > 0.70 && archetypeRoll < 0.45)
+            {
+                // Monolithic: Small realms or conservative tribal pantheons stay unified
+                faithCount = 1;
+            }
+            else if (archetypeRoll < 0.60)
+            {
+                // Dominant Orthodoxy: 1 dominant giant + 1-3 regional schisms/minorities
+                hasDominantFaith = true;
+                faithCount = Math.Clamp(rng.Int(2, 4), 2, Math.Max(2, members.Count / 3));
+            }
+            else
+            {
+                // Pluralistic: Multiple competing regional branches
+                int baseEstimate = (int)Math.Round(members.Count / cfg.CountiesPerFaith);
+                faithCount = Math.Clamp(rng.Int(baseEstimate - 1, baseEstimate + 1), 2, Math.Max(2, members.Count / 3));
+            }
 
             var religionFaiths = new List<Faith>();
+            var faithOf = new Dictionary<int, int>();
 
-            for (int f = 0; f < within; f++)
+            if (faithCount == 1)
             {
-                var owned = members.Where(i => faithOf[i] == f).Select(i => counties[i]).ToList();
+                for (int i = 0; i < members.Count; i++) faithOf[members[i]] = 0;
+            }
+            else if (hasDominantFaith)
+            {
+                // Partition with an asymmetric share: Dominant faith gets 65-85% of counties
+                faithOf = PartitionWithDominant(graph, members, faithCount, rng);
+            }
+            else
+            {
+                var rawPartition = RegionGrowth.Partition(graph, members, faithCount, rng, out _);
+                for (int i = 0; i < members.Count; i++) faithOf[members[i]] = rawPartition[i];
+            }
+
+            for (int f = 0; f < faithCount; f++)
+            {
+                var owned = members.Where(i => faithOf.GetValueOrDefault(i, 0) == f).Select(i => counties[i]).ToList();
                 if (owned.Count == 0) continue;
 
                 var faith = CreateFaith(religion, faiths.Count + religionFaiths.Count, vocab, usedNames, rng);
+                faith.IsDominant = (f == 0 && hasDominantFaith);
 
                 faith.Counties.AddRange(owned.Where(c => !wilderness.Contains(c)));
                 foreach (var county in owned) byCounty[county] = faith;
@@ -156,10 +195,10 @@ public static class Faiths
                 faiths.Add(faith);
             }
 
-            // Step 3: Mint Heads of Faith (ONLY for Organized Faiths)
+            // Step 3: Mint Heads of Faith (Favor Dominant / Primary Faiths)
             double headShare = cfg.HeadOfFaithShare * (religion.Monotheist ? 2.0 : 1.0);
 
-            if (primaryFaith.IsOrganized && rng.Chance(headShare))
+            if (primaryFaith.IsOrganized && rng.Chance(headShare * (hasDominantFaith ? 1.4 : 1.0)))
             {
                 primaryFaith.Head = new HeadOfFaith
                 {
@@ -171,7 +210,7 @@ public static class Faiths
 
             foreach (var faith in religionFaiths.Where(f => f != primaryFaith && f.IsOrganized))
             {
-                if (rng.Chance(headShare * 0.35))
+                if (rng.Chance(headShare * 0.25))
                 {
                     faith.Head = new HeadOfFaith
                     {
@@ -183,12 +222,12 @@ public static class Faiths
             }
         }
 
-        // Step 4: Place Holy Sites
+        // Step 4: Place Holy Sites (Hierarchically by Religion & Faith)
+        PlaceAllHolySites(religions, development, counties, cfg.HolySitesPerFaith,
+            wilderness, cfg.WildernessHolySiteShare, worldCenters, rng);
+
         foreach (var faith in faiths)
         {
-            PlaceHolySites(faith, development, faiths, counties, cfg.HolySitesPerFaith,
-                wilderness, cfg.WildernessHolySiteShare, rng);
-
             if (faith.Head is not null && faith.HolySites.Count > 0)
             {
                 faith.Head = new HeadOfFaith
@@ -213,6 +252,231 @@ public static class Faiths
             }
 
             return total == 0 ? 1.0 : tribal / (double)total;
+        }
+    }
+
+    /// <summary>
+    /// Partitions religion members into 1 large dominant orthodoxy (65-85% share) 
+    /// and 1 to N-1 minor schisms hugging periphery borderlands.
+    /// </summary>
+    private static Dictionary<int, int> PartitionWithDominant(
+        RegionGrowth.Graph graph, List<int> members, int faithCount, Rng rng)
+    {
+        var result = new Dictionary<int, int>();
+        if (members.Count == 0) return result;
+        if (faithCount <= 1)
+        {
+            foreach (int m in members) result[m] = 0;
+            return result;
+        }
+
+        int dominantTarget = (int)Math.Round(members.Count * rng.Double(0.68, 0.84));
+        dominantTarget = Math.Clamp(dominantTarget, members.Count - (faithCount - 1) * 3, members.Count - (faithCount - 1));
+
+        // Find the most central node in members for the dominant faith
+        int centerNode = members.OrderBy(i =>
+        {
+            double distSum = 0;
+            for (int k = 0; k < Math.Min(members.Count, 8); k++)
+            {
+                int other = members[k];
+                double dx = graph.Position[i].X - graph.Position[other].X;
+                double dy = graph.Position[i].Y - graph.Position[other].Y;
+                distSum += dx * dx + dy * dy;
+            }
+            return distSum;
+        }).First();
+
+        // Grow dominant faith outward from center
+        var dominantAssigned = new HashSet<int> { centerNode };
+        var frontier = new PriorityQueue<int, double>();
+
+        foreach (int nbr in graph.Neighbours[centerNode])
+        {
+            if (members.Contains(nbr)) frontier.Enqueue(nbr, graph.EnterCost[nbr]);
+        }
+
+        while (frontier.Count > 0 && dominantAssigned.Count < dominantTarget)
+        {
+            int current = frontier.Dequeue();
+            if (!dominantAssigned.Add(current)) continue;
+
+            foreach (int nbr in graph.Neighbours[current])
+            {
+                if (members.Contains(nbr) && !dominantAssigned.Contains(nbr))
+                {
+                    frontier.Enqueue(nbr, graph.EnterCost[nbr]);
+                }
+            }
+        }
+
+        foreach (int m in dominantAssigned) result[m] = 0;
+
+        // Partition the remaining fringe counties among the minority faiths
+        var remaining = members.Where(m => !dominantAssigned.Contains(m)).ToList();
+        if (remaining.Count > 0)
+        {
+            int minorFaithCount = faithCount - 1;
+            var minorPartition = RegionGrowth.Partition(graph, remaining, minorFaithCount, rng, out _);
+            for (int i = 0; i < remaining.Count; i++)
+            {
+                result[remaining[i]] = minorPartition[i] + 1;
+            }
+        }
+
+        return result;
+    }
+
+    private static void PlaceAllHolySites(
+        List<Religion> religions,
+        Dictionary<Title, int> development,
+        List<Title> allCounties,
+        int targetCount,
+        WildernessMap wilderness,
+        double wildShare,
+        WorldCenterMap? worldCenters,
+        Rng rng)
+    {
+        var globalHolySites = new List<Title>();
+
+        foreach (var religion in religions)
+        {
+            var religionCounties = religion.Faiths
+                .SelectMany(f => f.Counties)
+                .Distinct()
+                .ToList();
+
+            if (religionCounties.Count == 0) continue;
+
+            // 1. Pick Shared Core Holy Sites for the Religion (2 to 3 sites if multi-faith)
+            var coreSites = new List<Title>();
+
+            int coreTarget = religion.Faiths.Count > 1
+                ? Math.Clamp((int)Math.Round(targetCount * 0.5), 2, targetCount - 1)
+                : 0;
+
+            if (coreTarget > 0)
+            {
+                // Prioritize a World Center within the religion's domain (e.g. Rome, Mecca, Jerusalem)
+                if (worldCenters is not null)
+                {
+                    var religionCenters = religionCounties.Where(c => worldCenters.IsCenter(c)).ToList();
+                    if (religionCenters.Count > 0)
+                    {
+                        coreSites.Add(rng.Pick(religionCenters));
+                    }
+                    else if (globalHolySites.Count > 0 && rng.Chance(religion.Monotheist ? 0.45 : 0.20))
+                    {
+                        // Chance to share an existing renowned holy site from another religion
+                        coreSites.Add(rng.Pick(globalHolySites.Take(4).ToList()));
+                    }
+                }
+
+                // Chance for an ancient wilderness holy site (e.g. Mount Sinai, Stonehenge)
+                if (wilderness.Count > 0 && rng.Chance(wildShare))
+                {
+                    var duchies = religionCounties.Select(c => c.Parent).Where(p => p is not null).ToHashSet();
+                    var kingdoms = religionCounties.Select(c => c.Parent?.Parent).Where(p => p is not null).ToHashSet();
+
+                    var nearbyWild = wilderness.Counties
+                        .Where(c => !coreSites.Contains(c))
+                        .Where(c => duchies.Contains(c.Parent) || kingdoms.Contains(c.Parent?.Parent))
+                        .OrderBy(c => c.Index)
+                        .ToList();
+
+                    if (nearbyWild.Count > 0)
+                    {
+                        coreSites.Add(rng.Pick(nearbyWild));
+                    }
+                }
+
+                // Fill remaining core slots from the highest-development counties across the religion
+                var topReligionCounties = religionCounties
+                    .Where(c => !coreSites.Contains(c))
+                    .OrderByDescending(c => development.GetValueOrDefault(c))
+                    .ThenBy(c => c.Index);
+
+                foreach (var c in topReligionCounties)
+                {
+                    if (coreSites.Count >= coreTarget) break;
+                    coreSites.Add(c);
+                }
+
+                foreach (var site in coreSites)
+                {
+                    if (!globalHolySites.Contains(site))
+                        globalHolySites.Add(site);
+                }
+            }
+
+            // 2. Populate each Faith's holy sites (inheriting the core sites + adding local shrines)
+            foreach (var faith in religion.Faiths)
+            {
+                var chosenCounties = new List<Title>(coreSites);
+
+                // If the faith has a local World Center of its own not yet picked, include it
+                if (worldCenters is not null)
+                {
+                    var localCenters = faith.Counties
+                        .Where(c => worldCenters.IsCenter(c) && !chosenCounties.Contains(c))
+                        .ToList();
+
+                    if (localCenters.Count > 0)
+                    {
+                        chosenCounties.Add(rng.Pick(localCenters));
+                    }
+                }
+
+                // Add top development counties specific to this faith
+                var localRanked = faith.Counties
+                    .Where(c => !chosenCounties.Contains(c))
+                    .OrderByDescending(c => development.GetValueOrDefault(c))
+                    .ThenBy(c => c.Index);
+
+                foreach (var county in localRanked)
+                {
+                    if (chosenCounties.Count >= targetCount) break;
+                    chosenCounties.Add(county);
+                }
+
+                // Fallback 1: If faith is very small, pull from other counties in the parent religion
+                if (chosenCounties.Count < targetCount)
+                {
+                    var otherReligionCounties = religionCounties
+                        .Where(c => !chosenCounties.Contains(c))
+                        .OrderByDescending(c => development.GetValueOrDefault(c))
+                        .ThenBy(c => c.Index);
+
+                    foreach (var county in otherReligionCounties)
+                    {
+                        if (chosenCounties.Count >= targetCount) break;
+                        chosenCounties.Add(county);
+                    }
+                }
+
+                // Fallback 2: Any global county if still short
+                if (chosenCounties.Count < targetCount)
+                {
+                    foreach (var county in allCounties.Where(c => !chosenCounties.Contains(c)))
+                    {
+                        if (chosenCounties.Count >= targetCount) break;
+                        chosenCounties.Add(county);
+                    }
+                }
+
+                // Fallback 3: Single emergency fallback
+                if (chosenCounties.Count == 0 && allCounties.Count > 0)
+                {
+                    chosenCounties.Add(allCounties[0]);
+                }
+
+                foreach (var county in chosenCounties.Take(targetCount))
+                {
+                    faith.HolySites.Add(($"gen_hs_{county.Key}", county));
+                    if (!globalHolySites.Contains(county))
+                        globalHolySites.Add(county);
+                }
+            }
         }
     }
 
@@ -369,6 +633,10 @@ public static class Faiths
                     ? ["doctrine_pluralism_fundamentalist", "doctrine_pluralism_righteous"]
                     : ["doctrine_pluralism_pluralistic", "doctrine_pluralism_righteous"], rng),
 
+                "doctrine_pilgrimage" => Prefer(
+                    members.Where(d => d != "doctrine_pilgrimage_mandatory_hajj").ToList(),
+                    ["doctrine_pilgrimage_encouraged", "doctrine_pilgrimage_mandatory"], rng),
+
                 _ => rng.Pick(members),
             };
         }
@@ -446,82 +714,6 @@ public static class Faiths
         };
     }
 
-    private static void PlaceHolySites(Faith faith, Dictionary<Title, int> development,
-        List<Faith> allFaiths, List<Title> allCounties, int targetCount,
-        WildernessMap wilderness, double wildShare, Rng rng)
-    {
-        var chosenCounties = new List<Title>();
-        int abroad = Math.Max(0, targetCount - 4);
-
-        var existingHolySites = allFaiths
-            .Where(f => f != faith && f.HolySites.Count > 0)
-            .SelectMany(f => f.HolySites.Select(hs => hs.County))
-            .Distinct()
-            .OrderByDescending(c => development.GetValueOrDefault(c))
-            .ToList();
-
-        if (chosenCounties.Count < abroad && existingHolySites.Count > 0 && rng.Chance(0.75))
-        {
-            chosenCounties.Add(rng.Pick(existingHolySites.Take(4).ToList()));
-        }
-
-        var foreignCounties = allCounties
-            .Where(c => !faith.Counties.Contains(c) && !chosenCounties.Contains(c))
-            .OrderByDescending(c => development.GetValueOrDefault(c))
-            .Take(25)
-            .ToList();
-
-        if (chosenCounties.Count < abroad && foreignCounties.Count > 0 && rng.Chance(0.85))
-        {
-            chosenCounties.Add(rng.Pick(foreignCounties.Take(5).ToList()));
-        }
-
-        Title? wildSite = null;
-        bool wantWild = wilderness.Count > 0
-            && faith.Counties.Count > 0
-            && rng.Chance(wildShare);
-
-        if (wantWild)
-        {
-            var duchies = faith.Counties.Select(c => c.Parent).Where(p => p is not null).ToHashSet();
-            var kingdoms = faith.Counties.Select(c => c.Parent?.Parent).Where(p => p is not null).ToHashSet();
-
-            var nearby = wilderness.Counties
-                .Where(c => !chosenCounties.Contains(c))
-                .Where(c => duchies.Contains(c.Parent) || kingdoms.Contains(c.Parent?.Parent))
-                .OrderBy(c => c.Index)
-                .ToList();
-
-            if (nearby.Count > 0) wildSite = rng.Pick(nearby);
-        }
-
-        int localTarget = wildSite is null ? targetCount : targetCount - 1;
-
-        var localRanked = faith.Counties
-            .Where(c => !chosenCounties.Contains(c))
-            .OrderByDescending(c => development.GetValueOrDefault(c))
-            .ThenBy(c => c.Index);
-
-        foreach (var county in localRanked)
-        {
-            if (chosenCounties.Count >= localTarget) break;
-            chosenCounties.Add(county);
-        }
-
-        if (wildSite is not null && chosenCounties.Count > 0) chosenCounties.Add(wildSite);
-
-        // Fallback: If a faith has no counties at all (e.g. dummy/unsettled), ensure it gets at least 1 site
-        if (chosenCounties.Count == 0 && allCounties.Count > 0)
-        {
-            chosenCounties.Add(allCounties[0]);
-        }
-
-        foreach (var county in chosenCounties)
-        {
-            faith.HolySites.Add(($"site_{county.Key}", county));
-        }
-    }
-
     private static string Prefer(List<string> members, string[] preferred, Rng rng)
     {
         var usable = preferred.Where(members.Contains).ToList();
@@ -563,7 +755,7 @@ public static class Faiths
         Console.WriteLine($"  faiths: {faiths.Count} in {religions.Count} religions " +
                           $"({monotheist} monotheist, {unreformed} unreformed, {heads} heads of faith) " +
                           $"over {counties} counties — " +
-                          $"median {sizes[sizes.Count / 2]}, largest {sizes[^1]} counties " +
+                          $"smallest {sizes[0]}, median {sizes[sizes.Count / 2]}, largest {sizes[^1]} counties " +
                           $"({elapsedMs} ms)");
     }
 }

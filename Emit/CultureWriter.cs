@@ -50,6 +50,9 @@ public static class CultureWriter
         {
             sb.Append($"{heritage.Key} = {{\n");
             sb.Append("\ttype = heritage\n");
+            sb.Append("\t\taudio_parameter = european\n");
+            sb.Append("\tparameters = {\n");
+            sb.Append("\t}\n");
             sb.Append("\tis_shown = {\n");
             sb.Append($"\t\theritage_is_shown_trigger = {{ HERITAGE = {heritage.Key} }}\n");
             sb.Append("\t}\n");
@@ -68,7 +71,10 @@ public static class CultureWriter
             sb.Append("\t\t\tmultiply = 10\n");
             sb.Append("\t\t}\n");
             sb.Append("\t}\n");
-            if (heritage.LanguageColor is { } color) sb.Append($"\tcolor = {color}\n");
+            if (heritage.LanguageColor is { } color && color != "tungusic")
+            {
+                sb.Append($"\tcolor = {color}\n");
+            }
             sb.Append("}\n\n");
         }
 
@@ -179,8 +185,8 @@ public static class CultureWriter
                 sb.Append($"\t{field} = {{\n");
                 for (int i = 0; i < names.Count; i += 8)
                 {
-                    // NEW: Clean the keys before writing them as unquoted tokens so CK3 doesn't crash on apostrophes/hyphens
-                    var cleanNames = names.Skip(i).Take(8).Select(CleanKey);
+                    // Clean the keys and prefix with "cul_" to prevent Murmur3A hash collisions
+                    var cleanNames = names.Skip(i).Take(8).Select(n => $"cul_{CleanKey(n)}");
                     sb.Append("\t\t").Append(string.Join(' ', cleanNames)).Append('\n');
                 }
                 sb.Append("\t}\n\n");
@@ -465,9 +471,9 @@ public static class CultureWriter
             entries[$"dynnpat_suf_{culture.Key}_male"] = culture.PatronymSuffixMale;
             entries[$"dynnpat_suf_{culture.Key}_female"] = culture.PatronymSuffixFemale;
 
-            // NEW: The mapping key is cleaned, but the display value remains the rich, accented string
-            foreach (string name in culture.MaleNames) entries[CleanKey(name)] = name;
-            foreach (string name in culture.FemaleNames) entries[CleanKey(name)] = name;
+            // Apply the "cul_" prefix to character names in the localization file
+            foreach (string name in culture.MaleNames) entries[$"cul_{CleanKey(name)}"] = name;
+            foreach (string name in culture.FemaleNames) entries[$"cul_{CleanKey(name)}"] = name;
             foreach (string name in culture.DynastyNames) entries[$"dynn_{CleanKey(name)}"] = name;
         }
 

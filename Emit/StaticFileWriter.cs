@@ -87,7 +87,7 @@ public static class StaticFileWriter
 
                 if (File.Exists(targetFile))
                 {
-                    if (File.GetLastWriteTimeUtc(targetFile) >= runStarted)
+                    if (File.GetLastWriteTimeUtc(targetFile) >= runStarted.AddMinutes(-1))
                     {
                         skipped++;
                         continue;

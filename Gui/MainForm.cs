@@ -90,6 +90,16 @@ public sealed class MainForm : Form
         BackColor = Theme.Background,
         ForeColor = Theme.TextDim,
         Font = Theme.Mono,
+        HideSelection = false, // Keeps the match highlighted when the search box is focused
+    };
+
+    private readonly TextBox _logSearch = new()
+    {
+        Width = 120,
+        BorderStyle = BorderStyle.FixedSingle,
+        BackColor = Theme.SurfaceHigh,
+        ForeColor = Theme.Text,
+        Margin = new Padding(8, 5, 3, 3),
     };
 
     private readonly Label _status = new()
@@ -225,6 +235,10 @@ public sealed class MainForm : Form
         Theme.ApplyLight(_grid);
         _grid.SelectedObject = _options.Config;
 
+        // 1. Randomize the seed on program startup
+        _options.Config.Seed = Random.Shared.Next(1, int.MaxValue);
+
+        // 2. Assign the randomized seed to the UI field
         _seed.Value = Math.Clamp(_options.Config.Seed, 0, int.MaxValue);
         _seed.ValueChanged += (_, _) => _options.Config.Seed = (int)_seed.Value;
 
@@ -357,6 +371,19 @@ public sealed class MainForm : Form
             if (_log.TextLength > 0) Clipboard.SetText(_log.Text);
         };
 
+        // Trigger search on every keypress
+        _logSearch.TextChanged += (_, _) => SearchLog(next: false);
+
+        // Find the next match when pressing Enter
+        _logSearch.KeyDown += (sender, e) =>
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                e.SuppressKeyPress = true; // Stop the beep sound on Enter
+                SearchLog(next: true);
+            }
+        };
+
         var header = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
@@ -367,7 +394,40 @@ public sealed class MainForm : Form
         header.Controls.Add(Caption("Log"));
         header.Controls.Add(clear);
         header.Controls.Add(copy);
+        header.Controls.Add(Caption("Search"));
+        header.Controls.Add(_logSearch);
         return header;
+    }
+
+    private void SearchLog(bool next)
+    {
+        string query = _logSearch.Text;
+        if (string.IsNullOrEmpty(query) || _log.TextLength == 0) return;
+
+        int start = _log.SelectionStart;
+        if (next && start >= 0)
+        {
+            // Advance past the current match if we are finding the next instance
+            start += _log.SelectionLength > 0 ? 1 : 0;
+        }
+        else
+        {
+            start = 0;
+        }
+
+        int index = _log.Text.IndexOf(query, start, StringComparison.OrdinalIgnoreCase);
+
+        // Wrap around to the beginning if no match was found from the current cursor position
+        if (index == -1 && start > 0)
+        {
+            index = _log.Text.IndexOf(query, 0, StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (index != -1)
+        {
+            _log.Select(index, query.Length);
+            _log.ScrollToCaret();
+        }
     }
 
     private Control BuildStatusBar()
