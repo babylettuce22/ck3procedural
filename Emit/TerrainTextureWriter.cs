@@ -16,14 +16,6 @@ public static class TerrainTextureWriter
     /// <summary>
     /// For every pixel: the distance to the nearest ground of a *different* label, measured without
     /// leaving its own, and which label that is.
-    ///
-    /// A two-pass chamfer transform, so it is linear in the pixel count rather than one dilation
-    /// pass per unit of reach — at a hundred-pixel reach over a 42-million-pixel province map,
-    /// dilation would be some ten billion neighbour tests.
-    ///
-    /// Propagation is restricted to same-label neighbours on purpose. Letting it cross a boundary
-    /// would carry a label from the far side back into the region it came from, and a pixel would
-    /// end up blending toward its own class.
     /// </summary>
     private static (ushort[] Distance, byte[] Other) BoundaryField(byte[] label, int width, int height)
     {
@@ -62,7 +54,7 @@ public static class TerrainTextureWriter
             }
         });
 
-        // Forward scan, then backward. Sequential by nature — each pass depends on the one before.
+        // Forward scan, then backward.
         for (int y = 0; y < height; y++)
             for (int x = 0; x < width; x++)
             {
@@ -102,28 +94,99 @@ public static class TerrainTextureWriter
         }
     }
 
+    /// <summary>
+    /// Central-difference gradient magnitude at one heightmap pixel, in elevation units per pixel.
+    /// </summary>
+    private static float Gradient(float[] elevation, int width, int height, int x, int y)
+    {
+        int xm = Math.Max(0, x - 1), xp = Math.Min(width - 1, x + 1);
+        int ym = Math.Max(0, y - 1), yp = Math.Min(height - 1, y + 1);
+
+        float dx = elevation[(long)y * width + xp] - elevation[(long)y * width + xm];
+        float dy = elevation[(long)yp * width + x] - elevation[(long)ym * width + x];
+        return MathF.Sqrt(dx * dx + dy * dy);
+    }
+
+    private static (float Start, float Full) CliffLines(float[] elevation, int width, int height,
+        int sea, double share, byte[] coastDistance, int pWidth, int pHeight, int reach)
+    {
+        const int Stride = 4;
+        const int Bins = 2048;
+
+        double toProvinceX = (double)pWidth / width;
+        double toProvinceY = (double)pHeight / height;
+
+        bool Sampled(int x, int y)
+        {
+            if (elevation[(long)y * width + x] <= sea) return false;
+
+            int px = Math.Clamp((int)(x * toProvinceX), 0, pWidth - 1);
+            int py = Math.Clamp((int)(y * toProvinceY), 0, pHeight - 1);
+            byte d = coastDistance[(long)py * pWidth + px];
+            return d >= 1 && d <= reach;
+        }
+
+        int rows = (height + Stride - 1) / Stride;
+
+        float max = 0;
+        object gate = new();
+        Parallel.For(0, rows, () => 0f, (row, _, localMax) =>
+        {
+            int y = row * Stride;
+            for (int x = 0; x < width; x += Stride)
+            {
+                if (!Sampled(x, y)) continue;
+                float g = Gradient(elevation, width, height, x, y);
+                if (g > localMax) localMax = g;
+            }
+            return localMax;
+        }, localMax => { lock (gate) if (localMax > max) max = localMax; });
+
+        if (max <= 0) return (float.MaxValue, float.MaxValue);
+
+        var histogram = new long[Bins];
+        double scale = (Bins - 1) / max;
+
+        Parallel.For(0, rows, () => new long[Bins], (row, _, local) =>
+        {
+            int y = row * Stride;
+            for (int x = 0; x < width; x += Stride)
+            {
+                if (!Sampled(x, y)) continue;
+                float g = Gradient(elevation, width, height, x, y);
+                local[Math.Clamp((int)(g * scale), 0, Bins - 1)]++;
+            }
+            return local;
+        }, local => { lock (gate) for (int b = 0; b < Bins; b++) histogram[b] += local[b]; });
+
+        long total = 0;
+        foreach (long n in histogram) total += n;
+        if (total == 0) return (float.MaxValue, float.MaxValue);
+
+        float Percentile(double fraction)
+        {
+            long target = (long)(total * Math.Clamp(fraction, 0, 1));
+            long running = 0;
+            for (int b = 0; b < Bins; b++)
+            {
+                running += histogram[b];
+                if (running >= target) return (float)(b / scale);
+            }
+            return max;
+        }
+
+        return (Percentile(1.0 - share), Percentile(1.0 - share * 0.25));
+    }
+
     public static void WriteAll(string modDir, MapConfig cfg, TerrainClass[] terrain,
         KoppenClass[] climate, float[] elevation, Rng rng)
     {
         string dir = Path.Combine(modDir, "gfx", "map", "terrain");
         Directory.CreateDirectory(dir);
 
-        // Output resolution — province-sized, which is what vanilla ships. This is not a quality
-        // preference, it is a hard ceiling: D3D11 caps a Texture2D at 16384 px a side (the same
-        // limit HeightmapPacker.MaxTextureSide already respects). At vanilla's 18432x9216
-        // heightmap, emitting these at heightmap resolution makes CreateTexture2D fail with
-        // E_INVALIDARG, CK3 keeps the null pixel buffer, and the loading screen dies on an access
-        // violation. Half of 18432 is 9216, which clears it; the full size never will.
         int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
-
-        // The lattice terrain[] and climate[] are indexed on.
         int pWidth = cfg.ProvinceWidth, pHeight = cfg.ProvinceHeight;
 
-        // The lattice elevation[] is indexed on. The painting below is authored in *heightmap*
-        // pixels — the noise frequencies, the warp amplitudes and the blend radius are all tuned
-        // against that grid — so each output pixel maps up into heightmap space rather than the
-        // whole algorithm being retuned for a second coordinate space. Output resolution and
-        // sampling resolution are now independent, which is the property that was missing.
         int hWidth = cfg.Width, hHeight = cfg.Height;
         double toHeightX = (double)hWidth / width;
         double toHeightY = (double)hHeight / height;
@@ -145,28 +208,36 @@ public static class TerrainTextureWriter
         double fWarp = 20.0 / reference;
         double fBroad = 6.0 / reference;
 
-        // Heightmap space -> province space, applied to the warped coordinates below.
         double scaleX = (double)pWidth / hWidth;
         double scaleY = (double)pHeight / hHeight;
 
-        // How far a biome's materials bleed across its boundary, in *province* pixels, which is the
-        // space the boundary field below is measured in. Scaled so the band is the same fraction of
-        // a continent at every map size.
         float blendReach = (float)Math.Max(1.0, cfg.Scaled(cfg.TerrainBlendReach));
-
-        // The scale the band's own edge wanders at, and the scale it is dithered at. Deliberately
-        // far apart: the first decides where one biome fingers into the next, which happens over
-        // kilometres; the second is fine enough to break up the last few pixels so the outer edge
-        // of the band is not itself a drawable contour.
         double bandFrequency = 170.0 / reference;
         double interlockFrequency = fA * 4;
 
-        // Terrain and climate packed together, because the band has to be drawn wherever either
-        // changes — see TerrainPalette.Label.
         var label = new byte[terrain.Length];
         Parallel.For(0, terrain.Length, i => label[i] = TerrainPalette.Label(terrain[i], climate[i]));
 
         var (boundaryDistance, boundaryOther) = BoundaryField(label, pWidth, pHeight);
+
+        double cliffShare = Math.Clamp(cfg.CliffSlopeShare, 0, 1);
+        int cliffReach = Math.Max(1, (int)Math.Round(cfg.Scaled(cfg.CliffCoastReach)));
+
+        byte[]? coastDistance = null;
+        float cliffStart = float.MaxValue, cliffFull = float.MaxValue;
+
+        if (cliffShare > 0)
+        {
+            var shoreMask = new byte[terrain.Length];
+            Parallel.For(0, terrain.Length,
+                i => shoreMask[i] = terrain[i] == TerrainClass.Sea ? (byte)0 : (byte)1);
+            coastDistance = TerrainClassifier.DistanceToWater(shoreMask, pWidth, pHeight, cliffReach);
+
+            (cliffStart, cliffFull) = CliffLines(elevation, hWidth, hHeight, sea, cliffShare,
+                coastDistance, pWidth, pHeight, cliffReach);
+
+            if (cliffStart >= float.MaxValue) coastDistance = null;
+        }
 
         var used = new bool[256];
         object gate = new();
@@ -202,78 +273,108 @@ public static class TerrainTextureWriter
                     double nB = Math.Clamp(Field.Fbm(nBField, wx * fB + 31.7, wy * fB - 19.3, 3) * 0.5 + 0.5, 0, 1);
                     double nC = Math.Clamp(Field.Fbm(nCField, wx * fC - 11.2, wy * fC + 43.1, 2) * 0.5 + 0.5, 0, 1);
 
-                    // The warped coordinate decides which ground this pixel is standing on, so the
-                    // class boundary itself is ragged at material scale before the band is drawn.
-                    int sx = Math.Clamp((int)Math.Round(wx * scaleX), 0, pWidth - 1);
-                    int sy = Math.Clamp((int)Math.Round(wy * scaleY), 0, pHeight - 1);
+                    double gx = wx * scaleX;
+                    double gy = wy * scaleY;
+
+                    int sx = Math.Clamp((int)Math.Round(gx), 0, pWidth - 1);
+                    int sy = Math.Clamp((int)Math.Round(gy), 0, pHeight - 1);
                     int pSrc = sy * pWidth + sx;
 
                     byte self = label[pSrc];
                     var blend = TerrainPalette.For(TerrainPalette.TerrainOf(self),
                         TerrainPalette.ClimateFromLabel(self), relief, nA, nB, nC);
 
-                    // Distance from here to the nearest ground of a different class, measured
-                    // inside its own region. A smooth function of a real distance is what makes a
-                    // transition read as a gradient.
-                    //
-                    // This replaces a stencil that sampled four fixed cardinal probes at one reach
-                    // and averaged them. Five probes yield a handful of possible mix strengths, so
-                    // every transition was a staircase, the probes all flipped along the same
-                    // contour, and with no runner-up fade below the fourth material swapped for the
-                    // fifth on a clean line — which is what made biome edges read as hard seams and
-                    // made a cultivated province look like a decal.
-                    float edge = boundaryDistance[pSrc] * (1f / ChamferOrthogonal);
+                    // Bilinear continuous sample of boundary distance (eliminates discrete pixel stepping)
+                    int bx0 = Math.Clamp((int)Math.Floor(gx), 0, pWidth - 1);
+                    int bx1 = Math.Clamp(bx0 + 1, 0, pWidth - 1);
+                    int by0 = Math.Clamp((int)Math.Floor(gy), 0, pHeight - 1);
+                    int by1 = Math.Clamp(by0 + 1, 0, pHeight - 1);
+                    double bfx = gx - bx0;
+                    double bfy = gy - by0;
+
+                    float d00 = boundaryDistance[by0 * pWidth + bx0];
+                    float d10 = boundaryDistance[by0 * pWidth + bx1];
+                    float d01 = boundaryDistance[by1 * pWidth + bx0];
+                    float d11 = boundaryDistance[by1 * pWidth + bx1];
+
+                    float smoothDist = (float)((1 - bfx) * (1 - bfy) * d00 +
+                                               bfx * (1 - bfy) * d10 +
+                                               (1 - bfx) * bfy * d01 +
+                                               bfx * bfy * d11);
+
+                    float edge = smoothDist * (1f / ChamferOrthogonal);
+
                     if (edge < blendReach)
                     {
-                        // Push the band in and out along its length so it is not a uniform ribbon.
-                        // Several octaves rather than one: a single frequency displaces the edge in
-                        // smooth lobes a few hundred pixels across, which the eye reads as a blotch.
-                        // Stacked octaves give it fingers at every scale.
                         double ragged = Field.Fbm(bandField, sx * bandFrequency, sy * bandFrequency, 4);
                         edge += (float)(ragged * blendReach * 0.35);
 
-                        // And a fine dither on top, at texture scale, so the outer edge of the band
-                        // is not itself a clean iso-line along which every material switches on at
-                        // once.
-                        double interlock = Field.Fbm(interlockField,
-                            sx * interlockFrequency, sy * interlockFrequency, 2);
+                        double interlock = Field.Fbm(interlockField, sx * interlockFrequency, sy * interlockFrequency, 2);
                         edge += (float)(interlock * blendReach * 0.14);
 
                         if (edge < blendReach)
                         {
-                            double t = 1.0 - Math.Max(0f, edge) / blendReach;
+                            double t = Math.Clamp(1.0 - Math.Max(0f, edge) / blendReach, 0.0, 1.0);
+                            // Smoothstep curve ensures smooth zero-gradient transition
                             t = t * t * (3.0 - 2.0 * t);
 
-                            // Half at the boundary itself, falling to nothing at the far edge of the
-                            // band. Half is the ceiling on purpose: at an even split the two sides
-                            // are symmetric, so the seam disappears rather than reversing across one
-                            // pixel.
-                            double share = 0.5 * t * (0.78 + 0.44 *
-                                shareField.Unit(sx * fB - 88.2, sy * fB + 5.6));
+                            double share = 0.5 * t * (0.78 + 0.44 * shareField.Unit(sx * fB - 88.2, sy * fB + 5.6));
+                            share = Math.Clamp(share, 0.0, 0.5);
 
-                            byte winner = boundaryOther[pSrc];
-                            var neighbour = TerrainPalette.For(TerrainPalette.TerrainOf(winner),
-                                TerrainPalette.ClimateFromLabel(winner), relief, nA, nB, nC);
+                            if (share > 0.001)
+                            {
+                                byte winner = boundaryOther[pSrc];
+                                var neighbour = TerrainPalette.For(TerrainPalette.TerrainOf(winner),
+                                    TerrainPalette.ClimateFromLabel(winner), relief, nA, nB, nC);
 
-                            blend = TerrainPalette.Merge(blend, neighbour, share);
+                                blend = TerrainPalette.Merge(blend, neighbour, share);
+                            }
+                        }
+                    }
+
+                    if (coastDistance is not null)
+                    {
+                        byte coast = coastDistance[pSrc];
+                        if (coast >= 1 && coast <= cliffReach)
+                        {
+                            float g = Gradient(elevation, hWidth, hHeight,
+                                Math.Clamp((int)hx, 0, hWidth - 1),
+                                Math.Clamp((int)hy, 0, hHeight - 1));
+
+                            if (g > cliffStart)
+                            {
+                                double steep = Math.Clamp(
+                                    (g - cliffStart) / Math.Max(1e-4f, cliffFull - cliffStart), 0, 1);
+                                steep = steep * steep * (3.0 - 2.0 * steep);
+
+                                double inland = 1.0 - (coast - 1.0) / Math.Max(1, cliffReach - 1);
+                                double share = steep * inland * 0.92;
+                                if (share > 0.02)
+                                {
+                                    var rock = TerrainPalette.CliffFace(
+                                        TerrainPalette.ClimateFromLabel(self), nA, nC);
+                                    blend = TerrainPalette.Merge(blend, rock, share);
+                                }
+                            }
                         }
                     }
 
                     long o = row + x * 4;
-                    index[o + 2] = blend.M0;
-                    index[o + 1] = blend.M1;
-                    index[o + 0] = blend.M2;
-                    index[o + 3] = blend.M3;
+                    // For unused slots (weight == 0), write 0 index rather than 255
+                    index[o + 2] = blend.W0 > 0 && blend.M0 != TerrainPalette.Unused ? blend.M0 : (byte)0;
+                    index[o + 1] = blend.W1 > 0 && blend.M1 != TerrainPalette.Unused ? blend.M1 : (byte)0;
+                    index[o + 0] = blend.W2 > 0 && blend.M2 != TerrainPalette.Unused ? blend.M2 : (byte)0;
+                    index[o + 3] = blend.W3 > 0 && blend.M3 != TerrainPalette.Unused ? blend.M3 : (byte)0;
 
                     intensity[o + 2] = blend.W0;
                     intensity[o + 1] = blend.W1;
                     intensity[o + 0] = blend.W2;
                     intensity[o + 3] = blend.W3;
 
-                    if (blend.W0 > 0) localUsed[blend.M0] = true;
-                    if (blend.W1 > 0) localUsed[blend.M1] = true;
-                    if (blend.W2 > 0) localUsed[blend.M2] = true;
-                    if (blend.W3 > 0) localUsed[blend.M3] = true;
+                    if (blend.W0 > 0 && blend.M0 != TerrainPalette.Unused) localUsed[blend.M0] = true;
+                    if (blend.W1 > 0 && blend.M1 != TerrainPalette.Unused) localUsed[blend.M1] = true;
+                    if (blend.W2 > 0 && blend.M2 != TerrainPalette.Unused) localUsed[blend.M2] = true;
+                    if (blend.W3 > 0 && blend.M3 != TerrainPalette.Unused) localUsed[blend.M3] = true;
                 }
                 return localUsed;
             }, localUsed => { lock (gate) for (int i = 0; i < 256; i++) if (localUsed[i]) used[i] = true; });
@@ -283,6 +384,7 @@ public static class TerrainTextureWriter
         }
 
         used[TerrainPalette.Unused] = false;
+        used[0] = true;
         UsedMaterials = used;
 
         int distinct = used.Count(u => u);

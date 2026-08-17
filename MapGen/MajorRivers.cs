@@ -69,10 +69,10 @@ public static class MajorRivers
             }
         }
 
-        // 2. Carve channels with strict headwater tapering and gentle valley shoulders
+        // 2. Carve channels aggressively with sheer vertical drops to black (carvedBedElevation)
         CarveHeightmapChannels(fullElev, fullWidth, fullHeight, paths, cfg);
 
-        Console.WriteLine($"  major rivers: extracted, spline-smoothed and carved {paths.Count} major river system(s)");
+        Console.WriteLine($"  major rivers: extracted, spline-smoothed and aggressively carved {paths.Count} major river system(s)");
         return paths;
     }
 
@@ -135,19 +135,16 @@ public static class MajorRivers
     /// <summary>
     /// Smooths a discrete grid path using Centripetal Catmull-Rom splines (alpha = 0.5)
     /// and resamples the curve at equidistant arc lengths.
-    /// Centripetal splines are chosen specifically to eliminate cusps and overshoots on tight turns.
     /// </summary>
     private static List<(float X, float Y)> SmoothAndResamplePath(List<(float X, float Y)> raw, float stepSize)
     {
         if (raw.Count < 3) return new List<(float X, float Y)>(raw);
 
-        // 1. Build extended control points with end-point clamping
         var cp = new List<(float X, float Y)>(raw.Count + 2);
-        cp.Add((2f * raw[0].X - raw[1].X, 2f * raw[0].Y - raw[1].Y)); // Extrapolated P-1
+        cp.Add((2f * raw[0].X - raw[1].X, 2f * raw[0].Y - raw[1].Y));
         cp.AddRange(raw);
-        cp.Add((2f * raw[^1].X - raw[^2].X, 2f * raw[^1].Y - raw[^2].Y)); // Extrapolated P+1
+        cp.Add((2f * raw[^1].X - raw[^2].X, 2f * raw[^1].Y - raw[^2].Y));
 
-        // 2. Subsample each spline segment finely
         var denseSpline = new List<(float X, float Y)>();
         const int SubdivisionsPerSegment = 8;
 
@@ -158,7 +155,6 @@ public static class MajorRivers
             var p2 = cp[i + 1];
             var p3 = cp[i + 2];
 
-            // Centripetal knot calculation (alpha = 0.5)
             float t0 = 0.0f;
             float t1 = t0 + MathF.Pow(DistSq(p0, p1), 0.25f);
             float t2 = t1 + MathF.Pow(DistSq(p1, p2), 0.25f);
@@ -172,7 +168,6 @@ public static class MajorRivers
             {
                 float t = t1 + (t2 - t1) * (step / (float)SubdivisionsPerSegment);
 
-                // Hierarchical linear blending
                 var a1 = LerpPoint(p0, p1, (t1 - t) / (t1 - t0), (t - t0) / (t1 - t0));
                 var a2 = LerpPoint(p1, p2, (t2 - t) / (t2 - t1), (t - t1) / (t2 - t1));
                 var a3 = LerpPoint(p2, p3, (t3 - t) / (t3 - t2), (t - t2) / (t3 - t2));
@@ -187,7 +182,6 @@ public static class MajorRivers
         }
         denseSpline.Add(raw[^1]);
 
-        // 3. Resample densely evaluated spline onto equidistant arc-length intervals
         var resampled = new List<(float X, float Y)> { denseSpline[0] };
         float accumulated = 0f;
 
@@ -314,6 +308,7 @@ public static class MajorRivers
             MapConfig cfg)
     {
         float sea = cfg.Limits.SeaLevelUpper;
+        // Pure deep bed elevation (drops straight to 0 / black in the heightmap)
         float carvedBedElevation = cfg.SeaFloorElevation;
 
         float scaleX = (float)fullWidth / cfg.ProvinceWidth;
@@ -325,7 +320,7 @@ public static class MajorRivers
         if (maxWidthFull < minWidthFull) maxWidthFull = minWidthFull;
 
         float valleyReach = (float)Math.Max(1.0, cfg.RiverValleyReach);
-        float bankElevation = sea + 5.0f;
+        float bankElevation = sea + 3.0f; // Firm low bank line
 
         double variation = Math.Clamp(cfg.RiverWidthVariation, 0.0, 0.95);
         double variationScale = Math.Max(1.0, cfg.Scaled(cfg.RiverWidthVariationScale));
@@ -343,7 +338,6 @@ public static class MajorRivers
 
             var radChannel = new float[count];
             var radValley = new float[count];
-            var bedElev = new float[count];
             var hx = new float[count];
             var hy = new float[count];
 
@@ -361,8 +355,8 @@ public static class MajorRivers
 
                 float t = (float)i / (count - 1);
 
-                // Smooth cubic taper: 0 at vertex 0, opening over first 20%
-                float taper = t < 0.20f ? (t / 0.20f) * (t / 0.20f) * (3f - 2f * (t / 0.20f)) : 1.0f;
+                // Smooth cubic taper: 0 at vertex 0, opening over first 15%
+                float taper = t < 0.15f ? (t / 0.15f) * (t / 0.15f) * (3f - 2f * (t / 0.15f)) : 1.0f;
 
                 double radius = minWidthFull + (maxWidthFull - minWidthFull) * Math.Pow(t, 0.65);
 
@@ -375,7 +369,6 @@ public static class MajorRivers
 
                 radChannel[i] = (float)radius * taper;
                 radValley[i] = radChannel[i] * valleyReach;
-                bedElev[i] = bankElevation + (carvedBedElevation - bankElevation) * taper;
             }
 
             for (int i = 0; i < count - 1; i++)
@@ -385,7 +378,6 @@ public static class MajorRivers
 
                 float rChanA = radChannel[i], rChanB = radChannel[i + 1];
                 float rValA = radValley[i], rValB = radValley[i + 1];
-                float bedA = bedElev[i], bedB = bedElev[i + 1];
 
                 float maxR = Math.Max(rValA, rValB);
                 if (maxR < 0.5f) continue;
@@ -419,49 +411,23 @@ public static class MajorRivers
 
                         float curChanR = rChanA + u * (rChanB - rChanA);
                         float curValR = rValA + u * (rValB - rValA);
-                        float curBed = bedA + u * (bedB - bedA);
 
                         if (dist > curValR || curValR < 0.5f) continue;
 
                         int idx = y * fullWidth + x;
                         float original = fullElev[idx];
 
-                        // Inside CarveHeightmapChannels in MajorRivers.cs:
-
-                        float waterClearanceDepth = sea - 3.5f; // Ensures water is deep enough to render blue/opaque
-                        float bankLipHeight = sea + 3.0f;       // Solid dry ground above mud decals
-
+                        // 1. INSIDE WATER CHANNEL: Sheer, sharp vertical drop straight to deep black (no smoothing)
                         if (dist <= curChanR && curChanR > 0.5f)
                         {
-                            float norm = dist / curChanR; // 0.0 at center, 1.0 at bank edge
-
-                            float targetHeight;
-                            if (norm < 0.85f)
-                            {
-                                // 1. Riverbed floor: deep and navigable (smooth parabolic bed)
-                                float bedNorm = norm / 0.85f;
-                                targetHeight = curBed + (waterClearanceDepth - curBed) * (bedNorm * bedNorm);
-                            }
-                            else
-                            {
-                                // 2. Steep Bank: climbs sharply from below water level to dry bank lip in the outer 15%
-                                float bankT = (norm - 0.85f) / 0.15f;
-                                // Hermite smoothstep for a crisp, steep cut
-                                float smoothBank = bankT * bankT * (3.0f - 2.0f * bankT);
-                                targetHeight = waterClearanceDepth + (bankLipHeight - waterClearanceDepth) * smoothBank;
-                            }
-
-                            if (targetHeight < original)
-                            {
-                                fullElev[idx] = targetHeight;
-                            }
+                            fullElev[idx] = carvedBedElevation;
                         }
+                        // 2. OUTSIDE BANK: Gentle surrounding valley slope on dry land only
                         else if (curValR > curChanR)
                         {
-                            // 3. Valley Shoulder: smoothly rises from the dry bank lip into surrounding hills
                             float valleyT = (dist - curChanR) / (curValR - curChanR);
                             float smoothValley = (1.0f - MathF.Cos(valleyT * MathF.PI)) * 0.5f;
-                            float targetHeight = bankLipHeight + (original - bankLipHeight) * smoothValley;
+                            float targetHeight = bankElevation + (original - bankElevation) * smoothValley;
 
                             if (targetHeight < original)
                             {

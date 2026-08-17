@@ -75,110 +75,94 @@ public static class Koppen
     /// place dry enough to be desert is desert whatever its temperature, and testing tropical first
     /// would paint the Sahara as savanna.
     /// </summary>
+    /// <summary>
+    /// Classifies one place from its yearly temperature and rainfall.
+    ///
+    /// Aridity (B) is evaluated first using smooth Hermite-interpolated seasonal offsets to
+    /// prevent artificial step-cliffs and circular desert splotches across procedural noise fields.
+    /// </summary>
     public static KoppenClass Classify(double warmestC, double coldestC, double meanC,
-        double annualMm, double summerMm, double winterMm)
+            double annualMm, double summerMm, double winterMm)
     {
-        // --- B: arid. The threshold is a temperature, because warm places lose more to evaporation
-        // and so need more rain to be anything other than desert. The seasonal offset is Koppen's:
-        // rain that falls in the hot half of the year is worth less than rain that falls in the cold
-        // half, because more of it leaves again.
-        double summerShare = annualMm <= 0 ? 0.5 : summerMm / annualMm;
-        double offset = summerShare >= 0.7 ? 280 : summerShare >= 0.3 ? 140 : 0;
-        double aridity = 20 * meanC + offset;
+        // --- 1. E: Polar (Tested FIRST so cold tundra/ice isn't misclassified as sand desert) ---
+        // If the warmest month is under 10°C, it's too cold for trees regardless of rain.
+        if (warmestC < 10.0)
+            return warmestC < 0.0 ? KoppenClass.IceCap : KoppenClass.Tundra;
+
+        // --- 2. B: Arid (Only tested if warm enough for non-polar vegetation) ---
+        double summerShare = annualMm <= 0.0 ? 0.5 : Math.Clamp(summerMm / annualMm, 0.0, 1.0);
+        double offset = 280.0 * (summerShare * summerShare * (3.0 - 2.0 * summerShare));
+        double aridity = 20.0 * Math.Max(0.0, meanC) + offset;
 
         if (annualMm < aridity)
         {
-            bool hot = meanC >= 18;
-            if (annualMm < aridity / 2) return hot ? KoppenClass.HotDesert : KoppenClass.ColdDesert;
+            bool hot = meanC >= 18.0;
+            if (annualMm < aridity * 0.5)
+                return hot ? KoppenClass.HotDesert : KoppenClass.ColdDesert;
+
             return hot ? KoppenClass.HotSteppe : KoppenClass.ColdSteppe;
         }
 
-        // --- E: polar. No month warm enough for trees.
-        if (warmestC < 10) return warmestC < 0 ? KoppenClass.IceCap : KoppenClass.Tundra;
-
-        // --- A: tropical. Every month above 18, so nothing is ever limited by cold.
-        if (coldestC >= 18)
+        // --- 3. A: Tropical. Every month at or above 18°C.
+        if (coldestC >= 18.0)
         {
             double driestMonth = Math.Min(summerMm, winterMm) / 6.0;
-            if (driestMonth >= 60) return KoppenClass.TropicalRainforest;
+            if (driestMonth >= 60.0)
+                return KoppenClass.TropicalRainforest;
 
-            // Am is the monsoon case: a genuinely dry season, but a wet season heavy enough to carry
-            // rainforest through it. Koppen's own sliding threshold.
-            if (driestMonth >= 100 - annualMm / 25.0) return KoppenClass.TropicalMonsoon;
+            if (driestMonth >= 100.0 - annualMm / 25.0)
+                return KoppenClass.TropicalMonsoon;
+
             return KoppenClass.TropicalSavanna;
         }
 
-        if (coldestC < -3)
+        // --- 4. D: Continental & Subarctic (Taiga) ---
+        if (coldestC < -3.0)
         {
-            // Dfc/Dfd against Dfa/Dfb — boreal forest against broadleaf, and the line where taiga
-            // starts. Koppen's own rule counts months at or above ten degrees and calls it subarctic
-            // below four of them, which two seasonal means cannot answer directly. It can be
-            // answered exactly, though, rather than guessed at: for a year that runs as a sine of
-            // mean m and half-range A, the months above ten come to (12/pi)*acos((10-m)/A), and
-            // setting that to four gives (10-m)/A = 1/2. So four months is m = 10 - A/2, and the
-            // test below is Koppen's rule rearranged, not an approximation of it.
-            //
-            // It matters. Yakutsk's warmest month is +19, so a warmest-month test calls it
-            // temperate-continental; its annual mean of -9 against a half-range of 27 puts it a
-            // long way under this line, which is why it is taiga.
-            double halfRange = (warmestC - coldestC) / 2.0;
-            return meanC < 10 - halfRange / 2.0
+            double halfRange = (warmestC - coldestC) * 0.5;
+            return meanC < 10.0 - halfRange * 0.5
                 ? KoppenClass.Subarctic
                 : KoppenClass.HumidContinental;
         }
 
-        // --- C: temperate. The s/w/f split, and it matters: a dry-summer temperate climate carries
-        // scrub and olive groves where a wet-summer one at the same temperature carries oak.
+        // --- 5. C: Temperate ---
         double driestSummerMonth = summerMm / 6.0;
         double wettestWinterMonth = winterMm / 6.0;
 
-        if (driestSummerMonth < 40 && wettestWinterMonth >= 3 * driestSummerMonth)
+        if (driestSummerMonth < 40.0 && wettestWinterMonth >= 3.0 * driestSummerMonth)
             return KoppenClass.Mediterranean;
 
-        return warmestC >= 22 ? KoppenClass.HumidSubtropical : KoppenClass.Oceanic;
+        return warmestC >= 22.0 ? KoppenClass.HumidSubtropical : KoppenClass.Oceanic;
     }
 
-    /// <summary>
-    /// The CK3 terrain a Koppen class carries, before elevation has its say.
-    ///
-    /// <paramref name="patch"/> is a 0-1 noise sample, and is what keeps a climate zone from being
-    /// painted one flat colour: real vegetation inside one climate is a mosaic of woodland and open
-    /// ground, and the share of each is what differs between climates rather than the presence of
-    /// one at all. So each class names two terrains and a share, and the noise decides per pixel.
-    /// </summary>
     public static TerrainClass Terrain(KoppenClass climate, double patch) => climate switch
     {
-        // Closed canopy either way; the monsoon belt thins out at its edges.
+        // --- 1. TROPICAL (Lush jungle & savanna mosaic) ---
         KoppenClass.TropicalRainforest => TerrainClass.Jungle,
-        KoppenClass.TropicalMonsoon => patch > 0.25 ? TerrainClass.Jungle : TerrainClass.Plains,
+        KoppenClass.TropicalMonsoon => patch > 0.30 ? TerrainClass.Jungle : TerrainClass.Plains,
+        KoppenClass.TropicalSavanna => patch > 0.65 ? TerrainClass.Jungle : TerrainClass.Plains,
 
-        // Savanna is grass with trees in it, which is CK3's plains with jungle through the wetter
-        // parts and drylands where the dry season bites.
-        KoppenClass.TropicalSavanna => patch > 0.72 ? TerrainClass.Jungle
-            : patch < 0.28 ? TerrainClass.Drylands
-            : TerrainClass.Plains,
-
+        // --- 2. ARID & DESERT ---
+        // Hot deserts in the subtropics get sand dunes; cold deserts in the north get windswept steppe
         KoppenClass.HotDesert => TerrainClass.Desert,
-        KoppenClass.ColdDesert => patch > 0.7 ? TerrainClass.Steppe : TerrainClass.Desert,
-        KoppenClass.HotSteppe => patch > 0.45 ? TerrainClass.Drylands : TerrainClass.Desert,
-        KoppenClass.ColdSteppe => patch > 0.3 ? TerrainClass.Steppe : TerrainClass.Drylands,
+        KoppenClass.ColdDesert => TerrainClass.Steppe,
+        KoppenClass.HotSteppe => TerrainClass.Drylands,
+        KoppenClass.ColdSteppe => TerrainClass.Steppe,
 
-        // Mediterranean scrub: open, dry-looking ground with woodland in the folds.
-        KoppenClass.Mediterranean => patch > 0.68 ? TerrainClass.Forest
-            : patch > 0.35 ? TerrainClass.Drylands
-            : TerrainClass.Plains,
+        // --- 3. TEMPERATE & MEDITERRANEAN ---
+        KoppenClass.Mediterranean => patch > 0.55 ? TerrainClass.Forest
+                                        : patch > 0.20 ? TerrainClass.Drylands
+                                        : TerrainClass.Plains,
 
-        KoppenClass.HumidSubtropical => patch > 0.88 ? TerrainClass.Jungle
-            : patch > 0.5 ? TerrainClass.Forest
-            : TerrainClass.Plains,
+        KoppenClass.HumidSubtropical => patch > 0.85 ? TerrainClass.Jungle
+                                        : patch > 0.45 ? TerrainClass.Forest
+                                        : TerrainClass.Plains,
 
-        // Oceanic is the most cleared climate on Earth and the most wooded by default; the split is
-        // deliberately even.
-        KoppenClass.Oceanic => patch > 0.5 ? TerrainClass.Forest : TerrainClass.Plains,
-
+        KoppenClass.Oceanic => patch > 0.45 ? TerrainClass.Forest : TerrainClass.Plains,
         KoppenClass.HumidContinental => patch > 0.35 ? TerrainClass.Forest : TerrainClass.Plains,
-        KoppenClass.Subarctic => patch > 0.2 ? TerrainClass.Taiga : TerrainClass.Plains,
 
+        // --- 4. BOREAL & POLAR (Clean taiga and arctic snow) ---
+        KoppenClass.Subarctic => patch > 0.25 ? TerrainClass.Taiga : TerrainClass.Plains,
         KoppenClass.Tundra => TerrainClass.Arctic,
         KoppenClass.IceCap => TerrainClass.Arctic,
 

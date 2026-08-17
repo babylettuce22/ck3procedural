@@ -150,7 +150,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     [AdvancedSetting]
     [Category("05 Rivers")]
     [Description("Half-width of a major river's carved channel at its source, in heightmap pixels measured from the centreline — the channel is twice this across. Below about 7 it stops surviving the downsample into the province map and the river ceases to be navigable.")]
-    public double RiverChannelRadiusMin { get; set; } = 14.0;
+    public double RiverChannelRadiusMin { get; set; } = 18.0;
 
     /// <summary>
     /// Half-width of a major river's carved channel at its mouth, in vanilla heightmap pixels.
@@ -159,7 +159,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     [AdvancedSetting]
     [Category("05 Rivers")]
     [Description("Half-width of a major river's carved channel at its mouth, in heightmap pixels from the centreline. The channel opens from the source radius to this along its length.")]
-    public double RiverChannelRadiusMax { get; set; } = 32.0;
+    public double RiverChannelRadiusMax { get; set; } = 38.0;
 
     /// <summary>
     /// How much a major river's channel breathes in and out along its length, as a fraction of the
@@ -211,10 +211,9 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// How far above sea level a major river will climb before its trace stops, in elevation units.
     /// Keeps navigable corridors out of the mountains rather than trenching a canyon up to a peak.
     /// </summary>
-    [AdvancedSetting]
     [Category("05 Rivers")]
     [Description("How far above sea level a major river will climb before it stops, in elevation units. Keeps navigable corridors in the lowlands instead of trenching up into the mountains.")]
-    public double RiverMaxRiseAboveSea { get; set; } = 80.0;
+    public double RiverMaxRiseAboveSea { get; set; } = 120.0;
 
     /// <summary>
     /// The discharge at which a major river's upstream trace gives up, in the same units as
@@ -269,6 +268,40 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Category("03 Provinces")]
     [Description("Width in vanilla province pixels of the band where one biome's textures fade into the next. Larger is softer; much above 40 starts washing out single-province features like farmland, since a barony is about that wide.")]
     public double TerrainBlendReach { get; set; } = 44;
+
+    /// <summary>
+    /// Share of the coastal band steep enough to paint as bare cliff rather than as whatever biome
+    /// sits on it.
+    ///
+    /// A percentile of this map's own gradients, not an absolute rise-over-run, for the same reason
+    /// the hill and mountain lines are percentiles: the raw scale depends on how far the tectonic
+    /// sim happened to run, and a fixed gradient classifies a wildly different fraction of the map
+    /// from one seed to the next. Measured over the coastal band rather than over all land, so an
+    /// unusually mountainous interior does not starve the coast of cliffs.
+    ///
+    /// The default is measured off vanilla's own masks: coastline_cliff_grey covers 1.41% of the
+    /// map and coastline_cliff_desert 1.95%, at mean weights of 0.17% and 0.35%. Two percent
+    /// carrying some cliff, with the top quarter of that carrying it at full strength, lands in the
+    /// same place.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("03 Provinces")]
+    [Description("Share of the coastal band steep enough to paint as bare cliff. A percentile of this map's own slopes, so it means the same thing on any heightmap. 0 disables cliff painting entirely.")]
+    public double CliffSlopeShare { get; set; } = 0.02;
+
+    /// <summary>
+    /// How far inland, in vanilla province pixels, steep ground may still be painted as *coastal*
+    /// cliff. Scaled by <see cref="Scaled"/>.
+    ///
+    /// Gated on the coast because coastline_cliff_grey is a specific sea-cliff texture — stratified
+    /// grey rock cut by water — and vanilla only ever uses it at a shoreline. Steep ground inland
+    /// already resolves to the family's own mountain and hill rock, which is the right answer there;
+    /// letting the sea cliff reach inland would repaint every escarpment on the map.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("03 Provinces")]
+    [Description("How far inland, in vanilla province pixels, steep ground still counts as coastal cliff. Beyond this, steep ground gets its climate family's mountain rock instead.")]
+    public double CliffCoastReach { get; set; } = 8;
 
     [Category("13 Development")]
     [Description("Bonus development granted to World Center metropolises.")]
@@ -380,6 +413,14 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Category("11 Height scale")]
     public int SeaFloorElevation { get; set; } = -250;
 
+    [Category("11 Height scale")]
+    [Description("Inward coastal cliff smoothing strength (0.0 = sheer vertical cliffs, 1.0 = full smooth ramp). Softens high land meeting the ocean from the shore inward; water remains strictly untouched.")]
+    public double CoastalCliffSmoothing { get; set; } = 0.65;
+
+    [AdvancedSetting]
+    [Category("11 Height scale")]
+    [Description("How many pixels inland from the shoreline the coastal cliff smoothing reaches (1 to 16 pixels).")]
+    public int CoastalCliffReach { get; set; } = 5;
     /// <summary>
     /// How an imported heightmap is rescaled onto CK3's height scale before anything reads it.
     ///
@@ -1076,13 +1117,11 @@ public sealed class MapConfig : CustomTypeDescriptor
 
     /// <summary>
     /// Share of its remaining water an air parcel rains out per 100 vanilla province pixels of land
-    /// it crosses. The continental-interior dial: higher dries the far side of a landmass faster,
-    /// lower carries rain further inland.
+    /// it crosses. Lower carries rain much further across wide continental interiors.
     /// </summary>
     [Category("12 Climate")]
-    [Description("Share of its water an air parcel rains out per 100 vanilla province pixels of land it crosses. The continental-interior dial: higher leaves the far side of a landmass a desert, lower carries rain all the way across it.")]
-    public double RainoutPer100Pixels { get; set; } = 0.25;
-
+    [Description("Share of its water an air parcel rains out per 100 vanilla province pixels of land it crosses. Lower carries rain all the way across wide continental landmasses.")]
+    public double RainoutPer100Pixels { get; set; } = 0.08;
     /// <summary>
     /// Extra rain a climbing air parcel drops per kilometre it is lifted. The rain shadow behind a
     /// range exists without this - cooling alone squeezes the water out - but this sharpens the
@@ -1091,7 +1130,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     [AdvancedSetting]
     [Category("12 Climate")]
     [Description("Extra rain an air parcel drops per kilometre it is lifted over a range. A rain shadow forms without this, because cooling alone squeezes the water out, but raising it sharpens the contrast between a soaking windward slope and a desert behind it.")]
-    public double OrographicRainStrength { get; set; } = 1.5;
+    public double OrographicRainStrength { get; set; } = 0.85;
 
     /// <summary>
     /// How strongly the circulation's rising and sinking branches drive rainfall. This is what puts

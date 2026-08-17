@@ -1,5 +1,6 @@
 ﻿using Ck3MapGen.Config;
 using Ck3MapGen.Emit;
+using Ck3MapGen.Gui;
 using Ck3MapGen.MapGen;
 using Ck3MapGen.World;
 
@@ -55,28 +56,35 @@ public static class Generator
         return FromTerrain(terra, cfg);
     }
 
-    public static GenerationResult FromTerrain(TerrainData terra, MapConfig cfg)
+    public static GenerationResult FromTerrain(
+            TerrainData terra,
+            MapConfig cfg,
+            Action<string, PreviewRenderer.Image>? onPreview = null)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var rng = new Rng(cfg.Seed);
+
+        // 1. Initial Relief
+        onPreview?.Invoke("Relief", PreviewRenderer.RenderRelief(terra.ProvinceElevation, cfg));
 
         var world = Stage.Time("coarse world summary", () => WorldBridge.Populate(terra, cfg, rng));
         var provinceElevation = terra.ProvinceElevation;
         var landMask = Stage.Time("land mask", () => Raster.LandMask(terra.Elevation, cfg));
 
+        // 2. Climate
         var climate = Stage.Time("climate",
             () => MapGen.ClimateModel.Build(cfg, provinceElevation, landMask, new Rng(cfg.Seed ^ 0x0C11)));
+        onPreview?.Invoke("Climate", PreviewRenderer.RenderClimate(climate, cfg));
 
-        // 1. Naturalized drainage network (no 45° lines)
+        // 3. Drainage & Major Rivers
         var drainage = Stage.Time("drainage",
             () => MapGen.Drainage.Build(cfg, provinceElevation, landMask, climate.AnnualMm, rng));
+        onPreview?.Invoke("Drainage", PreviewRenderer.RenderDrainage(drainage, provinceElevation, cfg));
 
-        // 2. Extract major rivers from top drainage trunks and carve into heightmap
         var majorRivers = Stage.Time("major rivers carve",
             () => MajorRivers.ExtractAndCarve(terra.Elevation, cfg.Width, cfg.Height, drainage, cfg, rng));
         terra.MajorRiversList = majorRivers;
 
-        // 3. Re-sample province elevation and land mask so channels are seen as water
         provinceElevation = Stage.Time("recompute province elevation",
             () => Raster.ProvinceElevation(terra.Elevation, cfg));
         terra.ProvinceElevation = provinceElevation;
@@ -84,22 +92,35 @@ public static class Generator
         landMask = Stage.Time("recompute land mask",
             () => Raster.LandMask(terra.Elevation, cfg));
 
-        // 4. Partition provinces with river seeds and river-aware cost
+        // 4. Partition provinces with river seeds
         var provinces = Stage.Time("province partition",
             () => Provinces.Build(landMask, provinceElevation, climate,
                 cfg.ProvinceWidth, cfg.ProvinceHeight, cfg, rng, majorRivers, drainage));
         Console.WriteLine($"  {provinces.Count} provinces total");
 
+        // --- PREVIEWS READY HERE ---
+        onPreview?.Invoke("Provinces", PreviewRenderer.RenderProvinces(provinces, cfg));
+        onPreview?.Invoke("Rivers", PreviewRenderer.RenderRivers(
+            Emit.MapDataWriter.RiverIndices(cfg, provinces, drainage), cfg));
+
         var provinceLandMask = ProvinceLandMask(cfg, provinces);
 
+        // 5. Terrain
         var terrain = Stage.Time("terrain classification",
             () => MapGen.TerrainClassifier.Classify(cfg, provinceElevation, provinceLandMask,
                 climate, new Rng(cfg.Seed ^ 0x7E44)));
+        onPreview?.Invoke("Terrain", PreviewRenderer.RenderTerrain(terrain.Terrain, cfg));
 
         var order = MapDataWriter.BuildProvinceOrder(provinces, out int baronies, out int landCount, out int riverCount);
 
+        // 6. Titles
         var titles = Stage.Time("title hierarchy",
             () => MapGen.Titles.Build(provinces, baronies, order, cfg, new Rng(cfg.Seed ^ 0x71C1)));
+
+        onPreview?.Invoke("Counties", PreviewRenderer.RenderTitles(provinces, order, baronies, landCount, titles, "c"));
+        onPreview?.Invoke("Duchies", PreviewRenderer.RenderTitles(provinces, order, baronies, landCount, titles, "d"));
+        onPreview?.Invoke("Kingdoms", PreviewRenderer.RenderTitles(provinces, order, baronies, landCount, titles, "k"));
+        onPreview?.Invoke("Empires", PreviewRenderer.RenderTitles(provinces, order, baronies, landCount, titles, "e"));
 
         return new GenerationResult
         {
@@ -120,7 +141,6 @@ public static class Generator
             ElapsedMs = sw.ElapsedMilliseconds,
         };
     }
-
     private static byte[] ProvinceLandMask(MapConfig cfg, ProvinceMap provinces)
     {
         var mask = new byte[cfg.ProvinceWidth * cfg.ProvinceHeight];

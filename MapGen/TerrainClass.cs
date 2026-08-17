@@ -129,7 +129,7 @@ public static class TerrainClassifier
         Console.WriteLine($"  terrain thresholds: hills {hills:F0}, mountains {mountains:F0}, " +
                           $"wetland rainfall {marsh:F0} mm");
 
-        int BeachReach = BeachReachAtVanilla;
+        int BeachReach = Math.Max(1, (int)Math.Round(cfg.Scaled(BeachReachAtVanilla)));
 
         var coastDistance = DistanceToWater(landMask, width, height, BeachReach);
 
@@ -301,8 +301,11 @@ public static class TerrainClassifier
     /// Chebyshev distance from each land pixel to the nearest water, capped at
     /// <paramref name="maxDistance"/>. A capped dilation is far cheaper than a full distance
     /// transform and the beach only ever needs the first few pixels.
+    ///
+    /// Water reads 0 and anything past the cap reads <c>maxDistance + 1</c>. Cylindrical in x, so
+    /// a coast running off one edge of the map is still a coast.
     /// </summary>
-    private static byte[] DistanceToWater(byte[] landMask, int width, int height, int maxDistance)
+    internal static byte[] DistanceToWater(byte[] landMask, int width, int height, int maxDistance)
     {
         var distance = new byte[landMask.Length];
         byte cap = (byte)(maxDistance + 1);

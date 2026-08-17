@@ -28,6 +28,7 @@ public sealed class GuiState
     public string? View { get; set; }
     public string? PresetDir { get; set; }
 
+    public string? LaunchArgs { get; set; } = "-debug_mode -developer -skip";
     /// <summary>
     /// Where the game and the launcher's mod folder were last found, and what the last mod written
     /// was called.

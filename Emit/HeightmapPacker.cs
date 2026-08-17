@@ -2,99 +2,19 @@
 
 /// <summary>
 /// Builds the packed_heightmap/indirection_heightmap pair CK3 renders terrain from.
-///
-/// The heightmap the game reads is not heightmap.png. It is a texture atlas of 64-pixel tiles at
-/// five levels of detail, plus a lookup that says where each tile of the world lives in that atlas
-/// and how far it was decimated. heightmap.png is the authoring format; this is the runtime one.
-///
-/// Every rule below was measured against vanilla's own three files on 2026-08-11 rather than
-/// inferred from the wiki, by addressing vanilla's atlas with a candidate formula and scoring the
-/// reconstruction against vanilla's heightmap.png. The figures in brackets are mean absolute error
-/// on the 0-255 scale — a correct rule lands near zero, a wrong one scores like two unrelated
-/// pieces of terrain.
-///
-/// **Rows count up from the bottom.** <c>py = atlasHeight - levelOffset - tileSize * (G + 1)</c>
-/// [0.77] against the top-down reading [44.73]. Writing G top-down mirrors the atlas vertically so
-/// every tile resolves to another tile's terrain, which is what the "strips of missing terrain"
-/// from the previous packer actually were.
-///
-/// **level_offsets participate in the address.** Including them [0.009-0.014] against omitting
-/// them [25-47]. They are not decoration and they are not per-level metadata: they are the
-/// bottom-up distance from the foot of the atlas to the foot of each level's region.
-///
-/// **A tile's source window starts one row ABOVE its own grid line** — rows
-/// <c>[ty*64 - 1, ty*64 + 64)</c>, columns <c>[tx*64, tx*64 + 65)</c>. Asymmetric, and not a
-/// guess: it takes level 0 from 0.700 to 0.005. The previous packer read <c>[ty*64, ty*64 + 65)</c>
-/// and so shipped every tile one row south of where CK3 looks for it.
-///
-/// **Tiles are decimated, not averaged.** Taking every 2^level-th sample [0.005-0.014] against
-/// box-averaging the block [0.655-1.950], measured on the highest-relief tiles at each level where
-/// the two diverge most. AzgaarToCK3 box-averages; that would have been a fresh bug to import.
-///
-/// The one thing here that deliberately departs from vanilla is region packing. Vanilla's own
-/// regions overlap slightly — its level 0 needs 22 rows but only 1397 of the 1430 pixels they
-/// occupy are reserved before level 1 begins, and level 1 overruns into level 2 the same way. It
-/// evidently tolerates this because the colliding tiles are duplicates or open ocean, but there is
-/// nothing to gain by reproducing it. Regions here are allocated exactly and never overlap.
 /// </summary>
 public static class HeightmapPacker
 {
-    /// <summary>
-    /// Source pixels a tile spans. The tile stores one more sample than this, overlapping its
-    /// neighbour so adjacent tiles share an edge and the terrain does not crack between them —
-    /// hence <c>tile_size=65</c> in heightmap.heightmap, which is vanilla's own value.
-    ///
-    /// This was 32 (a 33-sample tile) and is now vanilla's 64. Nothing in the format demands one
-    /// over the other, and 33 packed a much smaller atlas, but vanilla is the only configuration
-    /// the engine is known to render at every zoom level: a map shipped at 33 loaded and looked
-    /// correct close up, then vanished when zoomed out to the map table, which is precisely where
-    /// the packed atlas rather than heightmap.png is what gets drawn.
-    ///
-    /// <see cref="VanillaShare"/> was already measured against vanilla's 41,472 tiles, i.e. at this
-    /// stride, so the level budget only becomes self-consistent with the change.
-    /// </summary>
     public const int TileStep = 64;
-
-    /// <summary>Levels of detail, from 0 (full resolution) to 4 (decimated 16x).</summary>
     public const int Levels = 5;
-
-    /// <summary>
-    /// Atlas coordinates live in the indirection's R and G *bytes*, so neither axis may exceed 256
-    /// tiles. Silent when broken: the byte wraps and a slice of the map points at the wrong terrain.
-    /// </summary>
     private const int MaxAddressable = 256;
-
-    /// <summary>
-    /// D3D11 caps a Texture2D at 16384 pixels a side, and the packed heightmap IS a texture. Exceed
-    /// it and creation fails, CK3 gets a null back, and it crashes reading the texture description
-    /// during heightmap setup — on a worker thread, with nothing in the log.
-    /// </summary>
     private const int MaxTextureSide = 16384;
 
-    /// <summary>
-    /// Share of tiles at each level, measured off vanilla's indirection_heightmap.png: 1,063 /
-    /// 4,948 / 6,100 / 4,838 / 24,523 of 41,472.
-    ///
-    /// Shares rather than absolute thresholds on the detail metric, so this self-calibrates. An
-    /// all-mountain map and an archipelago have wildly different gradient statistics but the same
-    /// texture budget to spend, and spending it in vanilla's proportions is what makes a generated
-    /// map cost what the base game costs. Note how lopsided vanilla is: nearly 60% of the world is
-    /// at the coarsest level, which is the whole reason its atlas is 12.9M pixels and a naive
-    /// all-level-0 one is 175.7M.
-    /// </summary>
     private static readonly double[] VanillaShare = [0.0256, 0.1193, 0.1471, 0.1167, 0.5913];
 
-    /// <summary>Samples along a tile edge at each level: 65, 33, 17, 9, 5 — vanilla's own ladder.</summary>
     public static int TileSize(int level) => TileStep / Decimation(level) + 1;
-
-    /// <summary>How far a level decimates its source: 1, 2, 4, 8, 16. Written to the indirection's B.</summary>
     public static int Decimation(int level) => 1 << level;
 
-    /// <summary>
-    /// The three files' worth of data, ready to write. <see cref="LevelOffsets"/> and
-    /// <see cref="EmptyR"/>/<see cref="EmptyG"/> belong in heightmap.heightmap; without them the
-    /// atlas cannot be addressed.
-    /// </summary>
     public sealed record Result(
         ushort[] Packed, int PackedWidth, int PackedHeight,
         byte[] Indirection, int TilesX, int TilesY,
@@ -106,14 +26,13 @@ public static class HeightmapPacker
         int tilesX = width / TileStep, tilesY = height / TileStep;
         int tileCount = tilesX * tilesY;
 
+        // 1. Initial level assignment by gradient relief metric
         var level = AssignLevels(Detail(full, width, height, tilesX, tilesY));
 
+        // 2. Enforce 2:1 LOD Neighbor Balance (Seam & T-junction protection)
+        EnforceNeighborLodBalance(level, tilesX, tilesY);
+
         // ── Deduplicate. Identical tiles share one slot in the atlas ──────────────
-        //
-        // Vanilla leans on this hard: 14,314 of its 41,472 tiles — 34.5% of the world — point at
-        // one single open-ocean tile, the one empty_tile_offset names. Content-hashing every level
-        // rather than special-casing ocean subsumes that and costs nothing, since the comparison is
-        // over at most 65x65 samples and only ever between tiles at the same level.
         var slotOf = new int[tileCount];
         var slots = new List<ushort[]>[Levels];
         var tilesPerLevel = new int[Levels];
@@ -141,10 +60,6 @@ public static class HeightmapPacker
                 }
         }
 
-        // empty_tile_offset has to name a tile that is inert if CK3 ever substitutes it. Vanilla's
-        // points at the open ocean every flat tile already shares. Prefer that — the most-referenced
-        // uniform tile at or below the water plane — and only mint a dedicated one if this map has
-        // no flat water anywhere, so the common case costs no extra slot.
         int emptySlot = FindFlatWaterSlot(slots[Levels - 1], slotOf, level, tileCount);
         if (emptySlot < 0)
         {
@@ -193,25 +108,126 @@ public static class HeightmapPacker
             tilesPerLevel, slotsPerLevel);
     }
 
-    /// <summary>Where a slot's top-left corner sits in the atlas. The one formula everything turns on.</summary>
+    /// <summary>
+    /// The heightmap as CK3 will actually render it: every tile decimated to the level this packer
+    /// would assign it, then filtered back up the way the GPU samples it.
+    ///
+    /// This is the geometry the game draws. <see cref="Pack"/> throws detail away — a tile that
+    /// lands on level 4 keeps one sample in sixteen — and which tiles lose what is decided by the
+    /// relief metric and the vanilla level shares, not by anything the author controls. That is
+    /// where a gentle slope turns into a staircase and a lone ridge quietly disappears, and it is
+    /// invisible in the source PNG. Running the same assignment and reversing the sampling is the
+    /// only way to see it without launching the game.
+    ///
+    /// Deliberately shares <see cref="Detail"/>, <see cref="AssignLevels"/>,
+    /// <see cref="EnforceNeighborLodBalance"/> and <see cref="Extract"/> with <see cref="Pack"/>
+    /// rather than reading the atlas back through the indirection texture. Going through the atlas
+    /// would be a second implementation of the same decision, free to drift from the one that ships.
+    /// </summary>
+    public static ushort[] Reconstruct(ushort[] full, int width, int height)
+    {
+        int tilesX = width / TileStep, tilesY = height / TileStep;
+        if (tilesX == 0 || tilesY == 0) return full;
+
+        var level = AssignLevels(Detail(full, width, height, tilesX, tilesY));
+        EnforceNeighborLodBalance(level, tilesX, tilesY);
+
+        // Copied rather than allocated blank: a map whose height is not a whole number of tiles has
+        // a strip at the bottom that no tile covers, and it should read as itself, not as sea.
+        var result = new ushort[full.Length];
+        Array.Copy(full, result, full.Length);
+
+        Parallel.For(0, tilesY, ty =>
+        {
+            for (int tx = 0; tx < tilesX; tx++)
+            {
+                int l = level[ty * tilesX + tx];
+                int step = Decimation(l), s = TileSize(l);
+                var samples = Extract(full, width, height, tx, ty, l);
+
+                for (int y = 0; y < TileStep; y++)
+                {
+                    int gy = ty * TileStep + y;
+                    if (gy >= height) break;
+
+                    // Extract starts its rows one pixel above the tile, so the sample grid is
+                    // offset by one; undo that here rather than resampling on a different origin.
+                    double v = (y + 1.0) / step;
+                    int v0 = Math.Clamp((int)v, 0, s - 2);
+                    double fv = v - v0;
+
+                    long row = (long)gy * width;
+
+                    for (int x = 0; x < TileStep; x++)
+                    {
+                        int gx = tx * TileStep + x;
+                        if (gx >= width) break;
+
+                        double u = (double)x / step;
+                        int u0 = Math.Clamp((int)u, 0, s - 2);
+                        double fu = u - u0;
+
+                        int a = v0 * s + u0, b = a + s;
+                        double top = samples[a] + (samples[a + 1] - samples[a]) * fu;
+                        double bottom = samples[b] + (samples[b + 1] - samples[b]) * fu;
+
+                        result[row + gx] = (ushort)Math.Clamp(
+                            Math.Round(top + (bottom - top) * fv), 0, 65535);
+                    }
+                }
+            }
+        });
+
+        return result;
+    }
+
+    /// <summary>
+    /// Enforces that no two adjacent tiles differ by more than 1 level of detail (|L1 - L2| <= 1).
+    /// Prevents T-junction mesh cracks and mip-level boundary tears when viewing the map in 3D.
+    /// </summary>
+    private static void EnforceNeighborLodBalance(int[] level, int tilesX, int tilesY)
+    {
+        bool changed = true;
+        int maxIterations = Levels;
+
+        while (changed && maxIterations-- > 0)
+        {
+            changed = false;
+            for (int ty = 0; ty < tilesY; ty++)
+            {
+                for (int tx = 0; tx < tilesX; tx++)
+                {
+                    int t = ty * tilesX + tx;
+                    int curLevel = level[t];
+
+                    // Check 4-connected neighbors
+                    for (int k = 0; k < 4; k++)
+                    {
+                        int nx = tx + Dx4[k], ny = ty + Dy4[k];
+                        if (nx < 0 || nx >= tilesX || ny < 0 || ny >= tilesY) continue;
+
+                        int nt = ny * tilesX + nx;
+                        // If neighbor is more than 1 step coarser, pull neighbor to curLevel + 1
+                        if (level[nt] > curLevel + 1)
+                        {
+                            level[nt] = curLevel + 1;
+                            changed = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static readonly int[] Dx4 = [1, -1, 0, 0];
+    private static readonly int[] Dy4 = [0, 0, 1, -1];
+
     private static (int px, int py) SlotPosition(int slot, int level, int cols, int offset, int atlasHeight)
     {
         int s = TileSize(level);
         return (slot % cols * s, atlasHeight - offset - s * (slot / cols + 1));
     }
 
-    /// <summary>
-    /// Mean gradient magnitude over a tile — how much relief it carries, and so how much resolution
-    /// it is worth spending on.
-    ///
-    /// Magnitude of the first derivative, not the signed sum of the second. AzgaarToCK3 records
-    /// hitting exactly that wall with the upstream metric: a signed sum cancels, so it collapses
-    /// towards zero on flat ocean AND on rough interiors alike and cannot tell them apart. A
-    /// Euclidean magnitude is single-sided, so it rises monotonically from still water to mountain
-    /// face, which is the ordering the bucketing needs.
-    ///
-    /// Deliberately unnormalised: only the ranking is ever used.
-    /// </summary>
     private static float[] Detail(ushort[] full, int width, int height, int tilesX, int tilesY)
     {
         var metric = new float[tilesX * tilesY];
@@ -246,14 +262,6 @@ public static class HeightmapPacker
         return metric;
     }
 
-    /// <summary>
-    /// Ranks tiles by relief and spends vanilla's budget on them, steepest first.
-    ///
-    /// Dead-flat tiles drop to the coarsest level whatever the budget says. A tile with no gradient
-    /// at all is open ocean or a plateau interior, and storing it at 33x33 buys literally nothing —
-    /// it is the same value 1,089 times. Letting one consume a level-0 slot would displace a
-    /// mountain face that needed it.
-    /// </summary>
     private static int[] AssignLevels(float[] metric)
     {
         int count = metric.Length;
@@ -281,14 +289,6 @@ public static class HeightmapPacker
         return level;
     }
 
-    /// <summary>
-    /// A tile's samples, decimated from the source.
-    ///
-    /// The -1 on the row origin is the measured alignment, not an off-by-one: CK3 expects the tile
-    /// to lead with the row above its own grid line. Columns have no such shift. Both axes clamp at
-    /// the map edge, which duplicates one row along the top — the only place the window falls
-    /// outside the raster.
-    /// </summary>
     private static ushort[] Extract(ushort[] full, int width, int height, int tx, int ty, int level)
     {
         int step = Decimation(level), s = TileSize(level);
@@ -308,16 +308,6 @@ public static class HeightmapPacker
         return samples;
     }
 
-    /// <summary>
-    /// Picks an atlas shape: how many columns each level gets, how many rows that needs, and where
-    /// each level's region starts.
-    ///
-    /// Searched rather than derived, because the total area is nearly fixed — it is the tiles
-    /// themselves plus a partial last row per level — so the only real choice is the aspect ratio.
-    /// The search takes the squarest atlas that keeps both axes inside the texture limit and every
-    /// level inside the byte the indirection addresses it with. Squarest rather than widest because
-    /// both limits are per-axis, so a square shape is the furthest from either.
-    /// </summary>
     private static (int width, int height, int[] cols, int[] rows, int[] offsets) Layout(int[] slotsPerLevel)
     {
         int best = -1;
@@ -334,7 +324,6 @@ public static class HeightmapPacker
             long maxDim = Math.Max((long)candidateWidth, h);
             long diff = Math.Abs((long)candidateWidth - h);
 
-            // Prefer smaller max dimension; tie-break on aspect ratio closest to square
             if (maxDim < bestMaxDim || (maxDim == bestMaxDim && diff < bestDiff))
             {
                 bestMaxDim = maxDim;
@@ -362,7 +351,6 @@ public static class HeightmapPacker
         return (width, height, cols, rows, offsets);
     }
 
-    /// <summary>Atlas height for a candidate width, and whether that candidate is legal at all.</summary>
     private static (long height, bool ok) Measure(int width, int[] slotsPerLevel)
     {
         long height = 0;
@@ -380,11 +368,6 @@ public static class HeightmapPacker
         return (height, height <= MaxTextureSide && width <= MaxTextureSide);
     }
 
-    /// <summary>
-    /// The most-referenced flat tile at or below the water plane, or -1 if this map has none.
-    /// Uniform because a tile that varies is terrain somewhere, and substituting it for a missing
-    /// one would stamp that terrain across the gap.
-    /// </summary>
     private static int FindFlatWaterSlot(List<ushort[]> slots, int[] slotOf, int[] level, int tileCount)
     {
         var references = new int[slots.Count];
@@ -410,7 +393,6 @@ public static class HeightmapPacker
         return best;
     }
 
-    /// <summary>Content equality over a tile's samples, so the dedup can key a dictionary on them.</summary>
     private sealed class SampleComparer : IEqualityComparer<ushort[]>
     {
         public static readonly SampleComparer Instance = new();

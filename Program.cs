@@ -20,6 +20,7 @@ public static class Program
         bool gui = args.Length == 0;
         bool staticOnly = false;
         bool guiOnly = false;
+        bool preview3d = false;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -131,10 +132,30 @@ public static class Program
                         System.Globalization.CultureInfo.InvariantCulture);
                     break;
 
+                // Render the heightmap in 3D and write the frames out, without generating
+                // anything. The same renderer the GUI's Source view drives, reachable headlessly
+                // so a heightmap can be judged from a terminal or a script.
+                case "--preview3d":
+                    preview3d = true;
+                    if (i + 1 < args.Length && !args[i + 1].StartsWith("--"))
+                        outDir = args[++i];
+                    break;
+
                 default:
                     Console.Error.WriteLine($"Unknown argument: {args[i]}");
                     return 1;
             }
+        }
+
+        if (preview3d)
+        {
+            if (options.HeightmapPath is null)
+            {
+                Console.Error.WriteLine("--preview3d needs --heightmap <path>.");
+                return 1;
+            }
+
+            return Preview3d(options.HeightmapPath, cfg, outDir);
         }
 
         // Handle static-only copy before checking GUI or Heightmap constraints
@@ -209,6 +230,116 @@ public static class Program
         if (modDir is not null) Generator.WriteMod(result, options, modDir);
         Core.Stage.Time("debug images", () => Generator.WriteDebugImages(result, outDir, scale));
         Core.Stage.Report();
+        return 0;
+    }
+
+    /// <summary>
+    /// Renders the heightmap in 3D from four sides, plus one frame of what CK3 will actually draw
+    /// after the packer has decimated it, and writes them as PNGs.
+    /// </summary>
+    private static int Preview3d(string path, MapConfig cfg, string outDir)
+    {
+        if (!File.Exists(path))
+        {
+            Console.Error.WriteLine($"No heightmap at {path}");
+            return 1;
+        }
+
+        Directory.CreateDirectory(outDir);
+
+        var loaded = MapGen.HeightmapSource.Read(path, cfg);
+        MapGen.HeightmapSource.Diagnose(loaded, cfg);
+
+        // What the game will be handed, not what was drawn — the normaliser is the whole reason a
+        // heightmap that looks fine in an image editor can ship as a plateau.
+        var normalized = MapGen.HeightmapNormalizer.Normalize(loaded.Raw, cfg);
+
+        const int Width = 1600, Height = 900;
+        var field = Gui.Heightfield.Downsample(normalized, loaded.Width, loaded.Height, Gui.Heightfield.PreviewCols);
+
+        Console.WriteLine($"  field {field.Cols}x{field.Rows}, " +
+                          $"{100 * field.LandShare:F1}% land, highest {field.LandMax}/65535");
+
+        var view = Gui.HeightfieldView.Default;
+
+        foreach (var (name, yaw) in ((string, double)[])
+                 [("ne", 0.7), ("se", 2.4), ("sw", 3.9), ("nw", 5.5)])
+        {
+            var frame = Gui.HeightfieldRenderer.Render(
+                field, view with { Yaw = yaw }, Width, Height);
+
+            string file = Path.Combine(outDir, $"preview3d_{name}.png");
+            Io.PngWriter.WriteRgb8(file, frame.Width, frame.Height, frame.Rgb);
+            Console.WriteLine($"  wrote {file}");
+        }
+
+        // The same angle again, through the packer, so the two can be flipped between.
+        var packed = Emit.HeightmapPacker.Reconstruct(normalized, loaded.Width, loaded.Height);
+
+        long changed = 0, sum = 0;
+        int worst = 0;
+        for (long i = 0; i < packed.LongLength; i++)
+        {
+            int d = Math.Abs(packed[i] - normalized[i]);
+            if (d == 0) continue;
+            changed++;
+            sum += d;
+            if (d > worst) worst = d;
+        }
+
+        Console.WriteLine($"  packing moves {100.0 * changed / packed.LongLength:F1}% of pixels, " +
+                          $"mean {(changed == 0 ? 0 : (double)sum / changed) / MapDataWriter.Step255:F2}/255, " +
+                          $"worst {(double)worst / MapDataWriter.Step255:F2}/255");
+
+        var packedField = Gui.Heightfield.Downsample(packed, loaded.Width, loaded.Height, Gui.Heightfield.PreviewCols);
+        var packedFrame = Gui.HeightfieldRenderer.Render(packedField, view, Width, Height);
+
+        string packedPath = Path.Combine(outDir, "preview3d_as_ck3_renders_it.png");
+        Io.PngWriter.WriteRgb8(packedPath, packedFrame.Width, packedFrame.Height, packedFrame.Rgb);
+        Console.WriteLine($"  wrote {packedPath}");
+
+        var plain = Gui.HeightfieldRenderer.Render(field, view, Width, Height);
+        string plainPath = Path.Combine(outDir, "preview3d_source.png");
+        Io.PngWriter.WriteRgb8(plainPath, plain.Width, plain.Height, plain.Rgb);
+        Console.WriteLine($"  wrote {plainPath}");
+
+        // A straight vertical pan, three frames. The map must slide along one axis and hold its
+        // shape; if the two pan components carry different units it skews instead, which is what
+        // the vertical drag used to do on any map that was not square.
+        var panned = view.Zoomed(0.45);
+        for (int s = -1; s <= 1; s++)
+        {
+            var step = panned.Panned(0, s * 0.22);
+            var frame = Gui.HeightfieldRenderer.Render(field, step, Width, Height);
+            string file = Path.Combine(outDir, $"preview3d_pan{s + 1}.png");
+            Io.PngWriter.WriteRgb8(file, frame.Width, frame.Height, frame.Rgb);
+            Console.WriteLine($"  wrote {file}");
+        }
+
+        // A pitch sweep. The map must stay the same size through it — tilting is an orbit, not a
+        // zoom, and re-fitting the distance per frame is what made it behave like one.
+        foreach (double pitch in (double[])[0.25, 0.55, 1.05])
+        {
+            var tilted = view with { Pitch = pitch };
+            var frame = Gui.HeightfieldRenderer.Render(field, tilted, Width, Height);
+            string file = Path.Combine(outDir, $"preview3d_tilt{pitch:F2}.png");
+            Io.PngWriter.WriteRgb8(file, frame.Width, frame.Height, frame.Rgb);
+            Console.WriteLine($"  wrote {file}");
+        }
+
+        // And the same pair zoomed in, which is the only scale the packer's decimation is visible
+        // at — across a whole map a 64-pixel tile is smaller than a screen pixel.
+        var close = view.Zoomed(0.18) with { PanX = 0.10, PanY = -0.14 };
+
+        foreach (var (name, from) in ((string, Gui.Heightfield)[])
+                 [("close_source", field), ("close_as_ck3_renders_it", packedField)])
+        {
+            var frame = Gui.HeightfieldRenderer.Render(from, close, Width, Height);
+            string file = Path.Combine(outDir, $"preview3d_{name}.png");
+            Io.PngWriter.WriteRgb8(file, frame.Width, frame.Height, frame.Rgb);
+            Console.WriteLine($"  wrote {file}");
+        }
+
         return 0;
     }
 

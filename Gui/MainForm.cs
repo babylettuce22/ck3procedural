@@ -7,24 +7,6 @@ namespace Ck3MapGen.Gui;
 
 /// <summary>
 /// One window: choose a heightmap, tune the settings, look at what they produce, write the mod.
-///
-/// There used to be a second tab that generated terrain. Heightmaps are now made elsewhere, so
-/// every setting applies to every run and there is nothing left to split the window along.
-///
-/// The whole reason this is WinForms is <see cref="PropertyGrid"/>: pointing it at
-/// <c>MapConfig</c> yields an editable, categorised editor for every setting with no per-parameter
-/// UI code, which is what makes the terrain tunable without an edit-rebuild-run cycle. That is
-/// also why MapConfig's fields became auto-properties — the grid reflects over properties only.
-///
-/// Work runs on a worker thread. It takes seconds at <c>tiny</c> and minutes at <c>vanilla</c>, so
-/// doing it on the UI thread would freeze the window for the whole run. What the window shows while
-/// that happens is <see cref="Stage.Entering"/> — the phase names the pipeline was already printing
-/// — because "province partition…" and a moving bar is the difference between working and hung.
-///
-/// The views are a strip of buttons over a single <see cref="ImageView"/> rather than a TabControl.
-/// One viewer means one zoom and one pan across all seven, so switching from climate to terrain
-/// compares the same coastline instead of two whole-world thumbnails, and it is the reason the
-/// renders are cached per view rather than rebuilt on every switch.
 /// </summary>
 public sealed class MainForm : Form
 {
@@ -56,11 +38,19 @@ public sealed class MainForm : Form
     private readonly Button _writeMod = Theme.MakeButton("Write mod", 96);
     private readonly Button _cancel = Theme.MakeButton("Cancel", 72);
     private readonly Button _openMod = Theme.MakeButton("Open mod folder", 120);
+
     private readonly Button _launchGame = Theme.MakeButton("Launch CK3", 100);
+    private readonly TextBox _launchArgs = new()
+    {
+        Width = 115,
+        BorderStyle = BorderStyle.FixedSingle,
+        BackColor = Theme.SurfaceHigh,
+        ForeColor = Theme.Text,
+        Margin = new Padding(2, 5, 4, 3),
+    };
+
     private readonly Button _gameFolder = Theme.MakeButton("Game folder…", 104);
 
-
-    /// <summary>Carries the resolved game folder, which is far too long to sit on a button.</summary>
     private readonly ToolTip _tips = new() { AutoPopDelay = 20000, InitialDelay = 400 };
     private readonly Button _savePreset = Theme.MakeButton("Save preset…", 110);
     private readonly Button _loadPreset = Theme.MakeButton("Load preset…", 110);
@@ -92,7 +82,7 @@ public sealed class MainForm : Form
         BackColor = Theme.Background,
         ForeColor = Theme.TextDim,
         Font = Theme.Mono,
-        HideSelection = false, // Keeps the match highlighted when the search box is focused
+        HideSelection = false,
     };
 
     private readonly TextBox _logSearch = new()
@@ -146,26 +136,12 @@ public sealed class MainForm : Form
         Visible = false,
     };
 
-    /// <summary>
-    /// Drives the bar between phase boundaries. Without it the bar would only move when a phase
-    /// ended, which on the province partition is a minute of nothing happening.
-    /// </summary>
     private readonly System.Windows.Forms.Timer _tick = new() { Interval = 200 };
 
     private RunProgress? _progressModel;
-
     private SplitContainer _body = null!;
     private SplitContainer _right = null!;
 
-    /// <summary>
-    /// The views, in the order the pipeline produces what they show. Rendered on demand and cached:
-    /// a vanilla-size map is seven renders of 42 million pixels each and only one of them is ever
-    /// on screen, so building all seven per click paid for six nobody looked at.
-    /// </summary>
-    /// <param name="Render">
-    /// Takes the write's capture as well as the run, because the landed-realm view is drawn from
-    /// something only a write produces. Null for every other view, and for Realms before a write.
-    /// </param>
     private static readonly (string Name,
         Func<GenerationResult, Emit.WrittenContent?, PreviewRenderer.Image> Render)[] Views =
         [
@@ -187,16 +163,8 @@ public sealed class MainForm : Form
         ("Wilderness", (r, _) => PreviewRenderer.RenderWilderness(r)),
     ];
 
-    /// <summary>What clicking a view selects.</summary>
     private enum Pick { Title, Culture, Faith }
 
-    /// <summary>
-    /// The views a click selects something on, and the ones an edit can make stale.
-    ///
-    /// Every one paints land by a colour that is editable, so its cached render has to be dropped
-    /// when that colour moves. The tier is the one the view draws — clicking the Duchies map picks
-    /// a duchy — and is the county for anything looked up per county.
-    /// </summary>
     private static readonly Dictionary<string, (Pick Kind, string Tier)> ClickableViews = new()
     {
         ["Counties"] = (Pick.Title, "c"),
@@ -208,7 +176,6 @@ public sealed class MainForm : Form
         ["Faiths"] = (Pick.Faith, "c"),
     };
 
-    /// <summary>Whether an edit of this kind changes what a view paints.</summary>
     private static bool Repaints(Pick kind, Emit.WorldAspect touched) => kind switch
     {
         Pick.Title => touched.HasFlag(Emit.WorldAspect.TitleColors),
@@ -221,19 +188,9 @@ public sealed class MainForm : Form
     private GenerationResult? _result;
     private string _view = "Counties";
 
-    /// <summary>
-    /// The edit session over the mod last written, shared by the tree and the inspector.
-    ///
-    /// Gated on a write rather than on a preview because a title has no name until one is written —
-    /// see <see cref="TitleEditor"/>. <see cref="ShowResult"/> detaches it on every finished run, so
-    /// a preview after a write correctly locks it again; <see cref="WriteModAsync"/> is the only
-    /// thing that ever attaches it.
-    /// </summary>
     private readonly WorldEdits _edits = new();
-
     private readonly TitleEditor _titles;
 
-    /// <summary>Hidden until something is pending. See <see cref="BuildPendingBar"/>.</summary>
     private readonly Panel _pendingBar = new()
     {
         Dock = DockStyle.Top,
@@ -254,51 +211,67 @@ public sealed class MainForm : Form
         Padding = new Padding(8, 0, 0, 0),
     };
 
-
     /// <summary>
-    /// The last heightmap decoded from disk, kept so previewing a settings change does not pay to
-    /// decode the image again. Only the decode is cached — see <see cref="MapGen.HeightmapImage"/>
-    /// for why nothing derived from it may be.
+    /// The settings <see cref="MapGen.HeightmapNormalizer"/> reads. Changing any of them changes
+    /// what the game would be handed, so the 3D view has to be rebuilt.
     /// </summary>
+    private static readonly HashSet<string> NormalizationSettings =
+    [
+        nameof(MapConfig.Normalization),
+        nameof(MapConfig.SourceSeaLevel),
+        nameof(MapConfig.LandTop),
+        nameof(MapConfig.LandTopPercentile),
+        nameof(MapConfig.LandFloorDensity),
+    ];
+
+    private bool _sourceShown;
+    private int _sourceGeneration;
+    private readonly HeightfieldPanel _solid = new() { Dock = DockStyle.Fill };
+
+    private readonly ComboBox _sourceMode = new()
+    {
+        DropDownStyle = ComboBoxStyle.DropDownList,
+        Width = 158,
+        Font = Theme.Ui,
+        FlatStyle = FlatStyle.Flat,
+    };
+
+    private readonly TrackBar _exaggeration = new()
+    {
+        Minimum = 20,
+        Maximum = 400,
+        Value = 100,
+        TickStyle = TickStyle.None,
+        Width = 110,
+        Height = 24,
+    };
+
+    private readonly Label _sourceReadout = new()
+    {
+        AutoSize = true,
+        ForeColor = Theme.TextDim,
+        Font = Theme.Ui,
+        Padding = new Padding(0, 5, 0, 0),
+    };
+
     private MapGen.HeightmapImage? _loaded;
-
-    /// <summary>
-    /// What the last build found wrong with the heightmap. Set on the worker thread and read on the
-    /// UI thread once it has finished, which is the same handoff <see cref="_loaded"/> uses.
-    /// </summary>
     private IReadOnlyList<MapGen.HeightmapWarning> _warnings = [];
-
-    /// <summary>
-    /// What the last write produced, for the title editor. Null after a preview, which writes
-    /// nothing there is anything to edit in. Same worker-to-UI handoff as <see cref="_warnings"/>.
-    /// </summary>
     private Emit.WrittenContent? _written;
-
     private string? _heightmapPath;
     private bool _busy;
     private CancellationTokenSource? _cancellation;
-
-    /// <summary>Where mod folders are created, and what the next one is called by default.</summary>
     private string _modRoot = "";
     private string _modName = GenerationOptions.DefaultModName;
-
-    /// <summary>The last mod folder written this session, or the one written last session.</summary>
     private string? _lastModDir;
 
     public MainForm(GenerationOptions options)
     {
         _options = options;
 
-        // A heightmap named on the command line is still the chosen one when the window opens.
-        // Without this, `--heightmap x.png --gui` came up with both buttons greyed out and no
-        // indication why. Failing that, the one from last session, if it is still there.
         _heightmapPath = options.HeightmapPath
             ?? (File.Exists(_state.HeightmapPath) ? _state.HeightmapPath : null);
         options.HeightmapPath = _heightmapPath;
 
-        // A folder picked by hand last session beats whatever the search would turn up, but only
-        // while it is still a game folder — an install that has since moved must not pin the tool to
-        // where it used to be. See LocateFolders, which reports whichever won.
         if (Core.GameLocator.IsGameDir(_state.GameDir)) options.GameDir = _state.GameDir!;
 
         _modRoot = Directory.Exists(_state.ModRoot) ? _state.ModRoot! : GenerationOptions.ModRoot;
@@ -312,15 +285,34 @@ public sealed class MainForm : Form
         Font = Theme.Ui;
         KeyPreview = true;
 
+        if (File.Exists("app.ico"))
+        {
+            Icon = new Icon("app.ico");
+        }
+        else if (Icon.ExtractAssociatedIcon(Application.ExecutablePath) is { } exeIcon)
+        {
+            Icon = exeIcon;
+        }
+
         Theme.ApplyLight(_grid);
         _grid.SelectedObject = _options.Config;
 
-        // 1. Randomize the seed on program startup
-        _options.Config.Seed = Random.Shared.Next(1, int.MaxValue);
+        // The 3D view shows the *normalised* heightmap, so the settings that decide normalisation
+        // change what it shows. Rebuilding on those and only those: everything else on this grid
+        // affects generation, which this view deliberately runs ahead of.
+        _grid.PropertyValueChanged += (_, e) =>
+        {
+            string? changed = e.ChangedItem?.PropertyDescriptor?.Name;
+            if (changed is null || !NormalizationSettings.Contains(changed)) return;
+            if (_sourceShown) _ = ShowSourceAsync();
+        };
 
-        // 2. Assign the randomized seed to the UI field
+        _options.Config.Seed = Random.Shared.Next(1, int.MaxValue);
         _seed.Value = Math.Clamp(_options.Config.Seed, 0, int.MaxValue);
         _seed.ValueChanged += (_, _) => _options.Config.Seed = (int)_seed.Value;
+
+        _launchArgs.Text = _state.LaunchArgs ?? "-debug_mode";
+        _tips.SetToolTip(_launchArgs, "Launch arguments passed to ck3.exe (e.g. -debug_mode -mapeditor -novid)");
 
         _browse.Click += (_, _) => PickHeightmap();
         _roll.Click += (_, _) => _seed.Value = Random.Shared.Next(1, int.MaxValue);
@@ -352,19 +344,11 @@ public sealed class MainForm : Form
         ApplySource();
         SelectView(_view);
 
-        // Everything in the generator reports progress with Console.WriteLine. Redirecting the
-        // console is what lets all of that reach the log pane without touching a single call site.
         Console.SetOut(new TextBoxWriter(_log));
         Stage.Entering += OnStageEntered;
         Stage.Detailing += OnStageDetail;
         _tick.Tick += (_, _) => ShowProgress();
     }
-
-    // --- Layout ---------------------------------------------------------------------------------
-    //
-    // Fill-docked children are added before edge-docked ones throughout. WinForms lays docking out
-    // in reverse z-order, so the fill has to be the first thing in the collection or it claims the
-    // whole client area and everything else is drawn over the top of it.
 
     private Control BuildToolbar()
     {
@@ -387,24 +371,13 @@ public sealed class MainForm : Form
         bar.Controls.Add(_cancel);
         bar.Controls.Add(_openMod);
         bar.Controls.Add(_launchGame);
+        bar.Controls.Add(_launchArgs);
         bar.Controls.Add(_gameFolder);
         bar.Controls.Add(_sourceName);
 
         return bar;
     }
 
-    /// <summary>
-    /// The unsaved-changes bar: absent entirely until an edit is pending, then impossible to miss.
-    ///
-    /// This replaces an Overwrite button that lived permanently on the toolbar and spent almost all
-    /// of its life greyed out — a disabled button in a row of a dozen is furniture, and nothing
-    /// about it said whether there was anything to press it for. A strip that does not exist until
-    /// there is something to do costs no chrome and states the count.
-    ///
-    /// Revert all lives here too rather than in the Titles tab, where it was before. It is a global
-    /// action over the whole edit session — titles, cultures and faiths — and it belongs next to
-    /// the other one, not inside one of the surfaces that feeds it.
-    /// </summary>
     private Control BuildPendingBar()
     {
         _overwrite.Click += (_, _) => OverwriteTitles();
@@ -459,10 +432,19 @@ public sealed class MainForm : Form
         viewer.Controls.Add(_viewer);
         viewer.Controls.Add(_viewStrip);
 
-        // The tabs wrap only the map pane, not the whole right-hand side, so the log stays visible
-        // under both of them — an overwrite reports into it, and watching that happen is the only
-        // confirmation the mod on disk actually changed.
         var tabs = Theme.MakeTabs();
+
+        // Loaded when the tab is first opened, not at startup: decoding a vanilla-sized heightmap
+        // is several seconds, and a window that takes that long to appear for a view nobody asked
+        // for is a worse trade than a view that takes a moment to fill in.
+        tabs.SelectedIndexChanged += (_, _) =>
+        {
+            if (tabs.SelectedTab?.Text == "Source 3D" && !_sourceShown)
+            {
+                _sourceShown = true;
+                _ = ShowSourceAsync();
+            }
+        };
 
         var mapTab = new TabPage("Map") { BackColor = Theme.Background };
         mapTab.Controls.Add(viewer);
@@ -470,16 +452,17 @@ public sealed class MainForm : Form
         var titleTab = new TabPage("Titles") { BackColor = Theme.Background };
         titleTab.Controls.Add(_titles);
 
+        var sourceTab = new TabPage("Source 3D") { BackColor = Theme.Background };
+        sourceTab.Controls.Add(BuildSourceView());
+
         tabs.TabPages.Add(mapTab);
+        tabs.TabPages.Add(sourceTab);
         tabs.TabPages.Add(titleTab);
 
         var logPane = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
         logPane.Controls.Add(_log);
         logPane.Controls.Add(BuildLogHeader());
 
-        // Neither the minimum sizes nor the splitter positions are set here. A SplitContainer that
-        // has not been laid out yet is 150 px wide, and both properties throw outright if the value
-        // will not fit inside that — see Place, called from OnLoad once the panes are real.
         _right = new SplitContainer
         {
             Dock = DockStyle.Fill,
@@ -501,6 +484,147 @@ public sealed class MainForm : Form
         return _body;
     }
 
+    /// <summary>
+    /// The 3D view of the heightmap as loaded, before anything is generated.
+    ///
+    /// Its own tab rather than another entry in <see cref="Views"/> because every one of those
+    /// takes a <see cref="GenerationResult"/>, and the entire point of this one is that it works
+    /// with nothing but a file on disk.
+    /// </summary>
+    private Control BuildSourceView()
+    {
+        var strip = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 32,
+            Padding = new Padding(4, 3, 4, 0),
+            BackColor = Theme.Surface,
+        };
+
+        _sourceMode.Items.AddRange(["Heightmap as loaded", "As CK3 will render it"]);
+        _sourceMode.SelectedIndex = 0;
+        _sourceMode.SelectedIndexChanged += (_, _) =>
+        {
+            _solid.ShowAsCk3Renders = _sourceMode.SelectedIndex == 1;
+            _solid.Refresh3d();
+        };
+
+        _exaggeration.ValueChanged += (_, _) =>
+        {
+            _solid.SetExaggeration(_exaggeration.Value / 100.0);
+            _sourceReadout.Text = Readout();
+        };
+
+        var reset = Theme.MakeButton("Reset view", 82);
+        reset.Click += (_, _) => _solid.ResetView();
+
+        strip.Controls.Add(_sourceMode);
+        strip.Controls.Add(new Label
+        {
+            Text = "Relief",
+            AutoSize = false,
+            Width = 40,
+            Height = 24,
+            TextAlign = ContentAlignment.MiddleRight,
+            ForeColor = Theme.TextDim,
+            Font = Theme.Ui,
+        });
+        strip.Controls.Add(_exaggeration);
+        strip.Controls.Add(reset);
+        strip.Controls.Add(_sourceReadout);
+
+        _solid.ViewChanged += _ => _sourceReadout.Text = Readout();
+        _sourceReadout.Text = Readout();
+
+        var host = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
+        host.Controls.Add(_solid);
+        host.Controls.Add(strip);
+        return host;
+    }
+
+    private string Readout()
+    {
+        var v = _solid.View;
+        // 1.00x is CK3's own vertical scale, so it is worth naming rather than leaving the reader
+        // to guess which end of the slider is the truthful one.
+        string relief = Math.Abs(v.Exaggeration - 1.0) < 0.005
+            ? "relief 1.00× (approximate to game)"
+            : $"relief {v.Exaggeration:F2}×";
+
+        return $"   {v.Yaw * 180 / Math.PI % 360:F0}°  ·  pitch {v.Pitch * 180 / Math.PI:F0}°  " +
+               $"·  zoom {1 / v.Distance:F2}×  ·  {relief}" +
+               "      drag to orbit · right-drag to pan · wheel to zoom · double-click to reset";
+    }
+
+    /// <summary>
+    /// Loads the chosen heightmap and hands it to the 3D view, without generating anything.
+    ///
+    /// The decode, the normalisation and the packer reconstruction all run off the UI thread — the
+    /// first is seconds on a vanilla-sized map and the last is not much quicker. The result is
+    /// cached in <see cref="_loaded"/>, which is the same field the generator reads, so opening the
+    /// 3D view first makes the subsequent build faster rather than slower.
+    /// </summary>
+    private async Task ShowSourceAsync()
+    {
+        if (_heightmapPath is null)
+        {
+            _solid.SetField(null, null, "Choose a heightmap to see it in 3D.");
+            return;
+        }
+
+        string path = _heightmapPath;
+        var cfg = _options.Config;
+
+        // Settings can be changed faster than a full-size heightmap can be normalised and packed,
+        // and the tasks do not finish in the order they started. Only the newest one is allowed to
+        // publish, or a stale frame silently wins and the view stops matching the settings.
+        int generation = ++_sourceGeneration;
+
+        _solid.SetField(null, null, "Reading the heightmap…");
+
+        try
+        {
+            var (source, packed, warnings, loaded) = await Task.Run(() =>
+            {
+                var image = _loaded is not null && _loaded.StillStandsFor(path)
+                    ? _loaded
+                    : MapGen.HeightmapSource.Read(path, cfg);
+
+                MapGen.HeightmapSource.Apply(image, cfg);
+                var found = MapGen.HeightmapSource.Diagnose(image, cfg);
+
+                // Normalised, because that is what the game is handed. A heightmap drawn on
+                // somebody else's height scale looks perfectly reasonable as a PNG and ships as a
+                // plateau with a wall at every shoreline, and this view exists to show that.
+                var levels = MapGen.HeightmapNormalizer.Normalize(image.Raw, cfg);
+
+                var field = Heightfield.Downsample(levels, image.Width, image.Height, Heightfield.PreviewCols);
+                var asRendered = Heightfield.Downsample(
+                    Emit.HeightmapPacker.Reconstruct(levels, image.Width, image.Height),
+                    image.Width, image.Height, Heightfield.PreviewCols);
+
+                return (field, asRendered, found, image);
+            });
+
+            if (generation != _sourceGeneration) return;
+
+            _loaded = loaded;
+            _warnings = warnings;
+
+            _solid.SetField(source, packed, "Nothing to show.");
+            _grid.Refresh();
+
+            _status.Text = $"{Path.GetFileName(path)} — {loaded.Width}×{loaded.Height}, " +
+                           $"{100 * source.LandShare:F1}% land" +
+                           (warnings.Count == 0 ? "" : $", {warnings.Count} warning(s)");
+        }
+        catch (Exception error)
+        {
+            if (generation != _sourceGeneration) return;
+            _solid.SetField(null, null, $"Could not read it: {error.Message}");
+        }
+    }
+
     private Control BuildLogHeader()
     {
         var clear = Theme.MakeButton("Clear", 60);
@@ -512,15 +636,12 @@ public sealed class MainForm : Form
             if (_log.TextLength > 0) Clipboard.SetText(_log.Text);
         };
 
-        // Trigger search on every keypress
         _logSearch.TextChanged += (_, _) => SearchLog(next: false);
-
-        // Find the next match when pressing Enter
         _logSearch.KeyDown += (sender, e) =>
         {
             if (e.KeyCode == Keys.Enter)
             {
-                e.SuppressKeyPress = true; // Stop the beep sound on Enter
+                e.SuppressKeyPress = true;
                 SearchLog(next: true);
             }
         };
@@ -548,7 +669,6 @@ public sealed class MainForm : Form
         int start = _log.SelectionStart;
         if (next && start >= 0)
         {
-            // Advance past the current match if we are finding the next instance
             start += _log.SelectionLength > 0 ? 1 : 0;
         }
         else
@@ -558,7 +678,6 @@ public sealed class MainForm : Form
 
         int index = _log.Text.IndexOf(query, start, StringComparison.OrdinalIgnoreCase);
 
-        // Wrap around to the beginning if no match was found from the current cursor position
         if (index == -1 && start > 0)
         {
             index = _log.Text.IndexOf(query, 0, StringComparison.OrdinalIgnoreCase);
@@ -594,11 +713,6 @@ public sealed class MainForm : Form
     private static Control Separator()
         => new Panel { Width = 1, Height = 22, BackColor = Theme.Border, Margin = new Padding(8, 4, 8, 0) };
 
-    /// <summary>
-    /// A view button, built by hand rather than through <see cref="Theme.MakeButton"/>: these carry
-    /// a selected state, and that helper repaints on enable to keep disabled buttons legible, which
-    /// would wipe the highlight off the selected view every time a run finished.
-    /// </summary>
     private Button ViewButton(string name)
     {
         var button = new Button
@@ -631,15 +745,6 @@ public sealed class MainForm : Form
         ReportFolders();
     }
 
-    /// <summary>
-    /// Says where the game and the mod folder were found, in the log, on every launch.
-    ///
-    /// The search itself has already run — <see cref="GenerationOptions.GameDir"/> is set from
-    /// <see cref="Core.GameLocator"/> when the options are constructed, and the mod root in this
-    /// window's constructor — so this is the report rather than the search. It is worth printing
-    /// even when everything is found: the first thing a wrong answer looks like is a run that fails
-    /// three phases in, and the first thing anyone asks is which install it was reading.
-    /// </summary>
     private void ReportFolders()
     {
         bool found = Core.GameLocator.IsGameDir(_options.GameDir);
@@ -655,7 +760,6 @@ public sealed class MainForm : Form
         if (!found) _status.Text = "Crusader Kings III not found — set the game folder before writing a mod";
     }
 
-    /// <summary>Keeps the game-folder button's tooltip and colour honest about what it points at.</summary>
     private void ShowGameFolder()
     {
         bool found = Core.GameLocator.IsGameDir(_options.GameDir);
@@ -669,10 +773,6 @@ public sealed class MainForm : Form
         _gameFolder.ForeColor = found ? Theme.Text : Theme.Danger;
     }
 
-    /// <summary>
-    /// Points the tool at a CK3 install by hand, for when the search came back empty or came back
-    /// with the wrong one of two installs.
-    /// </summary>
     private void PickGameFolder()
     {
         using var dialog = new FolderBrowserDialog
@@ -684,8 +784,6 @@ public sealed class MainForm : Form
 
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
-        // Normalize, not the raw pick: the folder people recognise is the one named after the game,
-        // and the one this needs is 'game' inside it.
         string? resolved = Core.GameLocator.Normalize(dialog.SelectedPath);
         if (resolved is null)
         {
@@ -703,10 +801,6 @@ public sealed class MainForm : Form
         _status.Text = "Game folder set";
     }
 
-    /// <summary>
-    /// Blocks a write that is going to fail, and offers the fix rather than only the diagnosis.
-    /// </summary>
-    /// <returns>Whether the game folder is now usable.</returns>
     private bool EnsureGameFolder()
     {
         if (Core.GameLocator.IsGameDir(_options.GameDir)) return true;
@@ -725,14 +819,6 @@ public sealed class MainForm : Form
         return Core.GameLocator.IsGameDir(_options.GameDir);
     }
 
-    /// <summary>
-    /// Sizes a splitter, once the pane it lives in has a real size.
-    ///
-    /// Every one of these three properties throws rather than clamping if the value does not fit the
-    /// current width — including against a width the control has not been laid out to yet — so the
-    /// order matters and so does clamping every value before it goes in. The minimums give way
-    /// first: on a window too narrow to honour both, a cramped pane beats a crash.
-    /// </summary>
     private static void Place(SplitContainer split, int min1, int min2, int wanted)
     {
         int size = (split.Orientation == Orientation.Vertical ? split.Width : split.Height)
@@ -747,10 +833,6 @@ public sealed class MainForm : Form
         split.SplitterDistance = Math.Clamp(wanted, min1, size - min2);
     }
 
-    /// <summary>
-    /// Restores the window where it was, unless that is off every screen it can see — a monitor
-    /// that has been unplugged since should not open the window somewhere invisible.
-    /// </summary>
     private void RestorePlacement()
     {
         var saved = new Rectangle(_state.Left, _state.Top, _state.Width, _state.Height);
@@ -772,8 +854,6 @@ public sealed class MainForm : Form
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
-        // RestoreBounds, not Bounds, when maximised: saving the maximised rectangle would make the
-        // window un-restore to full screen the next time it opened.
         var bounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
         _state.Left = bounds.X;
         _state.Top = bounds.Y;
@@ -785,12 +865,11 @@ public sealed class MainForm : Form
         _state.HeightmapPath = _heightmapPath;
         _state.View = _view;
 
-        // Only a game folder that is really one, so a bad hand-picked path cannot outlive the
-        // session that set it and pre-empt the search next launch.
         _state.GameDir = Core.GameLocator.IsGameDir(_options.GameDir) ? _options.GameDir : null;
         _state.ModRoot = _modRoot;
         _state.ModName = _modName;
         _state.LastModDir = _lastModDir;
+        _state.LaunchArgs = _launchArgs.Text;
         _state.Save();
 
         Stage.Entering -= OnStageEntered;
@@ -798,7 +877,6 @@ public sealed class MainForm : Form
         base.OnFormClosing(e);
     }
 
-    /// <summary>F5 previews, Ctrl+S writes the mod, Escape cancels.</summary>
     protected override bool ProcessCmdKey(ref Message message, Keys key)
     {
         switch (key)
@@ -819,8 +897,6 @@ public sealed class MainForm : Form
         return base.ProcessCmdKey(ref message, key);
     }
 
-    // --- Sources, presets and the mod folder -----------------------------------------------------
-
     private void PickHeightmap()
     {
         using var dialog = new OpenFileDialog
@@ -835,6 +911,8 @@ public sealed class MainForm : Form
         _heightmapPath = dialog.FileName;
         _options.HeightmapPath = _heightmapPath;
         ApplySource();
+
+        if (_sourceShown) _ = ShowSourceAsync();
     }
 
     private void ApplySource()
@@ -846,8 +924,6 @@ public sealed class MainForm : Form
         _openMod.Enabled = ModFolderToOpen() is not null;
         SetEnabled(!_busy);
 
-        // After SetEnabled, which repaints buttons from their enabled state and would otherwise
-        // take the warning colour off the game-folder button every time a run finished.
         ShowGameFolder();
     }
 
@@ -884,8 +960,6 @@ public sealed class MainForm : Form
             int applied = Preset.Load(_options.Config, dialog.FileName);
             _state.PresetDir = Path.GetDirectoryName(dialog.FileName);
 
-            // The seed lives in the config but has its own box on the toolbar, so it needs pushing
-            // back out; the grid needs telling that the object under it changed beneath its feet.
             _seed.Value = Math.Clamp(_options.Config.Seed, 0, int.MaxValue);
             _options.Config.StartYear = Math.Clamp(_options.Config.StartYear, 1, 9999);
 
@@ -900,13 +974,6 @@ public sealed class MainForm : Form
         }
     }
 
-    /// <summary>
-    /// The mod folder written last, or failing that the folder mods live in.
-    ///
-    /// The second case is not a consolation prize: before anything has been written, the useful
-    /// thing to open is the launcher's mod folder, which is also the quickest way to see whether
-    /// the tool has found the right one.
-    /// </summary>
     private string? ModFolderToOpen()
     {
         if (Directory.Exists(_lastModDir)) return _lastModDir;
@@ -920,9 +987,6 @@ public sealed class MainForm : Form
         Process.Start(new ProcessStartInfo(dir) { UseShellExecute = true });
     }
 
-    /// <summary>
-    /// Launches Crusader Kings III directly, bypassing the launcher to load the game quickly.
-    /// </summary>
     private void LaunchGame()
     {
         if (string.IsNullOrWhiteSpace(_options.GameDir) || !Core.GameLocator.IsGameDir(_options.GameDir))
@@ -933,8 +997,6 @@ public sealed class MainForm : Form
             return;
         }
 
-        // The game directory points to '...\Crusader Kings III\game'. 
-        // We look for '...\Crusader Kings III\binaries\ck3.exe'.
         string? gameRoot = Path.GetDirectoryName(_options.GameDir);
         if (gameRoot is null) return;
 
@@ -949,12 +1011,22 @@ public sealed class MainForm : Form
 
         try
         {
-            Process.Start(new ProcessStartInfo(exePath)
+            var startInfo = new ProcessStartInfo(exePath)
             {
                 WorkingDirectory = Path.Combine(gameRoot, "binaries"),
                 UseShellExecute = true
-            });
-            _status.Text = "Crusader Kings III launched";
+            };
+
+            string args = _launchArgs.Text.Trim();
+            if (!string.IsNullOrEmpty(args))
+            {
+                startInfo.Arguments = args;
+            }
+
+            Process.Start(startInfo);
+            _status.Text = string.IsNullOrEmpty(args)
+                ? "Crusader Kings III launched"
+                : $"Crusader Kings III launched with ({args})";
         }
         catch (Exception ex)
         {
@@ -965,23 +1037,10 @@ public sealed class MainForm : Form
         }
     }
 
-    /// <summary>
-    /// Asks what the mod is called and where it goes, then writes it.
-    ///
-    /// The name is asked for every write rather than once and remembered, because writing twice in
-    /// one session is normally two different maps — a seed rolled, a setting changed — and the old
-    /// behaviour of always writing into a folder called <c>proceduralmap</c> meant the second one
-    /// quietly ate the first. The box comes up filled with the last name used, so agreeing to
-    /// overwrite is still one keypress.
-    /// </summary>
     private async Task WriteModAsync()
     {
         if (_busy || _heightmapPath is null) return;
 
-        // A wider test than the preview's, and deliberately. Writing regenerates the world and
-        // rewrites every file an edit could have reached, so edits already pushed with Overwrite
-        // are destroyed on disk too — being saved is no protection here, which is the opposite of
-        // what "saved" usually implies and so worth saying out loud.
         if (_edits.EditedCount > 0)
         {
             var discard = MessageBox.Show(this,
@@ -995,8 +1054,6 @@ public sealed class MainForm : Form
             if (discard != DialogResult.OK) return;
         }
 
-        // Before the dialog rather than after: being asked to name a mod and only then told the
-        // game is missing is two dead ends where one would do.
         if (!EnsureGameFolder()) return;
 
         using var dialog = new ModNameDialog(_modRoot, _modName);
@@ -1009,12 +1066,8 @@ public sealed class MainForm : Form
         string modDir = dialog.ModDir;
         await BuildAsync(modDir);
 
-        // Only if it is actually there. A cancelled or failed write must not leave the button
-        // pointing at a folder that was never created.
         if (Directory.Exists(modDir)) _lastModDir = modDir;
 
-        // After BuildAsync, not inside it: ShowResult unloads the editor on every finished run,
-        // including this one, so loading any earlier would be undone a moment later.
         if (_result is not null && _written is not null && Directory.Exists(modDir))
         {
             _edits.Attach(_result, _written, modDir);
@@ -1025,13 +1078,6 @@ public sealed class MainForm : Form
         ApplySource();
     }
 
-    /// <summary>
-    /// Pushes renamed titles back into the mod on disk.
-    ///
-    /// Runs on the UI thread rather than through <see cref="RunAsync"/>: this is two localisation
-    /// files, which is milliseconds even at vanilla size, and borrowing the progress machinery for
-    /// it would put a bar and an ETA on screen for less time than they take to appear.
-    /// </summary>
     private void OverwriteTitles()
     {
         if (_busy || !_edits.HasPending || _edits.Target is not { } target) return;
@@ -1044,15 +1090,12 @@ public sealed class MainForm : Form
             using (new WaitCursorFor(this))
                 Emit.WorldOverwrite.Apply(target.ModDir, target.Result, target.Written, aspects);
 
-            // Only on success: a throw must leave the edits pending so they can be tried again.
             _edits.MarkWritten();
             Emit.WorldOverwrite.Report(aspects, edited, target.ModDir);
             _status.Text = $"Edits written to {target.ModDir}";
         }
         catch (Exception ex)
         {
-            // Same rule as a failed run: the message is worth more in the log next to what caused
-            // it than in a dialog that takes the window with it.
             Console.WriteLine();
             Console.WriteLine(ex);
             _status.Text = "Overwrite failed — see log";
@@ -1063,33 +1106,8 @@ public sealed class MainForm : Form
         }
     }
 
-    // --- Running --------------------------------------------------------------------------------
-
-    /// <summary>
-    /// Derives everything the mod is made of — the drainage network, the land mask, provinces, the
-    /// climate, cultures, faiths and titles — and optionally writes it out.
-    ///
-    /// Only the image *decode* is reused between runs, and only while the file on disk is byte-for-
-    /// byte the one that was decoded. Everything downstream is rebuilt from scratch every time.
-    ///
-    /// That is narrower than it used to be, and deliberately. The cache used to hold the whole
-    /// <see cref="MapGen.TerrainData"/> and key it on the file path alone, which produced two
-    /// silent failures: re-exporting a heightmap over the same path left the old one on screen, and
-    /// every river and lake setting appeared to do nothing at all, because those are consumed while
-    /// deriving TerrainData and the cache never let that run again. A cache that can make a setting
-    /// do nothing is worse than no cache; this one can only ever save the decode.
-    /// </summary>
-    /// <summary>
-    /// Previews, having first checked that nothing unsaved is about to be thrown away.
-    ///
-    /// The check lives here rather than in <see cref="BuildAsync"/> so the write path can ask its
-    /// own, differently worded question *before* the mod naming dialog rather than after it.
-    /// </summary>
     private async Task PreviewAsync()
     {
-        // Only what is genuinely at risk. A preview never touches the mod folder, so edits that
-        // have already been overwritten survive it on disk — asking about those would be crying
-        // wolf, and a confirmation people learn to click through protects nothing.
         if (_edits.HasPending)
         {
             int edited = _edits.EditedCount;
@@ -1111,6 +1129,27 @@ public sealed class MainForm : Form
     private static string Count(int n, string noun)
         => n == 1 ? $"1 {noun}" : $"{n} {noun}s";
 
+    private void OnProgressivePreview(string viewName, PreviewRenderer.Image image)
+    {
+        Post(() =>
+        {
+            var bitmap = ToBitmap(image);
+
+            if (_rendered.TryGetValue(viewName, out var old))
+            {
+                old.Dispose();
+            }
+            _rendered[viewName] = bitmap;
+
+            // Instantly update on-screen if this is the active tab
+            if (_view == viewName)
+            {
+                _viewer.SetImage(bitmap);
+                ShowReadout(_viewer.Zoom, null);
+            }
+        });
+    }
+
     private async Task BuildAsync(string? modDir)
     {
         var (result, cancelled) = await RunAsync(
@@ -1119,9 +1158,6 @@ public sealed class MainForm : Form
             {
                 var cfg = _options.Config;
 
-                // Phased like the rest, and by the same names Generator.Generate uses. These are
-                // seconds at vanilla size, and time outside a phase is time the progress estimate
-                // cannot see — it showed up as a bar that sat at zero and then leapt.
                 Stage.Time("heightmap decode", () =>
                 {
                     if (_loaded is null || !_loaded.StillStandsFor(_heightmapPath!))
@@ -1129,19 +1165,14 @@ public sealed class MainForm : Form
                     else
                         MapGen.HeightmapSource.Apply(_loaded, cfg);
 
-                    // Every build, not just a fresh decode: these depend on the height settings, so
-                    // changing one and rebuilding has to change what they say.
                     _warnings = MapGen.HeightmapSource.Diagnose(_loaded, cfg);
                 });
 
                 var terra = Stage.Time("province elevation",
                     () => MapGen.TerrainData.FromElevation(_loaded!.ToElevation(cfg), cfg));
 
-                var r = Generator.FromTerrain(terra, cfg);
+                var r = Generator.FromTerrain(terra, cfg, OnProgressivePreview);
 
-                // Set on the worker and read on the UI thread once it has finished, the same
-                // handoff _loaded and _warnings use. Cleared first so a failed write cannot leave
-                // the previous run's capture behind for the title editor to load.
                 _written = null;
                 if (modDir is not null) _written = Generator.WriteMod(r, _options, modDir);
                 return r;
@@ -1150,8 +1181,6 @@ public sealed class MainForm : Form
 
         if (cancelled)
         {
-            // A cancelled write stops between files rather than rolling back, and a half-written
-            // mod that CK3 will still try to load is worth saying out loud.
             _status.Text = modDir is null
                 ? "Cancelled — nothing written"
                 : "Cancelled — the mod folder may be half written";
@@ -1169,18 +1198,6 @@ public sealed class MainForm : Form
         ShowHeightmapWarnings(modDir);
     }
 
-    /// <summary>
-    /// Puts the import diagnostics in front of the user rather than in the log.
-    ///
-    /// These are the faults that produce a map which loads, generates without error, and is wrong
-    /// in game — an ocean rendered as open ground, a continent that is one plateau with a cliff at
-    /// every shore. Each one was already printed, and printing was measurably not enough: the log
-    /// scrolls past during a build nobody is watching, and the reports that reached us were of a
-    /// broken map rather than of a warning ignored.
-    ///
-    /// Shown after the preview is on screen, so the map behind the dialog is the map being
-    /// complained about, and the title says whether anything was written.
-    /// </summary>
     private void ShowHeightmapWarnings(string? modDir)
     {
         if (_warnings.Count == 0) return;
@@ -1210,7 +1227,6 @@ public sealed class MainForm : Form
             MessageBoxButtons.OK, MessageBoxIcon.Warning);
     }
 
-    /// <summary>Runs work off the UI thread, with the buttons locked and failures sent to the log.</summary>
     private async Task<(GenerationResult? Result, bool Cancelled)> RunAsync(
         string message, Func<GenerationResult> work, bool writing)
     {
@@ -1221,14 +1237,10 @@ public sealed class MainForm : Form
         _log.Clear();
         _status.Text = message;
 
-        // Province megapixels, read live: the heightmap decides the map size and has not been read
-        // yet when this starts, so the first phase or two are predicted against the last run's size.
         _progressModel = new RunProgress(
             Plan(writing),
             () => _options.Config.ProvinceWidth / 1000.0 * _options.Config.ProvinceHeight / 1000.0);
 
-        // With a shipped profile behind it there is always something to predict against, so the
-        // marquee is now only the fallback for a profile that has somehow been emptied.
         _progress.Style = _progressModel.Calibrated ? ProgressBarStyle.Blocks : ProgressBarStyle.Marquee;
         _progress.Value = 0;
         _progress.Visible = true;
@@ -1244,14 +1256,9 @@ public sealed class MainForm : Form
         {
             var result = await Task.Run(work, _cancellation.Token);
 
-            // Only a run that finished teaches anything: a cancelled or failed one has a truncated
-            // phase list, and storing it would predict the next run as that much shorter.
             var measured = _progressModel.Finish();
             if (writing) _state.WriteRun = measured; else _state.PreviewRun = measured;
 
-            // Saved now rather than only on close. A write is a long, rare run and the thing most
-            // worth having measured; losing it because the window was killed rather than closed
-            // would send the next first write back to the shipped numbers.
             _state.Save();
 
             Stage.Report();
@@ -1267,8 +1274,6 @@ public sealed class MainForm : Form
         }
         catch (Exception ex)
         {
-            // A failure must not take the window with it; the message is far more useful sitting
-            // in the log next to the parameters that caused it.
             Console.WriteLine();
             Console.WriteLine(ex);
             _status.Text = "Failed — see log";
@@ -1290,15 +1295,6 @@ public sealed class MainForm : Form
         }
     }
 
-    /// <summary>
-    /// What this run is expected to cost, best evidence first: a completed run of the same kind on
-    /// this machine, then the shipped profile with whatever previews have measured here folded into
-    /// it, then the shipped profile alone.
-    ///
-    /// The middle case is the one that matters. Writes are rare — a session is a dozen previews and
-    /// maybe one write — so the write profile was empty far more often than not, and a first write
-    /// is precisely when "how long will this take" is worth answering.
-    /// </summary>
     private RunProfile Plan(bool writing)
     {
         var learned = writing ? _state.WriteRun : _state.PreviewRun;
@@ -1308,7 +1304,6 @@ public sealed class MainForm : Form
         return writing ? RunProgress.Blend(shipped, _state.PreviewRun) : shipped;
     }
 
-    /// <summary>Moves the bar between phase boundaries and says how much longer it thinks it has.</summary>
     private void ShowProgress()
     {
         if (_progressModel is null) return;
@@ -1322,7 +1317,6 @@ public sealed class MainForm : Form
         }
         else
         {
-            // No plan yet. Elapsed time is the only true thing there is to show.
             _eta.Text = $"{_progressModel.Elapsed.TotalSeconds:F0}s elapsed";
         }
     }
@@ -1333,9 +1327,6 @@ public sealed class MainForm : Form
 
         _cancellation.Cancel();
         _cancel.Enabled = false;
-
-        // Not instant, and saying so is better than looking ignored: cancellation lands at the next
-        // phase boundary, which on a vanilla-size map can be the better part of a minute away.
         _status.Text = "Cancelling — stopping at the end of this phase…";
     }
 
@@ -1349,10 +1340,9 @@ public sealed class MainForm : Form
         _loadPreset.Enabled = enabled;
         _gameFolder.Enabled = enabled;
         _launchGame.Enabled = enabled;
+        _launchArgs.Enabled = enabled;
         _cancel.Enabled = !enabled;
 
-        // The editor holds the titles a run is about to rebuild, so it must not be edited while
-        // one is in flight. It gates itself on having a written mod on top of this.
         _titles.Enabled = enabled;
         ShowPending();
 
@@ -1361,14 +1351,6 @@ public sealed class MainForm : Form
         _preview.Enabled = ready;
     }
 
-    /// <summary>
-    /// A phase boundary: the estimate advances and the status bar names what is now running.
-    ///
-    /// The accounting is done on the UI thread rather than on the worker that raised the event, so
-    /// <see cref="RunProgress"/> never has to be thread-safe — it is only ever touched from here and
-    /// from the timer, which are the same thread. The cost is that a boundary is timed a few
-    /// milliseconds late, against phases measured in seconds.
-    /// </summary>
     private void OnStageEntered(string name) => Post(() =>
     {
         if (!_busy) return;
@@ -1379,7 +1361,6 @@ public sealed class MainForm : Form
         ShowProgress();
     });
 
-    /// <summary>A span inside the running phase — shown, but never counted toward progress.</summary>
     private void OnStageDetail(string name) => Post(() =>
     {
         if (_busy && _phase is not null) _status.Text = $"{_phase} · {name.Trim(' ', '·')}…";
@@ -1390,9 +1371,6 @@ public sealed class MainForm : Form
     private static string Sentence(string name)
         => $"{char.ToUpperInvariant(name[0])}{name[1..]}";
 
-    /// <summary>Runs an action on the UI thread, tolerating the window having gone away.</summary>
-    /// <returns>Whether it was actually queued. Callers holding a "already pending" flag need to
-    /// know, or a post that never lands leaves the flag set and suppresses every later one.</returns>
     private bool Post(Action action)
     {
         if (IsDisposed || !IsHandleCreated) return false;
@@ -1404,25 +1382,16 @@ public sealed class MainForm : Form
         }
         catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException)
         {
-            // The window went away between the check above and the post. Nothing to update.
             return false;
         }
     }
 
-    // --- Views ----------------------------------------------------------------------------------
-
-    /// <summary>Takes a finished run and drops every cached render of the previous one.</summary>
     private void ShowResult(GenerationResult result)
     {
         _result = result;
 
-        // Whatever the editor was holding belongs to a run that is no longer on screen, and its
-        // titles may not even be named — a preview leaves every one of them blank. WriteModAsync
-        // loads it again immediately afterwards on the one path where there is a mod to edit.
         _edits.Detach();
 
-        // A Bitmap is unmanaged memory the collector is in no hurry about, and preview is meant to
-        // be clicked repeatedly while a setting is tuned; leaking one per view per click adds up.
         _viewer.SetImage(null);
         foreach (var bitmap in _rendered.Values) bitmap.Dispose();
         _rendered.Clear();
@@ -1444,13 +1413,13 @@ public sealed class MainForm : Form
 
         _viewer.ViewName = name;
 
-        if (_result is null)
+        if (_result is null && !_rendered.ContainsKey(name))
         {
             _viewer.SetImage(null);
             return;
         }
 
-        if (!_rendered.TryGetValue(name, out var bitmap))
+        if (!_rendered.TryGetValue(name, out var bitmap) && _result is not null)
         {
             var render = Views.First(v => v.Name == name).Render;
             using (new WaitCursorFor(this)) bitmap = ToBitmap(render(_result, _written));
@@ -1461,14 +1430,6 @@ public sealed class MainForm : Form
         ShowReadout(_viewer.Zoom, null);
     }
 
-    /// <summary>
-    /// Turns a click on the preview into the title that was clicked.
-    ///
-    /// Four hops: undo the downsample to get a source pixel, read the province label there, map the
-    /// label through the write order to a province id, and walk up from that barony to the tier the
-    /// current view draws. Only meaningful on a view that draws titles at all — clicking the
-    /// climate map selects nothing, which is right.
-    /// </summary>
     private void PickTitleAt(Point pixel)
     {
         if (_busy || _edits.Target is not { } target || _result is null) return;
@@ -1483,7 +1444,6 @@ public sealed class MainForm : Form
         int id = _result.ProvinceOrder[map.Label[y * map.Width + x]];
         if (id < 1 || id > _result.BaronyCount)
         {
-            // Water, or the impassable land above the last barony. Neither has anything on it.
             _status.Text = "Nothing there — that is water or impassable";
             return;
         }
@@ -1499,8 +1459,6 @@ public sealed class MainForm : Form
         switch (view.Kind)
         {
             case Pick.Title:
-                // Through the tree, so both surfaces agree on what is selected and the tree scrolls
-                // to show it. Reveal raises SelectionChanged, which is what opens the inspector.
                 _titles.Reveal(title);
                 _status.Text = $"{TitleInspector.TierName(title)} {title.Name}";
                 break;
@@ -1519,16 +1477,8 @@ public sealed class MainForm : Form
         }
     }
 
-    /// <summary>
-    /// The inspectors, one per kind of thing, built on first use and reused thereafter.
-    ///
-    /// Keyed by type rather than by instance: a window per object becomes window soup within a
-    /// minute, and a single window that navigated between kinds would lose the thing the split is
-    /// for — having a county and the culture living in it open at once.
-    /// </summary>
     private readonly Dictionary<Type, InspectorForm> _inspectors = [];
 
-    /// <summary>Shows the right inspector for whatever is selected, creating it the first time.</summary>
     private void Inspect(IReadOnlyList<object> targets)
     {
         if (targets.Count == 0) return;
@@ -1557,9 +1507,6 @@ public sealed class MainForm : Form
         inspector.BringToFront();
     }
 
-    /// <summary>
-    /// Keeps the unsaved-changes bar honest, and hides it the moment there is nothing to say.
-    /// </summary>
     private void ShowPending()
     {
         _pendingBar.Visible = _edits.HasPending;
@@ -1567,8 +1514,6 @@ public sealed class MainForm : Form
 
         int edited = _edits.EditedCount;
 
-        // Zero edited with something still pending is the revert-after-overwrite case: the objects
-        // match what was generated again, but the files on disk are still holding the edit.
         _pendingText.Text = edited switch
         {
             0 => "Edits reverted — the mod on disk has not caught up",
@@ -1591,14 +1536,8 @@ public sealed class MainForm : Form
         if (answer == DialogResult.OK) _edits.RevertAll();
     }
 
-    /// <summary>Routes a navigation from one inspector to the one that owns that kind.</summary>
     private void Inspect(object target) => Inspect([target]);
 
-    /// <summary>
-    /// Opens the inspector beside the window rather than on top of it, falling back to inside it
-    /// where there is no room — the map is the thing being clicked and covering it defeats the
-    /// point of a separate window.
-    /// </summary>
     private void PlaceInspector(Form inspector)
     {
         var screen = Screen.FromControl(this).WorkingArea;
@@ -1609,22 +1548,12 @@ public sealed class MainForm : Form
             : new Point(Math.Max(screen.Left, Bounds.Right - inspector.Width - 24), Bounds.Top + 80);
     }
 
-    /// <summary>
-    /// Keeps the window in step with the edit session: the Overwrite button, and the cached renders
-    /// that a recolour has just made wrong.
-    /// </summary>
     private void OnEditsChanged(Emit.WorldAspect touched)
     {
         ShowPending();
 
         if (_redrawQueued || !ClickableViews.Values.Any(v => Repaints(v.Kind, touched))) return;
 
-        // Deferred rather than done here, and coalesced. This is raised from inside a PropertyGrid
-        // value commit — freeing the bitmap under the viewer and spending a full-map render while
-        // the grid is still mid-edit is asking for trouble — and one user action can raise it more
-        // than once, which would otherwise queue a redundant render of forty million pixels.
-        // Accumulated rather than replaced: a second edit before the post lands must not narrow
-        // what the first one invalidated.
         _staleAspects |= touched;
         _redrawQueued = Post(RedrawTitleViews);
     }
@@ -1632,7 +1561,6 @@ public sealed class MainForm : Form
     private bool _redrawQueued;
     private Emit.WorldAspect _staleAspects;
 
-    /// <summary>Drops the renders an edit has invalidated and rebuilds whichever is on screen.</summary>
     private void RedrawTitleViews()
     {
         _redrawQueued = false;
@@ -1643,16 +1571,8 @@ public sealed class MainForm : Form
         bool showing = ClickableViews.TryGetValue(_view, out var current)
                        && Repaints(current.Kind, stale);
 
-        // Detached before anything is disposed, and this order is not optional. The viewer is
-        // almost certainly holding one of these bitmaps, and a Bitmap freed out from under it does
-        // not fault where it was freed — it throws GDI+ "Parameter is not valid" out of the next
-        // paint or mouse move, in a stack that has nothing to do with colours. ShowResult clears
-        // the viewer before emptying the same cache, for exactly this reason.
         if (showing) _viewer.SetImage(null);
 
-        // Only the views this edit actually made wrong, and only those already rendered. A title
-        // recolour has no bearing on the culture map, and dropping it would cost a needless
-        // full-map pass the next time that button was pressed.
         foreach (var (name, view) in ClickableViews)
         {
             if (!Repaints(view.Kind, stale)) continue;
@@ -1675,39 +1595,8 @@ public sealed class MainForm : Form
         public void Dispose() => _form.Cursor = Cursors.Default;
     }
 
-    /// <summary>Packed RGB to a 24bpp bitmap, one row at a time to respect the stride.</summary>
-    private static Bitmap ToBitmap(PreviewRenderer.Image image)
-    {
-        var bitmap = new Bitmap(image.Width, image.Height, PixelFormat.Format24bppRgb);
-        var rect = new Rectangle(0, 0, image.Width, image.Height);
-        var data = bitmap.LockBits(rect, ImageLockMode.WriteOnly, PixelFormat.Format24bppRgb);
+    private static Bitmap ToBitmap(PreviewRenderer.Image image) => PreviewRenderer.ToBitmap(image);
 
-        try
-        {
-            var row = new byte[image.Width * 3];
-            for (int y = 0; y < image.Height; y++)
-            {
-                // Bitmap wants BGR; the renderers produce RGB.
-                int src = y * image.Width * 3;
-                for (int x = 0; x < image.Width; x++)
-                {
-                    row[x * 3 + 0] = image.Rgb[src + x * 3 + 2];
-                    row[x * 3 + 1] = image.Rgb[src + x * 3 + 1];
-                    row[x * 3 + 2] = image.Rgb[src + x * 3 + 0];
-                }
-                System.Runtime.InteropServices.Marshal.Copy(
-                    row, 0, data.Scan0 + y * data.Stride, row.Length);
-            }
-        }
-        finally
-        {
-            bitmap.UnlockBits(data);
-        }
-
-        return bitmap;
-    }
-
-    /// <summary>Routes Console output into the log pane, marshalling back onto the UI thread.</summary>
     private sealed class TextBoxWriter(TextBox target) : TextWriter
     {
         public override System.Text.Encoding Encoding => System.Text.Encoding.UTF8;
