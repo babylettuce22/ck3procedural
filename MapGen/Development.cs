@@ -160,8 +160,10 @@ public static class Development
         if (government == GovernmentMap.Tribal) chance = Math.Min(chance, 0.12);
         if (rng.NextDouble() > chance) return "none";
 
+        // An oasis is a market as much as a garden — it is where the caravan stops — so it counts
+        // as productive alongside the fields and the bottom land.
         bool productive = terrain is TerrainClass.Plains or TerrainClass.Farmlands
-            or TerrainClass.Floodplains or TerrainClass.Beach;
+            or TerrainClass.Floodplains or TerrainClass.Beach or TerrainClass.Oasis;
 
         string second = rng.NextDouble() < (productive ? 0.65 : 0.30) ? "city_holding" : "church_holding";
 

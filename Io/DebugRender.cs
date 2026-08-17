@@ -31,6 +31,7 @@ public static class DebugRender
         MapGen.TerrainClass.Hills => (140, 128, 92),
         MapGen.TerrainClass.Mountains => (146, 140, 136),
         MapGen.TerrainClass.DesertMountains => (176, 148, 118),
+        MapGen.TerrainClass.Oasis => (64, 148, 92),
         MapGen.TerrainClass.Arctic => (238, 240, 244),
         _ => (0, 0, 0),
     };

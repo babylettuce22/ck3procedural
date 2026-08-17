@@ -84,10 +84,10 @@ public static class Generator
         landMask = Stage.Time("recompute land mask",
             () => Raster.LandMask(terra.Elevation, cfg));
 
-        // 4. Partition provinces with river seeds
+        // 4. Partition provinces with river seeds and river-aware cost
         var provinces = Stage.Time("province partition",
             () => Provinces.Build(landMask, provinceElevation, climate,
-                cfg.ProvinceWidth, cfg.ProvinceHeight, cfg, rng, majorRivers));
+                cfg.ProvinceWidth, cfg.ProvinceHeight, cfg, rng, majorRivers, drainage));
         Console.WriteLine($"  {provinces.Count} provinces total");
 
         var provinceLandMask = ProvinceLandMask(cfg, provinces);
@@ -157,7 +157,7 @@ public static class Generator
                             modDir, options.GameDir, cfg, result.Provinces, result.ProvinceOrder,
                             result.BaronyCount, result.LandCount,
                             result.RiverCount, result.Titles, result.Terra, result.Terrain, rng,
-                            options.WriteHistory);
+                            options.WriteHistory, result.Drainage);
 
         Console.WriteLine($"  done in {sw.ElapsedMilliseconds} ms");
         return written;

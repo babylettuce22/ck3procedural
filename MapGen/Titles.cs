@@ -1,7 +1,7 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Ck3MapGen.Config;
 using Ck3MapGen.Core;
-using System.Globalization;
 
 namespace Ck3MapGen.MapGen;
 
@@ -34,19 +34,30 @@ public static class Titles
     public const int MinKingdomsPerEmpire = 3;
     public const int MaxKingdomsPerEmpire = 5;
 
-    public static Dictionary<int, HashSet<int>> BuildAdjacency(ProvinceMap map, int landCount, int[] order)
+    /// <summary>
+    /// Builds barony-to-barony land adjacency graph.
+    /// Only directly touching playable land baronies (1..baronyCount) share an edge.
+    /// </summary>
+    public static Dictionary<int, HashSet<int>> BuildAdjacency(ProvinceMap map, int baronyCount, int[] order)
     {
         var adjacency = new Dictionary<int, HashSet<int>>();
+        for (int i = 1; i <= baronyCount; i++) adjacency[i] = [];
 
-        for (int y = 0; y < map.Height; y++)
+        int w = map.Width, h = map.Height;
+        var label = map.Label;
+
+        for (int y = 0; y < h; y++)
         {
-            for (int x = 0; x < map.Width; x++)
-            {
-                int a = order[map.Label[y * map.Width + x]];
-                if (a > landCount) continue;
+            int row = y * w;
+            int nextRow = (y + 1) * w;
 
-                if (x + 1 < map.Width) Link(a, order[map.Label[y * map.Width + x + 1]]);
-                if (y + 1 < map.Height) Link(a, order[map.Label[(y + 1) * map.Width + x]]);
+            for (int x = 0; x < w; x++)
+            {
+                int a = order[label[row + x]];
+                if (a < 1 || a > baronyCount) continue;
+
+                if (x + 1 < w) Link(a, order[label[row + x + 1]]);
+                if (y + 1 < h) Link(a, order[label[nextRow + x]]);
             }
         }
 
@@ -54,7 +65,7 @@ public static class Titles
 
         void Link(int a, int b)
         {
-            if (a == b || b > landCount) return;
+            if (a == b || b < 1 || b > baronyCount) return;
             if (!adjacency.TryGetValue(a, out var sa)) adjacency[a] = sa = [];
             if (!adjacency.TryGetValue(b, out var sb)) adjacency[b] = sb = [];
             sa.Add(b);
@@ -63,25 +74,9 @@ public static class Titles
     }
 
     /// <summary>
-    /// Province pairs that face each other across a short stretch of water.
-    ///
-    /// Without this every title is landlocked by construction: <see cref="BuildAdjacency"/> links
-    /// provinces only where their pixels touch, so no kingdom can hold both sides of a strait and
-    /// no empire can be a thalassocracy. That is wrong at the top of the hierarchy specifically —
-    /// Britannia, Sicily, Denmark and Byzantium are all one realm across water — while remaining
-    /// right at the bottom, which is why the two adjacencies are kept apart and only merged for the
-    /// kingdom and empire tiers.
-    ///
-    /// Found by flooding outward from every coast at once and noting where two different provinces'
-    /// fronts meet: the meeting cost is how far apart the two coastlines are. Flooding stops at
-    /// <paramref name="maxDistance"/>, so the open ocean is never visited and the cost is
-    /// proportional to coastline rather than to sea area.
-    ///
-    /// Impassable provinces are not sources and not traversable — they are land, so a mountain wall
-    /// blocks a sea link exactly as it blocks a land one.
+    /// Province pairs that face each other across a short stretch of OPEN SEA water.
+    /// Major rivers are explicitly excluded so realms do not treat river channels as overseas straits.
     /// </summary>
-    /// <summary>8-neighbour offsets. Diagonals count as one step, which slightly understates a
-    /// diagonal crossing — immaterial against a threshold measured in tens of pixels.</summary>
     private static readonly (int Dx, int Dy)[] Neighbourhood =
         [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (1, -1), (-1, 1), (1, 1)];
 
@@ -96,20 +91,26 @@ public static class Titles
         var dist = new int[width * height];
         var frontier = new Queue<int>();
 
-        bool IsOpenWater(int cell) => !map.Seeds[map.Label[cell]].IsLand;
+        // Only open sea/ocean zones count for overseas links — NOT inland major rivers!
+        bool IsSeaWater(int cell)
+        {
+            var seed = map.Seeds[map.Label[cell]];
+            return !seed.IsLand && !seed.IsMajorRiver;
+        }
+
         int BaroniedLand(int cell)
         {
             int id = order[map.Label[cell]];
-            return map.Seeds[map.Label[cell]].IsLand && id <= baronyCount ? id : 0;
+            return map.Seeds[map.Label[cell]].IsLand && id >= 1 && id <= baronyCount ? id : 0;
         }
 
-        // Every water pixel touching a coast starts the flood, carrying the province behind it.
+        // Every sea pixel touching a coast starts the flood, carrying the province behind it.
         for (int y = 0; y < height; y++)
         {
             for (int x = 0; x < width; x++)
             {
                 int cell = y * width + x;
-                if (!IsOpenWater(cell)) continue;
+                if (!IsSeaWater(cell)) continue;
 
                 foreach (var (dx, dy) in Neighbourhood)
                 {
@@ -139,7 +140,7 @@ public static class Titles
                 if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
 
                 int next = ny * width + nx;
-                if (owner[next] != 0 || !IsOpenWater(next)) continue;
+                if (owner[next] != 0 || !IsSeaWater(next)) continue;
 
                 owner[next] = owner[cell];
                 dist[next] = dist[cell] + 1;
@@ -147,8 +148,7 @@ public static class Titles
             }
         }
 
-        // Where two fronts meet, the water between their coasts is as wide as the two distances
-        // added together.
+        // Where two fronts meet, the water between their coasts is as wide as the two distances added together.
         for (int y = 0; y < height; y++)
         {
             for (int x = 0; x < width; x++)
@@ -177,11 +177,6 @@ public static class Titles
         }
     }
 
-    /// <summary>
-    /// How many clusters are in more than one piece when only land links count — that is, how many
-    /// realms actually used a sea link. Reported rather than asserted, because the right number
-    /// depends on the map: a single-continent world should show zero and an archipelago most of them.
-    /// </summary>
     private static int Overseas(List<List<int>> clusters, Dictionary<int, HashSet<int>> landAdjacency)
     {
         int split = 0;
@@ -207,7 +202,6 @@ public static class Titles
         return split;
     }
 
-    /// <summary>Land and sea links together, for the tiers allowed to cross water.</summary>
     private static Dictionary<int, HashSet<int>> Union(
         Dictionary<int, HashSet<int>> land, Dictionary<int, HashSet<int>> sea)
     {
@@ -223,33 +217,8 @@ public static class Titles
         return merged;
     }
 
-    /// <summary>How many settling passes to run. Movement dies out well before this on every map
-    /// measured; the cap is only there so a pair of members cannot trade places forever.</summary>
     private const int SettlePasses = 12;
 
-    /// <summary>
-    /// Groups members into clusters of <paramref name="minSize"/> to <paramref name="maxSize"/>,
-    /// keeping each one as close to round as the adjacency allows.
-    ///
-    /// Compactness is the point, and it is not cosmetic. CK3 draws land at *county* level, so what
-    /// the player sees is the union of a county's baronies — provinces.png is never rendered on its
-    /// own, and a barony has no outline in game. That makes this function, not the province
-    /// partitioner, the thing that decides what the map looks like.
-    ///
-    /// It used to flood the adjacency graph in shuffled order, which is unconstrained by geometry:
-    /// a chain of eight baronies was exactly as likely as a blob of eight. Measured on the
-    /// 1024x512 test map, 11-18% of counties had a waist under 16 px against 0-5% of the baronies
-    /// making them up, and counties were *more* ragged than their own parts despite being three
-    /// times the area. Pinched counties over clean provinces is the signature.
-    ///
-    /// So growth takes the candidate nearest the cluster's running centre instead of the next one
-    /// off a shuffled queue, and <see cref="Settle"/> then trades boundary members between
-    /// neighbours while that keeps lowering the same distance. It is the graph-space counterpart of
-    /// the Lloyd relaxation <see cref="Provinces"/> already runs in pixel space.
-    ///
-    /// The seeds are still shuffled. Where a cluster starts should be arbitrary; only how it grows
-    /// from there should not be.
-    /// </summary>
     private static List<List<int>> Cluster(
         IReadOnlyList<int> members,
         Dictionary<int, HashSet<int>> adjacency,
@@ -280,8 +249,6 @@ public static class Titles
 
             while (cluster.Count < targetSize && candidates.Count > 0)
             {
-                // Nearest to the centre *so far*, so the cluster fills in around itself. Taking the
-                // nearest to the seed instead would let it reach past a gap and come back.
                 int bestAt = -1;
                 double best = double.PositiveInfinity;
 
@@ -296,7 +263,6 @@ public static class Titles
                     bestAt = i;
                 }
 
-                // Everything on the frontier was taken by a cluster seeded earlier.
                 if (bestAt < 0) break;
 
                 int chosen = candidates[bestAt];
@@ -325,16 +291,6 @@ public static class Titles
         return clusters;
     }
 
-    /// <summary>
-    /// Hands boundary members to a neighbouring cluster whose centre is nearer, which is what turns
-    /// the tendrils growth could not avoid into something round.
-    ///
-    /// Two guards keep it from trading one defect for a worse one. A cluster at
-    /// <paramref name="minSize"/> cannot give anything away and one at <paramref name="maxSize"/>
-    /// cannot take anything, so settling never undoes the size distribution growth just produced.
-    /// And a member is only moved if what it leaves behind is still one connected piece — a county
-    /// in two halves is not an improvement on a pinched one, and CK3 will happily draw it.
-    /// </summary>
     private static void Settle(List<List<int>> clusters, Dictionary<int, HashSet<int>> adjacency,
         (double X, double Y)[] positions, int minSize, int maxSize)
     {
@@ -361,8 +317,6 @@ public static class Titles
                 double bestCost = DistanceSquared(centre[from], here);
                 int best = -1;
 
-                // Only clusters this member actually touches, so the receiver stays connected for
-                // free — it is gaining a member adjacent to one it already holds.
                 foreach (int link in links)
                 {
                     if (!owner.TryGetValue(link, out int to) || to == from) continue;
@@ -390,7 +344,6 @@ public static class Titles
         }
     }
 
-    /// <summary>Whether what is left of a cluster is still one piece once a member is taken out.</summary>
     private static bool StaysConnected(List<int> cluster, int dropped,
         Dictionary<int, HashSet<int>> adjacency)
     {
@@ -415,44 +368,15 @@ public static class Titles
         return seen.Count == remaining.Count;
     }
 
-    /// <summary>Squared, because only the ordering is ever used and a square root would not change it.</summary>
     private static double DistanceSquared((double X, double Y) a, (double X, double Y) b)
     {
         double dx = a.X - b.X, dy = a.Y - b.Y;
         return dx * dx + dy * dy;
     }
 
-    /// <summary>Guarded like <see cref="Centre"/>: county members are province ids and every tier
-    /// above indexes from zero, so the two share this array shape but not its origin.</summary>
     private static (double X, double Y) At((double X, double Y)[] positions, int member)
         => member >= 0 && member < positions.Length ? positions[member] : (0, 0);
 
-    /// <summary>
-    /// Folds undersized clusters into a neighbour, so a scrap of land does not get a title of its
-    /// own at every tier above it.
-    ///
-    /// <see cref="Cluster"/> grows toward a target size but stops when it runs out of neighbours,
-    /// and then gives whatever is left its own cluster. On an island that means a lone county
-    /// becomes a duchy, the only duchy in a kingdom, and the only kingdom in an empire — three
-    /// titles conjured out of one province, none of which a player would ever draw that way.
-    /// Absorption is the counterpart to growth: growth decides who joins whom while there is room,
-    /// this decides where the leftovers go.
-    ///
-    /// The adjacency passed in should include sea links at every tier. Being *built* across water
-    /// is a privilege of the top tiers — see <see cref="BuildSeaAdjacency"/> — but being *absorbed*
-    /// across water is how a small island ends up inside a mainland duchy, which is exactly where
-    /// small islands are.
-    ///
-    /// Merging into the smallest available neighbour rather than the nearest keeps the tier even;
-    /// merging into the nearest lets one cluster snowball by being adjacent to a lot of coastline.
-    /// </summary>
-    /// <param name="positions">
-    /// Member positions, enabling a last-resort merge into the nearest cluster when an island lies
-    /// beyond every sea link. Supplied for kingdoms and empires, where CK3 expects de jure cover
-    /// over the whole map and a remote island belonging to a distant crown is normal. Left null for
-    /// duchies, where the same fallback would draw a duchy across an ocean — a lone island duchy is
-    /// a real thing (Iceland is one) and is where the stack should stop.
-    /// </param>
     private static List<List<int>> AbsorbUndersized(List<List<int>> clusters,
         Dictionary<int, HashSet<int>> adjacency, int minSize, int maxSize,
         (double X, double Y)[]? positions = null)
@@ -461,15 +385,10 @@ public static class Titles
         for (int i = 0; i < clusters.Count; i++)
             foreach (int member in clusters[i]) owner[member] = i;
 
-        // Clusters with nothing to join — an island beyond every sea link. They keep their own
-        // title because there is genuinely nowhere else to put them, and they are set aside so one
-        // of them cannot stall the pass for everyone else.
         var stranded = new HashSet<int>();
 
         while (true)
         {
-            // Smallest undersized cluster first, so the most obviously wrong ones are resolved
-            // while there is still the widest choice of host.
             int source = -1;
             for (int i = 0; i < clusters.Count; i++)
             {
@@ -495,8 +414,6 @@ public static class Titles
                 neighbours.Add(nearest);
             }
 
-            // Prefer a host that still has room. If every neighbour is already at its maximum the
-            // merge happens anyway: an oversized duchy is a lesser evil than a one-province one.
             int target = -1;
             foreach (int candidate in neighbours.OrderBy(n => n))
             {
@@ -525,10 +442,6 @@ public static class Titles
         return [.. clusters.Where(c => c.Count > 0)];
     }
 
-    /// <summary>
-    /// The cluster whose members' mean position is closest to this one's. Only reached when a
-    /// cluster touches nothing at all, so the answer is "which crown is this island nearest to".
-    /// </summary>
     private static int Nearest(List<List<int>> clusters, (double X, double Y)[] positions, int source)
     {
         var (x, y) = Centre(clusters[source], positions);
@@ -568,7 +481,6 @@ public static class Titles
         return counted == 0 ? (0, 0) : (x / counted, y / counted);
     }
 
-    /// <summary>Mean position of each cluster, in the index space of the tier above it.</summary>
     private static (double X, double Y)[] Roll(List<List<int>> clusters,
         (double X, double Y)[] positions)
         => [.. clusters.Select(c => Centre(c, positions))];
@@ -606,43 +518,40 @@ public static class Titles
         return lifted;
     }
 
-    public static List<Title> Build(ProvinceMap map, int landCount, int[] order, MapConfig cfg, Rng rng)
+    public static List<Title> Build(ProvinceMap map, int baronyCount, int[] order, MapConfig cfg, Rng rng)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        var adjacency = BuildAdjacency(map, landCount, order);
 
-        // Kept separate from the land adjacency all the way up, and merged in only where a realm is
-        // allowed to cross water — see BuildSeaAdjacency.
+        // 1. Strict land-to-land adjacency for baronies (no crossing major rivers)
+        var adjacency = BuildAdjacency(map, baronyCount, order);
+
+        // 2. Sea-only bridges (strait crossings) for higher tiers
         int bridge = (int)Math.Round(cfg.Scaled(cfg.SeaBridgePixelsAtVanilla));
-        var seaAdjacency = BuildSeaAdjacency(map, landCount, order, bridge);
+        var seaAdjacency = BuildSeaAdjacency(map, baronyCount, order, bridge);
 
-        var provinceIds = Enumerable.Range(1, landCount).ToList();
-        var baronies = new List<Title>(landCount);
-        for (int i = 0; i < landCount; i++)
+        var provinceIds = Enumerable.Range(1, baronyCount).ToList();
+        var baronies = new List<Title>(baronyCount);
+        for (int i = 0; i < baronyCount; i++)
             baronies.Add(new Title { Tier = "b", Index = i, ProvinceId = provinceIds[i] });
 
         var byProvince = baronies.ToDictionary(b => b.ProvinceId);
 
-        // Where each province sits, rolled up a tier at a time. Two jobs: it is what keeps a
-        // cluster compact as it grows, and it is how a stranded island is given to the nearest
-        // crown when no adjacency reaches it.
-        var provincePosition = new (double X, double Y)[landCount + 1];
+        var provincePosition = new (double X, double Y)[baronyCount + 1];
         for (int label = 0; label < order.Length; label++)
         {
             int id = order[label];
-            if (id >= 1 && id <= landCount)
+            if (id >= 1 && id <= baronyCount)
                 provincePosition[id] = (map.Seeds[label].X, map.Seeds[label].Y);
         }
 
+        // Counties: strictly clustered along land banks
         var countyClusters = Cluster(provinceIds, adjacency, MinBaroniesPerCounty,
             MaxBaroniesPerCounty, rng, provincePosition);
         var counties = Wrap("c", countyClusters, c => c.Select(p => byProvince[p]));
 
         var countyPosition = Roll(countyClusters, provincePosition);
 
-        // Every tier above the county absorbs its leftovers before the next tier is lifted off it,
-        // so an island scrap joins a real duchy instead of founding a duchy, a kingdom and an
-        // empire on the way up. Counties are left alone: a one-province county is ordinary.
+        // Duchies: clustered with land adjacency and absorbed across straits if needed
         var duchyAdjacency = LiftAdjacency(countyClusters, adjacency);
         var duchySea = LiftAdjacency(countyClusters, seaAdjacency);
         var duchyClusters = AbsorbUndersized(
@@ -652,7 +561,7 @@ public static class Titles
         var duchies = Wrap("d", duchyClusters, c => c.Select(i => counties[i]));
         var duchyPosition = Roll(duchyClusters, countyPosition);
 
-        // From here up, water is a road rather than a wall for growth too, not only for absorption.
+        // Kingdoms: can span across maritime sea links
         var kingdomAdjacency = LiftAdjacency(duchyClusters, duchyAdjacency);
         var kingdomSea = LiftAdjacency(duchyClusters, duchySea);
         var kingdomClusters = AbsorbUndersized(
@@ -663,6 +572,7 @@ public static class Titles
         var kingdoms = Wrap("k", kingdomClusters, c => c.Select(i => duchies[i]));
         var kingdomPosition = Roll(kingdomClusters, duchyPosition);
 
+        // Empires: grand realms across landmasses
         var empireAdjacency = LiftAdjacency(kingdomClusters, kingdomAdjacency);
         var empireSea = LiftAdjacency(kingdomClusters, kingdomSea);
         var empireClusters = AbsorbUndersized(
@@ -683,8 +593,6 @@ public static class Titles
                           $"{Overseas(empireClusters, kingdomAdjacency)} of {empires.Count} empires " +
                           $"span more than one landmass");
 
-        // Whatever is left here is genuinely unreachable rather than merely small, so it is worth
-        // seeing: a stubborn count means the sea-crossing limit is too tight for this map's islands.
         Console.WriteLine($"  singleton titles left stranded: " +
                           $"{duchyClusters.Count(c => c.Count == 1)} duchies, " +
                           $"{kingdomClusters.Count(c => c.Count == 1)} kingdoms, " +
@@ -708,17 +616,6 @@ public static class Titles
         }
     }
 
-    /// <summary>
-    /// Re-derives every descendant's colour from this title's current one, exactly as generation
-    /// would have.
-    ///
-    /// The generated palette is hierarchical — a duchy's counties are shades of the duchy, spread
-    /// within a tolerance that narrows with each tier — so a hand-picked colour leaves its children
-    /// as shades of a colour that is no longer there. This puts them back in step.
-    ///
-    /// Deliberately not automatic on every edit: it discards any hand-picked colour below the
-    /// title it is called on, which is not something a recolour should do without being asked.
-    /// </summary>
     public static void RecolorChildren(Title parent, Rng rng)
         => DistributeChildren(parent, Hsl.FromRgb(parent.Color), rng);
 
@@ -726,7 +623,6 @@ public static class Titles
     {
         if (empires.Count == 0) return;
 
-        // Spread empire base hues evenly across the color wheel using golden ratio offsets
         float baseHue = rng.Float(0f, 360f);
         const float GoldenAngle = 137.507764f;
 
@@ -743,36 +639,26 @@ public static class Titles
         }
     }
 
-    /// <summary>
-    /// Spreads a parent's colour over its children and down the tree.
-    ///
-    /// A static method rather than a local function inside <see cref="AssignColors"/> because
-    /// <see cref="RecolorChildren"/> re-runs it against a hand-picked colour long afterwards.
-    /// </summary>
     private static void DistributeChildren(Title parent, Hsl parentHsl, Rng rng)
     {
         int count = parent.Children.Count;
         if (count == 0) return;
 
-        // Define variation tolerances based on hierarchy depth
         var (maxHueShift, maxLitShift, maxSatShift) = parent.Tier switch
         {
-            "e" => (28f, 0.14f, 0.12f), // Kingdoms under Empire
-            "k" => (16f, 0.11f, 0.10f), // Duchies under Kingdom
-            "d" => (8f, 0.07f, 0.06f),  // Counties under Duchy
-            _ => (2f, 0.03f, 0.03f),  // Baronies under County
+            "e" => (28f, 0.14f, 0.12f),
+            "k" => (16f, 0.11f, 0.10f),
+            "d" => (8f, 0.07f, 0.06f),
+            _ => (2f, 0.03f, 0.03f),
         };
 
-        // Stratify sibling colors to prevent two neighboring siblings getting the same shade
         for (int i = 0; i < count; i++)
         {
             var child = parent.Children[i];
 
-            // Spread sibling hues evenly within [-maxHueShift, +maxHueShift]
-            float t = count == 1 ? 0f : (float)i / (count - 1) * 2f - 1f; // [-1.0 .. +1.0]
+            float t = count == 1 ? 0f : (float)i / (count - 1) * 2f - 1f;
             float hueDelta = t * maxHueShift + rng.Float(-3f, 3f);
 
-            // Alternate lightness so neighboring titles alternate lighter / darker
             float litDirection = (i % 2 == 0) ? 1f : -1f;
             float litDelta = litDirection * rng.Float(0.04f, maxLitShift);
             float satDelta = (i % 3 == 0 ? 1f : -1f) * rng.Float(0.02f, maxSatShift);
@@ -788,14 +674,11 @@ public static class Titles
         }
     }
 
-    /// <summary>
-    /// Compact HSL representation for perceptual de jure color harmonization.
-    /// </summary>
     private readonly struct Hsl
     {
-        public readonly float H; // [0 .. 360)
-        public readonly float S; // [0 .. 1]
-        public readonly float L; // [0 .. 1]
+        public readonly float H;
+        public readonly float S;
+        public readonly float L;
 
         public Hsl(float h, float s, float l)
         {
@@ -804,14 +687,6 @@ public static class Titles
             L = Math.Clamp(l, 0.22f, 0.78f);
         }
 
-        /// <summary>
-        /// The inverse of <see cref="ToRgb"/>, for re-deriving children from a hand-picked colour.
-        ///
-        /// Not an exact round trip: the constructor clamps saturation and lightness into the band
-        /// the generated palette lives in, so a colour picked at the extremes comes back pulled
-        /// toward that band. That is the wanted behaviour here — the children should sit in the
-        /// same range as every other title on the map, whatever the parent was set to.
-        /// </summary>
         public static Hsl FromRgb((byte R, byte G, byte B) rgb)
         {
             float r = rgb.R / 255f, g = rgb.G / 255f, b = rgb.B / 255f;
@@ -865,38 +740,15 @@ public static class Titles
         }
     }
 
-    /// <summary>
-    /// Names every title in the language of whoever lives there.
-    ///
-    /// This is a separate pass from <see cref="Build"/> because it cannot run until cultures exist,
-    /// and cultures cannot be assigned until the county hierarchy does — so the order is structure,
-    /// then culture, then names. Nothing reads a title's name or key in between.
-    ///
-    /// The alternative, which this replaces, was a single hand-written pool of Norse place names
-    /// used everywhere. That is fine on a map with one culture on it and actively misleading on a
-    /// map with forty: a player reads place names as evidence of who settled a place, so a Norse
-    /// county name in the middle of a desert culture's territory is a false statement about the
-    /// world. Drawing from the local culture's own phonology means the map's names carry the same
-    /// information its colours do.
-    /// </summary>
-    /// <summary>
-    /// One name for one title, in the language of whoever lives there.
-    ///
-    /// Public because the title editor rerolls a single name with it long after
-    /// <see cref="AssignNames"/> has run. Kept as the one definition of what each tier sounds like:
-    /// a second copy in the editor would drift, and a rerolled name that no longer matched the
-    /// naming of its neighbours is precisely the thing the editor exists to avoid.
-    /// </summary>
     public static string GenerateName(Title title, CultureMap cultures, Rng rng)
     {
         var language = cultures.For(title).Language;
 
         if (title.Tier == "e")
-            return language.CompoundName(rng); // Empires always get grand compound names
+            return language.CompoundName(rng);
 
         if (title.Tier == "k")
         {
-            // Kingdoms are 50/50: either a compound name or an affixed place name
             return rng.Chance(0.5)
                 ? language.CompoundName(rng)
                 : language.PlaceName(rng, language.KingdomAffixes);
@@ -919,8 +771,6 @@ public static class Titles
 
         void Visit(Title title)
         {
-            // Qualified: an unqualified call would bind to this local function rather than to the
-            // static above it, and recurse until the stack ran out.
             string GenerateName() => Titles.GenerateName(title, cultures, rng);
 
             string name = GenerateName();
@@ -945,15 +795,11 @@ public static class Titles
 
     private static string CleanKey(string input)
     {
-        // Convert spaces and hyphens to underscores (e.g. Al-Fariq -> al_fariq)
         string cleaned = input.ToLowerInvariant().Replace(" ", "_").Replace("-", "_");
-
-        // Flatten accents (e.g. ö -> o, á -> a) so keys remain standard a-z ASCII
         cleaned = RemoveDiacritics(cleaned);
-
-        // Strip out anything else (like apostrophes)
         return Regex.Replace(cleaned, "[^a-z0-9_]", "");
     }
+
     private static string RemoveDiacritics(string text)
     {
         var normalizedString = text.Normalize(System.Text.NormalizationForm.FormD);
@@ -971,6 +817,7 @@ public static class Titles
 
         return stringBuilder.ToString().Normalize(System.Text.NormalizationForm.FormC);
     }
+
     public static IEnumerable<Title> Flatten(IEnumerable<Title> roots)
     {
         foreach (var root in roots)

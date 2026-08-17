@@ -31,6 +31,27 @@ public static class TerrainPalette
     /// <summary>An unused layer: material 255, weight 0.</summary>
     public const byte Unused = 255;
 
+    /// <summary>
+    /// What a pixel is painted from, packed into one byte: the terrain class in the low five bits
+    /// and the climate family in the high three.
+    ///
+    /// The two are packed together because the transition band has to be drawn around *either*
+    /// changing. Once the climate picks the material family, two stretches of the same terrain
+    /// class in different climates are as different on the ground as two terrain classes are — a
+    /// plain running from mediterranean into central scrub swaps its whole palette — and a band
+    /// that only knew about terrain classes would leave that edge as a hard seam.
+    ///
+    /// Five bits, not four: <see cref="TerrainClass"/> reached seventeen members when
+    /// <see cref="TerrainClass.Oasis"/> was added, and a nibble tops out at sixteen. Seven climate
+    /// families fit the remaining three bits with one to spare.
+    /// </summary>
+    public static byte Label(TerrainClass terrain, KoppenClass zone)
+        => (byte)((int)terrain | ((int)ClimateOf(zone) << 5));
+
+    public static TerrainClass TerrainOf(byte label) => (TerrainClass)(label & 0x1F);
+
+    public static Climate ClimateFromLabel(byte label) => (Climate)(label >> 5);
+
     // --- Classic materials, used where a feature is sharper than a climate family, and as the
     // --- per-climate accents that keep a biome from being only its four gen_ textures.
     private const byte Beach = 6;
@@ -40,6 +61,8 @@ public static class TerrainPalette
     private const byte DesertRocky = 15;
     private const byte DesertWavy = 16;
     private const byte DesertWavyLarger = 17;
+    private const byte Desert01 = 11;
+    private const byte Desert02 = 12;
     private const byte DesertCracked = 13;
     private const byte Drylands01 = 18;
     private const byte DrylandsCracked = 19;
@@ -75,6 +98,9 @@ public static class TerrainPalette
     private const byte Wetlands = 50;
     private const byte WetlandsMud = 51;
     private const byte CentralMountain = 52;
+    private const byte CentralLowlands02 = 53;
+    private const byte CentralLowlands03 = 54;
+    private const byte Oasis = 40;
 
     /// <summary>
     /// Which of the seven <c>gen_*</c> climate families a pixel's ground belongs to. This is the
@@ -111,9 +137,11 @@ public static class TerrainPalette
     private static readonly byte[][] Accents =
     [
         [ForestJungle, ForestFloor, ForestLeaf],                        // Tropical
-        [Plains01, PlainsNoisy, PlainsRough, ForestFloor],              // Central
+        [Plains01, PlainsNoisy, PlainsRough, ForestFloor,
+         CentralLowlands02, CentralLowlands03],                         // Central
         [SteppeGrass, SteppeBushes, SteppeRocks],                       // Steppe
-        [DesertWavy, DesertWavyLarger, DesertFlat, DesertRocky],        // Desert
+        [DesertWavy, DesertWavyLarger, DesertFlat, DesertRocky,
+         Desert01, Desert02],                                           // Desert
         [Drylands01, DrylandsGrassy, DrylandsCracked, MediDryMud],      // Drylands
         [NorthernPlains, ForestPine, PlainsRough],                      // Northern
         [MediGrass, MediLumpyGrass, MediNoisyGrass, PlainsDry],         // Mediterranean
@@ -265,6 +293,22 @@ public static class TerrainPalette
                     );
                 }
 
+            case TerrainClass.Oasis:
+                {
+                    // The oasis material is the green itself, so it leads, and the desert it sits
+                    // in shows through the other three slots — an oasis reads as an oasis only
+                    // against sand. Wet mud at the waterline, dune and cracked pan around it.
+                    ref readonly var around = ref Families[(int)Climate.Desert];
+                    var (lowA, _) = LowlandPair(around, nA, nB);
+
+                    return Mix(
+                        Oasis, (byte)(130 + nA * 50),
+                        lowA, (byte)(55 + (1.0 - nA) * 35),
+                        WetlandsMud, (byte)(35 + nB * 30),
+                        nC < 0.5 ? DesertWavy : DesertCracked, (byte)(25 + nC * 25)
+                    );
+                }
+
             case TerrainClass.Forest:
                 {
                     // Needleleaf in the cold, broadleaf in the warm, and the litter under both.
@@ -343,12 +387,18 @@ public static class TerrainPalette
                     ref readonly var dry = ref Families[(int)Climate.Drylands];
                     var (lowA, lowB) = LowlandPair(dry, nA, nB);
 
+                    // medi_dry_mud and plains_01_dry_mud are the sun-baked flats between the scrub,
+                    // and together are 0.70% of vanilla's painted weight — more than the entire
+                    // farmland family. Both were previously unreachable: medi_dry_mud sat in the
+                    // drylands accent list, which this case never consults, and plains_01_dry_mud
+                    // only appeared under Floodplains, which nothing assigns.
                     return Mix(
                         lowA, (byte)(90 + nA * 40),
                         lowB, (byte)(75 + (1.0 - nA) * 40),
                         nB < 0.4 ? DrylandsGrassy : nB < 0.75 ? Drylands01 : DrylandsCracked,
                             (byte)(50 + nB * 30),
-                        nC < 0.5 ? DesertCracked : dry.Hills, (byte)(25 + nC * 25)
+                        nC < 0.3 ? DesertCracked : nC < 0.5 ? MediDryMud
+                            : nC < 0.68 ? PlainsDryMud : dry.Hills, (byte)(25 + nC * 25)
                     );
                 }
 
@@ -361,12 +411,21 @@ public static class TerrainPalette
                     // vanilla's twenty heaviest materials and we shipped none of it.
                     byte dune = nB < 0.55 ? DesertWavy : DesertWavyLarger;
 
+                    // desert_01 and desert_02 are vanilla's plain sand — 0.35% of its painted
+                    // weight between them — and were unreachable while the fourth slot only ever
+                    // offered cracked/flat/rocky/hills.
+                    byte grain = nC < 0.25 ? DesertCracked
+                               : nC < 0.42 ? Desert02
+                               : nC < 0.55 ? DesertFlat
+                               : nC < 0.68 ? Desert01
+                               : nC < 0.85 ? DesertRocky
+                               : desert.Hills;
+
                     return Mix(
                         lowA, (byte)(100 + nA * 40),
                         lowB, (byte)(75 + (1.0 - nA) * 40),
                         dune, (byte)(55 + nB * 40),
-                        nC < 0.4 ? DesertCracked : nC < 0.7 ? DesertFlat
-                            : nC < 0.9 ? DesertRocky : desert.Hills, (byte)(25 + nC * 25)
+                        grain, (byte)(25 + nC * 25)
                     );
                 }
 

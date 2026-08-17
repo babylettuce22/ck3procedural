@@ -99,21 +99,176 @@ public sealed class MapConfig : CustomTypeDescriptor
     public int StartingWarsCount { get; set; } = 3;
 
 
-    [Category("03 Provinces")]
+    // --- Rivers ---
+    //
+    // Two different things share the name. *Major* rivers are carved into the heightmap and become
+    // navigable water provinces, so they change the political map as well as the picture. *Minor*
+    // rivers are painted onto rivers.png and are purely visual — CK3 renders them from a palette
+    // whose index encodes width.
+    //
+    // Lengths below are in *vanilla* province pixels and are put through <see cref="Scaled"/>, so a
+    // river is the same fraction of a continent at every map size. Widths are the exception: they
+    // are in *heightmap* pixels, because that is the raster the channel is carved into.
+
+    [Category("05 Rivers")]
     [Description("Enable navigable major river corridors carved into the heightmap as river provinces.")]
     public bool EnableMajorRivers { get; set; } = true;
 
-    [Category("03 Provinces")]
+    [Category("05 Rivers")]
     [Description("Target number of navigable major river systems across the map.")]
     public int MajorRiverCount { get; set; } = 8;
 
-    [Category("03 Provinces")]
+    /// <summary>
+    /// How large a body of water a major river has to empty into, measured in sea zones.
+    ///
+    /// Expressed in sea zones rather than raw pixels so it tracks <see cref="SeaZonePixels"/> and
+    /// therefore <see cref="CountyScale"/> — the question is whether the receiving water reads as a
+    /// sea on *this* map, which is the same question as whether it could hold a few sea provinces.
+    ///
+    /// Gating on size rather than on connectivity to the ocean is deliberate: rivers that end in a
+    /// closed basin are real, and the Volga and the Amu Darya should both survive this test. What
+    /// should not survive is a river emptying into a three-cell speck left by a couple of
+    /// below-sea-level pixels in the heightmap.
+    /// </summary>
+    
+    [AdvancedSetting]
+    [Category("05 Rivers")]
+    [Description("How big the water at a major river's mouth must be, counted in sea zones. Stops rivers from draining into tiny inland dips in the heightmap, while still allowing genuine inland seas. Raise it to insist rivers reach open ocean.")]
+    public double MinOutletSeaZones { get; set; } = 0.5;
+
+    /// <summary>
+    /// Half-width of a major river's carved channel at its source, in vanilla *heightmap* pixels.
+    ///
+    /// A radius, measured perpendicular from the centreline — the carve tests
+    /// <c>dist &lt;= curChanR</c> — so the channel is twice this across.
+    ///
+    /// Floored at 7 in the carve regardless of scale. Navigability depends on the channel surviving
+    /// the 2:1 downsample into the province raster, which calls a cell water only when three of its
+    /// four pixels are under sea level, so a thinner channel stops reading as water at province
+    /// resolution and the navigable province chain breaks.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("05 Rivers")]
+    [Description("Half-width of a major river's carved channel at its source, in heightmap pixels measured from the centreline — the channel is twice this across. Below about 7 it stops surviving the downsample into the province map and the river ceases to be navigable.")]
+    public double RiverChannelRadiusMin { get; set; } = 14.0;
+
+    /// <summary>
+    /// Half-width of a major river's carved channel at its mouth, in vanilla heightmap pixels.
+    /// Same radius convention as <see cref="RiverChannelRadiusMin"/>.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("05 Rivers")]
+    [Description("Half-width of a major river's carved channel at its mouth, in heightmap pixels from the centreline. The channel opens from the source radius to this along its length.")]
+    public double RiverChannelRadiusMax { get; set; } = 32.0;
+
+    /// <summary>
+    /// How much a major river's channel breathes in and out along its length, as a fraction of the
+    /// radius it would otherwise have. 0.25 lets it run between three quarters and five quarters of
+    /// its nominal width.
+    ///
+    /// Without this the channel opens on a fixed curve from source to mouth and never does anything
+    /// else, which is the one thing a real river never does. The variation is low-frequency — see
+    /// <see cref="RiverWidthVariationScale"/> — because per-vertex jitter reads as a ragged edge
+    /// rather than as narrows and broads.
+    ///
+    /// The valley follows the channel, so a wide reach gets a wide flood plain and a narrow one a
+    /// gorge. Never allowed to pinch the channel below the navigable floor, except at the head where
+    /// the taper is deliberately closing it.
+    /// </summary>
+    [Category("05 Rivers")]
+    [Description("How much a major river widens and narrows along its length, as a fraction of its nominal width. 0 gives a channel that only ever opens from source to mouth; 0.25 lets it run between three quarters and five quarters of that. The valley follows, so wide reaches get flood plains and narrow ones get gorges.")]
+    public double RiverWidthVariation { get; set; } = 0.25;
+
+    /// <summary>
+    /// The distance over which a major river's width variation completes one cycle, in vanilla
+    /// province pixels. Deliberately long: this decides where a river has narrows and broads, which
+    /// happens over tens of kilometres, not between one pixel and the next.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("05 Rivers")]
+    [Description("How far a major river runs between one narrowing and the next, in vanilla province pixels. Long values give a few slow swells along a river; short ones make the banks look ragged rather than varied.")]
+    public double RiverWidthVariationScale { get; set; } = 150.0;
+
+    /// <summary>
+    /// How far the carved valley reaches beyond the channel itself, as a multiple of channel width.
+    /// The channel is the water; this is the shoulder of lower ground either side of it.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("05 Rivers")]
+    [Description("How far a major river's valley shoulders reach beyond the water itself, as a multiple of channel width. Higher carves a broad flood plain; 1 leaves the river in a trench with no valley around it.")]
+    public double RiverValleyReach { get; set; } = 4.0;
+
+    /// <summary>
+    /// Spacing of river province seeds along a carved corridor, in vanilla province pixels. This is
+    /// what decides how many provinces a river becomes, and so how finely it is named and travelled.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("05 Rivers")]
+    [Description("How long each navigable river province is, in vanilla province pixels. Lower chops a river into more, smaller provinces; higher makes each stretch longer.")]
+    public double RiverProvinceLength { get; set; } = 35.0;
+
+    /// <summary>
+    /// How far above sea level a major river will climb before its trace stops, in elevation units.
+    /// Keeps navigable corridors out of the mountains rather than trenching a canyon up to a peak.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("05 Rivers")]
+    [Description("How far above sea level a major river will climb before it stops, in elevation units. Keeps navigable corridors in the lowlands instead of trenching up into the mountains.")]
+    public double RiverMaxRiseAboveSea { get; set; } = 80.0;
+
+    /// <summary>
+    /// The discharge at which a major river's upstream trace gives up, in the same units as
+    /// <see cref="MapGen.Drainage.Flow"/>. Lower carries the corridor further into the headwaters.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("05 Rivers")]
+    [Description("The discharge at which a major river is declared finished and its trace stops. Lower carries the navigable corridor further upstream into smaller tributaries.")]
+    public double RiverTraceMinFlow { get; set; } = 350.0;
+
+    [Category("05 Rivers")]
     [Description("Enable tributary minor rivers drawn onto rivers.png.")]
     public bool EnableMinorRivers { get; set; } = true;
 
-    [Category("03 Provinces")]
+    [Category("05 Rivers")]
     [Description("Density multiplier for minor tributary rivers (1.0 = standard vanilla density, 0.5 = sparser, 2.0 = denser).")]
     public double RiverDensity { get; set; } = 0.1;
+
+    /// <summary>
+    /// Share of land provinces cultivated into <c>farmlands</c>.
+    ///
+    /// Deliberately tiny. Farmland is not a climate — it is ground people have cleared — so it
+    /// belongs to a handful of settled, well-watered baronies rather than to a biome. Measured
+    /// against vanilla's own detail_index, the entire farmland family (farmland_01, medi_farmlands,
+    /// india_farmlands, farm_paddy_01) carries 0.33% of all painted texture weight, which is the
+    /// number this default is calibrated to reproduce.
+    /// </summary>
+    [Category("03 Provinces")]
+    [Description("Share of land provinces cultivated into farmlands, taken from the best-watered baronies of settled counties. Vanilla's farmland textures cover about 0.33% of the map and this reproduces that; past a few percent, fields start reading as a biome rather than as settlement.")]
+    public double FarmlandShare { get; set; } = 0.02;
+
+    /// <summary>
+    /// Share of desert provinces that become <c>oasis</c>. Vanilla spends 0.02% of its painted
+    /// weight on the oasis material — the rarest thing it paints — so this gate is tighter still
+    /// than the farmland one.
+    /// </summary>
+    [Category("03 Provinces")]
+    [Description("Share of desert provinces that become oases. Only provinces holding a drainage sink — a depression water actually collects in — are eligible, and the wettest of those win. Oasis is vanilla's least-painted material; keep this small.")]
+    public double OasisShare { get; set; } = 0.015;
+
+    /// <summary>
+    /// How far, in vanilla province pixels, one biome's materials bleed across its boundary into
+    /// the next. Scaled by <see cref="Scaled"/>, so the band is the same fraction of a continent at
+    /// every map size.
+    ///
+    /// This is the width of the *whole* transition, and the neighbouring palette peaks at half
+    /// strength on the boundary itself. Sized against biome edges, which run for hundreds of
+    /// pixels. Note that a barony is roughly forty province pixels across, so a reach much above
+    /// that dilutes a cultivated province rather than just softening its rim.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("03 Provinces")]
+    [Description("Width in vanilla province pixels of the band where one biome's textures fade into the next. Larger is softer; much above 40 starts washing out single-province features like farmland, since a barony is about that wide.")]
+    public double TerrainBlendReach { get; set; } = 44;
 
     [Category("13 Development")]
     [Description("Bonus development granted to World Center metropolises.")]
@@ -558,6 +713,26 @@ public sealed class MapConfig : CustomTypeDescriptor
     // claims rather than of power. These decide how much of it anybody is actually wearing in 867,
     // which is what turns several hundred equal counts into a world with great powers in it.
 
+    [Category("15 Rulers")]
+    [Description("Enable centralized Administrative Empires with bureaucratic themes and noble families (requires Roads to Power DLC; safely degrades to Feudal/Clan if DLC is absent).")]
+    public bool EnableAdministrativeEmpires { get; set; } = true;
+
+    [Category("15 Rulers")]
+    [Description("Share of realized imperial realms that start with an Administrative Government.")]
+    public double AdministrativeEmpireShare { get; set; } = 0.25;
+
+    [Category("15 Rulers")]
+    [Description("Earliest start year for Administrative Governments to emerge across the realm. Empires before this year default to Feudal/Clan unless they host an Imperial World Center.")]
+    public int AdministrativeMinStartYear { get; set; } = 800;
+
+    [Category("15 Rulers")]
+    [Description("Enable Nomadic horde realms across steppes and arid plains (requires nomadic DLC; safely degrades to Tribal/Clan if DLC is absent).")]
+    public bool EnableNomadHordes { get; set; } = true;
+
+    [Category("15 Rulers")]
+    [Description("Share of qualifying steppe and arid realms that start as Nomads. Qualifying means a real pastoral majority: a fifth of the realm on steppe, or three fifths on steppe/desert/drylands together, or a steppe capital. Early starts add up to +0.25 to this and late starts subtract up to 0.25.")]
+    public double NomadSteppeShare { get; set; } = 0.45;
+
     /// <summary>Share of duchies whose title is held by somebody at the start date.</summary>
     [Category("15 Rulers")]
     [Description("Share of duchies actually held by a duke at the start date. The rest of their counties stand as independent counts or answer to a king directly.")]
@@ -586,8 +761,12 @@ public sealed class MapConfig : CustomTypeDescriptor
     public double RepublicShare { get; set; } = 0.1;
 
     /// <summary>
-    /// Share of eligible counties that start as prince-bishoprics. Counties holding one of their
-    /// own faith's holy sites are four times as likely, which is where vanilla puts its own.
+    /// Share of generated faiths that start organised under a head of faith. Monotheist faiths are
+    /// twice as likely, which is roughly how vanilla splits them.
+    ///
+    /// This is about faiths, not counties. The summary that used to sit here described a
+    /// prince-bishopric share — a theocracy setting that does not exist: nothing in
+    /// <see cref="MapGen.Governments"/> ever assigns <c>theocracy_government</c>.
     /// </summary>
     [Category("14 Cultures and faiths")]
     [Description("Share of generated faiths that start with a head of faith title. Monotheist faiths are twice as likely to be organised into one.")]
@@ -893,7 +1072,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// </summary>
     [Category("12 Climate")]
     [Description("Yearly rainfall on the middle of the map's land, in millimetres - Earth's is around 650. The circulation model has no units of its own, so this is what puts it on a scale Koppen can test. It scales without flattening the spread, so a dry world stays dry relative to itself.")]
-    public double MedianRainfallMm { get; set; } = 1600;
+    public double MedianRainfallMm { get; set; } = 550;
 
     /// <summary>
     /// Share of its remaining water an air parcel rains out per 100 vanilla province pixels of land
@@ -902,7 +1081,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// </summary>
     [Category("12 Climate")]
     [Description("Share of its water an air parcel rains out per 100 vanilla province pixels of land it crosses. The continental-interior dial: higher leaves the far side of a landmass a desert, lower carries rain all the way across it.")]
-    public double RainoutPer100Pixels { get; set; } = 0.1;
+    public double RainoutPer100Pixels { get; set; } = 0.25;
 
     /// <summary>
     /// Extra rain a climbing air parcel drops per kilometre it is lifted. The rain shadow behind a
@@ -912,7 +1091,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     [AdvancedSetting]
     [Category("12 Climate")]
     [Description("Extra rain an air parcel drops per kilometre it is lifted over a range. A rain shadow forms without this, because cooling alone squeezes the water out, but raising it sharpens the contrast between a soaking windward slope and a desert behind it.")]
-    public double OrographicRainStrength { get; set; } = 0.8;
+    public double OrographicRainStrength { get; set; } = 1.5;
 
     /// <summary>
     /// How strongly the circulation's rising and sinking branches drive rainfall. This is what puts
@@ -922,7 +1101,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     [AdvancedSetting]
     [Category("12 Climate")]
     [Description("How strongly the rising and sinking branches of the circulation drive rainfall. This is what puts the wet belt on the equator and the great deserts at 30 degrees; at 0 the subtropical deserts largely disappear.")]
-    public double ConvectiveRainStrength { get; set; } = 1.3;
+    public double ConvectiveRainStrength { get; set; } = 1.5;
 
     public Limits Limits { get; } = new();
 

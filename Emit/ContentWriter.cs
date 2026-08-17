@@ -20,7 +20,7 @@ public static class ContentWriter
     public static WrittenContent WriteAll(string modDir, string gameDir, MapConfig cfg,
             ProvinceMap provinces, int[] order, int baronyCount, int landCount, int riverCount,
             List<Title> empires, TerrainData terra, TerrainClassifier.Result classified, Rng rng,
-            bool writeHistory = true)
+            bool writeHistory = true, MapGen.Drainage? drainage = null)
     {
         var terrain = classified.Terrain;
         var provinceElevation = terra.ProvinceElevation;
@@ -74,8 +74,13 @@ public static class ContentWriter
             return levels;
         });
 
-        var governments = MapGen.Governments.Build(counties, provinceTerrain, development, cultures,
-            cfg, new Rng(cfg.Seed ^ 0x6017));
+        var realms = Core.Stage.Time("realms", () => Realms.Build(
+    empires, development, wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17)));
+
+        var governments = Core.Stage.Time("governments", () => MapGen.Governments.Build(
+            empires, counties, realms, provinceTerrain, development, cultures,
+            worldCenters, cfg, new Rng(cfg.Seed ^ 0x6017)));
+
         Console.WriteLine("  governments: " + string.Join(", ",
             governments.Tally(counties.Count).Select(g => $"{g.Count} {g.Government[..^11]}")));
 
@@ -99,8 +104,20 @@ public static class ContentWriter
             foreach (var county in wilderness.Counties) faiths.ByCounty[county] = unsettledFaith;
         }
 
+        // Farmland and oases, placed from settlement and drainage rather than from climate. Runs
+        // here, after every social layer has been decided, so nothing reads a terrain that only
+        // exists *because* of the settlement: development, government, culture and faith all see
+        // the pre-cultivation map. Both the pixel raster and the province vote are rewritten, so
+        // the painted ground and common/province_terrain cannot disagree. See MapGen/Cultivation.cs.
+        Core.Stage.Time("cultivation", () => MapGen.Cultivation.Apply(cfg, provinces, order,
+            landCount, terrain, provinceTerrain, counties, governments, development, wilderness,
+            drainage, provinceElevation, new Rng(cfg.Seed ^ 0x0FA2)));
+
+        // The traced courses go in so each river can be named along its length rather than by the
+        // latitude of its provinces — see WaterNaming.GroupRiverProvinces.
         var waterNames = Core.Stage.Time("water naming", () => WaterNaming.Generate(
-            provinces, order, landCount, riverCount, cultures, empires, cfg, new Rng(cfg.Seed ^ 0x5EAE)));
+            provinces, order, landCount, riverCount, cultures, empires, cfg,
+            new Rng(cfg.Seed ^ 0x5EAE), terra.MajorRiversList));
 
         Core.Stage.Time("titles, history and localisation", () =>
         {
@@ -146,16 +163,11 @@ public static class ContentWriter
         Core.Stage.Time("trees", () => TreeWriter.WriteAll(modDir, cfg, terrain, rng));
         Core.Stage.Time("map table", () => MapTableWriter.WriteAll(modDir, cfg));
 
-        // Hoisted out of the phase below so it can be captured: the landed-realm view is drawn from
-        // it, and it is built inside a block that a --no-history run skips entirely.
-        RealmMap? realms = null;
-
+        // --- AFTER (clean and unified) ---
         if (writeHistory)
         {
             Core.Stage.Time("history and bookmarks", () =>
             {
-                realms = Realms.Build(empires, development, wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17));
-
                 var prehistory = Core.Stage.Time("prehistory", () => PrehistoryMap.Build(
                     counties, provinces, order, landCount, realms, cultures, faiths,
                     governments, worldCenters, wilderness, cfg, new Rng(cfg.Seed ^ 0x4821)));

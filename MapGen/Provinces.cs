@@ -52,14 +52,15 @@ public static class Provinces
     private const double CandidateSpacing = 0.5;
 
     public static ProvinceMap Build(
-            byte[] mask,
-            float[] elevation,
-            ClimateField climate,
-            int width,
-            int height,
-            MapConfig cfg,
-            Rng rng,
-            List<MajorRiverPath>? majorRivers = null)
+                byte[] mask,
+                float[] elevation,
+                ClimateField climate,
+                int width,
+                int height,
+                MapConfig cfg,
+                Rng rng,
+                List<MajorRiverPath>? majorRivers = null,
+                Drainage? drainage = null)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -80,7 +81,8 @@ public static class Provinces
 
         Core.Stage.Detail("  · seed coverage", () => EnsureSeedsCoverComponents(mask, width, height, seeds));
 
-        var cost = Core.Stage.Detail("  · cost elevation blur", () => CostElevation(elevation, width, height, cfg));
+        // Rivers add crossing resistance to CostElevation
+        var cost = Core.Stage.Detail("  · cost elevation blur", () => CostElevation(elevation, mask, drainage, width, height, cfg));
 
         var bucketManager = new ThreadBucketManager();
         var label = Core.Stage.Detail("  · delta-stepping partition",
@@ -160,24 +162,46 @@ public static class Provinces
                           $"(target {cfg.BaronyPixels:F0}, p90/p10 {(double)p90 / Math.Max(1, p10):F1}x)");
     }
 
-    private static float[] CostElevation(float[] elevation, int width, int height, MapConfig cfg)
+    private static float[] CostElevation(
+            float[] elevation,
+            byte[] mask,
+            Drainage? drainage,
+            int width,
+            int height,
+            MapConfig cfg)
     {
         int radius = (int)Math.Round(cfg.Scaled(cfg.ProvinceTerrainSmoothPixels));
-        if (radius < 1 || cfg.ProvinceTerrainCost <= 0) return elevation;
-
         float sea = cfg.Limits.SeaLevelUpper;
-        var flattened = new float[elevation.Length];
+        var costField = new float[elevation.Length];
+
+        // 1. Flatten elevation below sea level
         Parallel.For(0, height, y =>
         {
             int row = y * width;
             for (int x = 0; x < width; x++)
             {
                 int i = row + x;
-                flattened[i] = Math.Max(elevation[i], sea);
+                costField[i] = Math.Max(elevation[i], sea);
             }
         });
 
-        return Field.Blur(flattened, width, height, radius, 2);
+        // 2. Add river / valley crossing cost if drainage is available
+        if (drainage is not null)
+        {
+            float maxFlow = 5000f;
+            for (int i = 0; i < costField.Length; i++)
+            {
+                if (mask[i] == 1 && drainage.Flow[i] > 100f)
+                {
+                    // Tributary flow acts as an elevation ridge in cost space
+                    float riverPenalty = MathF.Min(1.0f, drainage.Flow[i] / maxFlow) * 15.0f;
+                    costField[i] += riverPenalty;
+                }
+            }
+        }
+
+        if (radius < 1 || cfg.ProvinceTerrainCost <= 0) return costField;
+        return Field.Blur(costField, width, height, radius, 2);
     }
 
     private static void Relax(ProvinceMap map, byte[] mask, float[] elevation, MapConfig cfg,
@@ -1198,31 +1222,38 @@ public static class Provinces
 
             if (count < 128)
             {
-                var local = bucketManager.GetLocal(0);
+                var local = bucketManager.Rent();
                 for (int i = 0; i < count; i++)
                 {
                     RelaxNode(currentBucketItems[i], activeBucket, width, height, mask, elevation,
                         terrainCost, invRef, state, local, ref maxBucket);
                 }
+                bucketManager.Return(local);
             }
             else
             {
-                Parallel.ForEach(Partitioner.Create(0, count, 256), range =>
-                {
-                    var local = bucketManager.GetLocal(Environment.CurrentManagedThreadId);
-                    int localMaxBucket = activeBucket;
-
-                    for (int i = range.Item1; i < range.Item2; i++)
+                // localInit/localFinally rather than a lookup inside the body: this is what
+                // guarantees the bucket is held by exactly one worker for the life of its range.
+                Parallel.ForEach(Partitioner.Create(0, count, 256),
+                    bucketManager.Rent,
+                    (range, _, local) =>
                     {
-                        RelaxNode(currentBucketItems[i], activeBucket, width, height, mask, elevation,
-                            terrainCost, invRef, state, local, ref localMaxBucket);
-                    }
+                        int localMaxBucket = activeBucket;
 
-                    if (localMaxBucket > maxBucket)
-                    {
-                        InterlockedMax(ref maxBucket, localMaxBucket);
-                    }
-                });
+                        for (int i = range.Item1; i < range.Item2; i++)
+                        {
+                            RelaxNode(currentBucketItems[i], activeBucket, width, height, mask, elevation,
+                                terrainCost, invRef, state, local, ref localMaxBucket);
+                        }
+
+                        if (localMaxBucket > maxBucket)
+                        {
+                            InterlockedMax(ref maxBucket, localMaxBucket);
+                        }
+
+                        return local;
+                    },
+                    bucketManager.Return);
             }
 
             activeBucket++;
@@ -1384,14 +1415,14 @@ public static class Provinces
     }
 
     private static int PlaceMajorRiverSeeds(
-            List<ProvinceSeed> seeds,
-            List<MajorRiverPath> rivers,
-            byte[] mask,
-            int width,
-            int height,
-            MapConfig cfg)
+                List<ProvinceSeed> seeds,
+                List<MajorRiverPath> rivers,
+                byte[] mask,
+                int width,
+                int height,
+                MapConfig cfg)
     {
-        double segmentLength = cfg.Scaled(35.0);
+        double segmentLength = Math.Max(1.0, cfg.Scaled(cfg.RiverProvinceLength));
         int added = 0;
 
         foreach (var river in rivers)
@@ -1417,8 +1448,9 @@ public static class Provinces
                     int sy = Math.Clamp((int)MathF.Round(pts[i].Y), 0, height - 1);
 
                     int cell = sy * width + sx;
-                    // Only seed if actually in a water cell
-                    if (mask[cell] != 0) continue;
+
+                    // Ensure the mask registers this seed location as water
+                    mask[cell] = 0;
 
                     seeds.Add(new ProvinceSeed
                     {
@@ -1468,55 +1500,84 @@ public static class Provinces
     }
 }
 
+/// <summary>
+/// Hands out per-worker frontier buckets for <see cref="Provinces.Partition"/> and drains them
+/// between waves.
+///
+/// Buckets are *rented*, not looked up by thread identity. The earlier form indexed a fixed array
+/// by <c>Environment.CurrentManagedThreadId % ProcessorCount</c>, which is not a thread-local at
+/// all: managed thread ids are arbitrary and unbounded, so two live Parallel.ForEach workers
+/// collide on one slot as a matter of course. <see cref="ThreadLocalBucket"/> has no
+/// synchronisation, so a collision means lost updates on the count, a stale array reference
+/// surviving an <c>Array.Resize</c>, and finally a count that outruns its own backing array —
+/// which surfaces as an IndexOutOfRangeException somewhere in the relaxation loop, on big maps,
+/// intermittently. Renting gives each concurrent worker an object nobody else holds, which is the
+/// invariant the bucket type was written against.
+/// </summary>
 internal sealed class ThreadBucketManager
 {
-    private readonly ThreadLocalBucket[] _locals;
-    private readonly int _threadCount;
+    /// <summary>Every bucket ever created, rented or not. Drained by <see cref="CollectBucket"/>.</summary>
+    private readonly List<ThreadLocalBucket> _all = [];
 
-    public ThreadBucketManager()
+    /// <summary>Buckets not currently held by a worker.</summary>
+    private readonly ConcurrentBag<ThreadLocalBucket> _free = [];
+
+    private readonly object _gate = new();
+
+    /// <summary>
+    /// Takes a bucket no other worker holds. Cheap after the first wave, since workers return
+    /// theirs and the pool settles at the degree of parallelism the loop actually reached.
+    /// </summary>
+    public ThreadLocalBucket Rent()
     {
-        _threadCount = Math.Max(1, Environment.ProcessorCount);
-        _locals = new ThreadLocalBucket[_threadCount];
-        for (int i = 0; i < _threadCount; i++)
-            _locals[i] = new ThreadLocalBucket();
+        if (_free.TryTake(out var bucket)) return bucket;
+
+        bucket = new ThreadLocalBucket();
+        lock (_gate) _all.Add(bucket);
+        return bucket;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ThreadLocalBucket GetLocal(int threadId)
-    {
-        uint idx = (uint)threadId % (uint)_threadCount;
-        return _locals[idx];
-    }
+    /// <summary>Releases a bucket back to the pool. Its contents are kept for the next collect.</summary>
+    public void Return(ThreadLocalBucket bucket) => _free.Add(bucket);
 
+    /// <summary>
+    /// Concatenates and clears every bucket's entries for one distance band. Called from the
+    /// sequential driver between parallel waves, so no worker holds a bucket here.
+    /// </summary>
     public int CollectBucket(int bucketIdx, ref int[] targetBuffer)
     {
-        int total = 0;
-        for (int t = 0; t < _threadCount; t++)
-            total += _locals[t].GetCount(bucketIdx);
-
-        if (total == 0) return 0;
-
-        if (total > targetBuffer.Length)
-            Array.Resize(ref targetBuffer, Math.Max(total, targetBuffer.Length * 2));
-
-        int offset = 0;
-        for (int t = 0; t < _threadCount; t++)
+        lock (_gate)
         {
-            int count = _locals[t].GetCount(bucketIdx);
-            if (count > 0)
-            {
-                _locals[t].CopyAndClear(bucketIdx, targetBuffer, offset);
-                offset += count;
-            }
-        }
+            int total = 0;
+            foreach (var local in _all)
+                total += local.GetCount(bucketIdx);
 
-        return total;
+            if (total == 0) return 0;
+
+            if (total > targetBuffer.Length)
+                Array.Resize(ref targetBuffer, Math.Max(total, targetBuffer.Length * 2));
+
+            int offset = 0;
+            foreach (var local in _all)
+            {
+                int count = local.GetCount(bucketIdx);
+                if (count > 0)
+                {
+                    local.CopyAndClear(bucketIdx, targetBuffer, offset);
+                    offset += count;
+                }
+            }
+
+            return total;
+        }
     }
 
     public void Reset()
     {
-        for (int t = 0; t < _threadCount; t++)
-            _locals[t].Reset();
+        lock (_gate)
+        {
+            foreach (var local in _all) local.Reset();
+        }
     }
 }
 

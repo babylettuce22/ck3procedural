@@ -112,10 +112,13 @@ public static class TreeWriter
             ["tree_leaf_01_c_mesh"],
             [(TerrainClass.Forest, 16), (TerrainClass.Plains, 1.2)], 0.56, 1.04),
 
-        // Palms: tropical shore, and the occasional desert oasis.
+        // Palms: tropical shore, a token scatter on open desert, and the oasis itself — which is
+        // the one place they should actually stand thick, now that oases are a terrain class
+        // rather than a figure of speech.
         new("tree_palm_generator_1.txt", "tree_palm_generator_1", "tree_high_layer",
             ["tree_palm_01_a_mesh"],
-            [(TerrainClass.Beach, 3), (TerrainClass.Desert, 0.2)], 0.50, 0.90),
+            [(TerrainClass.Beach, 3), (TerrainClass.Desert, 0.2), (TerrainClass.Oasis, 22)],
+            0.50, 0.90),
 
         // Conifers. Vanilla fixes both pine_01_a (1.00) and pine_01_b (0.40).
         new("tree_pine_01_a_generator_1.txt", "tree_pine_01_a_generator_1", "tree_high_layer",

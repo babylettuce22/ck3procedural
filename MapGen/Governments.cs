@@ -1,33 +1,9 @@
 using Ck3MapGen.Config;
 using Ck3MapGen.Core;
+using Ck3MapGen.Emit;
 
 namespace Ck3MapGen.MapGen;
 
-/// <summary>
-/// Which government each county's ruler holds at the start date.
-///
-/// Head of faith titles are landless spiritual titles created directly in history with
-/// <c>theocracy_government</c> and seated on their faith's primary holy site, so no landed county
-/// starts as a theocracy.
-///
-/// The four settled governments a generated world can actually support are covered here. Left out
-/// on purpose:
-///
-///   * <c>administrative_government</c> — its rules carry <c>administrative = yes</c>, which needs
-///     the <c>admin_gov</c> DLC flag (Roads to Power). History files cannot test for DLC, so
-///     writing it would hand anyone without that DLC a realm whose mechanics silently do not exist.
-///   * <c>wanua_government</c>, and the nomad and herder families — same problem, gated behind
-///     <c>has_tgp_dlc_trigger</c> and Wandering Nobles respectively.
-///   * <c>mercenary_government</c> and <c>holy_order_government</c> — landless by design and
-///     carrying <c>cannot_be_vassal_or_liege</c>; they belong to title-less companies, not to the
-///     de jure counties this generator hands out.
-///
-/// The choice has to be made *once* and shared, because three separate things have to agree about
-/// it: the capital barony's holding, the government written into title history, and the GUI's
-/// preview. CK3 does not tolerate the first two disagreeing — a government lists exactly one
-/// <c>primary_holding</c>, so a republic on a castle or a feudal count on a tribal capital is a
-/// ruler who cannot hold his own seat.
-/// </summary>
 public sealed class GovernmentMap
 {
     public const string Feudal = "feudal_government";
@@ -35,33 +11,50 @@ public sealed class GovernmentMap
     public const string Clan = "clan_government";
     public const string Republic = "republic_government";
     public const string Theocracy = "theocracy_government";
+    public const string Administrative = "administrative_government";
+    public const string Nomad = "nomad_government";
 
     private readonly Dictionary<Title, string> byCounty;
+    private readonly HashSet<Title> _adminRealms;
+    private readonly HashSet<Title> _nomadRealms;
 
-    internal GovernmentMap(Dictionary<Title, string> byCounty) => this.byCounty = byCounty;
+    internal GovernmentMap(
+        Dictionary<Title, string> byCounty,
+        HashSet<Title>? adminRealms = null,
+        HashSet<Title>? nomadRealms = null)
+    {
+        this.byCounty = byCounty;
+        _adminRealms = adminRealms ?? [];
+        _nomadRealms = nomadRealms ?? [];
+    }
 
-    /// <summary>
-    /// The government a county's ruler holds. Feudal for anything unrecorded, which is also CK3's
-    /// own answer — <c>feudal_government</c> carries <c>fallback = 1</c>.
-    /// </summary>
     public string For(Title county) => byCounty.GetValueOrDefault(county, Feudal);
 
     public bool IsTribal(Title county) => For(county) == Tribal;
+    public bool IsAdministrative(Title county) => For(county) == Administrative;
+    public bool IsNomad(Title county) => For(county) == Nomad;
 
-    /// <summary>
-    /// The holding a county's capital barony must carry, which is entirely decided by the
-    /// government: each one names a single <c>primary_holding</c> and a ruler seated on anything
-    /// else cannot hold his own capital.
-    /// </summary>
+    public bool IsAdminEmpire(Title title) => _adminRealms.Contains(title);
+    public bool IsNomadRealm(Title title) => _nomadRealms.Contains(title);
+
+    public IEnumerable<Title> AdminTitles => _adminRealms;
+    public IEnumerable<Title> NomadTitles => _nomadRealms;
+
+    public static string SafeFallback(string government, bool isClanEligible = false) => government switch
+    {
+        Administrative => isClanEligible ? Clan : Feudal,
+        Nomad => isClanEligible ? Clan : Tribal,
+        _ => government
+    };
+
     public static string CapitalHolding(string government) => government switch
     {
-        Tribal => "tribal_holding",
+        Tribal or Nomad => "tribal_holding",
         Republic => "city_holding",
         Theocracy => "church_holding",
         _ => "castle_holding",
     };
 
-    /// <summary>Counts by government, commonest first — for the run log.</summary>
     public IEnumerable<(string Government, int Count)> Tally(int total)
     {
         var counts = new Dictionary<string, int> { [Feudal] = total };
@@ -79,9 +72,6 @@ public sealed class GovernmentMap
 
 public static class Governments
 {
-    private static int TribalThreshold(MapConfig cfg)
-        => Math.Clamp(5 - ((cfg.StartYear - 867) / 50), 1, 20);
-
     private const double ClanAridity = 0.40;
 
     private static bool IsArid(TerrainClass t) => t is TerrainClass.Desert or TerrainClass.Drylands
@@ -110,19 +100,24 @@ public static class Governments
         return false;
     }
 
-    /// <summary>
-    /// Builds the government map. Runs *before* faiths, not after: whether a faith starts
-    /// unreformed is read off how tribal its counties are, so the government map is an input to
-    /// religion rather than the other way round. Nothing here needs to know about faiths.
-    /// </summary>
-    public static GovernmentMap Build(List<Title> counties, TerrainClass[] provinceTerrain,
-        Dictionary<Title, int> development, CultureMap? cultures, MapConfig cfg, Rng rng)
+    public static GovernmentMap Build(
+        List<Title> empires,
+        List<Title> counties,
+        RealmMap realms,
+        TerrainClass[] provinceTerrain,
+        Dictionary<Title, int> development,
+        CultureMap? cultures,
+        WorldCenterMap? worldCenters,
+        MapConfig cfg,
+        Rng rng)
     {
-        int threshold = TribalThreshold(cfg);
         var assigned = new Dictionary<Title, string>();
+        var adminTitles = new HashSet<Title>();
+        var nomadTitles = new HashSet<Title>();
 
         int salt = rng.Int(1, int.MaxValue - 1);
 
+        // --- 1. Identify Clan-leaning heritages ---
         var clanHeritage = new HashSet<Heritage>();
         if (cultures is not null)
         {
@@ -138,41 +133,191 @@ public static class Governments
                 if (count > 0 && sum / count >= ClanAridity) clanHeritage.Add(heritage);
         }
 
+        // --- 2. Group counties by their independent top liege realm ---
+        var topLiegeCounties = new Dictionary<Title, List<Title>>();
         foreach (var county in counties)
         {
-            int level = development.GetValueOrDefault(county);
-            var dominant = Development.DominantTerrain(county, provinceTerrain);
-            var culture = cultures?.For(county);
-
-            bool isTribal = level < threshold
-                || (dominant is TerrainClass.Steppe or TerrainClass.Arctic or TerrainClass.Taiga
-                    && cfg.StartYear < 1100)
-                || (culture is not null && cfg.StartYear < 1000
-                    && culture.Traditions.Contains("tradition_pastoralists"));
-
-            if (isTribal)
-            {
-                assigned[county] = GovernmentMap.Tribal;
-                continue;
-            }
-
-            var draw = new Rng(county.Index ^ salt);
-
-            if (IsRepublic(county, level, draw)) { assigned[county] = GovernmentMap.Republic; continue; }
-
-            bool isClan = culture is not null
-                ? clanHeritage.Contains(culture.Heritage)
-                : Aridity(county, provinceTerrain) >= ClanAridity;
-
-            if (isClan) assigned[county] = GovernmentMap.Clan;
+            var topLiege = TopLiege(county, realms);
+            if (!topLiegeCounties.TryGetValue(topLiege, out var list))
+                topLiegeCounties[topLiege] = list = [];
+            list.Add(county);
         }
 
-        return new GovernmentMap(assigned);
+        // --- 3. Pre-score and identify Administrative Empires (STRICT QUALITY CRITERIA) ---
+        var eligibleAdminRealms = new HashSet<Title>();
+        if (cfg.EnableAdministrativeEmpires && !cfg.ShatteredWorld && cfg.AdministrativeEmpireShare > 0)
+        {
+            var scoredEmpires = new List<(Title TopLiege, double Score)>();
+
+            foreach (var (topLiege, realmCounties) in topLiegeCounties)
+            {
+                var primary = HistoryWriter.Primary(topLiege, realms);
+                if (primary.Tier != "e") continue;
+
+                bool hasImperialWonder = worldCenters is not null && realmCounties.Any(c =>
+                {
+                    var center = worldCenters.Centers.FirstOrDefault(wc => wc.County == c);
+                    return center != null && center.Wonder.Archetype is WonderArchetype.ImperialPalace or WonderArchetype.GreatLibrary;
+                });
+
+                // Temporal & Quality Gate:
+                // Must be in 800+ AD (or hold an ancient wonder) AND have high development (avgDev >= 11) or wonder
+                double avgDev = realmCounties.Average(c => (double)development.GetValueOrDefault(c));
+                if (cfg.StartYear < cfg.AdministrativeMinStartYear && !hasImperialWonder) continue;
+                if (avgDev < 11.0 && !hasImperialWonder) continue;
+
+                var capitalCulture = cultures?.For(topLiege);
+                double score = avgDev;
+
+                if (capitalCulture is not null)
+                {
+                    if (capitalCulture.Ethos is "ethos_bureaucratic" or "ethos_courtly") score += 6.0;
+                    if (capitalCulture.Traditions.Contains("tradition_city_keepers")) score += 3.0;
+                }
+
+                if (hasImperialWonder) score += 10.0;
+                scoredEmpires.Add((topLiege, score));
+            }
+
+            scoredEmpires.Sort((a, b) => b.Score.CompareTo(a.Score));
+            int targetAdmin = (int)Math.Round(scoredEmpires.Count * cfg.AdministrativeEmpireShare);
+            if (targetAdmin < 1 && scoredEmpires.Count > 0 && cfg.AdministrativeEmpireShare > 0)
+            {
+                targetAdmin = 1;
+            }
+
+            for (int i = 0; i < Math.Min(targetAdmin, scoredEmpires.Count); i++)
+            {
+                eligibleAdminRealms.Add(scoredEmpires[i].TopLiege);
+                adminTitles.Add(HistoryWriter.Primary(scoredEmpires[i].TopLiege, realms));
+            }
+        }
+
+        // --- 4. Assign Government Realm-by-Realm with Historical Calibration ---
+        foreach (var (topLiege, realmCounties) in topLiegeCounties)
+        {
+            var draw = new Rng(topLiege.Index ^ salt);
+            var capitalDomTerrain = Development.DominantTerrain(topLiege, provinceTerrain);
+            var capitalCulture = cultures?.For(topLiege);
+            double avgDev = realmCounties.Average(c => (double)development.GetValueOrDefault(c));
+            double avgAridity = realmCounties.Average(c => Aridity(c, provinceTerrain));
+
+            // Steppe & Arid composition
+            int steppeCount = realmCounties.Count(c => Development.DominantTerrain(c, provinceTerrain) == TerrainClass.Steppe);
+            int aridCount = realmCounties.Count(c => Development.DominantTerrain(c, provinceTerrain) is TerrainClass.Desert or TerrainClass.Drylands);
+            double steppeShare = realmCounties.Count > 0 ? (double)steppeCount / realmCounties.Count : 0.0;
+            double aridShare = realmCounties.Count > 0 ? (double)(steppeCount + aridCount) / realmCounties.Count : 0.0;
+
+            // Earlier starts lean harder nomadic: +0.25 at 500, +0.05 at 900, -0.25 at 1250 and
+            // later. The floor used to be 0.50, which meant NomadSteppeShare could not express
+            // anything below "half of every qualifying realm" — the clamp, not the knob, was
+            // setting the outcome. It is low enough now that the setting is honest across its
+            // whole range.
+            double timeNomadFactor = Math.Clamp((1000 - cfg.StartYear) / 2000.0, -0.25, 0.25);
+            double effectiveNomadShare = Math.Clamp(cfg.NomadSteppeShare + timeNomadFactor, 0.0, 0.98);
+
+            string realmGovernment;
+
+            // A. Administrative Empire
+            if (eligibleAdminRealms.Contains(topLiege))
+            {
+                realmGovernment = GovernmentMap.Administrative;
+            }
+            // B. Nomadic Horde.
+            //
+            // Steppe is the heartland and qualifies on a modest share. Merely dry ground has to be
+            // *mostly* dry: aridShare counts Desert and Drylands as well, so at the old 0.35 nearly
+            // every realm on an arid map cleared it and the other two clauses never mattered. The
+            // bare "capital is Drylands" clause is gone with it — it carried no share requirement at
+            // all, so one dry capital county made a whole settled realm roll for horde.
+            else if (cfg.EnableNomadHordes
+                     && (steppeShare >= 0.20 || aridShare >= 0.60 || capitalDomTerrain == TerrainClass.Steppe)
+                     && draw.Chance(effectiveNomadShare))
+            {
+                realmGovernment = GovernmentMap.Nomad;
+                nomadTitles.Add(HistoryWriter.Primary(topLiege, realms));
+            }
+            // C. Clan Realm (Arid heritages or dry terrain with decent settlement)
+            else if ((capitalCulture is not null && clanHeritage.Contains(capitalCulture.Heritage)) || avgAridity >= ClanAridity)
+            {
+                realmGovernment = GovernmentMap.Clan;
+            }
+            // D. Tribal Realm vs Feudal Realm (Historical Calibration)
+            //
+            // Early and undeveloped is tribal unless the capital sits on fertile ground. Note the
+            // escape hatch is narrower than it reads: cultivation makes Farmlands about 2% of
+            // provinces by design and nothing assigns Floodplains at all, so at any start before 950
+            // this clause — not the avgDev < 7 one below it — is what decides tribal-versus-feudal
+            // for nearly every realm the nomad and clan clauses did not already take.
+            else if (cfg.StartYear < 950 && avgDev < 12.0
+                     && capitalDomTerrain is not (TerrainClass.Farmlands or TerrainClass.Floodplains))
+            {
+                realmGovernment = GovernmentMap.Tribal;
+            }
+            else if (capitalDomTerrain is TerrainClass.Taiga or TerrainClass.Arctic or TerrainClass.Jungle or TerrainClass.Wetlands && cfg.StartYear < 1100)
+            {
+                realmGovernment = GovernmentMap.Tribal;
+            }
+            else if (avgDev < 7.0)
+            {
+                realmGovernment = GovernmentMap.Tribal;
+            }
+            // E. Feudal Realm (Settled core, fertile farmlands, or High/Late Medieval start)
+            else
+            {
+                realmGovernment = GovernmentMap.Feudal;
+            }
+
+            // Assign the unified government to all constituent counties
+            foreach (var county in realmCounties)
+            {
+                var countyDraw = new Rng(county.Index ^ salt);
+                var countyDomTerrain = Development.DominantTerrain(county, provinceTerrain);
+                int cLevel = development.GetValueOrDefault(county);
+
+                // 1. If realm is Nomadic or Administrative, all counties stay unified
+                if (realmGovernment is GovernmentMap.Nomad or GovernmentMap.Administrative)
+                {
+                    assigned[county] = realmGovernment;
+                }
+                // 2. Peripheral Steppe marches in feudal/clan/tribal realms become Nomadic hordes
+                else if (cfg.EnableNomadHordes && countyDomTerrain == TerrainClass.Steppe && countyDraw.Chance(effectiveNomadShare))
+                {
+                    assigned[county] = GovernmentMap.Nomad;
+                    nomadTitles.Add(county);
+                }
+                // 3. Merchant Republic ports
+                else if (realmGovernment is GovernmentMap.Feudal or GovernmentMap.Clan && IsRepublic(county, cLevel, countyDraw))
+                {
+                    assigned[county] = GovernmentMap.Republic;
+                }
+                // 4. Default to sovereign's government
+                else
+                {
+                    assigned[county] = realmGovernment;
+                }
+            }
+        }
+
+        return new GovernmentMap(assigned, adminTitles, nomadTitles);
 
         bool IsRepublic(Title county, int level, Rng draw)
             => cfg.RepublicShare > 0
                && IsCoastal(county, provinceTerrain)
-               && level >= threshold + 6
+               && level >= 10
                && draw.NextDouble() < cfg.RepublicShare;
+    }
+
+    private static Title TopLiege(Title county, RealmMap realms)
+    {
+        var primary = HistoryWriter.Primary(county, realms);
+        var current = primary;
+
+        while (realms.Liege.TryGetValue(current, out var liege))
+        {
+            current = liege;
+        }
+
+        return realms.HolderCounty.TryGetValue(current, out var topHolder) ? topHolder : county;
     }
 }

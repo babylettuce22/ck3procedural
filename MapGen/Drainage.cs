@@ -21,7 +21,25 @@ public sealed class Drainage
     public required float[] Flow { get; init; }
     public required byte[] LandMask { get; init; }
 
+    /// <summary>
+    /// The elevation the drainage was solved from, kept so <see cref="LakeDepth(int)"/> can be
+    /// asked without the caller having to supply the right array.
+    /// </summary>
+    public required float[] Source { get; init; }
+
     public bool IsLand(int i) => LandMask[i] != 0;
+
+    /// <summary>
+    /// How deep the fill stands over the original ground — the depth of a closed depression, and
+    /// zero wherever the terrain already drained.
+    ///
+    /// Prefer this overload. The one taking an explicit array is easy to call with
+    /// <see cref="Filled"/> itself, which computes <c>Filled[i] - Filled[i]</c> and is therefore
+    /// identically zero, so a guard written against it silently never fires. That is exactly what
+    /// had happened to the lake-basin stop in <see cref="MajorRivers"/>.
+    /// </summary>
+    public float LakeDepth(int i) => Math.Max(0f, Filled[i] - Source[i]);
+
     public float LakeDepth(float[] elevation, int i) => Math.Max(0f, Filled[i] - elevation[i]);
 
     public static Drainage Build(MapConfig cfg, float[] elevation, byte[] landMask,
@@ -69,6 +87,7 @@ public sealed class Drainage
             Receiver = receiver,
             Flow = flow,
             LandMask = landMask,
+            Source = elevation,
         };
 
         drainage.Report(elevation);

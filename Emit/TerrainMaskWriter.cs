@@ -6,13 +6,17 @@ namespace Ck3MapGen.Emit;
 
 /// <summary>
 /// Writes gfx/map/terrain/masks and gfx/map/terrain/masks_gen — one 8-bit greyscale coverage
-/// image per material at full map resolution with Gaussian anti-aliasing.
+/// image per material at province resolution, matching the detail textures they are read back
+/// out of, with Gaussian anti-aliasing.
 /// </summary>
 public static class TerrainMaskWriter
 {
     public static void WriteAll(string modDir, string gameDir, MapConfig cfg)
     {
-        int width = cfg.Width, height = cfg.Height;
+        // Province resolution, because that is the size TerrainTextureWriter emits the detail
+        // textures at and these masks are read straight back out of them. The two are one
+        // decision; see the ceiling documented on TerrainTextureWriter.WriteAll.
+        int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
 
         string terrainDir = Path.Combine(modDir, "gfx", "map", "terrain");
         var index = ReadTga(Path.Combine(terrainDir, "detail_index.tga"));
@@ -23,12 +27,26 @@ public static class TerrainMaskWriter
             return;
         }
 
+        // The loop below indexes both TGAs as width*height*4 without consulting their headers, so
+        // a writer/reader disagreement about resolution reads off the end of the buffer or paints
+        // silent garbage. Check it once, loudly, instead of finding out in the game.
+        if (index.Width != width || index.Height != height ||
+            intensity.Width != width || intensity.Height != height)
+        {
+            Console.WriteLine($"  terrain masks: SKIPPED (detail textures are " +
+                              $"{index.Width}x{index.Height} / {intensity.Width}x{intensity.Height}, " +
+                              $"expected {width}x{height})");
+            return;
+        }
+
         var names = ReadMaterialOrder(Path.Combine(gameDir, "gfx", "map", "terrain", "materials.settings"));
         if (names.Count == 0)
         {
             Console.WriteLine("  terrain masks: SKIPPED (materials.settings unreadable)");
             return;
         }
+
+        byte[] indexPixels = index.Pixels, intensityPixels = intensity.Pixels;
 
         var used = TerrainTextureWriter.UsedMaterials;
         int painted = 0, blanked = 0, carried = 0;
@@ -70,10 +88,10 @@ public static class TerrainMaskWriter
                             long o = srcRow + x * 4;
 
                             byte weight = 0;
-                            if (index[o + 2] == target) weight = Math.Max(weight, intensity[o + 2]);
-                            if (index[o + 1] == target) weight = Math.Max(weight, intensity[o + 1]);
-                            if (index[o + 0] == target) weight = Math.Max(weight, intensity[o + 0]);
-                            if (index[o + 3] == target) weight = Math.Max(weight, intensity[o + 3]);
+                            if (indexPixels[o + 2] == target) weight = Math.Max(weight, intensityPixels[o + 2]);
+                            if (indexPixels[o + 1] == target) weight = Math.Max(weight, intensityPixels[o + 1]);
+                            if (indexPixels[o + 0] == target) weight = Math.Max(weight, intensityPixels[o + 0]);
+                            if (indexPixels[o + 3] == target) weight = Math.Max(weight, intensityPixels[o + 3]);
 
                             coverage[dstRow + x] = weight;
                         }
@@ -176,7 +194,10 @@ public static class TerrainMaskWriter
         return order;
     }
 
-    private static byte[]? ReadTga(string path)
+    /// <summary>Decoded 32-bit TGA payload, carrying the dimensions its header declared.</summary>
+    private sealed record Tga(byte[] Pixels, int Width, int Height);
+
+    private static Tga? ReadTga(string path)
     {
         if (!File.Exists(path)) return null;
 
@@ -187,8 +208,14 @@ public static class TerrainMaskWriter
         int offset = 18 + idLength;
         if (file[2] != 2 || file[16] != 32 || offset >= file.Length) return null;
 
+        int width = file[12] | (file[13] << 8);
+        int height = file[14] | (file[15] << 8);
+
         var pixels = new byte[file.Length - offset];
         Array.Copy(file, offset, pixels, 0, pixels.Length);
-        return pixels;
+
+        if ((long)width * height * 4 != pixels.Length) return null;
+
+        return new Tga(pixels, width, height);
     }
 }

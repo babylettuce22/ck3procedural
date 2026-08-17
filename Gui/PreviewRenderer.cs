@@ -170,19 +170,6 @@ public static class PreviewRenderer
 
     /// <summary>
     /// Who actually holds what at the bookmark date, as opposed to who holds it de jure.
-    ///
-    /// The de jure views above are the map CK3 draws its borders from; this is the map a player
-    /// sees on the first day. They are routinely nothing alike — a de jure kingdom is normally
-    /// several independent realms, and a strong emperor's realm sprawls across kingdoms that are
-    /// not his — and telling them apart is most of what makes a generated start date readable.
-    ///
-    /// Each county takes the colour of its ultimate liege's primary title, so an emperor's whole
-    /// realm reads in the empire's own colour and the two maps share a palette. That is the reason
-    /// for borrowing the de jure colours rather than generating contrasting ones: flipping between
-    /// the two views should let you see which crowns actually got realised.
-    ///
-    /// Needs a realm map, which only exists if the mod was written with history. Falls back to the
-    /// de jure county view rather than failing, so the button is never dead.
     /// </summary>
     public static Image RenderRealms(GenerationResult result, MapGen.RealmMap? realms,
         MapGen.WildernessMap? wilderness)
@@ -196,9 +183,6 @@ public static class PreviewRenderer
 
         var counties = Titles.Flatten(result.Titles).Where(t => t.Tier == "c").ToList();
 
-        // The highest-ranked title each holder holds, built once. HistoryWriter.Primary answers the
-        // same question by scanning the whole realm map, which is fine for one county and quadratic
-        // across every county on the map.
         var primaryOf = new Dictionary<Title, Title>();
         foreach (var (title, holder) in realms.HolderCounty)
         {
@@ -207,7 +191,6 @@ public static class PreviewRenderer
                 primaryOf[holder] = title;
         }
 
-        // Colour per county: walk from its holder up the liege chain to whoever is independent.
         var colour = new (byte R, byte G, byte B)[counties.Count];
         var wild = new bool[counties.Count];
 
@@ -238,8 +221,6 @@ public static class PreviewRenderer
             return id <= baronyCount ? countyOf[id] : id <= landCount ? Impassable : Water;
         }
 
-        // Borders between *realms*, not between counties: two counties of the same realm are one
-        // block of colour, which is what makes the political shape legible.
         bool Edge(int i, int county)
         {
             int x = i % width, y = i / width;
@@ -272,15 +253,6 @@ public static class PreviewRenderer
             });
     }
 
-    /// <summary>
-    /// Land coloured by whatever a county belongs to — its culture, its faith — with borders drawn
-    /// between the regions rather than between counties.
-    ///
-    /// Shared by the culture and faith views because the two differ only in the lookup: both paint
-    /// per county, both want a block of one colour where neighbours agree, and both need the same
-    /// wilderness and water handling. <paramref name="colourOf"/> returning null means the county
-    /// has no such thing, which is what unsettled land is.
-    /// </summary>
     private static Image RenderByCounty(GenerationResult result, MapGen.WildernessMap? wilderness,
         Func<Title, (byte R, byte G, byte B)?> colourOf)
     {
@@ -347,8 +319,6 @@ public static class PreviewRenderer
             });
     }
 
-    /// <summary>Who lives where. Falls back to the county view before a write, when no culture
-    /// map exists yet.</summary>
     public static Image RenderCultures(GenerationResult result, MapGen.CultureMap? cultures,
         MapGen.WildernessMap? wilderness)
         => cultures is null
@@ -356,7 +326,6 @@ public static class PreviewRenderer
             : RenderByCounty(result, wilderness,
                 county => cultures.ByCounty.TryGetValue(county, out var c) ? c.Color : null);
 
-    /// <summary>What they believe. Faith colours are stored as the 0..1 triple CK3 script uses.</summary>
     public static Image RenderFaiths(GenerationResult result, MapGen.FaithMap? faiths,
         MapGen.WildernessMap? wilderness)
         => faiths is null
@@ -388,12 +357,10 @@ public static class PreviewRenderer
             }
             else if (seed.IsMajorRiver)
             {
-                // Distinct cyan/aquamarine shades for major river provinces
                 colours[i] = ((byte)rng.Int(0, 40), (byte)rng.Int(130, 200), (byte)rng.Int(200, 255));
             }
             else
             {
-                // Deeper marine blue for open sea zones
                 colours[i] = ((byte)rng.Int(20, 70), (byte)rng.Int(45, 105), (byte)rng.Int(90, 170));
             }
         }
@@ -401,7 +368,10 @@ public static class PreviewRenderer
         return Downsample(map.Width, map.Height, i => colours[map.Label[i]]);
     }
 
-    public static Image RenderGovernment(GenerationResult result)
+    public static Image RenderGovernment(
+            GenerationResult result,
+            MapGen.CultureMap? cultures = null,
+            MapGen.WorldCenterMap? worldCenters = null)
     {
         var map = result.Provinces;
         var order = result.ProvinceOrder;
@@ -409,11 +379,23 @@ public static class PreviewRenderer
         int baronyCount = result.BaronyCount, landCount = result.LandCount;
         var cfg = result.Config;
 
+        var empires = result.Titles;
         var counties = Titles.Flatten(result.Titles).Where(t => t.Tier == "c").ToList();
-        var provinceTerrain = result.Terrain.Terrain;
+
+        // The per-province vote, not the pixel raster. result.Terrain.Terrain is indexed by *pixel*
+        // — 42 million of them at vanilla size — while Development, Wilderness and Governments all
+        // index by province id, of which there are a few thousand. Passing the raster straight in
+        // read the first few thousand pixels of the map, which is the strip along its top edge, and
+        // called that every county's terrain. Both are TerrainClass[], so it compiled, and the
+        // preview quietly drew governments from noise while the emitted mod was fine.
+        var provinceTerrain = Emit.ContentWriter.ProvinceTerrain(cfg, map, order, result.Terrain.Terrain, landCount);
 
         var development = MapGen.Development.ForCounties(counties, provinceTerrain, cfg, new Rng(cfg.Seed ^ 0x0DE7));
-        var governments = MapGen.Governments.Build(counties, provinceTerrain, development, null, cfg, new Rng(cfg.Seed ^ 0x6017));
+        var wilderness = MapGen.Wilderness.Build(counties, map, order, landCount, provinceTerrain, development, cfg, new Rng(cfg.Seed ^ 0x1D17));
+        var realms = MapGen.Realms.Build(empires, development, wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17));
+
+        var governments = MapGen.Governments.Build(
+            empires, counties, realms, provinceTerrain, development, cultures, worldCenters, cfg, new Rng(cfg.Seed ^ 0x6017));
 
         var government = new string[counties.Count];
         for (int c = 0; c < counties.Count; c++) government[c] = governments.For(counties[c]);
@@ -442,11 +424,13 @@ public static class PreviewRenderer
 
         (byte, byte, byte) Colour(string g) => g switch
         {
-            GovernmentMap.Tribal => ((byte)185, (byte)95, (byte)60),
-            GovernmentMap.Clan => ((byte)80, (byte)150, (byte)95),
-            GovernmentMap.Republic => ((byte)200, (byte)70, (byte)70),
-            GovernmentMap.Theocracy => ((byte)205, (byte)205, (byte)200),
-            _ => ((byte)65, (byte)110, (byte)160),
+            GovernmentMap.Administrative => ((byte)155, (byte)60, (byte)160), // Imperial / Byzantine Purple
+            GovernmentMap.Nomad => ((byte)210, (byte)160, (byte)65),          // Steppe / Horde Golden Ochre
+            GovernmentMap.Tribal => ((byte)185, (byte)95, (byte)60),          // Terracotta / Rust
+            GovernmentMap.Clan => ((byte)80, (byte)150, (byte)95),            // Emerald / Clan Green
+            GovernmentMap.Republic => ((byte)200, (byte)70, (byte)70),        // Crimson Red
+            GovernmentMap.Theocracy => ((byte)205, (byte)205, (byte)200),      // Parchment White
+            _ => ((byte)65, (byte)110, (byte)160),                            // Feudal Sapphire Blue
         };
 
         return Downsample(width, height,
@@ -475,7 +459,9 @@ public static class PreviewRenderer
         var cfg = result.Config;
 
         var counties = Titles.Flatten(result.Titles).Where(t => t.Tier == "c").ToList();
-        var provinceTerrain = result.Terrain.Terrain;
+
+        // Province-id indexed, not the pixel raster — see RenderGovernment.
+        var provinceTerrain = Emit.ContentWriter.ProvinceTerrain(cfg, map, order, result.Terrain.Terrain, landCount);
 
         var development = MapGen.Development.ForCounties(counties, provinceTerrain, cfg, new Rng(cfg.Seed ^ 0x0DE7));
         var wilderness = MapGen.Wilderness.Build(counties, map, order, landCount, provinceTerrain,

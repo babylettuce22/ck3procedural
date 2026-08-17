@@ -13,7 +13,8 @@ public static class WaterNaming
         CultureMap cultures,
         List<Title> empires,
         MapConfig cfg,
-        Rng rng)
+        Rng rng,
+        List<MajorRiverPath>? majorRivers = null)
     {
         var names = new Dictionary<int, string>();
         var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -26,7 +27,8 @@ public static class WaterNaming
         var adjacency = BuildAdjacency(provinces, order);
 
         // 1. Name Major River Provinces
-        NameMajorRivers(provinces, order, landCount, riverCount, byId, adjacency, cultures, empires, names, usedNames, rng);
+        NameMajorRivers(provinces, order, landCount, riverCount, byId, adjacency, cultures, empires,
+            majorRivers, names, usedNames, rng);
 
         // 2. Name Sea Zones by Agglomerative Clustering
         NameSeaZones(provinces, order, riverCount, byId, adjacency, cultures, empires, cfg, names, usedNames, rng);
@@ -43,19 +45,142 @@ public static class WaterNaming
         Dictionary<int, HashSet<int>> adjacency,
         CultureMap cultures,
         List<Title> empires,
+        List<MajorRiverPath>? majorRivers,
         Dictionary<int, string> names,
         HashSet<string> usedNames,
         Rng rng)
     {
         if (riverCount <= landCount) return;
 
+        var systems = GroupRiverProvinces(provinces, order, landCount, riverCount, byId,
+            adjacency, majorRivers);
+
+        foreach (var system in systems)
+        {
+            var localCulture = FindNeighborCulture(system, adjacency, byId, cultures, provinces, empires);
+            string baseName = Unique(localCulture.Language.Word(rng, 1, 2), usedNames);
+
+            Name(system, baseName, names);
+        }
+    }
+
+    /// <summary>
+    /// One name per river, applied along its whole course.
+    ///
+    /// The river keeps a single identity from source to mouth — every province is "River X" — and
+    /// only the two ends are qualified, which is how a real river reads on a map. The previous
+    /// scheme alternated "River X" and "X Reach" on every other province, so following one
+    /// downstream looked like the name changing under you even though the root word never did.
+    ///
+    /// <paramref name="system"/> must already be ordered source-first; see
+    /// <see cref="GroupRiverProvinces"/>.
+    /// </summary>
+    private static void Name(List<int> system, string baseName, Dictionary<int, string> names)
+    {
+        if (system.Count == 1)
+        {
+            names[system[0]] = $"River {baseName}";
+            return;
+        }
+
+        if (system.Count == 2)
+        {
+            names[system[0]] = $"Upper {baseName}";
+            names[system[1]] = $"Lower {baseName}";
+            return;
+        }
+
+        // The headwaters get "Upper", the mouth "Delta" and the province above it "Lower". Long
+        // rivers earn a proportionate headwater stretch; short ones give up just the first province,
+        // so a four-province river does not end up entirely made of qualifiers.
+        int upper = Math.Clamp(system.Count / 5, 1, Math.Max(1, system.Count - 3));
+
+        for (int i = 0; i < system.Count; i++)
+        {
+            names[system[i]] =
+                  i < upper                ? $"Upper {baseName}"
+                : i == system.Count - 1    ? $"{baseName} Delta"
+                : i == system.Count - 2    ? $"Lower {baseName}"
+                :                            $"River {baseName}";
+        }
+    }
+
+    /// <summary>
+    /// The river provinces, grouped into rivers and ordered from source to mouth.
+    ///
+    /// Ordering is the whole point. The provinces themselves know nothing about which way the water
+    /// runs, so this used to sort a connected component by latitude — which on an east-west river is
+    /// very nearly constant, making the order arbitrary and scattering "Upper" and "Lower" at random
+    /// points along the course.
+    ///
+    /// <see cref="MajorRiverPath"/> already holds the answer: <see cref="MajorRiverPath.Points"/> is
+    /// the traced course in province pixels, source first. Each river province is matched to the
+    /// nearest point on the nearest course, which gives it both an identity — which river it belongs
+    /// to — and a position along that river to sort by. Each path is a single trunk, because
+    /// TraceUpstream follows only the strongest feeder at every junction, so the ordering is
+    /// unambiguous.
+    ///
+    /// Falls back to the old connected-component grouping when no paths are available, so a run with
+    /// major rivers disabled, or an older saved world, still names whatever river provinces exist.
+    /// </summary>
+    private static List<List<int>> GroupRiverProvinces(
+        ProvinceMap provinces,
+        int[] order,
+        int landCount,
+        int riverCount,
+        int[] byId,
+        Dictionary<int, HashSet<int>> adjacency,
+        List<MajorRiverPath>? majorRivers)
+    {
+        if (majorRivers is { Count: > 0 })
+        {
+            // Nearest course point per province: which river, and how far along it.
+            var along = new Dictionary<int, (int System, int Position)>();
+
+            for (int id = landCount + 1; id <= riverCount; id++)
+            {
+                var seed = provinces.Seeds[byId[id]];
+                float bestDistance = float.MaxValue;
+                int bestSystem = -1, bestPosition = 0;
+
+                for (int s = 0; s < majorRivers.Count; s++)
+                {
+                    var points = majorRivers[s].Points;
+                    for (int p = 0; p < points.Count; p++)
+                    {
+                        float dx = points[p].X - seed.X;
+                        float dy = points[p].Y - seed.Y;
+                        float distance = dx * dx + dy * dy;
+
+                        if (distance < bestDistance)
+                        {
+                            bestDistance = distance;
+                            bestSystem = s;
+                            bestPosition = p;
+                        }
+                    }
+                }
+
+                if (bestSystem >= 0) along[id] = (bestSystem, bestPosition);
+            }
+
+            var grouped = new List<List<int>>();
+            foreach (var bySystem in along.GroupBy(kv => kv.Value.System).OrderBy(g => g.Key))
+            {
+                grouped.Add([.. bySystem.OrderBy(kv => kv.Value.Position).Select(kv => kv.Key)]);
+            }
+
+            if (grouped.Count > 0) return grouped;
+        }
+
+        // No courses to match against: fall back to connected components, ordered by latitude.
+        var systems = new List<List<int>>();
         var assigned = new bool[provinces.Count + 1];
 
         for (int id = landCount + 1; id <= riverCount; id++)
         {
             if (assigned[id]) continue;
 
-            // Gather all connected provinces in this river system
             var system = new List<int> { id };
             assigned[id] = true;
 
@@ -78,34 +203,11 @@ public static class WaterNaming
                 }
             }
 
-            var localCulture = FindNeighborCulture(system, adjacency, byId, cultures, provinces, empires);
-            string baseName = Unique(localCulture.Language.Word(rng, 1, 2), usedNames);
-
-            // Sort downstream: highest Y to lowest Y (or position)
             system.Sort((a, b) => provinces.Seeds[byId[b]].Y.CompareTo(provinces.Seeds[byId[a]].Y));
-
-            if (system.Count == 1)
-            {
-                names[system[0]] = $"River {baseName}";
-            }
-            else if (system.Count == 2)
-            {
-                names[system[0]] = $"Upper {baseName}";
-                names[system[1]] = $"Lower {baseName}";
-            }
-            else
-            {
-                for (int i = 0; i < system.Count; i++)
-                {
-                    if (i == 0)
-                        names[system[i]] = $"Upper {baseName}";
-                    else if (i == system.Count - 1)
-                        names[system[i]] = rng.Chance(0.5) ? $"Lower {baseName}" : $"{baseName} Delta";
-                    else
-                        names[system[i]] = (i % 2 == 1) ? $"River {baseName}" : $"{baseName} Reach";
-                }
-            }
+            systems.Add(system);
         }
+
+        return systems;
     }
 
     private static void NameSeaZones(

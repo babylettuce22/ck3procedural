@@ -26,6 +26,16 @@ public enum TerrainClass : byte
     Mountains,
     DesertMountains,
     Arctic,
+
+    /// <summary>
+    /// A watered pocket in a desert. Appended rather than slotted in beside Desert because the
+    /// numeric values are used as array indices in the province-terrain vote, so inserting one
+    /// would silently renumber every class above it.
+    ///
+    /// Like <see cref="Farmlands"/>, nothing in the climate classifier assigns this — it is placed
+    /// later, from drainage, by <see cref="Cultivation"/>.
+    /// </summary>
+    Oasis,
 }
 
 /// <summary>
@@ -353,6 +363,7 @@ public static class TerrainClassifier
         TerrainClass.Hills => "hills",
         TerrainClass.Mountains => "mountains",
         TerrainClass.DesertMountains => "desert_mountains",
+        TerrainClass.Oasis => "oasis",
         TerrainClass.Arctic => "taiga",           // no arctic terrain type; taiga is the closest
         _ => "plains",
     };
