@@ -37,11 +37,6 @@ public static class DebugRender
 
     /// <summary>
     /// The classifier's own output at province resolution — what the map is actually painted from.
-    ///
-    /// Distinct from <see cref="WriteTerrain"/>, which draws ck2rpg's coarse <c>biome()</c> off the
-    /// simulation grid and is only a port-fidelity check. That one is not what the mod ships, so
-    /// judging climate or biome boundaries by it reads the wrong picture; this is the one to look
-    /// at. Until this existed the classification had no CLI view at all, only the GUI preview.
     /// </summary>
     public static void WriteTerrainClasses(string path, MapGen.TerrainClass[] terrain,
         int width, int height, int maxWidth = 2048)
@@ -67,12 +62,6 @@ public static class DebugRender
 
     /// <summary>
     /// The Koppen classification behind the terrain, in the scheme's own published colours.
-    ///
-    /// This is the view that makes the climate model falsifiable. A terrain map can look perfectly
-    /// plausible while the temperatures and rainfall driving it are nonsense — greens in the right
-    /// places for the wrong reasons — whereas a Koppen map can be laid beside any published one and
-    /// checked feature by feature: deserts on the 30th parallel, oceanic west coasts, subarctic in
-    /// the continental interior, tundra at the pole.
     /// </summary>
     public static void WriteKoppen(string path, MapGen.KoppenClass[] climate,
         int width, int height, int maxWidth = 2048)
@@ -98,11 +87,6 @@ public static class DebugRender
 
     /// <summary>
     /// A climate field as a false-colour ramp, normalised across its own range over land.
-    ///
-    /// The Koppen view answers "what class is this" and hides how it got there. When a classified
-    /// map comes out mottled the question is always whether the field underneath is genuinely
-    /// patchy or merely sitting on a threshold, and those two have completely different fixes — one
-    /// is a bug in the model, the other is a bug in the calibration. Only this view separates them.
     /// </summary>
     public static void WriteField(string path, float[] field, byte[] landMask,
         int width, int height, int maxWidth = 2048)
@@ -136,7 +120,6 @@ public static class DebugRender
                     continue;
                 }
 
-                // Blue through green to red, so bands of equal value read as contours by eye.
                 double t = Math.Clamp((field[i] - low) / span, 0, 1);
                 rgb[o] = (byte)(255 * Math.Clamp(1.5 - Math.Abs(t - 1.0) * 3, 0, 1));
                 rgb[o + 1] = (byte)(255 * Math.Clamp(1.5 - Math.Abs(t - 0.5) * 3, 0, 1));
@@ -149,12 +132,6 @@ public static class DebugRender
 
     /// <summary>
     /// The drainage network: ground by height, filled depressions in teal, discharge as a ramp.
-    ///
-    /// The only view here that cannot be point-sampled. Everything else on this page is areas —
-    /// a climate zone or a province is thousands of cells and any one of them stands for the block —
-    /// whereas a watercourse is one cell wide and a minority inside every block it crosses, so
-    /// taking the top-left cell of each block breaks it into dots. Each block resolves to its
-    /// highest-discharge cell instead, which is what <see cref="MapGen.Drainage.ViewRank"/> is for.
     /// </summary>
     public static void WriteDrainage(string path, MapGen.Drainage drainage, float[] elevation,
         MapConfig cfg, int maxWidth = 2048)
@@ -196,15 +173,6 @@ public static class DebugRender
 
     /// <summary>
     /// rivers.png itself, through its own palette, block-sampled so the courses survive.
-    ///
-    /// The same rule as <see cref="WriteDrainage"/> and for the same reason — a course is one pixel
-    /// wide — with one addition: a *wider* course outranks a narrower one, so where a trunk and a
-    /// tributary share a block the trunk is what comes through. Sources and junctions outrank
-    /// everything, because a marker in the wrong place is the failure worth seeing.
-    ///
-    /// With no course generator in the tool this is land and water only, and the ranking costs
-    /// nothing: a flat rank is exactly the plain point sample. It is kept because it is a view of a
-    /// file the mod ships and CK3 requires.
     /// </summary>
     public static void WriteRivers(string path, byte[] indices, int width, int height,
         int maxWidth = 2048)
@@ -213,7 +181,6 @@ public static class DebugRender
         int outW = width / step, outH = height / step;
         var rgb = new byte[outW * outH * 3];
 
-        // Land and water rank 0; widths 3..11 rank by width; the two markers sit above both.
         static int Rank(byte index) => index switch
         {
             Emit.MapDataWriter.RiverIndexLand or Emit.MapDataWriter.RiverIndexWater => 0,
@@ -271,9 +238,7 @@ public static class DebugRender
     }
 
     /// <summary>
-    /// A terrain-coloured view, equivalent in spirit to drawWorld()'s "colorful" mode: enough
-    /// to judge coastline shape, mountain placement and deserts at a glance. Rivers and lakes
-    /// were drawn here too until the hydrology was removed on 2026-08-10.
+    /// A terrain-coloured view, equivalent in spirit to drawWorld()'s "colorful" mode.
     /// </summary>
     public static void WriteTerrain(string path, WorldGrid w, MapConfig cfg, int scale = 1)
     {
@@ -306,18 +271,35 @@ public static class DebugRender
     }
 
     /// <summary>
-    /// Province map with a random colour per province, downsampled to a viewable size. Land
-    /// provinces get warm hues and sea zones cool ones so the coastline stays readable.
+    /// Province map with a random colour per province, downsampled to a viewable size.
+    /// Land provinces get warm hues, major rivers get bright river cyan, and sea zones get deep blue.
     /// </summary>
     public static void WriteProvinces(string path, MapGen.ProvinceMap map, Core.Rng rng, int maxWidth = 2048)
     {
         var palette = new byte[map.Count * 3];
         for (int i = 0; i < map.Count; i++)
         {
-            bool land = map.Seeds[i].IsLand;
-            palette[i * 3] = (byte)(land ? rng.Int(90, 255) : rng.Int(0, 70));
-            palette[i * 3 + 1] = (byte)(land ? rng.Int(60, 200) : rng.Int(20, 110));
-            palette[i * 3 + 2] = (byte)(land ? rng.Int(30, 140) : rng.Int(120, 255));
+            var seed = map.Seeds[i];
+            if (seed.IsLand)
+            {
+                palette[i * 3] = (byte)rng.Int(90, 255);
+                palette[i * 3 + 1] = (byte)rng.Int(60, 200);
+                palette[i * 3 + 2] = (byte)rng.Int(30, 140);
+            }
+            else if (seed.IsMajorRiver)
+            {
+                // Bright cyan/aquamarine for river provinces
+                palette[i * 3] = (byte)rng.Int(0, 40);
+                palette[i * 3 + 1] = (byte)rng.Int(130, 200);
+                palette[i * 3 + 2] = (byte)rng.Int(200, 255);
+            }
+            else
+            {
+                // Deep ocean blue
+                palette[i * 3] = (byte)rng.Int(0, 70);
+                palette[i * 3 + 1] = (byte)rng.Int(20, 110);
+                palette[i * 3 + 2] = (byte)rng.Int(120, 255);
+            }
         }
 
         int step = Math.Max(1, map.Width / maxWidth);
@@ -340,7 +322,6 @@ public static class DebugRender
         PngWriter.WriteRgb8(path, outW, outH, rgb);
     }
 
-    /// <summary>Nearest-neighbour upscale, so a 512-wide sim grid is legible on screen.</summary>
     private static (byte[] Pixels, int Width, int Height) Upscale(
         byte[] src, int width, int height, int channels, int scale)
     {

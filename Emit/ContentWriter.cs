@@ -19,23 +19,15 @@ public static class ContentWriter
     /// climate, so the painter cannot pick a family without it.
     /// </param>
     public static void WriteAll(string modDir, string gameDir, MapConfig cfg,
-        ProvinceMap provinces, int[] order, int landCount, List<Title> empires,
-        float[] provinceElevation, TerrainClassifier.Result classified, Rng rng,
-        bool writeHistory = true)
+            ProvinceMap provinces, int[] order, int landCount, int riverCount, List<Title> empires,
+            float[] provinceElevation, TerrainClassifier.Result classified, Rng rng,
+            bool writeHistory = true)
     {
         var terrain = classified.Terrain;
-
-        // Stamped before anything is written. StaticFileWriter compares against it to tell a file a
-        // writer produced in this run from one a previous run left behind — see its WriteAll.
         var runStarted = DateTime.UtcNow;
 
-        // Blanking runs FIRST so the generated files below always win: several of them share a
-        // filename with a vanilla file they are replacing.
         Core.Stage.Time("blank vanilla data", () => BlankVanillaData(modDir, gameDir));
 
-        // Terrain arrives already resolved per pixel; provinces take a majority vote of it here.
-        // Everything that paints the ground — the detail textures, the masks, the colormap and
-        // common/province_terrain — is derived from that one array, so none of them can disagree.
         var provinceTerrain = Core.Stage.Time("province terrain vote", () =>
         {
             var vote = ProvinceTerrain(cfg, provinces, order, terrain, landCount);
@@ -43,25 +35,8 @@ public static class ContentWriter
             return vote;
         });
 
-        // --- The order below is forced, and each step needs the one before it ---
-        //
-        // Titles arrive from Titles.Build with a structure and colours but no names, because a
-        // title is named in the language of whoever lives there and nobody lives anywhere until
-        // cultures are assigned. Cultures and faiths in turn read how rich a county is, so
-        // development comes first — which is why it is keyed by Title and not by title key.
-        //
-        // Governments sit between the two: they read cultures (for the pastoralist and clan rules)
-        // and faiths read them back, because whether a faith starts unreformed is decided by how
-        // tribal its counties are. That edge runs one way only — nothing in Governments knows about
-        // religion — so there is no cycle to break.
-        //
-        // So: development, cultures, names, governments, faiths. Nothing reads a title's name
-        // before AssignNames runs, and everything that writes one runs after it.
         var vocabulary = Core.Stage.Time("vanilla vocabulary", () => MapGen.VanillaVocabulary.Read(gameDir));
 
-        // Fail here rather than three writers later. Without a vocabulary every generated culture
-        // and faith would reference an ethos, a tradition and a doctrine that do not exist, and CK3
-        // reports that as a wall of unrelated script errors with nothing pointing back to the cause.
         if (!vocabulary.IsUsable)
             throw new InvalidOperationException(
                 $"Could not read enough of the game's own culture and religion data from '{gameDir}' " +
@@ -69,8 +44,6 @@ public static class ContentWriter
 
         var counties = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
 
-        // Derived once and shared: the county's development and its baronies' holdings have to
-        // agree, and they are written by two different emitters into two different directories.
         var development = Core.Stage.Time("development", () =>
         {
             var levels = MapGen.Development.ForCounties(counties, provinceTerrain, cfg,
@@ -79,10 +52,6 @@ public static class ContentWriter
             return levels;
         });
 
-        // Which counties nobody lives in. Between development and cultures because it reads the
-        // first and every stage below it has to skip what it returns — a wilderness county has no
-        // culture, no faith, no government, no ruler and no holdings, and each of those is somebody
-        // else's file. See MapGen/Wilderness.cs.
         var wilderness = Core.Stage.Time("wilderness", () => MapGen.Wilderness.Build(counties,
             provinces, order, landCount, provinceTerrain, development, cfg, new Rng(cfg.Seed ^ 0x1D17)));
 
@@ -94,11 +63,9 @@ public static class ContentWriter
             return map;
         });
 
-        // 3. Identify World Centers & Wonders
         var worldCenters = Core.Stage.Time("world centers", () => WorldCenterMap.Build(
             counties, provinces, order, landCount, provinceTerrain, cultures, wilderness, cfg, new Rng(cfg.Seed ^ 0x93FA)));
 
-        // 4. Update Development with World Centers boost
         development = Core.Stage.Time("development", () =>
         {
             var levels = MapGen.Development.ForCounties(counties, provinceTerrain, cfg,
@@ -107,8 +74,6 @@ public static class ContentWriter
             return levels;
         });
 
-        // Who holds what at the start date. Derived once here because the holdings written below and
-        // the governments HistoryWriter writes have to be the same answer — see MapGen.Governments.
         var governments = MapGen.Governments.Build(counties, provinceTerrain, development, cultures,
             cfg, new Rng(cfg.Seed ^ 0x6017));
         Console.WriteLine("  governments: " + string.Join(", ",
@@ -118,14 +83,6 @@ public static class ContentWriter
             landCount, provinceTerrain, development, governments, vocabulary, wilderness, cfg, worldCenters,
             new Rng(cfg.Seed ^ 0x0FA1)));
 
-        // Empty counties get a culture and a faith of their own.
-        //
-        // Applied by overwriting after both maps are built, rather than by teaching the two region
-        // growers to skip wilderness. The growth is what decides where cultural and religious
-        // borders fall, and holes punched in it would bend those borders around the empty ground —
-        // but a frontier is not a border, and the settled world on either side of a wilderness
-        // should meet across it exactly as if it were not there. So: grow over everything, then
-        // overwrite. The counties are lost from their original culture's tally and nothing else.
         if (wilderness.Count > 0)
         {
             var unsettledCulture = MapGen.Cultures.CreateUnsettled(
@@ -142,80 +99,50 @@ public static class ContentWriter
             foreach (var county in wilderness.Counties) faiths.ByCounty[county] = unsettledFaith;
         }
 
+        // 5. Generate authentic regional names for Major Rivers and Sea Zones
+        var waterNames = Core.Stage.Time("water naming", () => WaterNaming.Generate(
+            provinces, order, landCount, riverCount, cultures, empires, cfg, new Rng(cfg.Seed ^ 0x5EAE)));
+
         Core.Stage.Time("titles, history and localisation", () =>
         {
             WriteLandedTitles(modDir, empires, faiths, wilderness, worldCenters);
             WriteProvinceTerrain(modDir, provinceTerrain, landCount);
             WriteProvinceHistory(modDir, cfg, empires, provinceTerrain, development, cultures, faiths, governments, wilderness, worldCenters, cfg.Seed);
-            WriteLocalisation(modDir, empires);
+            WriteLocalisation(modDir, empires, waterNames, provinces, order, landCount, riverCount);
         });
 
         Core.Stage.Time("wonders", () => WonderWriter.WriteAll(modDir, worldCenters));
 
-        // The cultures and faiths themselves. Additive — vanilla's stay declared and unheld.
         Core.Stage.Time("culture files",
             () => CultureWriter.WriteAll(modDir, cfg, cultures, vocabulary, new Rng(cfg.Seed ^ 0x0C1A)));
 
         Core.Stage.Time("compatibility", () =>
         {
-            // The engine's world size must match the province map we ship.
             CompatibilityWriter.WriteDefines(modDir, gameDir, cfg);
-
-            // Re-declare rather than blank: a missing region key is a hard script error.
             CompatibilityWriter.WriteGeographicalRegions(modDir, gameDir, empires);
-
-            // Faiths hold their holy sites, so a site with no county leaves a dangling object.
             CompatibilityWriter.WriteHolySites(modDir, gameDir, empires, faiths);
         });
 
-        // MUST follow WriteHolySites, which recreates that whole directory and would otherwise
-        // delete the generated faiths' own sites along with it.
         Core.Stage.Time("religion files", () => ReligionWriter.WriteAll(modDir, faiths));
 
-        // Vanilla/DLC script hardcodes title keys, and the coat of arms system dereferences
-        // whatever it gets back when the lookup fails.
         Core.Stage.Time("vanilla titulars",
             () => CompatibilityWriter.WriteVanillaTitulars(modDir, gameDir, empires));
 
-        // Per-province map anchors. replace_path drops vanilla's, so these must be rebuilt or
-        // the map has nowhere to put holdings, armies or sieges.
         Core.Stage.Time("locators", () => LocatorWriter.WriteAll(modDir, gameDir, provinces, order, landCount, provinceElevation, cfg));
-
-        // Close every casus belli against the wilderness. Without this a neighbour who creates a
-        // title covering unsettled ground gets a de jure war on it, and realms conquer the frontier
-        // instead of settling it. See Emit/CasusBelliWriter.cs.
         Core.Stage.Time("casus belli", () => CasusBelliWriter.WriteAll(modDir, gameDir, cfg));
-
-        // The main menu renders live 3D portraits, which is the step right after history load.
         Core.Stage.Time("frontend", () => FrontendWriter.WriteFrontend(modDir, gameDir));
-
-        // Hide the dummy holder, its government, and the culture and faith the engine forced us to
-        // invent, on any county nobody lives in. Reads vanilla's county view and writes a patched
-        // copy into the mod; the game folder is never written to. See Emit/GuiWriter.cs.
         Core.Stage.Time("GUI changes", () => GuiWriter.WriteAll(modDir, gameDir, cfg));
 
-        // Without these, vanilla's terrain painting is stretched across our continents.
         Core.Stage.Time("terrain textures", () => TerrainTextureWriter.WriteAll(modDir, cfg, terrain,
             classified.Climate, provinceElevation, rng));
 
-        // And the rest of the map-sized graphics — water, foam, snow — which are all still
-        // painted for vanilla's geography until we replace them.
         Core.Stage.Time("map graphics", () => MapGraphicsWriter.WriteAll(modDir, gameDir, cfg, provinces, order, landCount));
 
-        // 2. Render illuminated manuscript flatmaps
         Core.Stage.Time("flatmap", () => FlatmapWriter.WriteAll(
             modDir, cfg, provinces, order, landCount, provinceElevation, provinceTerrain));
 
-        // Per-material coverage masks, read back out of the detail textures written just above so
-        // the two are the same data. MUST run after TerrainTextureWriter.
         Core.Stage.Time("terrain masks", () => TerrainMaskWriter.WriteAll(modDir, gameDir, cfg));
-
-        // Foliage. replace_path drops vanilla's, so without this the world has no trees at all.
         Core.Stage.Time("trees", () => TreeWriter.WriteAll(modDir, cfg, terrain, rng));
-
-        // The tabletop the map sits on, whose entities are placed in world coordinates and so are
-        // the wrong size and in the wrong place on any map that is not vanilla's. Must run before
-        // StaticFileWriter, which copies the unscaled originals only where nothing generated one.
         Core.Stage.Time("map table", () => MapTableWriter.WriteAll(modDir, cfg));
 
         if (writeHistory)
@@ -224,12 +151,10 @@ public static class ContentWriter
             {
                 var realms = Realms.Build(empires, development, wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17));
 
-                // 1. Build Prehistory (Marriages, Alliances, Rivalries, Claims, Truces, Starting Wars)
                 var prehistory = Core.Stage.Time("prehistory", () => PrehistoryMap.Build(
                     counties, provinces, order, landCount, realms, cultures, faiths,
                     governments, worldCenters, wilderness, cfg, new Rng(cfg.Seed ^ 0x4821)));
 
-                // 2. Artifacts
                 var artifacts = MapGen.ArtifactMap.Build(
                     counties, cultures, faiths, realms, wilderness, new Rng(cfg.Seed ^ 0x4A1F));
 
@@ -238,34 +163,36 @@ public static class ContentWriter
                 ArtifactWriter.WriteLocalisation(modDir, artifacts);
                 ArtifactWriter.WriteOnGameStart(modDir, artifacts);
 
-                // 3. Bookmarks (Pass prehistory as the 13th argument)
                 var bookmarkResult = BookmarkWriter.WriteAll(
                     modDir, gameDir, cfg, provinces, order, empires,
                     realms, development, cultures, faiths, governments, wilderness, prehistory);
 
-                // 4. Pass prehistory payload into HistoryWriter
                 HistoryWriter.WriteAll(
                     modDir, cfg, empires, realms, development,
                     cultures, faiths, governments, wilderness, prehistory, bookmarkResult.BookmarkDnaMap);
 
-                // 5. Emit Active Starting Wars
                 WarWriter.WriteAll(modDir, prehistory);
-
-                // 6. 3D Portraits
                 PortraitWriter.WriteAll(modDir, gameDir, bookmarkResult.PortraitRequests, cfg.Seed);
             });
         }
         else Console.WriteLine("  history: SKIPPED (--no-history)");
 
-        // Last, so that the files kept by hand can only fill gaps the writers above left.
-        //
-        // Core is unconditional — it is vanilla data replace_path deleted and nothing regenerates.
-        // Wilderness is a whole optional system, so it ships only when asked for; see
-        // MapConfig.EnableWilderness for why it is all-or-nothing rather than a share knob.
         List<string> sets = [StaticFileWriter.Core];
         if (cfg.EnableWilderness) sets.Add(StaticFileWriter.Wilderness);
-
         Core.Stage.Time("static files", () => StaticFileWriter.WriteAll(modDir, sets, runStarted));
+    }
+
+    public static void WriteAll(string modDir, string gameDir, MapConfig cfg,
+    ProvinceMap provinces, int[] order, int landCount, List<Title> empires,
+    float[] provinceElevation, TerrainClassifier.Result classified, Rng rng,
+    bool writeHistory = true)
+    {
+        int riverCount = landCount;
+        for (int i = 0; i < provinces.Count; i++)
+            if (!provinces.Seeds[i].IsLand && provinces.Seeds[i].IsMajorRiver) riverCount++;
+
+        WriteAll(modDir, gameDir, cfg, provinces, order, landCount, riverCount, empires,
+            provinceElevation, classified, rng, writeHistory);
     }
 
     /// <summary>
@@ -529,16 +456,39 @@ public static class ContentWriter
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_provinces.txt"), sb.ToString());
     }
 
-    /// <summary>Title names. Missing localisation shows as raw keys in-game, not an error.</summary>
-    private static void WriteLocalisation(string modDir, List<Title> empires)
+    private static void WriteLocalisation(
+        string modDir,
+        List<Title> empires,
+        Dictionary<int, string> waterNames,
+        ProvinceMap provinces,
+        int[] order,
+        int landCount,
+        int riverCount)
     {
         string dir = Path.Combine(modDir, "localization", "english");
         Directory.CreateDirectory(dir);
 
         var sb = new StringBuilder();
         sb.Append("l_english:\n");
+
         foreach (var title in Titles.Flatten(empires))
+        {
             sb.Append($" {title.Key}: \"{title.Name}\"\n");
+            if (title.Tier == "b" && title.ProvinceId > 0)
+            {
+                sb.Append($" PROV{title.ProvinceId}: \"{title.Name}\"\n");
+                sb.Append($" prov_{title.ProvinceId}: \"{title.Name}\"\n");
+            }
+        }
+
+        for (int id = landCount + 1; id <= provinces.Count; id++)
+        {
+            string name = waterNames.GetValueOrDefault(id, id <= riverCount ? $"River {id}" : $"Sea of {id}");
+            string prefix = id <= riverCount ? "river" : "sea";
+
+            sb.Append($" PROV{id}: \"{name}\"\n");
+            sb.Append($" {prefix}_{id}: \"{name}\"\n");
+        }
 
         ParadoxText.WriteBom(Path.Combine(dir, "gen_titles_l_english.yml"), sb.ToString());
     }

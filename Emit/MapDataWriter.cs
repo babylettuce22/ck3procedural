@@ -74,23 +74,41 @@ public static class MapDataWriter
     /// of writing files, so nothing could name a province without writing a mod first.
     /// </summary>
     public static void WriteAll(string modDir, MapConfig cfg, ProvinceMap provinces,
-        int[] order, int baronyCount, int landCount, bool writePacked, MapGen.TerrainData terra)
+            int[] order, int baronyCount, int landCount, int riverCount, bool writePacked,
+            MapGen.TerrainData terra, MapGen.Drainage? drainage = null)
     {
         string dir = Path.Combine(modDir, "map_data");
         Directory.CreateDirectory(dir);
 
         WriteProvincesPng(Path.Combine(dir, "provinces.png"), provinces, order);
         WriteDefinitionCsv(Path.Combine(dir, "definition.csv"), provinces, order);
-        WriteRiversPng(Path.Combine(dir, "rivers.png"), cfg, provinces);
+
+        if (drainage != null)
+            WriteRiversPng(Path.Combine(dir, "rivers.png"), cfg, provinces, drainage);
+        else
+            WriteRiversPng(Path.Combine(dir, "rivers.png"), cfg, provinces, null!);
+
         WriteHeightmap(dir, cfg, writePacked, provinces, order, landCount, terra);
-        WriteDefaultMap(Path.Combine(dir, "default.map"), provinces.Count, baronyCount, landCount);
+        WriteDefaultMap(Path.Combine(dir, "default.map"), provinces.Count, baronyCount, landCount, riverCount);
         WriteStubs(dir);
 
         AssertNoEmptyFiles(dir);
 
         Console.WriteLine($"  map_data written: {baronyCount} baronied + " +
                           $"{landCount - baronyCount} impassable land, " +
-                          $"{provinces.Count - landCount} sea zones");
+                          $"{riverCount - landCount} major river provinces, " +
+                          $"{provinces.Count - riverCount} sea zones");
+    }
+
+    public static void WriteAll(string modDir, MapConfig cfg, ProvinceMap provinces,
+    int[] order, int baronyCount, int landCount, bool writePacked, MapGen.TerrainData terra)
+    {
+        // If not supplied, calculate riverCount from provinces
+        int riverCount = landCount;
+        for (int i = 0; i < provinces.Count; i++)
+            if (!provinces.Seeds[i].IsLand && provinces.Seeds[i].IsMajorRiver) riverCount++;
+
+        WriteAll(modDir, cfg, provinces, order, baronyCount, landCount, riverCount, writePacked, terra);
     }
 
     /// <summary>
@@ -126,21 +144,33 @@ public static class MapDataWriter
     /// is why they have to be contiguous.
     /// </summary>
     public static int[] BuildProvinceOrder(ProvinceMap provinces, out int baronyCount,
-        out int landCount)
+        out int landCount, out int riverCount)
     {
         var order = new int[provinces.Count];
         int next = 1;
 
+        // 1. Baronied land provinces
         for (int i = 0; i < provinces.Count; i++)
-            if (provinces.Seeds[i].IsLand && !provinces.Seeds[i].IsImpassable) order[i] = next++;
+            if (provinces.Seeds[i].IsLand && !provinces.Seeds[i].IsImpassable)
+                order[i] = next++;
         baronyCount = next - 1;
 
+        // 2. Impassable mountain provinces
         for (int i = 0; i < provinces.Count; i++)
-            if (provinces.Seeds[i].IsLand && provinces.Seeds[i].IsImpassable) order[i] = next++;
+            if (provinces.Seeds[i].IsLand && provinces.Seeds[i].IsImpassable)
+                order[i] = next++;
         landCount = next - 1;
 
+        // 3. Major river provinces
         for (int i = 0; i < provinces.Count; i++)
-            if (!provinces.Seeds[i].IsLand) order[i] = next++;
+            if (!provinces.Seeds[i].IsLand && provinces.Seeds[i].IsMajorRiver)
+                order[i] = next++;
+        riverCount = next - 1;
+
+        // 4. Open sea zones
+        for (int i = 0; i < provinces.Count; i++)
+            if (!provinces.Seeds[i].IsLand && !provinces.Seeds[i].IsMajorRiver)
+                order[i] = next++;
 
         return order;
     }
@@ -187,46 +217,26 @@ public static class MapDataWriter
         ParadoxText.WriteNoBom(path, sb.ToString());
     }
 
-    /// <summary>
-    /// rivers.png as palette indices, at province resolution: index 255 (white) on land, 254
-    /// (magenta) on water.
-    ///
-    /// No courses. A course generator was written against <see cref="MapGen.Drainage"/> on
-    /// 2026-08-11 and removed the same day, so what this emits is a valid, riverless rivers.png —
-    /// which is what it emitted between the hydrology's removal on 2026-08-10 and that attempt.
-    /// The file is **not optional**: default.map names it, CK3 will not load without it, and a map
-    /// with no rivers drawn on it is a legal map. This is the correct interim output rather than a
-    /// stub, and commenting it out silently costs the mod its ability to load.
-    ///
-    /// Public because the GUI previews this file, and a preview built from its own reading would be
-    /// a second opinion on what ships rather than a view of it.
-    /// </summary>
-    public static byte[] RiverIndices(MapConfig cfg, ProvinceMap provinces)
+    public static byte[] RiverIndices(MapConfig cfg, ProvinceMap provinces, MapGen.Drainage? drainage = null)
     {
+        if (drainage != null)
+        {
+            return MapGen.RiverMap.Generate(cfg, provinces, drainage);
+        }
+
+        // Fallback: blank land & water if drainage is not supplied
         var indices = new byte[cfg.ProvinceWidth * cfg.ProvinceHeight];
         Array.Fill(indices, RiverIndexLand);
-
-        // Water comes from the province partition rather than from a fresh elevation threshold,
-        // so rivers.png agrees with provinces.png pixel for pixel by construction.
         Parallel.For(0, provinces.Label.Length, i =>
         {
             if (!provinces.Seeds[provinces.Label[i]].IsLand) indices[i] = RiverIndexWater;
         });
-
         return indices;
     }
 
-    /// <summary>The colour a rivers.png index renders as — vanilla's palette for the course indices,
-    /// magenta for water and white for land. Shared with the GUI preview.</summary>
-    public static (byte R, byte G, byte B) RiverColour(byte index)
-        => index < RiverPaletteHead.Length ? RiverPaletteHead[index]
-            : index == RiverIndexWater ? ((byte)255, (byte)0, (byte)128)
-            : index == RiverIndexLand ? ((byte)255, (byte)255, (byte)255)
-            : ((byte)2, (byte)0, (byte)1);
-
-    private static void WriteRiversPng(string path, MapConfig cfg, ProvinceMap provinces)
+    private static void WriteRiversPng(string path, MapConfig cfg, ProvinceMap provinces, MapGen.Drainage drainage)
     {
-        var indices = RiverIndices(cfg, provinces);
+        var indices = RiverIndices(cfg, provinces, drainage);
 
         var palette = new byte[256 * 3];
         for (int i = 0; i < 256; i++)
@@ -239,6 +249,14 @@ public static class MapDataWriter
 
         PngWriter.WriteIndexed8(path, cfg.ProvinceWidth, cfg.ProvinceHeight, indices, palette);
     }
+
+    /// <summary>The colour a rivers.png index renders as — vanilla's palette for the course indices,
+    /// magenta for water and white for land. Shared with the GUI preview.</summary>
+    public static (byte R, byte G, byte B) RiverColour(byte index)
+        => index < RiverPaletteHead.Length ? RiverPaletteHead[index]
+            : index == RiverIndexWater ? ((byte)255, (byte)0, (byte)128)
+            : index == RiverIndexLand ? ((byte)255, (byte)255, (byte)255)
+            : ((byte)2, (byte)0, (byte)1);
 
     /// <summary>
     /// Drags the heightmap's coastline onto the province map's coastline, exactly.
@@ -259,7 +277,7 @@ public static class MapDataWriter
     /// province pixel.
     /// </summary>
     private static void ForceCoastlineToMatchProvinces(ushort[] height, MapConfig cfg,
-        ProvinceMap provinces, int[] order, int landCount)
+            ProvinceMap provinces, int[] order, int landCount)
     {
         int pw = provinces.Width, ph = provinces.Height;
         int scaleX = cfg.Width / pw, scaleY = cfg.Height / ph;
@@ -271,30 +289,25 @@ public static class MapDataWriter
             for (int x = 0; x < cfg.Width; x++)
             {
                 int px = Math.Min(x / scaleX, pw - 1);
-                bool isLand = order[provinces.Label[py * pw + px]] <= landCount;
+                int label = provinces.Label[py * pw + px];
+                var seed = provinces.Seeds[label];
+                bool isLand = seed.IsLand;
 
                 long i = (long)y * cfg.Width + x;
                 ushort v = height[i];
 
-                // Reflected across the water plane rather than clamped to a constant, and this is
-                // the whole reason the coastline used to read as a staircase in game.
-                //
-                // Clamping put every disagreeing pixel on one of two fixed values — measured at
-                // 2,794 pixels sitting on exactly one such constant, the second commonest value in
-                // the entire heightmap after open ocean. Because provinces.png is half the
-                // heightmap's resolution, those pixels arrive in 2x2 blocks, so the result was flat
-                // square plateaus separated from the land beside them by a cliff of nearly 3,000
-                // raw units. Reflecting instead keeps the pixel's own relief: one unit on the wrong
-                // side of the plane comes back one unit on the right side, so it still meets its
-                // neighbours, and a drowned island becomes a submerged mound rather than a plate.
-                //
-                // The extra whole 0-255 step is the minimum crossing: it guarantees the pixel is on
-                // the correct side after CK3 quantises to 8 bits, which a single raw unit does not.
                 if (isLand)
                 {
                     if (v > WaterLevel16) continue;
                     height[i] = (ushort)Math.Min(65535, WaterLevel16 + Step255 + (WaterLevel16 - v));
                     local++;
+                    continue;
+                }
+
+                // If this is a major river province and the pixel is dry land, DO NOT drown it!
+                // This prevents the black polygonal holes at the river headwaters.
+                if (seed.IsMajorRiver && v > WaterLevel16)
+                {
                     continue;
                 }
 
@@ -844,44 +857,52 @@ public static class MapDataWriter
     }
 
     private static void WriteDefaultMap(string path, int provinceCount, int baronyCount,
-        int landCount)
+        int landCount, int riverCount)
     {
-        // Impassable provinces are land, so they sit between the baronied land and the sea zones.
         string impassable = landCount > baronyCount
             ? $"impassable_mountains = RANGE {{ {baronyCount + 1} {landCount} }}"
             : "";
 
+        string rivers = riverCount > landCount
+            ? $"river_provinces = RANGE {{ {landCount + 1} {riverCount} }}"
+            : "";
+
+        string seaZones = riverCount < provinceCount
+            ? $"sea_zones = RANGE {{ {riverCount + 1} {provinceCount} }}"
+            : "";
+
         ParadoxText.WriteNoBom(path,
             $$"""
-              #max_provinces = {{provinceCount + 1}}
-              definitions = "definition.csv"
-              provinces = "provinces.png"
-              rivers = "rivers.png"
-              topology = "heightmap.heightmap"
-              continent = "continent.txt"
-              adjacencies = "adjacencies.csv"
-              island_region = "island_region.txt"
-              seasons = "seasons.txt"
+          #max_provinces = {{provinceCount + 1}}
+          definitions = "definition.csv"
+          provinces = "provinces.png"
+          rivers = "rivers.png"
+          topology = "heightmap.heightmap"
+          continent = "continent.txt"
+          adjacencies = "adjacencies.csv"
+          island_region = "island_region.txt"
+          seasons = "seasons.txt"
 
-              #############
-              # SEA ZONES
-              #############
-              sea_zones = RANGE { {{landCount + 1}} {{provinceCount}} }
+          #############
+          # SEA ZONES
+          #############
+          {{seaZones}}
 
-              #############
-              # MAJOR RIVERS
-              #############
+          #############
+          # MAJOR RIVERS
+          #############
+          {{rivers}}
 
-              #############
-              # LAKES
-              #############
+          #############
+          # LAKES
+          #############
 
-              #############
-              # IMPASSABLE
-              #############
-              {{impassable}}
+          #############
+          # IMPASSABLE
+          #############
+          {{impassable}}
 
-              """);
+          """);
     }
 
     /// <summary>Files default.map references that must exist even when effectively empty.</summary>

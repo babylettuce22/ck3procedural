@@ -98,6 +98,23 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Description("Target number of active ongoing wars on Day 1.")]
     public int StartingWarsCount { get; set; } = 3;
 
+
+    [Category("03 Provinces")]
+    [Description("Enable navigable major river corridors carved into the heightmap as river provinces.")]
+    public bool EnableMajorRivers { get; set; } = true;
+
+    [Category("03 Provinces")]
+    [Description("Target number of navigable major river systems across the map.")]
+    public int MajorRiverCount { get; set; } = 8;
+
+    [Category("03 Provinces")]
+    [Description("Enable tributary minor rivers drawn onto rivers.png.")]
+    public bool EnableMinorRivers { get; set; } = true;
+
+    [Category("03 Provinces")]
+    [Description("Density multiplier for minor tributary rivers (1.0 = standard vanilla density, 0.5 = sparser, 2.0 = denser).")]
+    public double RiverDensity { get; set; } = 0.1;
+
     [Category("13 Development")]
     [Description("Bonus development granted to World Center metropolises.")]
     public int WorldCenterDevBoost { get; set; } = 32;
@@ -114,6 +131,8 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// reads as a frontier when it is at the edge of the known world; set it negative for a map
     /// whose middle is a wasteland and whose coasts are settled.
     /// </summary>
+    /// 
+
     [Category("16 Wilderness")]
     [Description("Pull wilderness toward the map edges (1), ignore position (0), or pull it inland (-1). Edge-biased reads as a frontier at the rim of the world; inland-biased makes the interior the wasteland.")]
     public double WildernessEdgeBias { get; set; } = 0.75;

@@ -357,7 +357,9 @@ public sealed class PrehistoryMap
                 dynId == liegeDynId &&
                 map.DeceasedParents.TryGetValue(liegeCounty, out var sharedFather))
             {
-                map.DeceasedParents[county] = sharedFather;
+                // consider re-enabling sharedFather (originally was causing too many siblings and lag when clicking on certain character's portraits)
+
+                //map.DeceasedParents[county] = sharedFather;
                 var liegePrimary = HistoryWriter.Primary(liegeCounty, realms);
                 AddClaim(map, county, liegePrimary, pressed: false);
             }
@@ -477,6 +479,8 @@ public sealed class PrehistoryMap
                 }
             }
 
+            // consider re-enabling brideFather
+
             // === 3. GENERATE SPOUSE CHARACTER ===
             string brideDynasty;
             string? brideHouse;
@@ -490,7 +494,7 @@ public sealed class PrehistoryMap
                 brideFaith = faiths.For(brideOriginCounty);
                 brideDynasty = map.CharacterDynastyMap.GetValueOrDefault(brideOriginCounty, map.CharacterDynastyMap[ruler]);
                 brideHouse = map.CharacterHouseMap.GetValueOrDefault(brideOriginCounty);
-                brideFather = map.DeceasedParents.TryGetValue(brideOriginCounty, out var df) ? df.Id : HistoryWriter.CharacterId(brideOriginCounty);
+                //brideFather = map.DeceasedParents.TryGetValue(brideOriginCounty, out var df) ? df.Id : HistoryWriter.CharacterId(brideOriginCounty);
             }
             else
             {
@@ -549,7 +553,7 @@ public sealed class PrehistoryMap
                 CultureKey = brideCulture.Key,
                 FaithKey = brideFaith.Key,
                 BirthDate = $"{brideBirthYear}.{mRng.Int(1, 12)}.{mRng.Int(1, 28)}",
-                FatherId = brideFather,
+                FatherId = null,
                 AssociatedCounty = ruler,
                 MarriageDate = weddingDate
             };

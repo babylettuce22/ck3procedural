@@ -708,14 +708,113 @@ public static class Titles
         }
     }
 
-    private static void AssignColors(List<Title> roots, Rng rng)
+    private static void AssignColors(List<Title> empires, Rng rng)
     {
-        foreach (var root in roots) Visit(root);
+        if (empires.Count == 0) return;
 
-        void Visit(Title title)
+        // Spread empire base hues evenly across the color wheel using golden ratio offsets
+        float baseHue = rng.Float(0f, 360f);
+        const float GoldenAngle = 137.507764f;
+
+        for (int i = 0; i < empires.Count; i++)
         {
-            title.Color = ((byte)rng.Int(20, 235), (byte)rng.Int(20, 235), (byte)rng.Int(20, 235));
-            foreach (var child in title.Children) Visit(child);
+            float hue = (baseHue + i * GoldenAngle + rng.Float(-15f, 15f)) % 360f;
+            float sat = rng.Float(0.55f, 0.85f);
+            float lit = rng.Float(0.42f, 0.58f);
+
+            var empireHsl = new Hsl(hue, sat, lit);
+            empires[i].Color = empireHsl.ToRgb();
+
+            DistributeChildren(empires[i], empireHsl, rng);
+        }
+
+        void DistributeChildren(Title parent, Hsl parentHsl, Rng rng)
+        {
+            int count = parent.Children.Count;
+            if (count == 0) return;
+
+            // Define variation tolerances based on hierarchy depth
+            var (maxHueShift, maxLitShift, maxSatShift) = parent.Tier switch
+            {
+                "e" => (28f, 0.14f, 0.12f), // Kingdoms under Empire
+                "k" => (16f, 0.11f, 0.10f), // Duchies under Kingdom
+                "d" => (8f, 0.07f, 0.06f),  // Counties under Duchy
+                _ => (2f, 0.03f, 0.03f),  // Baronies under County
+            };
+
+            // Stratify sibling colors to prevent two neighboring siblings getting the same shade
+            for (int i = 0; i < count; i++)
+            {
+                var child = parent.Children[i];
+
+                // Spread sibling hues evenly within [-maxHueShift, +maxHueShift]
+                float t = count == 1 ? 0f : (float)i / (count - 1) * 2f - 1f; // [-1.0 .. +1.0]
+                float hueDelta = t * maxHueShift + rng.Float(-3f, 3f);
+
+                // Alternate lightness so neighboring titles alternate lighter / darker
+                float litDirection = (i % 2 == 0) ? 1f : -1f;
+                float litDelta = litDirection * rng.Float(0.04f, maxLitShift);
+                float satDelta = (i % 3 == 0 ? 1f : -1f) * rng.Float(0.02f, maxSatShift);
+
+                var childHsl = new Hsl(
+                    parentHsl.H + hueDelta,
+                    parentHsl.S + satDelta,
+                    parentHsl.L + litDelta
+                );
+
+                child.Color = childHsl.ToRgb();
+                DistributeChildren(child, childHsl, rng);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Compact HSL representation for perceptual de jure color harmonization.
+    /// </summary>
+    private readonly struct Hsl
+    {
+        public readonly float H; // [0 .. 360)
+        public readonly float S; // [0 .. 1]
+        public readonly float L; // [0 .. 1]
+
+        public Hsl(float h, float s, float l)
+        {
+            H = ((h % 360f) + 360f) % 360f;
+            S = Math.Clamp(s, 0.25f, 0.90f);
+            L = Math.Clamp(l, 0.22f, 0.78f);
+        }
+
+        public (byte R, byte G, byte B) ToRgb()
+        {
+            if (S < 1e-4f)
+            {
+                byte grey = (byte)Math.Round(L * 255f);
+                return (grey, grey, grey);
+            }
+
+            float q = L < 0.5f ? L * (1f + S) : L + S - L * S;
+            float p = 2f * L - q;
+            float hk = H / 360f;
+
+            float r = HueToRgb(p, q, hk + 1f / 3f);
+            float g = HueToRgb(p, q, hk);
+            float b = HueToRgb(p, q, hk - 1f / 3f);
+
+            return (
+                (byte)Math.Clamp((int)Math.Round(r * 255f), 15, 240),
+                (byte)Math.Clamp((int)Math.Round(g * 255f), 15, 240),
+                (byte)Math.Clamp((int)Math.Round(b * 255f), 15, 240)
+            );
+
+            static float HueToRgb(float p, float q, float t)
+            {
+                if (t < 0f) t += 1f;
+                if (t > 1f) t -= 1f;
+                if (t < 1f / 6f) return p + (q - p) * 6f * t;
+                if (t < 1f / 2f) return q;
+                if (t < 2f / 3f) return p + (q - p) * (2f / 3f - t) * 6f;
+                return p;
+            }
         }
     }
 

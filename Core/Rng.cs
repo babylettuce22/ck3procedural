@@ -60,7 +60,15 @@ public sealed class Rng
     public double Double() => NextDouble();
 
     /// <summary>Uniform double in [min, max).</summary>
-    public double Double(double min, double max) => NextDouble() * (max - min) + min;    /// <summary>Port of getRandomDecimal(min, max) — two decimal places, as the JS does.</summary>
+    public double Double(double min, double max) => NextDouble() * (max - min) + min;
+
+    /// <summary>Uniform float in [0, 1).</summary>
+    public float Float() => (float)NextDouble();
+
+    /// <summary>Uniform float in [min, max).</summary>
+    public float Float(float min, float max) => (float)NextDouble() * (max - min) + min;
+
+    /// <summary>Port of getRandomDecimal(min, max) — two decimal places, as the JS does.</summary>
     public double Decimal(double min, double max)
         => Math.Round(NextDouble() * (max - min) + min, 2);
 

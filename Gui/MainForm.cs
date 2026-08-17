@@ -56,7 +56,9 @@ public sealed class MainForm : Form
     private readonly Button _writeMod = Theme.MakeButton("Write mod", 96);
     private readonly Button _cancel = Theme.MakeButton("Cancel", 72);
     private readonly Button _openMod = Theme.MakeButton("Open mod folder", 120);
+    private readonly Button _launchGame = Theme.MakeButton("Launch CK3", 100);
     private readonly Button _gameFolder = Theme.MakeButton("Game folder…", 104);
+
 
     /// <summary>Carries the resolved game folder, which is far too long to sit on a button.</summary>
     private readonly ToolTip _tips = new() { AutoPopDelay = 20000, InitialDelay = 400 };
@@ -248,6 +250,7 @@ public sealed class MainForm : Form
         _writeMod.Click += async (_, _) => await WriteModAsync();
         _cancel.Click += (_, _) => RequestCancel();
         _openMod.Click += (_, _) => OpenModFolder();
+        _launchGame.Click += (_, _) => LaunchGame();
         _gameFolder.Click += (_, _) => PickGameFolder();
         _savePreset.Click += (_, _) => SavePreset();
         _loadPreset.Click += (_, _) => LoadPreset();
@@ -299,6 +302,7 @@ public sealed class MainForm : Form
         bar.Controls.Add(_writeMod);
         bar.Controls.Add(_cancel);
         bar.Controls.Add(_openMod);
+        bar.Controls.Add(_launchGame);
         bar.Controls.Add(_gameFolder);
         bar.Controls.Add(_sourceName);
 
@@ -780,6 +784,51 @@ public sealed class MainForm : Form
     }
 
     /// <summary>
+    /// Launches Crusader Kings III directly, bypassing the launcher to load the game quickly.
+    /// </summary>
+    private void LaunchGame()
+    {
+        if (string.IsNullOrWhiteSpace(_options.GameDir) || !Core.GameLocator.IsGameDir(_options.GameDir))
+        {
+            MessageBox.Show(this,
+                "Please configure a valid game folder before launching Crusader Kings III.",
+                "Game folder not configured", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        // The game directory points to '...\Crusader Kings III\game'. 
+        // We look for '...\Crusader Kings III\binaries\ck3.exe'.
+        string? gameRoot = Path.GetDirectoryName(_options.GameDir);
+        if (gameRoot is null) return;
+
+        string exePath = Path.Combine(gameRoot, "binaries", "ck3.exe");
+        if (!File.Exists(exePath))
+        {
+            MessageBox.Show(this,
+                $"Could not find the game executable at:\n\n{exePath}\n\nPlease check your game folder configuration.",
+                "Executable not found", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(exePath)
+            {
+                WorkingDirectory = Path.Combine(gameRoot, "binaries"),
+                UseShellExecute = true
+            });
+            _status.Text = "Crusader Kings III launched";
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to launch CK3: {ex.Message}");
+            MessageBox.Show(this,
+                $"An error occurred while launching Crusader Kings III:\n\n{ex.Message}",
+                "Launch Failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    /// <summary>
     /// Asks what the mod is called and where it goes, then writes it.
     ///
     /// The name is asked for every write rather than once and remembered, because writing twice in
@@ -1060,6 +1109,7 @@ public sealed class MainForm : Form
         _savePreset.Enabled = enabled;
         _loadPreset.Enabled = enabled;
         _gameFolder.Enabled = enabled;
+        _launchGame.Enabled = enabled;
         _cancel.Enabled = !enabled;
 
         bool ready = enabled && _heightmapPath is not null;

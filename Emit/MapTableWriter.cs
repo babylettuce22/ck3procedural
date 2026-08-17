@@ -123,6 +123,11 @@ public static class MapTableWriter
     /// A file that would end up with no objects is left whole rather than emptied — an empty
     /// map_table file means that style has no table, which is worse than keeping its clutter.
     /// </summary>
+    /// <summary>
+    /// Removes the candles, goblets, coins, chess pieces and ground clutter that sit inside 
+    /// the playable map boundaries, keeping the tabletop, the cloth, the floor, and any 
+    /// props safely positioned outside the map area on the margins of the table.
+    /// </summary>
     private static string DropProps(string text, ref int dropped)
     {
         var kept = new System.Text.StringBuilder();
@@ -141,7 +146,36 @@ public static class MapTableWriter
             bool isProp = Entity.Match(block) is { Success: true } m &&
                           PropEntities.Any(p => m.Groups[1].Value.Contains(p, StringComparison.Ordinal));
 
-            if (isProp) removed++;
+            bool shouldRemove = false;
+            if (isProp)
+            {
+                var match = Transform.Match(block);
+                if (match.Success)
+                {
+                    string transformValue = match.Groups[1].Value;
+                    var parts = transformValue.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length == 10 &&
+                        double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out double px) &&
+                        double.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out double pz))
+                    {
+                        // Check if the prop lies within the vanilla map boundaries (0 to 9216 horizontally, 0 to 4608 vertically)
+                        if (px >= 0 && px <= 9216 && pz >= 0 && pz <= 4608)
+                        {
+                            shouldRemove = true; // Inside the map area; drop to avoid clipping with custom terrain elevation
+                        }
+                    }
+                    else
+                    {
+                        shouldRemove = true; // Malformed transform; drop to be safe
+                    }
+                }
+                else
+                {
+                    shouldRemove = true; // No transform found; drop
+                }
+            }
+
+            if (shouldRemove) removed++;
             else kept.Append(text, at, start - at).Append(block);
 
             at = end;
