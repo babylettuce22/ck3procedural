@@ -4,10 +4,18 @@ using Ck3MapGen.MapGen;
 
 namespace Ck3MapGen.Emit;
 
+/// <summary>
+/// Writes gfx/map/terrain/masks and gfx/map/terrain/masks_gen — one 8-bit greyscale coverage
+/// image per material at province resolution, matching the detail textures they are read back
+/// out of, with Gaussian anti-aliasing.
+/// </summary>
 public static class TerrainMaskWriter
 {
     public static void WriteAll(string modDir, string gameDir, MapConfig cfg)
     {
+        // Province resolution, because that is the size TerrainTextureWriter emits the detail
+        // textures at and these masks are read straight back out of them. The two are one
+        // decision; see the ceiling documented on TerrainTextureWriter.WriteAll.
         int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
 
         string terrainDir = Path.Combine(modDir, "gfx", "map", "terrain");
@@ -19,6 +27,9 @@ public static class TerrainMaskWriter
             return;
         }
 
+        // The loop below indexes both TGAs as width*height*4 without consulting their headers, so
+        // a writer/reader disagreement about resolution reads off the end of the buffer or paints
+        // silent garbage. Check it once, loudly, instead of finding out in the game.
         if (index.Width != width || index.Height != height ||
             intensity.Width != width || intensity.Height != height)
         {
@@ -36,8 +47,9 @@ public static class TerrainMaskWriter
         }
 
         byte[] indexPixels = index.Pixels, intensityPixels = intensity.Pixels;
+
         var used = TerrainTextureWriter.UsedMaterials;
-        int totalPixels = width * height;
+        int painted = 0, blanked = 0, carried = 0;
 
         foreach (string sub in (string[])["masks", "masks_gen"])
         {
@@ -46,21 +58,26 @@ public static class TerrainMaskWriter
             if (!Directory.Exists(source)) continue;
             Directory.CreateDirectory(destination);
 
-            var maskFiles = Directory.GetFiles(source, "*.png");
-            var coverageMap = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+            foreach (string path in Directory.GetFiles(source))
+            {
+                if (path.EndsWith(".png", StringComparison.OrdinalIgnoreCase)) continue;
+                File.Copy(path, Path.Combine(destination, Path.GetFileName(path)), overwrite: true);
+                carried++;
+            }
 
-            foreach (string path in maskFiles)
+            Parallel.ForEach(Directory.GetFiles(source, "*.png"), path =>
             {
                 string file = Path.GetFileName(path);
                 string material = Path.GetFileNameWithoutExtension(path);
                 if (material.EndsWith("_mask", StringComparison.Ordinal)) material = material[..^5];
 
-                var coverage = new byte[totalPixels];
+                var coverage = new byte[(long)width * height];
 
                 if (names.TryGetValue(material, out int id) && id < 256 && used[id])
                 {
                     byte target = (byte)id;
 
+                    // TGAs are stored bottom-up; PNG masks are top-down
                     for (int y = 0; y < height; y++)
                     {
                         long srcRow = (long)(height - 1 - y) * width * 4;
@@ -80,52 +97,32 @@ public static class TerrainMaskWriter
                         }
                     }
 
+                    // 5-tap Gaussian blur to eliminate the 4-layer cutoff staircases
                     coverage = SmoothCoverage(coverage, width, height);
+                    Interlocked.Increment(ref painted);
+                }
+                else
+                {
+                    Interlocked.Increment(ref blanked);
                 }
 
-                coverageMap[file] = coverage;
-            }
-
-            // Normalization pass to eliminate 0-weight dropouts across all masks
-            var activeCoverages = coverageMap.Values.Where(c => c.Any(b => b > 0)).ToList();
-            if (activeCoverages.Count > 0)
-            {
-                Parallel.For(0, totalPixels, i =>
-                {
-                    int sum = 0;
-                    for (int m = 0; m < activeCoverages.Count; m++) sum += activeCoverages[m][i];
-                    if (sum > 0 && sum < 255)
-                    {
-                        float norm = 255f / sum;
-                        for (int m = 0; m < activeCoverages.Count; m++)
-                        {
-                            if (activeCoverages[m][i] > 0)
-                                activeCoverages[m][i] = (byte)Math.Clamp((int)Math.Round(activeCoverages[m][i] * norm), 0, 255);
-                        }
-                    }
-                });
-            }
-
-            foreach (var kvp in coverageMap)
-            {
-                PngWriter.WriteGray8(Path.Combine(destination, kvp.Key), width, height, kvp.Value);
-            }
-
-            foreach (string path in Directory.GetFiles(source))
-            {
-                if (path.EndsWith(".png", StringComparison.OrdinalIgnoreCase)) continue;
-                File.Copy(path, Path.Combine(destination, Path.GetFileName(path)), overwrite: true);
-            }
+                PngWriter.WriteGray8(Path.Combine(destination, file), width, height, coverage);
+            });
         }
 
-        Console.WriteLine($"  terrain masks written & normalized");
+        Console.WriteLine($"  terrain masks: {painted} smoothed from blend, {blanked} blanked (masks + masks_gen), {carried} non-mask files carried");
     }
 
+    /// <summary>
+    /// Separable 5-tap Gaussian smoothing filter [1, 4, 6, 4, 1] / 16.
+    /// Eliminates sharp 1-pixel cutoff edges where materials enter/leave the top 4 blend slots.
+    /// </summary>
     private static byte[] SmoothCoverage(byte[] src, int width, int height)
     {
         var temp = new byte[src.Length];
         var dst = new byte[src.Length];
 
+        // Horizontal Pass
         Parallel.For(0, height, y =>
         {
             long row = (long)y * width;
@@ -146,6 +143,7 @@ public static class TerrainMaskWriter
             }
         });
 
+        // Vertical Pass
         Parallel.For(0, height, y =>
         {
             int ym2 = Math.Max(0, y - 2);
@@ -196,6 +194,7 @@ public static class TerrainMaskWriter
         return order;
     }
 
+    /// <summary>Decoded 32-bit TGA payload, carrying the dimensions its header declared.</summary>
     private sealed record Tga(byte[] Pixels, int Width, int Height);
 
     private static Tga? ReadTga(string path)

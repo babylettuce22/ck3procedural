@@ -109,11 +109,6 @@ public static class Wilderness
         var (neighbours, centroid) = CountyGraph(counties, provinces, order, landCount);
 
         // --- Pass 1: score every county -------------------------------------------------------
-        //
-        // Two terms. Hostility says what the ground is like; placement says where on the map it
-        // sits. Development is deliberately NOT a third term: this codebase derives development
-        // from terrain in the first place, so feeding it back in here would weight terrain twice
-        // under two names and quietly overwhelm the edge bias.
         double edgeWeight = Math.Abs(cfg.WildernessEdgeBias);
         bool towardEdge = cfg.WildernessEdgeBias >= 0;
 
@@ -124,17 +119,10 @@ public static class Wilderness
             double edgeness = Edgeness(centroid[i]);
             double placement = towardEdge ? edgeness : 1.0 - edgeness;
 
-            // How buried this county is inside its own kingdom: 0 on a kingdom border, 1 when
-            // every neighbour answers to the same crown.
-            //
-            // Subtracted, because `Edgeness` above measures the wrong edge for this purpose. It is
-            // distance from the middle of the MAP, so a mountain range through the middle of a
-            // kingdom that happens to sit near the map's rim scores high on both existing terms.
-            // This is the edge that matters for not cutting realms in half.
+            // Measures edge distance from both kingdom and empire borders to prevent
+            // bisecting multi-kingdom empires.
             double interior = Interiority(i, neighbours, counties);
 
-            // A little noise so that a map of uniform terrain does not produce a perfectly
-            // rectangular wilderness, and so two seeds differ where the inputs cannot.
             score[i] = cfg.WildernessTerrainWeight * hostility
                      - cfg.WildernessAvoidRealmInteriors * interior
                      + edgeWeight * placement
@@ -144,8 +132,6 @@ public static class Wilderness
         // --- Pass 2: grow clumps from the worst ground ------------------------------------------
         int target = Math.Max(1, (int)Math.Round(cfg.WildernessShare * counties.Count));
 
-        // Everything above this is fair game to grow into. Taken from the ranking itself rather
-        // than fixed, so the floor means the same thing on an ice world and a garden world.
         var ranked = Enumerable.Range(0, counties.Count).OrderByDescending(i => score[i]).ToList();
         double floor = score[ranked[Math.Min(target, ranked.Count - 1)]];
 
@@ -157,8 +143,6 @@ public static class Wilderness
             if (chosen.Count >= target) break;
             if (chosen.Contains(seed)) continue;
 
-            // Grow outward, always taking the best available neighbour, so a clump follows the
-            // mountain range rather than spilling evenly in all directions.
             var clump = new List<int>();
             var frontier = new PriorityQueue<int, double>();
             frontier.Enqueue(seed, -score[seed]);
@@ -181,42 +165,11 @@ public static class Wilderness
         }
 
         // --- Give back the runts ----------------------------------------------------------------
-        //
-        // Except never all of them. With the feature enabled the map must contain wilderness
-        // somewhere, or the scripts ship with nothing to point at and the whole system is
-        // untestable from inside the game — which is exactly the state this stage exists to end.
         var kept = clumps.Where(c => c.Count >= cfg.WildernessMinClump).ToList();
         if (kept.Count == 0 && clumps.Count > 0)
             kept = [clumps.OrderByDescending(c => c.Count).First()];
 
         // --- Give back the ones that cut a realm in half ----------------------------------------
-        //
-        // The mirror of the runt rule above: that one rejects a clump for being too SMALL to read
-        // as deliberate, this one rejects it for being too DISRUPTIVE regardless of size.
-        //
-        // Needed because the scoring does not merely ignore realm shape, it actively seeks the
-        // worst case. Hostile ground forms ridges — mountain ranges, marsh belts — and the growth
-        // pass deliberately follows them, because that is where the score stays above the floor.
-        // A ridge across a kingdom is a bisection by definition, so the thing that makes wilderness
-        // look intentional is the same thing that severs realms. The interiority term above biases
-        // against it; this is the guarantee.
-        //
-        // Clumps are offered in descending order of how wild they are, so when two conflict the
-        // more deserving one is kept.
-        // A split is repaired by ABSORBING the stranded side, not by refusing the clump. Refusing
-        // was the first attempt and it fails at exactly the settings that need it most: at a high
-        // share the first clump grows to most of a continent, severs one duchy somewhere, and is
-        // thrown away whole — a 90% target delivered 13%, and the only regions that survived were
-        // islands, which sever nothing because their titles are entirely wild.
-        //
-        // Absorbing scales in both directions. A belt that strands three counties takes those three
-        // with it; a continent-wide region simply finishes the job. Either way the outcome satisfies
-        // the rule, because a title that is *entirely* wilderness was always allowed — it is only
-        // settled land on both sides of a belt that reads as two realms sharing a name.
-        //
-        // The budget is what stops absorption running away. A clump that would strand half a
-        // kingdom is still refused, because swallowing half a kingdom to place one region is worse
-        // than not placing it.
         int budget = Math.Max(target, (int)Math.Round(target * 1.35));
 
         int refused = 0, absorbed = 0;
@@ -225,11 +178,15 @@ public static class Wilderness
 
         foreach (var clump in kept.OrderByDescending(c => c.Average(i => score[i])))
         {
+            if (taken.Count >= target) break;
+
             var trial = new HashSet<int>(taken);
             foreach (int i in clump) trial.Add(i);
 
             var stranded = StrandedBy(trial, neighbours, counties);
-            if (taken.Count + clump.Count + stranded.Count > budget)
+
+            // Only refuse a clump if it causes runaway stranding that exceeds budget
+            if (stranded.Count > clump.Count * 2 && taken.Count + clump.Count + stranded.Count > budget)
             {
                 refused++;
                 continue;
@@ -238,18 +195,14 @@ public static class Wilderness
             accepted.Add(clump);
             foreach (int i in clump) taken.Add(i);
 
-            if (stranded.Count > 0)
+            if (stranded.Count > 0 && taken.Count + stranded.Count <= budget)
             {
-                // Stranded counties join the region that stranded them, so the run log's region
-                // count stays the number of places a player would point at.
                 accepted[^1].AddRange(stranded);
                 foreach (int i in stranded) taken.Add(i);
                 absorbed += stranded.Count;
             }
         }
 
-        // Same floor as the runt rule: the map must contain wilderness somewhere or the scripts
-        // ship with nothing to point at.
         if (accepted.Count == 0 && kept.Count > 0)
             accepted = [kept.OrderByDescending(c => c.Count).First()];
 
@@ -269,49 +222,36 @@ public static class Wilderness
     }
 
     /// <summary>
-    /// The share of a county's neighbours that answer to the same kingdom it does.
-    ///
-    /// 0 for a county on a kingdom border or a coast, 1 for one buried in the middle of its own
-    /// realm. Measured at kingdom level rather than duchy because duchies are small enough that
-    /// most counties are interior to one, which would flatten the term to a constant.
+    /// The share of a county's neighbours that answer to the same kingdom/empire it does.
     /// </summary>
     private static double Interiority(int index, List<int>[] neighbours, List<Title> counties)
     {
-        var mine = Kingdom(counties[index]);
-        if (mine is null || neighbours[index].Count == 0) return 0;
+        var myKingdom = Kingdom(counties[index]);
+        var myEmpire = Empire(counties[index]);
+        if (neighbours[index].Count == 0) return 0;
 
-        int same = neighbours[index].Count(n => ReferenceEquals(Kingdom(counties[n]), mine));
-        return (double)same / neighbours[index].Count;
+        double kRatio = myKingdom != null
+            ? (double)neighbours[index].Count(n => ReferenceEquals(Kingdom(counties[n]), myKingdom)) / neighbours[index].Count
+            : 0.0;
+        double eRatio = myEmpire != null
+            ? (double)neighbours[index].Count(n => ReferenceEquals(Empire(counties[n]), myEmpire)) / neighbours[index].Count
+            : 0.0;
+
+        return Math.Max(kRatio, eRatio * 0.85);
     }
 
     /// <summary>
     /// Would making this clump wilderness leave some de jure title in two disconnected pieces?
-    ///
-    /// The rule, per title: the counties it still has left must be reachable from one another
-    /// WITHOUT leaving the title. A title that ends up entirely wilderness is fine — that is a
-    /// legitimate wild region, and the whole point of the feature. A title left with settled land on
-    /// both sides of a wilderness belt is not, because on the map it reads as two realms sharing a
-    /// name.
-    ///
-    /// Only the titles this clump actually touches are checked. A clump cannot disconnect a duchy it
-    /// has no county in, so the cost is proportional to the clump rather than to the map.
     /// </summary>
     private static HashSet<int> StrandedBy(HashSet<int> wild, List<int>[] neighbours,
         List<Title> counties)
     {
         var stranded = new HashSet<int>();
 
-        // Absorbing a county can strand another — it belongs to a duchy and a kingdom, and taking
-        // it may cut either — so this repeats until nothing new falls out. Bounded because a
-        // pathological map could otherwise walk the whole continent one county at a time; hitting
-        // the cap simply means the caller sees a large stranded set and refuses on budget, which is
-        // the right answer anyway.
         for (int pass = 0; pass < 8; pass++)
         {
             var before = stranded.Count;
 
-            // Duchies and kingdoms both, because they fragment independently: a belt can leave
-            // every duchy intact and still cut the kingdom above them into two halves.
             var titles = new HashSet<Title>();
             foreach (int i in wild.Concat(stranded))
             {
@@ -332,8 +272,6 @@ public static class Wilderness
 
                 if (members.Count <= 1) continue;
 
-                // Every connected piece of what the title has left, flooding without ever stepping
-                // outside it.
                 var pieces = new List<List<int>>();
                 var seen = new HashSet<int>();
 
@@ -358,8 +296,6 @@ public static class Wilderness
 
                 if (pieces.Count <= 1) continue;
 
-                // Keep the largest piece as the title's real territory; everything else is a
-                // remnant the wilderness has cut off, and goes wild with it.
                 foreach (var piece in pieces.OrderByDescending(p => p.Count).Skip(1))
                     foreach (int i in piece)
                         stranded.Add(i);
@@ -373,6 +309,9 @@ public static class Wilderness
 
     /// <summary>A county's de jure kingdom, or null if the tree is shallower than that.</summary>
     private static Title? Kingdom(Title county) => county.Parent?.Parent;
+
+    /// <summary>A county's de jure empire, or null if the tree is shallower than that.</summary>
+    private static Title? Empire(Title county) => county.Parent?.Parent?.Parent;
 
     /// <summary>Mean hostility over a county's baronies.</summary>
     private static double MeanHostility(Title county, TerrainClass[] provinceTerrain)
@@ -393,21 +332,12 @@ public static class Wilderness
 
     /// <summary>
     /// How close to the rim of the map a point sits, 0 at the centre and 1 at any edge.
-    ///
-    /// Chebyshev rather than Euclidean distance, so the measure follows the rectangle the map
-    /// actually is: a point near the left edge is at the rim whatever its latitude, which a radial
-    /// measure would deny.
     /// </summary>
     private static double Edgeness((double X, double Y) position)
         => Math.Max(Math.Abs(position.X - 0.5), Math.Abs(position.Y - 0.5)) * 2.0;
 
     /// <summary>
     /// County adjacency, plus each county's centre in normalised 0-1 map coordinates.
-    ///
-    /// Cultures and Faiths each build a comparable graph for RegionGrowth, with a traversal cost
-    /// this has no use for. Kept separate rather than folded into theirs because those two are
-    /// working code and the shared part is fifteen lines; if a fourth caller appears it is worth
-    /// lifting all three into Titles.
     /// </summary>
     private static (List<int>[] Neighbours, (double X, double Y)[] Centroid) CountyGraph(
         List<Title> counties, ProvinceMap provinces, int[] order, int landCount)

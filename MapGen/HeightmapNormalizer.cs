@@ -32,8 +32,8 @@ public static class HeightmapNormalizer
             return raw;
         }
 
-        const int water16 = MapDataWriter.WaterLevel16;        // ~4883 (19/255)
-        const int lowestLand = water16 + MapDataWriter.Step255; // ~5140 (20/255)
+        const int water16 = MapDataWriter.WaterLevel16;
+        const int lowestLand = water16 + MapDataWriter.Step255;
 
         int landFloor = DetectLandFloor(histogram, landMin, cfg.LandFloorDensity);
 
@@ -76,9 +76,7 @@ public static class HeightmapNormalizer
         double drop = Math.Max(0, landFloor - lowestLand);
 
         var result = new ushort[raw.Length];
-        const int maxWaterAllowed = water16 - MapDataWriter.Step255 * 6;
 
-        // 1. Base normalisation pass
         Parallel.For(0, raw.Length, i =>
         {
             int v = raw[i];
@@ -113,19 +111,13 @@ public static class HeightmapNormalizer
                 }
                 else
                 {
-                    scaled = (double)v / seaSpan * maxWaterAllowed;
-                    if (v >= sourceSea - MapDataWriter.Step255 * 2) scaled = 0;
+                    // Scale water smoothly down from WaterLevel16 (19/255) to 0 (deep sea)
+                    scaled = (double)v / seaSpan * (water16 - 1);
                 }
             }
 
             result[i] = (ushort)Math.Clamp(Math.Round(scaled), 0, 65535);
         });
-
-        // 2. Configurable Inward Coastal Cliff Bevel / Smoothing
-        if (cfg.CoastalCliffSmoothing > 0 && cfg.CoastalCliffReach > 0)
-        {
-            ApplyInwardShoreCliffBevel(result, width, height, lowestLand, cfg.CoastalCliffReach, (float)cfg.CoastalCliffSmoothing);
-        }
 
         double sourceWaterShare = 100.0 * (raw.LongLength - landCount) / raw.LongLength;
         double floor255 = (double)landFloor / MapDataWriter.Step255;
@@ -140,120 +132,6 @@ public static class HeightmapNormalizer
                           $"(lowest land pixel {(double)landMin / MapDataWriter.Step255:F2})");
 
         return result;
-    }
-
-    private static void ApplyInwardShoreCliffBevel(
-        ushort[] heightmap,
-        int width,
-        int height,
-        int lowestLand,
-        int reach,
-        float strength)
-    {
-        int maxDist = Math.Clamp(reach, 1, 16);
-        strength = Math.Clamp(strength, 0.0f, 1.0f);
-
-        var distToWater = new byte[heightmap.Length];
-
-        // Pass 1: Tag immediate shore land pixels (distance = 1)
-        Parallel.For(0, height, y =>
-        {
-            long row = (long)y * width;
-            for (int x = 0; x < width; x++)
-            {
-                long idx = row + x;
-                if (heightmap[idx] < lowestLand)
-                {
-                    distToWater[idx] = 0; // Water
-                    continue;
-                }
-
-                bool touchesWater = false;
-                for (int dy = -1; dy <= 1 && !touchesWater; dy++)
-                {
-                    int ny = Math.Clamp(y + dy, 0, height - 1);
-                    long nrow = (long)ny * width;
-                    for (int dx = -1; dx <= 1; dx++)
-                    {
-                        int nx = Math.Clamp(x + dx, 0, width - 1);
-                        if (heightmap[nrow + nx] < lowestLand)
-                        {
-                            touchesWater = true;
-                            break;
-                        }
-                    }
-                }
-
-                distToWater[idx] = touchesWater ? (byte)1 : (byte)255;
-            }
-        });
-
-        // Pass 2: Expand distance rings inland up to maxDist
-        for (byte d = 1; d < maxDist; d++)
-        {
-            byte cur = d;
-            byte next = (byte)(d + 1);
-            Parallel.For(0, height, y =>
-            {
-                long row = (long)y * width;
-                for (int x = 0; x < width; x++)
-                {
-                    long idx = row + x;
-                    if (distToWater[idx] != 255) continue;
-
-                    for (int dy = -1; dy <= 1; dy++)
-                    {
-                        int ny = Math.Clamp(y + dy, 0, height - 1);
-                        long nrow = (long)ny * width;
-                        for (int dx = -1; dx <= 1; dx++)
-                        {
-                            int nx = Math.Clamp(x + dx, 0, width - 1);
-                            if (distToWater[nrow + nx] == cur)
-                            {
-                                distToWater[idx] = next;
-                                goto advanced;
-                            }
-                        }
-                    }
-
-                    // Jump to the next pixel, not out of the row. This was `return`, which exits
-                    // the Parallel.For body — so each expansion pass advanced at most one pixel
-                    // per row and every ring above 1 stayed unreachable. Pass 3 then skipped all
-                    // of them, and the configured ramp was in practice a one-pixel notch cut into
-                    // the shore with the cliff left standing behind it, whatever CoastalCliffReach
-                    // was set to.
-                    advanced: ;
-                }
-            });
-        }
-
-        // Pass 3: Smoothstep inward ramp
-        Parallel.For(0, height, y =>
-        {
-            long row = (long)y * width;
-            for (int x = 0; x < width; x++)
-            {
-                long idx = row + x;
-                byte d = distToWater[idx];
-                if (d == 0 || d > maxDist) continue; // Water or untouched interior
-
-                int original = heightmap[idx];
-                int excess = original - lowestLand;
-                if (excess <= 0) continue;
-
-                // Normalized distance fraction [0..1]
-                float t = (float)d / (maxDist + 1);
-
-                // Hermite smoothstep curve: zero derivative at coast and interior
-                float curve = t * t * (3.0f - 2.0f * t);
-
-                // Calculate beveled elevation and blend by user strength
-                int ramped = lowestLand + (int)Math.Round(excess * curve);
-                int finalElev = (int)Math.Round(original * (1.0f - strength) + ramped * strength);
-
-                heightmap[idx] = (ushort)Math.Clamp(finalElev, lowestLand, 65535);
-            }
-        });
     }
 
     private static int DetectLandFloor(int[] histogram, int landMin, double density)

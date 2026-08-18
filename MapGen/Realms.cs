@@ -12,11 +12,96 @@ public sealed class RealmMap
 
 public static class Realms
 {
-    public static RealmMap Build(List<Title> empires, Dictionary<Title, int> development,
-        WildernessMap wilderness, MapConfig cfg, Rng rng)
+    public static Dictionary<Title, HashSet<Title>> BuildCountyAdjacency(
+        List<Title> counties,
+        ProvinceMap map,
+        int baronyCount,
+        int[] order,
+        int bridgeDistance)
+    {
+        var baronyToCounty = new Dictionary<int, Title>();
+        foreach (var c in counties)
+        {
+            foreach (var b in c.Children)
+            {
+                if (b.ProvinceId >= 1 && b.ProvinceId <= baronyCount)
+                    baronyToCounty[b.ProvinceId] = c;
+            }
+        }
+
+        var landAdj = Titles.BuildAdjacency(map, baronyCount, order);
+        var seaAdj = Titles.BuildSeaAdjacency(map, baronyCount, order, bridgeDistance);
+
+        var countyAdj = new Dictionary<Title, HashSet<Title>>();
+        foreach (var c in counties) countyAdj[c] = [];
+
+        void AddLinks(Dictionary<int, HashSet<int>> adj)
+        {
+            foreach (var (bA, neighbors) in adj)
+            {
+                if (!baronyToCounty.TryGetValue(bA, out var cA)) continue;
+                foreach (var bB in neighbors)
+                {
+                    if (baronyToCounty.TryGetValue(bB, out var cB) && cA != cB)
+                    {
+                        countyAdj[cA].Add(cB);
+                        countyAdj[cB].Add(cA);
+                    }
+                }
+            }
+        }
+
+        AddLinks(landAdj);
+        AddLinks(seaAdj);
+
+        return countyAdj;
+    }
+
+    private static bool IsReachable(
+        Title startCounty,
+        Title targetCounty,
+        Dictionary<Title, HashSet<Title>> countyAdj)
+    {
+        if (startCounty == targetCounty) return true;
+        if (!countyAdj.TryGetValue(startCounty, out _)) return false;
+
+        var visited = new HashSet<Title> { startCounty };
+        var queue = new Queue<Title>();
+        queue.Enqueue(startCounty);
+
+        while (queue.Count > 0)
+        {
+            var curr = queue.Dequeue();
+            if (curr == targetCounty) return true;
+
+            if (!countyAdj.TryGetValue(curr, out var neighbors)) continue;
+            foreach (var n in neighbors)
+            {
+                if (visited.Add(n)) queue.Enqueue(n);
+            }
+        }
+
+        return false;
+    }
+
+    public static RealmMap Build(
+        List<Title> empires,
+        Dictionary<Title, int> development,
+        WildernessMap wilderness,
+        MapConfig cfg,
+        Rng rng,
+        ProvinceMap? provinces = null,
+        int[]? order = null,
+        int baronyCount = 0)
     {
         var all = Titles.Flatten(empires).ToList();
         var weight = Weigh(empires, development, wilderness);
+        var nonWildCounties = all.Where(t => t.Tier == "c" && !wilderness.Contains(t)).ToList();
+
+        int bridge = (int)Math.Round(cfg.Scaled(cfg.SeaBridgePixelsAtVanilla));
+        var countyAdj = (provinces != null && order != null && baronyCount > 0)
+            ? BuildCountyAdjacency(nonWildCounties, provinces, baronyCount, order, bridge)
+            : null;
 
         var realized = new HashSet<Title>();
         var holderCounty = new Dictionary<Title, Title>();
@@ -26,7 +111,7 @@ public static class Realms
             var shatteredHolders = new Dictionary<Title, Title>();
             var shatteredPrimary = new Dictionary<Title, Title>();
 
-            foreach (var county in all.Where(t => t.Tier == "c" && !wilderness.Contains(t)))
+            foreach (var county in nonWildCounties)
             {
                 shatteredHolders[county] = county;
                 shatteredPrimary[county] = county;
@@ -42,13 +127,13 @@ public static class Realms
             return new RealmMap
             {
                 HolderCounty = shatteredHolders,
-                Liege = [], // Empty: everyone is independent
+                Liege = [],
                 Greatest = shatteredGreatest,
             };
         }
 
         // All non-wilderness counties start with their own count holder
-        foreach (var county in all.Where(t => t.Tier == "c" && !wilderness.Contains(t)))
+        foreach (var county in nonWildCounties)
             holderCounty[county] = county;
 
         // --- Step 1: Realize Empires ---
@@ -63,7 +148,6 @@ public static class Realms
 
         foreach (var emp in chosenEmpires)
         {
-            // Emperor holds: Empire -> Capital Kingdom -> Capital Duchy -> Capital County
             RealizeChain(emp, realized, holderCounty, weight);
         }
 
@@ -79,14 +163,12 @@ public static class Realms
             {
                 if (weight.GetValueOrDefault(k) <= 0) continue;
 
-                // The Emperor's personal capital kingdom is already realized
                 if (holderCounty.TryGetValue(k, out var kHolder) && kHolder == empCap)
                 {
                     realizedKingdoms.Add(k);
                     continue;
                 }
 
-                // Subordinate kingdoms under the Emperor: 75% become Vassal Kingdoms
                 if (rng.Chance(0.75))
                 {
                     RealizeChain(k, realized, holderCounty, weight);
@@ -117,7 +199,6 @@ public static class Realms
         }
 
         // --- Step 3: Feudal Vassal Consolidation (Duchies) ---
-        // 3A. Duchies inside active Kingdoms/Empires (95% realized so counts answer to Dukes)
         foreach (var emp in chosenEmpires)
         {
             foreach (var k in emp.Children)
@@ -131,7 +212,6 @@ public static class Realms
             EnsureKingdomDuchiesRealized(k, realized, holderCounty, weight, rng, isUnderActiveRealm: true);
         }
 
-        // 3B. Shattered/Stateless Regions (Petty Kings / Independent Duchies)
         var unruledKingdoms = empires
             .Where(e => !chosenEmpires.Contains(e))
             .SelectMany(e => e.Children)
@@ -157,6 +237,11 @@ public static class Realms
             for (var above = top.Parent; above is not null; above = above.Parent)
             {
                 if (!holderCounty.TryGetValue(above, out var lord) || lord == county) continue;
+
+                // Ensure realm contiguity: never link across wilderness
+                if (countyAdj != null && !IsReachable(county, lord, countyAdj))
+                    continue;
+
                 liege[top] = above;
                 break;
             }
@@ -194,12 +279,9 @@ public static class Realms
         {
             if (weight.GetValueOrDefault(duchy) <= 0) continue;
 
-            // Never overwrite the King's/Emperor's personal capital duchy
             if (kingdomHeld && holderCounty.TryGetValue(duchy, out var dHolder) && dHolder == kingCap)
                 continue;
 
-            // Inside an active kingdom/empire: 95% of duchies are realized to bundle counts under Dukes!
-            // In shattered regions: roll the independent duchy share (~50%)
             double chance = isUnderActiveRealm ? 0.95 : independentDuchyShare;
 
             if (rng.Chance(chance))
@@ -277,13 +359,11 @@ public static class Realms
     private static void Report(HashSet<Title> realized, Dictionary<Title, Title> primary,
         Dictionary<Title, Title> liege, List<Title> all)
     {
-        // Total count of each ruler rank by primary title
         int emperors = primary.Values.Count(t => t.Tier == "e");
         int kings = primary.Values.Count(t => t.Tier == "k");
         int dukes = primary.Values.Count(t => t.Tier == "d");
         int counts = primary.Values.Count(t => t.Tier == "c");
 
-        // Independent rulers per tier (top lieges with no liege above them)
         int indepEmperors = primary.Count(kv => kv.Value.Tier == "e" && !liege.ContainsKey(kv.Value));
         int indepKings = primary.Count(kv => kv.Value.Tier == "k" && !liege.ContainsKey(kv.Value));
         int indepDukes = primary.Count(kv => kv.Value.Tier == "d" && !liege.ContainsKey(kv.Value));

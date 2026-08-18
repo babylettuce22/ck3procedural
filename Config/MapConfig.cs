@@ -321,6 +321,83 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// </summary>
     /// 
 
+    // --- Map Objects: Animals & Ambience ---
+
+    [Category("06 Map Objects")]
+    [Description("Enable decorative wildlife herds (sheep flocks, grazing/galloping wild horses, and solitary elephants) on unit_layer.")]
+    public bool EnableAnimals { get; set; } = true;
+
+    [Category("06 Map Objects")]
+    [Description("Density multiplier for wildlife herds across the map (1.0 = standard, 0.5 = sparser, 2.0 = denser).")]
+    public double AnimalDensity { get; set; } = 1.0;
+
+    [AdvancedSetting]
+    [Category("06 Map Objects")]
+    [Description("Scale multiplier for animal models on the 3D map.")]
+    public double AnimalScale { get; set; } = 1.0;
+
+    [AdvancedSetting]
+    [Category("06 Map Objects")]
+    [Description("Allow wild horses to use the animated galloping variant on wide, flat plains and steppes.")]
+    public bool EnableGallopingHorses { get; set; } = true;
+
+    /// <summary>
+    /// Size multiplier for the holding models — the castle, city and temple meshes drawn on every
+    /// barony.
+    ///
+    /// 1.0 is vanilla size and is deliberately the default: holdings are the one class of map object
+    /// whose size the player reads as "how big is a settlement", and vanilla's meshes are already
+    /// tuned against vanilla's own province sizes. It is a knob rather than something derived from
+    /// <see cref="MapScale"/> because the right answer depends on <see cref="CountyScale"/> too —
+    /// a small map with correspondingly small baronies wants vanilla-sized holdings, while a small
+    /// map with vanilla-sized baronies does not.
+    ///
+    /// Scaling up is the risky direction. Holdings sit at province anchors, so past roughly 1.5x on
+    /// a dense map neighbouring baronies start intersecting each other, and armies, sieges and
+    /// activity markers keep their own sizes regardless of this — a castle twice its usual size
+    /// standing next to a normal army stack reads worse than either error on its own.
+    ///
+    /// At exactly 1.0 nothing is written and vanilla's own assets are left alone. See
+    /// <see cref="Emit.HoldingModelWriter"/>.
+    /// </summary>
+    [Category("06 Map Objects")]
+    [Description("Size multiplier for holding models (castles, cities, temples) on the 3D map. 1.0 is vanilla size and leaves the game's own assets untouched. Above 1 makes settlements read larger; scaling far past 1.5 makes neighbouring baronies overlap on a dense map.")]
+    public double HoldingScale { get; set; } = 1.0;
+
+    /// <summary>
+    /// Whether the map table keeps its clutter — the candles, goblets, coins, chess pieces and
+    /// ground props that dress vanilla's four tabletops.
+    ///
+    /// On, because every one of these objects is <c>render_pass=MapUnderTerrain</c>: the map itself
+    /// occludes the parts of them that lie under it, and only the overhang past the map's edge is
+    /// ever drawn, which is exactly where the props are meant to read. Six objects across the four
+    /// styles were being dropped, and with them ep3's table lost the only dressing it has.
+    ///
+    /// Off if the candle flames misbehave. Four of the six hang <c>flame_*_entity</c> and
+    /// <c>candle_glow</c> off their bones as attachments; those are separate entities and the
+    /// layer's fade does not govern them, so they can outlive the table on the way in. See
+    /// <see cref="Emit.MapTableWriter"/>.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("06 Map Objects")]
+    [Description("Keep the map table's candles, goblets, coins and ground props. They render under the terrain, so only the parts overhanging the map's edge are visible. Turn off if candle flames show through the map when zooming in — the flames are attached particle entities the layer fade does not reach.")]
+    public bool MapTableProps { get; set; } = true;
+
+    [Category("06 Map Objects")]
+    [Description("Density multiplier for trees and ground foliage (1.0 = the tuned default, 0.5 = sparser, 2.0 = denser). Costs load time and memory in the game at high values — every instance is written out individually.")]
+    public double TreeDensity { get; set; } = 1.0;
+
+    [Category("06 Map Objects")]
+    [Description("Global multiplier for atmospheric environmental visual effects (dust plumes, forest mist, mountain snow clouds). 1.0 matches vanilla density scaled to this map's resolution.")]
+    public double EnvEffectDensity { get; set; } = 1.0;
+
+    [AdvancedSetting]
+    [Category("06 Map Objects")]
+    [Description("Global scale multiplier for environmental VFX billboards. Automatically scaled with map resolution.")]
+    public double EnvEffectScale { get; set; } = 1.0;
+
+    //
+
     [Category("16 Wilderness")]
     [Description("Pull wilderness toward the map edges (1), ignore position (0), or pull it inland (-1). Edge-biased reads as a frontier at the rim of the world; inland-biased makes the interior the wasteland.")]
     public double WildernessEdgeBias { get; set; } = 0.75;

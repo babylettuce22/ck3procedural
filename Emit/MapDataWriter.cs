@@ -95,25 +95,21 @@ public static class MapDataWriter
         var order = new int[provinces.Count];
         int next = 1;
 
-        // 1. Baronied land provinces
         for (int i = 0; i < provinces.Count; i++)
             if (provinces.Seeds[i].IsLand && !provinces.Seeds[i].IsImpassable)
                 order[i] = next++;
         baronyCount = next - 1;
 
-        // 2. Impassable mountain provinces
         for (int i = 0; i < provinces.Count; i++)
             if (provinces.Seeds[i].IsLand && provinces.Seeds[i].IsImpassable)
                 order[i] = next++;
         landCount = next - 1;
 
-        // 3. Major river provinces
         for (int i = 0; i < provinces.Count; i++)
             if (!provinces.Seeds[i].IsLand && provinces.Seeds[i].IsMajorRiver)
                 order[i] = next++;
         riverCount = next - 1;
 
-        // 4. Open sea zones
         for (int i = 0; i < provinces.Count; i++)
             if (!provinces.Seeds[i].IsLand && !provinces.Seeds[i].IsMajorRiver)
                 order[i] = next++;
@@ -198,10 +194,6 @@ public static class MapDataWriter
             : index == RiverIndexLand ? ((byte)255, (byte)255, (byte)255)
             : ((byte)2, (byte)0, (byte)1);
 
-    /// <summary>
-    /// Reconciles macro-level province changes (dissolved islands/lakes) without destroying
-    /// the smooth 8K sub-pixel curves of natural coastlines.
-    /// </summary>
     private static void ForceCoastlineToMatchProvinces(ushort[] height, MapConfig cfg,
             ProvinceMap provinces, int[] order, int landCount)
     {
@@ -225,13 +217,9 @@ public static class MapDataWriter
                 ushort v = height[i];
                 bool heightmapIsLand = v > WaterLevel16;
 
-                // If heightmap and province classification agree, leave 8K contour completely untouched
                 if (heightmapIsLand == provinceIsLand) continue;
-
-                // If this is a major river province and pixel is dry land, do not drown it
                 if (seed.IsMajorRiver && heightmapIsLand) continue;
 
-                // Check if this pixel is right on a natural smooth coastline transition (within 1 province pixel of shore)
                 bool nearNaturalShore = false;
                 for (int dy = -scaleY; dy <= scaleY && !nearNaturalShore; dy++)
                 {
@@ -248,10 +236,8 @@ public static class MapDataWriter
                     }
                 }
 
-                // If it's a natural smooth diagonal coastline, DO NOT hard-snap it to a 2x2 square block!
                 if (nearNaturalShore) continue;
 
-                // Only snap true macro-dissolved features (e.g. interior of a dissolved lake or deleted speck island)
                 if (provinceIsLand)
                 {
                     height[i] = (ushort)(WaterLevel16 + Step255);
@@ -269,12 +255,13 @@ public static class MapDataWriter
         Console.WriteLine($"  coastline: {changed:N0} macro-mismatch pixels reconciled ({pct:F2}%), 8K sub-pixel contours preserved");
     }
 
-    private static byte[] CoastDistance(ushort[] full, int width, int height, int cap)
+    private static (byte[] LandDist, byte[] WaterDist) MeasureCoastDistances(ushort[] full, int width, int height, int cap)
     {
         const int Orthogonal = 3, Diagonal = 4;
         int capUnits = (cap + 1) * Orthogonal;
 
-        var distance = new ushort[full.Length];
+        var landDistUnits = new ushort[full.Length];
+        var waterDistUnits = new ushort[full.Length];
 
         Parallel.For(0, height, y =>
         {
@@ -282,7 +269,8 @@ public static class MapDataWriter
             {
                 long i = (long)y * width + x;
                 bool land = full[i] > WaterLevel16;
-                distance[i] = (ushort)capUnits;
+                landDistUnits[i] = (ushort)capUnits;
+                waterDistUnits[i] = (ushort)capUnits;
 
                 for (int dy = -1; dy <= 1; dy++)
                 {
@@ -292,9 +280,10 @@ public static class MapDataWriter
                     {
                         if (dx == 0 && dy == 0) continue;
                         int xx = ((x + dx) % width + width) % width;
-                        if (full[(long)yy * width + xx] > WaterLevel16 != land)
+                        if ((full[(long)yy * width + xx] > WaterLevel16) != land)
                         {
-                            distance[i] = 0;
+                            if (land) landDistUnits[i] = 0;
+                            else waterDistUnits[i] = 0;
                             dy = 2;
                             break;
                         }
@@ -306,44 +295,59 @@ public static class MapDataWriter
         for (int y = 0; y < height; y++)
             for (int x = 0; x < width; x++)
             {
-                Relax(y, x, -1, 0, Orthogonal);
-                Relax(y, x, -1, -1, Diagonal);
-                Relax(y, x, 0, -1, Orthogonal);
-                Relax(y, x, 1, -1, Diagonal);
+                Relax(landDistUnits, full, true, y, x, -1, 0, Orthogonal);
+                Relax(landDistUnits, full, true, y, x, -1, -1, Diagonal);
+                Relax(landDistUnits, full, true, y, x, 0, -1, Orthogonal);
+                Relax(landDistUnits, full, true, y, x, 1, -1, Diagonal);
+
+                Relax(waterDistUnits, full, false, y, x, -1, 0, Orthogonal);
+                Relax(waterDistUnits, full, false, y, x, -1, -1, Diagonal);
+                Relax(waterDistUnits, full, false, y, x, 0, -1, Orthogonal);
+                Relax(waterDistUnits, full, false, y, x, 1, -1, Diagonal);
             }
 
         for (int y = height - 1; y >= 0; y--)
             for (int x = width - 1; x >= 0; x--)
             {
-                Relax(y, x, 1, 0, Orthogonal);
-                Relax(y, x, 1, 1, Diagonal);
-                Relax(y, x, 0, 1, Orthogonal);
-                Relax(y, x, -1, 1, Diagonal);
+                Relax(landDistUnits, full, true, y, x, 1, 0, Orthogonal);
+                Relax(landDistUnits, full, true, y, x, 1, 1, Diagonal);
+                Relax(landDistUnits, full, true, y, x, 0, 1, Orthogonal);
+                Relax(landDistUnits, full, true, y, x, -1, 1, Diagonal);
+
+                Relax(waterDistUnits, full, false, y, x, 1, 0, Orthogonal);
+                Relax(waterDistUnits, full, false, y, x, 1, 1, Diagonal);
+                Relax(waterDistUnits, full, false, y, x, 0, 1, Orthogonal);
+                Relax(waterDistUnits, full, false, y, x, -1, 1, Diagonal);
             }
 
-        var result = new byte[full.Length];
+        var landDist = new byte[full.Length];
+        var waterDist = new byte[full.Length];
+
         Parallel.For(0, height, y =>
         {
             for (int x = 0; x < width; x++)
             {
                 long i = (long)y * width + x;
-                result[i] = (byte)Math.Min(cap + 1, distance[i] / Orthogonal);
+                landDist[i] = (byte)Math.Min(cap + 1, landDistUnits[i] / Orthogonal);
+                waterDist[i] = (byte)Math.Min(cap + 1, waterDistUnits[i] / Orthogonal);
             }
         });
 
-        return result;
+        return (landDist, waterDist);
 
-        void Relax(int y, int x, int dx, int dy, int cost)
+        void Relax(ushort[] distArray, ushort[] srcFull, bool targetLand, int y, int x, int dx, int dy, int cost)
         {
             long target = (long)y * width + x;
-            if (distance[target] == 0) return;
+            if ((srcFull[target] > WaterLevel16) != targetLand) return;
 
             int yy = y + dy;
             if (yy < 0 || yy >= height) return;
             int xx = ((x + dx) % width + width) % width;
+            long from = (long)yy * width + xx;
+            if ((srcFull[from] > WaterLevel16) != targetLand) return;
 
-            int candidate = distance[(long)yy * width + xx] + cost;
-            if (candidate < distance[target]) distance[target] = (ushort)candidate;
+            int candidate = distArray[from] + cost;
+            if (candidate < distArray[target]) distArray[target] = (ushort)candidate;
         }
     }
 
@@ -351,90 +355,66 @@ public static class MapDataWriter
     {
         int width = cfg.Width, height = cfg.Height;
 
-        int smooth = Math.Max(2, (int)Math.Round(cfg.Scaled(cfg.CoastalCliffReach)));
-        float smoothStrength = (float)Math.Clamp(cfg.CoastalCliffSmoothing, 0.0, 1.0);
+        int landReach = Math.Max(2, (int)Math.Round(cfg.Scaled(cfg.CoastalCliffReach)));
+        float landStrength = (float)Math.Clamp(cfg.CoastalCliffSmoothing, 0.0, 1.0);
         const int lowestLand = WaterLevel16 + Step255;
 
-        var distance = CoastDistance(full, width, height, Math.Max(8, smooth));
+        // Fast plunge curve matching vanilla 3-4 pixel shelf
+        const int shelfReach = 7;
 
-        // 1. INWARD VERTICAL CLIFF BEVEL
-        if (smooth > 0 && smoothStrength > 0.0f)
+        var (landDistance, waterDistance) = MeasureCoastDistances(full, width, height, Math.Max(shelfReach, landReach));
+
+        var source = (ushort[])full.Clone();
+
+        Parallel.For(0, height, y =>
         {
-            var source = (ushort[])full.Clone();
-
-            Parallel.For(0, height, y =>
+            long row = (long)y * width;
+            for (int x = 0; x < width; x++)
             {
-                long row = (long)y * width;
-                for (int x = 0; x < width; x++)
+                long i = row + x;
+                ushort val = source[i];
+
+                if (val > WaterLevel16)
                 {
-                    long i = row + x;
-                    if (source[i] <= WaterLevel16) continue;
-
-                    int d = distance[i];
-                    if (d > smooth) continue;
-
-                    int original = source[i];
-                    int excess = original - lowestLand;
-                    if (excess <= 0) continue;
-
-                    float t = (float)(d + 1) / (smooth + 1);
-                    float curve = t * t * (3.0f - 2.0f * t);
-
-                    int ramped = lowestLand + (int)Math.Round(excess * curve);
-                    int finalElev = (int)Math.Round(original * (1.0f - smoothStrength) + ramped * smoothStrength);
-
-                    full[i] = (ushort)Math.Clamp(finalElev, lowestLand, 65535);
-                }
-            });
-        }
-
-        // 2. SIDE-RESTRICTED ORGANIC SHORE SMOOTHING
-        const int SmoothingPasses = 3;
-        for (int pass = 0; pass < SmoothingPasses; pass++)
-        {
-            var source = (ushort[])full.Clone();
-
-            Parallel.For(0, height, y =>
-            {
-                long row = (long)y * width;
-                for (int x = 0; x < width; x++)
-                {
-                    long i = row + x;
-                    if (source[i] <= WaterLevel16 || distance[i] > 6) continue;
-
-                    long sum = 0;
-                    int count = 0;
-
-                    for (int dy = -1; dy <= 1; dy++)
+                    // 1. LAND-SIDE GENTLE COASTAL BEVEL
+                    int d = landDistance[i];
+                    if (d <= landReach && landStrength > 0.0f)
                     {
-                        int ny = y + dy;
-                        if (ny < 0 || ny >= height) continue;
-                        long nrow = (long)ny * width;
-
-                        for (int dx = -1; dx <= 1; dx++)
+                        int excess = val - lowestLand;
+                        if (excess > 0)
                         {
-                            int nx = (x + dx + width) % width;
-                            ushort neighborVal = source[nrow + nx];
+                            float t = (float)(d + 1) / (landReach + 1);
+                            float curve = t * t * (3.0f - 2.0f * t);
 
-                            if (neighborVal > WaterLevel16)
-                            {
-                                sum += neighborVal;
-                                count++;
-                            }
+                            int ramped = lowestLand + (int)Math.Round(excess * curve);
+                            int finalElev = (int)Math.Round(val * (1.0f - landStrength) + ramped * landStrength);
+                            full[i] = (ushort)Math.Clamp(finalElev, lowestLand, 65535);
                         }
                     }
-
-                    if (count > 0)
+                }
+                else
+                {
+                    // 2. WATER-SIDE FAST PLUNGE (3-4 pixels down to deep black bed)
+                    // Plunges: d=1 (~16/255), d=2 (~9/255), d=3 (~3/255), d>=4 (0)
+                    int d = waterDistance[i];
+                    if (d <= shelfReach)
                     {
-                        ushort averaged = (ushort)(sum / count);
-                        full[i] = Math.Max(averaged, (ushort)lowestLand);
+                        float t = (float)d / shelfReach;
+                        float plunge = (1.0f - t) * (1.0f - t); // Quadratic rapid drop
+                        int shelfHeight = (int)Math.Round((WaterLevel16 - Step255 * 3) * plunge);
+                        full[i] = (ushort)Math.Clamp(shelfHeight, 0, WaterLevel16);
+                    }
+                    else
+                    {
+                        // Deep water
+                        full[i] = 0;
                     }
                 }
-            });
-        }
+            }
+        });
 
-        Console.WriteLine($"  coastline shaping: water drops straight to black, " +
-                          $"cliffs beveled and smoothed organically over {smooth} px");
+        Console.WriteLine($"  coastline shaping: underwater shelf plunged to deep bed over {shelfReach} px, " +
+                          $"land coast smoothed over {landReach} px");
     }
 
     private static ushort[] ElevationTo16(float[] elevation, MapConfig cfg)
@@ -516,6 +496,7 @@ public static class MapDataWriter
 
         var packing = HeightmapPacker.Pack(full, cfg.Width, cfg.Height);
 
+
         PngWriter.WriteGray16(Path.Combine(dir, "packed_heightmap.png"),
             packing.PackedWidth, packing.PackedHeight, packing.Packed);
         PngWriter.WriteRgba8(Path.Combine(dir, "indirection_heightmap.png"),
@@ -525,7 +506,10 @@ public static class MapDataWriter
 
         string levelOffsets = string.Join(" ", packing.LevelOffsets.Select(n => $"{{ 0 {n} }}"));
 
-        ParadoxText.WriteNoBom(Path.Combine(dir, "heightmap.heightmap"),
+        // BOM, unlike the rest of map_data. Verified on the bytes of two files CK3 renders
+        // correctly: vanilla's own heightmap.heightmap and one written by Clausewitz's repacker
+        // both begin ef bb bf, and ours began "heig". It is the only map_data file that wants one.
+        ParadoxText.WriteBom(Path.Combine(dir, "heightmap.heightmap"),
             $$"""
               heightmap_file="map_data/packed_heightmap.png"
               indirection_file="map_data/indirection_heightmap.png"
@@ -556,7 +540,6 @@ public static class MapDataWriter
 
         ParadoxText.WriteNoBom(path,
             $$"""
-          #max_provinces = {{provinceCount + 1}}
           definitions = "definition.csv"
           provinces = "provinces.png"
           rivers = "rivers.png"

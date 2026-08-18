@@ -6,9 +6,14 @@ namespace Ck3MapGen.Io;
 /// Owns the BOM distinction, which is not cosmetic in CK3.
 ///
 /// Core map_data files (definition.csv, default.map, adjacencies.csv, seasons.txt,
-/// island_region.txt, heightmap.heightmap) have **no BOM** in vanilla. Script files under
-/// common/, history/, gfx/ and map_data/geographical_regions need UTF-8 **with** BOM. Always
-/// write through here rather than File.WriteAllText so the choice is explicit at every site.
+/// island_region.txt) have **no BOM** in vanilla. Script files under common/, history/, gfx/ and
+/// map_data/geographical_regions need UTF-8 **with** BOM. Always write through here rather than
+/// File.WriteAllText so the choice is explicit at every site.
+///
+/// heightmap.heightmap was listed above as no-BOM and is not: vanilla's begins ef bb bf, and so
+/// does one written by Clausewitz's own repacker. It only stopped mattering while this project
+/// shipped a bare heightmap.png and let the map editor rewrite the file; the moment it ships the
+/// packed trio itself, the file it writes is the one CK3 has to parse.
 /// </summary>
 public static class ParadoxText
 {

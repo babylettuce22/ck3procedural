@@ -73,7 +73,9 @@ public static class MapTableWriter
 
         foreach (string source in Directory.GetFiles(sourceDir, "map_table_*.txt"))
         {
-            string text = DropProps(File.ReadAllText(source), ref dropped);
+            string text = File.ReadAllText(source);
+            if (!cfg.MapTableProps) text = DropProps(text, ref dropped);
+
             string rescaled = Transform.Replace(text, match =>
             {
                 string? scaled = Rescale(match.Groups[1].Value, scale, heightScale, meshScale);
@@ -90,7 +92,7 @@ public static class MapTableWriter
 
         Console.WriteLine($"  map tables: {objects} objects in {written} files placed at " +
                           $"{scale:F3}x / {heightScale:F3}x vanilla's world, mesh {meshScale:F3}x " +
-                          $"({dropped} prop objects dropped)");
+                          (cfg.MapTableProps ? "(props kept)" : $"({dropped} prop objects dropped)"));
 
         RescaleLayerFades(targetDir, cfg);
     }
@@ -109,24 +111,36 @@ public static class MapTableWriter
 
     /// <summary>
     /// Removes the candles, goblets, coins, chess pieces and ground clutter, keeping the tabletop,
-    /// the cloth and the floor.
+    /// the cloth and the floor. Only runs when <see cref="Config.MapConfig.MapTableProps"/> is off;
+    /// the default is to keep them.
     ///
-    /// These share one layer with the table — <c>map_table_layer_western</c> and its three
-    /// siblings — so they share its single <c>fade_in</c>, and there is no per-object fade to tune.
-    /// They nonetheless outlive the table on the way in, because the props mesh carries its own
-    /// <c>cull_distance = 50000</c> and the candles hang <c>flame_*_entity</c> and
-    /// <c>candle_glow</c> off their bones as attachments, which are their own entities and not
-    /// governed by the layer at all. Giving them a layer of their own would fix the first and not
-    /// reliably the second, so they come out instead: on a generated map they are scenery with no
-    /// content riding on them.
+    /// This used to be unconditional, on the grounds that the clutter outlives the table on the way
+    /// in: the props mesh carries its own <c>cull_distance = 50000</c>, and the candles hang
+    /// <c>flame_*_entity</c> and <c>candle_glow</c> off their bones as attachments, which are their
+    /// own entities and not governed by the layer at all.
+    ///
+    /// Half of that is simply wrong. Every object in these files carries <c>cull_distance = 50000</c>
+    /// — the tabletops and cloths we always keep included — so the cull distance does not separate
+    /// clutter from furniture at all. And every object is <c>render_pass=MapUnderTerrain</c>, so
+    /// prop *geometry* over the map is occluded by the map: what is authored across the whole table
+    /// surface only ever shows in the overhang, which is where it is meant to show. Two of the six
+    /// objects this drops — western's and ce1's <c>props</c> — have no attachments whatsoever and
+    /// are in exactly the same rendering class as the tabletop.
+    ///
+    /// What is left of the original argument is the attachments, and only on four objects: the two
+    /// candle objects (12 attachments each), ce1's misleadingly named <c>groundprops</c> (48), and
+    /// ep3's <c>tabletop_props</c> (4). Those are particle entities on their own and the layer fade
+    /// does not reach them. That is a fade artefact rather than a broken table, so it is now a
+    /// setting rather than a rule.
+    ///
+    /// There is no repositioning option hiding here, by the way. The props mesh spans the table:
+    /// western's runs local x -6687..6215 against a slab of -6645..6645, so the cluster is as wide
+    /// as the furniture it sits on. Against vanilla's 9216x4608 map the table leaves margins of
+    /// only ~2145/1929 either side and ~863/1375 front and back, and no translation fits a
+    /// 12,902-unit-wide cluster into a 2145-unit strip.
     ///
     /// A file that would end up with no objects is left whole rather than emptied — an empty
     /// map_table file means that style has no table, which is worse than keeping its clutter.
-    /// </summary>
-    /// <summary>
-    /// Removes the candles, goblets, coins, chess pieces and ground clutter that sit inside 
-    /// the playable map boundaries, keeping the tabletop, the cloth, the floor, and any 
-    /// props safely positioned outside the map area on the margins of the table.
     /// </summary>
     private static string DropProps(string text, ref int dropped)
     {
@@ -146,37 +160,13 @@ public static class MapTableWriter
             bool isProp = Entity.Match(block) is { Success: true } m &&
                           PropEntities.Any(p => m.Groups[1].Value.Contains(p, StringComparison.Ordinal));
 
-            bool shouldRemove = false;
-            if (isProp)
-            {
-                var match = Transform.Match(block);
-                if (match.Success)
-                {
-                    string transformValue = match.Groups[1].Value;
-                    var parts = transformValue.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-                    if (parts.Length == 10 &&
-                        double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out double px) &&
-                        double.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out double pz))
-                    {
-                        // Check if the prop lies within the vanilla map boundaries (0 to 9216 horizontally, 0 to 4608 vertically)
-                        if (px >= 0 && px <= 9216 && pz >= 0 && pz <= 4608)
-                        {
-                            shouldRemove = true; // Inside the map area; drop to avoid clipping with custom terrain elevation
-                        }
-                    }
-                    else
-                    {
-                        shouldRemove = true; // Malformed transform; drop to be safe
-                    }
-                }
-                else
-                {
-                    shouldRemove = true; // No transform found; drop
-                }
-            }
+            // Whatever sits between the previous block and this one comes across either way. It is
+            // only whitespace in vanilla's four files, but dropping an object should not take a
+            // comment written above it along with it.
+            kept.Append(text, at, start - at);
 
-            if (shouldRemove) removed++;
-            else kept.Append(text, at, start - at).Append(block);
+            if (isProp) removed++;
+            else kept.Append(block);
 
             at = end;
         }

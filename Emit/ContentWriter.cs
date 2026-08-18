@@ -75,7 +75,7 @@ public static class ContentWriter
         });
 
         var realms = Core.Stage.Time("realms", () => Realms.Build(
-    empires, development, wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17)));
+                    empires, development, wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17), provinces, order, baronyCount));
 
         var governments = Core.Stage.Time("governments", () => MapGen.Governments.Build(
             empires, counties, realms, provinceTerrain, development, cultures,
@@ -160,8 +160,13 @@ public static class ContentWriter
             modDir, cfg, provinces, order, landCount, provinceElevation, provinceTerrain));
 
         Core.Stage.Time("terrain masks", () => TerrainMaskWriter.WriteAll(modDir, gameDir, cfg));
-        Core.Stage.Time("trees", () => TreeWriter.WriteAll(modDir, cfg, terrain, rng));
+        // terra.Elevation, not the province-resolution copy: both scatters jitter to sub-pixel
+        // positions and have to ask the heightmap the engine renders whether that spot is dry.
+        Core.Stage.Time("trees", () => TreeWriter.WriteAll(modDir, cfg, terrain, classified.Climate, terra.Elevation, rng));
+        Core.Stage.Time("animals", () => AnimalWriter.WriteAll(modDir, cfg, terrain, terra.Elevation, rng));
+        Core.Stage.Time("env effects", () => EnvEffectWriter.WriteAll(modDir, cfg, terrain, terra.Elevation, rng));
         Core.Stage.Time("map table", () => MapTableWriter.WriteAll(modDir, cfg));
+        Core.Stage.Time("holding models", () => HoldingModelWriter.WriteAll(modDir, gameDir, cfg));
 
         // --- AFTER (clean and unified) ---
         if (writeHistory)

@@ -1009,6 +1009,20 @@ public sealed class MainForm : Form
             return;
         }
 
+        // Launching closes this window, and the pending edits are the one thing it holds that only
+        // lives in memory — everything else is on disk or saved by OnFormClosing on the way out.
+        if (_edits.HasPending)
+        {
+            var answer = MessageBox.Show(this,
+                $"Launching closes the generator, which discards "
+                + $"{Count(_edits.EditedCount, "unsaved edit")}.\n\n"
+                + "Press Overwrite first to push them into the mod folder.\n\n"
+                + "Launch anyway?",
+                "Unsaved edits", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning);
+
+            if (answer != DialogResult.OK) return;
+        }
+
         try
         {
             var startInfo = new ProcessStartInfo(exePath)
@@ -1024,9 +1038,12 @@ public sealed class MainForm : Form
             }
 
             Process.Start(startInfo);
-            _status.Text = string.IsNullOrEmpty(args)
-                ? "Crusader Kings III launched"
-                : $"Crusader Kings III launched with ({args})";
+
+            // ShellExecute has already handed the game to the OS by the time Start returns, and
+            // nothing about it is tied to this process, so closing now leaves it running. Going
+            // out through Close() rather than Application.Exit is what keeps OnFormClosing — and
+            // so the saved window state — exactly as it is for a window closed by hand.
+            Close();
         }
         catch (Exception ex)
         {
@@ -1073,9 +1090,82 @@ public sealed class MainForm : Form
             _edits.Attach(_result, _written, modDir);
             Console.WriteLine();
             Console.WriteLine("The world can now be edited — click any title, culture or faith map.");
+
+            OfferToEnableMod(modDir);
         }
 
         ApplySource();
+    }
+
+    /// <summary>
+    /// Asks whether the game should be set to load what was just written, and edits
+    /// <c>dlc_load.json</c> if so. Only ever runs after a write that actually landed, and only
+    /// asks when the answer would change something — a mod already listed says so in the log and
+    /// costs no click.
+    /// </summary>
+    private void OfferToEnableMod(string modDir)
+    {
+        string? file = Core.DlcLoad.FileFor(modDir);
+        if (file is null)
+        {
+            Console.WriteLine("Written outside the launcher's mod folder — dlc_load.json left alone. "
+                              + "Enable the mod from the launcher.");
+            return;
+        }
+
+        string entry = Core.DlcLoad.EntryFor(modDir);
+        if (Core.DlcLoad.IsOnly(file, entry))
+        {
+            Console.WriteLine($"Crusader Kings III is already set to load {entry}, and only it.");
+            return;
+        }
+
+        // Named rather than counted. Turning off somebody's mod list is a thing they should be able
+        // to put back by hand, and the file that recorded it is the file about to be overwritten.
+        var dropped = Core.DlcLoad.Enabled(file)
+            .Where(m => !string.Equals(m, entry, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        string turningOff = dropped.Count == 0 ? "" :
+            "A generated map is a total conversion, so it has to load on its own — "
+            + $"{Count(dropped.Count, "other enabled mod")} will be turned off:\n"
+            + string.Join("\n", dropped.Take(8).Select(m => $"    {m}"))
+            + (dropped.Count > 8 ? $"\n    ...and {dropped.Count - 8} more" : "")
+            + "\n\n";
+
+        var answer = MessageBox.Show(this,
+            $"Crusader Kings III can be set to load \"{_modName}\" the next time it starts.\n\n"
+            + turningOff
+            + "This only edits dlc_load.json — the game is not launched and no mod is deleted, so "
+            + "anything turned off here can be ticked again in the launcher.\n\n"
+            + "Note that opening the Paradox launcher afterwards can undo it, because the launcher "
+            + "rewrites that file from its own playsets.\n\n"
+            + "Enable it?",
+            "Enable the mod?", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+        if (answer != DialogResult.Yes)
+        {
+            Console.WriteLine("Left disabled — dlc_load.json unchanged.");
+            return;
+        }
+
+        try
+        {
+            Core.DlcLoad.EnableOnly(file, entry);
+            Console.WriteLine($"Enabled {entry} — Crusader Kings III will load it, and only it, "
+                              + "on the next start.");
+            foreach (string mod in dropped) Console.WriteLine($"  turned off: {mod}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine();
+            Console.WriteLine(ex);
+
+            MessageBox.Show(this,
+                $"dlc_load.json could not be updated:\n\n{ex.Message}\n\n"
+                + "The mod itself is written, so it can still be enabled from the launcher.",
+                "Could not enable the mod", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     private void OverwriteTitles()
