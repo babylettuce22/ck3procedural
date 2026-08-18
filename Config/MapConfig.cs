@@ -232,6 +232,9 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Description("Density multiplier for minor tributary rivers (1.0 = standard vanilla density, 0.5 = sparser, 2.0 = denser).")]
     public double RiverDensity { get; set; } = 0.1;
 
+
+
+
     /// <summary>
     /// Share of land provinces cultivated into <c>farmlands</c>.
     ///

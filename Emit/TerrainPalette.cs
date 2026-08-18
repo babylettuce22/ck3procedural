@@ -278,6 +278,17 @@ public static class TerrainPalette
         => Math.Clamp(Math.Abs(n - cut) / CutFadeBand, 0, 1);
 
     /// <summary>
+    /// The weakest of several threshold confidences — for a pick chained across a run of cuts,
+    /// where the selector only has to be near *one* of them for the choice to be uncertain.
+    /// </summary>
+    private static double CutConfidence(double n, params ReadOnlySpan<double> cuts)
+    {
+        double worst = 1.0;
+        foreach (double cut in cuts) worst = Math.Min(worst, CutConfidence(n, cut));
+        return worst;
+    }
+
+    /// <summary>
     /// Fade width for a bare threshold, on the selector's own 0-1 scale — unlike
     /// <see cref="BucketFadeBand"/>, which is a fraction of a bucket. The selectors move about 0.02
     /// per pixel, so 0.15 spreads the crossfade over roughly seven texels.
@@ -455,12 +466,27 @@ public static class TerrainPalette
                     ref readonly var north = ref Families[(int)Climate.Northern];
                     var (lowA, lowB, confA, confB) = LowlandPair(north, nA, nB);
 
+                    // Pine leads. Measured over every taiga province, forest_pine_01 is 38.8% of
+                    // the painted weight — the heaviest single material in the biome — against
+                    // 12.9 / 7.9 / 6.8% for the three northern lowlands, which led here instead.
+                    // It also varies a long way: the dense provinces run pine at 53% and the open
+                    // ones at 28%, so the canopy rides the coarse selector and the ground shows
+                    // through where it thins.
+                    //
+                    // Snow is gone. It was drawn on the third of taiga pixels with nC < 0.35 at a
+                    // weight of 25-55; vanilla paints snow on 0.08% of taiga, which is to say
+                    // nowhere. What is under the trees instead is forestfloor (4.5%) and the dry
+                    // plains pair (3.6% / 1.4%), none of which this case could previously reach.
+                    double canopy = 0.25 + 0.75 * nA;
+
                     return Mix(
-                        lowA, (byte)((90 + nA * 40) * confA),
-                        ForestPine, (byte)(75 + (1.0 - nA) * 40),
-                        lowB, (byte)((50 + nB * 35) * confB),
-                        nC < 0.35 ? Snow : nC < 0.7 ? NorthernPlains : north.Hills,
-                            (byte)(25 + nC * 30)
+                        ForestPine, (byte)Math.Clamp(22 + 88 * canopy, 0, 255),
+                        lowA, (byte)Math.Clamp((70 + (1.0 - nA) * 45) * confA, 0, 255),
+                        lowB, (byte)Math.Clamp((40 + nB * 30) * confB, 0, 255),
+                        nC < 0.45 ? ForestFloor : nC < 0.75 ? PlainsDry : PlainsDryMud,
+                            (byte)Math.Clamp((30 + nC * 25)
+                                * Math.Min(CutConfidence(nC, 0.45), CutConfidence(nC, 0.75)), 0, 255),
+                        north.Hills, (byte)Math.Clamp(18 * (1.0 - nA), 0, 255)
                     );
                 }
 
@@ -498,26 +524,34 @@ public static class TerrainPalette
                     // The regimes ride the coarsest selector, so they arrive as patches a hundred
                     // pixels across, and they are bumps rather than thresholds: a regime that
                     // switched on at a cut would put its whole palette in along one contour.
-                    double bushy = Bump(nA, 0.09, 0.15);
-                    double patchy = Bump(nA, 0.42, 0.20);
-                    double side = Ramp(nB, 0.5, 0.15);
-                    double quiet = 1.0 - 0.75 * bushy;
-
-                    // The patch is a *boost* to one variant rather than a new layer, so it costs no
-                    // slot and cannot evict anything on its way in or out.
-                    double toLow1 = 150 * patchy * side;
-                    double toLow3 = 150 * patchy * (1.0 - side);
-
-                    byte tail = nC < 0.45 ? SteppeGrass : nC < 0.8 ? SteppeRocks : steppe.Hills;
-                    double tailConf = Math.Min(CutConfidence(nC, 0.45), CutConfidence(nC, 0.8));
+                    // Clustering all 378 steppe provinces by their material mix returns four
+                    // well-balanced groups (120 / 87 / 99 / 72), and no one of them looks like the
+                    // biome average — which is why an average is the wrong thing to paint. They
+                    // separate along two axes, and both are reproduced here directly:
+                    //
+                    //   bushiness   steppe_bushes runs 0% in the eastern/Gobi provinces, ~8% in
+                    //               the open west, and 28-32% north of the Caucasus.
+                    //   lowland lead  gen_steppe_lowlands_02 carries the western steppe (23.3% of
+                    //               the biome overall, its heaviest single material) while
+                    //               gen_steppe_lowlands leads in the east (28.4% of that cluster).
+                    //
+                    // Two continuous axes rather than four discrete regimes because a regime that
+                    // switches puts its whole palette in along one contour; crossing these two
+                    // reaches all four measured looks and everything between them.
+                    double bush = Ramp(nA, 0.42, 0.22);
+                    double west = Ramp(nB, 0.50, 0.20);
 
                     return Mix(
-                        steppeBase, (byte)Math.Min(255, (105 + nA * 30) * quiet),
-                        low1, (byte)Math.Min(255, (65 + nB * 30 + toLow1) * quiet),
-                        low2, (byte)Math.Min(255, (55 + nC * 30) * quiet),
-                        low3, (byte)Math.Min(255, (50 + (1.0 - nB) * 30 + toLow3) * quiet),
-                        SteppeBushes, (byte)Math.Min(255, 235 * bushy),
-                        tail, (byte)Math.Min(255, (40 + nC * 25) * quiet * tailConf)
+                        low2, (byte)Math.Clamp(45 + 140 * west, 0, 255),
+                        low1, (byte)Math.Clamp(18 + 70 * (1.0 - west), 0, 255),
+                        SteppeBushes, (byte)Math.Clamp(5 + 125 * bush, 0, 255),
+                        steppeBase, (byte)Math.Clamp(55 + 30 * (1.0 - bush), 0, 255),
+                        low3, (byte)Math.Clamp(28 + 52 * (1.0 - west), 0, 255),
+                        // drylands_01_grassy is 12.6% of the bushy cluster and steppe_rocks 4.6%
+                        // of the dense one; steppe_grass, which used to hold this slot, is 0.06%
+                        // of vanilla's steppe and was the wrong texture to lean on.
+                        nC < 0.55 ? DrylandsGrassy : SteppeRocks,
+                            (byte)Math.Clamp((26 + nC * 30) * CutConfidence(nC, 0.55), 0, 255)
                     );
                 }
 
@@ -546,28 +580,40 @@ public static class TerrainPalette
             case TerrainClass.Desert:
                 {
                     ref readonly var desert = ref Families[(int)Climate.Desert];
-                    var (lowA, lowB, confA, confB) = LowlandPair(desert, nA, nB);
+
+                    // gen_desert_base is 25.9% of every desert pixel vanilla paints — more than
+                    // twice the next material — and LowlandPair treated it as one of five
+                    // interchangeable variants, so it drew a fifth of the rotation. Here the base
+                    // leads outright and the four variants rotate underneath it.
+                    byte desertBase = desert.Lowlands[0];
+                    int variantCount = desert.Lowlands.Length - 1;
+                    byte variant = desert.Lowlands[1 + (int)(Math.Clamp(nA, 0, 0.999999) * variantCount)];
+                    double variantConf = BucketConfidence(nA, variantCount);
 
                     // Dunes are the thing a desert is missing without them. desert_wavy is one of
                     // vanilla's twenty heaviest materials and we shipped none of it.
                     byte dune = nB < 0.55 ? DesertWavy : DesertWavyLarger;
                     byte duneAlt = nB < 0.55 ? DesertWavyLarger : DesertWavy;
                     double duneConf = CutConfidence(nB, 0.55);
-                    double duneWeight = 55 + nB * 40;
+                    double duneWeight = 22 + nB * 24;
 
                     // desert_01 and desert_02 are vanilla's plain sand — 0.35% of its painted
                     // weight between them — and were unreachable while the fourth slot only ever
                     // offered cracked/flat/rocky/hills.
-                    byte grain = nC < 0.25 ? DesertCracked
-                               : nC < 0.42 ? Desert02
-                               : nC < 0.55 ? DesertFlat
-                               : nC < 0.68 ? Desert01
-                               : nC < 0.85 ? DesertRocky
+                    // drylands_01 joins the rotation: it is 6.1% of vanilla's desert — ahead of
+                    // desert_rocky, desert_cracked and every gen_desert variant except
+                    // lowlands_02 — and nothing in this case could reach it.
+                    byte grain = nC < 0.22 ? DesertCracked
+                               : nC < 0.37 ? Desert02
+                               : nC < 0.50 ? DesertFlat
+                               : nC < 0.62 ? Desert01
+                               : nC < 0.78 ? DesertRocky
+                               : nC < 0.90 ? Drylands01
                                : desert.Hills;
 
                     return Mix(
-                        lowA, (byte)((100 + nA * 40) * confA),
-                        lowB, (byte)((75 + (1.0 - nA) * 40) * confB),
+                        desertBase, (byte)Math.Clamp(28 + nB * 16, 0, 255),
+                        variant, (byte)Math.Clamp((85 + (1.0 - nB) * 40) * variantConf, 0, 255),
                         dune, (byte)(duneWeight * (0.5 + 0.5 * duneConf)),
                         // 45..90 rather than 25..50. Measured against the map editor's own
                         // recompile, its desert holds a fourth layer at 12-13% of the pixel where
@@ -575,10 +621,8 @@ public static class TerrainPalette
                         // read, and faint layers are also the ones the shader's 0.1 cutoff drops.
                         // Vanilla's fourth slot averages 6% across all land, so this is a desert
                         // correction rather than a global one.
-                        grain, (byte)((45 + nC * 45) * Math.Min(
-                            Math.Min(CutConfidence(nC, 0.25), CutConfidence(nC, 0.42)),
-                            Math.Min(Math.Min(CutConfidence(nC, 0.55), CutConfidence(nC, 0.68)),
-                                     CutConfidence(nC, 0.85)))),
+                        grain, (byte)((45 + nC * 45)
+                            * CutConfidence(nC, 0.22, 0.37, 0.50, 0.62, 0.78, 0.90)),
                         duneAlt, (byte)(duneWeight * 0.5 * (1.0 - duneConf))
                     );
                 }
@@ -598,10 +642,10 @@ public static class TerrainPalette
                 return HillBlend(family, climate, relief, nA, nB, nC);
 
             case TerrainClass.Mountains:
-                return MountainBlend(family, relief, nA, nC);
+                return MountainBlend(family, climate, relief, nA, nB, nC);
 
             case TerrainClass.DesertMountains:
-                return MountainBlend(Families[(int)Climate.Desert], relief, nA, nC);
+                return MountainBlend(Families[(int)Climate.Desert], Climate.Desert, relief, nA, nB, nC);
 
             default:
                 {
@@ -644,6 +688,46 @@ public static class TerrainPalette
         );
     }
 
+    /// <summary>
+    /// How much the four layers are pushed apart before they leave <see cref="Mix"/>.
+    ///
+    /// Every blend in this file comes out flatter than vanilla's, and for a structural reason
+    /// rather than a per-biome one: <see cref="BucketConfidence"/> fades a rotated pick to nothing
+    /// at its bucket edges, so averaged over the selector a rotated layer carries about half its
+    /// nominal weight while an unfaded lead carries all of it. The weights that survive are
+    /// therefore bunched together. Swept across the whole selector space the four layers came out
+    /// at 40/27/19/14 of the pixel for steppe where vanilla measures 49/27/17/7 — the fourth layer
+    /// twice as strong as it should be, the first well short.
+    ///
+    /// Raising each layer's share to this power and renormalising restores the measured profile
+    /// without touching any of the pick logic, and it applies to every terrain at once because
+    /// vanilla's profile is near-constant across them (roughly 50/27/16/6 everywhere, flattest in
+    /// steppe and desert, sharpest in jungle).
+    /// </summary>
+    private const double LayerContrast = 1.6;
+
+    /// <summary>
+    /// Push the four surviving weights apart by <see cref="LayerContrast"/>, preserving their sum
+    /// so the pixel's overall intensity is unchanged.
+    /// </summary>
+    private static void Contrast(Span<byte> w)
+    {
+        double sum = w[0] + w[1] + w[2] + w[3];
+        if (sum <= 0) return;
+
+        Span<double> curved = stackalloc double[4];
+        double curvedSum = 0;
+        for (int i = 0; i < 4; i++)
+        {
+            curved[i] = w[i] == 0 ? 0 : Math.Pow(w[i] / sum, LayerContrast);
+            curvedSum += curved[i];
+        }
+        if (curvedSum <= 0) return;
+
+        for (int i = 0; i < 4; i++)
+            w[i] = w[i] == 0 ? (byte)0 : (byte)Math.Clamp(curved[i] / curvedSum * sum, 1, 255);
+    }
+
     /// <summary>The bare rock a family's hills break out into.</summary>
     private static byte HillRock(Climate climate, double n) => climate switch
     {
@@ -666,16 +750,52 @@ public static class TerrainPalette
         );
     }
 
-    private static Blend MountainBlend(in Family family, double relief, double nA, double nC)
+    /// <summary>
+    /// A mountain is three bands stacked by height, not one mix.
+    ///
+    /// Sampled straight up a single Alpine face in the map editor, vanilla runs hills 47 /
+    /// mountain 27 / lowland 25 at the foot, mountain 65 / lowland 33 at mid height, and snow 73 /
+    /// mountain 25 at the summit; the Norwegian and Anatolian faces trace the same shape. The
+    /// per-province averages hide this completely — pooled over a whole province the mountain
+    /// material is only 8-24% and the *lowlands* are 25-38%, because a mountain province is mostly
+    /// the valley it stands in. Painting that pooled average at every elevation is what made a
+    /// mountain read as one flat stony field from foot to summit.
+    ///
+    /// <paramref name="relief"/> is 0 at sea level and 1 at the mountain line, so the bands are
+    /// cut on it directly and snow exists only above it.
+    ///
+    /// <c>central_mountain</c> is gone from here. It held a fixed 60 — about a fifth of every
+    /// mountain pixel — while vanilla uses it outside the central family as a 2-5% contaminant,
+    /// and the slot it was occupying is worth more to the lowlands that actually carry the foot.
+    /// </summary>
+    private static Blend MountainBlend(in Family family, Climate climate, double relief,
+        double nA, double nB, double nC)
     {
-        double above = Math.Clamp(relief - 1.0, 0, 1);
-        byte snow = (byte)Math.Clamp(above * 240 + nC * 50 - 25, 0, 255);
+        double r = Math.Clamp(relief, 0, 1.8);
+
+        // Smooth bands rather than thresholds, for the reason the rest of this file gives: a
+        // palette that switches on a contour puts its whole set in along that contour.
+        double foot = 1.0 - Ramp(r, 0.60, 0.30);
+        double face = Ramp(r, 0.45, 0.30);
+        double cap = Ramp(r, 1.18, 0.20);
+
+        var (lowA, lowB, confA, confB) = LowlandPair(family, nA, nB);
+
+        // Tropical mountains carry no snow line and barely change texture with height — the
+        // sampled Sumatran face reads gen_tropical_mountain 100% from base to summit — so the cap
+        // is suppressed and the face material is left to take the pixel on its own.
+        double snow = climate is Climate.Tropical ? 0 : cap * (210 + nC * 40) - 25;
 
         return Mix(
-            family.Mountain, 140,
-            CentralMountain, 60,
-            family.Transition, (byte)(45 + nA * 35),
-            Snow, snow
+            family.Mountain, (byte)Math.Clamp(55 + 165 * face * (1.0 - 0.62 * cap), 0, 255),
+            // The transition is the shoulder between valley and rock, so it peaks partway up
+            // rather than at either end. Pooled, it is the single heaviest material in northern
+            // and mediterranean mountains — ahead of the mountain material itself.
+            family.Transition, (byte)Math.Clamp(25 + 130 * Bump(r, 0.55, 0.60), 0, 255),
+            family.Hills, (byte)Math.Clamp(110 * foot, 0, 255),
+            lowA, (byte)Math.Clamp((30 + 120 * foot) * confA, 0, 255),
+            Snow, (byte)Math.Clamp(snow, 0, 255),
+            lowB, (byte)Math.Clamp(75 * foot * confB, 0, 255)
         );
     }
 
@@ -1003,6 +1123,8 @@ public static class TerrainPalette
             outW[slot] = (byte)Math.Clamp(weights[best], 1, 255);
             weights[best] = 0;
         }
+
+        Contrast(outW);
 
         blend.M0 = outM[0]; blend.M1 = outM[1]; blend.M2 = outM[2]; blend.M3 = outM[3];
         blend.W0 = outW[0]; blend.W1 = outW[1]; blend.W2 = outW[2]; blend.W3 = outW[3];

@@ -142,9 +142,160 @@ public static class RiverMap
             drawnRivers++;
         }
 
+        // Geometry first, then orphans: thinning can sever a fragment from its outlet, and
+        // whatever it leaves stranded should be pruned rather than shipped.
+        EnforceEngineTopology(indices, width, height);
         Console.WriteLine($"  minor rivers: generated {drawnRivers} engine-compliant tributary streams in rivers.png");
         return indices;
     }
+
+    /// <summary>
+    /// Make the painted raster obey the two geometric rules the engine imposes on rivers.png: no
+    /// river pixel orthogonally adjacent to more than two others (three for a join or a split), and
+    /// no river two pixels wide.
+    ///
+    /// Both are hard rules rather than preferences — a malformed river map is documented as a crash,
+    /// and two-pixel-wide rivers and diagonal-only links simply fail to render. Measured on a
+    /// generated map, 11,412 of 81,754 river pixels (14.0%) had too many orthogonal neighbours and
+    /// 5,807 solid 2x2 blocks were two pixels wide, which is very likely why courses appeared to
+    /// stop halfway: the engine gave up drawing where the geometry stopped making sense.
+    ///
+    /// They come from painting many traced paths into one raster. <see cref="MakeOrthogonal"/>
+    /// guarantees a single path is 4-connected, but it inserts corner pixels to do it, and a corner
+    /// laid beside a path already drawn — or two courses converging a pixel apart before they meet —
+    /// makes a block no single path ever contained.
+    ///
+    /// The repair is to thin rather than to redraw. A pixel is removed only where its own
+    /// neighbourhood stays connected without it, so a course can lose its redundant width but never
+    /// be cut in half; anything left with three neighbours after thinning is a genuine confluence
+    /// and is marked as a join, which is the one thing the engine allows three neighbours.
+    /// </summary>
+    private static void EnforceEngineTopology(byte[] indices, int width, int height)
+    {
+        static bool IsRiver(byte v) => v <= PaletteWide;
+        static bool IsSpecial(byte v) => v == PaletteSource || v == PaletteJoin || v == PaletteSplit;
+
+        // The eight neighbours in ring order, so that consecutive entries are themselves adjacent.
+        int[] ringX = [-1, 0, 1, 1, 1, 0, -1, -1];
+        int[] ringY = [-1, -1, -1, 0, 1, 1, 1, 0];
+
+        // A pixel may go only if what is left behind still hangs together: its river neighbours must
+        // form one group around it, and there must be at least two of them, or removal would be
+        // eroding the end of a course rather than narrowing it.
+        bool Removable(int i)
+        {
+            byte v = indices[i];
+            if (!IsRiver(v) || IsSpecial(v)) return false;
+
+            int x = i % width, y = i / width;
+            int ring = 0, count = 0;
+            for (int k = 0; k < 8; k++)
+            {
+                int nx = x + ringX[k], ny = y + ringY[k];
+                if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+                if (!IsRiver(indices[ny * width + nx])) continue;
+
+                ring |= 1 << k;
+                count++;
+            }
+            if (count < 2) return false;
+
+            // One run of river around the ring means one group, so nothing is severed by leaving.
+            int runs = 0;
+            for (int k = 0; k < 8; k++)
+                if ((ring & (1 << k)) != 0 && (ring & (1 << ((k + 7) % 8))) == 0) runs++;
+
+            return runs == 1;
+        }
+
+        var candidates = new int[4];
+        int thinned = 0;
+
+        for (int pass = 0; pass < 4; pass++)
+        {
+            int before = thinned;
+
+            for (int y = 0; y + 1 < height; y++)
+            {
+                for (int x = 0; x + 1 < width; x++)
+                {
+                    int a = y * width + x, b = a + 1, c = a + width, d = c + 1;
+                    if (!IsRiver(indices[a]) || !IsRiver(indices[b]) ||
+                        !IsRiver(indices[c]) || !IsRiver(indices[d])) continue;
+
+                    // The diagonal partners first: dropping one of those keeps the block's own
+                    // corner-to-corner run intact, which is the shape a course actually needs.
+                    candidates[0] = d; candidates[1] = a; candidates[2] = b; candidates[3] = c;
+                    for (int k = 0; k < 4; k++)
+                    {
+                        if (!Removable(candidates[k])) continue;
+
+                        indices[candidates[k]] = PaletteLand;
+                        thinned++;
+                        break;
+                    }
+                }
+            }
+
+            if (thinned == before) break;
+        }
+
+        int OrthogonalDegree(int i)
+        {
+            int x = i % width, y = i / width, degree = 0;
+            if (x > 0 && IsRiver(indices[i - 1])) degree++;
+            if (x + 1 < width && IsRiver(indices[i + 1])) degree++;
+            if (y > 0 && IsRiver(indices[i - width])) degree++;
+            if (y + 1 < height && IsRiver(indices[i + width])) degree++;
+            return degree;
+        }
+
+        int marked = 0, stubborn = 0;
+        for (int i = 0; i < indices.Length; i++)
+        {
+            if (!IsRiver(indices[i])) continue;
+
+            int degree = OrthogonalDegree(i);
+            if (degree <= 2) continue;
+
+            if (degree > 3)
+            {
+                // Four ways out is beyond what even a join may have; give up one arm if any arm can
+                // be spared, and count the rest rather than cutting a course in half to satisfy a
+                // rule.
+                int x = i % width, y = i / width;
+                candidates[0] = y > 0 ? i - width : -1;
+                candidates[1] = y + 1 < height ? i + width : -1;
+                candidates[2] = x > 0 ? i - 1 : -1;
+                candidates[3] = x + 1 < width ? i + 1 : -1;
+
+                bool relieved = false;
+                for (int k = 0; k < 4 && !relieved; k++)
+                {
+                    if (candidates[k] < 0 || !Removable(candidates[k])) continue;
+
+                    indices[candidates[k]] = PaletteLand;
+                    thinned++;
+                    relieved = true;
+                }
+
+                if (!relieved) { stubborn++; continue; }
+
+                degree = OrthogonalDegree(i);
+                if (degree <= 2) continue;
+            }
+
+            // Three arms is a confluence, and red is how the engine is told so: a tributary joining
+            // here, flowing towards this pixel.
+            if (!IsSpecial(indices[i])) { indices[i] = PaletteJoin; marked++; }
+        }
+
+        if (thinned > 0 || marked > 0)
+            Console.WriteLine($"  minor rivers: thinned {thinned:N0} px to keep courses one pixel wide, " +
+                              $"marked {marked:N0} confluence(s) as joins" +
+                              (stubborn > 0 ? $", {stubborn:N0} crossing(s) left over-connected" : ""));
+    }
+
 
     /// <summary>
     /// Ensures strictly 4-connected (orthogonal) river pixels without diagonal-only corners.

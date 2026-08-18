@@ -479,6 +479,7 @@ public static class MapDataWriter
     {
         var full = ShippedHeightmap(cfg, provinces, order, landCount, terra);
 
+
         ReportHypsometry(full);
         PngWriter.WriteGray16(Path.Combine(dir, "heightmap.png"), cfg.Width, cfg.Height, full);
 
@@ -522,6 +523,7 @@ public static class MapDataWriter
 
               """);
     }
+
 
     private static void WriteDefaultMap(string path, int provinceCount, int baronyCount,
         int landCount, int riverCount)
