@@ -75,7 +75,8 @@ internal static class ScatterGround
         // real-world slope over more of them — left unscaled, a generous tolerance on a dramatic map
         // silently becomes a strict one and the wide meshes stop being placed at all.
         float range = Math.Max(1f, cfg.PeakElevation - cfg.Limits.SeaLevelUpper);
-        float tolerance = maxRelief * (range / Math.Max(1f, 236f));
+        float vanillaRange = Math.Max(1f, 236f);
+        float tolerance = maxRelief * (range / vanillaRange);
 
         for (int dy = -radius; dy <= radius; dy += 2)
         {

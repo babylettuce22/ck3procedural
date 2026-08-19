@@ -163,9 +163,12 @@ public static class HistoryWriter
             sb.Append($"\tculture = {ancestor.CultureKey}\n");
 
             var ancestorCulture = cultures.Cultures.FirstOrDefault(c => c.Key == ancestor.CultureKey);
-            if (ancestorCulture is not null
-                && GetPhenotypeTrait(ancestorCulture, ethnicities) is { } ancestorTrait)
-                sb.Append($"\ttrait = {ancestorTrait}\n");
+            if (ancestorCulture is not null)
+            {
+                string? ancestorTrait = GetPhenotypeTrait(ancestorCulture, ethnicities);
+                if (ancestorTrait is not null)
+                    sb.Append($"\ttrait = {ancestorTrait}\n");
+            }
             sb.Append($"\t{ancestor.BirthDate} = {{ birth = yes }}\n");
             sb.Append($"\t{ancestor.DeathDate} = {{ death = yes }}\n");
             sb.Append("}\n\n");
@@ -307,7 +310,12 @@ public static class HistoryWriter
             sb.Append($"\t\t\tadd_gold = {gold}\n");
             sb.Append($"\t\t\tadd_prestige = {prestige}\n");
 
-            if (renown > 0)
+            // Renown only for rulers who answer to nobody. A vassal's house does not gain standing
+            // for holding what its liege granted it, and handing it out regardless made every
+            // dynasty on the map start equally renowned.
+            bool independent = !realms.Liege.ContainsKey(primaryTitle);
+
+            if (renown > 0 && independent)
             {
                 sb.Append($"\t\t\tdynasty = {{ add_dynasty_prestige = {renown} }}\n");
             }
@@ -336,10 +344,10 @@ public static class HistoryWriter
                 }
             }
 
-            bool isIndependent = !realms.Liege.ContainsKey(primaryTitle);
+
             bool isHigherTier = primaryTitle.Tier is "d" or "k" or "e";
 
-            if (isIndependent || isHigherTier)
+            if (independent || isHigherTier)
             {
                 sb.Append("\t\t\tadd_character_modifier = {\n");
                 sb.Append("\t\t\t\tmodifier = gen_early_realm_stability\n");
@@ -373,9 +381,12 @@ public static class HistoryWriter
             sb.Append($"\tculture = {character.CultureKey}\n");
 
             var characterCulture = cultures.Cultures.FirstOrDefault(c => c.Key == character.CultureKey);
-            if (characterCulture is not null
-                && GetPhenotypeTrait(characterCulture, ethnicities) is { } characterTrait)
-                sb.Append($"\ttrait = {characterTrait}\n");
+            if (characterCulture is not null)
+            {
+                string? characterTrait = GetPhenotypeTrait(characterCulture, ethnicities);
+                if (characterTrait is not null)
+                    sb.Append($"\ttrait = {characterTrait}\n");
+            }
 
             if (character.FatherId is not null) sb.Append($"\tfather = {character.FatherId}\n");
             if (character.MotherId is not null) sb.Append($"\tmother = {character.MotherId}\n");
@@ -397,7 +408,10 @@ public static class HistoryWriter
 
         foreach (var faith in faiths.Faiths)
         {
-            if (faith.Head is null) continue;
+            if (faith.Head is null)
+            {
+                continue;
+            }
 
             var sampleCounty = counties.FirstOrDefault(c => faiths.For(c) == faith) ?? counties[0];
             var culture = cultures.For(sampleCounty);
@@ -562,7 +576,10 @@ public static class HistoryWriter
         int hofIndex = 0;
         foreach (var faith in faiths.Faiths)
         {
-            if (faith.Head is null) continue;
+            if (faith.Head is null)
+            {
+                continue;
+            }
 
             sb.Append($"{faith.Head.TitleKey} = {{\n");
             sb.Append($"\t{titleGrantDate} = {{\n");

@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Drawing.Imaging;
 using Ck3MapGen.Config;
 using Ck3MapGen.Core;
@@ -319,6 +319,10 @@ public sealed class MainForm : Form
         _preview.Click += async (_, _) => await PreviewAsync();
         _writeMod.Click += async (_, _) => await WriteModAsync();
         _cancel.Click += (_, _) => RequestCancel();
+
+        // Disabled until a run is actually going, so the button is never a no-op.
+        _cancel.Enabled = false;
+        _tips.SetToolTip(_cancel, "Stop the run in progress. It stops at the next step boundary, so a long step can take a few seconds to let go.");
         _openMod.Click += (_, _) => OpenModFolder();
         _launchGame.Click += (_, _) => LaunchGame();
         _gameFolder.Click += (_, _) => PickGameFolder();
@@ -1225,10 +1229,8 @@ public sealed class MainForm : Form
         {
             var bitmap = ToBitmap(image);
 
-            if (_rendered.TryGetValue(viewName, out var old))
-            {
-                old.Dispose();
-            }
+            _rendered.TryGetValue(viewName, out var old);
+            old?.Dispose();
             _rendered[viewName] = bitmap;
 
             // Instantly update on-screen if this is the active tab
@@ -1417,7 +1419,7 @@ public sealed class MainForm : Form
 
         _cancellation.Cancel();
         _cancel.Enabled = false;
-        _status.Text = "Cancelling — stopping at the end of this phase…";
+        _status.Text = "Cancelling — stopping at the end of this step…";
     }
 
     private void SetEnabled(bool enabled)

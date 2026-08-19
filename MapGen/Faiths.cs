@@ -178,7 +178,7 @@ public static class Faiths
                 var owned = members.Where(i => faithOf.GetValueOrDefault(i, 0) == f).Select(i => counties[i]).ToList();
                 if (owned.Count == 0) continue;
 
-                var faith = CreateFaith(religion, faiths.Count + religionFaiths.Count, vocab, usedNames, rng);
+                var faith = CreateFaith(religion, faiths.Count + religionFaiths.Count, vocab, usedNames, cfg, rng);
                 faith.IsDominant = (f == 0 && hasDominantFaith);
 
                 faith.Counties.AddRange(owned.Where(c => !wilderness.Contains(c)));
@@ -637,6 +637,8 @@ public static class Faiths
                     ? ["doctrine_pluralism_fundamentalist", "doctrine_pluralism_righteous"]
                     : ["doctrine_pluralism_pluralistic", "doctrine_pluralism_righteous"], rng),
 
+                "doctrine_theocracy" => Prefer(members, ["doctrine_theocracy_temporal"], rng),
+
                 "doctrine_pilgrimage" => Prefer(
                     members.Where(d => d != "doctrine_pilgrimage_mandatory_hajj").ToList(),
                     ["doctrine_pilgrimage_encouraged", "doctrine_pilgrimage_mandatory"], rng),
@@ -705,8 +707,15 @@ public static class Faiths
         || tag.EndsWith("MotherFather", StringComparison.Ordinal);
 
     private static Faith CreateFaith(Religion religion, int index, VanillaVocabulary vocab,
-        HashSet<string> usedNames, Rng rng)
+        HashSet<string> usedNames, MapConfig cfg, Rng rng)
     {
+        // Natural primitivism reads as a slur on a generated people rather than as flavour, so it is
+        // filterable. Filtered here rather than out of the vocabulary itself because the vocabulary
+        // is what the install actually has, and the rest of the program is entitled to see it whole.
+        var pool = cfg.AllowNaturalPrimitivism
+            ? vocab.Tenets
+            : vocab.Tenets.Where(t => !t.Contains("natural_primitivism", StringComparison.OrdinalIgnoreCase)).ToList();
+
         return new Faith
         {
             Key = $"gen_faith_{index}",
@@ -714,7 +723,7 @@ public static class Faiths
             Religion = religion,
             Color = (rng.Decimal(0.1, 0.9), rng.Decimal(0.1, 0.9), rng.Decimal(0.1, 0.9)),
             Icon = vocab.FaithIcons.Count > 0 ? rng.Pick(vocab.FaithIcons) : "germanic",
-            Tenets = Sample(vocab.Tenets, 3, rng),
+            Tenets = Sample(pool, 3, rng),
         };
     }
 

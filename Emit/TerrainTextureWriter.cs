@@ -360,7 +360,7 @@ public static class TerrainTextureWriter
                     int best = -1;
                     for (int k = 0; k < 4; k++)
                     {
-                        if (remainder[k] < 0 || intensity[at + k] == byte.MaxValue) continue;
+                        if (!(remainder[k] >= 0) || intensity[at + k] >= byte.MaxValue) continue;
                         if (best < 0 || remainder[k] > remainder[best]) best = k;
                     }
 
@@ -938,9 +938,12 @@ public static class TerrainTextureWriter
                     double wx = hx + qx;
                     double wy = hy + qy;
 
-                    double canopyDensity = CanopyField.At(canopyField, x, y);
-                    double zoneA = ZoneField.Primary(zoneField, x, y);
-                    double zoneB = ZoneField.Secondary(zoneField, x, y);
+                    // srcY, not y: the image runs top-down and the map runs bottom-up, and these
+                    // two fields are shared with the tree scatter, which works in map space. Sampling
+                    // at the image row would mirror the canopy against the trees standing in it.
+                    double canopyDensity = CanopyField.At(canopyField, x, srcY);
+                    double zoneA = ZoneField.Primary(zoneField, x, srcY);
+                    double zoneB = ZoneField.Secondary(zoneField, x, srcY);
 
                     double nA = Math.Clamp(Field.Fbm(nAField, wx * fA, wy * fA, 3) * 0.5 + 0.5, 0, 1);
                     double nB = Math.Clamp(Field.Fbm(nBField, wx * fB + 31.7, wy * fB - 19.3, 3) * 0.5 + 0.5, 0, 1);
@@ -1149,11 +1152,6 @@ public static class TerrainTextureWriter
                     // normalise again, so what they were carrying goes back to the ones that stayed.
                     blend = TerrainPalette.Normalized(blend, MaterialContrast);
                     blend = TerrainPalette.Pruned(blend, MaterialFloor);
-
-                    // Set is settled; now scatter only the weights.
-                    blend = TerrainPalette.Normalized(TerrainPalette.WeightJitter(blend,
-                        Dither(x, srcY, 5), Dither(x, srcY, 6),
-                        Dither(x, srcY, 7), Dither(x, srcY, 8), WeightDither));
 
                     // Unused slots keep the 255 sentinel, which is what vanilla writes: measured on
                     // its own detail_index, a zero-weight slot carries 255 on 60-87% of pixels and

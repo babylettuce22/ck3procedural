@@ -470,7 +470,14 @@ public static class TerrainPalette
                     // northern family's own biome, and a warm-side subarctic pixel painted out of
                     // Central was one of the seams in the far north.
                     ref readonly var north = ref Families[(int)Climate.Northern];
-                    var (lowA, lowB, confA, confB) = LowlandPair(north, nA, nB);
+                    // Taken as a tuple and read field by field rather than deconstructed: the
+                    // confidences are used twice each below, and a deconstruction would copy them
+                    // into four more locals on a path that already carries a dozen.
+                    var pair = LowlandPair(north, nA, nB);
+                    byte lowA = pair.First;
+                    byte lowB = pair.Second;
+                    double confA = pair.ConfA;
+                    double confB = pair.ConfB;
 
                     // Pine leads. Measured over every taiga province, forest_pine_01 is 38.8% of
                     // the painted weight — the heaviest single material in the biome — against

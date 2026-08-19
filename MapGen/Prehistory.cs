@@ -204,47 +204,48 @@ public sealed class PrehistoryMap
 
         foreach (var county in rulerCounties)
         {
-            if (map.CharacterDynastyMap.ContainsKey(county)) continue;
-
+            if (!map.CharacterDynastyMap.ContainsKey(county))
+            {
             var primary = HistoryWriter.Primary(county, realms);
             var liegeCounty = TopLiegeCounty(county, realms);
 
             var vRng = new Rng(county.Index ^ 0x48A1);
             bool isHighVassal = primary.Tier is "d" or "k";
 
-            if (isHighVassal && map.CharacterDynastyMap.TryGetValue(liegeCounty, out var liegeDynastyId) && vRng.Chance(0.40))
+            // Cadet branches are rare on purpose. At two in five, most of the map's dukes turned out
+            // to be relatives of their king, so nearly every war was a family quarrel and the
+            // dynasty screen was one tree; at one in eight they are the exception they should be.
+            //
+            // A cadet always founds its own house — sharing the liege's outright made the branch
+            // invisible, which is the one thing a cadet branch is for.
+            if (isHighVassal && map.CharacterDynastyMap.TryGetValue(liegeCounty, out var liegeDynastyId)
+                && vRng.Chance(0.12))
             {
                 map.CharacterDynastyMap[county] = liegeDynastyId;
 
-                if (vRng.Chance(0.50))
-                {
-                    var culture = cultures.For(county);
-                    string houseName = culture.DynastyNames.Count > 0
-                        ? culture.DynastyNames[vRng.Int(0, culture.DynastyNames.Count - 1)]
-                        : $"{culture.Name}_{county.Index}";
+                var culture = cultures.For(county);
+                string houseName = culture.DynastyNames.Count > 0
+                    ? culture.DynastyNames[vRng.Int(0, culture.DynastyNames.Count - 1)]
+                    : $"{culture.Name}_{county.Index}";
 
-                    string houseKey = $"house_gen_{county.Index}";
-                    string houseNameKey = $"dynn_gen_house_{county.Index}";
-                    string? prefix = CulturePrefix(culture.Key);
+                string houseKey = $"house_gen_{county.Index}";
+                string houseNameKey = $"dynn_gen_house_{county.Index}";
+                string? prefix = CulturePrefix(culture.Key);
 
-                    map.Houses[houseKey] = new DynastyHouseDef
-                    {
-                        Key = houseKey,
-                        NameKey = houseNameKey,
-                        LocalizedName = houseName,
-                        DynastyId = liegeDynastyId,
-                        Prefix = prefix
-                    };
-                    map.CharacterHouseMap[county] = houseKey;
-                }
-                else
+                map.Houses[houseKey] = new DynastyHouseDef
                 {
-                    map.CharacterHouseMap[county] = map.CharacterHouseMap[liegeCounty];
-                }
+                    Key = houseKey,
+                    NameKey = houseNameKey,
+                    LocalizedName = houseName,
+                    DynastyId = liegeDynastyId,
+                    Prefix = prefix
+                };
+                map.CharacterHouseMap[county] = houseKey;
             }
             else
             {
                 CreateDynastyAndMainHouse(map, county, cultures);
+            }
             }
         }
     }
