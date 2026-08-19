@@ -5,6 +5,10 @@
  # in-game and reports nothing, which is why every one of these was caught by ck3-tiger rather than
  # by playing.
 
+ # War/Casus Belli 
+ is_a_wilderness_recipient_tt:0 "You cannot declare war on uncolonized wilderness."
+ is_a_wilderness_actor_tt:0 "The wilderness cannot declare war."
+
  # --- Trait and government -----------------------------------------------------------------
  trait_wilderness:0 "Wilderness"
  blank_title_male:0 ""

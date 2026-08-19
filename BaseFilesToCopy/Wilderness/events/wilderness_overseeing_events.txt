@@ -238,7 +238,7 @@ wilderness_colonization.0030 = {
 		}
 	}
 
-	# --- Option C: Bar the Gates & Preserve Stores ---
+# --- Option C: Bar the Gates & Preserve Stores ---
 	option = {
 		name = wilderness_colonization.0030.c
 		trait = callous
@@ -249,7 +249,7 @@ wilderness_colonization.0030 = {
 				years = 5
 			}
 			if = {
-				limit = { has_realm_law = colony_law_corvee }
+				limit = { root = { has_realm_law = colony_law_corvee } }
 				change_county_control = 15
 			}
 			else = {
@@ -268,7 +268,7 @@ wilderness_colonization.0030 = {
 		ai_chance = {
 			base = 20
 			modifier = { add = 50 has_trait = callous }
-			modifier = { add = 35 has_realm_law = colony_law_corvee }
+			modifier = { add = 35 root = { has_realm_law = colony_law_corvee } }
 			modifier = { add = 30 ai_compassion < 25 }
 			modifier = { add = 30 gold < 30 }
 		}

@@ -1,0 +1,108 @@
+{
+  "format": "ck3-heightmap-forge-preset",
+  "version": 1,
+  "saved": "2026-08-18 18:04:48",
+  "project": {
+    "baseWidth": 9216,
+    "baseHeight": 4608,
+    "masterSeed": 1337,
+    "seaLevel": 0.07451,
+    "previewLongEdge": 2048
+  },
+  "stages": [
+    {
+      "type": "ImportStage",
+      "name": "Import Heightmap",
+      "enabled": true,
+      "params": {
+        "path": "C:\\Users\\caelo\\Downloads\\Oreia 2026-08-18-17-43.png",
+        "fit": 0,
+        "flipY": false,
+        "alignWaterline": true,
+        "srcWaterline": 0.07450981,
+        "landCeiling": 0.6,
+        "oceanFloor": 0,
+        "smooth": 6
+      }
+    },
+    {
+      "type": "ContrastStage",
+      "name": "Contrast",
+      "enabled": true,
+      "params": {
+        "mode": 2,
+        "contrast": 2.3737,
+        "gamma": 1.8038,
+        "bias": -0.06660001,
+        "pivotMode": 0,
+        "customPivot": 0.5,
+        "targetArea": 0,
+        "ceiling": 0.95,
+        "keepCoastline": true
+      }
+    },
+    {
+      "type": "HillStage",
+      "name": "Rolling Hills",
+      "enabled": true,
+      "params": {
+        "seed": 8080,
+        "frequency": 30,
+        "octaves": 4,
+        "gain": 0.44,
+        "warp": 0.3,
+        "amplitude": 0.12,
+        "slopeLimit": 4,
+        "patchiness": 0.28,
+        "patchScale": 1.57,
+        "landOnly": true
+      }
+    },
+    {
+      "type": "RidgeStage",
+      "name": "Ridges \u0026 Mountains",
+      "enabled": true,
+      "params": {
+        "seed": -92528388,
+        "rangeFrequency": 1.7326,
+        "coverage": 0.11506,
+        "edgeSoftness": 0.35,
+        "rangeWarp": 0.666,
+        "ridgeFrequency": 18.38,
+        "octaves": 6,
+        "lacunarity": 2.07,
+        "gain": 0.5,
+        "ridgeWarp": 0.21,
+        "sharpness": 4,
+        "amplitude": 0.6,
+        "basinDepth": 0.096,
+        "followElevation": 0.55,
+        "followInland": 0.6,
+        "inlandScale": 0.01,
+        "ceiling": 1,
+        "landOnly": true
+      }
+    },
+    {
+      "type": "HydraulicErosionStage",
+      "name": "Hydraulic Erosion (GPU)",
+      "enabled": true,
+      "params": {
+        "iterations": 300,
+        "reliefRatio": 0.094,
+        "timeStep": 0.04,
+        "rain": 0.02,
+        "evaporation": 0.02,
+        "capacity": 2.5,
+        "dissolve": 0.3,
+        "deposit": 0.3,
+        "minTilt": 0.01,
+        "channelThreshold": 0.05,
+        "talus": 0.153,
+        "thermalRate": 0.2,
+        "thermalEvery": 4,
+        "protectCoast": true
+      }
+    }
+  ]
+}

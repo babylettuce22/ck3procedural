@@ -1,0 +1,224 @@
+﻿# Procedural Genetic Phenotypes
+
+#elf
+phenotype_gracile = {
+    physical = yes
+    inherit_chance = 100
+    both_parent_has_trait_inherit_chance = 100
+    inherit_from_real_father = yes
+    inherit_from_real_mother = yes
+    shown_in_ruler_designer = yes
+    ruler_designer_cost = 20
+
+    group = phenotype_physique
+    opposites = { phenotype_stocky phenotype_rough_hewn }
+
+    icon = "gracile.dds"
+
+    desc = {
+        first_valid = {
+            triggered_desc = {
+                trigger = {
+                    NOT = { exists = this }
+                }
+                desc = trait_phenotype_gracile_desc
+            }
+            desc = trait_phenotype_gracile_character_desc
+        }
+    }
+
+	culture_modifier = {
+		parameter = forest_trait_bonuses
+		forest_attrition_mult = -0.1
+		taiga_attrition_mult = -0.1
+	}
+
+    diplomacy = 1
+    prowess = 1
+    movement_speed = 0.05
+    stress_loss_mult = 0.05
+	health = 0.65
+    same_opinion = 10
+}
+
+#dwarf
+phenotype_stocky = {
+    physical = yes
+    inherit_chance = 100
+    both_parent_has_trait_inherit_chance = 100
+    inherit_from_real_father = yes
+    inherit_from_real_mother = yes
+    shown_in_ruler_designer = yes
+    ruler_designer_cost = 20
+
+    group = phenotype_physique
+    opposites = { phenotype_gracile phenotype_diminutive }
+
+    icon = "stocky.dds"
+
+    desc = {
+        first_valid = {
+            triggered_desc = {
+                trigger = {
+                    NOT = { exists = this }
+                }
+                desc = trait_phenotype_stocky_desc
+            }
+            desc = trait_phenotype_stocky_character_desc
+        }
+    }
+
+    stewardship = 1
+    prowess = 2
+    health = 0.5
+    siege_defence = 0.10
+
+    same_opinion = 5
+	
+		culture_modifier = {
+		parameter = mountain_trait_bonuses
+		mountains_attrition_mult= -0.15
+		desert_mountains_attrition_mult = -0.15
+	}
+}
+
+#orc
+phenotype_rough_hewn = {
+    physical = yes
+    inherit_chance = 100
+    both_parent_has_trait_inherit_chance = 100
+    inherit_from_real_father = yes
+    inherit_from_real_mother = yes
+    shown_in_ruler_designer = yes
+    ruler_designer_cost = 15
+
+    group = phenotype_physique
+    opposites = { phenotype_gracile }
+
+    icon = "rough_hewn.dds"
+
+    desc = {
+        first_valid = {
+            triggered_desc = {
+                trigger = {
+                    NOT = { exists = this }
+                }
+                desc = trait_phenotype_rough_hewn_desc
+            }
+            desc = trait_phenotype_rough_hewn_character_desc
+        }
+    }
+
+    health = -0.1
+    martial = 1
+    prowess = 3
+    natural_dread = 15
+    dread_gain_mult = 0.3
+    general_opinion = -5
+    same_opinion = 10
+}
+
+#giant
+phenotype_towering = {
+    physical = yes
+    inherit_chance = 100
+    both_parent_has_trait_inherit_chance = 100
+    inherit_from_real_father = yes
+    inherit_from_real_mother = yes
+    shown_in_ruler_designer = yes
+    ruler_designer_cost = 25
+
+    group = phenotype_height
+    opposites = { phenotype_diminutive phenotype_stocky }
+
+    icon = "towering.dds"
+
+    desc = {
+        first_valid = {
+            triggered_desc = {
+                trigger = {
+                    NOT = { exists = this }
+                }
+                desc = trait_phenotype_towering_desc
+            }
+            desc = trait_phenotype_towering_character_desc
+        }
+    }
+
+    prowess = 4
+    knight_effectiveness_mult = 0.15
+    advantage = 2
+    dread_gain_mult = 0.10
+
+    same_opinion = 5
+}
+
+#gnome
+phenotype_diminutive = {
+    physical = yes
+    inherit_chance = 100
+    both_parent_has_trait_inherit_chance = 100
+    inherit_from_real_father = yes
+    inherit_from_real_mother = yes
+    shown_in_ruler_designer = yes
+    ruler_designer_cost = 10
+
+    group = phenotype_height
+    opposites = { phenotype_towering }
+
+    icon = "diminutive.dds"
+
+    desc = {
+        first_valid = {
+            triggered_desc = {
+                trigger = {
+                    NOT = { exists = this }
+                }
+                desc = trait_phenotype_diminutive_desc
+            }
+            desc = trait_phenotype_diminutive_character_desc
+        }
+    }
+
+    intrigue = 1
+    prowess = -2
+    hostile_scheme_power_mult = 0.15
+    scheme_resistance_mult = 0.10
+    stress_loss_mult = 0.10
+
+    same_opinion = 5
+}
+
+#drow
+phenotype_dusk_adapted = {
+    physical = yes
+    inherit_chance = 100
+    both_parent_has_trait_inherit_chance = 100
+    inherit_from_real_father = yes
+    inherit_from_real_mother = yes
+    shown_in_ruler_designer = yes
+    ruler_designer_cost = 20
+
+    group = phenotype_origin
+
+    icon = "dusk_adapted.dds"
+
+    desc = {
+        first_valid = {
+            triggered_desc = {
+                trigger = {
+                    NOT = { exists = this }
+                }
+                desc = trait_phenotype_dusk_adapted_desc
+            }
+            desc = trait_phenotype_dusk_adapted_character_desc
+        }
+    }
+
+    intrigue = 2
+    learning = 1
+    hostile_scheme_power_mult = 0.10
+    enemy_hostile_scheme_success_chance_add = -5
+
+    same_opinion = 5
+}

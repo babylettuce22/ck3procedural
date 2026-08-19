@@ -4,3 +4,28 @@
 
   MOD_GITHUB_BUTTON_TEXT: "Check Mod Updates"
  MOD_GITHUB_BUTTON_TOOLTIP: "View the latest releases, changelogs, and bugfixes on GitHub"
+ 
+ # RACE PHENOTYPE TRAITS (Generic Descriptions for Ruler Designer & Encyclopedia)
+ trait_phenotype_gracile:0 "Gracile"
+ trait_phenotype_gracile_desc:0 "Possessing an elongated, lithesome build and sharp bone structure, characters with this trait move with natural poise and effortless grace."
+ trait_phenotype_gracile_character_desc:0 "Possessing an elongated, lithesome build and sharp bone structure, [ROOT.GetCharacter.GetFirstNameNoTooltip] moves with natural poise and effortless grace."
+
+ trait_phenotype_stocky:0 "Stocky"
+ trait_phenotype_stocky_desc:0 "Built low to the ground with broad shoulders and dense bone structure, characters with this trait possess immense physical stamina and stability."
+ trait_phenotype_stocky_character_desc:0 "Built low to the ground with broad shoulders and dense bone structure, [ROOT.GetCharacter.GetFirstNameNoTooltip] possesses immense physical stamina and stability."
+
+ trait_phenotype_rough_hewn:0 "Rough-Hewn"
+ trait_phenotype_rough_hewn_desc:0 "Marked by a pronounced brow, heavy jaw, and thick skin, characters with this trait are naturally intimidating and hardened against hardship."
+ trait_phenotype_rough_hewn_character_desc:0 "Marked by a pronounced brow, heavy jaw, and thick skin, [ROOT.GetCharacter.GetFirstNameNoTooltip] is naturally intimidating and hardened against hardship."
+
+ trait_phenotype_towering:0 "Towering"
+ trait_phenotype_towering_desc:0 "Standing heads above others with massive physical reach, characters with this trait command an overwhelming presence on and off the battlefield."
+ trait_phenotype_towering_character_desc:0 "Standing heads above others with massive physical reach, [ROOT.GetCharacter.GetFirstNameNoTooltip] commands an overwhelming presence on and off the battlefield."
+
+ trait_phenotype_diminutive:0 "Diminutive"
+ trait_phenotype_diminutive_desc:0 "Noticeably small in stature and light of step, characters with this trait easily slip through tight spaces and go unnoticed in the shadows."
+ trait_phenotype_diminutive_character_desc:0 "Noticeably small in stature and light of step, [ROOT.GetCharacter.GetFirstNameNoTooltip] easily slips through tight spaces and goes unnoticed in the shadows."
+
+ trait_phenotype_dusk_adapted:0 "Dusk-Adapted"
+ trait_phenotype_dusk_adapted_desc:0 "Adapted to subterranean depths and nocturnal life, characters with this trait possess acute senses and a calm, calculating demeanor in the dark."
+ trait_phenotype_dusk_adapted_character_desc:0 "Adapted to subterranean depths and nocturnal life, [ROOT.GetCharacter.GetFirstNameNoTooltip] possesses acute senses and a calm, calculating demeanor in the dark."
