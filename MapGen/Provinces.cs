@@ -284,7 +284,7 @@ public static class Provinces
                     double dy = y - centroidY[label];
                     double d = dx * dx + dy * dy;
 
-                    if (d < localBest[label])
+                    if (Closer(d, x, y, localBest[label], localTarget[label]))
                     {
                         localBest[label] = d;
                         localTarget[label] = (x, y);
@@ -298,11 +298,11 @@ public static class Provinces
                 {
                     for (int i = 0; i < mapCount; i++)
                     {
-                        if (local.Item1[i] < best[i])
-                        {
-                            best[i] = local.Item1[i];
-                            target[i] = local.Item2[i];
-                        }
+                        if (double.IsPositiveInfinity(local.Item1[i])) continue;
+                        if (!Closer(local.Item1[i], local.Item2[i].X, local.Item2[i].Y, best[i], target[i])) continue;
+
+                        best[i] = local.Item1[i];
+                        target[i] = local.Item2[i];
                     }
                 }
             });
@@ -324,6 +324,30 @@ public static class Provinces
 
         Console.WriteLine($"  relaxed {iterations}x: seeds moved {moved:F1} px on the last pass " +
                           $"({sw.ElapsedMilliseconds} ms)");
+    }
+
+    /// <summary>
+    /// Whether a candidate pixel beats the incumbent as a province's next seed, under a total
+    /// order rather than a bare distance test.
+    ///
+    /// The tie-break is not a nicety. The candidates are integer pixels measured against a
+    /// fractional centroid, so exact ties are the common case — every pair placed symmetrically
+    /// about the centre ties to the bit. Under a plain <c>&lt;</c> the winner is whichever tied
+    /// pixel its worker happened to see first, which depends on how Parallel.For split the rows
+    /// and on which thread reached the reduction lock first. That is the whole of the province
+    /// map's run-to-run drift on a fixed seed: the relaxed seeds land a pixel apart, the next
+    /// partition grows from somewhere slightly different, and the borders come out different.
+    ///
+    /// Ordering on position after distance — topmost row, then leftmost column — makes the winner
+    /// a property of the map rather than of the schedule, so the result no longer depends on how
+    /// the work was divided.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool Closer(double d, int x, int y, double bestDistance, (int X, int Y) bestAt)
+    {
+        if (d < bestDistance) return true;
+        if (d > bestDistance) return false;
+        return y < bestAt.Y || (y == bestAt.Y && x < bestAt.X);
     }
 
     private static void SeverWaists(ProvinceMap map)

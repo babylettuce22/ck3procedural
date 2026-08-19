@@ -276,9 +276,25 @@ public static class ClimateModel
 
         return rain;
 
+        /// <summary>
+        /// One upwind sweep. Sequential over rows on purpose — do not restore the Parallel.For.
+        ///
+        /// The march along x has to be in-place: cell x is fed by the moisture the parcel carried
+        /// out of x - direction, which this same sweep has already updated. That part would be fine
+        /// in parallel, since rows do not share it. What is not fine is that the wind is not purely
+        /// zonal — <c>sy</c> follows the meridional component, so the sample reaches up to two rows
+        /// away and reads moisture that neighbouring rows are writing at the same moment. Across
+        /// threads that is a plain data race, and it was the map's largest source of run-to-run
+        /// drift on a fixed seed: rainfall moved, which moved drainage, which moved the rivers, the
+        /// province sizes and every border downstream of them.
+        ///
+        /// Sequential rows fix it for a few milliseconds — the grid is capped at
+        /// <see cref="GridWidth"/> across, so this is a small part of a stage dominated by the
+        /// relief blur at full province resolution.
+        /// </summary>
         void Advect(int direction)
         {
-            Parallel.For(0, height, y =>
+            for (int y = 0; y < height; y++)
             {
                 for (int step = 0; step < width; step++)
                 {
@@ -322,7 +338,7 @@ public static class ClimateModel
                     moisture[i] = (float)Math.Min(limit, left + fell * LandRecycling);
                     rain[i] = (float)fell;
                 }
-            });
+            }
         }
     }
 
