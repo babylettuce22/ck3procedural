@@ -380,8 +380,16 @@ public static class TerrainTextureWriter
 
         Parallel.For(0, height, y =>
         {
+            // All five allocated once per row, not once per pixel. A stackalloc inside the x loop
+            // grows the frame by another sixteen bytes on every one of the width iterations without
+            // ever releasing them — the stack is only unwound when the lambda returns — so a wide
+            // map overflows it. Every one of these is fully rewritten for indices below `kept`
+            // before it is read, so nothing carries between pixels.
             Span<byte> mats = stackalloc byte[36];
             Span<float> wts = stackalloc float[36];
+            Span<int> pick = stackalloc int[4];
+            Span<int> scaled = stackalloc int[4];
+            Span<float> remainder = stackalloc float[4];
 
             for (int x = 0; x < width; x++)
             {
@@ -429,7 +437,6 @@ public static class TerrainTextureWriter
                 }
 
                 // Four heaviest, by selection — n is small and this avoids sorting the whole set.
-                Span<int> pick = stackalloc int[4];
                 int kept = 0;
                 for (int slot = 0; slot < 4 && slot < n; slot++)
                 {
@@ -451,8 +458,6 @@ public static class TerrainTextureWriter
                 for (int i = 0; i < kept; i++) total += wts[pick[i]];
 
                 // Largest remainder, so the four still sum to exactly 255 as vanilla's always do.
-                Span<int> scaled = stackalloc int[4];
-                Span<float> remainder = stackalloc float[4];
                 int assigned = 0;
 
                 for (int i = 0; i < kept; i++)

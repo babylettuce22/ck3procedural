@@ -100,12 +100,6 @@ public static class Governments
         return false;
     }
 
-    /// <summary>Title tiers as a number, so a hierarchy can be walked biggest-first.</summary>
-    private static int TierRank(string tier) => tier switch
-    {
-        "e" => 4, "k" => 3, "d" => 2, "c" => 1, _ => 0,
-    };
-
     public static GovernmentMap Build(
         List<Title> empires,
         List<Title> counties,
@@ -349,6 +343,12 @@ public static class Governments
                && level >= 10
                && draw.NextDouble() < cfg.RepublicShare;
     }
+
+    /// <summary>Title tiers as a number, so a hierarchy can be walked biggest-first.</summary>
+    private static int TierRank(string tier) => tier switch
+    {
+        "e" => 4, "k" => 3, "d" => 2, "c" => 1, _ => 0,
+    };
 
     private static Title TopLiege(Title county, RealmMap realms)
     {

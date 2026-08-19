@@ -637,11 +637,11 @@ public static class Faiths
                     ? ["doctrine_pluralism_fundamentalist", "doctrine_pluralism_righteous"]
                     : ["doctrine_pluralism_pluralistic", "doctrine_pluralism_righteous"], rng),
 
-                "doctrine_theocracy" => Prefer(members, ["doctrine_theocracy_temporal"], rng),
-
                 "doctrine_pilgrimage" => Prefer(
                     members.Where(d => d != "doctrine_pilgrimage_mandatory_hajj").ToList(),
                     ["doctrine_pilgrimage_encouraged", "doctrine_pilgrimage_mandatory"], rng),
+
+                "doctrine_theocracy" => Prefer(members, ["doctrine_theocracy_temporal"], rng),
 
                 _ => rng.Pick(members),
             };

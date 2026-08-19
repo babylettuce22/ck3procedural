@@ -1230,7 +1230,6 @@ public sealed class MainForm : Form
             var bitmap = ToBitmap(image);
 
             _rendered.TryGetValue(viewName, out var old);
-            old?.Dispose();
             _rendered[viewName] = bitmap;
 
             // Instantly update on-screen if this is the active tab
@@ -1239,6 +1238,12 @@ public sealed class MainForm : Form
                 _viewer.SetImage(bitmap);
                 ShowReadout(_viewer.Zoom, null);
             }
+
+            // Disposed last, after the viewer is already holding the replacement. Disposing before
+            // SetImage frees a bitmap the control may still be mid-paint on, which is the stale-image
+            // crash ImageView now catches — this is the other half of that fix, and the half that
+            // stops it happening rather than surviving it.
+            old?.Dispose();
         });
     }
 

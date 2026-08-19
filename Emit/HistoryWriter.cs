@@ -422,11 +422,16 @@ public static class HistoryWriter
 
             sb.Append($"gen_hof_{hofIndex++} = {{\n");
             sb.Append($"\tname = \"{firstName}\"\n");
+
+            if (culture is not null)
+            {
+                string? hofTrait = GetPhenotypeTrait(culture, ethnicities);
+                if (hofTrait is not null)
+                    sb.Append($"\ttrait = {hofTrait}\n");
+            }
+
             sb.Append($"\treligion = {faith.Key}\n");
             sb.Append($"\tculture = {culture.Key}\n");
-
-            if (GetPhenotypeTrait(culture, ethnicities) is { } hofTrait)
-                sb.Append($"\ttrait = {hofTrait}\n");
             sb.Append($"\t{birthYear}.1.1 = {{ birth = yes }}\n");
             sb.Append($"\t{cfg.StartDate} = {{\n");
             sb.Append("\t\teffect = {\n");
