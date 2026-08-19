@@ -725,6 +725,11 @@ public static class TerrainTextureWriter
         int sea = cfg.Limits.SeaLevelUpper;
         int mountains = cfg.Limits.Mountains.Lower;
 
+        // The same two fields the tree scatter and the steppe regimes read, so painted canopy and
+        // planted canopy thin out together and a steppe regime covers the same ground in both.
+        var canopyField = CanopyField.Create(cfg);
+        var zoneField = ZoneField.Create(cfg);
+
         var nAField = new SimplexNoise(rng);
         var nBField = new SimplexNoise(rng);
         var nCField = new SimplexNoise(rng);
@@ -839,6 +844,10 @@ public static class TerrainTextureWriter
                     double wx = hx + qx;
                     double wy = hy + qy;
 
+                    double canopyDensity = CanopyField.At(canopyField, x, y);
+                    double zoneA = ZoneField.Primary(zoneField, x, y);
+                    double zoneB = ZoneField.Secondary(zoneField, x, y);
+
                     double nA = Math.Clamp(Field.Fbm(nAField, wx * fA, wy * fA, 3) * 0.5 + 0.5, 0, 1);
                     double nB = Math.Clamp(Field.Fbm(nBField, wx * fB + 31.7, wy * fB - 19.3, 3) * 0.5 + 0.5, 0, 1);
                     double nC = Math.Clamp(Field.Fbm(nCField, wx * fC - 11.2, wy * fC + 43.1, 2) * 0.5 + 0.5, 0, 1);
@@ -886,7 +895,8 @@ public static class TerrainTextureWriter
 
                     byte self = label[pSrc];
                     var blend = TerrainPalette.For(TerrainPalette.TerrainOf(self),
-                        TerrainPalette.ClimateFromLabel(self), relief, nA, nB, nC);
+                        TerrainPalette.ClimateFromLabel(self), relief, nA, nB, nC,
+                        canopyDensity, zoneA, zoneB);
 
                     // Distance from here to the nearest ground of a different class, measured
                     // inside its own region. A smooth function of a real distance is what makes a
@@ -974,7 +984,8 @@ public static class TerrainTextureWriter
 
                                 byte winner = boundaryOther[pSrc];
                                 var neighbour = TerrainPalette.For(TerrainPalette.TerrainOf(winner),
-                                    TerrainPalette.ClimateFromLabel(winner), relief, nA, nB, nC);
+                                    TerrainPalette.ClimateFromLabel(winner), relief, nA, nB, nC,
+                                    canopyDensity, zoneA, zoneB);
 
                                 blend = TerrainPalette.Merge(blend, neighbour, a);
 
@@ -983,7 +994,8 @@ public static class TerrainTextureWriter
                                     byte second = boundaryOther2[pSrc];
                                     var runnerUp = TerrainPalette.For(
                                         TerrainPalette.TerrainOf(second),
-                                        TerrainPalette.ClimateFromLabel(second), relief, nA, nB, nC);
+                                        TerrainPalette.ClimateFromLabel(second), relief, nA, nB, nC,
+                                        canopyDensity, zoneA, zoneB);
 
                                     blend = TerrainPalette.Merge(blend, runnerUp, b);
                                 }

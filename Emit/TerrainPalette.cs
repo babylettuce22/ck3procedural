@@ -323,7 +323,8 @@ public static class TerrainPalette
     /// <param name="nB">Noise selecting the second variant, 0..1.</param>
     /// <param name="nC">Noise selecting the accent and setting how strongly it shows through, 0..1.</param>
     public static Blend For(TerrainClass terrain, Climate climate, double relief,
-        double nA, double nB, double nC)
+        double nA, double nB, double nC,
+        double canopyDensity = 0.5, double zoneA = 0.5, double zoneB = 0.5)
     {
         ref readonly var family = ref Families[(int)climate];
 
@@ -433,12 +434,17 @@ public static class TerrainPalette
                     // crossfaded — an even split at the threshold, one of them alone away from it.
                     byte canopyAlt = mixedCanopy ? (nC < 0.45 ? ForestLeaf : ForestPine) : canopy;
                     double canopyConf = mixedCanopy ? CutConfidence(nC, 0.45) : 1.0;
-                    double canopyWeight = 80 + (1.0 - nA) * 40;
+
+                    // Canopy density comes from the map-wide field rather than from nA, so the trees
+                    // painted here thin out over the same ground the tree *instances* thin out over.
+                    // Sharing one field is the whole point: two independent noises average back into
+                    // an even carpet, which is what made forest read as uniform.
+                    double canopyWeight = 72 + 60 * canopyDensity;
 
                     var (lowA, _, confA, _) = LowlandPair(family, nA, nB);
 
                     return Mix(
-                        ForestFloor, (byte)(100 + nA * 40),
+                        ForestFloor, (byte)Math.Clamp(70 + 55 * canopyDensity + nA * 20, 0, 255),
                         canopy, (byte)(canopyWeight * (0.5 + 0.5 * canopyConf)),
                         lowA, (byte)((40 + nB * 30) * confA),
                         family.Hills, (byte)(20 + nC * 20),
@@ -450,7 +456,7 @@ public static class TerrainPalette
                 {
                     var (lowA, lowB, confA, confB) = LowlandPair(Families[(int)Climate.Tropical], nA, nB);
                     return Mix(
-                        ForestJungle, (byte)(100 + nA * 40),
+                        ForestJungle, (byte)Math.Clamp(60 + 95 * canopyDensity + nA * 20, 0, 255),
                         lowA, (byte)((70 + (1.0 - nA) * 40) * confA),
                         lowB, (byte)((50 + nB * 30) * confB),
                         nC < 0.5 ? ForestFloor : Families[(int)Climate.Tropical].Hills,
@@ -477,11 +483,9 @@ public static class TerrainPalette
                     // weight of 25-55; vanilla paints snow on 0.08% of taiga, which is to say
                     // nowhere. What is under the trees instead is forestfloor (4.5%) and the dry
                     // plains pair (3.6% / 1.4%), none of which this case could previously reach.
-                    double canopy = 0.25 + 0.75 * nA;
-
                     return Mix(
-                        ForestPine, (byte)Math.Clamp(22 + 88 * canopy, 0, 255),
-                        lowA, (byte)Math.Clamp((70 + (1.0 - nA) * 45) * confA, 0, 255),
+                        ForestPine, (byte)Math.Clamp(11 + 50 * canopyDensity, 0, 255),
+                        lowA, (byte)Math.Clamp((70 + 45 * (1.0 - canopyDensity)) * confA, 0, 255),
                         lowB, (byte)Math.Clamp((40 + nB * 30) * confB, 0, 255),
                         nC < 0.45 ? ForestFloor : nC < 0.75 ? PlainsDry : PlainsDryMud,
                             (byte)Math.Clamp((30 + nC * 25)
@@ -538,15 +542,18 @@ public static class TerrainPalette
                     // Two continuous axes rather than four discrete regimes because a regime that
                     // switches puts its whole palette in along one contour; crossing these two
                     // reaches all four measured looks and everything between them.
-                    double bush = Ramp(nA, 0.42, 0.22);
-                    double west = Ramp(nB, 0.50, 0.20);
+                    // Both axes ride the shared zone field with a fifth of the local selector mixed
+                    // back in: the field is what makes the regimes arrive as regions the same size
+                    // on every map, and the local term keeps them from being flat inside.
+                    double bush = Ramp(0.8 * zoneA + 0.2 * nA, 0.45, 0.20);
+                    double west = Ramp(0.8 * zoneB + 0.2 * nB, 0.50, 0.18);
 
                     return Mix(
-                        low2, (byte)Math.Clamp(45 + 140 * west, 0, 255),
-                        low1, (byte)Math.Clamp(18 + 70 * (1.0 - west), 0, 255),
-                        SteppeBushes, (byte)Math.Clamp(5 + 125 * bush, 0, 255),
-                        steppeBase, (byte)Math.Clamp(55 + 30 * (1.0 - bush), 0, 255),
-                        low3, (byte)Math.Clamp(28 + 52 * (1.0 - west), 0, 255),
+                        low2, (byte)Math.Clamp(30 + 120 * west + 55 * nB, 0, 255),
+                        low1, (byte)Math.Clamp(12 + 60 * (1.0 - west) + 45 * nC, 0, 255),
+                        SteppeBushes, (byte)Math.Clamp(4 + 110 * bush + 30 * nA, 0, 255),
+                        steppeBase, (byte)Math.Clamp(38 + 25 * (1.0 - bush) + 45 * (1.0 - nC), 0, 255),
+                        low3, (byte)Math.Clamp(18 + 45 * (1.0 - west) + 40 * (1.0 - nB), 0, 255),
                         // drylands_01_grassy is 12.6% of the bushy cluster and steppe_rocks 4.6%
                         // of the dense one; steppe_grass, which used to hold this slot, is 0.06%
                         // of vanilla's steppe and was the wrong texture to lean on.

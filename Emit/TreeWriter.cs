@@ -299,6 +299,11 @@ public static class TreeWriter
         string dir = Path.Combine(modDir, "gfx", "map", "map_object_data", "generated");
         Directory.CreateDirectory(dir);
 
+        // One canopy field for the whole map, shared by every generator, so a stand of oak and the
+        // birch scattered through it thin out together instead of each rolling its own noise and
+        // averaging back into an even carpet.
+        var field = CanopyField.Create(cfg);
+
         int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
         long total = 0, drowned = 0, steep = 0;
 
@@ -331,6 +336,18 @@ public static class TreeWriter
                     {
                         int i = y * width + x;
                         double p = chance[(int)terrain[i]] * factor[(int)climate[i]];
+
+                        // Open ground clumps into groves and closed ground only thins; the two read
+                        // very differently and a single factor cannot do both. Insensitive plants —
+                        // the ones that are not really canopy — opt out entirely.
+                        if (generator.Plant != Flora.Insensitive)
+                        {
+                            double canopy = CanopyField.At(field, x, y);
+                            p *= IsOpenCountry(terrain[i])
+                                ? CanopyField.GroveFactor(canopy)
+                                : CanopyField.ScatterFactor(canopy);
+                        }
+
                         if (p <= 0 || rng.NextDouble() >= p) continue;
 
                         // Jitter inside the pixel so instances do not sit on a lattice.
@@ -377,6 +394,14 @@ public static class TreeWriter
                           $"in {byFile.Count} files ({drowned:N0} rejected below the waterline, " +
                           $"{steep:N0} on ground too steep for their footprint)");
     }
+
+    /// <summary>
+    /// Ground where trees gather into stands rather than spreading evenly — the classes whose real
+    /// counterparts carry copses and windbreaks instead of forest.
+    /// </summary>
+    private static bool IsOpenCountry(TerrainClass t)
+        => t is TerrainClass.Plains or TerrainClass.Farmlands or TerrainClass.Steppe
+             or TerrainClass.Oasis;
 
     private static void Write(string path,
         List<(Generator Generator, List<(float X, float Z, float Angle, float Scale)>[] Buckets)> blocks)
