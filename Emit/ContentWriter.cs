@@ -20,7 +20,8 @@ public static class ContentWriter
     public static WrittenContent WriteAll(string modDir, string gameDir, MapConfig cfg,
             ProvinceMap provinces, int[] order, int baronyCount, int landCount, int riverCount,
             List<Title> empires, TerrainData terra, TerrainClassifier.Result classified, Rng rng,
-            bool writeHistory = true, MapGen.Drainage? drainage = null)
+            bool writeHistory = true, MapGen.Drainage? drainage = null,
+            MapGen.AzgaarImport? azgaar = null)
     {
         var terrain = classified.Terrain;
         var provinceElevation = terra.ProvinceElevation;
@@ -44,6 +45,21 @@ public static class ContentWriter
 
         var counties = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
 
+        // Matches every title to whatever Azgaar had on the same ground. Must run before the
+        // cultures below, which ask it which culture holds which county.
+        if (azgaar is not null)
+            Core.Stage.Time("azgaar binding",
+                () => azgaar.Bind(empires, provinces, order, baronyCount));
+
+        // A country's government comes from its own form, not from our terrain reasoning — the
+        // difference between a Kingdom and a Most Serene Republic is the export's to state.
+        var stateGovernments = azgaar is null ? null : MapGen.AzgaarGovernments.ByState(azgaar, cfg);
+
+        if (stateGovernments is not null)
+            Console.WriteLine("  azgaar governments: " + string.Join(", ",
+                MapGen.AzgaarGovernments.Tally(stateGovernments)
+                    .Select(g => $"{g.Count} {TitleTierWriter.Token(g.Government)}")));
+
         var development = Core.Stage.Time("development", () =>
         {
             var levels = MapGen.Development.ForCounties(counties, provinceTerrain, cfg,
@@ -53,15 +69,47 @@ public static class ContentWriter
         });
 
         var wilderness = Core.Stage.Time("wilderness", () => MapGen.Wilderness.Build(counties,
-            provinces, order, landCount, provinceTerrain, development, cfg, new Rng(cfg.Seed ^ 0x1D17)));
+            provinces, order, landCount, provinceTerrain, development, cfg, new Rng(cfg.Seed ^ 0x1D17),
+            azgaar));
+
+        Dictionary<(string Culture, string Government), string>? tierForms = null;
 
         var cultures = Core.Stage.Time("cultures", () =>
         {
             var map = MapGen.Cultures.Build(empires, provinces, order, landCount, provinceTerrain,
-                development, vocabulary, cfg, new Rng(cfg.Seed ^ 0x0C17));
-            Titles.AssignNames(empires, map, new Rng(cfg.Seed ^ 0x7171));
+                development, vocabulary, cfg, new Rng(cfg.Seed ^ 0x0C17), azgaar);
+
+            if (azgaar is not null)
+            {
+                int renamed = MapGen.AzgaarNaming.RenameCultures(azgaar, map);
+                Console.WriteLine($"  azgaar: {renamed} of {map.Cultures.Count} cultures named from the export");
+            }
+
+            // Which word each culture-and-government will render for a rank, decided once here so
+            // the title names below can leave that word out rather than repeating it.
+            tierForms = azgaar is null || stateGovernments is null
+                ? null
+                : TitleTierWriter.FormsByCulture(azgaar, map, stateGovernments);
+
+            // Worked out for the whole hierarchy at once rather than title by title, so each state
+            // and burg goes to the title that actually contains most of it — see AzgaarNaming.
+            var borrowed = azgaar is null
+                ? null
+                : MapGen.AzgaarNaming.TitleNames(azgaar, empires, tierForms, map, stateGovernments);
+
+            Titles.AssignNames(empires, map, new Rng(cfg.Seed ^ 0x7171), borrowed);
+
+            if (borrowed is not null)
+                Console.WriteLine($"  azgaar: {borrowed.Count} of {Titles.Flatten(empires).Count()} " +
+                                  "titles named from the export, the rest from its name bases");
+
             return map;
         });
+
+        var ethnicities = Core.Stage.Time("ethnicities", () => MapGen.Ethnicities.Build(
+            cultures.Heritages, cultures.Cultures, provinceTerrain, cfg, new Rng(cfg.Seed ^ 0x38F1)));
+
+        Core.Stage.Time("ethnicity files", () => EthnicityWriter.WriteAll(modDir, ethnicities));
 
         var worldCenters = Core.Stage.Time("world centers", () => WorldCenterMap.Build(
             counties, provinces, order, landCount, provinceTerrain, cultures, wilderness, cfg, new Rng(cfg.Seed ^ 0x93FA)));
@@ -75,18 +123,29 @@ public static class ContentWriter
         });
 
         var realms = Core.Stage.Time("realms", () => Realms.Build(
-                    empires, development, wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17), provinces, order, baronyCount));
+                    empires, development, wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17), provinces, order,
+                    baronyCount, azgaar));
 
         var governments = Core.Stage.Time("governments", () => MapGen.Governments.Build(
             empires, counties, realms, provinceTerrain, development, cultures,
-            worldCenters, cfg, new Rng(cfg.Seed ^ 0x6017)));
+            worldCenters, cfg, new Rng(cfg.Seed ^ 0x6017), azgaar, stateGovernments));
 
         Console.WriteLine("  governments: " + string.Join(", ",
             governments.Tally(counties.Count).Select(g => $"{g.Count} {g.Government[..^11]}")));
 
+        Core.Stage.Time("government overrides",
+            () => GovernmentWriter.WriteNomadNaming(modDir, gameDir, counties.Any(governments.IsNomad)));
+
         var faiths = Core.Stage.Time("faiths", () => MapGen.Faiths.Build(empires, provinces, order,
             landCount, provinceTerrain, development, governments, vocabulary, wilderness, cfg, worldCenters,
             new Rng(cfg.Seed ^ 0x0FA1)));
+
+        if (azgaar is not null)
+        {
+            var (namedFaiths, namedReligions) = MapGen.AzgaarNaming.RenameFaiths(azgaar, faiths);
+            Console.WriteLine($"  azgaar: {namedFaiths} of {faiths.Faiths.Count} faiths and " +
+                              $"{namedReligions} of {faiths.Religions.Count} religions named from the export");
+        }
 
         if (wilderness.Count > 0)
         {
@@ -117,7 +176,7 @@ public static class ContentWriter
         // latitude of its provinces — see WaterNaming.GroupRiverProvinces.
         var waterNames = Core.Stage.Time("water naming", () => WaterNaming.Generate(
             provinces, order, landCount, riverCount, cultures, empires, cfg,
-            new Rng(cfg.Seed ^ 0x5EAE), terra.MajorRiversList));
+            new Rng(cfg.Seed ^ 0x5EAE), terra.MajorRiversList, azgaar));
 
         Core.Stage.Time("titles, history and localisation", () =>
         {
@@ -130,8 +189,12 @@ public static class ContentWriter
 
         Core.Stage.Time("wonders", () => WonderWriter.WriteAll(modDir, worldCenters));
 
+        Core.Stage.Time("title tiers", () => TitleTierWriter.WriteAll(
+            modDir, cultures, new Rng(cfg.Seed ^ 0x7117), tierForms, azgaar));
+
         Core.Stage.Time("culture files",
-            () => CultureWriter.WriteAll(modDir, cfg, cultures, vocabulary, new Rng(cfg.Seed ^ 0x0C1A)));
+            () => CultureWriter.WriteAll(modDir, cfg, cultures, ethnicities, vocabulary,
+                new Rng(cfg.Seed ^ 0x0C1A)));
 
         Core.Stage.Time("compatibility", () =>
         {
@@ -208,6 +271,7 @@ public static class ContentWriter
         return new WrittenContent
         {
             Cultures = cultures,
+            Ethnicities = ethnicities,
             Faiths = faiths,
             WaterNames = waterNames,
             Wilderness = wilderness,

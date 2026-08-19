@@ -1,4 +1,4 @@
-using Ck3MapGen.MapGen;
+﻿using Ck3MapGen.MapGen;
 
 namespace Ck3MapGen.Emit;
 
@@ -24,6 +24,9 @@ namespace Ck3MapGen.Emit;
 public sealed record WrittenContent
 {
     public required CultureMap Cultures { get; init; }
+
+    /// <summary>The generated ethnicities, needed to rewrite the culture files after an edit.</summary>
+    public required EthnicityMap Ethnicities { get; init; }
     public required FaithMap Faiths { get; init; }
 
     /// <summary>Province id to name, for the rivers and sea zones that share the title

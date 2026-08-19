@@ -1,4 +1,4 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
@@ -19,10 +19,11 @@ namespace Ck3MapGen.Emit;
 /// </summary>
 public static class CultureWriter
 {
-    public static void WriteAll(string modDir, MapConfig cfg, CultureMap cultures, VanillaVocabulary vocab, Rng rng)
+    public static void WriteAll(string modDir, MapConfig cfg, CultureMap cultures,
+        EthnicityMap ethnicityMap, VanillaVocabulary vocab, Rng rng)
     {
         WritePillars(modDir, cultures);
-        WriteCultures(modDir, cultures);
+        WriteCultures(modDir, cultures, ethnicityMap);
         WriteNameLists(modDir, cultures);
         WriteHistory(modDir, cfg, cultures, vocab, rng);
         WriteLocalisation(modDir, cultures);
@@ -85,7 +86,7 @@ public static class CultureWriter
     /// Not private: a culture's name, colour, ethos and traditions all live in this file, so
     /// editing one after the mod is written re-runs exactly this. See <see cref="WorldOverwrite"/>.
     /// </summary>
-    internal static void WriteCultures(string modDir, CultureMap cultures)
+    internal static void WriteCultures(string modDir, CultureMap cultures, EthnicityMap ethnicityMap)
     {
         string dir = Path.Combine(modDir, "common", "culture", "cultures");
         Directory.CreateDirectory(dir);
@@ -117,12 +118,11 @@ public static class CultureWriter
             sb.Append($"\tclothing_gfx = {look.ClothingGfx}\n");
             sb.Append($"\tunit_gfx = {look.UnitGfx}\n\n");
 
+            // One generated ethnicity rather than the vanilla culture's whole weighted list. The
+            // borrowed list describes the people it was lifted from; a generated culture has its own
+            // look to declare, and pointing at a single definition is what lets it.
             sb.Append("\tethnicities = {\n");
-            foreach (string line in look.Ethnicities.Split('\n'))
-            {
-                string trimmed = line.Trim();
-                if (trimmed.Length > 0) sb.Append($"\t\t{trimmed}\n");
-            }
+            sb.Append($"\t\t100 = {ethnicityMap.For(culture).Key}\n");
             sb.Append("\t}\n");
 
             sb.Append("}\n\n");

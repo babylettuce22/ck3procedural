@@ -13,6 +13,12 @@ public sealed class GenerationOptions
     public bool WriteHistory { get; set; } = true;
     public bool WritePacked { get; set; } = true;
     public string? HeightmapPath { get; set; }
+
+    /// <summary>
+    /// An Azgaar "Full" JSON export to borrow names, borders and politics from. Optional and always
+    /// has been: with no path the generator behaves exactly as it does without one.
+    /// </summary>
+    public string? AzgaarJsonPath { get; set; }
     public string ModName { get; set; } = DefaultModName;
 
     public const string DefaultModName = "Procedural Map";
@@ -36,6 +42,10 @@ public sealed class GenerationResult
     public required MapGen.Drainage Drainage { get; init; }
     public required MapGen.TerrainClassifier.Result Terrain { get; init; }
     public required TerrainData Terra { get; init; }
+
+    /// <summary>The imported Azgaar world, or null when none was given.</summary>
+    public MapGen.AzgaarImport? Azgaar { get; init; }
+
     public long ElapsedMs { get; init; }
 }
 
@@ -53,13 +63,14 @@ public static class Generator
         var terra = Stage.Time("province elevation",
             () => TerrainData.FromElevation(image.ToElevation(cfg), cfg));
 
-        return FromTerrain(terra, cfg);
+        return FromTerrain(terra, cfg, azgaarJsonPath: options.AzgaarJsonPath);
     }
 
     public static GenerationResult FromTerrain(
             TerrainData terra,
             MapConfig cfg,
-            Action<string, PreviewRenderer.Image>? onPreview = null)
+            Action<string, PreviewRenderer.Image>? onPreview = null,
+            string? azgaarJsonPath = null)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var rng = new Rng(cfg.Seed);
@@ -105,6 +116,11 @@ public static class Generator
 
         var provinceLandMask = ProvinceLandMask(cfg, provinces);
 
+        // Loaded here rather than in the writer because the raster it builds is keyed to the
+        // province grid, and this is where that grid becomes final.
+        var azgaar = MapGen.AzgaarImport.Load(azgaarJsonPath ?? cfg.AzgaarJsonPath, cfg);
+        azgaar?.CheckAlignment(provinceLandMask);
+
         // 5. Terrain
         var terrain = Stage.Time("terrain classification",
             () => MapGen.TerrainClassifier.Classify(cfg, provinceElevation, provinceLandMask,
@@ -113,9 +129,17 @@ public static class Generator
 
         var order = MapDataWriter.BuildProvinceOrder(provinces, out int baronies, out int landCount, out int riverCount);
 
-        // 6. Titles
+        // Before the hierarchy, not after: this decides what shape the hierarchy can be built in,
+        // and it is the last point at which re-exporting a larger heightmap is still cheaper than
+        // finishing the run.
+        Stage.Time("azgaar hierarchy plan", () => azgaar?.PlanHierarchy(provinces, order, baronies));
+
+        // 6. Titles — inside the export's borders when there is one, geometrically when there is not.
         var titles = Stage.Time("title hierarchy",
-            () => MapGen.Titles.Build(provinces, baronies, order, cfg, new Rng(cfg.Seed ^ 0x71C1)));
+            () => azgaar?.Plan is not null
+                ? MapGen.AzgaarHierarchy.Build(provinces, baronies, order, cfg,
+                                               new Rng(cfg.Seed ^ 0x71C1), azgaar)
+                : MapGen.Titles.Build(provinces, baronies, order, cfg, new Rng(cfg.Seed ^ 0x71C1)));
 
         onPreview?.Invoke("Counties", PreviewRenderer.RenderTitles(provinces, order, baronies, landCount, titles, "c"));
         onPreview?.Invoke("Duchies", PreviewRenderer.RenderTitles(provinces, order, baronies, landCount, titles, "d"));
@@ -138,6 +162,7 @@ public static class Generator
             Drainage = drainage,
             Terrain = terrain,
             Terra = terra,
+            Azgaar = azgaar,
             ElapsedMs = sw.ElapsedMilliseconds,
         };
     }
@@ -177,7 +202,7 @@ public static class Generator
                             modDir, options.GameDir, cfg, result.Provinces, result.ProvinceOrder,
                             result.BaronyCount, result.LandCount,
                             result.RiverCount, result.Titles, result.Terra, result.Terrain, rng,
-                            options.WriteHistory, result.Drainage);
+                            options.WriteHistory, result.Drainage, result.Azgaar);
 
         Console.WriteLine($"  done in {sw.ElapsedMilliseconds} ms");
         return written;

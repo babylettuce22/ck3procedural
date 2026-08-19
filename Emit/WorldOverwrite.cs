@@ -1,4 +1,4 @@
-using Ck3MapGen.Core;
+﻿using Ck3MapGen.Core;
 
 namespace Ck3MapGen.Emit;
 
@@ -105,7 +105,7 @@ public static class WorldOverwrite
 
         if (aspects.HasFlag(WorldAspect.Cultures))
         {
-            CultureWriter.WriteCultures(modDir, written.Cultures);
+            CultureWriter.WriteCultures(modDir, written.Cultures, written.Ethnicities);
             CultureWriter.WriteLocalisation(modDir, written.Cultures);
         }
 

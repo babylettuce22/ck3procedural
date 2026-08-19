@@ -82,6 +82,13 @@ public static class Program
                     options.HeightmapPath = args[++i];
                     break;
 
+                // Optional. An Azgaar "Full" JSON export to borrow from, alongside — never instead
+                // of — the heightmap. Without it every name and border is generated as before.
+                case "--azgaar" when i + 1 < args.Length:
+                    options.AzgaarJsonPath = args[++i];
+                    cfg.AzgaarJsonPath = options.AzgaarJsonPath;
+                    break;
+
                 // How big a barony is relative to vanilla's. 2 makes each one twice as wide and a
                 // quarter as numerous; the rest of the title hierarchy follows.
                 case "--county-scale" when i + 1 < args.Length:
@@ -218,6 +225,8 @@ public static class Program
                 "       [--normalize-heightmap | --shift-heightmap [source sea level 0-255]]");
             Console.Error.WriteLine(
                 "       [--land-top 0-255] [--land-top-percentile 0-100]");
+            Console.Error.WriteLine(
+                "       [--azgaar <export.json>]  optional; borrows names from an Azgaar map");
             Console.Error.WriteLine(
                 "This tool builds a CK3 mod around a heightmap; it does not generate terrain.");
             return 1;
