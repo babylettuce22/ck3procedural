@@ -153,6 +153,10 @@ public static class Governments
             }
 
             counties = counties.Where(c => !claimed.Contains(c)).ToList();
+
+            // An export that covers the whole map leaves the terrain reasoning below nothing to
+            // reason about, and running it over an empty list only risks it inventing a default.
+            if (counties.Count == 0) return new GovernmentMap(assigned, adminTitles, nomadTitles);
         }
 
         // --- 1. Identify Clan-leaning heritages ---

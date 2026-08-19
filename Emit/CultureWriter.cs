@@ -97,6 +97,7 @@ public static class CultureWriter
         foreach (var culture in cultures.Cultures)
         {
             var look = culture.Heritage.Look;
+            var ethnicity = ethnicityMap.For(culture);
 
             sb.Append($"{culture.Key} = {{\n");
             sb.Append($"\tcolor = {{ {culture.Color.R} {culture.Color.G} {culture.Color.B} }}\n\n");
@@ -122,7 +123,7 @@ public static class CultureWriter
             // borrowed list describes the people it was lifted from; a generated culture has its own
             // look to declare, and pointing at a single definition is what lets it.
             sb.Append("\tethnicities = {\n");
-            sb.Append($"\t\t100 = {ethnicityMap.For(culture).Key}\n");
+            sb.Append($"\t\t100 = {ethnicity.Key}\n");
             sb.Append("\t}\n");
 
             sb.Append("}\n\n");

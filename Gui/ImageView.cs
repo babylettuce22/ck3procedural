@@ -1,4 +1,4 @@
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 
 namespace Ck3MapGen.Gui;
@@ -26,6 +26,16 @@ namespace Ck3MapGen.Gui;
 public sealed class ImageView : Control
 {
     private Bitmap? _image;
+
+    /// <summary>
+    /// The image's size, kept beside it.
+    ///
+    /// Reading <c>_size.Width</c> during a paint is what made the preview crash: generation hands
+    /// this control a new bitmap and disposes the old one, and a repaint already in flight then asks
+    /// a disposed object for its size. The size never changes while an image is set, so caching it
+    /// removes every one of those reads from the paint path.
+    /// </summary>
+    private Size _size;
     private float _zoom = 1f;
     private PointF _origin;          // Where the image's top-left sits, in control pixels.
     private bool _fit = true;        // Track the pane on resize until the user zooms.
@@ -126,9 +136,10 @@ public sealed class ImageView : Control
     public void SetImage(Bitmap? image)
     {
         bool sameShape = _image is not null && image is not null
-            && _image.Width == image.Width && _image.Height == image.Height;
+            && _size.Width == image.Width && _size.Height == image.Height;
 
         _image = image;
+        _size = image?.Size ?? Size.Empty;
 
         if (!sameShape) _fit = true;
         if (_fit) FitNow();
@@ -160,10 +171,10 @@ public sealed class ImageView : Control
     {
         if (_image is null || Width <= 0 || Height <= 0) return;
 
-        _zoom = Math.Min((float)Width / _image.Width, (float)Height / _image.Height);
+        _zoom = Math.Min((float)Width / _size.Width, (float)Height / _size.Height);
         _origin = new PointF(
-            (Width - _image.Width * _zoom) / 2f,
-            (Height - _image.Height * _zoom) / 2f);
+            (Width - _size.Width * _zoom) / 2f,
+            (Height - _size.Height * _zoom) / 2f);
     }
 
     private PointF Centre() => new(Width / 2f, Height / 2f);
@@ -173,7 +184,7 @@ public sealed class ImageView : Control
     {
         if (_image is null) return;
 
-        float fit = Math.Min((float)Width / _image.Width, (float)Height / _image.Height);
+        float fit = Math.Min((float)Width / _size.Width, (float)Height / _size.Height);
 
         // Down to a quarter of fit — enough to pull back off the map — and up to 32x, which is
         // where the province raster's own pixels are the size of a fingertip.
@@ -197,7 +208,7 @@ public sealed class ImageView : Control
     {
         if (_image is null) return;
 
-        float w = _image.Width * _zoom, h = _image.Height * _zoom;
+        float w = _size.Width * _zoom, h = _size.Height * _zoom;
 
         _origin.X = w <= Width
             ? (Width - w) / 2f
@@ -264,7 +275,7 @@ public sealed class ImageView : Control
         if (!clicked || _image is null) return;
 
         var p = ToImage(e.Location);
-        if (p.X >= 0 && p.Y >= 0 && p.X < _image.Width && p.Y < _image.Height)
+        if (p.X >= 0 && p.Y >= 0 && p.X < _size.Width && p.Y < _size.Height)
             PixelClicked?.Invoke(new Point((int)p.X, (int)p.Y));
     }
 
@@ -290,7 +301,7 @@ public sealed class ImageView : Control
         if (_image is not null && cursor is { } c)
         {
             var p = ToImage(c);
-            if (p.X >= 0 && p.Y >= 0 && p.X < _image.Width && p.Y < _image.Height)
+            if (p.X >= 0 && p.Y >= 0 && p.X < _size.Width && p.Y < _size.Height)
                 pixel = new Point((int)p.X, (int)p.Y);
         }
 
@@ -320,8 +331,21 @@ public sealed class ImageView : Control
         g.PixelOffsetMode = PixelOffsetMode.Half;
         g.SmoothingMode = SmoothingMode.None;
 
-        g.DrawImage(_image,
-            new RectangleF(_origin.X, _origin.Y, _image.Width * _zoom, _image.Height * _zoom));
+        // The bitmap can still be disposed between the null check above and the draw — generation
+        // replaces it from another thread — and GDI+ reports that as an ArgumentException rather
+        // than anything more specific. Dropping the reference and repainting empty beats taking the
+        // window down over a preview frame.
+        try
+        {
+            g.DrawImage(_image,
+                new RectangleF(_origin.X, _origin.Y, _size.Width * _zoom, _size.Height * _zoom));
+        }
+        catch (Exception ex) when (ex is ArgumentException or ObjectDisposedException)
+        {
+            _image = null;
+            _size = Size.Empty;
+            Console.WriteLine("Preview dropped a stale image: " + ex.Message);
+        }
     }
 
     private void Export()

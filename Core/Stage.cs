@@ -95,6 +95,7 @@ public static class Stage
     /// </summary>
     public static T Detail<T>(string name, Func<T> work)
     {
+        Cancellation.ThrowIfCancellationRequested();
         Detailing?.Invoke(name);
         var clock = Stopwatch.StartNew();
         var result = work();
@@ -105,6 +106,7 @@ public static class Stage
     /// <inheritdoc cref="Detail{T}"/>
     public static void Detail(string name, Action work)
     {
+        Cancellation.ThrowIfCancellationRequested();
         Detailing?.Invoke(name);
         var clock = Stopwatch.StartNew();
         work();

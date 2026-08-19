@@ -81,6 +81,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// mismatch is reported rather than silently imported; see <see cref="MapGen.AzgaarRaster"/>.
     /// </summary>
     [Category("01 General")]
+    [RefreshProperties(RefreshProperties.All)]
     [Description("Optional. An Azgaar 'Full' JSON export (Menu > Save/Load > Export to JSON > Full) " +
                  "to take names from. Leave empty to generate every name as usual. Use together " +
                  "with a heightmap exported from the same map and the same unzoomed view.")]

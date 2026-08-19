@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using Ck3MapGen.Config;
 using Ck3MapGen.Core;
@@ -82,7 +82,9 @@ public static class AnimalWriter
 
         bool enabled = cfg.EnableAnimals && cfg.AnimalDensity > 0;
         double densityMultiplier = enabled ? cfg.AnimalDensity : 0.0;
-        double scaleMultiplier = cfg.AnimalScale;
+        // Scaled with the map for the same reason the trees are: the meshes are authored against
+        // vanilla's world size, and an unscaled herd on a larger map reads as vermin.
+        double scaleMultiplier = cfg.AnimalScale * cfg.MapScale;
 
         foreach (var species in SpeciesTable)
         {

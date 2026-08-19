@@ -239,7 +239,7 @@ public static class Titles
         {
             if (!assigned.Add(start)) continue;
 
-            int targetSize = rng.Int(minSize, maxSize + 1);
+            int targetSize = rng.Int(minSize, maxSize);
 
             var cluster = new List<int> { start };
             var (cx, cy) = At(positions, start);
@@ -465,7 +465,7 @@ public static class Titles
         return best;
     }
 
-    private static (double X, double Y) Centre(List<int> cluster, (double X, double Y)[] positions)
+    internal static (double X, double Y) Centre(List<int> cluster, (double X, double Y)[] positions)
     {
         double x = 0, y = 0;
         int counted = 0;

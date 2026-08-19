@@ -300,20 +300,37 @@ public static class WaterNaming
             string? importedBody = azgaar?.WaterBodyFor(cluster)?.Name;
             if (importedBody is { Length: > 0 }) importedBody = AzgaarNaming.StripArticle(importedBody);
 
-            string baseName = importedBody is { Length: > 0 } && !usedNames.Contains(importedBody)
-                ? Unique(importedBody, usedNames)
-                : Unique(culture.Language.Word(rng, 2, 3), usedNames);
+            // Two names, because they are used for different things: the full one titles the body,
+            // and the bare one is what the directional qualifiers below are built on.
+            string bodyFullName;
+            string baseName;
 
-            string bodyType = enclosure switch
+            if (importedBody is { Length: > 0 } && !usedNames.Contains(importedBody))
             {
-                > 3.0 => rng.Pick(["Gulf of", "Bay of", "Sound of"]),
-                > 1.5 => rng.Pick(["Sea", "Sea of", "Gulf of"]),
-                _ => rng.Pick(["Ocean", "Sea", "Great Sea of"]),
-            };
+                // Azgaar's name already carries its own body word — "Sundering Sea", "Gulf of Kehl"
+                // — so nothing is appended, and the bare form is recovered by taking that word back
+                // off. Building "Eastern Sundering Sea Sea" was the alternative.
+                bodyFullName = Unique(importedBody, usedNames);
+                baseName = StripBodyType(bodyFullName);
+            }
+            else
+            {
+                string word = Unique(culture.Language.Word(rng), usedNames);
+                baseName = word;
 
-            string bodyFullName = bodyType.EndsWith("of")
-                ? $"{bodyType} {baseName}"
-                : $"{baseName} {bodyType}";
+                // Rolled only here. Doing it above, before the branch, would spend the same rng draw
+                // on imported bodies that never use it and shift every later name on the map.
+                string bodyType = enclosure switch
+                {
+                    > 3.0 => rng.Pick(["Gulf of", "Bay of", "Sound of"]),
+                    > 1.5 => rng.Pick(["Sea", "Sea of", "Gulf of"]),
+                    _ => rng.Pick(["Ocean", "Sea", "Great Sea of"]),
+                };
+
+                bodyFullName = bodyType.EndsWith("of")
+                    ? $"{bodyType} {word}"
+                    : $"{word} {bodyType}";
+            }
 
             if (cluster.Count == 1)
             {
@@ -445,6 +462,36 @@ public static class WaterNaming
             su.Add(v);
             sv.Add(u);
         }
+    }
+
+    /// <summary>
+    /// Takes the body word off a water name, leaving the bare one underneath.
+    ///
+    /// Only needed for imported names, which arrive complete — Azgaar writes "Gulf of Kehl" and
+    /// "Sundering Sea", while a generated name is built from a bare word this program still has. The
+    /// directional qualifiers want that bare word, so this recovers it.
+    ///
+    /// Both word orders, because both occur: the "of" forms lead with the body and the rest trail
+    /// it. Anything unrecognised is returned whole, which costs a slightly long qualified name and
+    /// never a wrong one.
+    /// </summary>
+    private static string StripBodyType(string full)
+    {
+        foreach (string prefix in (string[])
+                 ["Gulf of ", "Bay of ", "Sound of ", "Sea of ", "Strait of ", "Great Sea of "])
+        {
+            if (full.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return full[prefix.Length..].Trim();
+        }
+
+        foreach (string suffix in (string[])
+                 [" Ocean", " Sea", " Gulf", " Bay", " Sound", " Strait", " Lake"])
+        {
+            if (full.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                return full[..^suffix.Length].Trim();
+        }
+
+        return full;
     }
 
     private static string Unique(string name, HashSet<string> used)
