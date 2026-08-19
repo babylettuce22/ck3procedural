@@ -389,6 +389,27 @@ public static class TitleTierWriter
                 // vassal would be checked against the overlord's title and never match its own.
                 sb.Append("\tflavourization_rules = { top_liege = no }\n");
             }
+            else if (entry.Governments is { Count: > 0 })
+            {
+                // Culture from the top liege, government from the character.
+                //
+                // Both halves are deliberate. Culture stays on the liege — that is the default, and
+                // it is what makes a realm read as one realm rather than as a patchwork, since our
+                // cultures are finer-grained than the countries they sit in and a minority-culture
+                // vassal taking his own people's word for a duchy would be the odd one out among his
+                // neighbours. Government does not: the export states one per country, so a feudal
+                // Grand Duchy that Azgaar made a horde's vassal is still a feudal Grand Duchy, and
+                // leaving the check on the liege styled its counties as part of the horde.
+                //
+                // Vanilla does exactly this, and for the same reason — see duchy_administrative in
+                // common/flavorization/00_flavorization.txt, where the comment is that only the
+                // governors should take the top liege's titles, "not also feudal vassals,
+                // republican vassals, etc."
+                sb.Append("\tflavourization_rules = {\n");
+                sb.Append("\t\ttop_liege = yes\n");
+                sb.Append("\t\tignore_top_liege_government = yes\n");
+                sb.Append("\t}\n");
+            }
 
             sb.Append("}\n\n");
         }

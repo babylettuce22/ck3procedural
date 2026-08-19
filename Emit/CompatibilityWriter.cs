@@ -294,18 +294,42 @@ public static class CompatibilityWriter
 
         if (keys.Count == 0) return;
 
+        // One county carries every shim rather than 1,459 counties carrying one each. `capital`
+        // confers no ownership — it is only where CK3 draws the title and roots its arms — so
+        // spreading them did nothing but decorate real counties with foreign titles in tooltips
+        // and in the coat of arms system. Concentrating them makes the shims visibly inert.
+        string shimCapital = counties[0].Key;
+
         var sb = new StringBuilder();
         sb.Append("# Vanilla e_/k_/d_/h_ keys re-declared as landless titulars.\n");
         sb.Append("# Base-game and DLC content hardcodes these; a missing key is a hard error,\n");
-        sb.Append("# and the coat of arms system dereferences the null it gets back.\n\n");
+        sb.Append("# and the coat of arms system dereferences the null it gets back.\n");
+        sb.Append("#\n");
+        sb.Append("# These exist to be *referenced*, never to be held. The creation gates below are\n");
+        sb.Append("# the first half of that; common/on_action/00_generated_titular_guard.txt is the\n");
+        sb.Append("# half that actually guarantees it.\n\n");
 
         for (int i = 0; i < keys.Count; i++)
         {
             var (r, g, b) = MapDataWriter.ProvinceColor(i + 1);
             sb.Append($"{keys[i]} = {{\n");
             sb.Append("\tlandless = yes\n");
-            sb.Append($"\tcapital = {counties[i % counties.Count].Key}\n");
+            sb.Append($"\tcapital = {shimCapital}\n");
             sb.Append($"\tcolor = {{ {r} {g} {b} }}\n");
+
+            // A shim owns no de jure territory, which is exactly what makes it cheap to create:
+            // the engine's "do you hold enough of the de jure land" test runs against an empty set.
+            // These four close every route into a domain that does not go through a scripted
+            // effect — the creation UI, partition succession, inherited claims, and the AI's
+            // primary-title pick for the frame a shim might exist before the guard strips it.
+            sb.Append("\tcan_create = { always = no }\n");
+            sb.Append("\tcan_create_on_partition = { always = no }\n");
+            sb.Append("\tno_automatic_claims = yes\n");
+            sb.Append("\tai_primary_priority = { add = -1000 }\n");
+
+            // Deliberately absent: delete_on_destroy. It defaults to no and has to stay no — the
+            // guard destroys these titles, and deleting the object would take the key with it,
+            // undoing the ~12,900 references this whole file exists to resolve.
             sb.Append("}\n");
         }
 
@@ -313,7 +337,89 @@ public static class CompatibilityWriter
         Directory.CreateDirectory(dir);
         ParadoxText.WriteBom(Path.Combine(dir, "zz_vanilla_titulars.txt"), sb.ToString());
 
+        WriteTitularGuard(modDir, keys);
+
         Console.WriteLine($"  titulars: {keys.Count} vanilla e_/k_/d_/h_ keys re-declared as landless");
+    }
+
+    /// <summary>
+    /// The half of the shim problem the landed_titles file cannot solve: a guarantee that a
+    /// re-declared vanilla title never stays in a ruler's domain.
+    ///
+    /// The creation gates in <see cref="WriteVanillaTitulars"/> only close the routes the engine
+    /// owns. Script walks straight past them — `create_title_and_vassal_change` and
+    /// `set_title_holder` hand a title over without consulting `can_create` — and vanilla is full
+    /// of decisions that do exactly that once a region check passes. Those checks pass for free
+    /// against a shim: it has no de jure territory, so `completely_controls = title:d_latium` and
+    /// the fourteen siblings that make up restore_roman_empire_decision's entire `is_valid` are
+    /// each asking whether a ruler holds every county in an empty set.
+    ///
+    /// Chasing that through 430 vanilla decisions plus every future DLC one is a losing game, so
+    /// the guard keys on the title instead of the grant: every shim is stamped with a variable at
+    /// game start, and any gain of a stamped title destroys it. Paths nobody has read yet are
+    /// covered by construction.
+    ///
+    /// `destroy_title` is safe for what the shims exist to do. `delete_on_destroy` defaults to no,
+    /// so the title is unlanded while the database object survives — `title:e_byzantium` still
+    /// resolves for the ~12,900 hardcoded references and for the coat of arms system.
+    /// </summary>
+    private static void WriteTitularGuard(string modDir, List<string> keys)
+    {
+        string dir = Path.Combine(modDir, "common", "on_action");
+        Directory.CreateDirectory(dir);
+
+        var sb = new StringBuilder();
+        sb.Append("# Vanilla e_/k_/d_/h_ shims may be referenced. They may never be held.\n");
+        sb.Append("# See common/landed_titles/zz_vanilla_titulars.txt for what they are and why.\n\n");
+
+        // on_title_gain already covers inheritance and usurpation — vanilla's own copy branches on
+        // flag:inheritance and flag:usurped inside it — but the two specialised on_actions are
+        // hooked as well. The check is one variable read on one title; a missed strip costs more
+        // than a redundant one.
+        foreach (string hook in new[] { "on_title_gain", "on_title_gain_inheritance", "on_title_gain_usurpation" })
+        {
+            sb.Append($"{hook} = {{\n");
+            sb.Append("\ton_actions = {\n");
+            sb.Append("\t\tgen_strip_vanilla_titular\n");
+            sb.Append("\t}\n");
+            sb.Append("}\n\n");
+        }
+
+        sb.Append("on_game_start = {\n");
+        sb.Append("\ton_actions = {\n");
+        sb.Append("\t\tgen_mark_vanilla_titulars\n");
+        sb.Append("\t}\n");
+        sb.Append("}\n\n");
+
+        sb.Append("# root = the new holder, scope:title = the title that changed hands.\n");
+        sb.Append("gen_strip_vanilla_titular = {\n");
+        sb.Append("\teffect = {\n");
+        sb.Append("\t\tif = {\n");
+        sb.Append("\t\t\tlimit = {\n");
+        sb.Append("\t\t\t\tscope:title = { has_variable = gen_vanilla_titular }\n");
+        sb.Append("\t\t\t}\n");
+        sb.Append("\t\t\tdestroy_title = scope:title\n");
+        sb.Append("\t\t}\n");
+        sb.Append("\t}\n");
+        sb.Append("}\n\n");
+
+        // The holder clause is not redundant with the strip hook. Ordering between on_game_start
+        // on_actions from different files is not defined, so a shim could in principle be granted
+        // before this runs and never be seen by a gain hook again. Checking each title's holder as
+        // it is stamped closes that window without iterating a list while mutating it.
+        sb.Append("gen_mark_vanilla_titulars = {\n");
+        sb.Append("\teffect = {\n");
+
+        foreach (string key in keys)
+            sb.Append($"\t\ttitle:{key} = {{ set_variable = gen_vanilla_titular "
+                    + "if = { limit = { exists = holder } holder = { destroy_title = prev } } }\n");
+
+        sb.Append("\t}\n");
+        sb.Append("}\n");
+
+        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_titular_guard.txt"), sb.ToString());
+
+        Console.WriteLine($"  titular guard: {keys.Count} shims stamped, stripped on any title gain");
     }
 
     /// <summary>

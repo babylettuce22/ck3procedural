@@ -9,15 +9,40 @@ public sealed class AdvancedSettingAttribute : Attribute
 
 
 /// <summary>
-/// Marks a setting the Azgaar path ignores, so the property grid can hide it once an export is
-/// loaded rather than leave a knob on screen that silently does nothing.
+/// Marks a setting an Azgaar export decides instead of the user, so the property grid can say so on
+/// the row itself rather than leave a knob on screen that silently does nothing.
 ///
 /// A comment would not do: the settings these mark are the ones a user reaches for first when the
-/// hierarchy comes out the wrong shape, and turning them while an import is loaded produces no
-/// change at all, because the import decides those counts from Azgaar's own provinces.
+/// hierarchy or the realm map comes out the wrong shape, and turning them while an import is loaded
+/// produces no change at all, because the import decides those things from the export.
+///
+/// These used to be *hidden* while a path was set, which was a lie in both directions. An import
+/// can load and then decide nothing — an export with no cell data plans no hierarchy
+/// (<see cref="MapGen.AzgaarImport.PlanHierarchy"/> returns null) and binds no states, and every
+/// one of these settings is then read at whatever value the grid was no longer showing. Hiding also
+/// took the value off screen in exactly the case where knowing it mattered. So the row stays, reads
+/// as inert, and carries <see cref="Reason"/> — which is expected to name both what overrides it and
+/// when it is still read.
 /// </summary>
 [AttributeUsage(AttributeTargets.Property)]
-public sealed class AzgaarIncompatAttribute : Attribute;
+public sealed class AzgaarIncompatAttribute(string reason, bool overridden = true) : Attribute
+{
+    /// <summary>
+    /// What the export decides instead, and where the setting is still read. Appended to the
+    /// property's own description while an export is loaded.
+    /// </summary>
+    public string Reason { get; } = reason;
+
+    /// <summary>
+    /// True when the export genuinely takes the decision over, which is what makes the row
+    /// read-only: the value is not consulted and editing it would only look like it did something.
+    ///
+    /// False marks the other kind — a setting that still applies and *overrides the export*, which
+    /// has to stay editable, since a user who has just loaded an export and finds it half-discarded
+    /// needs to be able to turn the thing off.
+    /// </summary>
+    public bool Overridden { get; } = overridden;
+}
 
 /// <summary>
 /// Every knob the mod is built with.
@@ -110,6 +135,10 @@ public sealed class MapConfig : CustomTypeDescriptor
     public string DeathDate => $"{Math.Max(1, StartYear + 33)}.1.1";
 
     [Category("02 World State")]
+    [AzgaarIncompat("Shattered world wins over the export: every county becomes an independent count and the " +
+                    "countries Azgaar drew are discarded, though governments still come from its states. " +
+                    "Left editable because turning it off is how you get the export's realms back.",
+                    overridden: false)]
     [Description("Shatter the world: no empires, kingdoms, or duchies exist at start. Every count is an independent ruler.")]
     public bool ShatteredWorld { get; set; } = false;
 
@@ -477,7 +506,9 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// provinces decide where the county borders fall.
     /// </summary>
     [Category("04 Titles")]
-    [AzgaarIncompat]
+    [AzgaarIncompat("Counties follow the export's provinces: baronies are grouped inside one Azgaar province " +
+                    "at a fixed 3–7 band, so neither end of this is consulted. Read again only if the export " +
+                    "has no cell data and the geometric hierarchy runs instead.")]
     [Description("Fewest baronies a county is grown towards. A cluster that runs out of unclaimed neighbours can still end up under this — an island holds what it holds.")]
     public int MinBaroniesPerCounty { get; set; } = 3;
 
@@ -487,7 +518,9 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// of the same provinces rather than fewer provinces.
     /// </summary>
     [Category("04 Titles")]
-    [AzgaarIncompat]
+    [AzgaarIncompat("Counties follow the export's provinces: baronies are grouped inside one Azgaar province " +
+                    "at a fixed 3–7 band, so neither end of this is consulted. Read again only if the export " +
+                    "has no cell data and the geometric hierarchy runs instead.")]
     [Description("Most baronies a county may hold. A hard ceiling on the procedural path: nothing is ever moved into a county that has already reached it. Lowering it buys more, smaller counties out of the same provinces rather than fewer provinces.")]
     public int MaxBaroniesPerCounty { get; set; } = 7;
 
@@ -1123,11 +1156,17 @@ public sealed class MapConfig : CustomTypeDescriptor
 
     /// <summary>Share of duchies whose title is held by somebody at the start date.</summary>
     [Category("11 Rulers")]
+    [AzgaarIncompat("Realms come from the export's states — one realm per country, with independence and " +
+                    "vassalage taken from Azgaar's own relations rather than from a share of the de jure " +
+                    "tree. Read again only if no state bound to a title.")]
     [Description("Share of duchies actually held by a duke at the start date. The rest of their counties stand as independent counts or answer to a king directly.")]
     public double DuchyTitleShare { get; set; } = 0.5;
 
     /// <summary>Share of kingdoms whose title is held by somebody at the start date.</summary>
     [Category("11 Rulers")]
+    [AzgaarIncompat("Realms come from the export's states — one realm per country, with independence and " +
+                    "vassalage taken from Azgaar's own relations rather than from a share of the de jure " +
+                    "tree. Read again only if no state bound to a title.")]
     [Description("Share of kingdoms actually held by a king at the start date. Realising one also realises its strongest duchy, so a king is always a duke and a count as well.")]
     public double KingdomTitleShare { get; set; } = 0.25;
 
@@ -1136,6 +1175,9 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// should be a rarity the map is built around, not a tier everyone occupies.
     /// </summary>
     [Category("11 Rulers")]
+    [AzgaarIncompat("Realms come from the export's states — one realm per country, with independence and " +
+                    "vassalage taken from Azgaar's own relations rather than from a share of the de jure " +
+                    "tree. Read again only if no state bound to a title.")]
     [Description("Share of empires actually held by an emperor at the start date. Kept low on purpose — an emperor should be a rarity the map is built around.")]
     public double EmpireTitleShare { get; set; } = 0.15;
 
@@ -1145,18 +1187,29 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// handful of ports, not a proportion of the world.
     /// </summary>
     [Category("11 Rulers")]
+    [AzgaarIncompat("Governments come from each state's own form and type — a republic is one because Azgaar " +
+                    "called it one. Read again only for counties no state claims.")]
     [Description("Share of settled, prosperous coastal counties that start as merchant republics. Their capital is a city rather than a castle, so this also changes what those counties hold.")]
     public double RepublicShare { get; set; } = 0.1;
 
     [Category("11 Rulers")]
+    [AzgaarIncompat("Governments come from each state's own form and type, and no Azgaar form word maps to " +
+                    "administrative government, so an imported map has none however this is set. Read again " +
+                    "only for counties no state claims.")]
     [Description("Enable centralized Administrative Empires with bureaucratic themes and noble families (requires Roads to Power DLC; safely degrades to Feudal/Clan if DLC is absent).")]
     public bool EnableAdministrativeEmpires { get; set; } = true;
 
     [Category("11 Rulers")]
+    [AzgaarIncompat("Governments come from each state's own form and type, and no Azgaar form word maps to " +
+                    "administrative government, so an imported map has none however this is set. Read again " +
+                    "only for counties no state claims.")]
     [Description("Share of realized imperial realms that start with an Administrative Government.")]
     public double AdministrativeEmpireShare { get; set; } = 0.25;
 
     [Category("11 Rulers")]
+    [AzgaarIncompat("Governments come from each state's own form and type, and no Azgaar form word maps to " +
+                    "administrative government, so an imported map has none however this is set. Read again " +
+                    "only for counties no state claims.")]
     [Description("Earliest start year for Administrative Governments to emerge across the realm. Empires before this year default to Feudal/Clan unless they host an Imperial World Center.")]
     public int AdministrativeMinStartYear { get; set; } = 800;
 
@@ -1165,6 +1218,10 @@ public sealed class MapConfig : CustomTypeDescriptor
     public bool EnableNomadHordes { get; set; } = true;
 
     [Category("11 Rulers")]
+    [AzgaarIncompat("Governments come from each state's own form and type — a horde is one because Azgaar " +
+                    "called its state Nomadic or named it a Khanate, not because of the ground it stands " +
+                    "on. Enable nomad hordes still applies, and turns those states tribal instead. Read " +
+                    "again only for counties no state claims.")]
     [Description("Share of qualifying steppe and arid realms that start as Nomads. Qualifying means a real pastoral majority: a fifth of the realm on steppe, or three fifths on steppe/desert/drylands together, or a steppe capital. Early starts add up to +0.25 to this and late starts subtract up to 0.25.")]
     public double NomadSteppeShare { get; set; } = 0.45;
 
@@ -1183,6 +1240,8 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// indistinguishable from a broken one and there would be nothing to test against.
     /// </summary>
     [Category("12 Wilderness")]
+    [AzgaarIncompat("Wilderness is the ground the export left unclaimed, which is a statement rather than " +
+                    "the habitability guess this scores. Read again only if the export claims every county.")]
     [Description("Share of counties left as unsettled wilderness. A target, not a guarantee — clumps too small to read as a region are discarded, so the delivered share lands slightly under this.")]
     public double WildernessShare { get; set; } = 0.12;
 
@@ -1195,6 +1254,8 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// whose middle is a wasteland and whose coasts are settled.
     /// </summary>
     [Category("12 Wilderness")]
+    [AzgaarIncompat("Wilderness is the ground the export left unclaimed, which is a statement rather than " +
+                    "the habitability guess this scores. Read again only if the export claims every county.")]
     [Description("Pull wilderness toward the map edges (1), ignore position (0), or pull it inland (-1). Edge-biased reads as a frontier at the rim of the world; inland-biased makes the interior the wasteland.")]
     public double WildernessEdgeBias { get; set; } = 0.75;
 
@@ -1207,6 +1268,8 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// </summary>
     [AdvancedSetting]
     [Category("12 Wilderness")]
+    [AzgaarIncompat("Wilderness is the ground the export left unclaimed, which is a statement rather than " +
+                    "the habitability guess this scores. Read again only if the export claims every county.")]
     [Description("How strongly wilderness follows hostile terrain — mountains, ice, desert, marsh, jungle — against the edge bias. At 0 it ignores terrain entirely and can leave empty farmland.")]
     public double WildernessTerrainWeight { get; set; } = 0.75;
 
@@ -1220,6 +1283,8 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// </summary>
     [AdvancedSetting]
     [Category("12 Wilderness")]
+    [AzgaarIncompat("Wilderness is the ground the export left unclaimed, which is a statement rather than " +
+                    "the habitability guess this scores. Read again only if the export claims every county.")]
     [Description("Smallest connected run of counties kept as wilderness. Lone wild counties surrounded by settled land read as a bug, so runts below this are given back. Set to 1 to allow singletons.")]
     public int WildernessMinClump { get; set; } = 2;
 
@@ -1241,6 +1306,8 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// 0 restores the old behaviour of ignoring realm shape entirely.
     /// </summary>
     [Category("12 Wilderness")]
+    [AzgaarIncompat("Wilderness is the ground the export left unclaimed, which is a statement rather than " +
+                    "the habitability guess this scores. Read again only if the export claims every county.")]
     [Description("How strongly wilderness avoids the interior of a kingdom, preferring borders and coasts. Placement otherwise follows mountain ranges straight through the middle of realms and splits them in two. 0 ignores realm shape.")]
     public double WildernessAvoidRealmInteriors { get; set; } = 0.6;
 
@@ -1384,19 +1451,59 @@ public sealed class MapConfig : CustomTypeDescriptor
         var baseProps = TypeDescriptor.GetProperties(this, attributes, true);
 
         bool hideAdvanced = !ShowAdvancedSettings;
-        bool hideAzgaarIncompat = !string.IsNullOrWhiteSpace(AzgaarJsonPath);
+        bool imported = !string.IsNullOrWhiteSpace(AzgaarJsonPath);
 
-        if (!hideAdvanced && !hideAzgaarIncompat) return baseProps;
+        if (!hideAdvanced && !imported) return baseProps;
 
         var shown = new List<PropertyDescriptor>();
         foreach (PropertyDescriptor property in baseProps)
         {
             if (hideAdvanced && property.Attributes[typeof(AdvancedSettingAttribute)] is not null) continue;
-            if (hideAzgaarIncompat && property.Attributes[typeof(AzgaarIncompatAttribute)] is not null) continue;
-            shown.Add(property);
+
+            shown.Add(imported && property.Attributes[typeof(AzgaarIncompatAttribute)]
+                          is AzgaarIncompatAttribute incompat
+                ? new AzgaarOverridden(property, incompat)
+                : property);
         }
 
         return new PropertyDescriptorCollection([.. shown]);
+    }
+
+    /// <summary>
+    /// One row of the grid while an export is loaded, wearing the reason the export decides it.
+    ///
+    /// A wrapper rather than a second <see cref="DescriptionAttribute"/> because an attribute
+    /// appended to a descriptor does not replace the one already on the property —
+    /// <see cref="AttributeCollection"/> answers with the first of a type it finds, so the original
+    /// description would have won and the note never appeared. <see cref="Description"/> is what the
+    /// grid's help pane reads, so overriding it is both the shortest route and the only one that
+    /// cannot lose a race with the attribute the property already carries.
+    /// </summary>
+    private sealed class AzgaarOverridden(PropertyDescriptor inner, AzgaarIncompatAttribute incompat)
+        : PropertyDescriptor(inner)
+    {
+        /// <summary>
+        /// The property's own description with the reason after it, so the row still explains what
+        /// the setting *is* before explaining who is deciding it. Prefixed rather than merely
+        /// appended so the note survives a help pane too short to show the whole thing.
+        /// </summary>
+        public override string Description
+            => $"[Azgaar export] {incompat.Reason}  ---  {inner.Description}";
+
+        /// <summary>
+        /// Read-only only for the settings the export truly takes over, which is also what greys the
+        /// row. The value is still shown, because the export deciding it does not stop the fallback
+        /// paths from reading it, and a user comparing a run against its settings needs to see it.
+        /// </summary>
+        public override bool IsReadOnly => incompat.Overridden || inner.IsReadOnly;
+
+        public override Type ComponentType => inner.ComponentType;
+        public override Type PropertyType => inner.PropertyType;
+        public override bool CanResetValue(object component) => inner.CanResetValue(component);
+        public override object? GetValue(object? component) => inner.GetValue(component);
+        public override void ResetValue(object component) => inner.ResetValue(component);
+        public override void SetValue(object? component, object? value) => inner.SetValue(component, value);
+        public override bool ShouldSerializeValue(object component) => inner.ShouldSerializeValue(component);
     }
 }
 
