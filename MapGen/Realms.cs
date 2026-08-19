@@ -1,4 +1,4 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 
 namespace Ck3MapGen.MapGen;
@@ -92,7 +92,8 @@ public static class Realms
         Rng rng,
         ProvinceMap? provinces = null,
         int[]? order = null,
-        int baronyCount = 0)
+        int baronyCount = 0,
+        AzgaarImport? azgaar = null)
     {
         var all = Titles.Flatten(empires).ToList();
         var weight = Weigh(empires, development, wilderness);
@@ -136,8 +137,51 @@ public static class Realms
         foreach (var county in nonWildCounties)
             holderCounty[county] = county;
 
+        // --- Step 0: Countries the export drew ---
+        //
+        // One realm per Azgaar state, which is what makes the realm map read like the export rather
+        // than like our own clustering. When there is one, the generated empire and kingdom
+        // selection below is skipped entirely: it would hand independence to titles the export never
+        // drew and split the countries it did.
+        var stateTitles = azgaar?.StateTitles is { Count: > 0 } bound ? bound : null;
+        bool fromExport = stateTitles is not null;
+
+        if (stateTitles is not null)
+        {
+            var countries = stateTitles.Values.ToHashSet();
+
+            // Ascending by tier: a duchy-sized country claims its capital before the kingdom that
+            // contains it goes looking for one, and the kingdom then steps around it. Without this a
+            // small country inside a larger neighbour's de jure kingdom shares its ruler, and one of
+            // the two stops existing.
+            foreach (var top in stateTitles.OrderBy(kv => Rank(kv.Value)).ThenBy(kv => kv.Key)
+                                           .Select(kv => kv.Value))
+            {
+                if (weight.GetValueOrDefault(top) <= 0) continue;
+                RealizeChain(top, realized, holderCounty, weight, [.. countries.Where(t => t != top)]);
+            }
+
+            // Internal vassals: most duchies inside a country get their own duke, so a kingdom is a
+            // realm with a court rather than one character holding everything.
+            foreach (var (_, top) in stateTitles.OrderBy(kv => kv.Key))
+            {
+                holderCounty.TryGetValue(top, out var capital);
+
+                foreach (var duchy in Titles.Flatten([top]).Where(t => t.Tier == "d"))
+                {
+                    if (weight.GetValueOrDefault(duchy) <= 0) continue;
+                    if (holderCounty.TryGetValue(duchy, out var held) && held == capital) continue;
+                    if (!rng.Chance(0.85)) continue;
+
+                    RealizeChain(duchy, realized, holderCounty, weight);
+                }
+            }
+        }
+
         // --- Step 1: Realize Empires ---
-        var validEmpires = empires.Where(e => weight.GetValueOrDefault(e) > 0).ToList();
+        var validEmpires = fromExport
+            ? []
+            : empires.Where(e => weight.GetValueOrDefault(e) > 0).ToList();
         int targetEmpires = cfg.EmpireTitleShare <= 0 ? 0
             : Math.Max(1, (int)Math.Round(validEmpires.Count * cfg.EmpireTitleShare));
 
@@ -178,7 +222,7 @@ public static class Realms
         }
 
         // 2B. Independent Kingdoms outside of Empires
-        var independentKingdoms = empires
+        var independentKingdoms = fromExport ? [] : empires
             .Where(e => !chosenEmpires.Contains(e))
             .SelectMany(e => e.Children)
             .Where(k => weight.GetValueOrDefault(k) > 0)
@@ -247,6 +291,62 @@ public static class Realms
             }
         }
 
+        if (stateTitles is not null)
+        {
+            // Azgaar's own vassalage, which is the only liege relation the export actually states.
+            // Applied after the de jure walk so it overrides it rather than competing with it.
+            int vassals = 0;
+            var suzerained = new HashSet<Title>();
+
+            foreach (var state in azgaar!.World.RealStates)
+            {
+                int suzerain = Array.IndexOf(state.Relations, "Vassal");
+                if (suzerain <= 0) continue;
+
+                if (!stateTitles.TryGetValue(state.I, out var vassalTitle)) continue;
+                if (!stateTitles.TryGetValue(suzerain, out var suzerainTitle)) continue;
+                if (vassalTitle == suzerainTitle) continue;
+
+                if (!holderCounty.TryGetValue(suzerainTitle, out var suzerainSeat)) continue;
+                if (!holderCounty.TryGetValue(vassalTitle, out var vassalSeat)) continue;
+                if (vassalSeat == suzerainSeat) continue;
+                if (countyAdj is not null && !IsReachable(vassalSeat, suzerainSeat, countyAdj)) continue;
+
+                liege[vassalTitle] = suzerainTitle;
+                suzerained.Add(vassalTitle);
+                vassals++;
+            }
+
+            // Every other country is independent, whatever the de jure tree says. A small state
+            // sitting inside a larger neighbour's de jure kingdom is a country in its own right, and
+            // leaving the walk's answer in place is what quietly annexed it.
+            int freed = 0;
+            foreach (var title in stateTitles.Values)
+            {
+                if (!liege.ContainsKey(title) || suzerained.Contains(title)) continue;
+                liege.Remove(title);
+                freed++;
+            }
+
+            if (freed > 0)
+                Console.WriteLine($"  realms: freed {freed} states the de jure tree had made vassals");
+
+            // By distinct holder, not by absent liege: two state titles sharing one character are
+            // one realm however the liege table reads, and counting them apart is what made an
+            // earlier version report nine independent states on a map that had eight.
+            int shared = stateTitles.Values.Count()
+                       - stateTitles.Values.Select(t => holderCounty.GetValueOrDefault(t))
+                                           .Where(c => c is not null).Distinct().Count();
+
+            int independent = stateTitles.Values.Count(t => !liege.ContainsKey(t)) - shared;
+
+            if (shared > 0)
+                Console.WriteLine($"  realms: {shared} states still share a ruler with a neighbour");
+
+            Console.WriteLine($"  realms: bound to {stateTitles.Count} azgaar states — " +
+                              $"{independent} independent, {vassals} vassal to a suzerain");
+        }
+
         var greatest = primary
             .OrderByDescending(kv => Rank(kv.Value))
             .ThenByDescending(kv => weight[kv.Value])
@@ -295,9 +395,10 @@ public static class Realms
         Title title,
         HashSet<Title> realized,
         Dictionary<Title, Title> holderCounty,
-        Dictionary<Title, int> weight)
+        Dictionary<Title, int> weight,
+        HashSet<Title>? avoid = null)
     {
-        var capital = Capital(title, weight);
+        var capital = Capital(title, weight, avoid);
         var current = title;
 
         while (current.Tier != "c")
@@ -305,27 +406,50 @@ public static class Realms
             realized.Add(current);
             holderCounty[current] = capital;
 
-            var next = Strongest(current, weight);
+            var next = Strongest(current, weight, avoid);
             if (next is null) break;
             current = next;
         }
     }
 
-    private static Title Capital(Title title, Dictionary<Title, int> weight)
+    /// <summary>
+    /// The county a holder of <paramref name="title"/> sits in — its strongest child, all the way
+    /// down.
+    ///
+    /// <paramref name="avoid"/> names children the descent must step around. It exists for imported
+    /// maps, where a small country can be a duchy inside a larger neighbour's de jure kingdom: left
+    /// alone the descent takes the strongest duchy, which *is* that country, and the neighbour's
+    /// king comes out holding it — so the two states share one character and one of them stops
+    /// existing. Skipping it takes the second-strongest instead, which is the same rule with one
+    /// exception rather than a different rule.
+    /// </summary>
+    private static Title Capital(Title title, Dictionary<Title, int> weight,
+        HashSet<Title>? avoid = null)
     {
         while (title.Tier != "c")
         {
-            var next = Strongest(title, weight);
+            var next = Strongest(title, weight, avoid);
             if (next is null) break;
             title = next;
         }
         return title;
     }
 
-    private static Title? Strongest(Title title, Dictionary<Title, int> weight)
-        => title.Children.Count == 0
+    private static Title? Strongest(Title title, Dictionary<Title, int> weight,
+        HashSet<Title>? avoid = null)
+    {
+        // Only while something is left to pick. A duchy whose every child is spoken for still needs
+        // a capital, and a shared one beats none at all.
+        if (avoid is { Count: > 0 } && title.Children.Any(c => !avoid.Contains(c)))
+            return Strongest([.. title.Children.Where(c => !avoid.Contains(c))], weight);
+
+        return Strongest(title.Children, weight);
+    }
+
+    private static Title? Strongest(IReadOnlyList<Title> children, Dictionary<Title, int> weight)
+        => children.Count == 0
             ? null
-            : title.Children.OrderByDescending(c => weight.GetValueOrDefault(c))
+            : children.OrderByDescending(c => weight.GetValueOrDefault(c))
                             .ThenBy(c => c.Index).First();
 
     private static Dictionary<Title, int> Weigh(List<Title> empires,

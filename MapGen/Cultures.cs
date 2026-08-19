@@ -1,4 +1,4 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 
 namespace Ck3MapGen.MapGen;
@@ -208,7 +208,7 @@ public static class Cultures
 
     public static CultureMap Build(List<Title> empires, ProvinceMap provinces, int[] order,
         int landCount, TerrainClass[] provinceTerrain, Dictionary<Title, int> development,
-        VanillaVocabulary vocab, MapConfig cfg, Rng rng)
+        VanillaVocabulary vocab, MapConfig cfg, Rng rng, AzgaarImport? azgaar = null)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -232,10 +232,25 @@ public static class Cultures
             var members = all.Where(i => heritageOf[i] == h).ToList();
             if (members.Count == 0) continue;
 
+            // Which of the export's cultures holds most of this heritage's ground, and therefore
+            // whose name base its language should be built from. None on a generated map, and none
+            // where our region growth landed a heritage on water or on unclaimed ground.
+            var imported = azgaar?.Across(members.Select(i => counties[i]), b => b.Culture)
+                           ?? AzgaarShare.None;
+            var importedNames = imported.Exists ? azgaar!.NamesForCulture(imported.Id) : null;
+
+            string languageKey = $"language_gen_{heritages.Count}";
+
+            // The language's own name is generated from the corpus rather than taken from it. The
+            // corpus is called things like "Arabic" and "Nordic" — real-world labels with no place
+            // on a fantasy map's language list — and the heritage claims the export's culture name
+            // just below, which the two are meant to differ from anyway.
             // Guarantee the first generated heritage gets the English-like language
-            var language = heritages.Count == 0
-                ? Language.CreateAnglic($"language_gen_{heritages.Count}", rng)
-                : Language.Create($"language_gen_{heritages.Count}", rng); usedNames.Add(language.Name);
+            var language = importedNames is not null
+                ? Language.FromNameBase(languageKey, importedNames, rng)
+                : heritages.Count == 0
+                    ? Language.CreateAnglic(languageKey, rng)
+                    : Language.Create(languageKey, rng); usedNames.Add(language.Name);
 
             var heritage = new Heritage
             {
@@ -244,7 +259,11 @@ public static class Cultures
                 // A separate word from the language's own name, because they are separate things —
                 // vanilla pairs the North Germanic heritage with the Norse language, not with the
                 // North Germanic language, and naming both the same reads as a bug.
-                Name = Unique(language.Word(rng, 2, 3), usedNames),
+                Name = Unique(
+                    imported.Exists && azgaar!.World.Culture(imported.Id)?.Name is { Length: > 0 } n
+                        ? n
+                        : language.Word(rng, 2, 3),
+                    usedNames),
                 Language = language,
                 Look = rng.Pick(vocab.Looks),
                 LanguageColor = vocab.LanguageColors.Count > 0 ? rng.Pick(vocab.LanguageColors) : null,

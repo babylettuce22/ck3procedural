@@ -1,4 +1,4 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 using Ck3MapGen.Emit;
 
@@ -100,6 +100,12 @@ public static class Governments
         return false;
     }
 
+    /// <summary>Title tiers as a number, so a hierarchy can be walked biggest-first.</summary>
+    private static int TierRank(string tier) => tier switch
+    {
+        "e" => 4, "k" => 3, "d" => 2, "c" => 1, _ => 0,
+    };
+
     public static GovernmentMap Build(
         List<Title> empires,
         List<Title> counties,
@@ -109,13 +115,45 @@ public static class Governments
         CultureMap? cultures,
         WorldCenterMap? worldCenters,
         MapConfig cfg,
-        Rng rng)
+        Rng rng,
+        AzgaarImport? azgaar = null,
+        Dictionary<int, string>? stateGovernments = null)
     {
         var assigned = new Dictionary<Title, string>();
         var adminTitles = new HashSet<Title>();
         var nomadTitles = new HashSet<Title>();
 
         int salt = rng.Int(1, int.MaxValue - 1);
+
+        // A country's government is Azgaar's to decide when it said one — its form is the whole
+        // difference between a Kingdom and a Most Serene Republic, and the terrain-and-development
+        // reasoning below has no way to recover it.
+        //
+        // Highest tier first so that an empire lays its government over its whole span before the
+        // kingdoms inside it are considered; a county claimed by a larger state is left alone rather
+        // than reassigned, which is what keeps a vassal kingdom from overwriting its suzerain.
+        var claimed = new HashSet<Title>();
+
+        if (azgaar is not null && stateGovernments is not null)
+        {
+            foreach (var (state, title) in azgaar.StateTitles
+                         .OrderByDescending(kv => TierRank(kv.Value.Tier))
+                         .ThenBy(kv => kv.Key))
+            {
+                if (!stateGovernments.TryGetValue(state, out string? government)) continue;
+
+                foreach (var county in Titles.Flatten([title]).Where(t => t.Tier == "c"))
+                {
+                    assigned[county] = government;
+                    claimed.Add(county);
+                }
+
+                if (government == GovernmentMap.Nomad) nomadTitles.Add(title);
+                if (government == GovernmentMap.Administrative) adminTitles.Add(title);
+            }
+
+            counties = counties.Where(c => !claimed.Contains(c)).ToList();
+        }
 
         // --- 1. Identify Clan-leaning heritages ---
         var clanHeritage = new HashSet<Heritage>();
