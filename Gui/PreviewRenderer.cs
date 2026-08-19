@@ -254,9 +254,7 @@ public static class PreviewRenderer
             var county = counties[c];
             if (wilderness?.Contains(county) == true) { wild[c] = true; continue; }
             var holder = realms.HolderCounty.GetValueOrDefault(county, county);
-            var top = primaryOf.GetValueOrDefault(holder, county);
-            while (realms.Liege.TryGetValue(top, out var liege)) top = liege;
-            colour[c] = top.Color;
+            colour[c] = TopLiege(realms, primaryOf, holder).Color;
         }
 
         var countyOf = new int[baronyCount + 1];
@@ -301,6 +299,42 @@ public static class PreviewRenderer
                 int c = At(i);
                 return c >= 0 && Edge(i, c) ? 1 : 0;
             });
+    }
+
+    /// <summary>
+    /// The title at the top of the realm a holder belongs to.
+    ///
+    /// The walk has to change hands at every step, not just follow <see cref="RealmMap.Liege"/>.
+    /// That table maps a holder's primary title to the de jure title <em>above</em> it, and the
+    /// title above is frequently not anybody's primary — a duchy held by a king whose primary is
+    /// the kingdom is a liege that is itself no key in the table. Following the titles alone stops
+    /// there, one rung short, and paints the county in that duchy's colour.
+    ///
+    /// On an Azgaar map that is the difference between a country and its pieces: the export's
+    /// states end up shattered across several colours, so the realm map reads as if the import had
+    /// never happened. Champsia painted 29 realms where 15 existed, with 109 of 367 counties in the
+    /// wrong one.
+    ///
+    /// So each step resolves the liege title to the character holding it — its seat county — and
+    /// resumes from that character's own primary title, which is a key again. The visited set
+    /// guards the general case rather than an observed cycle: this runs on a half-built world every
+    /// time a preview is drawn, and a render is not the place to hang.
+    /// </summary>
+    private static Title TopLiege(MapGen.RealmMap realms, Dictionary<Title, Title> primaryOf, Title holder)
+    {
+        var seat = holder;
+        var visited = new HashSet<Title>();
+
+        while (visited.Add(seat))
+        {
+            var primary = primaryOf.GetValueOrDefault(seat, seat);
+            if (!realms.Liege.TryGetValue(primary, out var lord)) return primary;
+            if (!realms.HolderCounty.TryGetValue(lord, out var lordSeat) || lordSeat == seat) return lord;
+
+            seat = lordSeat;
+        }
+
+        return primaryOf.GetValueOrDefault(seat, seat);
     }
 
     private static Image RenderByCounty(GenerationResult result, MapGen.WildernessMap? wilderness,

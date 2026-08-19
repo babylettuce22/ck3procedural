@@ -13,6 +13,15 @@ public sealed class ProvinceSeed
     public bool IsLand;
     public bool IsImpassable;
     public bool IsMajorRiver;
+
+    /// <summary>
+    /// The region this province grows inside and may never leave. See <see cref="ProvinceDomain"/>.
+    ///
+    /// Strictly finer than <see cref="IsLand"/> — water is always domain 0 — so every test that used
+    /// to ask whether two provinces were on the same side of the coastline can ask about domains
+    /// instead and get the old answer plus the border constraint.
+    /// </summary>
+    public int Domain;
 }
 
 /// <summary>Pixel-level province assignment at provinces-map resolution.</summary>
@@ -27,6 +36,17 @@ public sealed class ProvinceMap
     public required List<ProvinceSeed> Seeds;
 
     public int Count => Seeds.Count;
+
+    /// <summary>
+    /// Whether two provinces may exchange pixels — that is, whether they grew in the same region.
+    ///
+    /// Every tidy-up pass after the partition used to ask <c>Seeds[a].IsLand == Seeds[b].IsLand</c>
+    /// before moving a pixel or merging a province, to stop the sea eating the shore. Asking about
+    /// the domain instead answers the same question and the border question together, because water
+    /// is a domain of its own; that is why the border constraint needed no new test anywhere, only
+    /// a wider one.
+    /// </summary>
+    public bool SameDomain(int a, int b) => Seeds[a].Domain == Seeds[b].Domain;
 }
 
 /// <summary>
@@ -60,7 +80,8 @@ public static class Provinces
                 MapConfig cfg,
                 Rng rng,
                 List<MajorRiverPath>? majorRivers = null,
-                Drainage? drainage = null)
+                Drainage? drainage = null,
+                AzgaarImport? azgaar = null)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -79,18 +100,25 @@ public static class Provinces
                           $"{seeds.Count(s => !s.IsLand && s.IsMajorRiver)} major river / " +
                           $"{seeds.Count(s => !s.IsLand && !s.IsMajorRiver)} sea provinces ({sw.ElapsedMilliseconds} ms)");
 
-        Core.Stage.Detail("  · seed coverage", () => EnsureSeedsCoverComponents(mask, width, height, seeds));
+        // The region each pixel grows inside. Without an import this is the land mask by another
+        // name; with one it is the export's provinces, and the partition below cannot cross them.
+        var domain = Core.Stage.Detail("  · domain field",
+            () => ProvinceDomain.Build(mask, azgaar, width, height, cfg));
+
+        foreach (var seed in seeds) seed.Domain = domain[seed.Y * width + seed.X];
+
+        Core.Stage.Detail("  · seed coverage", () => EnsureSeedsCoverComponents(domain, width, height, seeds));
 
         // Rivers add crossing resistance to CostElevation
         var cost = Core.Stage.Detail("  · cost elevation blur", () => CostElevation(elevation, mask, drainage, width, height, cfg));
 
         var bucketManager = new ThreadBucketManager();
         var label = Core.Stage.Detail("  · delta-stepping partition",
-            () => Partition(mask, cost, width, height, cfg, seeds, bucketManager));
+            () => Partition(domain, cost, width, height, cfg, seeds, bucketManager));
 
         var map = new ProvinceMap { Width = width, Height = height, Label = label, Seeds = seeds };
-        Core.Stage.Detail("  · repair unlabeled", () => RepairUnlabeled(map));
-        Core.Stage.Detail("  · lloyd relaxation", () => Relax(map, mask, cost, cfg, bucketManager));
+        Core.Stage.Detail("  · repair unlabeled", () => RepairUnlabeled(map, domain));
+        Core.Stage.Detail("  · lloyd relaxation", () => Relax(map, domain, cost, cfg, bucketManager));
         Core.Stage.Detail("  · border smoothing", () => SmoothBorders(map, cfg));
         Core.Stage.Detail("  · sever waists", () => SeverWaists(map));
         Core.Stage.Detail("  · reconnect fragments", () => ReconnectFragments(map));
@@ -102,6 +130,7 @@ public static class Provinces
             MergeImpassableRanges(map, cfg);
         });
         Core.Stage.Detail("  · province report", () => Report(map, elevation, cfg));
+        if (azgaar is not null) VerifyDomains(map, domain);
         return map;
     }
 
@@ -204,7 +233,7 @@ public static class Provinces
         return Field.Blur(costField, width, height, radius, 2);
     }
 
-    private static void Relax(ProvinceMap map, byte[] mask, float[] elevation, MapConfig cfg,
+    private static void Relax(ProvinceMap map, int[] domain, float[] elevation, MapConfig cfg,
         ThreadBucketManager bucketManager)
     {
         int iterations = Math.Max(0, cfg.ProvinceRelaxIterations);
@@ -280,6 +309,16 @@ public static class Provinces
                 for (int x = 0; x < width; x++)
                 {
                     int label = map.Label[row + x];
+
+                    // A seed may only move to ground its own province is allowed to grow from.
+                    // Relaxation picks the pixel nearest the centroid, and the partition that
+                    // follows reads the domain of wherever the seed landed — so a seed that
+                    // wandered across a border would take its whole province with it next pass.
+                    // In a clean map every pixel of a province already shares its domain and this
+                    // rejects nothing; it matters only where a tidy-up pass has left a province
+                    // holding a stray pixel from next door.
+                    if (domain[row + x] != map.Seeds[label].Domain) continue;
+
                     double dx = x - centroidX[label];
                     double dy = y - centroidY[label];
                     double d = dx * dx + dy * dy;
@@ -310,6 +349,9 @@ public static class Provinces
             moved = 0;
             for (int label = 0; label < mapCount; label++)
             {
+                // No pixel of its own — nothing to move towards, and (0, 0) is not an answer.
+                if (double.IsPositiveInfinity(best[label])) continue;
+
                 var seed = map.Seeds[label];
                 moved += Math.Sqrt((double)(target[label].X - seed.X) * (target[label].X - seed.X)
                                    + (double)(target[label].Y - seed.Y) * (target[label].Y - seed.Y));
@@ -318,8 +360,8 @@ public static class Provinces
             }
             moved /= Math.Max(1, mapCount);
 
-            map.Label = Partition(mask, elevation, map.Width, map.Height, cfg, map.Seeds, bucketManager);
-            RepairUnlabeled(map);
+            map.Label = Partition(domain, elevation, map.Width, map.Height, cfg, map.Seeds, bucketManager);
+            RepairUnlabeled(map, domain);
         }
 
         Console.WriteLine($"  relaxed {iterations}x: seeds moved {moved:F1} px on the last pass " +
@@ -380,7 +422,7 @@ public static class Provinces
                 {
                     int other = source[(y + dy) * width + (x + dx)];
                     if (other == label) continue;
-                    if (map.Seeds[other].IsLand != map.Seeds[label].IsLand) continue;
+                    if (!map.SameDomain(other, label)) continue;
 
                     foreign++;
                     int slot = 0;
@@ -446,7 +488,7 @@ public static class Provinces
                         {
                             int other = source[j * width + i];
                             if (other == label) { own++; continue; }
-                            if (map.Seeds[other].IsLand != map.Seeds[label].IsLand) continue;
+                            if (!map.SameDomain(other, label)) continue;
 
                             int slot = 0;
                             while (slot < distinct && labels[slot] != other) slot++;
@@ -596,7 +638,7 @@ public static class Provinces
 
                 int other = map.Label[ny * width + nx];
                 if (other == map.Label[cell]) continue;
-                if (map.Seeds[other].IsLand != map.Seeds[map.Label[cell]].IsLand) continue;
+                if (!map.SameDomain(other, map.Label[cell])) continue;
 
                 counts[other] = counts.GetValueOrDefault(other) + 1;
             }
@@ -676,7 +718,7 @@ public static class Provinces
                 int best = -1, bestBorder = -1;
                 foreach (var (other, border) in counts)
                 {
-                    if (map.Seeds[other].IsLand != map.Seeds[t].IsLand) continue;
+                    if (!map.SameDomain(other, t)) continue;
                     if (border <= bestBorder) continue;
                     best = other;
                     bestBorder = border;
@@ -905,7 +947,7 @@ public static class Provinces
 
         void Link(int a, int b)
         {
-            if (a == b || !impassable[b]) return;
+            if (a == b || !impassable[b] || !map.SameDomain(a, b)) return;
             if (!touching.TryGetValue(a, out var sa)) touching[a] = sa = [];
             if (!touching.TryGetValue(b, out var sb)) touching[b] = sb = [];
             sa.Add(b);
@@ -1109,7 +1151,7 @@ public static class Provinces
     }
 
     private static void EnsureSeedsCoverComponents(
-        byte[] mask, int width, int height, List<ProvinceSeed> seeds)
+        int[] domain, int width, int height, List<ProvinceSeed> seeds)
     {
         int n = width * height;
         var parent = new int[n];
@@ -1146,17 +1188,17 @@ public static class Provinces
             for (int x = 0; x < width; x++)
             {
                 int cell = row + x;
-                byte d = mask[cell];
+                int d = domain[cell];
 
-                if (x > 0 && mask[cell - 1] == d)
+                if (x > 0 && domain[cell - 1] == d)
                     Union(cell, cell - 1);
 
                 if (y > 0)
                 {
                     int up = cell - width;
-                    if (mask[up] == d) Union(cell, up);
-                    if (x > 0 && mask[up - 1] == d) Union(cell, up - 1);
-                    if (x < width - 1 && mask[up + 1] == d) Union(cell, up + 1);
+                    if (domain[up] == d) Union(cell, up);
+                    if (x > 0 && domain[up - 1] == d) Union(cell, up - 1);
+                    if (x < width - 1 && domain[up + 1] == d) Union(cell, up + 1);
                 }
             }
         }
@@ -1185,7 +1227,8 @@ public static class Provinces
             {
                 X = cell % width,
                 Y = cell / width,
-                IsLand = mask[cell] == 1,
+                IsLand = domain[cell] != ProvinceDomain.Water,
+                Domain = domain[cell],
             });
             added++;
         }
@@ -1194,7 +1237,7 @@ public static class Provinces
             Console.WriteLine($"  added {added} seeds to cover otherwise-unreachable components");
     }
 
-    private static int[] Partition(byte[] mask, float[] elevation, int width, int height,
+    private static int[] Partition(int[] domainField, float[] elevation, int width, int height,
         MapConfig cfg, List<ProvinceSeed> seeds, ThreadBucketManager bucketManager)
     {
         int n = width * height;
@@ -1207,7 +1250,7 @@ public static class Provinces
         int samples = 0;
         for (int i = width; i < n - width; i += 97)
         {
-            if (mask[i] == 0 || mask[i - 1] == 0) continue;
+            if (domainField[i] == ProvinceDomain.Water || domainField[i - 1] == ProvinceDomain.Water) continue;
             total += Math.Abs(elevation[i] - elevation[i - 1]);
             samples++;
         }
@@ -1249,7 +1292,7 @@ public static class Provinces
                 var local = bucketManager.Rent();
                 for (int i = 0; i < count; i++)
                 {
-                    RelaxNode(currentBucketItems[i], activeBucket, width, height, mask, elevation,
+                    RelaxNode(currentBucketItems[i], activeBucket, width, height, domainField, elevation,
                         terrainCost, invRef, state, local, ref maxBucket);
                 }
                 bucketManager.Return(local);
@@ -1266,7 +1309,7 @@ public static class Provinces
 
                         for (int i = range.Item1; i < range.Item2; i++)
                         {
-                            RelaxNode(currentBucketItems[i], activeBucket, width, height, mask, elevation,
+                            RelaxNode(currentBucketItems[i], activeBucket, width, height, domainField, elevation,
                                 terrainCost, invRef, state, local, ref localMaxBucket);
                         }
 
@@ -1303,7 +1346,7 @@ public static class Provinces
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void RelaxNode(int cell, int activeBucket, int width, int height,
-        byte[] mask, float[] elevation, float terrainCost, float invRef,
+        int[] domainField, float[] elevation, float terrainCost, float invRef,
         ulong[] state, ThreadLocalBucket local, ref int localMaxBucket)
     {
         ulong stateU = Volatile.Read(ref state[cell]);
@@ -1311,7 +1354,7 @@ public static class Provinces
         if ((int)distU != activeBucket) return;
 
         uint labelU = (uint)stateU;
-        byte domain = mask[cell];
+        int domain = domainField[cell];
         float elevCell = elevation[cell];
         int x = cell % width;
         int y = cell / width;
@@ -1322,7 +1365,7 @@ public static class Provinces
         {
             // 1. Left
             int nk = cell - 1;
-            if (mask[nk] == domain)
+            if (domainField[nk] == domain)
             {
                 float nd = distU + (1f + terrainCost * MathF.Abs(elevation[nk] - elevCell) * invRef);
                 TryRelax(nk, nd, labelU, state, local, ref localMaxBucket);
@@ -1330,7 +1373,7 @@ public static class Provinces
 
             // 2. Right
             nk = cell + 1;
-            if (mask[nk] == domain)
+            if (domainField[nk] == domain)
             {
                 float nd = distU + (1f + terrainCost * MathF.Abs(elevation[nk] - elevCell) * invRef);
                 TryRelax(nk, nd, labelU, state, local, ref localMaxBucket);
@@ -1338,7 +1381,7 @@ public static class Provinces
 
             // 3. Up
             nk = cell - width;
-            if (mask[nk] == domain)
+            if (domainField[nk] == domain)
             {
                 float nd = distU + (1f + terrainCost * MathF.Abs(elevation[nk] - elevCell) * invRef);
                 TryRelax(nk, nd, labelU, state, local, ref localMaxBucket);
@@ -1346,7 +1389,7 @@ public static class Provinces
 
             // 4. Down
             nk = cell + width;
-            if (mask[nk] == domain)
+            if (domainField[nk] == domain)
             {
                 float nd = distU + (1f + terrainCost * MathF.Abs(elevation[nk] - elevCell) * invRef);
                 TryRelax(nk, nd, labelU, state, local, ref localMaxBucket);
@@ -1354,7 +1397,7 @@ public static class Provinces
 
             // 5. Up-Left (-1, -1)
             nk = cell - width - 1;
-            if (mask[nk] == domain && mask[cell - 1] == domain && mask[cell - width] == domain)
+            if (domainField[nk] == domain && domainField[cell - 1] == domain && domainField[cell - width] == domain)
             {
                 float nd = distU + DiagonalCost * (1f + terrainCost * MathF.Abs(elevation[nk] - elevCell) * invRef);
                 TryRelax(nk, nd, labelU, state, local, ref localMaxBucket);
@@ -1362,7 +1405,7 @@ public static class Provinces
 
             // 6. Up-Right (1, -1)
             nk = cell - width + 1;
-            if (mask[nk] == domain && mask[cell + 1] == domain && mask[cell - width] == domain)
+            if (domainField[nk] == domain && domainField[cell + 1] == domain && domainField[cell - width] == domain)
             {
                 float nd = distU + DiagonalCost * (1f + terrainCost * MathF.Abs(elevation[nk] - elevCell) * invRef);
                 TryRelax(nk, nd, labelU, state, local, ref localMaxBucket);
@@ -1370,7 +1413,7 @@ public static class Provinces
 
             // 7. Down-Left (-1, 1)
             nk = cell + width - 1;
-            if (mask[nk] == domain && mask[cell - 1] == domain && mask[cell + width] == domain)
+            if (domainField[nk] == domain && domainField[cell - 1] == domain && domainField[cell + width] == domain)
             {
                 float nd = distU + DiagonalCost * (1f + terrainCost * MathF.Abs(elevation[nk] - elevCell) * invRef);
                 TryRelax(nk, nd, labelU, state, local, ref localMaxBucket);
@@ -1378,7 +1421,7 @@ public static class Provinces
 
             // 8. Down-Right (1, 1)
             nk = cell + width + 1;
-            if (mask[nk] == domain && mask[cell + 1] == domain && mask[cell + width] == domain)
+            if (domainField[nk] == domain && domainField[cell + 1] == domain && domainField[cell + width] == domain)
             {
                 float nd = distU + DiagonalCost * (1f + terrainCost * MathF.Abs(elevation[nk] - elevCell) * invRef);
                 TryRelax(nk, nd, labelU, state, local, ref localMaxBucket);
@@ -1392,12 +1435,12 @@ public static class Provinces
                 if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
 
                 int nk = ny * width + nx;
-                if (mask[nk] != domain) continue;
+                if (domainField[nk] != domain) continue;
 
                 if (diagonal)
                 {
-                    if (mask[y * width + nx] != domain) continue;
-                    if (mask[ny * width + x] != domain) continue;
+                    if (domainField[y * width + nx] != domain) continue;
+                    if (domainField[ny * width + x] != domain) continue;
                 }
 
                 float nd = distU + cost * (1f + terrainCost * MathF.Abs(elevation[nk] - elevCell) * invRef);
@@ -1491,36 +1534,120 @@ public static class Provinces
 
         return added;
     }
-    private static void RepairUnlabeled(ProvinceMap map)
+    /// <summary>
+    /// Hands every pixel the partition never reached to a neighbour that was.
+    ///
+    /// Pixels are left over because the seed-coverage check and the growth disagree slightly about
+    /// what "connected" means: the check unions diagonally, while growth refuses to cut a corner
+    /// unless both orthogonal neighbours are in the same domain. Ground reachable only through a
+    /// corner therefore has a seed guaranteed somewhere in its component but no path from it.
+    ///
+    /// The flood is restricted to the pixel's own domain first, which is what keeps the border
+    /// constraint true of the finished map rather than merely of the partition — an unreached
+    /// pixel filled from whichever neighbour happened to be nearest would quietly hand a scrap of
+    /// one Azgaar province to a barony belonging to another. Only pixels with no labelled
+    /// same-domain neighbour anywhere in reach fall through to the unrestricted pass, which cannot
+    /// happen while every domain component holds a seed, and is reported when it does.
+    /// </summary>
+    private static void RepairUnlabeled(ProvinceMap map, int[] domain)
     {
         var label = map.Label;
-        int firstUnlabeled = Array.IndexOf(label, -1);
-        if (firstUnlabeled < 0) return;
+        if (Array.IndexOf(label, -1) < 0) return;
 
-        var queue = new List<int>();
-        for (int i = 0; i < label.Length; i++)
-            if (label[i] >= 0) queue.Add(i);
-
-        int unlabeled = label.Length - queue.Count;
+        int unlabeled = 0;
+        for (int i = 0; i < label.Length; i++) if (label[i] < 0) unlabeled++;
         if (unlabeled == 0) return;
 
-        int head = 0;
-        while (head < queue.Count)
+        int filled = Flood(matchDomain: true);
+        int strays = unlabeled - filled;
+        if (strays > 0) Flood(matchDomain: false);
+
+        Console.WriteLine($"  repaired {unlabeled} unlabeled pixels" +
+                          (strays > 0 ? $" ({strays} had no same-domain neighbour)" : ""));
+        return;
+
+        int Flood(bool matchDomain)
         {
-            int cell = queue[head++];
-            int x = cell % map.Width, y = cell / map.Width;
-            foreach (var (dx, dy, _, _) in Dirs)
+            var queue = new List<int>();
+            for (int i = 0; i < label.Length; i++)
+                if (label[i] >= 0) queue.Add(i);
+
+            int taken = 0;
+            int head = 0;
+            while (head < queue.Count)
             {
-                int nx = x + dx, ny = y + dy;
-                if (nx < 0 || ny < 0 || nx >= map.Width || ny >= map.Height) continue;
-                int nk = ny * map.Width + nx;
-                if (label[nk] >= 0) continue;
-                label[nk] = label[cell];
-                queue.Add(nk);
+                int cell = queue[head++];
+                int x = cell % map.Width, y = cell / map.Width;
+                foreach (var (dx, dy, _, _) in Dirs)
+                {
+                    int nx = x + dx, ny = y + dy;
+                    if (nx < 0 || ny < 0 || nx >= map.Width || ny >= map.Height) continue;
+                    int nk = ny * map.Width + nx;
+                    if (label[nk] >= 0) continue;
+                    if (matchDomain && domain[nk] != domain[cell]) continue;
+
+                    label[nk] = label[cell];
+                    queue.Add(nk);
+                    taken++;
+                }
             }
+
+            return taken;
+        }
+    }
+
+    /// <summary>
+    /// Checks that no barony ended up spanning two of Azgaar's provinces, and says so if one did.
+    ///
+    /// This is the assertion the whole hard-constraint approach exists to make possible. A penalty
+    /// in the cost field can only be eyeballed; a partition either respects the borders or it does
+    /// not, and the difference is one pass over the labels.
+    ///
+    /// Only land provinces are examined, and only the Azgaar province behind each pixel — water is
+    /// skipped rather than treated as a second domain. That is the question rather than a loophole:
+    /// a county's border is wrong when it takes ground from the state next door, and unbothered by
+    /// a sea pixel <see cref="DissolveTinyProvinces"/> folded into the shoreline. Counting water
+    /// reported three hundred failures on a map with none of the kind that matters — they were the
+    /// drowned islets, which are meant to stop being land at all.
+    ///
+    /// Reported rather than thrown because a few stray pixels are a blemish rather than a reason to
+    /// lose the run, but anything above zero means a tidy-up pass is still moving pixels across a
+    /// border it should be treating as a wall.
+    /// </summary>
+    private static void VerifyDomains(ProvinceMap map, int[] domain)
+    {
+        var first = new int[map.Count];
+        Array.Fill(first, ProvinceDomain.Water);
+
+        var impure = new HashSet<int>();
+        long strayPixels = 0;
+
+        for (int i = 0; i < map.Label.Length; i++)
+        {
+            int id = map.Label[i];
+            if (id < 0 || !map.Seeds[id].IsLand) continue;
+
+            int d = domain[i];
+            if (d == ProvinceDomain.Water) continue;
+
+            if (first[id] == ProvinceDomain.Water) { first[id] = d; continue; }
+            if (first[id] == d) continue;
+
+            strayPixels++;
+            impure.Add(id);
         }
 
-        Console.WriteLine($"  repaired {unlabeled} unlabeled pixels");
+        int land = 0;
+        for (int i = 0; i < map.Count; i++) if (map.Seeds[i].IsLand) land++;
+
+        if (impure.Count == 0)
+        {
+            Console.WriteLine($"  domain check: all {land} land provinces sit inside one azgaar province");
+            return;
+        }
+
+        Console.WriteLine($"  ! domain check: {impure.Count} of {land} land provinces straddle an " +
+                          $"azgaar border ({strayPixels} px)");
     }
 }
 

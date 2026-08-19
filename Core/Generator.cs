@@ -122,7 +122,7 @@ public static class Generator
         // 5. Partition provinces with river seeds
         var provinces = Stage.Time("province partition",
             () => Provinces.Build(landMask, provinceElevation, climate,
-                cfg.ProvinceWidth, cfg.ProvinceHeight, cfg, rng, majorRivers, drainage));
+                cfg.ProvinceWidth, cfg.ProvinceHeight, cfg, rng, majorRivers, drainage, azgaar));
         Console.WriteLine($"  {provinces.Count} provinces total");
 
         // --- PREVIEWS READY HERE ---

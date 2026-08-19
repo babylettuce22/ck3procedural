@@ -388,6 +388,24 @@ wilderness_colonization.0010.d:0 "I will lead the column myself. No one else has
  colonize_keep_direct_control_tt:0 "You retain direct possession of [colony.GetName] as part of your domain."
  colonize_grant_to_leader_tt:0 "#V [expedition_leader.GetShortUIName]#! is granted [colony.GetName] and becomes your colonial vassal."
 
+ # --- Naming the colony ----------------------------------------------------------------------
+ # `colony_entered_name` is the only one of these the game ever stores. The text widget on 0012
+ # keeps whatever was typed under `colony_chosen_name` on the character, GetLocalizedText reads it
+ # back out, and `set_title_name_dynamic` in the event's `after` resolves this key once and bakes
+ # the result onto the title. Nothing here is looked up again afterwards, so these strings are
+ # free to change without touching colonies that were already named.
+ colony_entered_name:0 "[ROOT.Char.GetLocalizedText('colony_chosen_name')]"
+
+ # The suggestions under the box. `colony_name_keep` is first, so it is what the box is pre-filled
+ # with, and clicking straight through leaves the generated name alone.
+ colony_name_keep:0 "[colony.GetName]"
+ colony_name_wood:0 "Thornwood"
+ colony_name_jungle:0 "Greenmarch"
+ colony_name_stone:0 "Stonewatch"
+ colony_name_dry:0 "Dryhold"
+ colony_name_fen:0 "Fenmarch"
+ colony_name_field:0 "Longfield"
+
  # --- A colony comes of age ------------------------------------------------------------------
  wilderness_colonization.0020.t:0 "The Seat Is Raised"
  wilderness_colonization.0020.desc:0 "Word from [finished_colony.GetName]: the hall is up.\n\n[colonist.GetTitledFirstName] has spent the better part of [colonist.GetHerHis] life on this — the wolves, the winters, the years where nothing we sent made any difference and nothing came back. There is a road to it now. There are people in it who were born in it.\n\n[colonist.GetSheHe|U] has sent word rather than come [colonist.GetHerselfHimself], which is fair; the ride is long and there is a harvest. The word is that [colonist.GetSheHe] remains ours."
