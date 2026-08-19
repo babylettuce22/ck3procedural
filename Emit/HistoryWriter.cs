@@ -363,7 +363,12 @@ public static class HistoryWriter
             sb.Append($"\tname = \"{character.Name}\"\n");
             if (character.Female) sb.Append("\tfemale = yes\n");
 
-            sb.Append($"\tdynasty_house = {character.DynastyHouseKey ?? character.DynastyId}\n");
+            // Same distinction as the ancestors above: a dynasty id is not a house id, and putting
+            // one in dynasty_house leaves the character in no house at all.
+            if (character.DynastyHouseKey is not null)
+                sb.Append($"\tdynasty_house = {character.DynastyHouseKey}\n");
+            else
+                sb.Append($"\tdynasty = {character.DynastyId}\n");
             sb.Append($"\treligion = {character.FaithKey}\n");
             sb.Append($"\tculture = {character.CultureKey}\n");
 
@@ -578,7 +583,10 @@ public static class HistoryWriter
     /// orc's frame survive inheritance, show in the character sheet, and reach the AI.
     /// </summary>
     private static string? GetPhenotypeTrait(Culture culture, EthnicityMap ethnicityMap)
-        => ethnicityMap.For(culture).Archetype switch
+    {
+        var ethnicity = ethnicityMap.For(culture);
+
+        return ethnicity.Archetype switch
         {
             RaceArchetype.HighElf or RaceArchetype.WoodElf => "phenotype_gracile",
             RaceArchetype.Dwarf => "phenotype_stocky",
@@ -588,6 +596,7 @@ public static class HistoryWriter
             RaceArchetype.Deepkin => "phenotype_dusk_adapted",
             _ => null,
         };
+    }
 
     private static void WriteDynastyLocalisation(string modDir, PrehistoryMap prehistory)
     {

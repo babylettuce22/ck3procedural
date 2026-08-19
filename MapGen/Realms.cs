@@ -256,7 +256,7 @@ public static class Realms
             EnsureKingdomDuchiesRealized(k, realized, holderCounty, weight, rng, isUnderActiveRealm: true);
         }
 
-        var unruledKingdoms = empires
+        var unruledKingdoms = fromExport ? [] : empires
             .Where(e => !chosenEmpires.Contains(e))
             .SelectMany(e => e.Children)
             .Where(k => !chosenIndepKingdoms.Contains(k))
@@ -300,7 +300,8 @@ public static class Realms
 
             foreach (var state in azgaar!.World.RealStates)
             {
-                int suzerain = Array.IndexOf(state.Relations, "Vassal");
+                var relations = state.Relations;
+                int suzerain = Array.IndexOf(relations, "Vassal");
                 if (suzerain <= 0) continue;
 
                 if (!stateTitles.TryGetValue(state.I, out var vassalTitle)) continue;
@@ -441,7 +442,7 @@ public static class Realms
         // Only while something is left to pick. A duchy whose every child is spoken for still needs
         // a capital, and a shared one beats none at all.
         if (avoid is { Count: > 0 } && title.Children.Any(c => !avoid.Contains(c)))
-            return Strongest([.. title.Children.Where(c => !avoid.Contains(c))], weight);
+            return Strongest(title.Children.Where(c => !avoid.Contains(c)).ToList(), weight);
 
         return Strongest(title.Children, weight);
     }

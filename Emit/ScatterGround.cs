@@ -70,6 +70,13 @@ internal static class ScatterGround
         int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
         float low = float.MaxValue, high = float.MinValue;
 
+        // The tolerance is quoted against vanilla's height range, so it has to be restated in this
+        // map's. Elevation here is in simulation units, and a map with taller peaks spreads the same
+        // real-world slope over more of them — left unscaled, a generous tolerance on a dramatic map
+        // silently becomes a strict one and the wide meshes stop being placed at all.
+        float range = Math.Max(1f, cfg.PeakElevation - cfg.Limits.SeaLevelUpper);
+        float tolerance = maxRelief * (range / Math.Max(1f, 236f));
+
         for (int dy = -radius; dy <= radius; dy += 2)
         {
             for (int dx = -radius; dx <= radius; dx += 2)
@@ -81,7 +88,7 @@ internal static class ScatterGround
                 low = Math.Min(low, h);
                 high = Math.Max(high, h);
 
-                if (high - low > maxRelief) return false;
+                if (high - low > tolerance) return false;
             }
         }
 

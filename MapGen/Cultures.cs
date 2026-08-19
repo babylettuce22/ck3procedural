@@ -219,6 +219,17 @@ public static class Cultures
         int cultureTarget = Math.Max(1, (int)Math.Round(counties.Count / cfg.CountiesPerCulture));
         int heritageTarget = Math.Max(1, (int)Math.Round(cultureTarget / cfg.CulturesPerHeritage));
 
+        // When race follows heritage, the heritage count is also the race count, and the density
+        // knobs above have no idea about that — a small map can ask for two heritages and then have
+        // nowhere to put the other six races. Raised to the guarantee, but never past the county
+        // count, since a heritage with no counties is not a people.
+        if (cfg.EnableFantasyEthnicities
+            && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly
+            && cfg.TieRaceToHeritage)
+        {
+            heritageTarget = Math.Max(heritageTarget, Math.Min(cfg.GuaranteedRaceCount, counties.Count));
+        }
+
         var all = Enumerable.Range(0, counties.Count).ToList();
         var heritageOf = RegionGrowth.Partition(graph, all, heritageTarget, rng, out _);
 

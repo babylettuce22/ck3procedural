@@ -477,15 +477,15 @@ public static class WaterNaming
     /// </summary>
     private static string StripBodyType(string full)
     {
-        foreach (string prefix in (string[])
-                 ["Gulf of ", "Bay of ", "Sound of ", "Sea of ", "Strait of ", "Great Sea of "])
+        string[] prefixes = ["Gulf of ", "Bay of ", "Sound of ", "Sea of ", "Strait of ", "Great Sea of "];
+        foreach (string prefix in prefixes)
         {
             if (full.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                 return full[prefix.Length..].Trim();
         }
 
-        foreach (string suffix in (string[])
-                 [" Ocean", " Sea", " Gulf", " Bay", " Sound", " Strait", " Lake"])
+        string[] suffixes = [" Ocean", " Sea", " Gulf", " Bay", " Sound", " Strait", " Lake"];
+        foreach (string suffix in suffixes)
         {
             if (full.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
                 return full[..^suffix.Length].Trim();

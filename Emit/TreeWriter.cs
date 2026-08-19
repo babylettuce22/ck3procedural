@@ -337,6 +337,11 @@ public static class TreeWriter
                         int i = y * width + x;
                         double p = chance[(int)terrain[i]] * factor[(int)climate[i]];
 
+                        // Before the canopy field, not after: a generator that does not grow on this
+                        // terrain at all is the common case on any given pass, and sampling noise
+                        // for it would cost more than the whole rest of the loop.
+                        if (p <= 0) continue;
+
                         // Open ground clumps into groves and closed ground only thins; the two read
                         // very differently and a single factor cannot do both. Insensitive plants —
                         // the ones that are not really canopy — opt out entirely.
@@ -348,7 +353,6 @@ public static class TreeWriter
                                 : CanopyField.ScatterFactor(canopy);
                         }
 
-                        if (p <= 0) continue;
                         if (rng.NextDouble() >= p) continue;
 
                         // Jitter inside the pixel so instances do not sit on a lattice.

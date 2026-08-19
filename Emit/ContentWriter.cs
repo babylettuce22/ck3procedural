@@ -227,9 +227,9 @@ public static class ContentWriter
         // the one we computed. The packer quantises and reassembles the terrain from a tile atlas,
         // and near a shore that moves the surface by enough to leave trunks standing in water — so
         // the elevation is round-tripped through the packer first and the scatter reads the result.
-        var packedHeightmap = HeightmapPacker.Reconstruct(
-            HeightmapSource.ToHeightmap16(terra.Elevation, cfg), cfg.Width, cfg.Height);
-        var renderedElevation = HeightmapSource.ToSimulationScale(packedHeightmap, cfg);
+        var full = HeightmapSource.ToHeightmap16(terra.Elevation, cfg);
+        var raw = HeightmapPacker.Reconstruct(full, cfg.Width, cfg.Height);
+        var renderedElevation = HeightmapSource.ToSimulationScale(raw, cfg);
 
         // terra.Elevation, not the province-resolution copy: both scatters jitter to sub-pixel
         // positions and have to ask the heightmap the engine renders whether that spot is dry.
@@ -543,34 +543,38 @@ public static class ContentWriter
         var sb = new StringBuilder();
         sb.Append("l_english:\n");
 
+        // Every entry carries the :0 version marker. Paradox treats a missing one as version 0 in
+        // most files and as a parse error in some, and the launcher's own validator flags it, so it
+        // is written rather than relied upon.
+        //
+        // The PROV<id> keys are deliberately absent. They are the *vanilla* province name keys, and
+        // vanilla declares all 8,000-odd of them; re-declaring one per generated province put a
+        // duplicate in the dictionary for every id the base game also uses, and CK3 resolves those
+        // by load order rather than by mod. prov_<id> is the key the map actually reads.
         foreach (var title in Titles.Flatten(empires))
         {
             string name = ParadoxText.Loc(title.Name);
-            sb.Append($" {title.Key}: \"{name}\"\n");
+            sb.Append($" {title.Key}:0 \"{name}\"\n");
+
             if (title.Tier == "b" && title.ProvinceId > 0)
-            {
-                sb.Append($" PROV{title.ProvinceId}: \"{name}\"\n");
-                sb.Append($" prov_{title.ProvinceId}: \"{name}\"\n");
-            }
+                sb.Append($" prov_{title.ProvinceId}:0 \"{name}\"\n");
         }
 
         // From baronyCount + 1, not from 1. Starting at 1 covered every barony as well, so each one
-        // got a second, later PROV entry reading "Wasteland" — the impassable provinces are the
-        // ones above the last barony, and they are the only ones without a title to be named after.
+        // got a second, later entry reading "Wasteland" — the impassable provinces are the ones
+        // above the last barony, and they are the only ones without a title to be named after.
         for (int id = baronyCount + 1; id <= landCount; id++)
-        {
-            sb.Append($" PROV{id}: \"Wasteland\"\n");
-            sb.Append($" prov_{id}: \"Wasteland\"\n");
-        }
+            sb.Append($" prov_{id}:0 \"Wasteland\"\n");
 
         for (int id = landCount + 1; id <= provinces.Count; id++)
         {
             string name = ParadoxText.Loc(
                 waterNames.GetValueOrDefault(id, id <= riverCount ? $"River {id}" : $"Sea of {id}"));
 
-            sb.Append($" PROV{id}: \"{name}\"\n");
-            sb.Append($" sea_{id}: \"{name}\"\n");
-            sb.Append($" river_{id}: \"{name}\"\n");
+            // One key or the other, never both: a province is a river or a sea, and writing both
+            // left every river also declared as a sea of the same name.
+            if (id <= riverCount) sb.Append($" river_{id}:0 \"{name}\"\n");
+            else sb.Append($" sea_{id}:0 \"{name}\"\n");
         }
 
         ParadoxText.WriteBom(Path.Combine(dir, "gen_titles_l_english.yml"), sb.ToString());
