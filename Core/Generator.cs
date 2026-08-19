@@ -82,12 +82,28 @@ public static class Generator
         var provinceElevation = terra.ProvinceElevation;
         var landMask = Stage.Time("land mask", () => Raster.LandMask(terra.Elevation, cfg));
 
-        // 2. Climate
+        // 2. The Azgaar export, if there is one.
+        //
+        // Loaded before anything consumes it rather than beside its first reader, because its
+        // readers now sit on both sides of the pipeline: the climate is reanchored on grid.temp
+        // and grid.prec, and the province partition is cut inside the export's own borders, so by
+        // the time the province grid exists it is already too late. Nothing here depends on that
+        // grid — AzgaarRaster keys off cfg.ProvinceWidth/Height, which are config — so reading it
+        // first costs nothing.
+        //
+        // The alignment check moves with it, and gains by the move. It compares the export's land
+        // against the heightmap's, and landMask is exactly that, more directly than the
+        // post-partition mask it used to read. Reporting it here means a heightmap exported
+        // cropped or zoomed is caught before the run is spent on it rather than after.
+        var azgaar = MapGen.AzgaarImport.Load(azgaarJsonPath ?? cfg.AzgaarJsonPath, cfg);
+        azgaar?.CheckAlignment(landMask);
+
+        // 3. Climate
         var climate = Stage.Time("climate",
             () => MapGen.ClimateModel.Build(cfg, provinceElevation, landMask, new Rng(cfg.Seed ^ 0x0C11)));
         onPreview?.Invoke("Climate", PreviewRenderer.RenderClimate(climate, cfg));
 
-        // 3. Drainage & Major Rivers
+        // 4. Drainage & Major Rivers
         var drainage = Stage.Time("drainage",
             () => MapGen.Drainage.Build(cfg, provinceElevation, landMask, climate.AnnualMm, rng));
         onPreview?.Invoke("Drainage", PreviewRenderer.RenderDrainage(drainage, provinceElevation, cfg));
@@ -103,7 +119,7 @@ public static class Generator
         landMask = Stage.Time("recompute land mask",
             () => Raster.LandMask(terra.Elevation, cfg));
 
-        // 4. Partition provinces with river seeds
+        // 5. Partition provinces with river seeds
         var provinces = Stage.Time("province partition",
             () => Provinces.Build(landMask, provinceElevation, climate,
                 cfg.ProvinceWidth, cfg.ProvinceHeight, cfg, rng, majorRivers, drainage));
@@ -116,12 +132,7 @@ public static class Generator
 
         var provinceLandMask = ProvinceLandMask(cfg, provinces);
 
-        // Loaded here rather than in the writer because the raster it builds is keyed to the
-        // province grid, and this is where that grid becomes final.
-        var azgaar = MapGen.AzgaarImport.Load(azgaarJsonPath ?? cfg.AzgaarJsonPath, cfg);
-        azgaar?.CheckAlignment(provinceLandMask);
-
-        // 5. Terrain
+        // 6. Terrain
         var terrain = Stage.Time("terrain classification",
             () => MapGen.TerrainClassifier.Classify(cfg, provinceElevation, provinceLandMask,
                 climate, new Rng(cfg.Seed ^ 0x7E44)));
@@ -134,7 +145,7 @@ public static class Generator
         // finishing the run.
         Stage.Time("azgaar hierarchy plan", () => azgaar?.PlanHierarchy(provinces, order, baronies));
 
-        // 6. Titles — inside the export's borders when there is one, geometrically when there is not.
+        // 7. Titles — inside the export's borders when there is one, geometrically when there is not.
         var titles = Stage.Time("title hierarchy",
             () => azgaar?.Plan is not null
                 ? MapGen.AzgaarHierarchy.Build(provinces, baronies, order, cfg,

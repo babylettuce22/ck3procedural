@@ -143,12 +143,13 @@ public sealed class AzgaarImport
     }
 
     /// <summary>
-    /// Compares the imported land against ours and says so. Called once the province land mask
-    /// exists; see <see cref="AzgaarRaster.CheckAlignment"/> for why this matters.
+    /// Compares the imported land against ours and says so. Called as soon as the heightmap's land
+    /// mask exists, which is before anything has been built on either; see
+    /// <see cref="AzgaarRaster.CheckAlignment"/> for why this matters.
     /// </summary>
-    public AzgaarRaster.Alignment CheckAlignment(byte[] provinceLandMask)
+    public AzgaarRaster.Alignment CheckAlignment(byte[] landMask)
     {
-        var alignment = Raster.CheckAlignment(provinceLandMask);
+        var alignment = Raster.CheckAlignment(landMask);
         Alignment = alignment;
 
         Console.WriteLine($"  azgaar alignment: {100 * alignment.LandAgreement:F1}% of pixels agree " +

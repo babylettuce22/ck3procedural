@@ -249,15 +249,21 @@ public sealed class AzgaarRaster
     /// at load time is the difference between noticing that immediately and noticing it after
     /// wondering for an hour why a kingdom has no counties.
     /// </summary>
-    public Alignment CheckAlignment(byte[] provinceLandMask)
+    /// <param name="landMask">
+    /// Our own land at province-raster resolution, straight off the heightmap. Deliberately the
+    /// heightmap's mask rather than the partitioned map's: the question is whether the PNG and the
+    /// JSON describe the same view, and the answer must be available before the run commits to
+    /// either.
+    /// </param>
+    public Alignment CheckAlignment(byte[] landMask)
     {
         long agreed = 0, azgaarLand = 0, ourLand = 0;
-        long total = Math.Min(provinceLandMask.LongLength, CellByPixel.LongLength);
+        long total = Math.Min(landMask.LongLength, CellByPixel.LongLength);
 
         for (long i = 0; i < total; i++)
         {
             bool theirs = IsLandAt((int)i);
-            bool ours = provinceLandMask[i] != 0;
+            bool ours = landMask[i] != 0;
             if (theirs) azgaarLand++;
             if (ours) ourLand++;
             if (theirs == ours) agreed++;
