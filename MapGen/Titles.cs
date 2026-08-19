@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.RegularExpressions;
 using Ck3MapGen.Config;
 using Ck3MapGen.Core;
@@ -202,7 +202,7 @@ public static class Titles
         return split;
     }
 
-    private static Dictionary<int, HashSet<int>> Union(
+    internal static Dictionary<int, HashSet<int>> Union(
         Dictionary<int, HashSet<int>> land, Dictionary<int, HashSet<int>> sea)
     {
         var merged = new Dictionary<int, HashSet<int>>(land.Count);
@@ -219,7 +219,7 @@ public static class Titles
 
     private const int SettlePasses = 12;
 
-    private static List<List<int>> Cluster(
+    internal static List<List<int>> Cluster(
         IReadOnlyList<int> members,
         Dictionary<int, HashSet<int>> adjacency,
         int minSize,
@@ -377,7 +377,7 @@ public static class Titles
     private static (double X, double Y) At((double X, double Y)[] positions, int member)
         => member >= 0 && member < positions.Length ? positions[member] : (0, 0);
 
-    private static List<List<int>> AbsorbUndersized(List<List<int>> clusters,
+    internal static List<List<int>> AbsorbUndersized(List<List<int>> clusters,
         Dictionary<int, HashSet<int>> adjacency, int minSize, int maxSize,
         (double X, double Y)[]? positions = null)
     {
@@ -481,11 +481,11 @@ public static class Titles
         return counted == 0 ? (0, 0) : (x / counted, y / counted);
     }
 
-    private static (double X, double Y)[] Roll(List<List<int>> clusters,
+    internal static (double X, double Y)[] Roll(List<List<int>> clusters,
         (double X, double Y)[] positions)
         => [.. clusters.Select(c => Centre(c, positions))];
 
-    private static void Shuffle<T>(List<T> list, Rng rng)
+    internal static void Shuffle<T>(List<T> list, Rng rng)
     {
         for (int i = list.Count - 1; i > 0; i--)
         {
@@ -494,7 +494,7 @@ public static class Titles
         }
     }
 
-    private static Dictionary<int, HashSet<int>> LiftAdjacency(
+    internal static Dictionary<int, HashSet<int>> LiftAdjacency(
         List<List<int>> clusters, Dictionary<int, HashSet<int>> below)
     {
         var owner = new Dictionary<int, int>();
@@ -545,8 +545,14 @@ public static class Titles
         }
 
         // Counties: strictly clustered along land banks
-        var countyClusters = Cluster(provinceIds, adjacency, MinBaroniesPerCounty,
-            MaxBaroniesPerCounty, rng, provincePosition);
+        // The consts above are the defaults; the settings are what a map actually runs with, so a
+        // county can be retuned without a rebuild. Clamped rather than trusted: a ceiling below the
+        // floor would make Cluster grow counties it then immediately rejects.
+        int minBaronies = Math.Max(1, cfg.MinBaroniesPerCounty);
+        int maxBaronies = Math.Max(minBaronies, cfg.MaxBaroniesPerCounty);
+
+        var countyClusters = Cluster(provinceIds, adjacency, minBaronies,
+            maxBaronies, rng, provincePosition);
         var counties = Wrap("c", countyClusters, c => c.Select(p => byProvince[p]));
 
         var countyPosition = Roll(countyClusters, provincePosition);
@@ -599,22 +605,36 @@ public static class Titles
                           $"{empireClusters.Count(c => c.Count == 1)} empires");
         return empires;
 
-        static List<Title> Wrap(string tier, List<List<int>> clusters, Func<List<int>, IEnumerable<Title>> resolve)
-        {
-            var result = new List<Title>(clusters.Count);
-            for (int i = 0; i < clusters.Count; i++)
-            {
-                var title = new Title { Tier = tier, Index = i };
-                foreach (var child in resolve(clusters[i]))
-                {
-                    child.Parent = title;
-                    title.Children.Add(child);
-                }
-                result.Add(title);
-            }
-            return result;
-        }
     }
+
+    /// <summary>
+    /// Turns clusters of child indices into titles of one tier, parenting as it goes.
+    ///
+    /// Lifted out of <see cref="Build"/> so the Azgaar-constrained builder can wrap its own clusters
+    /// the same way rather than growing a second, subtly different version of this.
+    /// </summary>
+    internal static List<Title> Wrap(string tier, List<List<int>> clusters,
+        Func<List<int>, IEnumerable<Title>> resolve)
+    {
+        var result = new List<Title>(clusters.Count);
+        for (int i = 0; i < clusters.Count; i++)
+        {
+            var title = new Title { Tier = tier, Index = i };
+            foreach (var child in resolve(clusters[i]))
+            {
+                child.Parent = title;
+                title.Children.Add(child);
+            }
+            result.Add(title);
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Colours a finished hierarchy. The Azgaar-constrained builder assembles its own roots and so
+    /// never reaches the colouring at the end of <see cref="Build"/>; this is that step, exposed.
+    /// </summary>
+    internal static void AssignColorsTo(List<Title> empires, Rng rng) => AssignColors(empires, rng);
 
     public static void RecolorChildren(Title parent, Rng rng)
         => DistributeChildren(parent, Hsl.FromRgb(parent.Color), rng);
@@ -764,7 +784,12 @@ public static class Titles
         return language.PlaceName(rng, affixes);
     }
 
-    public static void AssignNames(List<Title> roots, CultureMap cultures, Rng rng)
+    /// <param name="preferred">
+    /// Names borrowed from an import, by title. A title listed here takes its name from the export
+    /// instead of the generator; everything absent is named as usual. Null on a generated map.
+    /// </param>
+    public static void AssignNames(List<Title> roots, CultureMap cultures, Rng rng,
+        Dictionary<Title, string>? preferred = null)
     {
         var usedKeys = new HashSet<string>(StringComparer.Ordinal);
         foreach (var root in roots) Visit(root);
@@ -773,7 +798,10 @@ public static class Titles
         {
             string GenerateName() => Titles.GenerateName(title, cultures, rng);
 
-            string name = GenerateName();
+            string name = preferred?.GetValueOrDefault(title) is { Length: > 0 } imported
+                ? imported
+                : GenerateName();
+
             string key = $"{title.Tier}_gen_{CleanKey(name)}_{title.Index}";
 
             for (int attempt = 0; attempt < 24 && (name.Length < 3 || usedKeys.Contains(key)); attempt++)

@@ -14,7 +14,8 @@ public static class WaterNaming
         List<Title> empires,
         MapConfig cfg,
         Rng rng,
-        List<MajorRiverPath>? majorRivers = null)
+        List<MajorRiverPath>? majorRivers = null,
+        AzgaarImport? azgaar = null)
     {
         var names = new Dictionary<int, string>();
         var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -28,10 +29,11 @@ public static class WaterNaming
 
         // 1. Name Major River Provinces
         NameMajorRivers(provinces, order, landCount, riverCount, byId, adjacency, cultures, empires,
-            majorRivers, names, usedNames, rng);
+            majorRivers, names, usedNames, rng, azgaar);
 
         // 2. Name Sea Zones by Agglomerative Clustering
-        NameSeaZones(provinces, order, riverCount, byId, adjacency, cultures, empires, cfg, names, usedNames, rng);
+        NameSeaZones(provinces, order, riverCount, byId, adjacency, cultures, empires, cfg, names,
+            usedNames, rng, azgaar);
 
         return names;
     }
@@ -48,7 +50,8 @@ public static class WaterNaming
         List<MajorRiverPath>? majorRivers,
         Dictionary<int, string> names,
         HashSet<string> usedNames,
-        Rng rng)
+        Rng rng,
+        AzgaarImport? azgaar)
     {
         if (riverCount <= landCount) return;
 
@@ -58,7 +61,17 @@ public static class WaterNaming
         foreach (var system in systems)
         {
             var localCulture = FindNeighborCulture(system, adjacency, byId, cultures, provinces, empires);
-            string baseName = Unique(localCulture.Language.Word(rng, 1, 2), usedNames);
+
+            // The export's own name for whichever of its rivers this system mostly follows, when it
+            // has one and nothing else has taken it. Asked of the whole system at once rather than
+            // province by province — see AzgaarImport.RiverFor, which is why one river does not come
+            // out wearing four names down its length.
+            string? imported = azgaar?.RiverFor(system)?.Name;
+            if (imported is { Length: > 0 }) imported = AzgaarNaming.StripArticle(imported);
+
+            string baseName = imported is { Length: > 0 } && !usedNames.Contains(imported)
+                ? Unique(imported, usedNames)
+                : Unique(localCulture.Language.Word(rng, 1, 2), usedNames);
 
             Name(system, baseName, names);
         }
@@ -221,7 +234,8 @@ public static class WaterNaming
         MapConfig cfg,
         Dictionary<int, string> names,
         HashSet<string> usedNames,
-        Rng rng)
+        Rng rng,
+        AzgaarImport? azgaar)
     {
         int totalProvinces = provinces.Count;
         if (totalProvinces <= riverCount) return;
@@ -277,7 +291,17 @@ public static class WaterNaming
             double enclosure = (double)landContact / Math.Max(1, cluster.Count);
 
             var culture = FindNeighborCulture(cluster, adjacency, byId, cultures, provinces, empires);
-            string baseName = Unique(culture.Language.Word(rng, 2, 3), usedNames);
+
+            // Azgaar writes some of these with an article — "the Sundering Sea". A CK3 title name is
+            // a bare noun phrase the game puts its own words in front of, and the directional
+            // qualifiers below prepend theirs directly, so leaving it produces the "Northeastern the
+            // Sundering Sea" that made stripping it necessary.
+            string? importedBody = azgaar?.WaterBodyFor(cluster)?.Name;
+            if (importedBody is { Length: > 0 }) importedBody = AzgaarNaming.StripArticle(importedBody);
+
+            string baseName = importedBody is { Length: > 0 } && !usedNames.Contains(importedBody)
+                ? Unique(importedBody, usedNames)
+                : Unique(culture.Language.Word(rng, 2, 3), usedNames);
 
             string bodyType = enclosure switch
             {

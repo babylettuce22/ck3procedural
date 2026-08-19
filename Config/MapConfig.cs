@@ -7,6 +7,18 @@ public sealed class AdvancedSettingAttribute : Attribute
 {
 }
 
+
+/// <summary>
+/// Marks a setting the Azgaar path ignores, so the property grid can hide it once an export is
+/// loaded rather than leave a knob on screen that silently does nothing.
+///
+/// A comment would not do: the settings these mark are the ones a user reaches for first when the
+/// hierarchy comes out the wrong shape, and turning them while an import is loaded produces no
+/// change at all, because the import decides those counts from Azgaar's own provinces.
+/// </summary>
+[AttributeUsage(AttributeTargets.Property)]
+public sealed class AzgaarIncompatAttribute : Attribute;
+
 /// <summary>
 /// Every knob the mod is built with.
 ///
@@ -456,6 +468,28 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// 12 kingdoms; at the duchy target of 4 the same map collapses to a single empire holding
     /// seven kingdoms. This is a floor for absurdity, not a lever for realm size.
     /// </summary>
+    /// <summary>
+    /// Fewest baronies a county is grown towards.
+    ///
+    /// A target rather than a guarantee: a cluster that runs out of unclaimed neighbours stops where
+    /// it is, because an island holds what it holds. Ignored on an imported map, where Azgaar's own
+    /// provinces decide where the county borders fall.
+    /// </summary>
+    [Category("04 Titles")]
+    [AzgaarIncompat]
+    [Description("Fewest baronies a county is grown towards. A cluster that runs out of unclaimed neighbours can still end up under this — an island holds what it holds.")]
+    public int MinBaroniesPerCounty { get; set; } = 3;
+
+    /// <summary>
+    /// Most baronies a county may hold, and unlike the floor this one is absolute: nothing is ever
+    /// moved into a county that has already reached it. Lowering it buys more, smaller counties out
+    /// of the same provinces rather than fewer provinces.
+    /// </summary>
+    [Category("04 Titles")]
+    [AzgaarIncompat]
+    [Description("Most baronies a county may hold. A hard ceiling on the procedural path: nothing is ever moved into a county that has already reached it. Lowering it buys more, smaller counties out of the same provinces rather than fewer provinces.")]
+    public int MaxBaroniesPerCounty { get; set; } = 7;
+
     [Category("04 Titles")]
     [Description("Fewest children a duchy, kingdom or empire may have and still exist. 2 stops one-province islands from founding a duchy, a kingdom and an empire on the way up. Raising it much past 2 cascades and collapses the hierarchy.")]
     public int MinChildrenPerTitle { get; set; } = 4;
@@ -1348,21 +1382,20 @@ public sealed class MapConfig : CustomTypeDescriptor
         // Get all default properties
         var baseProps = TypeDescriptor.GetProperties(this, attributes, true);
 
-        // If advanced mode is enabled, show everything as normal
-        if (ShowAdvancedSettings)
-            return baseProps;
+        bool hideAdvanced = !ShowAdvancedSettings;
+        bool hideAzgaarIncompat = !string.IsNullOrWhiteSpace(AzgaarJsonPath);
 
-        // Otherwise, filter out anything tagged with [AdvancedSetting]
-        var filtered = new List<PropertyDescriptor>();
-        foreach (PropertyDescriptor prop in baseProps)
+        if (!hideAdvanced && !hideAzgaarIncompat) return baseProps;
+
+        var shown = new List<PropertyDescriptor>();
+        foreach (PropertyDescriptor property in baseProps)
         {
-            if (prop.Attributes[typeof(AdvancedSettingAttribute)] == null)
-            {
-                filtered.Add(prop);
-            }
+            if (hideAdvanced && property.Attributes[typeof(AdvancedSettingAttribute)] is not null) continue;
+            if (hideAzgaarIncompat && property.Attributes[typeof(AzgaarIncompatAttribute)] is not null) continue;
+            shown.Add(property);
         }
 
-        return new PropertyDescriptorCollection(filtered.ToArray());
+        return new PropertyDescriptorCollection([.. shown]);
     }
 }
 

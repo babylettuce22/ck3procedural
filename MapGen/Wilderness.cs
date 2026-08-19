@@ -100,11 +100,52 @@ public static class Wilderness
     /// <summary>
     /// Picks the unsettled counties.
     /// </summary>
+    /// <summary>
+    /// Wilderness straight off the export: the counties standing on ground Azgaar gave to no state.
+    ///
+    /// Better than the habitability heuristic below whenever there is an export, because it is not a
+    /// guess. Azgaar already decided which ground nobody settled, and the heuristic — which picks
+    /// remote, poor, edge-of-the-map counties — would otherwise carve wilderness out of the middle
+    /// of a country the export drew as inhabited.
+    ///
+    /// Returns null rather than an empty map when the export claims everything, so the caller falls
+    /// back to generating wilderness instead of shipping a map with none.
+    /// </summary>
+    private static WildernessMap? FromExport(List<Title> counties, AzgaarImport azgaar)
+    {
+        var unclaimed = new List<Title>();
+
+        foreach (var county in counties)
+        {
+            int total = 0, ownerless = 0;
+
+            foreach (var barony in county.Children)
+            {
+                if (barony.ProvinceId < 1) continue;
+                total++;
+                if (azgaar.StateOfBarony(barony.ProvinceId) <= 0) ownerless++;
+            }
+
+            // A simple majority, since a county straddling a border is partly claimed by
+            // construction and only the ones mostly outside every state are truly wild.
+            if (total > 0 && ownerless * 2 > total) unclaimed.Add(county);
+        }
+
+        if (unclaimed.Count == 0) return null;
+
+        Console.WriteLine($"  wilderness: {unclaimed.Count} counties on ground azgaar left unclaimed " +
+                          $"({100.0 * unclaimed.Count / counties.Count:F1} % of counties)");
+
+        return new WildernessMap([.. unclaimed]);
+    }
+
     public static WildernessMap Build(List<Title> counties, ProvinceMap provinces, int[] order,
         int landCount, TerrainClass[] provinceTerrain, Dictionary<Title, int> development,
-        MapConfig cfg, Rng rng)
+        MapConfig cfg, Rng rng, AzgaarImport? azgaar = null)
     {
         if (!cfg.EnableWilderness || counties.Count == 0) return WildernessMap.Empty;
+
+        if (azgaar is not null && FromExport(counties, azgaar) is { } imported) return imported;
 
         var (neighbours, centroid) = CountyGraph(counties, provinces, order, landCount);
 

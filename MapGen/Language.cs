@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Collections.Generic;
 using System.Linq;
 using System;
@@ -78,6 +78,13 @@ public sealed class Language
     private readonly string[] _vowels;
     private readonly string[] _codas;
 
+    /// <summary>
+    /// Set when this language was built from an imported Azgaar name base, in which case roots come
+    /// out of its Markov chain instead of the syllable machinery above and every other member here
+    /// keeps working unchanged. See <see cref="FromNameBase"/>.
+    /// </summary>
+    private readonly AzgaarNames? _markov;
+
     private readonly double _bareOnsetChance;
     private readonly double _medialCodaChance;
     private readonly double _finalCodaChance;
@@ -139,6 +146,61 @@ public sealed class Language
             _targetVowelForAccent = 'a';
             _accentCharacter = 'æ';
         }
+    }
+
+    /// <summary>
+    /// Builds a language whose words come from an imported Azgaar name base.
+    ///
+    /// The phoneme pools are left empty on purpose: nothing reads them once <see cref="_markov"/>
+    /// is set, and filling them with plausible-looking values would only hide the fact that this
+    /// language does not work that way.
+    /// </summary>
+    private Language(string key, AzgaarNames markov, Rng rng)
+    {
+        Key = key;
+        _markov = markov;
+
+        _onsets = [];
+        _vowels = [];
+        _codas = [];
+
+        _bareOnsetChance = 0;
+        _medialCodaChance = 0;
+        _finalCodaChance = 0;
+
+        // Whether a corpus puts its affixes in front is a property of the corpus, not something to
+        // roll for — and the mined endings below are, by construction, endings.
+        _usesPlacePrefixes = false;
+        _apostropheChance = 0;
+    }
+
+    /// <summary>
+    /// A language backed by one of Azgaar's name bases, so that places our generator names itself
+    /// sound like the places Azgaar named.
+    ///
+    /// Affixes are mined from the same corpus rather than invented, which is what keeps a generated
+    /// county from reading as an Azgaar root with a fantasy suffix bolted on. When the corpus turns
+    /// out too thin to yield recurring endings, the invented pools stand in for that one list and
+    /// the roots still come from the chain.
+    /// </summary>
+    public static Language FromNameBase(string key, AzgaarNames markov, Rng rng, string? name = null)
+    {
+        var language = new Language(key, markov, rng);
+        var fallback = new Language(key, rng);
+
+        language.MaleEndings = Pick(markov.CommonEndings(6, 2, 4), () => fallback.Fragments(rng, 4, false));
+        language.FemaleEndings = Pick(markov.CommonEndings(6, 2, 3), () => fallback.Fragments(rng, 4, true));
+        language.BaronyAffixes = Pick(markov.CommonEndings(8, 3, 6), () => fallback.Fragments(rng, 6, false));
+        language.CountyAffixes = Pick(markov.CommonEndings(6, 4, 7), () => fallback.Fragments(rng, 6, false));
+        language.DuchyAffixes = Pick(markov.CommonEndings(5, 4, 7), () => fallback.Fragments(rng, 5, false));
+        language.KingdomAffixes = Pick(markov.CommonEndings(5, 2, 5), () => fallback.Fragments(rng, 5, false));
+
+        language.Name = name ?? Capitalise(markov.Generate(rng, 4, 9));
+        return language;
+
+        // Two is the fewest that reads as a pattern rather than as one word's tail repeated.
+        static string[] Pick(string[] mined, Func<string[]> invented)
+            => mined.Length >= 2 ? mined : invented();
     }
 
     public static Language Create(string key, Rng rng)
@@ -209,6 +271,17 @@ public sealed class Language
 
     private string Root(Rng rng, int minSyllables, int maxSyllables)
     {
+        if (_markov is not null)
+        {
+            // Syllable counts translated into letter counts, because that is what the chain is
+            // bounded by. The floor of three is deliberate: a one-syllable request scaled down from
+            // a short base otherwise yields names like "As" and "Sa", which read as truncation
+            // rather than as words. Azgaar's own bases never go below four.
+            int lo = Math.Max(3, (int)Math.Round(_markov.MinLength * minSyllables / 2.0));
+            int hi = Math.Max(lo + 1, (int)Math.Round(_markov.MaxLength * maxSyllables / 3.0));
+            return _markov.Generate(rng, lo, hi).ToLowerInvariant();
+        }
+
         int count = rng.Int(minSyllables, maxSyllables);
         var sb = new StringBuilder();
 
