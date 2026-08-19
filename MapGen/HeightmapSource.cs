@@ -99,6 +99,41 @@ public static class HeightmapSource
         return histogram;
     }
 
+    /// <summary>
+    /// Simulation elevation back onto the 16-bit heightmap scale — the inverse of
+    /// <see cref="ToSimulationScale"/>.
+    ///
+    /// Two straight lines meeting at the water plane rather than one across the whole range, because
+    /// the water plane is a fixed value in the file and not a fraction of it: 4883 of 65535 is where
+    /// CK3 puts sea level, and stretching one line across both halves would move the coastline
+    /// whenever the deepest trench or the highest peak changed.
+    ///
+    /// It exists so a caller can ask what the engine will actually render. Round-tripping through
+    /// this and the packer is the only way to find out where the shoreline ends up once the terrain
+    /// has been quantised into a tile atlas and reassembled.
+    /// </summary>
+    public static ushort[] ToHeightmap16(float[] elevation, MapConfig cfg)
+    {
+        var raw = new ushort[elevation.Length];
+
+        float sea = cfg.Limits.SeaLevelUpper;
+        float floor = cfg.SeaFloorElevation;
+        float top = cfg.PeakElevation;
+
+        Parallel.For(0, elevation.Length, i =>
+        {
+            float e = elevation[i];
+
+            float scaled = e <= sea
+                ? (e - floor) / Math.Max(1f, sea - floor) * 4883f
+                : 4883f + (e - sea - 1f) / Math.Max(1f, top - sea - 1f) * 60652f;
+
+            raw[i] = (ushort)Math.Clamp(MathF.Round(scaled), 0f, 65535f);
+        });
+
+        return raw;
+    }
+
     public static IReadOnlyList<HeightmapWarning> Diagnose(HeightmapImage image, MapConfig cfg)
     {
         const int water16 = MapDataWriter.WaterLevel16;

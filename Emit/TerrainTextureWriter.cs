@@ -279,6 +279,100 @@ public static class TerrainTextureWriter
     /// test crop this took unmatched weight from 10.35/70 to 3.52/20, and the hard rectangular
     /// edges in the simulated render became smooth curves.
     /// </summary>
+    /// <summary>
+    /// Jitters the four material weights of every texel while keeping their sum exactly as it was.
+    ///
+    /// The blend weights come out of a handful of smooth noise fields, so neighbouring texels that
+    /// picked the same four materials also get near-identical weights, and a large stretch of one
+    /// biome reads as a flat wash of a single blended colour. Perturbing each weight by a dithered
+    /// fraction breaks that up at texel scale — the materials and their proportions are unchanged at
+    /// any distance, but the surface stops looking painted by a single brush.
+    ///
+    /// The sum is preserved exactly, not approximately. CK3 normalises the four weights per texel,
+    /// so a drifting total quietly rescales the blend and shows up as banding along the boundaries
+    /// where the drift changes. Weights are scaled to the original total, floored, and then the
+    /// remainder is handed out one unit at a time to whichever slot lost the most in the rounding —
+    /// which is the standard largest-remainder apportionment, and the reason for the second span.
+    ///
+    /// Slots holding the empty material (index 255) or already at zero are left alone: they carry no
+    /// colour, and giving them weight would introduce a material the texel never selected.
+    /// </summary>
+    private static void ScatterWeights(byte[] index, byte[] intensity, int width, int height,
+        double amount)
+    {
+        if (amount <= 0) return;
+
+        Parallel.For(0, height, y =>
+        {
+            Span<double> jittered = stackalloc double[4];
+            Span<double> remainder = stackalloc double[4];
+
+            for (int x = 0; x < width; x++)
+            {
+                long at = ((long)y * width + x) * 4;
+
+                int total = 0;
+                for (int k = 0; k < 4; k++) total += intensity[at + k];
+                if (total == 0) continue;
+
+                double sum = 0;
+                for (int k = 0; k < 4; k++)
+                {
+                    byte weight = intensity[at + k];
+
+                    if (weight == 0 || index[at + k] == byte.MaxValue)
+                    {
+                        jittered[k] = 0;
+                        continue;
+                    }
+
+                    double d = Dither(x, y, 5 + k);
+                    jittered[k] = weight * (1.0 + (d - 0.5) * 2.0 * amount);
+                    sum += jittered[k];
+                }
+
+                if (sum <= 0) continue;
+
+                double scale = total / sum;
+                int assigned = 0;
+
+                for (int k = 0; k < 4; k++)
+                {
+                    if (jittered[k] <= 0)
+                    {
+                        intensity[at + k] = 0;
+                        remainder[k] = -1;
+                        continue;
+                    }
+
+                    double exact = jittered[k] * scale;
+                    int floored = Math.Clamp((int)exact, 1, 255);
+
+                    intensity[at + k] = (byte)floored;
+                    remainder[k] = exact - floored;
+                    assigned += floored;
+                }
+
+                // Largest remainder first, so the units the flooring dropped go back where they were
+                // most nearly earned.
+                for (int left = total - assigned; left > 0; left--)
+                {
+                    int best = -1;
+                    for (int k = 0; k < 4; k++)
+                    {
+                        if (remainder[k] < 0 || intensity[at + k] == byte.MaxValue) continue;
+                        if (best < 0 || remainder[k] > remainder[best]) best = k;
+                    }
+
+                    if (best < 0) break;
+
+                    intensity[at + best]++;
+                    remainder[best]--;
+                }
+            }
+        });
+    }
+
     private static void Reconcile(byte[] index, byte[] intensity, int width, int height)
     {
         var srcIndex = (byte[])index.Clone();
@@ -1087,6 +1181,7 @@ public static class TerrainTextureWriter
             }, localUsed => { lock (gate) for (int i = 0; i < 256; i++) if (localUsed[i]) used[i] = true; });
 
             Reconcile(index, intensity, width, height);
+            ScatterWeights(index, intensity, width, height, 0.3);
 
             WriteTga(Path.Combine(dir, "detail_index.tga"), width, height, index);
             WriteTga(Path.Combine(dir, "detail_intensity.tga"), width, height, intensity);

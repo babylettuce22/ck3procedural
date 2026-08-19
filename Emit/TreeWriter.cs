@@ -200,16 +200,16 @@ public static class TreeWriter
         // Mediterranean / subtropical uplands. Vanilla fixes cypress scale at exactly 1.00.
         new("tree_cypress_01_generator_1.txt", "tree_cypress_01_generator_1", "tree_high_layer",
             ["tree_cypress_01_a_mesh", "tree_cypress_01_b_mesh", "tree_cypress_01_c_mesh"],
-            [(TerrainClass.Drylands, 4), (TerrainClass.Hills, 3.5)], 1.0, 1.0, Flora.Warm),
+            [(TerrainClass.Drylands, 4), (TerrainClass.Hills, 3.5)], 1.0, 1.0, Flora.Warm, 2, 24f),
 
         // Jungle. Vanilla runs the c and d variants at 1,227 against 38,113 — c is the occasional
         // accent, not a co-equal variant — so the densities keep that ~1:31 ratio.
         new("tree_jungle_01_c_generator_1.txt", "tree_jungle_01_c_generator_1", "tree_high_layer",
             ["tree_jungle_01_c_mesh"],
-            [(TerrainClass.Jungle, 1.4)], 0.70, 1.10, Flora.Warm),
+            [(TerrainClass.Jungle, 1.4)], 0.70, 1.10, Flora.Warm, 2, 24f),
         new("tree_jungle_01_d_generator_1.txt", "tree_jungle_01_d_generator_1", "tree_high_layer",
             ["tree_jungle_01_d_mesh"],
-            [(TerrainClass.Jungle, 42)], 0.50, 1.00, Flora.Warm),
+            [(TerrainClass.Jungle, 42)], 0.50, 1.00, Flora.Warm, 2, 24f),
 
         // Scattered broadleaf on open ground. The steppe entry is what replaces the bush patch
         // that used to stand in for a horizon: a lone tree is a real upright silhouette, and
@@ -217,7 +217,7 @@ public static class TreeWriter
         new("tree_leaf_01_single_generator_1.txt", "tree_leaf_01_single_generator_1",
             "tree_high_layer", ["tree_leaf_01_single_a_mesh"],
             [(TerrainClass.Plains, 2.4), (TerrainClass.Farmlands, 1.6), (TerrainClass.Steppe, 2.0),
-             (TerrainClass.Drylands, 1.2)], 0.50, 0.90, Flora.Broadleaf),
+             (TerrainClass.Drylands, 1.2)], 0.50, 0.90, Flora.Broadleaf, 2, 24f),
 
         // Temperate broadleaf forest — vanilla's densest group by a wide margin, and the group that
         // used to cover the boreal north as well, because nothing here could tell the two apart.
@@ -225,16 +225,16 @@ public static class TreeWriter
         // to each other are vanilla's still, carrying the global increase.
         new("tree_leaf_2_high_generator_1.txt", "tree_leaf_2_high_generator_1", "tree_high_layer",
             ["tree_leaf_01_a_mesh", "tree_leaf_01_b_mesh"],
-            [(TerrainClass.Forest, 12), (TerrainClass.Hills, 3)], 0.40, 0.80, Flora.Broadleaf),
+            [(TerrainClass.Forest, 12), (TerrainClass.Hills, 3)], 0.40, 0.80, Flora.Broadleaf, 2, 24f),
         new("tree_leaf_high_generator_1.txt", "tree_leaf_high_generator_1", "tree_high_layer",
             ["tree_leaf_01_a_mesh"],
-            [(TerrainClass.Forest, 36), (TerrainClass.Hills, 6)], 0.60, 1.00, Flora.Broadleaf),
+            [(TerrainClass.Forest, 36), (TerrainClass.Hills, 6)], 0.60, 1.00, Flora.Broadleaf, 2, 24f),
         new("tree_leaf_high_generator_2.txt", "tree_leaf_high_generator_2", "tree_high_layer",
             ["tree_leaf_01_b_mesh"],
-            [(TerrainClass.Forest, 17), (TerrainClass.Farmlands, 2)], 0.21, 0.60, Flora.Broadleaf),
+            [(TerrainClass.Forest, 17), (TerrainClass.Farmlands, 2)], 0.21, 0.60, Flora.Broadleaf, 2, 24f),
         new("tree_leaf_high_generator_3.txt", "tree_leaf_high_generator_3", "tree_high_layer",
             ["tree_leaf_01_c_mesh"],
-            [(TerrainClass.Forest, 22), (TerrainClass.Plains, 1.8)], 0.56, 1.04, Flora.Broadleaf),
+            [(TerrainClass.Forest, 22), (TerrainClass.Plains, 1.8)], 0.56, 1.04, Flora.Broadleaf, 2, 24f),
 
         // Palms: tropical shore, a token scatter on open desert, and the oasis itself — which is
         // the one place they should actually stand thick, now that oases are a terrain class
@@ -243,7 +243,7 @@ public static class TreeWriter
         new("tree_palm_generator_1.txt", "tree_palm_generator_1", "tree_high_layer",
             ["tree_palm_01_a_mesh"],
             [(TerrainClass.Beach, 4), (TerrainClass.Desert, 0.3), (TerrainClass.Oasis, 26)],
-            0.50, 0.90, Flora.Warm),
+            0.50, 0.90, Flora.Warm, 2, 24f),
 
         // Conifers, and the reason for the climate table above. These used to be effectively a
         // Taiga-only group, and Taiga is painted only inside the subarctic and only where the
@@ -256,11 +256,11 @@ public static class TreeWriter
         new("tree_pine_01_a_generator_1.txt", "tree_pine_01_a_generator_1", "tree_high_layer",
             ["tree_pine_single_01_a_mesh", "tree_pine_single_01_b_mesh", "tree_pine_single_01_c_mesh"],
             [(TerrainClass.Taiga, 14), (TerrainClass.Forest, 12), (TerrainClass.Hills, 2),
-             (TerrainClass.Plains, 1.2), (TerrainClass.Steppe, 2.5)], 1.0, 1.0, Flora.Conifer),
+             (TerrainClass.Plains, 1.2), (TerrainClass.Steppe, 2.5)], 1.0, 1.0, Flora.Conifer, 2, 24f),
         new("tree_pine_01_b_generator_1.txt", "tree_pine_01_b_generator_1", "tree_high_layer",
             ["tree_pine_01_b_mesh"],
             [(TerrainClass.Taiga, 46), (TerrainClass.Forest, 30), (TerrainClass.Hills, 4),
-             (TerrainClass.Plains, 1.5)], 0.40, 0.40, Flora.Conifer),
+             (TerrainClass.Plains, 1.5)], 0.40, 0.40, Flora.Conifer, 2, 24f),
         // The impassable mesh is not a tree. It is a piece of forest scenery — a standing pine
         // with a fallen log beside it, 23 x 21 units in plan, which is nine province pixels across
         // even at vanilla's fixed 0.40. Vanilla gets away with it because it packs them: measured
@@ -348,7 +348,8 @@ public static class TreeWriter
                                 : CanopyField.ScatterFactor(canopy);
                         }
 
-                        if (p <= 0 || rng.NextDouble() >= p) continue;
+                        if (p <= 0) continue;
+                        if (rng.NextDouble() >= p) continue;
 
                         // Jitter inside the pixel so instances do not sit on a lattice.
                         double jx = x + rng.NextDouble(), jy = y + rng.NextDouble();
@@ -372,8 +373,10 @@ public static class TreeWriter
                         // Image rows run top-down; the map's Z axis runs bottom-up.
                         float pz = (float)(height - jy);
 
-                        float scale = (float)(generator.MinScale +
-                            rng.NextDouble() * (generator.MaxScale - generator.MinScale));
+                        // Scaled with the map: the meshes are authored against vanilla's world size,
+                        // and on a larger one an unscaled tree is a shrub next to its own province.
+                        float scale = (float)((generator.MinScale +
+                            rng.NextDouble() * (generator.MaxScale - generator.MinScale)) * cfg.MapScale);
 
                         buckets[rng.Int(0, buckets.Length - 1)]
                             .Add((px, pz, (float)(rng.NextDouble() * Math.Tau), scale));
@@ -401,7 +404,7 @@ public static class TreeWriter
     /// </summary>
     private static bool IsOpenCountry(TerrainClass t)
         => t is TerrainClass.Plains or TerrainClass.Farmlands or TerrainClass.Steppe
-             or TerrainClass.Oasis;
+             or TerrainClass.Drylands or TerrainClass.Desert or TerrainClass.Oasis;
 
     private static void Write(string path,
         List<(Generator Generator, List<(float X, float Z, float Angle, float Scale)>[] Buckets)> blocks)

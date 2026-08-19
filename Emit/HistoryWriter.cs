@@ -12,7 +12,7 @@ public static class HistoryWriter
     public static void WriteAll(
         string modDir, MapConfig cfg, List<Title> empires,
         RealmMap realms, Dictionary<Title, int> development,
-        CultureMap cultures, FaithMap faiths, GovernmentMap governments,
+        CultureMap cultures, EthnicityMap ethnicities, FaithMap faiths, GovernmentMap governments,
         WildernessMap wilderness, PrehistoryMap prehistory,
         IReadOnlyDictionary<Title, string>? bookmarkDnaMap = null)
     {
@@ -29,8 +29,9 @@ public static class HistoryWriter
         WriteDynasties(modDir, prehistory);
         WriteDynastyHouses(modDir, prehistory);
         CoatOfArmsWriter.WriteAll(modDir, prehistory);
-        WriteCharacters(modDir, cfg, counties, cultures, faiths, realms, governments, prehistory, dnaMap);
-        WriteHeadOfFaithCharacters(modDir, cfg, faiths, cultures, counties);
+        WriteCharacters(modDir, cfg, counties, cultures, ethnicities, faiths, realms, governments,
+            prehistory, dnaMap);
+        WriteHeadOfFaithCharacters(modDir, cfg, faiths, cultures, ethnicities, counties);
         WriteWildernessHolder(modDir, cfg, wild);
         WriteHouseRelationsOnAction(modDir, prehistory);
         WriteTitleHistory(modDir, cfg, empires, development, realms, governments, faiths, wilderness, wild);
@@ -125,8 +126,9 @@ public static class HistoryWriter
     }
 
     private static void WriteCharacters(string modDir, MapConfig cfg, List<Title> counties,
-        CultureMap cultures, FaithMap faiths, RealmMap realms, GovernmentMap governments,
-        PrehistoryMap prehistory, IReadOnlyDictionary<Title, string> bookmarkDnaMap)
+        CultureMap cultures, EthnicityMap ethnicities, FaithMap faiths, RealmMap realms,
+        GovernmentMap governments, PrehistoryMap prehistory,
+        IReadOnlyDictionary<Title, string> bookmarkDnaMap)
     {
         string dir = Path.Combine(modDir, "history", "characters");
         Directory.CreateDirectory(dir);
@@ -148,9 +150,22 @@ public static class HistoryWriter
         {
             sb.Append($"{ancestor.Id} = {{\n");
             sb.Append($"\tname = \"{ancestor.Name}\"\n");
-            sb.Append($"\tdynasty_house = {ancestor.DynastyHouseKey ?? ancestor.DynastyId}\n");
+            if (ancestor.Female) sb.Append("\tfemale = yes\n");
+
+            // A house and a dynasty are different keys to CK3, and pointing dynasty_house at
+            // a dynasty id makes the character landless of no house at all rather than the
+            // founder of one.
+            if (ancestor.DynastyHouseKey is not null)
+                sb.Append($"\tdynasty_house = {ancestor.DynastyHouseKey}\n");
+            else
+                sb.Append($"\tdynasty = {ancestor.DynastyId}\n");
             sb.Append($"\treligion = {ancestor.FaithKey}\n");
             sb.Append($"\tculture = {ancestor.CultureKey}\n");
+
+            var ancestorCulture = cultures.Cultures.FirstOrDefault(c => c.Key == ancestor.CultureKey);
+            if (ancestorCulture is not null
+                && GetPhenotypeTrait(ancestorCulture, ethnicities) is { } ancestorTrait)
+                sb.Append($"\ttrait = {ancestorTrait}\n");
             sb.Append($"\t{ancestor.BirthDate} = {{ birth = yes }}\n");
             sb.Append($"\t{ancestor.DeathDate} = {{ death = yes }}\n");
             sb.Append("}\n\n");
@@ -206,6 +221,9 @@ public static class HistoryWriter
             sb.Append($"\tdynasty_house = {houseKey}\n");
             sb.Append($"\treligion = {faiths.For(county).Key}\n");
             sb.Append($"\tculture = {culture.Key}\n");
+
+            if (GetPhenotypeTrait(culture, ethnicities) is { } rulerTrait)
+                sb.Append($"\ttrait = {rulerTrait}\n");
 
             if (fatherId is not null)
             {
@@ -309,6 +327,11 @@ public static class HistoryWriter
             {
                 foreach (var (truceTarget, days) in truces)
                 {
+                    // Written from one side only. add_truce_both_ways already binds both, so
+                    // emitting it from each partner in turn set the same truce twice and the second
+                    // one silently restarted its clock.
+                    if (county.Index >= truceTarget.Index) continue;
+
                     sb.Append($"\t\t\tadd_truce_both_ways = {{ character = character:{CharacterId(truceTarget)} days = {days} }}\n");
                 }
             }
@@ -344,6 +367,11 @@ public static class HistoryWriter
             sb.Append($"\treligion = {character.FaithKey}\n");
             sb.Append($"\tculture = {character.CultureKey}\n");
 
+            var characterCulture = cultures.Cultures.FirstOrDefault(c => c.Key == character.CultureKey);
+            if (characterCulture is not null
+                && GetPhenotypeTrait(characterCulture, ethnicities) is { } characterTrait)
+                sb.Append($"\ttrait = {characterTrait}\n");
+
             if (character.FatherId is not null) sb.Append($"\tfather = {character.FatherId}\n");
             if (character.MotherId is not null) sb.Append($"\tmother = {character.MotherId}\n");
 
@@ -354,7 +382,7 @@ public static class HistoryWriter
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_characters.txt"), sb.ToString());
     }
     private static void WriteHeadOfFaithCharacters(string modDir, MapConfig cfg,
-        FaithMap faiths, CultureMap cultures, List<Title> counties)
+        FaithMap faiths, CultureMap cultures, EthnicityMap ethnicities, List<Title> counties)
     {
         string dir = Path.Combine(modDir, "history", "characters");
         Directory.CreateDirectory(dir);
@@ -377,6 +405,9 @@ public static class HistoryWriter
             sb.Append($"\tname = \"{firstName}\"\n");
             sb.Append($"\treligion = {faith.Key}\n");
             sb.Append($"\tculture = {culture.Key}\n");
+
+            if (GetPhenotypeTrait(culture, ethnicities) is { } hofTrait)
+                sb.Append($"\ttrait = {hofTrait}\n");
             sb.Append($"\t{birthYear}.1.1 = {{ birth = yes }}\n");
             sb.Append($"\t{cfg.StartDate} = {{\n");
             sb.Append("\t\teffect = {\n");
@@ -538,6 +569,25 @@ public static class HistoryWriter
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_titles.txt"), sb.ToString());
     }
+
+    /// <summary>
+    /// The trait that carries a culture's build, or null for the ones that need none.
+    ///
+    /// Written onto the character rather than left to the portrait alone because a phenotype the
+    /// game does not know about is only a look: the trait is what makes a dwarf's height and an
+    /// orc's frame survive inheritance, show in the character sheet, and reach the AI.
+    /// </summary>
+    private static string? GetPhenotypeTrait(Culture culture, EthnicityMap ethnicityMap)
+        => ethnicityMap.For(culture).Archetype switch
+        {
+            RaceArchetype.HighElf or RaceArchetype.WoodElf => "phenotype_gracile",
+            RaceArchetype.Dwarf => "phenotype_stocky",
+            RaceArchetype.Orc => "phenotype_rough_hewn",
+            RaceArchetype.Giantkin => "phenotype_towering",
+            RaceArchetype.Gnome => "phenotype_diminutive",
+            RaceArchetype.Deepkin => "phenotype_dusk_adapted",
+            _ => null,
+        };
 
     private static void WriteDynastyLocalisation(string modDir, PrehistoryMap prehistory)
     {

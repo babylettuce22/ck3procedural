@@ -223,9 +223,17 @@ public static class ContentWriter
             modDir, cfg, provinces, order, landCount, provinceElevation, provinceTerrain));
 
         Core.Stage.Time("terrain masks", () => TerrainMaskWriter.WriteAll(modDir, gameDir, cfg));
+        // Trees are placed against the heightmap *as the engine will reconstruct it*, not against
+        // the one we computed. The packer quantises and reassembles the terrain from a tile atlas,
+        // and near a shore that moves the surface by enough to leave trunks standing in water — so
+        // the elevation is round-tripped through the packer first and the scatter reads the result.
+        var packedHeightmap = HeightmapPacker.Reconstruct(
+            HeightmapSource.ToHeightmap16(terra.Elevation, cfg), cfg.Width, cfg.Height);
+        var renderedElevation = HeightmapSource.ToSimulationScale(packedHeightmap, cfg);
+
         // terra.Elevation, not the province-resolution copy: both scatters jitter to sub-pixel
         // positions and have to ask the heightmap the engine renders whether that spot is dry.
-        Core.Stage.Time("trees", () => TreeWriter.WriteAll(modDir, cfg, terrain, classified.Climate, terra.Elevation, rng));
+        Core.Stage.Time("trees", () => TreeWriter.WriteAll(modDir, cfg, terrain, classified.Climate, renderedElevation, rng));
         Core.Stage.Time("animals", () => AnimalWriter.WriteAll(modDir, cfg, terrain, terra.Elevation, rng));
         Core.Stage.Time("env effects", () => EnvEffectWriter.WriteAll(modDir, cfg, terrain, terra.Elevation, rng));
         Core.Stage.Time("map table", () => MapTableWriter.WriteAll(modDir, cfg));
@@ -254,7 +262,8 @@ public static class ContentWriter
 
                 HistoryWriter.WriteAll(
                     modDir, cfg, empires, realms, development,
-                    cultures, faiths, governments, wilderness, prehistory, bookmarkResult.BookmarkDnaMap);
+                    cultures, ethnicities, faiths, governments, wilderness, prehistory,
+                    bookmarkResult.BookmarkDnaMap);
 
                 WarWriter.WriteAll(modDir, prehistory);
                 PortraitWriter.WriteAll(modDir, gameDir, bookmarkResult.PortraitRequests, cfg.Seed);

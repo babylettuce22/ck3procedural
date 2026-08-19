@@ -60,18 +60,19 @@ public static class WaterNaming
 
         foreach (var system in systems)
         {
-            var localCulture = FindNeighborCulture(system, adjacency, byId, cultures, provinces, empires);
-
             // The export's own name for whichever of its rivers this system mostly follows, when it
             // has one and nothing else has taken it. Asked of the whole system at once rather than
             // province by province — see AzgaarImport.RiverFor, which is why one river does not come
             // out wearing four names down its length.
+            //
+            // No article stripping here, unlike the sea zones below: a river name never takes a
+            // directional qualifier in front of it, so "the Aldwater" survives intact.
             string? imported = azgaar?.RiverFor(system)?.Name;
-            if (imported is { Length: > 0 }) imported = AzgaarNaming.StripArticle(imported);
 
             string baseName = imported is { Length: > 0 } && !usedNames.Contains(imported)
                 ? Unique(imported, usedNames)
-                : Unique(localCulture.Language.Word(rng, 1, 2), usedNames);
+                : Unique(FindNeighborCulture(system, adjacency, byId, cultures, provinces, empires)
+                             .Language.Word(rng, 1, 2), usedNames);
 
             Name(system, baseName, names);
         }

@@ -309,60 +309,154 @@ public sealed class PrehistoryMap
         MapConfig cfg,
         Rng rng)
     {
+        // Grouped by realm rather than walked flat, because a shared father is a fact about a realm:
+        // whether two rulers are brothers depends on who they both answer to.
+        var byTopLiege = new Dictionary<Title, List<Title>>();
+
         foreach (var county in rulerCounties)
         {
-            var primary = HistoryWriter.Primary(county, realms);
-            bool isTopLiege = !realms.Liege.ContainsKey(primary);
+            var top = TopLiegeCounty(county, realms);
+            if (!byTopLiege.TryGetValue(top, out var members)) byTopLiege[top] = members = [];
+            members.Add(county);
+        }
 
-            if (isTopLiege)
+        foreach (var (topLiege, realmCounties) in byTopLiege)
+        {
+            var culture = cultures.For(topLiege);
+            var faith = faiths.For(topLiege);
+            var topTitle = HistoryWriter.Primary(topLiege, realms);
+
+            var topRng = new Rng(topLiege.Index ^ 0x7E1B);
+            int topBirthYear = HistoryWriter.GetRulerBirthYear(topLiege.Index, cfg.StartYear);
+
+            string topFatherName = culture.MaleNames.Count > 0
+                ? culture.MaleNames[topRng.Int(0, culture.MaleNames.Count - 1)]
+                : "Nullbert";
+
+            int topFatherBirth = topBirthYear - topRng.Int(22, 35);
+            int topFatherDeath = cfg.StartYear - topRng.Int(2, 12);
+
+            var topFather = new HistoricalCharacter
             {
-                var culture = cultures.For(county);
-                var faith = faiths.For(county);
-                var fRng = new Rng(county.Index ^ 0x7E1B);
+                Id = $"gen_char_father_{topLiege.Index}",
+                Name = topFatherName,
+                Female = false,
+                DynastyId = map.CharacterDynastyMap[topLiege],
+                DynastyHouseKey = map.CharacterHouseMap[topLiege],
+                CultureKey = culture.Key,
+                FaithKey = faith.Key,
+                BirthDate = $"{topFatherBirth}.{topRng.Int(1, 12)}.{topRng.Int(1, 28)}",
+                DeathDate = $"{topFatherDeath}.{topRng.Int(1, 12)}.{topRng.Int(1, 28)}",
+                AssociatedCounty = topLiege,
+                IsDeadAncestor = true
+            };
 
-                string fatherName = culture.MaleNames.Count > 0
-                    ? culture.MaleNames[fRng.Int(0, culture.MaleNames.Count - 1)]
-                    : "Aldgisl";
+            map.DeceasedParents[topLiege] = topFather;
+            map.AllExtraCharacters.Add(topFather);
 
-                int birthYear = cfg.StartYear - fRng.Int(65, 85);
-                int deathYear = cfg.StartYear - fRng.Int(5, 18);
+            // Only vassals of the same dynasty can be the liege's brother, highest tier first so the
+            // brother is the realm's second man rather than whichever county came up first.
+            var kin = realmCounties
+                .Where(c => c != topLiege
+                            && map.CharacterDynastyMap.GetValueOrDefault(c) == map.CharacterDynastyMap[topLiege])
+                .OrderByDescending(c => HistoryWriter.Rank(HistoryWriter.Primary(c, realms)))
+                .ToList();
 
-                var father = new HistoricalCharacter
+            // At most one. Sharing a father across a whole realm produced courts of a dozen
+            // siblings, which is both wrong and slow to draw.
+            bool brotherTaken = false;
+
+            foreach (var kinCounty in kin)
+            {
+                int kinBirthYear = HistoryWriter.GetRulerBirthYear(kinCounty.Index, cfg.StartYear);
+                int ageGap = Math.Abs(topBirthYear - kinBirthYear);
+                var kinTitle = HistoryWriter.Primary(kinCounty, realms);
+                var kinRng = new Rng(kinCounty.Index ^ 0x481A);
+
+                if (!brotherTaken && ageGap <= 10 && kinRng.Chance(0.4))
                 {
-                    Id = $"gen_char_father_{county.Index}",
-                    Name = fatherName,
+                    map.DeceasedParents[kinCounty] = topFather;
+                    brotherTaken = true;
+
+                    // Brothers of consequence hold claims on each other. Only from a duchy or a
+                    // kingdom: a count with a claim on his brother's county is a border squabble,
+                    // while a duke with one on the realm is a succession crisis.
+                    if (kinTitle.Tier is "d" or "k")
+                    {
+                        AddClaim(map, kinCounty, topTitle, pressed: false);
+
+                        // And sometimes the elder brother wants what the younger holds.
+                        if (kinRng.Chance(0.5)) AddClaim(map, topLiege, kinTitle, pressed: false);
+                    }
+
+                    continue;
+                }
+
+                var kinCulture = cultures.For(kinCounty);
+                var kinFaith = faiths.For(kinCounty);
+
+                string kinFatherName = kinCulture.MaleNames.Count > 0
+                    ? kinCulture.MaleNames[kinRng.Int(0, kinCulture.MaleNames.Count - 1)]
+                    : "Nullbert";
+
+                int kinFatherBirth = kinBirthYear - kinRng.Int(22, 35);
+                int kinFatherDeath = cfg.StartYear - kinRng.Int(2, 16);
+
+                var kinFather = new HistoricalCharacter
+                {
+                    Id = $"gen_char_father_{kinCounty.Index}",
+                    Name = kinFatherName,
                     Female = false,
-                    DynastyId = map.CharacterDynastyMap[county],
-                    DynastyHouseKey = map.CharacterHouseMap[county],
-                    CultureKey = culture.Key,
-                    FaithKey = faith.Key,
-                    BirthDate = $"{birthYear}.{fRng.Int(1, 12)}.{fRng.Int(1, 28)}",
-                    DeathDate = $"{deathYear}.{fRng.Int(1, 12)}.{fRng.Int(1, 28)}",
-                    AssociatedCounty = county,
+                    DynastyId = map.CharacterDynastyMap[kinCounty],
+                    DynastyHouseKey = map.CharacterHouseMap[kinCounty],
+                    CultureKey = kinCulture.Key,
+                    FaithKey = kinFaith.Key,
+                    BirthDate = $"{kinFatherBirth}.{kinRng.Int(1, 12)}.{kinRng.Int(1, 28)}",
+                    DeathDate = $"{kinFatherDeath}.{kinRng.Int(1, 12)}.{kinRng.Int(1, 28)}",
+                    AssociatedCounty = kinCounty,
                     IsDeadAncestor = true
                 };
 
-                map.DeceasedParents[county] = father;
-                map.AllExtraCharacters.Add(father);
+                map.DeceasedParents[kinCounty] = kinFather;
+                map.AllExtraCharacters.Add(kinFather);
             }
         }
 
+        // Everyone the grouping missed — rulers of another dynasty, and any county whose realm was
+        // not walked — still needs a father, or their house begins with them and nothing inherits.
         foreach (var county in rulerCounties)
         {
-            var liegeCounty = TopLiegeCounty(county, realms);
-            if (county == liegeCounty) continue;
+            if (map.DeceasedParents.ContainsKey(county)) continue;
 
-            if (map.CharacterDynastyMap.TryGetValue(county, out var dynId) &&
-                map.CharacterDynastyMap.TryGetValue(liegeCounty, out var liegeDynId) &&
-                dynId == liegeDynId &&
-                map.DeceasedParents.TryGetValue(liegeCounty, out var sharedFather))
+            var culture = cultures.For(county);
+            var faith = faiths.For(county);
+            var fRng = new Rng(county.Index ^ 0x981C);
+
+            int birthYear = HistoryWriter.GetRulerBirthYear(county.Index, cfg.StartYear);
+            int fatherBirth = birthYear - fRng.Int(22, 35);
+            int fatherDeath = cfg.StartYear - fRng.Int(2, 15);
+
+            string fatherName = culture.MaleNames.Count > 0
+                ? culture.MaleNames[fRng.Int(0, culture.MaleNames.Count - 1)]
+                : "Nullbert";
+
+            var father = new HistoricalCharacter
             {
-                // consider re-enabling sharedFather (originally was causing too many siblings and lag when clicking on certain character's portraits)
+                Id = $"gen_char_father_{county.Index}",
+                Name = fatherName,
+                Female = false,
+                DynastyId = map.CharacterDynastyMap[county],
+                DynastyHouseKey = map.CharacterHouseMap[county],
+                CultureKey = culture.Key,
+                FaithKey = faith.Key,
+                BirthDate = $"{fatherBirth}.{fRng.Int(1, 12)}.{fRng.Int(1, 28)}",
+                DeathDate = $"{fatherDeath}.{fRng.Int(1, 12)}.{fRng.Int(1, 28)}",
+                AssociatedCounty = county,
+                IsDeadAncestor = true
+            };
 
-                //map.DeceasedParents[county] = sharedFather;
-                var liegePrimary = HistoryWriter.Primary(liegeCounty, realms);
-                AddClaim(map, county, liegePrimary, pressed: false);
-            }
+            map.DeceasedParents[county] = father;
+            map.AllExtraCharacters.Add(father);
         }
     }
 
