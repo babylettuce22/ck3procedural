@@ -86,6 +86,20 @@ public sealed class MainForm : Form
         Margin = new Padding(10, 6, 0, 0),
     };
 
+    private readonly ComboBox _drape = new()
+    {
+        DropDownStyle = ComboBoxStyle.DropDownList,
+        Width = 132,
+        Font = Theme.Ui,
+        FlatStyle = FlatStyle.Flat,
+        Enabled = false,
+    };
+
+    private bool _drapeRefreshing;
+
+    private readonly Button _recent = Theme.MakeButton("▾", 26);
+    private TabControl _tabs = null!;
+
     private readonly ImageView _viewer = new() { Dock = DockStyle.Fill };
 
     private readonly FlowLayoutPanel _categoryStrip = new()
@@ -356,6 +370,8 @@ public sealed class MainForm : Form
         _tips.SetToolTip(_launchArgs, "Launch arguments passed to ck3.exe (e.g. -debug_mode -mapeditor -novid)");
 
         _browse.Click += (_, _) => PickHeightmap();
+        _recent.Click += (_, _) => ShowRecentHeightmaps();
+        _tips.SetToolTip(_recent, "Recent heightmaps");
         _roll.Click += (_, _) => _seed.Value = Random.Shared.Next(1, int.MaxValue);
         _preview.Click += async (_, _) => await PreviewAsync();
         _writeMod.Click += async (_, _) => await WriteModAsync();
@@ -432,6 +448,7 @@ public sealed class MainForm : Form
         };
 
         build.Controls.Add(_browse);
+        build.Controls.Add(_recent);
         build.Controls.Add(Separator());
         build.Controls.Add(Caption("Seed"));
         build.Controls.Add(_seed);
@@ -533,6 +550,12 @@ public sealed class MainForm : Form
             _categoryStrip.Controls.Add(button);
         }
 
+        var exportMap = Theme.MakeButton("Export…", 74);
+        exportMap.Margin = new Padding(18, 1, 1, 1);
+        _tips.SetToolTip(exportMap, "Save the current view as a PNG (Ctrl+E)");
+        exportMap.Click += (_, _) => ExportView();
+        _categoryStrip.Controls.Add(exportMap);
+
         foreach (var mode in MapModes.All)
         {
             var button = StripButton(mode.Clickable ? $"{mode.Name} ✎" : mode.Name, bold: false);
@@ -548,7 +571,7 @@ public sealed class MainForm : Form
         viewer.Controls.Add(_modeStrip);
         viewer.Controls.Add(_categoryStrip);
 
-        var tabs = Theme.MakeTabs();
+        var tabs = _tabs = Theme.MakeTabs();
 
         // Loaded when the tab is first opened, not at startup: decoding a vanilla-sized heightmap
         // is several seconds, and a window that takes that long to appear for a view nobody asked
@@ -646,7 +669,29 @@ public sealed class MainForm : Form
         var reset = Theme.MakeButton("Reset view", 82);
         reset.Click += (_, _) => _solid.ResetView();
 
+        _drape.Items.Add("Terrain shading");
+        _drape.SelectedIndex = 0;
+        _drape.SelectedIndexChanged += (_, _) => { if (!_drapeRefreshing) UpdateDrape(); };
+        _tips.SetToolTip(_drape,
+            "What the terrain wears: the built-in height tints, or any generated map mode " +
+            "draped over the relief. Fills in after a preview.");
+
+        var export3d = Theme.MakeButton("Export…", 74);
+        _tips.SetToolTip(export3d, "Save the current view as a PNG (Ctrl+E)");
+        export3d.Click += (_, _) => ExportView();
+
         strip.Controls.Add(_sourceMode);
+        strip.Controls.Add(new Label
+        {
+            Text = "Surface",
+            AutoSize = false,
+            Width = 50,
+            Height = 24,
+            TextAlign = ContentAlignment.MiddleRight,
+            ForeColor = Theme.TextDim,
+            Font = Theme.Ui,
+        });
+        strip.Controls.Add(_drape);
         strip.Controls.Add(new Label
         {
             Text = "Relief",
@@ -659,6 +704,7 @@ public sealed class MainForm : Form
         });
         strip.Controls.Add(_exaggeration);
         strip.Controls.Add(reset);
+        strip.Controls.Add(export3d);
         strip.Controls.Add(_sourceReadout);
 
         _solid.ViewChanged += _ => _sourceReadout.Text = Readout();
@@ -1141,6 +1187,10 @@ public sealed class MainForm : Form
             case Keys.Control | Keys.Oem6:
                 CycleCategory(+1);
                 return true;
+
+            case Keys.Control | Keys.E when !_busy:
+                ExportView();
+                return true;
         }
 
         return base.ProcessCmdKey(ref message, key);
@@ -1183,12 +1233,127 @@ public sealed class MainForm : Form
 
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
 
-        _heightmapPath = dialog.FileName;
-        _options.HeightmapPath = _heightmapPath;
-        ApplySource();
+        SetHeightmap(dialog.FileName);
+    }
 
+    /// <summary>The one route a heightmap comes in by — the dialog and the recents menu both land here.</summary>
+    private void SetHeightmap(string path)
+    {
+        _heightmapPath = path;
+        _options.HeightmapPath = path;
+
+        var recent = _state.RecentHeightmaps ?? [];
+        recent.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+        recent.Insert(0, path);
+        if (recent.Count > 8) recent.RemoveRange(8, recent.Count - 8);
+        _state.RecentHeightmaps = recent;
+
+        ApplySource();
         InvalidateProcessed();
         if (_sourceShown) _ = ShowSourceAsync();
+    }
+
+    private void ShowRecentHeightmaps()
+    {
+        var recent = (_state.RecentHeightmaps ?? [])
+            .Where(p => File.Exists(p) && !string.Equals(p, _heightmapPath, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        var menu = new ContextMenuStrip();
+        menu.Closed += (_, _) => BeginInvoke(menu.Dispose);
+
+        if (recent.Count == 0)
+            menu.Items.Add(new ToolStripMenuItem("(no other recent heightmaps)") { Enabled = false });
+
+        foreach (string path in recent)
+        {
+            var item = new ToolStripMenuItem(
+                $"{Path.GetFileName(path)}   ({Clipped(Path.GetDirectoryName(path) ?? "", 44)})");
+            item.Click += (_, _) => SetHeightmap(path);
+            menu.Items.Add(item);
+        }
+
+        menu.Show(_recent, new Point(0, _recent.Height));
+    }
+
+    /// <summary>Saves whatever the active tab is showing — a map mode or the 3D frame — as a PNG.</summary>
+    private void ExportView()
+    {
+        Bitmap? frame;
+        string name;
+
+        if (_tabs.SelectedTab?.Text == "3D render")
+        {
+            frame = _solid.CurrentFrame;
+            name = "terrain-3d";
+        }
+        else
+        {
+            frame = _focusFrame ?? _rendered.GetValueOrDefault(_view);
+            name = _view.ToLowerInvariant();
+        }
+
+        if (frame is null)
+        {
+            _status.Text = "Nothing to export yet — open the view first";
+            return;
+        }
+
+        // Cloned before the dialog opens: the frame belongs to a view that may re-render and
+        // dispose it while the dialog holds the message loop.
+        using var copy = new Bitmap(frame);
+
+        using var dialog = new SaveFileDialog
+        {
+            Title = "Export the current view",
+            Filter = "PNG image (*.png)|*.png",
+            FileName = $"{name}.png",
+            InitialDirectory = _state.ExportDir ?? "",
+        };
+
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        copy.Save(dialog.FileName, System.Drawing.Imaging.ImageFormat.Png);
+        _state.ExportDir = Path.GetDirectoryName(dialog.FileName);
+        _status.Text = $"Exported {Path.GetFileName(dialog.FileName)} ({copy.Width}×{copy.Height})";
+    }
+
+    /// <summary>
+    /// Rebuilds the 3D drape choices for the current result: the built-in tints plus every map
+    /// mode that can render right now. Post-write modes appear once written content exists.
+    /// </summary>
+    private void RefreshDrapeChoices()
+    {
+        string? keep = _drape.SelectedIndex > 0 ? _drape.SelectedItem as string : null;
+
+        _drapeRefreshing = true;
+        _drape.Items.Clear();
+        _drape.Items.Add("Terrain shading");
+
+        if (_result is not null)
+            foreach (var mode in MapModes.All)
+                if (Available(mode)) _drape.Items.Add(mode.Name);
+
+        _drape.SelectedIndex = Math.Max(0, keep is null ? 0 : _drape.Items.IndexOf(keep));
+        _drape.Enabled = _result is not null;
+        _drapeRefreshing = false;
+
+        // Explicit rather than via the event: a kept selection keeps its index, and the drape
+        // still has to be re-rendered against the new result.
+        UpdateDrape();
+    }
+
+    private void UpdateDrape()
+    {
+        if (_result is null || _drape.SelectedIndex <= 0
+            || _drape.SelectedItem is not string name
+            || MapModes.Find(name) is not { } mode || !Available(mode))
+        {
+            _solid.SetDrape(null);
+            return;
+        }
+
+        using (new WaitCursorFor(this)) _solid.SetDrape(mode.Render(_result, _written));
     }
 
     private void ApplySource()
@@ -1731,6 +1896,8 @@ public sealed class MainForm : Form
         _seed.Enabled = enabled;
         _roll.Enabled = enabled;
         _browse.Enabled = enabled;
+        _recent.Enabled = enabled;
+        _drape.Enabled = enabled && _result is not null;
         _savePreset.Enabled = enabled;
         _loadPreset.Enabled = enabled;
         _gameFolder.Enabled = enabled;
@@ -1801,6 +1968,7 @@ public sealed class MainForm : Form
         _focusFrame = null;
 
         SelectView(_view);
+        RefreshDrapeChoices();
     }
 
     // --- Realm navigation -----------------------------------------------------------------------

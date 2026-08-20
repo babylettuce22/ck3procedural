@@ -258,8 +258,15 @@ public static class HeightfieldRenderer
     /// Render at this multiple of the requested size, then box-filter back down. 1 is the draft
     /// path; 2 is what smooths the staircase off ridgelines and coasts on the settled frame.
     /// </param>
+    /// <param name="drape">
+    /// A rendered map mode to wear as the surface texture instead of the built-in hypsometric
+    /// tints — realms over the mountains they sit on, climate over the relief that causes it. Any
+    /// size; it is assumed to cover the same extent as the field, which every mode render does.
+    /// Sampled nearest-neighbour, because these rasters are classifications and blending across a
+    /// realm border invents a realm that does not exist.
+    /// </param>
     public static PreviewRenderer.Image Render(Heightfield field, HeightfieldView view,
-        int width, int height, int supersample = 1)
+        int width, int height, int supersample = 1, PreviewRenderer.Image? drape = null)
     {
         width = Math.Max(16, width);
         height = Math.Max(16, height);
@@ -368,7 +375,8 @@ public static class HeightfieldRenderer
                 // what it is: the cut side of a solid block.
                 bool cut = floorRow >= sh;
 
-                var (r, g, b) = cut ? Earth
+                (byte r, byte g, byte b) = cut ? Earth
+                    : drape is { } tex ? Draped(tex, samples, cols, rows, px, py, zScale, sea)
                     : sea ? SeaColour(h, water)
                     : LandColour(h, water, landSpan, Slope(samples, cols, rows, px, py, zScale));
 
@@ -487,6 +495,30 @@ public static class HeightfieldRenderer
         double top = samples[a] + (samples[a + 1] - samples[a]) * fx;
         double bottom = samples[b] + (samples[b + 1] - samples[b]) * fx;
         return top + (bottom - top) * fy;
+    }
+
+    /// <summary>
+    /// The drape's colour under this sample, lit by the terrain. Land keeps the same Lambert
+    /// shading the hypsometric tints get, so ridges and valleys still read through a flat realm
+    /// colour; the sea is left as the drape painted it — the drape's water is already the water.
+    /// </summary>
+    private static (byte, byte, byte) Draped(PreviewRenderer.Image tex, ushort[] samples,
+        int cols, int rows, double px, double py, double zScale, bool sea)
+    {
+        int tx = Math.Min(tex.Width - 1, (int)(px * tex.Width / cols));
+
+        // The field runs +Y northward — Downsample flips the image's top-down rows on the way in —
+        // but a mode render is still a top-down image, so the drape flips back here or the world
+        // wears its arctic on the equator.
+        int ty = tex.Height - 1 - Math.Min(tex.Height - 1, (int)(py * tex.Height / rows));
+
+        long at = ((long)ty * tex.Width + tx) * 3;
+        byte r = tex.Rgb[at], g = tex.Rgb[at + 1], b = tex.Rgb[at + 2];
+        if (sea) return (r, g, b);
+
+        double lit = Slope(samples, cols, rows, px, py, zScale);
+        return ((byte)Math.Min(255, r * lit), (byte)Math.Min(255, g * lit),
+                (byte)Math.Min(255, b * lit));
     }
 
     /// <summary>Lambert term from the local gradient, lit from the north-west as maps always are.</summary>

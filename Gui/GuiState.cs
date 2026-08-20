@@ -33,6 +33,12 @@ public sealed class GuiState
 
     /// <summary>The settings section the pane was left on. Null or unknown means "All".</summary>
     public string? SettingsSection { get; set; }
+
+    /// <summary>Recently opened heightmaps, newest first, for the chip's dropdown.</summary>
+    public List<string>? RecentHeightmaps { get; set; }
+
+    /// <summary>Where the last exported view PNG went.</summary>
+    public string? ExportDir { get; set; }
     public string? PresetDir { get; set; }
 
     public string? LaunchArgs { get; set; } = "-debug_mode -developer -skip";

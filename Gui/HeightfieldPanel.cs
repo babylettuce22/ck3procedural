@@ -35,6 +35,20 @@ public sealed class HeightfieldPanel : Control
         System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public bool ShowAsCk3Renders { get; set; }
 
+    private PreviewRenderer.Image? _drape;
+
+    /// <summary>Drapes a rendered map mode over the terrain, or null for the built-in tints.</summary>
+    public void SetDrape(PreviewRenderer.Image? drape)
+    {
+        _drape = drape;
+        if (_source is not null) Request(draft: false);
+    }
+
+    /// <summary>The frame on screen, for export. Owned by this control — clone before keeping.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(
+        System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public Bitmap? CurrentFrame => _frame;
+
     /// <summary>Raised when the view changes, so a host can show the camera state.</summary>
     public event Action<HeightfieldView>? ViewChanged;
 
@@ -134,8 +148,9 @@ public sealed class HeightfieldPanel : Control
         // resolution too, but the renderer measures a few milliseconds without supersampling, and
         // the bilinear stretch back up read as the whole view going fuzzy mid-drag.
         int ss = _draft ? 1 : 2;
+        var drape = _drape;
 
-        Task.Run(() => HeightfieldRenderer.Render(field, view, w, h, ss))
+        Task.Run(() => HeightfieldRenderer.Render(field, view, w, h, ss, drape))
             .ContinueWith(task =>
             {
                 _running = false;
