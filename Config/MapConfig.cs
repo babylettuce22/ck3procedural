@@ -106,14 +106,16 @@ public sealed class MapConfig : CustomTypeDescriptor
     // 01 General
     // =========================================================================
 
-    [Category("01 General")]
-    [Description("Toggle between showing basic settings and advanced fine-tuning knobs.")]
-    [RefreshProperties(RefreshProperties.All)] // Tells PropertyGrid to redraw instantly when changed
+    /// <summary>
+    /// Whether the grid shows the fine-tuning knobs. Owned by the settings pane's Advanced toggle
+    /// rather than shown as a row of its own — a setting about the settings is chrome, not config —
+    /// but it lives here so presets carry it and <see cref="GetProperties()"/> can read it.
+    /// </summary>
+    [Browsable(false)]
     public bool ShowAdvancedSettings { get; set; } = false;
 
-    /// <summary>Seed for every random decision.</summary>
-    [Category("01 General")]
-    [Description("Seed for every random decision.")]
+    /// <summary>Seed for every random decision. The toolbar's seed box owns the row.</summary>
+    [Browsable(false)]
     public int Seed { get; set; } = 1;
 
     /// <summary>

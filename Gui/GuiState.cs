@@ -30,6 +30,9 @@ public sealed class GuiState
     /// <summary>The last mode chosen in each strip category, so switching categories lands back
     /// where the user left that category rather than on its first entry.</summary>
     public Dictionary<string, string>? CategoryViews { get; set; }
+
+    /// <summary>The settings section the pane was left on. Null or unknown means "All".</summary>
+    public string? SettingsSection { get; set; }
     public string? PresetDir { get; set; }
 
     public string? LaunchArgs { get; set; } = "-debug_mode -developer -skip";

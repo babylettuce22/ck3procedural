@@ -55,12 +55,35 @@ public sealed class MainForm : Form
     private readonly Button _savePreset = Theme.MakeButton("Save preset…", 110);
     private readonly Button _loadPreset = Theme.MakeButton("Load preset…", 110);
 
-    private readonly Label _sourceName = new()
+    private SettingsView _settingsView = null!;
+
+    private readonly ListBox _sections = new()
     {
-        AutoSize = true,
-        Margin = new Padding(8, 8, 0, 0),
-        ForeColor = Theme.TextDim,
+        Dock = DockStyle.Left,
+        Width = 118,
+        BorderStyle = BorderStyle.None,
+        BackColor = Theme.Surface,
+        ForeColor = Theme.Text,
         Font = Theme.Ui,
+        IntegralHeight = false,
+    };
+
+    private readonly TextBox _settingsSearch = new()
+    {
+        Width = 170,
+        BorderStyle = BorderStyle.FixedSingle,
+        BackColor = Theme.SurfaceHigh,
+        ForeColor = Theme.Text,
+        Margin = new Padding(3, 5, 3, 3),
+    };
+
+    private readonly CheckBox _advanced = new()
+    {
+        Text = "Advanced",
+        AutoSize = true,
+        ForeColor = Theme.Text,
+        Font = Theme.Ui,
+        Margin = new Padding(10, 6, 0, 0),
     };
 
     private readonly ImageView _viewer = new() { Dock = DockStyle.Fill };
@@ -285,7 +308,34 @@ public sealed class MainForm : Form
         }
 
         Theme.ApplyLight(_grid);
-        _grid.SelectedObject = _options.Config;
+
+        _settingsView = new SettingsView(_options.Config);
+        _grid.SelectedObject = _settingsView;
+
+        _sections.Items.Add("All");
+        foreach (var section in SettingsView.Sections)
+            _sections.Items.Add(SettingsView.DisplayName(section));
+
+        _sections.SelectedIndex =
+            _state.SettingsSection is { } saved && _sections.Items.IndexOf(saved) is var found and > 0
+                ? found
+                : 0;
+        ApplySection();
+
+        _sections.SelectedIndexChanged += (_, _) => ApplySection();
+        _settingsSearch.TextChanged += (_, _) =>
+        {
+            _settingsView.Search = _settingsSearch.Text;
+            RefreshSettings();
+        };
+
+        _advanced.Checked = _options.Config.ShowAdvancedSettings;
+        _tips.SetToolTip(_advanced, "Also show the fine-tuning knobs. Saved with presets.");
+        _advanced.CheckedChanged += (_, _) =>
+        {
+            _options.Config.ShowAdvancedSettings = _advanced.Checked;
+            RefreshSettings();
+        };
 
         // The 3D view shows the *normalised* heightmap, so the settings that decide normalisation
         // change what it shows. Rebuilding on those and only those: everything else on this grid
@@ -311,8 +361,14 @@ public sealed class MainForm : Form
         _writeMod.Click += async (_, _) => await WriteModAsync();
         _cancel.Click += (_, _) => RequestCancel();
 
-        // Disabled until a run is actually going, so the button is never a no-op.
+        // Hidden until a run is actually going, so the row never shows a button that is a no-op.
         _cancel.Enabled = false;
+        _cancel.Visible = false;
+
+        // The chip wears the chosen file's name, so it has to be free to grow.
+        _browse.AutoSize = true;
+        _tips.SetToolTip(_preview, "Generate and preview without writing anything (F5)");
+        _tips.SetToolTip(_writeMod, "Generate and write the mod to disk (Ctrl+S)");
         _tips.SetToolTip(_cancel, "Stop the run in progress. It stops at the next step boundary, so a long step can take a few seconds to let go.");
         _openMod.Click += (_, _) => OpenModFolder();
         _launchGame.Click += (_, _) => LaunchGame();
@@ -352,30 +408,61 @@ public sealed class MainForm : Form
         _tick.Tick += (_, _) => ShowProgress();
     }
 
+    /// <summary>
+    /// The toolbar, in two anchored groups that read left to right as a sentence: what the world is
+    /// built *from* and the runs that build it on the left; what to do with the built mod — open
+    /// it, launch the game into it, point at the install — on the right. One flat row used to hold
+    /// all of it in arrival order, with the heightmap's name orphaned at the far end from the
+    /// button that chooses it; the name now lives on the button itself.
+    /// </summary>
     private Control BuildToolbar()
     {
-        var bar = new FlowLayoutPanel
+        var bar = new Panel
         {
             Dock = DockStyle.Top,
             Height = 40,
-            Padding = new Padding(6, 5, 6, 5),
             BackColor = Theme.Surface,
         };
 
-        bar.Controls.Add(_browse);
-        bar.Controls.Add(Separator());
-        bar.Controls.Add(Caption("Seed"));
-        bar.Controls.Add(_seed);
-        bar.Controls.Add(_roll);
-        bar.Controls.Add(Separator());
-        bar.Controls.Add(_preview);
-        bar.Controls.Add(_writeMod);
-        bar.Controls.Add(_cancel);
-        bar.Controls.Add(_openMod);
-        bar.Controls.Add(_launchGame);
-        bar.Controls.Add(_launchArgs);
-        bar.Controls.Add(_gameFolder);
-        bar.Controls.Add(_sourceName);
+        var build = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(6, 5, 0, 5),
+            BackColor = Color.Transparent,
+        };
+
+        build.Controls.Add(_browse);
+        build.Controls.Add(Separator());
+        build.Controls.Add(Caption("Seed"));
+        build.Controls.Add(_seed);
+        build.Controls.Add(_roll);
+        build.Controls.Add(Separator());
+        build.Controls.Add(_preview);
+        build.Controls.Add(_writeMod);
+        build.Controls.Add(_cancel);
+
+        // Right to left, so the group hugs the window edge; visually it reads
+        // "Open mod folder · Launch CK3 [args] | Game folder…".
+        var made = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Right,
+            FlowDirection = FlowDirection.RightToLeft,
+            AutoSize = true,
+            // Without this the docked panel settles at one button wide and quietly wraps the
+            // rest below the 40 px bar, where they render as nothing at all.
+            WrapContents = false,
+            Padding = new Padding(0, 5, 6, 5),
+            BackColor = Color.Transparent,
+        };
+
+        made.Controls.Add(_gameFolder);
+        made.Controls.Add(Separator());
+        made.Controls.Add(_launchArgs);
+        made.Controls.Add(_launchGame);
+        made.Controls.Add(_openMod);
+
+        bar.Controls.Add(build);
+        bar.Controls.Add(made);
 
         return bar;
     }
@@ -419,8 +506,23 @@ public sealed class MainForm : Form
         presets.Controls.Add(_savePreset);
         presets.Controls.Add(_loadPreset);
 
+        var settingsHeader = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 32,
+            Padding = new Padding(4, 3, 4, 0),
+            BackColor = Theme.Surface,
+        };
+        settingsHeader.Controls.Add(Caption("Search"));
+        settingsHeader.Controls.Add(_settingsSearch);
+        settingsHeader.Controls.Add(_advanced);
+
+        // Fill first, so docking (which lays out from the last control back) gives the bottom,
+        // top and left bars their edges before the grid takes what remains.
         var settings = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Surface };
         settings.Controls.Add(_grid);
+        settings.Controls.Add(_sections);
+        settings.Controls.Add(settingsHeader);
         settings.Controls.Add(presets);
 
         foreach (string category in MapModes.Categories)
@@ -987,6 +1089,9 @@ public sealed class MainForm : Form
         _state.HeightmapPath = _heightmapPath;
         _state.View = _view;
         _state.CategoryViews = new Dictionary<string, string>(_lastInCategory);
+        _state.SettingsSection = _sections.SelectedIndex > 0
+            ? _sections.Items[_sections.SelectedIndex] as string
+            : null;
 
         _state.GameDir = Core.GameLocator.IsGameDir(_options.GameDir) ? _options.GameDir : null;
         _state.ModRoot = _modRoot;
@@ -1088,15 +1193,31 @@ public sealed class MainForm : Form
 
     private void ApplySource()
     {
-        _sourceName.Text = _heightmapPath is null
-            ? "(no heightmap chosen)"
-            : Path.GetFileName(_heightmapPath);
+        // The button is the label: it always answers "built from what?" without a trip elsewhere.
+        _browse.Text = _heightmapPath is null
+            ? "Choose heightmap…"
+            : Clipped(Path.GetFileName(_heightmapPath), 30);
+
+        _tips.SetToolTip(_browse, _heightmapPath ?? "The heightmap PNG the whole mod is built from.");
 
         _openMod.Enabled = ModFolderToOpen() is not null;
         SetEnabled(!_busy);
 
         ShowGameFolder();
     }
+
+    private void ApplySection()
+    {
+        int index = _sections.SelectedIndex;
+        _settingsView.Section = index <= 0 ? null : SettingsView.Sections[index - 1];
+        RefreshSettings();
+    }
+
+    /// <summary>
+    /// Makes the grid re-ask the view for its rows. Reassignment rather than
+    /// <see cref="PropertyGrid.Refresh"/>, which repaints the values of the rows it already has.
+    /// </summary>
+    private void RefreshSettings() => _grid.SelectedObject = _settingsView;
 
     private void SavePreset()
     {
@@ -1134,7 +1255,10 @@ public sealed class MainForm : Form
             _seed.Value = Math.Clamp(_options.Config.Seed, 0, int.MaxValue);
             _options.Config.StartYear = Math.Clamp(_options.Config.StartYear, 1, 9999);
 
-            _grid.Refresh();
+            // The preset may have flipped the advanced flag; the checkbox follows the config, and
+            // its CheckedChanged (when it fires) or this call (when it does not) rebuilds the rows.
+            _advanced.Checked = _options.Config.ShowAdvancedSettings;
+            RefreshSettings();
 
             _status.Text = $"Loaded {applied} settings from {Path.GetFileName(dialog.FileName)}";
         }
@@ -1601,6 +1725,9 @@ public sealed class MainForm : Form
     private void SetEnabled(bool enabled)
     {
         _grid.Enabled = enabled;
+        _sections.Enabled = enabled;
+        _settingsSearch.Enabled = enabled;
+        _advanced.Enabled = enabled;
         _seed.Enabled = enabled;
         _roll.Enabled = enabled;
         _browse.Enabled = enabled;
@@ -1610,6 +1737,7 @@ public sealed class MainForm : Form
         _launchGame.Enabled = enabled;
         _launchArgs.Enabled = enabled;
         _cancel.Enabled = !enabled;
+        _cancel.Visible = !enabled;
 
         _titles.Enabled = enabled;
         ShowPending();
@@ -1774,6 +1902,10 @@ public sealed class MainForm : Form
         oldFocus?.Dispose();
         ShowReadout(_viewer.Zoom, null);
     }
+
+    /// <summary>Middle-ellipsis, so both the start of a long file name and its extension survive.</summary>
+    private static string Clipped(string text, int max)
+        => text.Length <= max ? text : $"{text[..(max / 2 - 1)]}…{text[^(max / 2 - 1)..]}";
 
     private static string TierWord(string tier) => tier switch
     {
