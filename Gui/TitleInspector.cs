@@ -10,6 +10,20 @@ public sealed class TitleInspector : InspectorForm
     private readonly Button _recolorChildren = Theme.MakeButton("Recolour children", 130);
     private readonly Button _culture = Theme.MakeButton("Culture…", 84);
     private readonly Button _faith = Theme.MakeButton("Faith…", 76);
+    private readonly Button _liege = Theme.MakeButton("Liege", 60);
+    private readonly Button _vassals = Theme.MakeButton("Vassals…", 84);
+    private readonly Button _focusMap = Theme.MakeButton("Focus map", 90);
+
+    /// <summary>
+    /// The written world's de facto structure, when there is one. Set by the owning window after
+    /// every write; null before the first write, when the realm buttons stay dark and this window
+    /// is a purely de jure affair.
+    /// </summary>
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public RealmGraph? Realm { get; set; }
+
+    /// <summary>Asks the owning window to focus the Realms map on this ruler's seat.</summary>
+    public event Action<Title>? FocusRealm;
 
     public TitleInspector(WorldEdits edits) : base(edits, "Title", new Size(380, 500))
     {
@@ -17,17 +31,29 @@ public sealed class TitleInspector : InspectorForm
         _recolorChildren.Click += (_, _) => RecolorChildren();
         _culture.Click += (_, _) => GoToRelated(t => Edits.Target?.Written.Cultures.For(t));
         _faith.Click += (_, _) => GoToRelated(t => Edits.Target?.Written.Faiths.For(t));
+        _liege.Click += (_, _) => GoToLiege();
+        _vassals.Click += (_, _) => ShowVassals();
+        _focusMap.Click += (_, _) => { if (Seat() is { } seat) FocusRealm?.Invoke(seat); };
 
         AddAction(_reroll);
         AddAction(_recolorChildren);
         AddAction(_culture);
         AddAction(_faith);
+        AddAction(_liege);
+        AddAction(_vassals);
+        AddAction(_focusMap);
     }
 
     private IEnumerable<Title> Titles_ => Selection.OfType<Title>();
 
+    /// <summary>The seat of whoever holds the single selected title, when that means anything.</summary>
+    private Title? Seat()
+        => Realm is { } realm && Selection.Count == 1 && Selection[0] is Title title
+            ? realm.SeatOf(title)
+            : null;
+
     protected override IEnumerable<object> Wrap(IReadOnlyList<object> targets)
-        => targets.OfType<Title>().Select(t => new Fields(t, Edits));
+        => targets.OfType<Title>().Select(t => new Fields(t, Edits, Realm));
 
     protected override string Describe(IReadOnlyList<object> targets)
         => targets.Count == 1 && targets[0] is Title t
@@ -45,6 +71,11 @@ public sealed class TitleInspector : InspectorForm
         bool single = Edits.IsLoaded && Selection.Count == 1;
         _culture.Enabled = single;
         _faith.Enabled = single;
+
+        var seat = Edits.IsLoaded ? Seat() : null;
+        _liege.Enabled = seat is not null && Realm!.LiegeSeat(seat) is not null;
+        _vassals.Enabled = seat is not null && Realm!.VassalSeats(seat).Count > 0;
+        _focusMap.Enabled = seat is not null;
     }
 
     public static string TierName(Title title) => title.Tier switch
@@ -83,6 +114,48 @@ public sealed class TitleInspector : InspectorForm
         if (resolve(title) is { } related) GoTo(related);
     }
 
+    private void GoToLiege()
+    {
+        if (Seat() is not { } seat || Realm!.LiegeSeat(seat) is not { } above) return;
+        GoTo(Realm.Primary(above));
+    }
+
+    /// <summary>
+    /// The way down a realm: a menu of the ruler's direct vassals, biggest first. Picking one both
+    /// inspects it here and refocuses the map, so the window and the map descend together.
+    /// </summary>
+    private void ShowVassals()
+    {
+        if (Seat() is not { } seat || Realm is not { } realm) return;
+
+        var vassals = realm.VassalSeats(seat);
+        if (vassals.Count == 0) return;
+
+        var menu = new ContextMenuStrip();
+        menu.Closed += (_, _) => BeginInvoke(menu.Dispose);
+
+        const int cap = 40;
+        foreach (var vassal in vassals.Take(cap))
+        {
+            var primary = realm.Primary(vassal);
+            var item = new ToolStripMenuItem(
+                $"{TierName(primary)} {primary.Name} — {realm.RealmSize(vassal)} counties");
+
+            item.Click += (_, _) =>
+            {
+                GoTo(primary);
+                FocusRealm?.Invoke(vassal);
+            };
+
+            menu.Items.Add(item);
+        }
+
+        if (vassals.Count > cap)
+            menu.Items.Add(new ToolStripMenuItem($"… and {vassals.Count - cap} more") { Enabled = false });
+
+        menu.Show(_vassals, new Point(0, _vassals.Height));
+    }
+
     /// <summary>
     /// The editable face of a title.
     ///
@@ -91,8 +164,45 @@ public sealed class TitleInspector : InspectorForm
     /// properties are context — what this is and where it sits — which is most of what tells you
     /// whether you clicked the right thing.
     /// </summary>
-    public sealed class Fields(Title title, WorldEdits edits)
+    public sealed class Fields(Title title, WorldEdits edits, RealmGraph? realm)
     {
+        private Title? Seat => realm?.SeatOf(title);
+
+        [Category("Realm (de facto)")]
+        [DisplayName("Held by")]
+        [Description("The ruler holding this title at game start, named by their primary title. "
+                     + "De facto, unlike Liege below — written with the mod, so empty until one is.")]
+        [ReadOnly(true)]
+        public string HeldBy
+            => Seat is { } s ? $"{TierName(realm!.Primary(s))} {realm.Primary(s).Name}" : "—";
+
+        [Category("Realm (de facto)")]
+        [DisplayName("Answers to")]
+        [Description("The liege this ruler is sworn to, or independent.")]
+        [ReadOnly(true)]
+        public string AnswersTo
+            => Seat is not { } s ? "—"
+                : realm!.LiegeSeat(s) is { } above
+                    ? $"{TierName(realm.Primary(above))} {realm.Primary(above).Name}"
+                    : "(independent)";
+
+        [Category("Realm (de facto)")]
+        [DisplayName("Direct vassals")]
+        [ReadOnly(true)]
+        public string DirectVassals => Seat is { } s ? realm!.VassalSeats(s).Count.ToString() : "—";
+
+        [Category("Realm (de facto)")]
+        [DisplayName("Realm counties")]
+        [Description("Everything this ruler's realm contains, demesne and vassals together.")]
+        [ReadOnly(true)]
+        public string RealmCounties => Seat is { } s ? realm!.RealmSize(s).ToString() : "—";
+
+        [Category("Realm (de facto)")]
+        [DisplayName("Demesne")]
+        [Description("Counties this ruler holds personally rather than through a vassal.")]
+        [ReadOnly(true)]
+        public string Demesne => Seat is { } s ? realm!.Demesne(s).Count.ToString() : "—";
+
         [Category("Identity")]
         [Description("The name shown in game. Renaming rewrites the localisation; the title's key "
                      + "is left alone, so nothing that references this title breaks.")]

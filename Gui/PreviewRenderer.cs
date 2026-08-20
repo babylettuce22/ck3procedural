@@ -337,9 +337,69 @@ public static class PreviewRenderer
         return primaryOf.GetValueOrDefault(seat, seat);
     }
 
-    private static Image RenderByCounty(GenerationResult result, MapGen.WildernessMap? wilderness,
-        Func<Title, (byte R, byte G, byte B)?> colourOf)
+    /// <summary>
+    /// The realms view focused on one ruler: their realm painted by its structure, the rest of the
+    /// world receding to grey.
+    ///
+    /// Inside the focused realm, each direct vassal's subtree wears that vassal's primary-title
+    /// colour — the next level of the hierarchy down, exactly what a click on the unfocused view
+    /// was showing one level up. The ruler's personal demesne is their own colour lifted toward
+    /// white, so "held directly" and "held through a vassal" separate at a glance. Everything
+    /// outside keeps a ghost of its realm colour rather than flat grey, because the question a
+    /// focus answers is "what is this realm made of", and answering it while erasing where the
+    /// realm *sits* would throw away the context that makes the answer readable.
+    /// </summary>
+    public static Image RenderRealmsFocused(GenerationResult result, RealmGraph graph,
+        MapGen.WildernessMap? wilderness, Title focusSeat)
     {
+        var focusColour = graph.Primary(focusSeat).Color;
+
+        // Wilderness recedes with the rest of the unfocused world — at its usual orange it would
+        // be the loudest thing on a frame whose whole point is that one realm is loudest.
+        return RenderByCounty(result, wilderness, wildColour: Dim(168, 120, 48), colourOf: county =>
+        {
+            var seat = graph.SeatOfCounty(county);
+            var path = graph.PathFromTop(seat);
+
+            int at = -1;
+            for (int i = 0; i < path.Count; i++)
+            {
+                if (path[i] == focusSeat) { at = i; break; }
+            }
+
+            if (at < 0)
+            {
+                // Outside the focused realm: its own realm colour, three quarters of the way to grey.
+                var (r, g, b) = graph.Primary(path[0]).Color;
+                return Dim(r, g, b);
+            }
+
+            if (at == path.Count - 1)
+            {
+                // The focused ruler's own demesne.
+                return Lift(focusColour.R, focusColour.G, focusColour.B);
+            }
+
+            return graph.Primary(path[at + 1]).Color;
+        });
+
+        static (byte, byte, byte) Dim(byte r, byte g, byte b)
+        {
+            byte grey = 84;
+            return ((byte)(grey + (r - grey) / 4), (byte)(grey + (g - grey) / 4),
+                    (byte)(grey + (b - grey) / 4));
+        }
+
+        static (byte, byte, byte) Lift(byte r, byte g, byte b)
+            => ((byte)(r + (255 - r) / 3), (byte)(g + (255 - g) / 3), (byte)(b + (255 - b) / 3));
+    }
+
+    private static Image RenderByCounty(GenerationResult result, MapGen.WildernessMap? wilderness,
+        Func<Title, (byte R, byte G, byte B)?> colourOf,
+        (byte R, byte G, byte B)? wildColour = null)
+    {
+        var wildTint = wildColour ?? ((byte)168, (byte)120, (byte)48);
+
         var map = result.Provinces;
         var order = result.ProvinceOrder;
         int width = map.Width, height = map.Height;
@@ -391,7 +451,7 @@ public static class PreviewRenderer
                 if (c == Impassable) return ((byte)92, (byte)92, (byte)100);
                 if (c == NoCounty) return ((byte)255, (byte)0, (byte)255);
                 if (Edge(i, c)) return ((byte)22, (byte)24, (byte)28);
-                return wild[c] ? ((byte)168, (byte)120, (byte)48) : colour[c];
+                return wild[c] ? wildTint : colour[c];
             },
             i =>
             {

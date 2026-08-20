@@ -1016,6 +1016,11 @@ public sealed class MainForm : Form
                 RequestCancel();
                 return true;
 
+            case Keys.Escape when _view == "Realms" && _realmFocus.Count > 0:
+                _realmFocus.RemoveAt(_realmFocus.Count - 1);
+                SelectView("Realms");
+                return true;
+
             case Keys.Oem4 when !TypingInText():   // [
                 CycleMode(-1);
                 return true;
@@ -1654,13 +1659,49 @@ public sealed class MainForm : Form
         _result = result;
         _probeBaronies = null;
 
+        _realmGraph = null;
+        _realmGraphBuilt = false;
+        _realmFocus.Clear();
+
         _edits.Detach();
 
         _viewer.SetImage(null);
         foreach (var bitmap in _rendered.Values) bitmap.Dispose();
         _rendered.Clear();
 
+        _focusFrame?.Dispose();
+        _focusFrame = null;
+
         SelectView(_view);
+    }
+
+    // --- Realm navigation -----------------------------------------------------------------------
+
+    private RealmGraph? _realmGraph;
+    private bool _realmGraphBuilt;
+
+    /// <summary>
+    /// The seats the user has drilled into on the Realms view, top realm first. Empty means the
+    /// unfocused world view. Cleared with every new result — the seats are Title references into
+    /// the written world, and a rebuild replaces that world wholesale.
+    /// </summary>
+    private readonly List<MapGen.Title> _realmFocus = [];
+
+    /// <summary>The last focused-realm frame, owned here because it bypasses the render cache.</summary>
+    private Bitmap? _focusFrame;
+
+    private RealmGraph? Realm
+    {
+        get
+        {
+            if (!_realmGraphBuilt && _result is not null)
+            {
+                _realmGraph = RealmGraph.Build(_written, _result);
+                _realmGraphBuilt = true;
+            }
+
+            return _realmGraph;
+        }
     }
 
     private void SelectView(string name)
@@ -1695,23 +1736,42 @@ public sealed class MainForm : Form
             {
                 MapPick.Culture => "Click a county to inspect and edit its culture",
                 MapPick.Faith => "Click a county to inspect and edit its faith",
+                MapPick.Realm => "Click a realm to focus it · Ctrl+click for the county · Esc steps back",
                 _ => $"Click a {TierWord(pick.Tier)} to inspect and edit it",
             };
         }
 
+        // Disposed at the end, after the viewer holds its replacement — never before SetImage,
+        // for the same stale-paint crash the progressive preview's dispose-last comment explains.
+        var oldFocus = _focusFrame;
+        _focusFrame = null;
+
         if (_result is null && !_rendered.ContainsKey(mode.Name))
         {
             _viewer.SetImage(null);
+            oldFocus?.Dispose();
             return;
         }
 
-        if (!_rendered.TryGetValue(mode.Name, out var bitmap) && _result is not null)
+        Bitmap? bitmap;
+        if (mode.Name == "Realms" && _realmFocus.Count > 0 && Realm is { } graph && _result is not null)
+        {
+            // Focused frames bypass the render cache: they are ~100 ms to draw and keyed by a
+            // whole focus stack, and a cache the edit-invalidation would have to understand is a
+            // worse deal than just drawing.
+            using (new WaitCursorFor(this))
+                bitmap = ToBitmap(PreviewRenderer.RenderRealmsFocused(
+                    _result, graph, _written?.Wilderness, _realmFocus[^1]));
+            _focusFrame = bitmap;
+        }
+        else if (!_rendered.TryGetValue(mode.Name, out bitmap) && _result is not null)
         {
             using (new WaitCursorFor(this)) bitmap = ToBitmap(mode.Render(_result, _written));
             _rendered[mode.Name] = bitmap;
         }
 
         _viewer.SetImage(bitmap);
+        oldFocus?.Dispose();
         ShowReadout(_viewer.Zoom, null);
     }
 
@@ -1755,7 +1815,12 @@ public sealed class MainForm : Form
             button.FlatAppearance.MouseOverBackColor = on ? Theme.Accent : Theme.Border;
 
             _tips.SetToolTip(button, available
-                ? mode.Clickable ? "Click the map in this mode to inspect and edit" : null
+                ? mode.Pick?.Kind switch
+                {
+                    MapPick.Realm => "Click a realm to focus and drill into it — Ctrl+click for the county",
+                    not null => "Click the map in this mode to inspect and edit",
+                    null => null,
+                }
                 : "Shows written content — available after Write mod");
 
             _modeStrip.Controls.Add(button);
@@ -1794,8 +1859,63 @@ public sealed class MainForm : Form
             }
         }
 
-        _legendBar.Visible = mode.Legend is not null;
+        // The Realms drill-down borrows this bar for its breadcrumb — the mode has no legend, and
+        // a second bar that exists for one mode would spend height on every other one.
+        bool breadcrumb = mode.Name == "Realms" && _realmFocus.Count > 0 && Realm is { } graph;
+        if (breadcrumb)
+        {
+            AddCrumb("World", 0);
+
+            for (int i = 0; i < _realmFocus.Count; i++)
+            {
+                _legendBar.Controls.Add(new Label
+                {
+                    Text = "▸",
+                    AutoSize = true,
+                    Font = Theme.Ui,
+                    ForeColor = Theme.TextDim,
+                    Margin = new Padding(2, 3, 2, 0),
+                });
+
+                var primary = Realm!.Primary(_realmFocus[i]);
+                AddCrumb($"{TitleInspector.TierName(primary)} {primary.Name}", i + 1);
+            }
+
+            _legendBar.Controls.Add(new Label
+            {
+                Text = "   Esc steps back · Ctrl+click opens the county",
+                AutoSize = true,
+                Font = Theme.Ui,
+                ForeColor = Theme.TextDim,
+                Margin = new Padding(12, 3, 0, 0),
+            });
+        }
+
+        _legendBar.Visible = mode.Legend is not null || breadcrumb;
         _legendBar.ResumeLayout();
+
+        void AddCrumb(string text, int keep)
+        {
+            var link = new Label
+            {
+                Text = text,
+                AutoSize = true,
+                Font = keep == _realmFocus.Count ? Theme.UiBold : Theme.Ui,
+                ForeColor = Theme.Text,
+                Cursor = Cursors.Hand,
+                Margin = new Padding(2, 3, 2, 0),
+            };
+            link.Click += (_, _) => SetRealmFocusDepth(keep);
+            _legendBar.Controls.Add(link);
+        }
+    }
+
+    /// <summary>Truncates the drill-down to a breadcrumb level and repaints. Zero is the world.</summary>
+    private void SetRealmFocusDepth(int keep)
+    {
+        if (_realmFocus.Count <= keep) return;
+        _realmFocus.RemoveRange(keep, _realmFocus.Count - keep);
+        SelectView("Realms");
     }
 
     private void PickTitleAt(Point pixel)
@@ -1826,6 +1946,17 @@ public sealed class MainForm : Form
 
         switch (view.Kind)
         {
+            // The colours on the Realms view are whole de facto realms, so a plain click resolves
+            // to the realm and drills; the county under the cursor stays reachable with Ctrl held.
+            case MapPick.Realm when ModifierKeys.HasFlag(Keys.Control) || Realm is null:
+                _titles.Reveal(title);
+                _status.Text = $"{TitleInspector.TierName(title)} {title.Name}";
+                break;
+
+            case MapPick.Realm:
+                PickRealm(title);
+                break;
+
             case MapPick.Title:
                 _titles.Reveal(title);
                 _status.Text = $"{TitleInspector.TierName(title)} {title.Name}";
@@ -1843,6 +1974,75 @@ public sealed class MainForm : Form
                 _status.Text = $"Faith {faith.Name} — {title.Name}";
                 break;
         }
+    }
+
+    /// <summary>
+    /// One click's worth of realm drilling, given the county under the cursor.
+    ///
+    /// Unfocused, a click focuses the whole realm the county belongs to. Focused, a click inside
+    /// the realm descends one structural level toward the clicked county — into the direct vassal
+    /// whose subtree it sits in — until it lands on the focused ruler's own demesne, where the only
+    /// thing left to open is the county itself. A click outside the focused realm steps back out
+    /// one level, which together with Esc makes the drill reversible from either hand.
+    /// </summary>
+    private void PickRealm(MapGen.Title county)
+    {
+        var graph = Realm!;
+        var path = graph.PathFromTop(graph.SeatOfCounty(county));
+
+        if (_realmFocus.Count == 0)
+        {
+            _realmFocus.Add(path[0]);
+            InspectRealm(path[0]);
+        }
+        else
+        {
+            int at = -1;
+            for (int i = 0; i < path.Count; i++)
+            {
+                if (path[i] == _realmFocus[^1]) { at = i; break; }
+            }
+
+            if (at < 0)
+            {
+                _realmFocus.RemoveAt(_realmFocus.Count - 1);
+                if (_realmFocus.Count > 0) InspectRealm(_realmFocus[^1]);
+                else _status.Text = "Back to all realms";
+            }
+            else if (at < path.Count - 1)
+            {
+                _realmFocus.Add(path[at + 1]);
+                InspectRealm(path[at + 1]);
+            }
+            else
+            {
+                _titles.Reveal(county);
+                _status.Text =
+                    $"Demesne of {graph.Primary(path[at]).Name} — county {county.Name}";
+            }
+        }
+
+        SelectView("Realms");
+    }
+
+    private void InspectRealm(MapGen.Title seat)
+    {
+        var graph = Realm!;
+        var primary = graph.Primary(seat);
+
+        Inspect([primary]);
+        _status.Text = $"{TitleInspector.TierName(primary)} {primary.Name} — " +
+                       $"{graph.RealmSize(seat)} counties, {graph.VassalSeats(seat).Count} direct vassals";
+    }
+
+    /// <summary>The inspector's "focus map" path: jump the Realms view straight to this ruler.</summary>
+    private void FocusRealmOnMap(MapGen.Title seat)
+    {
+        if (Realm is not { } graph) return;
+
+        _realmFocus.Clear();
+        _realmFocus.AddRange(graph.PathFromTop(seat));
+        SelectView("Realms");
     }
 
     private readonly Dictionary<Type, InspectorForm> _inspectors = [];
@@ -1863,11 +2063,16 @@ public sealed class MainForm : Form
             };
 
             inspector.Navigate += Inspect;
+            if (inspector is TitleInspector created) created.FocusRealm += FocusRealmOnMap;
             _inspectors[kind] = inspector;
 
             inspector.Show(this);
             PlaceInspector(inspector);
         }
+
+        // Refreshed on every visit rather than at creation: the graph is rebuilt with each write,
+        // and the window outlives many of them.
+        if (inspector is TitleInspector titles) titles.Realm = Realm;
 
         inspector.Inspect(targets);
 
@@ -1988,7 +2193,10 @@ public sealed class MainForm : Form
     /// </summary>
     private string Probe(Point pixel)
     {
-        if (_result is null || !_rendered.TryGetValue(_view, out var bitmap)) return "";
+        // The focused-realm frame bypasses the render cache, so the size lookup has to as well.
+        var bitmap = _focusFrame
+                     ?? (_rendered.TryGetValue(_view, out var cached) ? cached : null);
+        if (_result is null || bitmap is null) return "";
 
         var map = _result.Provinces;
         int mx = Math.Clamp(pixel.X * map.Width / Math.Max(1, bitmap.Width), 0, map.Width - 1);
@@ -2030,6 +2238,19 @@ public sealed class MainForm : Form
             && probe(_result, _written, cell, county) is { } extra)
         {
             place = $"{place} · {extra}";
+        }
+
+        // The realm line lives here rather than in the registry because it needs the graph, which
+        // is this form's to build and invalidate.
+        if (_view == "Realms" && county is not null && Realm is { } graph)
+        {
+            var holder = graph.Primary(graph.SeatOfCounty(county));
+            var top = graph.Primary(graph.PathFromTop(graph.SeatOfCounty(county))[0]);
+
+            place = holder == top
+                ? $"{place} · {TitleInspector.TierName(top)} {top.Name}"
+                : $"{place} · {TitleInspector.TierName(top)} {top.Name} · " +
+                  $"held by {TitleInspector.TierName(holder)} {holder.Name}";
         }
 
         return place;

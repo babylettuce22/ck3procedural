@@ -4,7 +4,7 @@ using Ck3MapGen.MapGen;
 namespace Ck3MapGen.Gui;
 
 /// <summary>What a click on the map picks in an editable mode.</summary>
-public enum MapPick { Title, Culture, Faith }
+public enum MapPick { Title, Culture, Faith, Realm }
 
 /// <summary>
 /// One map mode: how it renders, where it lives in the strip, whether a click edits something,
@@ -59,7 +59,7 @@ public static class MapModes
     /// <summary>Does a pending edit of these aspects change what this pick kind paints?</summary>
     public static bool Repaints(MapPick kind, Emit.WorldAspect touched) => kind switch
     {
-        MapPick.Title => touched.HasFlag(Emit.WorldAspect.TitleColors),
+        MapPick.Title or MapPick.Realm => touched.HasFlag(Emit.WorldAspect.TitleColors),
         MapPick.Culture => touched.HasFlag(Emit.WorldAspect.Cultures),
         _ => touched.HasFlag(Emit.WorldAspect.Faiths),
     };
@@ -137,7 +137,10 @@ public static class MapModes
         new("Realms", "World", (r, w) => PreviewRenderer.RenderRealms(r, w?.Realms, w?.Wilderness))
         {
             AfterWrite = true,
-            Pick = (MapPick.Title, "c"),
+            // Realm, not Title: the colours show whole de facto realms, so a click resolves to the
+            // realm too, and drills from there. The county underneath stays a Ctrl+click away.
+            // MainForm owns the focus stack this drives; the probe lives there too, beside it.
+            Pick = (MapPick.Realm, "c"),
         },
         new("Cultures", "World", (r, w) => PreviewRenderer.RenderCultures(r, w?.Cultures, w?.Wilderness))
         {
