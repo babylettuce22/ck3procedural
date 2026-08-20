@@ -1,0 +1,94 @@
+﻿# Renders the wilderness dummy holder as nothing at all.
+#
+# The dummy is a bookkeeping device that has to be a character, and CK3 draws a face for it in every
+# window, map tooltip and character list it appears in. Emit/GuiWriter.cs blanks the two windows it
+# can reach; this is what covers everywhere else, because it works on the MODEL rather than the UI.
+#
+# This is vanilla's own mechanism, not a trick. `gene_bs_body_type` ships a `no_portrait` template
+# whose two attributes -- bs_no_portrait and bs_body_no_portrait, both pinned to 1.0 -- tell the
+# renderer to draw no head and no body. Paradox uses it for exactly one character, the Prophet, in
+# gfx/portraits/portrait_modifiers/99_special.txt, and the recipe below is that block with its
+# character check swapped for the wilderness trait. Following it matters: a portrait that is merely
+# hidden still lights the model, and the accessory lines are what stop a set of floating clothes.
+#
+# **Structure is load-bearing.** A portrait_modifiers file is TWO levels deep -- an outer GROUP
+# carrying `usage`, then named modifiers inside it carrying `dna_modifiers` and `weight`. An earlier
+# version of this file put dna_modifiers and weight directly on the outer block, which parses
+# cleanly as a group containing no modifiers: no error from the game, none from ck3-tiger, and no
+# effect whatsoever. If the portrait comes back, check the nesting here before anything else.
+#
+# **Do not reach for a custom gene.** This previously lived in a hand-written
+# common/genes/wilderness_genes.txt that moved the model 50 units below the camera. CK3 1.19 rejects
+# that file outright -- manual gene indices are refused (genedatabase.cpp:105), and
+# `root = { position = ... }` is not morph-template syntax and appears nowhere in vanilla's genes --
+# while still registering the gene far enough to demand an entry in every vanilla DNA record, which
+# is 440 errors per load. Everything below uses stock genes and stock templates only.
+
+wilderness_hidden_portrait = {
+
+	usage = game
+	selection_behavior = weighted_random
+	priority = 9999
+
+	wilderness_no_portrait = {
+		dna_modifiers = {
+			# The two that do the actual work: no body, no face.
+			morph = {
+				mode = replace
+				gene = gene_bs_body_type
+				template = no_portrait
+				value = 1.0
+			}
+			morph = {
+				mode = replace
+				gene = complexion
+				template = complexion_no_face
+				value = 1.0
+			}
+
+			# Accessories are meshes rather than morphs, so they are not covered by no_portrait and
+			# would otherwise be left hanging in the air where the character used to be.
+			accessory = {
+				mode = add
+				gene = clothes
+				template = no_clothes
+				value = 0
+			}
+			accessory = {
+				mode = add
+				gene = hairstyles
+				template = no_hairstyles
+				value = 0
+			}
+			accessory = {
+				mode = add
+				gene = beards
+				template = no_beard
+				value = 0
+			}
+			accessory = {
+				mode = add
+				gene = headgear
+				template = no_headgear
+				value = 0
+			}
+			accessory = {
+				mode = add
+				gene = cloaks
+				template = no_cloak
+				value = 0
+			}
+		}
+
+		# `exists = this` guards the trait check: this weight is evaluated for portraits that have no
+		# character behind them, and has_trait on nothing is an error rather than a no.
+		weight = {
+			base = 0
+			modifier = {
+				add = 999
+				exists = this
+				has_trait = wilderness
+			}
+		}
+	}
+}

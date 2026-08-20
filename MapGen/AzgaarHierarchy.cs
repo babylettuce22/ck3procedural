@@ -194,7 +194,10 @@ public static class AzgaarHierarchy
         }
         azgaar.SetStateTitles(stateTitles);
 
+        // Generated colours first, so every title has one; the export then overrides the tier it
+        // actually has an opinion about and reshades what hangs below it.
         Titles.AssignColorsTo(current, rng);
+        AzgaarColors.Apply(current, azgaar, rng);
 
         int kingdoms = Titles.Flatten(current).Count(t => t.Tier == "k");
         int duchies = Titles.Flatten(current).Count(t => t.Tier == "d");

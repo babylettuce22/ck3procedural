@@ -49,7 +49,10 @@ public sealed class GovernmentMap
 
     public static string CapitalHolding(string government) => government switch
     {
-        Tribal or Nomad => "tribal_holding",
+        // nomad_government declares primary_holding = nomad_holding and requires one in every
+        // county it holds; a tribal seat is not a seat it can sit in.
+        Nomad => "nomad_holding",
+        Tribal => "tribal_holding",
         Republic => "city_holding",
         Theocracy => "church_holding",
         _ => "castle_holding",

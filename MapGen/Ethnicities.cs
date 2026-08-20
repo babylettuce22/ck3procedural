@@ -594,7 +594,7 @@ public static class Ethnicities
         {
             case RaceArchetype.HighElf:
                 AddGene(def, "gene_height", "normal_height", 0.65f, 0.7f);
-                AddGene(def, "gene_bs_body_type", "body_shape_average", 0.10f, 0.35f);
+                AddGene(def, "gene_bs_body_type", "body_average", 0.10f, 0.35f);
                 AddGene(def, "gene_neck_length", "neck_length_pos", 0.65f, 0.90f);
                 AddGene(def, "gene_neck_width", "neck_width_neg", 0.20f, 0.40f);
                 AddGene(def, "gene_bs_ear_angle", "ear_angle_pos", 0.80f, 1.0f);
@@ -606,28 +606,34 @@ public static class Ethnicities
                 AddGene(def, "gene_chin_width", "chin_width_neg", 0.20f, 0.40f);
                 AddGene(def, "gene_chin_forward", "chin_forward_pos", 0.45f, 0.65f);
                 AddGene(def, "gene_bs_nose_length", "nose_length_pos", 0.35f, 0.55f);
-                AddGene(def, "gene_bs_nose_profile", "nose_profile_straight", 0.40f, 0.70f);
+                // gene_bs_nose_profile has no "straight" template — only _neg, _pos, and the two
+                // hawk variants — so the straight elven nose has to be expressed as a low value on
+                // _pos rather than as a template of its own. Range narrowed from 0.40-0.70 to keep
+                // it near the neutral end, which is what "straight" meant here.
+                AddGene(def, "gene_bs_nose_profile", "nose_profile_pos", 0.15f, 0.35f);
                 break;
 
             case RaceArchetype.WoodElf:
                 AddGene(def, "gene_height", "normal_height", 0.60f, 0.65f);
-                AddGene(def, "gene_bs_body_type", "body_shape_average", 0.20f, 0.45f);
+                AddGene(def, "gene_bs_body_type", "body_average", 0.20f, 0.45f);
                 AddGene(def, "gene_neck_length", "neck_length_pos", 0.50f, 0.75f);
                 AddGene(def, "gene_bs_ear_angle", "ear_angle_pos", 0.70f, 0.95f);
                 AddGene(def, "gene_bs_ear_bend", "ear_both_bend_pos", 0.75f, 0.95f);
                 AddGene(def, "gene_bs_ear_outward", "ear_outward_pos", 0.55f, 0.85f);
+                // Slanted eyes come from gene_eye_angle alone. There is no gene_bs_eye_slant in
+                // vanilla — nothing matching "slant" exists at all — and the second call this line
+                // replaces would have been a duplicate block on gene_eye_angle even if it did.
                 AddGene(def, "gene_eye_angle", "eye_angle_pos", 0.60f, 0.85f);
-                AddGene(def, "gene_bs_eye_slant", "eye_slant_pos", 0.55f, 0.80f);
                 AddGene(def, "gene_jaw_width", "jaw_width_neg", 0.25f, 0.45f);
                 AddGene(def, "gene_bs_nose_ridge_angle", "nose_ridge_angle_pos", 0.45f, 0.70f);
                 break;
 
             case RaceArchetype.Dwarf:
                 AddGene(def, "gene_height", "normal_height", 0.02f, 0.10f);
-                AddGene(def, "gene_bs_body_type", "body_shape_average", 0.70f, 0.95f);
+                AddGene(def, "gene_bs_body_type", "body_average", 0.70f, 0.95f);
                 AddGene(def, "gene_neck_width", "neck_width_pos", 0.80f, 1.0f);
                 AddGene(def, "gene_neck_length", "neck_length_neg", 0.10f, 0.35f);
-                AddGene(def, "gene_bs_head_width_pos", "head_width_pos", 0.70f, 0.95f);
+                AddGene(def, "gene_head_width", "head_width_pos", 0.70f, 0.95f);
                 AddGene(def, "gene_jaw_width", "jaw_width_pos", 0.75f, 1.0f);
                 AddGene(def, "gene_jaw_forward", "jaw_forward_pos", 0.55f, 0.85f);
                 AddGene(def, "gene_chin_width", "chin_width_pos", 0.70f, 0.95f);
@@ -638,19 +644,19 @@ public static class Ethnicities
 
             case RaceArchetype.Orc:
                 AddGene(def, "gene_height", "normal_height", 0.65f, 0.90f);
-                AddGene(def, "gene_bs_body_type", "body_shape_average", 0.75f, 1.0f);
+                AddGene(def, "gene_bs_body_type", "body_average", 0.75f, 1.0f);
                 AddGene(def, "gene_neck_width", "neck_width_pos", 0.75f, 1.0f);
                 AddGene(def, "gene_jaw_width", "jaw_width_pos", 0.70f, 1.0f);
                 AddGene(def, "gene_jaw_forward", "jaw_forward_pos", 0.65f, 0.95f);
                 AddGene(def, "gene_mouth_forward", "mouth_forward_pos", 0.65f, 0.95f);
-                AddGene(def, "gene_bs_mouth_lower_lip_size", "mouth_lower_lip_size_pos", 0.60f, 0.90f);
+                AddGene(def, "gene_mouth_lower_lip_size", "mouth_lower_lip_size_pos", 0.60f, 0.90f);
                 AddGene(def, "gene_bs_forehead_brow_forward", "forehead_brow_forward_pos", 0.75f, 1.0f);
                 AddGene(def, "gene_bs_ear_angle", "ear_angle_pos", 0.65f, 0.90f);
                 break;
 
             case RaceArchetype.Gnome:
                 AddGene(def, "gene_height", "normal_height", 0.05f, 0.25f);
-                AddGene(def, "gene_bs_body_type", "body_shape_average", 0.05f, 0.30f);
+                AddGene(def, "gene_bs_body_type", "body_average", 0.05f, 0.30f);
                 AddGene(def, "gene_neck_length", "neck_length_pos", 0.55f, 0.80f);
                 AddGene(def, "gene_bs_ear_size", "ear_size_pos", 0.80f, 1.0f);
                 AddGene(def, "gene_bs_ear_outward", "ear_outward_pos", 0.80f, 1.0f);
@@ -663,7 +669,7 @@ public static class Ethnicities
 
             case RaceArchetype.Giantkin:
                 AddGene(def, "gene_height", "normal_height", 0.94f, 1.0f);
-                AddGene(def, "gene_bs_body_type", "body_shape_average", 0.80f, 1.0f);
+                AddGene(def, "gene_bs_body_type", "body_average", 0.80f, 1.0f);
                 AddGene(def, "gene_neck_width", "neck_width_pos", 0.85f, 1.0f);
                 AddGene(def, "gene_jaw_width", "jaw_width_pos", 0.75f, 1.0f);
                 AddGene(def, "gene_chin_width", "chin_width_pos", 0.70f, 0.95f);
@@ -672,7 +678,7 @@ public static class Ethnicities
 
             case RaceArchetype.Deepkin:
                 AddGene(def, "gene_height", "normal_height", 0.45f, 0.60f);
-                AddGene(def, "gene_bs_body_type", "body_shape_average", 0.05f, 0.25f);
+                AddGene(def, "gene_bs_body_type", "body_average", 0.05f, 0.25f);
                 AddGene(def, "gene_neck_length", "neck_length_pos", 0.60f, 0.85f);
                 AddGene(def, "gene_neck_width", "neck_width_neg", 0.15f, 0.35f);
                 AddGene(def, "gene_bs_ear_angle", "ear_angle_pos", 0.75f, 1.0f);
@@ -681,7 +687,7 @@ public static class Ethnicities
                 AddGene(def, "gene_bs_cheek_forward", "cheek_forward_pos", 0.70f, 0.95f);
                 AddGene(def, "gene_bs_cheek_height", "cheek_height_pos", 0.65f, 0.90f);
                 AddGene(def, "gene_eye_depth", "eye_depth_pos", 0.60f, 0.85f);
-                AddGene(def, "gene_bs_eye_slant", "eye_slant_pos", 0.60f, 0.85f);
+                AddGene(def, "gene_eye_angle", "eye_angle_pos", 0.60f, 0.85f);
                 AddGene(def, "gene_jaw_width", "jaw_width_neg", 0.10f, 0.30f);
                 AddGene(def, "gene_chin_width", "chin_width_neg", 0.15f, 0.35f);
                 AddGene(def, "gene_bs_nose_length", "nose_length_neg", 0.30f, 0.50f);
@@ -698,7 +704,7 @@ public static class Ethnicities
             default:
                 AddGene(def, "gene_height", "normal_height", 0.35f, 0.65f);
                 AddGene(def, "gene_jaw_width", "jaw_width_pos", 0.35f, 0.65f);
-                AddGene(def, "gene_bs_body_type", "body_shape_average", 0.30f, 0.70f);
+                AddGene(def, "gene_bs_body_type", "body_average", 0.30f, 0.70f);
                 break;
         }
     }
@@ -843,6 +849,29 @@ public static class Ethnicities
         }
     }
 
+    /// <summary>
+    /// Per-race and per-family hair and beard weights.
+    ///
+    /// **Currently emitted nowhere.** An ethnicity cannot set `hairstyles` or `beards` — CK3 rejects
+    /// the block rather than honouring it, and no vanilla ethnicity declares one — so
+    /// <see cref="Emit.EthnicityWriter"/> deliberately skips <c>AccessoryGenes</c> and explains why
+    /// at the point it skips them. Kept because the intent is real and the weights are the work; the
+    /// legal home for them is a portrait_modifier group, which does not exist yet.
+    ///
+    /// **It is not ready to move as-is.** 16 of the 24 template names below do not exist in vanilla.
+    /// Only `no_beard` and seven of the `*_hairstyles_*` keys are real; validate against
+    /// `game/common/genes/0{2,3,4}_genes_*accessories*.txt` before relying on any of them.
+    ///
+    /// The beards are the harder half, and renaming will not fix them. Vanilla beard templates vary
+    /// only by TEXTURE — `<region>_beards_straight`, `_curly`, plus `sub_saharan_beards_afro` — and
+    /// each is a group of many meshes. There is no `_full`, `_goatee`, `_trim`, `_stubble`,
+    /// `_clean_shaven` or `_mustache`, and no template-level notion of beard style at all; `no_beard`
+    /// is the only style control the gene offers. So the intent here — a different beard SHAPE per
+    /// race — cannot be expressed through this gene, and re-homing it means picking a different
+    /// mechanism, not correcting these strings. Hairstyles follow the same
+    /// `<region>_hairstyles_{straight,wavy,curly,afro}` convention, so those do map cleanly:
+    /// `african_*` wants `sub_saharan_*`, and `fp1_norse_*` wants `northern_*`.
+    /// </summary>
     private static void ApplyAccessoryGenes(EthnicityDef def, RaceArchetype archetype, string family)
     {
         switch (archetype)

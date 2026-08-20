@@ -68,7 +68,19 @@ public static class GuiWriter
             ("using = Window_Background_Sidebar", "placeholder", TitlePlaceholder),
         ]),
 
-    // REMOVED frontend_main.gui TARGET HERE
+    // No target for gui/shared/portraits.gui, deliberately.
+    //
+    // Inserting a `visible` after `pop_out = no` — the first line of `template portrait_base`, which
+    // every portrait widget in the game uses — would hide the dummy's portrait everywhere in one
+    // edit, and the anchor is still unique in 1.19 with `Character` already in datacontext. It is
+    // not needed: the dummy renders as nothing at the MODEL level via the no_portrait morph in
+    // BaseFilesToCopy/Wilderness/gfx/portraits/portrait_modifiers, which is vanilla's own mechanism
+    // and costs no override of a 3,300-line vanilla file.
+    //
+    // Keep it in reserve rather than in the build. It is the answer if an empty portrait FRAME on
+    // map hover is still too much, but it carries a risk this writer cannot check: a `visible` set
+    // in a template is overridden by one set at the use site, so coverage would be partial in a way
+    // that is invisible from here, and a mistake takes every portrait in the game with it.
 ];
     private static string Placeholder(string text, params string[] onclick) => $$"""
         widget = {

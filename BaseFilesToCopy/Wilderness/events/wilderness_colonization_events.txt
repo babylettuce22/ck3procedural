@@ -1278,6 +1278,13 @@ wilderness_colonization.0012 = {
 				}
 			}
 		}
+
+		# Where the typed text goes. Every text widget in the game declares this and the controller
+		# writes to it by name — drop it and the box still renders, still accepts typing, and
+		# stores nothing, which reads downstream as an empty name and leaves the title alone.
+		setup_scope = {
+			root = { save_scope_as = text_target }
+		}
 	}
 
 	immediate = {
@@ -1372,9 +1379,8 @@ wilderness_colonization.0012 = {
 		custom_tooltip = colonize_grant_to_leader_tt
 	}
 
-	# Runs whichever option was taken, and after option B has already handed the county over — a
-	# title can be renamed by anyone, holder or not. `set_title_name_dynamic` resolves the loc key
-	# once, right here, and stores the resulting string on the title; the key itself is not kept.
+	# Runs whichever option was taken. `set_title_name_dynamic` resolves the loc key once, right
+	# here, and stores the resulting string on the title; the key itself is not kept afterwards.
 	#
 	# The capital barony gets the same name because it is what the map labels at close zoom, and
 	# `colonize_county_effect` has already guaranteed it is the only holding in the county.

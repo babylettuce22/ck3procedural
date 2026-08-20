@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.Windows.Forms.Design;
 
 namespace Ck3MapGen.Config;
 
@@ -42,6 +43,28 @@ public sealed class AzgaarIncompatAttribute(string reason, bool overridden = tru
     /// needs to be able to turn the thing off.
     /// </summary>
     public bool Overridden { get; } = overridden;
+}
+
+/// <summary>
+/// The file picker behind <see cref="MapConfig.AzgaarJsonPath"/>.
+///
+/// The stock <see cref="FileNameEditor"/> opens with no filter at all, so the dialog lands in a
+/// folder that also holds the heightmap PNG the same export produced - and the two files are
+/// interchangeable to the eye and not at all to the loader. Naming the extension is the whole of
+/// this class: Azgaar's other menu entries export .svg and .map, neither of which parses here, and
+/// finding that out costs a run.
+///
+/// "All files" stays on the list, because a user who has renamed their export is better served by a
+/// dialog that will still show it than by one that is certain it knows better.
+/// </summary>
+public sealed class AzgaarJsonFileEditor : FileNameEditor
+{
+    protected override void InitializeDialog(OpenFileDialog openFileDialog)
+    {
+        base.InitializeDialog(openFileDialog);
+        openFileDialog.Title = "Choose an Azgaar 'Full' JSON export";
+        openFileDialog.Filter = "Azgaar export (*.json)|*.json|All files (*.*)|*.*";
+    }
 }
 
 /// <summary>
@@ -110,10 +133,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Description("Optional. An Azgaar 'Full' JSON export (Menu > Save/Load > Export to JSON > Full) " +
                  "to take names from. Leave empty to generate every name as usual. Use together " +
                  "with a heightmap exported from the same map and the same unzoomed view.")]
-    [System.ComponentModel.Editor(
-        "System.Windows.Forms.Design.FileNameEditor, System.Design, Version=4.0.0.0, " +
-        "Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a",
-        typeof(System.Drawing.Design.UITypeEditor))]
+    [Editor(typeof(AzgaarJsonFileEditor), typeof(System.Drawing.Design.UITypeEditor))]
     public string AzgaarJsonPath { get; set; } = "";
 
 

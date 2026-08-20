@@ -19,7 +19,12 @@ public static class HistoryWriter
         var all = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
         if (all.Count == 0) return;
 
-        var counties = all.Where(c => !wilderness.Contains(c)).ToList();
+        // One character per RULER, not per county. The two used to be the same thing — every county
+        // held itself — but a liege's personal demesne now covers several counties under one man,
+        // and writing a count for each of them would put a landless stranger beside every lord.
+        var rulers = realms.HolderCounty.Values.ToHashSet();
+
+        var counties = all.Where(c => !wilderness.Contains(c) && rulers.Contains(c)).ToList();
         var wild = all.Where(wilderness.Contains).ToList();
 
         if (counties.Count == 0) return;
@@ -174,6 +179,13 @@ public static class HistoryWriter
             sb.Append("}\n\n");
         }
 
+        // Which rulers actually have someone answering to them. Only they need the standing that
+        // holds a court together, and writing it for a lone count would just be free stats.
+        var liegeCounties = realms.Liege.Values
+            .Select(t => realms.HolderCounty.GetValueOrDefault(t))
+            .Where(c => c is not null)
+            .ToHashSet();
+
         // =========================================================================
         // 3. Living Rulers — Chronological timeline of wedding, alliances, and rivals
         // =========================================================================
@@ -291,6 +303,19 @@ public static class HistoryWriter
                 }
             }
 
+            // --- Sworn Blood Brothers (nomad khans and their anda) ---
+            if (prehistory.BloodBrothers.TryGetValue(county, out var bloodBrothers))
+            {
+                foreach (var brother in bloodBrothers)
+                {
+                    sb.Append($"\t{brother.Date} = {{\n");
+                    sb.Append("\t\teffect = {\n");
+                    sb.Append($"\t\t\tset_relation_blood_brother = character:{CharacterId(brother.TargetCounty)}\n");
+                    sb.Append("\t\t}\n");
+                    sb.Append("\t}\n");
+                }
+            }
+
             // --- Game Start Date (Currencies, Truces, Claims & Modifiers) ---
             sb.Append($"\t{cfg.StartDate} = {{\n");
             sb.Append("\t\teffect = {\n");
@@ -344,6 +369,19 @@ public static class HistoryWriter
                 }
             }
 
+
+            // A khan's standing, written only for nomads with vassals to hold.
+            //
+            // obedience_value docks a subject 5 for an overlord whose dread is under 10 and 15 for
+            // one whose legitimacy has not reached level 3, and pays back half the overlord's dread
+            // and a flat 25 once both clear. Left unwritten — as they were — every khan on the map
+            // started feared by nobody and legitimate to nobody, which is 40 points of a 100-point
+            // obedience threshold given away before anything else is counted.
+            if (governments.IsNomad(county) && liegeCounties.Contains(county))
+            {
+                sb.Append($"\t\t\tadd_dread = {rng.Int(15, 30)}\n");
+                sb.Append("\t\t\tadd_legitimacy = legitimacy_level_3\n");
+            }
 
             bool isHigherTier = primaryTitle.Tier is "d" or "k" or "e";
 

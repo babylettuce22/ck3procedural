@@ -70,6 +70,18 @@ public static class RiverMap
         sourceCandidates.Sort((a, b) => drainage.Flow[b].CompareTo(drainage.Flow[a]));
 
         var isRiverPixel = new bool[n];
+
+        // Width is painted now; the markers are derived later, so the flow-derived band each pixel
+        // belongs to has to survive until then rather than being overwritten by a marker.
+        var widthBand = new byte[n];
+        var isHead = new bool[n];
+
+        // Where one course ran into another is knowledge the raster does not carry: once both are
+        // painted, a merge looks like any other neighbourhood, and the pixel it happened at is not
+        // always one the geometry would call a confluence. Remembered here and re-applied once the
+        // thinning has settled, because ck3-tiger ends a tributary's segment at its join marker and
+        // a tributary whose segment never ends is reported as an orphan.
+        var mergeJoins = new List<int>();
         int drawnRivers = 0;
 
         foreach (int source in sourceCandidates)
@@ -112,39 +124,37 @@ public static class RiverMap
             // Convert 8-connected diagonal path to strict 4-connected orthogonal path
             var orthoPath = MakeOrthogonal(path, width, height);
 
-            // Paint pixels
+            // Paint width only. A source and a join are statements *about* the finished geometry,
+            // and the geometry is not finished here: a later course can run into this one's head,
+            // and thinning can shift a confluence by a pixel or dissolve it entirely. Deciding the
+            // markers now means deciding them against a raster that is still moving, which is how a
+            // green ended up mid-course and how two reds ended up side by side with no plain water
+            // between them. EnforceEngineTopology assigns them once nothing is moving any more.
             for (int k = 0; k < orthoPath.Count; k++)
             {
                 int c = orthoPath[k];
 
-                if (k == 0)
-                {
-                    // Only main trunks get green source; tributaries starting anew start as narrow blue
-                    indices[c] = hitExisting ? PaletteNarrow : PaletteSource;
-                }
-                else if (k == orthoPath.Count - 1 && hitExisting && mergeTarget >= 0)
-                {
-                    // Merge point gets Red join
-                    indices[mergeTarget] = PaletteJoin;
-                }
-                else
-                {
-                    float f = drainage.Flow[c];
-                    double t = Math.Clamp(Math.Log(Math.Max(1f, f / minFlowThreshold)) /
-                                          Math.Log(Math.Max(1.01f, maxFlowThreshold / minFlowThreshold)), 0, 1);
-                    int tier = PaletteNarrow + (int)Math.Round(t * (PaletteWide - PaletteNarrow));
-                    indices[c] = (byte)Math.Clamp(tier, PaletteNarrow, PaletteWide);
-                }
+                float f = drainage.Flow[c];
+                double t = Math.Clamp(Math.Log(Math.Max(1f, f / minFlowThreshold)) /
+                                      Math.Log(Math.Max(1.01f, maxFlowThreshold / minFlowThreshold)), 0, 1);
+                int band = PaletteNarrow + (int)Math.Round(t * (PaletteWide - PaletteNarrow));
 
+                widthBand[c] = (byte)Math.Clamp(band, PaletteNarrow, PaletteWide);
+                indices[c] = widthBand[c];
                 isRiverPixel[c] = true;
             }
+
+            // A course that began by running into a river already drawn has no head of its own;
+            // only a trunk that started on dry land is a candidate source.
+            if (!hitExisting) isHead[orthoPath[0]] = true;
+            else if (mergeTarget >= 0) mergeJoins.Add(mergeTarget);
 
             drawnRivers++;
         }
 
         // Geometry first, then orphans: thinning can sever a fragment from its outlet, and
         // whatever it leaves stranded should be pruned rather than shipped.
-        EnforceEngineTopology(indices, width, height);
+        EnforceEngineTopology(indices, widthBand, isHead, mergeJoins, width, height);
         Console.WriteLine($"  minor rivers: generated {drawnRivers} engine-compliant tributary streams in rivers.png");
         return indices;
     }
@@ -169,11 +179,22 @@ public static class RiverMap
     /// neighbourhood stays connected without it, so a course can lose its redundant width but never
     /// be cut in half; anything left with three neighbours after thinning is a genuine confluence
     /// and is marked as a join, which is the one thing the engine allows three neighbours.
+    ///
+    /// Thinning runs before any marker exists, and the markers are read off the result afterwards.
+    /// Doing it the other way round is what left ck3-tiger complaining: markers were exempt from
+    /// thinning, so a 2x2 block with a marker in it could never be narrowed, and a marker decided
+    /// against a half-finished raster could end up mid-course or pressed against another marker.
+    ///
+    /// The one thing that cannot be read back off the geometry is which course flowed into which,
+    /// so <paramref name="mergeJoins"/> carries it here. A tributary landing on the end of a trunk
+    /// leaves a pixel with two arms, indistinguishable from ordinary water, and dropping its marker
+    /// leaves the tributary's segment with nothing to terminate it — measured at 1,217 orphaned
+    /// segments against 13 without.
     /// </summary>
-    private static void EnforceEngineTopology(byte[] indices, int width, int height)
+    private static void EnforceEngineTopology(byte[] indices, byte[] widthBand, bool[] isHead,
+                                              List<int> mergeJoins, int width, int height)
     {
         static bool IsRiver(byte v) => v <= PaletteWide;
-        static bool IsSpecial(byte v) => v == PaletteSource || v == PaletteJoin || v == PaletteSplit;
 
         // The eight neighbours in ring order, so that consecutive entries are themselves adjacent.
         int[] ringX = [-1, 0, 1, 1, 1, 0, -1, -1];
@@ -184,8 +205,7 @@ public static class RiverMap
         // eroding the end of a course rather than narrowing it.
         bool Removable(int i)
         {
-            byte v = indices[i];
-            if (!IsRiver(v) || IsSpecial(v)) return false;
+            if (!IsRiver(indices[i])) return false;
 
             int x = i % width, y = i / width;
             int ring = 0, count = 0;
@@ -250,7 +270,7 @@ public static class RiverMap
             return degree;
         }
 
-        int marked = 0, stubborn = 0;
+        int stubborn = 0;
         for (int i = 0; i < indices.Length; i++)
         {
             if (!IsRiver(indices[i])) continue;
@@ -279,20 +299,64 @@ public static class RiverMap
                     relieved = true;
                 }
 
-                if (!relieved) { stubborn++; continue; }
-
-                degree = OrthogonalDegree(i);
-                if (degree <= 2) continue;
+                if (!relieved) stubborn++;
             }
-
-            // Three arms is a confluence, and red is how the engine is told so: a tributary joining
-            // here, flowing towards this pixel.
-            if (!IsSpecial(indices[i])) { indices[i] = PaletteJoin; marked++; }
         }
 
-        if (thinned > 0 || marked > 0)
+        // The geometry has stopped moving, so the markers can finally be read off it. Doing this in
+        // one sweep at the end is what keeps them consistent: every marker is a statement about the
+        // neighbourhood as it actually ships, not as it looked when some earlier path was drawn.
+        //
+        // ck3-tiger enforces the two readings precisely. A join must have at least two ordinary
+        // river arms — the tributary arriving and the water it joins — or it is "not joining another
+        // river". A source must be a free end whose one arm is ordinary river, or it is "not at the
+        // source of a river". Both failures are the same underlying mistake: a marker whose arm
+        // turned out to be another marker rather than water.
+        int joins = 0, sources = 0;
+        for (int i = 0; i < indices.Length; i++)
+        {
+            if (!IsRiver(indices[i])) continue;
+
+            // Three arms is a confluence, and red is how the engine is told so: a tributary joining
+            // here, flowing towards this pixel. A crossing left over-connected above is still better
+            // described as a join than as plain water.
+            indices[i] = OrthogonalDegree(i) >= 3 ? PaletteJoin : widthBand[i];
+            if (indices[i] == PaletteJoin) joins++;
+        }
+
+        // The remembered merges, for the ones whose pixel survived the thinning. Geometry alone
+        // cannot find these: a tributary that lands on the end of a trunk leaves a pixel with only
+        // two arms, which reads as ordinary water however closely it is examined.
+        foreach (int m in mergeJoins)
+        {
+            if (!IsRiver(indices[m]) || indices[m] == PaletteJoin) continue;
+
+            indices[m] = PaletteJoin;
+            joins++;
+        }
+
+        // Sources afterwards, because whether a head qualifies depends on the joins being placed. A
+        // head that opens directly onto a confluence is a stub the engine cannot trace a course
+        // from, so it stays ordinary water rather than claiming to be a spring.
+        for (int i = 0; i < indices.Length; i++)
+        {
+            if (!isHead[i] || !IsRiver(indices[i])) continue;
+
+            int x = i % width, y = i / width, degree = 0, sole = -1;
+            if (x > 0 && IsRiver(indices[i - 1])) { degree++; sole = i - 1; }
+            if (x + 1 < width && IsRiver(indices[i + 1])) { degree++; sole = i + 1; }
+            if (y > 0 && IsRiver(indices[i - width])) { degree++; sole = i - width; }
+            if (y + 1 < height && IsRiver(indices[i + width])) { degree++; sole = i + width; }
+
+            if (degree != 1 || indices[sole] == PaletteJoin) continue;
+
+            indices[i] = PaletteSource;
+            sources++;
+        }
+
+        if (thinned > 0 || joins > 0)
             Console.WriteLine($"  minor rivers: thinned {thinned:N0} px to keep courses one pixel wide, " +
-                              $"marked {marked:N0} confluence(s) as joins" +
+                              $"marked {joins:N0} confluence(s) as joins and {sources:N0} head(s) as sources" +
                               (stubborn > 0 ? $", {stubborn:N0} crossing(s) left over-connected" : ""));
     }
 

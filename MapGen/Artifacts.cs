@@ -61,7 +61,10 @@ public sealed class ArtifactMap
 
         if (counties.Count == 0) return map;
 
-        var settledCounties = counties.Where(c => !wilderness.Contains(c)).ToList();
+        // Ruler counties only. A county inside a liege's personal demesne has no character of its
+        // own to hand a treasure to, and the spawn effect would scope to one that was never written.
+        var rulers = realms.HolderCounty.Values.ToHashSet();
+        var settledCounties = counties.Where(c => !wilderness.Contains(c) && rulers.Contains(c)).ToList();
         if (settledCounties.Count == 0) return map;
 
         // Draw a fated bearer among settled counties only

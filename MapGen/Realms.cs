@@ -267,6 +267,24 @@ public static class Realms
             EnsureKingdomDuchiesRealized(k, realized, holderCounty, weight, rng, isUnderActiveRealm: false, cfg.DuchyTitleShare);
         }
 
+        // --- Step 3b: Personal Demesne ---
+        //
+        // Every county starts as its own count's, and a higher title only ever redirected ONE county
+        // to its holder — so a king's personal domain was a single county, exactly what each of his
+        // counts held. Nothing in the generation made a liege the strongest man in his own realm.
+        //
+        // That is invisible under feudalism (it just reads as an unusually factious map) but the
+        // nomad rules score it directly: obedience_value docks a vassal 500 for a larger army and
+        // another 500 for a larger herd than his overlord, so a coin-flip on troop counts was
+        // deciding whether a khan's vassals obeyed him at all.
+        //
+        // Kept off the imported path for now — the export decides its own realms and this would
+        // quietly redraw them.
+        if (!fromExport)
+        {
+            GrantDemesne(holderCounty, weight, countyAdj);
+        }
+
         // --- Step 4: Resolve Primary Titles and Lieges ---
         var primary = new Dictionary<Title, Title>();
         foreach (var (title, county) in holderCounty)
@@ -363,6 +381,124 @@ public static class Realms
             Liege = liege,
             Greatest = greatest,
         };
+    }
+
+    /// <summary>
+    /// Folds a few nearby unclaimed counties into each titled ruler's own hands, so that a liege
+    /// holds visibly more than any one of his vassals.
+    ///
+    /// Counties are taken border-first and only from inside the ruler's own de jure empire, which
+    /// keeps a demesne a contiguous block around the capital rather than a scatter of enclaves.
+    /// Targets are deliberately small — three counties for a king or emperor, two for a duke — to
+    /// stay inside CK3's starting domain limits, which nomads sit one below.
+    /// </summary>
+    private static void GrantDemesne(
+        Dictionary<Title, Title> holderCounty,
+        Dictionary<Title, int> weight,
+        Dictionary<Title, HashSet<Title>>? countyAdj)
+    {
+        // The highest title each ruler answers for, and every county that already seats one.
+        var topTitle = new Dictionary<Title, Title>();
+        var spokenFor = new HashSet<Title>();
+
+        foreach (var (title, county) in holderCounty)
+        {
+            if (title.Tier == "c") continue;
+
+            spokenFor.Add(county);
+            if (!topTitle.TryGetValue(county, out var current) || Rank(title) > Rank(current))
+                topTitle[county] = title;
+        }
+
+        // Free means the county still holds itself and no higher title seats its ruler there — in
+        // other words, an independent count with nothing above him. Those are the only ones a liege
+        // may absorb; taking a realized duke's capital would delete the duke.
+        var free = holderCounty
+            .Where(kv => kv.Key.Tier == "c" && kv.Value == kv.Key && !spokenFor.Contains(kv.Key))
+            .Select(kv => kv.Key)
+            .ToHashSet();
+
+        int granted = 0;
+
+        // Biggest first, so an emperor settles his capital duchy before the dukes beneath him carve
+        // the same counties up.
+        foreach (var (capital, title) in topTitle.OrderByDescending(kv => Rank(kv.Value))
+                                                 .ThenByDescending(kv => weight.GetValueOrDefault(kv.Value))
+                                                 .ThenBy(kv => kv.Key.Index))
+        {
+            int target = title.Tier switch { "e" or "k" => 3, "d" => 2, _ => 1 };
+            var held = new HashSet<Title> { capital };
+
+            while (held.Count < target)
+            {
+                var pick = NextDemesneCounty(capital, held, free, countyAdj, weight);
+                if (pick is null) break;
+
+                free.Remove(pick);
+                held.Add(pick);
+                holderCounty[pick] = capital;
+                granted++;
+            }
+        }
+
+        if (granted > 0)
+            Console.WriteLine($"  realms: {granted} counties folded into their liege's personal demesne");
+    }
+
+    private static Title? NextDemesneCounty(
+        Title capital,
+        HashSet<Title> held,
+        HashSet<Title> free,
+        Dictionary<Title, HashSet<Title>>? countyAdj,
+        Dictionary<Title, int> weight)
+    {
+        IEnumerable<Title> candidates = free;
+
+        if (countyAdj is not null)
+        {
+            var bordering = new HashSet<Title>();
+            foreach (var owned in held)
+            {
+                if (!countyAdj.TryGetValue(owned, out var neighbors)) continue;
+                foreach (var n in neighbors)
+                    if (free.Contains(n)) bordering.Add(n);
+            }
+
+            if (bordering.Count == 0) return null;
+            candidates = bordering;
+        }
+
+        return candidates
+            .Select(c => (County: c, Kinship: DeJureKinship(capital, c)))
+            .Where(x => x.Kinship > 0)
+            .OrderByDescending(x => x.Kinship)
+            .ThenByDescending(x => weight.GetValueOrDefault(x.County))
+            .ThenBy(x => x.County.Index)
+            .Select(x => x.County)
+            .FirstOrDefault();
+    }
+
+    /// <summary>
+    /// How close two counties sit in the de jure tree: 3 for the same duchy, 2 for the same
+    /// kingdom, 1 for the same empire, 0 for no shared ancestor at all.
+    /// </summary>
+    private static int DeJureKinship(Title a, Title b)
+    {
+        var duchyA = a.Parent;
+        var duchyB = b.Parent;
+        if (duchyA is null || duchyB is null) return 0;
+        if (duchyA == duchyB) return 3;
+
+        var kingdomA = duchyA.Parent;
+        var kingdomB = duchyB.Parent;
+        if (kingdomA is null || kingdomB is null) return 0;
+        if (kingdomA == kingdomB) return 2;
+
+        var empireA = kingdomA.Parent;
+        var empireB = kingdomB.Parent;
+        if (empireA is null || empireB is null) return 0;
+
+        return empireA == empireB ? 1 : 0;
     }
 
     private static void EnsureKingdomDuchiesRealized(

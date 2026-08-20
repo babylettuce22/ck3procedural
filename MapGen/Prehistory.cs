@@ -91,6 +91,7 @@ public sealed class PrehistoryMap
     public Dictionary<Title, List<DatedRelation>> Rivals { get; } = [];
     public Dictionary<Title, List<DatedRelation>> Friends { get; } = [];
     public Dictionary<Title, List<DatedRelation>> Nemeses { get; } = [];
+    public Dictionary<Title, List<DatedRelation>> BloodBrothers { get; } = [];
     public Dictionary<Title, List<(Title TargetCounty, int Days)>> Truces { get; } = [];
     public Dictionary<Title, List<(Title TargetTitle, bool Pressed)>> Claims { get; } = [];
 
@@ -139,6 +140,9 @@ public sealed class PrehistoryMap
 
         // 6. Internal Realm Drama & Sibling Cadet Branches
         BuildInternalDrama(map, rulerCounties, realms, faiths, cultures, cfg, rng);
+
+        // 6b. The Khan's Sworn Men
+        BuildNomadCompanions(map, rulerCounties, realms, governments, cfg);
 
         // 7. Contested World Centers
         if (worldCenters is not null)
@@ -860,6 +864,112 @@ public sealed class PrehistoryMap
             }
         }
     }
+
+    /// <summary>
+    /// Binds a khan to the strongest of his vassals as sworn friends and blood brothers.
+    ///
+    /// Nomad realms are the one place CK3 scores a liege's personal ties directly:
+    /// <c>obedience_value</c> pays +100 for a friend and +1250 for a blood brother, against a
+    /// threshold of 100 for a king. A vassal with no tie to his khan instead takes -50 simply for
+    /// having no good relationship, which — with the kurultai, dread and legitimacy penalties on top
+    /// — is why every generated horde started with a court of Disobedient strangers.
+    ///
+    /// Deliberately partial. Roughly the top half of each horde is sworn to its khan and the rest is
+    /// left to be won over, which is the mechanic doing its job rather than being switched off.
+    /// </summary>
+    private static void BuildNomadCompanions(
+        PrehistoryMap map,
+        List<Title> rulerCounties,
+        RealmMap realms,
+        GovernmentMap governments,
+        MapConfig cfg)
+    {
+        const int MaxBloodBrothers = 2;
+        const int MaxSwornFriends = 4;
+
+        // Grouped by DIRECT liege, not by top liege: obedience is scored against whoever a
+        // character actually answers to, so a count under a duke under a khan is the duke's problem
+        // and binding him to the khan would buy nothing. Any nomad with vassals qualifies, whatever
+        // his tier.
+        var vassalsByLiege = new Dictionary<Title, List<Title>>();
+        foreach (var county in rulerCounties)
+        {
+            var primary = HistoryWriter.Primary(county, realms);
+            if (!realms.Liege.TryGetValue(primary, out var liegeTitle)) continue;
+            if (!realms.HolderCounty.TryGetValue(liegeTitle, out var liegeCounty)) continue;
+            if (liegeCounty == county) continue;
+            if (!governments.IsNomad(liegeCounty)) continue;
+
+            if (!vassalsByLiege.TryGetValue(liegeCounty, out var list))
+                vassalsByLiege[liegeCounty] = list = [];
+            list.Add(county);
+        }
+
+        int sworn = 0, anda = 0;
+
+        foreach (var (khan, vassals) in vassalsByLiege.OrderBy(kv => kv.Key.Index))
+        {
+            var draw = new Rng(khan.Index ^ 0x6D0A);
+
+            // Highest tier first: the vassals big enough to out-muster the khan are the ones whose
+            // obedience actually decides whether the horde holds together.
+            var ranked = vassals
+                // blood_brother lists friend and rival among its opposites, so anyone already tied
+                // to the khan is left as he is rather than given a second, contradictory relation.
+                .Where(v => !HasRelation(map.Rivals, khan, v)
+                            && !HasRelation(map.Nemeses, khan, v)
+                            && !HasRelation(map.Friends, khan, v))
+                .OrderByDescending(v => TierRank(HistoryWriter.Primary(v, realms).Tier))
+                .ThenBy(v => v.Index)
+                .ToList();
+
+            int brothers = 0, friends = 0;
+
+            foreach (var vassal in ranked)
+            {
+                int year = Math.Max(1, cfg.StartYear - draw.Int(4, 20));
+                string date = $"{year}.{draw.Int(1, 12)}.{draw.Int(1, 28)}";
+
+                // An anda is sworn young and rarely — two at most, and only to the men who could
+                // otherwise stand against him.
+                if (brothers < MaxBloodBrothers && draw.Chance(0.45))
+                {
+                    AddRelation(map.BloodBrothers, khan, vassal, date);
+                    brothers++;
+                    anda++;
+                }
+                else if (friends < MaxSwornFriends && draw.Chance(0.55))
+                {
+                    AddFriendship(map, khan, vassal, date);
+                    friends++;
+                    sworn++;
+                }
+
+                if (brothers >= MaxBloodBrothers && friends >= MaxSwornFriends) break;
+            }
+        }
+
+        if (sworn + anda > 0)
+            Console.WriteLine($"  pre-history: {anda} blood brothers and {sworn} sworn friends bound to their khans");
+    }
+
+    private static bool HasRelation(Dictionary<Title, List<DatedRelation>> table, Title a, Title b)
+        => table.TryGetValue(a, out var list) && list.Any(r => r.TargetCounty == b);
+
+    private static void AddRelation(
+        Dictionary<Title, List<DatedRelation>> table, Title a, Title b, string date)
+    {
+        if (!table.TryGetValue(a, out var listA)) table[a] = listA = [];
+        if (!table.TryGetValue(b, out var listB)) table[b] = listB = [];
+
+        if (!listA.Any(r => r.TargetCounty == b)) listA.Add(new DatedRelation { TargetCounty = b, Date = date });
+        if (!listB.Any(r => r.TargetCounty == a)) listB.Add(new DatedRelation { TargetCounty = a, Date = date });
+    }
+
+    private static int TierRank(string tier) => tier switch
+    {
+        "e" => 4, "k" => 3, "d" => 2, "c" => 1, _ => 0,
+    };
 
     private static void BuildInternalDrama(
         PrehistoryMap map,

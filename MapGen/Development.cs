@@ -154,6 +154,11 @@ public static class Development
         if (indexInCounty == 0) return capital;
         if (indexInCounty > 1) return "none";
 
+        // A horde's county is the camp and nothing else, the way vanilla writes the steppe. The
+        // second holding would be a mayor or a bishop answering to a khan — a settled vassal inside
+        // a nomadic realm, scored by the obedience rules and failing every one of them.
+        if (government == GovernmentMap.Nomad) return "none";
+
         // Ramped across the development range rather than switched at a threshold, so there is no
         // single number where counties suddenly all sprout a town.
         double chance = Math.Clamp((development - 6) / 18.0, 0.0, 0.85);

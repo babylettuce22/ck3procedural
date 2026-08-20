@@ -685,26 +685,115 @@ public static class TerrainTextureWriter
         return t * t * (3.0 - 2.0 * t);
     }
 
+    /// <summary>Smoothstep on an already-clamped 0..1, so a fade has no corner at either end.</summary>
+    private static double Smooth(double t) => t * t * (3.0 - 2.0 * t);
+
     /// <summary>
     /// Central-difference gradient magnitude at one heightmap pixel, in elevation units per pixel.
+    ///
+    /// <paramref name="span"/> is the half-width of the difference. At 1 this is the tightest
+    /// stencil the grid allows, which is what a cliff wants — a sea cliff is a few pixels wide and
+    /// a wider stencil averages it back into the shore. Ruggedness wants the opposite: it asks
+    /// whether the ground under *one output texel* is broken, and an output texel covers several
+    /// heightmap pixels, so measuring across one pixel there reports the heightmap's own noise
+    /// rather than the landform. The result is divided by the span so both callers get the same
+    /// units — elevation per pixel — and their percentile thresholds stay comparable.
     /// </summary>
-    private static float Gradient(float[] elevation, int width, int height, int x, int y)
+    private static float Gradient(float[] elevation, int width, int height, int x, int y, int span = 1)
     {
-        int xm = Math.Max(0, x - 1), xp = Math.Min(width - 1, x + 1);
-        int ym = Math.Max(0, y - 1), yp = Math.Min(height - 1, y + 1);
+        int xm = Math.Max(0, x - span), xp = Math.Min(width - 1, x + span);
+        int ym = Math.Max(0, y - span), yp = Math.Min(height - 1, y + span);
 
-        float dx = elevation[(long)y * width + xp] - elevation[(long)y * width + xm];
-        float dy = elevation[(long)yp * width + x] - elevation[(long)ym * width + x];
+        float dx = (elevation[(long)y * width + xp] - elevation[(long)y * width + xm]) / Math.Max(1, xp - xm);
+        float dy = (elevation[(long)yp * width + x] - elevation[(long)ym * width + x]) / Math.Max(1, yp - ym);
         return MathF.Sqrt(dx * dx + dy * dy);
     }
 
     /// <summary>
-    /// Two gradient thresholds off this map's own coast: where cliff rock starts showing, and where
-    /// it has taken the face over completely.
+    /// Two gradient magnitudes off this map's own ground, at the given percentiles of whatever
+    /// pixels <paramref name="sampled"/> admits.
     ///
     /// Percentiles rather than an absolute rise-over-run, for the reason the hill and mountain
-    /// lines are percentiles — the raw elevation scale depends on how far the tectonic sim ran, so
+    /// lines are percentiles: the raw elevation scale depends on how far the tectonic sim ran, so
     /// a fixed gradient marks a different fraction of every map.
+    ///
+    /// Sampled on a stride. A heightmap is 170 million pixels at vanilla size and a percentile does
+    /// not need all of them, only an unbiased sample. One pass to find the range, one to bin it,
+    /// both on the same stride so they see the same sample.
+    /// </summary>
+    private static (float Lo, float Hi) GradientPercentiles(float[] elevation, int width, int height,
+        int span, Func<int, int, bool> sampled, double lo, double hi)
+    {
+        const int Stride = 4;
+        const int Bins = 2048;
+
+        int rows = (height + Stride - 1) / Stride;
+
+        float max = 0;
+        object gate = new();
+        Parallel.For(0, rows, () => 0f, (row, _, localMax) =>
+        {
+            int y = row * Stride;
+            for (int x = 0; x < width; x += Stride)
+            {
+                if (!sampled(x, y)) continue;
+                float g = Gradient(elevation, width, height, x, y, span);
+                if (g > localMax) localMax = g;
+            }
+            return localMax;
+        }, localMax => { lock (gate) if (localMax > max) max = localMax; });
+
+        if (max <= 0) return (float.MaxValue, float.MaxValue);
+
+        var histogram = new long[Bins];
+        double scale = (Bins - 1) / max;
+
+        Parallel.For(0, rows, () => new long[Bins], (row, _, local) =>
+        {
+            int y = row * Stride;
+            for (int x = 0; x < width; x += Stride)
+            {
+                if (!sampled(x, y)) continue;
+                local[Math.Clamp((int)(Gradient(elevation, width, height, x, y, span) * scale), 0, Bins - 1)]++;
+            }
+            return local;
+        }, local => { lock (gate) for (int b = 0; b < Bins; b++) histogram[b] += local[b]; });
+
+        long total = 0;
+        foreach (long n in histogram) total += n;
+        if (total == 0) return (float.MaxValue, float.MaxValue);
+
+        float Percentile(double fraction)
+        {
+            long target = (long)(total * Math.Clamp(fraction, 0, 1));
+            long running = 0;
+            for (int b = 0; b < Bins; b++)
+            {
+                running += histogram[b];
+                if (running >= target) return (float)(b / scale);
+            }
+            return max;
+        }
+
+        return (Percentile(lo), Percentile(hi));
+    }
+
+    /// <summary>
+    /// Where this map's land stops being smooth and where it is as broken as it gets: the two
+    /// gradients the hill textures fade between.
+    ///
+    /// Over *all* land, unlike <see cref="CliffLines"/>, because this is applied everywhere rather
+    /// than in a coastal band. The lower line sits above the median on purpose — half of any map's
+    /// land is flat by construction and none of it should carry rock — and the upper one stops
+    /// short of the very steepest so that ordinary hill country, not just mountain faces,
+    /// saturates.
+    /// </summary>
+    private const double RuggedLoPercentile = 0.60;
+    private const double RuggedHiPercentile = 0.92;
+
+    /// <summary>
+    /// Two gradient thresholds off this map's own coast: where cliff rock starts showing, and where
+    /// it has taken the face over completely.
     ///
     /// Measured over the *coastal band only*, not over all land, because that band is the only
     /// place the result is applied. Taken over all land the share would be diluted by every inland
@@ -712,15 +801,12 @@ public static class TerrainTextureWriter
     /// on a shore would swing with how mountainous the interior happened to come out. Over the band
     /// itself the knob means what it says: this share of coastal ground reads as cliff.
     ///
-    /// Sampled on a stride. A heightmap is 170 million pixels at vanilla size and a percentile does
-    /// not need all of them, only an unbiased sample.
+    /// The tightest stencil the grid allows, because a sea cliff is a few pixels wide and a wider
+    /// one averages it back into the shore.
     /// </summary>
     private static (float Start, float Full) CliffLines(float[] elevation, int width, int height,
         int sea, double share, byte[] coastDistance, int pWidth, int pHeight, int reach)
     {
-        const int Stride = 4;
-        const int Bins = 2048;
-
         double toProvinceX = (double)pWidth / width;
         double toProvinceY = (double)pHeight / height;
 
@@ -737,60 +823,9 @@ public static class TerrainTextureWriter
             return d >= 1 && d <= reach;
         }
 
-        int rows = (height + Stride - 1) / Stride;
-
-        // One pass to find the range, one to bin it. Both on the same stride, so they see the
-        // same sample.
-        float max = 0;
-        object gate = new();
-        Parallel.For(0, rows, () => 0f, (row, _, localMax) =>
-        {
-            int y = row * Stride;
-            for (int x = 0; x < width; x += Stride)
-            {
-                if (!Sampled(x, y)) continue;
-                float g = Gradient(elevation, width, height, x, y);
-                if (g > localMax) localMax = g;
-            }
-            return localMax;
-        }, localMax => { lock (gate) if (localMax > max) max = localMax; });
-
-        if (max <= 0) return (float.MaxValue, float.MaxValue);
-
-        var histogram = new long[Bins];
-        double scale = (Bins - 1) / max;
-
-        Parallel.For(0, rows, () => new long[Bins], (row, _, local) =>
-        {
-            int y = row * Stride;
-            for (int x = 0; x < width; x += Stride)
-            {
-                if (!Sampled(x, y)) continue;
-                float g = Gradient(elevation, width, height, x, y);
-                local[Math.Clamp((int)(g * scale), 0, Bins - 1)]++;
-            }
-            return local;
-        }, local => { lock (gate) for (int b = 0; b < Bins; b++) histogram[b] += local[b]; });
-
-        long total = 0;
-        foreach (long n in histogram) total += n;
-        if (total == 0) return (float.MaxValue, float.MaxValue);
-
         // The band the cliff fades in over. A single threshold would put a hard iso-gradient line
         // around every cliff, which is the same failure the biome band was built to avoid.
-        float Percentile(double fraction)
-        {
-            long target = (long)(total * Math.Clamp(fraction, 0, 1));
-            long running = 0;
-            for (int b = 0; b < Bins; b++)
-            {
-                running += histogram[b];
-                if (running >= target) return (float)(b / scale);
-            }
-            return max;
-        }
-
-        return (Percentile(1.0 - share), Percentile(1.0 - share * 0.25));
+        return GradientPercentiles(elevation, width, height, 1, Sampled, 1.0 - share, 1.0 - share * 0.25);
     }
 
     public static void WriteAll(string modDir, MapConfig cfg, TerrainClass[] terrain,
@@ -913,6 +948,29 @@ public static class TerrainTextureWriter
             if (cliffStart >= float.MaxValue) coastDistance = null;
         }
 
+        // How broken the ground is, as a gradient measured across the footprint of one output
+        // texel. This is the signal the hill textures were missing: a terrain class is picked on an
+        // elevation percentile, so a high tableland is classed Hills exactly like a broken ridge
+        // is, and every gen_*_hills texture is roughly two thirds bare rock. Painted from elevation
+        // alone that put a rockfield on ground the heightmap renders dead flat.
+        //
+        // Measured here rather than carried as a field: it is one extra Gradient call per output
+        // texel against a full byte per heightmap pixel — 170 MB at vanilla size — and the cliff
+        // path above already reads the heightmap this way in the same loop.
+        int ruggedSpan = Math.Max(1, (int)Math.Round(Math.Min(toHeightX, toHeightY)));
+
+        bool IsLand(int x, int y) => elevation[(long)y * hWidth + x] > sea;
+        var (ruggedLo, ruggedHi) = GradientPercentiles(elevation, hWidth, hHeight, ruggedSpan,
+            IsLand, RuggedLoPercentile, RuggedHiPercentile);
+
+        float ruggedRange = Math.Max(1e-4f, ruggedHi - ruggedLo);
+        bool hasRelief = ruggedLo < float.MaxValue;
+
+        Console.WriteLine(hasRelief
+            ? $"  terrain: hill rock from gradient {ruggedLo:F2} (full at {ruggedHi:F2}), " +
+              $"measured over {ruggedSpan} px"
+            : "  terrain: no measurable relief; hill rock left at its smooth-ground weight");
+
         var used = new bool[256];
         object gate = new();
 
@@ -995,10 +1053,21 @@ public static class TerrainTextureWriter
                     int sy = Math.Clamp((int)Math.Round(wy * scaleY), 0, pHeight - 1);
                     int pSrc = sy * pWidth + sx;
 
+                    // Sampled at the pixel's own coordinate, not the warped one: the warp decides
+                    // which ground this pixel is standing on, but how broken that ground is has to
+                    // be read where the pixel actually is or the rock lands beside the slope
+                    // instead of on it — the same reason the cliff test below is unwarped.
+                    double rugged = hasRelief
+                        ? Smooth(Math.Clamp((Gradient(elevation, hWidth, hHeight,
+                            Math.Clamp((int)hx, 0, hWidth - 1),
+                            Math.Clamp((int)hy, 0, hHeight - 1), ruggedSpan) - ruggedLo)
+                            / ruggedRange, 0, 1))
+                        : 0.0;
+
                     byte self = label[pSrc];
                     var blend = TerrainPalette.For(TerrainPalette.TerrainOf(self),
                         TerrainPalette.ClimateFromLabel(self), relief, nA, nB, nC,
-                        canopyDensity, zoneA, zoneB);
+                        canopyDensity, zoneA, zoneB, rugged);
 
                     // Distance from here to the nearest ground of a different class, measured
                     // inside its own region. A smooth function of a real distance is what makes a
@@ -1087,7 +1156,7 @@ public static class TerrainTextureWriter
                                 byte winner = boundaryOther[pSrc];
                                 var neighbour = TerrainPalette.For(TerrainPalette.TerrainOf(winner),
                                     TerrainPalette.ClimateFromLabel(winner), relief, nA, nB, nC,
-                                    canopyDensity, zoneA, zoneB);
+                                    canopyDensity, zoneA, zoneB, rugged);
 
                                 blend = TerrainPalette.Merge(blend, neighbour, a);
 
@@ -1097,7 +1166,7 @@ public static class TerrainTextureWriter
                                     var runnerUp = TerrainPalette.For(
                                         TerrainPalette.TerrainOf(second),
                                         TerrainPalette.ClimateFromLabel(second), relief, nA, nB, nC,
-                                        canopyDensity, zoneA, zoneB);
+                                        canopyDensity, zoneA, zoneB, rugged);
 
                                     blend = TerrainPalette.Merge(blend, runnerUp, b);
                                 }

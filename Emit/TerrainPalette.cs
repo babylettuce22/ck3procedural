@@ -220,9 +220,9 @@ public static class TerrainPalette
 
     private static double HillRockConfidence(Climate climate, double n) => climate switch
     {
-        Climate.Mediterranean => 1.0,
+        Climate.Mediterranean => CutConfidence(n, 0.55),
         Climate.Desert or Climate.Drylands => CutConfidence(n, 0.5),
-        _ => Math.Min(CutConfidence(n, 0.4), CutConfidence(n, 0.75)),
+        _ => CutConfidence(n, 0.25, 0.75),
     };
 
     /// <summary>
@@ -322,10 +322,20 @@ public static class TerrainPalette
     /// <param name="nA">Noise selecting which lowland variant dominates, 0..1.</param>
     /// <param name="nB">Noise selecting the second variant, 0..1.</param>
     /// <param name="nC">Noise selecting the accent and setting how strongly it shows through, 0..1.</param>
+    /// <param name="rugged">
+    /// How broken the ground actually is under this pixel, 0 flat to 1 as broken as this map gets,
+    /// measured from the heightmap gradient rather than from elevation. Separate from
+    /// <paramref name="relief"/> on purpose: relief is height, and a terrain class is picked on an
+    /// elevation percentile, so height cannot tell a tableland from a ridge. Defaults to 0.5 —
+    /// middling ground — so a caller that has no heightmap to measure gets the old behaviour
+    /// roughly split rather than either extreme.
+    /// </param>
     public static Blend For(TerrainClass terrain, Climate climate, double relief,
         double nA, double nB, double nC,
-        double canopyDensity = 0.5, double zoneA = 0.5, double zoneB = 0.5)
+        double canopyDensity = 0.5, double zoneA = 0.5, double zoneB = 0.5,
+        double rugged = 0.5)
     {
+        double hillTex = HillTexture(rugged);
         ref readonly var family = ref Families[(int)climate];
 
         switch (terrain)
@@ -447,7 +457,7 @@ public static class TerrainPalette
                         ForestFloor, (byte)Math.Clamp(70 + 55 * canopyDensity + nA * 20, 0, 255),
                         canopy, (byte)(canopyWeight * (0.5 + 0.5 * canopyConf)),
                         lowA, (byte)((40 + nB * 30) * confA),
-                        family.Hills, (byte)(20 + nC * 20),
+                        family.Hills, (byte)((20 + nC * 20) * hillTex),
                         canopyAlt, (byte)(canopyWeight * 0.5 * (1.0 - canopyConf))
                     );
                 }
@@ -460,7 +470,7 @@ public static class TerrainPalette
                         lowA, (byte)((70 + (1.0 - nA) * 40) * confA),
                         lowB, (byte)((50 + nB * 30) * confB),
                         nC < 0.5 ? ForestFloor : Families[(int)Climate.Tropical].Hills,
-                            (byte)(20 + nC * 20)
+                            (byte)((20 + nC * 20) * (nC < 0.5 ? 1.0 : hillTex))
                     );
                 }
 
@@ -497,7 +507,7 @@ public static class TerrainPalette
                         nC < 0.45 ? ForestFloor : nC < 0.75 ? PlainsDry : PlainsDryMud,
                             (byte)Math.Clamp((30 + nC * 25)
                                 * Math.Min(CutConfidence(nC, 0.45), CutConfidence(nC, 0.75)), 0, 255),
-                        north.Hills, (byte)Math.Clamp(18 * (1.0 - nA), 0, 255)
+                        north.Hills, (byte)Math.Clamp(18 * (1.0 - nA) * hillTex, 0, 255)
                     );
                 }
 
@@ -511,7 +521,8 @@ public static class TerrainPalette
                         Snow, (byte)(120 + (1.0 - nC) * 80),
                         lowA, (byte)((60 + nA * 40) * confA),
                         lowB, (byte)((35 + nB * 30) * confB),
-                        nC < 0.5 ? north.Hills : north.Mountain, (byte)((20 + nC * 30) * CutConfidence(nC, 0.5))
+                        nC < 0.5 ? north.Hills : north.Mountain,
+                            (byte)((20 + nC * 30) * CutConfidence(nC, 0.5) * (nC < 0.5 ? hillTex : 1.0))
                     );
                 }
 
@@ -587,7 +598,8 @@ public static class TerrainPalette
                         nC < 0.3 ? DesertCracked : nC < 0.5 ? MediDryMud
                             : nC < 0.68 ? PlainsDryMud : dry.Hills,
                         (byte)((25 + nC * 25) * Math.Min(CutConfidence(nC, 0.3),
-                            Math.Min(CutConfidence(nC, 0.5), CutConfidence(nC, 0.68))))
+                            Math.Min(CutConfidence(nC, 0.5), CutConfidence(nC, 0.68)))
+                            * (nC < 0.68 ? 1.0 : hillTex))
                     );
                 }
 
@@ -636,7 +648,8 @@ public static class TerrainPalette
                         // Vanilla's fourth slot averages 6% across all land, so this is a desert
                         // correction rather than a global one.
                         grain, (byte)((45 + nC * 45)
-                            * CutConfidence(nC, 0.22, 0.37, 0.50, 0.62, 0.78, 0.90)),
+                            * CutConfidence(nC, 0.22, 0.37, 0.50, 0.62, 0.78, 0.90)
+                            * (nC < 0.90 ? 1.0 : hillTex)),
                         duneAlt, (byte)(duneWeight * 0.5 * (1.0 - duneConf))
                     );
                 }
@@ -644,16 +657,32 @@ public static class TerrainPalette
             case TerrainClass.Plains:
                 {
                     var (lowA, lowB, confA, confB) = LowlandPair(family, nA, nB);
+
+                    // The tail slot used to spend 60% of its range on the family's *hill* texture.
+                    // That is hill ground painted across land the classifier called flat, on more
+                    // pixels than not, and it is the second source of the stony look — the first
+                    // being the hills palette itself leaking outward through the warp and the
+                    // transition band. Cut to the low third of the range, and scaled by how broken
+                    // the ground is on top, so a plain that genuinely rolls still picks up some
+                    // hill texture and one that does not picks up almost none.
+                    //
+                    // The range the hills gave up goes to the accent set rather than being
+                    // dropped: 1 - nC now walks 0..0.65 instead of 0..0.4, so more of each
+                    // climate's hand-made ground is reachable here than before.
+                    bool hilly = nC < 0.35;
+                    double tail = (30 + nC * 20) * CutConfidence(nC, 0.35);
+                    if (hilly) tail *= hillTex;
+
                     return Mix(
                         lowA, (byte)((80 + nA * 40) * confA),
                         lowB, (byte)((70 + (1.0 - nA) * 40) * confB),
                         Accent(climate, nB), (byte)((50 + nB * 30) * AccentConfidence(climate, nB)),
-                        nC < 0.6 ? family.Hills : Accent(climate, 1.0 - nC), (byte)((30 + nC * 20) * CutConfidence(nC, 0.6))
+                        hilly ? family.Hills : Accent(climate, 1.0 - nC), (byte)tail
                     );
                 }
 
             case TerrainClass.Hills:
-                return HillBlend(family, climate, relief, nA, nB, nC);
+                return HillBlend(family, climate, relief, rugged, nA, nB, nC);
 
             case TerrainClass.Mountains:
                 return MountainBlend(family, climate, relief, nA, nB, nC);
@@ -667,7 +696,7 @@ public static class TerrainPalette
                     return Mix(
                         lowA, (byte)((90 + nA * 50) * confA),
                         lowB, (byte)((70 + (1.0 - nA) * 40) * confB),
-                        family.Hills, (byte)(50 + nB * 30),
+                        family.Hills, (byte)((50 + nB * 30) * hillTex),
                         Accent(climate, nC), (byte)((25 + nC * 20) * AccentConfidence(climate, nC))
                     );
                 }
@@ -742,25 +771,100 @@ public static class TerrainPalette
             w[i] = w[i] == 0 ? (byte)0 : (byte)Math.Clamp(curved[i] / curvedSum * sum, 1, 255);
     }
 
-    /// <summary>The bare rock a family's hills break out into.</summary>
+    /// <summary>
+    /// The ground a family's hills break out into where the slope shows through.
+    ///
+    /// Soil first, stone second. The temperate line used to run bare rock across the low 75% of
+    /// the selector and reach <c>hills_01</c> — the grassy, soiled hill texture, and the only one
+    /// of the four that is not stone — only in its top quarter. Away from an actual scarp that is
+    /// backwards: a hill in Kent or Picardy is turf with rock breaking out of it, not a rockfield.
+    /// The cuts are re-ordered so <c>hills_01</c> takes the middle half of the selector and the two
+    /// rock textures split the tails — stone and soil an even share each, instead of three to one.
+    ///
+    /// Mediterranean no longer draws stone unconditionally. It was the one family with no soil
+    /// branch at all — every mediterranean hill pixel got <c>hills_rocks_medi</c> at full
+    /// confidence — which made the whole Aegean and Iberian upland read as scree.
+    ///
+    /// Arid hills are left alone: in desert and drylands the stone is the ground, and both
+    /// branches there are already the dry family's own rock rather than grey alpine scree.
+    /// </summary>
     private static byte HillRock(Climate climate, double n) => climate switch
     {
-        Climate.Mediterranean => HillsRocksMedi,
+        Climate.Mediterranean => n < 0.55 ? Hills01 : HillsRocksMedi,
         Climate.Desert or Climate.Drylands => n < 0.5 ? HillsRocks : DesertRocky,
-        _ => n < 0.4 ? HillsRocks : n < 0.75 ? HillsRocksSmall : Hills01,
+        _ => n < 0.25 ? HillsRocksSmall : n < 0.75 ? Hills01 : HillsRocks,
     };
 
-    private static Blend HillBlend(in Family family, Climate climate, double relief,
+    /// <summary>
+    /// How much bare stone a hill shows, from how broken the ground under it actually is.
+    ///
+    /// This used to key off <c>relief</c>, which is height, and height cannot answer the question:
+    /// a terrain class is picked on an elevation percentile, so a flat tableland is classed Hills
+    /// exactly like a broken ridge and reads identically high. <paramref name="rugged"/> is a real
+    /// heightmap gradient and separates the two.
+    ///
+    /// Floored rather than taken to zero, so ground that is only *fairly* smooth keeps a trace of
+    /// stone instead of losing it on a threshold. On genuinely flat ground the trace is small
+    /// enough that <see cref="Mix"/> spends the slot on the second lowland variant instead, which
+    /// is the right answer there — a tableland has no rock to show.
+    /// </summary>
+    private static double RockExposure(double rugged) => 0.12 + 0.88 * Math.Clamp(rugged, 0, 1);
+
+    /// <summary>
+    /// The share of its nominal weight a <c>gen_*_hills</c> texture keeps on this ground.
+    ///
+    /// All seven of them are roughly two thirds bare rock in their own diffuse — they are hillside
+    /// textures, not hill-coloured ground — so wherever one is painted on flat land it reads as a
+    /// rockfield regardless of how little of the accent rock sits beside it. That is why this is a
+    /// separate knob from <see cref="RockExposure"/> and why it is applied at *every* site that
+    /// names a family's hills, not only in <see cref="HillBlend"/>: the drylands tail drew
+    /// <c>gen_drylands_hills</c> across a third of its selector and the desert tail drew
+    /// <c>gen_desert_hills</c> at up to 90 weight, both on ground classified flat.
+    ///
+    /// It keeps a larger floor than the rock does because on genuine hill ground this is the
+    /// dominant layer and dropping it outright would leave the biome with no landform texture at
+    /// all — smooth high ground should read as upland pasture, which is this texture underweighted,
+    /// not as lowland plain.
+    /// </summary>
+    private static double HillTexture(double rugged) => 0.20 + 0.80 * Math.Clamp(rugged, 0, 1);
+
+    /// <summary>
+    /// Hill ground, mixed by how broken it is rather than only by how high it stands.
+    ///
+    /// The class covers everything between the hill and mountain lines, and those are elevation
+    /// percentiles — so this one case has to paint both a broken ridge and a flat tableland, and
+    /// until <paramref name="rugged"/> existed it painted them identically. All three of the stony
+    /// layers here (the family's hills, its mountain transition, and the bare rock accent) now
+    /// scale with it, and the lowlands take back what they give up.
+    ///
+    /// A fifth and sixth layer appear only on smooth ground. On a ridge the rock and the transition
+    /// carry the pixel and <see cref="Mix"/> drops the surplus lowland anyway; on a tableland those
+    /// two are faint and the pixel would otherwise be a single lowland variant repeated, which
+    /// tiles. The second variant is what keeps smooth upland reading as pasture rather than as one
+    /// stretched texture.
+    /// </summary>
+    private static Blend HillBlend(in Family family, Climate climate, double relief, double rugged,
         double nA, double nB, double nC)
     {
         byte toMountain = (byte)(30 + Math.Clamp(relief, 0, 1) * 70);
-        var (lowA, _, confA, _) = LowlandPair(family, nA, nB);
+        double broken = Math.Clamp(rugged, 0, 1);
+        double hillTex = HillTexture(broken);
+        double exposed = RockExposure(broken);
+        var (lowA, lowB, confA, confB) = LowlandPair(family, nA, nB);
+
+        // Kept at its old strength on broken ground and cut hard on smooth, where the freed weight
+        // goes back to the lowlands through Normalized rather than being lost.
+        double rock = (30 + nB * 25) * exposed * HillRockConfidence(climate, nC);
+        double soil = 70 - toMountain / 3.0 + (1.0 - nA) * 20 + 60 * (1.0 - broken);
 
         return Mix(
-            family.Hills, (byte)(100 + nA * 30),
-            lowA, (byte)((70 - toMountain / 3 + (1.0 - nA) * 20) * confA),
-            family.Transition, toMountain,
-            HillRock(climate, nC), (byte)((30 + nB * 25) * HillRockConfidence(climate, nC))
+            family.Hills, (byte)((100 + nA * 30) * hillTex),
+            lowA, (byte)(soil * confA),
+            // The shoulder into mountain rock is a slope by definition, so it has no business on
+            // flat ground at all and gets the smallest floor of the three.
+            family.Transition, (byte)(toMountain * (0.15 + 0.85 * broken)),
+            HillRock(climate, nC), (byte)rock,
+            lowB, (byte)(55 * (1.0 - broken) * confB)
         );
     }
 

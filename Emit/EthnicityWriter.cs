@@ -48,16 +48,23 @@ public static class EthnicityWriter
                 sb.Append("\t}\n\n");
             }
 
-            // 3. Accessory overrides (Hairstyles & Beards)
-            foreach (var (accKey, entries) in eth.AccessoryGenes)
-            {
-                sb.Append($"\t{accKey} = {{\n");
-                foreach (var entry in entries)
-                {
-                    sb.Append($"\t\t{entry.Weight} = {{ name = {entry.AccessoryName} }}\n");
-                }
-                sb.Append("\t}\n\n");
-            }
+            // 3. NOT accessories. `eth.AccessoryGenes` is deliberately not emitted.
+            //
+            // An ethnicity cannot set hairstyles or beards. CK3 rejects the attempt outright —
+            // "gene category 'hairstyles' cannot be influenced by DNA" (ethnicity.cpp:304), once per
+            // category per ethnicity — because those are accessory genes, chosen by portrait
+            // modifiers and DNA rather than inherited through ethnicity. No vanilla ethnicity
+            // declares either block; there is no correct syntax to switch to.
+            //
+            // Writing them anyway was not merely noisy. A rejected block does not fall back to the
+            // author's intent, it falls back to the base `template` ethnicity, so every generated
+            // culture silently drew vanilla's default hair and beards while the curated weights in
+            // MapGen/Ethnicities.cs ApplyAccessoryGenes had no effect at all.
+            //
+            // Those weights are still built and still carried on the def, because the intent behind
+            // them is real and their only legal home is a portrait_modifier group — the same shape
+            // as BaseFilesToCopy/Wilderness/gfx/portraits/portrait_modifiers, whose accessory lines
+            // are exactly this kind of override. Nothing reads them until that exists.
 
             sb.Append("}\n\n");
         }
