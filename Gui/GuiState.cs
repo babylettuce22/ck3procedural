@@ -26,6 +26,10 @@ public sealed class GuiState
 
     public string? HeightmapPath { get; set; }
     public string? View { get; set; }
+
+    /// <summary>The last mode chosen in each strip category, so switching categories lands back
+    /// where the user left that category rather than on its first entry.</summary>
+    public Dictionary<string, string>? CategoryViews { get; set; }
     public string? PresetDir { get; set; }
 
     public string? LaunchArgs { get; set; } = "-debug_mode -developer -skip";

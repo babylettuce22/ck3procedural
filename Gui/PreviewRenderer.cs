@@ -445,17 +445,6 @@ public static class PreviewRenderer
 
         var boundaryColor = ((byte)22, (byte)24, (byte)28);
 
-        (byte, byte, byte) Colour(string g) => g switch
-        {
-            GovernmentMap.Administrative => ((byte)155, (byte)60, (byte)160),
-            GovernmentMap.Nomad => ((byte)210, (byte)160, (byte)65),
-            GovernmentMap.Tribal => ((byte)185, (byte)95, (byte)60),
-            GovernmentMap.Clan => ((byte)80, (byte)150, (byte)95),
-            GovernmentMap.Republic => ((byte)200, (byte)70, (byte)70),
-            GovernmentMap.Theocracy => ((byte)205, (byte)205, (byte)200),
-            _ => ((byte)65, (byte)110, (byte)160),
-        };
-
         return Downsample(width, height,
             i =>
             {
@@ -463,7 +452,7 @@ public static class PreviewRenderer
                 if (c == Water) return ((byte)38, (byte)62, (byte)96);
                 if (c == Impassable) return ((byte)92, (byte)92, (byte)100);
                 if (c == NoCounty) return ((byte)255, (byte)0, (byte)255);
-                return Edge(i, c) ? boundaryColor : Colour(government[c]);
+                return Edge(i, c) ? boundaryColor : GovernmentColour(government[c]);
             },
             i =>
             {
@@ -543,6 +532,140 @@ public static class PreviewRenderer
                 if (isWild[c]) return 2;
                 return Edge(i, c) ? 1 : 0;
             });
+    }
+
+    /// <summary>Shared with the legend, so the key can never drift from the paint.</summary>
+    public static (byte R, byte G, byte B) GovernmentColour(string government) => government switch
+    {
+        GovernmentMap.Administrative => (155, 60, 160),
+        GovernmentMap.Nomad => (210, 160, 65),
+        GovernmentMap.Tribal => (185, 95, 60),
+        GovernmentMap.Clan => (80, 150, 95),
+        GovernmentMap.Republic => (200, 70, 70),
+        GovernmentMap.Theocracy => (205, 205, 200),
+        _ => (65, 110, 160),
+    };
+
+    private static readonly (byte R, byte G, byte B) SeaBlue = (38, 62, 96);
+
+    /// <summary>
+    /// Mean annual temperature on a cold-to-hot ramp. Piecewise-linear through hand-placed stops
+    /// rather than one hue sweep, so the freezing point lands exactly on the blue-to-green break —
+    /// the one temperature a reader actually looks for.
+    /// </summary>
+    public static (byte R, byte G, byte B) TemperatureColour(float meanC)
+        => Ramp(meanC,
+        [
+            (-25, (70, 50, 160)),
+            (-10, (60, 100, 200)),
+            (0, (100, 180, 220)),
+            (10, (120, 190, 120)),
+            (20, (230, 200, 90)),
+            (30, (220, 110, 60)),
+            (38, (170, 40, 40)),
+        ]);
+
+    /// <summary>Annual rainfall, parched tan through green to drowned blue.</summary>
+    public static (byte R, byte G, byte B) RainfallColour(float annualMm)
+        => Ramp(annualMm,
+        [
+            (0, (210, 180, 120)),
+            (250, (190, 190, 110)),
+            (500, (140, 180, 100)),
+            (1000, (70, 160, 110)),
+            (1600, (50, 130, 170)),
+            (2400, (30, 80, 160)),
+        ]);
+
+    /// <summary>The 0..1 habitability field, barren red-brown to rich green.</summary>
+    public static (byte R, byte G, byte B) HabitabilityColour(float t)
+        => Ramp(t,
+        [
+            (0.0, (150, 60, 50)),
+            (0.25, (190, 140, 80)),
+            (0.5, (200, 190, 100)),
+            (0.75, (130, 180, 90)),
+            (1.0, (60, 150, 70)),
+        ]);
+
+    private static (byte R, byte G, byte B) Ramp(double value,
+        (double At, (int R, int G, int B) Colour)[] stops)
+    {
+        if (value <= stops[0].At) return Byte(stops[0].Colour);
+        for (int i = 1; i < stops.Length; i++)
+        {
+            if (value > stops[i].At) continue;
+
+            var (a, from) = stops[i - 1];
+            var (b, to) = stops[i];
+            double t = (value - a) / (b - a);
+
+            return ((byte)(from.R + (to.R - from.R) * t),
+                    (byte)(from.G + (to.G - from.G) * t),
+                    (byte)(from.B + (to.B - from.B) * t));
+        }
+        return Byte(stops[^1].Colour);
+
+        static (byte, byte, byte) Byte((int R, int G, int B) c) => ((byte)c.R, (byte)c.G, (byte)c.B);
+    }
+
+    public static Image RenderTemperature(GenerationResult r)
+        => RenderField(r, i => TemperatureColour(r.Terrain.Field.MeanC[i]));
+
+    public static Image RenderRainfall(GenerationResult r)
+        => RenderField(r, i => RainfallColour(r.Terrain.Field.AnnualMm[i]));
+
+    /// <summary>
+    /// The habitability field the province sizer weighs — rebuilt on demand from inputs the result
+    /// already carries, exactly as <see cref="ProvinceSize"/> built it, rather than stored: it is
+    /// asked for once per build at most and the arrays are 40MB a copy.
+    /// </summary>
+    public static Image RenderHabitability(GenerationResult r)
+    {
+        var field = Habitability.Build(r.LandMask, r.ProvinceElevation, r.Terrain.Field,
+            r.Config.ProvinceWidth, r.Config.ProvinceHeight, r.Config);
+        return RenderField(r, i => HabitabilityColour(field[i]));
+    }
+
+    /// <summary>A per-cell scalar over land, with the sea flattened to one colour.</summary>
+    private static Image RenderField(GenerationResult r, Func<int, (byte R, byte G, byte B)> colour)
+        => Downsample(r.Config.ProvinceWidth, r.Config.ProvinceHeight,
+            i => r.LandMask[i] == 1 ? colour(i) : SeaBlue);
+
+    /// <summary>
+    /// Counties by the ethnicity their culture wears. Ethnicities carry no colour of their own —
+    /// they are portrait DNA, not map paint — so each gets a stable hue from its position on the
+    /// golden-angle wheel, which keeps neighbours apart for any count of ethnicities.
+    /// </summary>
+    public static Image RenderEthnicities(GenerationResult result, Emit.WrittenContent written)
+    {
+        var keys = written.Ethnicities.Ethnicities.Keys.Order(StringComparer.Ordinal).ToList();
+        var hueOf = new Dictionary<string, (byte R, byte G, byte B)>();
+        for (int i = 0; i < keys.Count; i++)
+            hueOf[keys[i]] = HueColour(i * 137.508, 0.55, 0.82);
+
+        return RenderByCounty(result, written.Wilderness, county =>
+            written.Cultures.ByCounty.TryGetValue(county, out var culture)
+                ? hueOf.GetValueOrDefault(written.Ethnicities.For(culture).Key)
+                : null);
+    }
+
+    public static (byte R, byte G, byte B) HueColour(double hueDegrees, double s, double v)
+    {
+        double h = ((hueDegrees % 360) + 360) % 360 / 60.0;
+        double c = v * s, x = c * (1 - Math.Abs(h % 2 - 1)), m = v - c;
+
+        var (r, g, b) = (int)h switch
+        {
+            0 => (c, x, 0.0),
+            1 => (x, c, 0.0),
+            2 => (0.0, c, x),
+            3 => (0.0, x, c),
+            4 => (x, 0.0, c),
+            _ => (c, 0.0, x),
+        };
+
+        return ((byte)((r + m) * 255), (byte)((g + m) * 255), (byte)((b + m) * 255));
     }
 
     private static (byte R, byte G, byte B) Colour(TerrainClass terrain)

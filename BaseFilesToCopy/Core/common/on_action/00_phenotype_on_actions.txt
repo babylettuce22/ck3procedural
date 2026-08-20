@@ -53,3 +53,15 @@ gen_phenotype_assign_on_action = {
 		gen_assign_phenotype_effect = yes
 	}
 }
+
+# Child corrections
+
+on_birth_child = {
+    on_actions = { gen_phenotype_birth_on_action }
+}
+
+gen_phenotype_birth_on_action = {
+    effect = {
+        gen_resolve_child_phenotype_effect = yes
+    }
+}

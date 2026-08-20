@@ -1,135 +1,83 @@
-﻿# Procedural Genetic Phenotypes
+﻿# 00_phenotype_traits.txt
 
-#elf
+# Elf
 phenotype_gracile = {
     physical = yes
-    inherit_chance = 100
-    both_parent_has_trait_inherit_chance = 100
-    inherit_from_real_father = yes
-    inherit_from_real_mother = yes
+    inherit_chance = 0
     shown_in_ruler_designer = yes
     ruler_designer_cost = 20
 
-    group = phenotype_physique
-    opposites = { phenotype_stocky phenotype_rough_hewn }
-
+    group = phenotype_race
+    opposites = {
+        phenotype_stocky
+        phenotype_rough_hewn
+        phenotype_towering
+        phenotype_diminutive
+        phenotype_dusk_adapted
+    }
     icon = "gracile.dds"
 
-    desc = {
-        first_valid = {
-            triggered_desc = {
-                trigger = {
-                    NOT = { exists = this }
-                }
-                desc = trait_phenotype_gracile_desc
-            }
-            desc = trait_phenotype_gracile_character_desc
-        }
+    culture_modifier = {
+        parameter = forest_trait_bonuses
+        forest_attrition_mult = -0.1
+        taiga_attrition_mult = -0.1
     }
-
-	culture_modifier = {
-		parameter = forest_trait_bonuses
-		forest_attrition_mult = -0.1
-		taiga_attrition_mult = -0.1
-	}
 
     diplomacy = 1
     prowess = 1
     movement_speed = 0.05
     stress_loss_mult = 0.05
     same_opinion = 10
-
-    # Elves outlive men, and both halves of that are needed.
-    #
-    # `life_expectancy` is literally years before natural death, and it also makes a character
-    # visibly age slower -- which is the same idea gene_age's `no_aging` expresses on the portrait,
-    # so the two agree instead of one contradicting the other. Vanilla's own range runs -10..+10
-    # (fecund is +5), so +35 is far outside human scale on purpose: base expectancy sits around
-    # sixty, and this is what puts an elf comfortably past a hundred.
     life_expectancy = 35
-
-    # Health does the other half, and it is the part that actually stops the age-related ailments
-    # -- faltering heart, clouded eyes, fragile bones, withering mind, infirm -- from arriving at a
-    # human's schedule. Each of those events carries `modifier = { health >= good_health  age < 60
-    # factor = 0 }`, so a character at or above good_health (5) simply cannot draw one before sixty.
-    # Engine-generated characters spawn at health 4.0-5.0 (RANDOM_CHARACTER_MIN/MAX_HEALTH), so the
-    # old +0.65 left roughly half of all elves under the bar and collecting ailments from 45. At
-    # +1.25 the whole spawn range clears it.
-    #
-    # It keeps paying afterwards: the tracked ailments advance through a random_list in
-    # health_on_actions.txt that subtracts 25 from the progression roll at `health >= fine_health`,
-    # so an elf who does pick one up past sixty climbs toward the lethal top of the track far more
-    # slowly than a man would.
     health = 1.25
 }
 
-#dwarf
+# Dwarf
 phenotype_stocky = {
     physical = yes
-    inherit_chance = 100
-    both_parent_has_trait_inherit_chance = 100
-    inherit_from_real_father = yes
-    inherit_from_real_mother = yes
+    inherit_chance = 0
     shown_in_ruler_designer = yes
     ruler_designer_cost = 20
 
-    group = phenotype_physique
-    opposites = { phenotype_gracile phenotype_diminutive }
-
-    icon = "stocky.dds"
-
-    desc = {
-        first_valid = {
-            triggered_desc = {
-                trigger = {
-                    NOT = { exists = this }
-                }
-                desc = trait_phenotype_stocky_desc
-            }
-            desc = trait_phenotype_stocky_character_desc
-        }
+    group = phenotype_race
+    opposites = {
+        phenotype_gracile
+        phenotype_rough_hewn
+        phenotype_towering
+        phenotype_diminutive
+        phenotype_dusk_adapted
     }
+    icon = "stocky.dds"
 
     stewardship = 1
     prowess = 2
     health = 0.5
     defender_advantage = 3
-
     same_opinion = 5
 	
-		culture_modifier = {
-		parameter = mountain_trait_bonuses
-		mountains_attrition_mult= -0.15
-		desert_mountains_attrition_mult = -0.15
-	}
+    culture_modifier = {
+        parameter = mountain_trait_bonuses
+        mountains_attrition_mult = -0.15
+        desert_mountains_attrition_mult = -0.15
+    }
 }
 
-#orc
+# Orc
 phenotype_rough_hewn = {
     physical = yes
-    inherit_chance = 100
-    both_parent_has_trait_inherit_chance = 100
-    inherit_from_real_father = yes
-    inherit_from_real_mother = yes
+    inherit_chance = 0
     shown_in_ruler_designer = yes
     ruler_designer_cost = 15
 
-    group = phenotype_physique
-    opposites = { phenotype_gracile }
-
-    icon = "rough_hewn.dds"
-
-    desc = {
-        first_valid = {
-            triggered_desc = {
-                trigger = {
-                    NOT = { exists = this }
-                }
-                desc = trait_phenotype_rough_hewn_desc
-            }
-            desc = trait_phenotype_rough_hewn_character_desc
-        }
+    group = phenotype_race
+    opposites = {
+        phenotype_gracile
+        phenotype_stocky
+        phenotype_towering
+        phenotype_diminutive
+        phenotype_dusk_adapted
     }
+    icon = "rough_hewn.dds"
 
     health = -0.1
     martial = 1
@@ -140,112 +88,77 @@ phenotype_rough_hewn = {
     same_opinion = 10
 }
 
-#giant
+# Giant
 phenotype_towering = {
     physical = yes
-    inherit_chance = 100
-    both_parent_has_trait_inherit_chance = 100
-    inherit_from_real_father = yes
-    inherit_from_real_mother = yes
+    inherit_chance = 0
     shown_in_ruler_designer = yes
     ruler_designer_cost = 25
 
-    group = phenotype_height
-    opposites = { phenotype_diminutive phenotype_stocky }
-
-    icon = "towering.dds"
-
-    desc = {
-        first_valid = {
-            triggered_desc = {
-                trigger = {
-                    NOT = { exists = this }
-                }
-                desc = trait_phenotype_towering_desc
-            }
-            desc = trait_phenotype_towering_character_desc
-        }
+    group = phenotype_race
+    opposites = {
+        phenotype_gracile
+        phenotype_stocky
+        phenotype_rough_hewn
+        phenotype_diminutive
+        phenotype_dusk_adapted
     }
+    icon = "towering.dds"
 
     prowess = 4
     knight_effectiveness_mult = 0.15
     advantage = 2
     dread_gain_mult = 0.10
-
     same_opinion = 5
 }
 
-#gnome
+# Gnome
 phenotype_diminutive = {
     physical = yes
-    inherit_chance = 100
-    both_parent_has_trait_inherit_chance = 100
-    inherit_from_real_father = yes
-    inherit_from_real_mother = yes
+    inherit_chance = 0
     shown_in_ruler_designer = yes
     ruler_designer_cost = 10
 
-    group = phenotype_height
-    opposites = { phenotype_towering }
-
-    icon = "diminutive.dds"
-
-    desc = {
-        first_valid = {
-            triggered_desc = {
-                trigger = {
-                    NOT = { exists = this }
-                }
-                desc = trait_phenotype_diminutive_desc
-            }
-            desc = trait_phenotype_diminutive_character_desc
-        }
+    group = phenotype_race
+    opposites = {
+        phenotype_gracile
+        phenotype_stocky
+        phenotype_rough_hewn
+        phenotype_towering
+        phenotype_dusk_adapted
     }
+    icon = "diminutive.dds"
 
     intrigue = 1
     prowess = -2
     owned_hostile_scheme_success_chance_add = 15
-    scheme_resistance = 10
+    enemy_hostile_scheme_success_chance_add = -10
     stress_loss_mult = 0.10
-
     same_opinion = 5
 }
 
-#drow
+# Drow
 phenotype_dusk_adapted = {
     physical = yes
-    inherit_chance = 100
-    both_parent_has_trait_inherit_chance = 100
-    inherit_from_real_father = yes
-    inherit_from_real_mother = yes
+    inherit_chance = 0
     shown_in_ruler_designer = yes
     ruler_designer_cost = 20
 
-    group = phenotype_origin
-
-    icon = "dusk_adapted.dds"
-
-    desc = {
-        first_valid = {
-            triggered_desc = {
-                trigger = {
-                    NOT = { exists = this }
-                }
-                desc = trait_phenotype_dusk_adapted_desc
-            }
-            desc = trait_phenotype_dusk_adapted_character_desc
-        }
+    group = phenotype_race
+    opposites = {
+        phenotype_gracile
+        phenotype_stocky
+        phenotype_rough_hewn
+        phenotype_towering
+        phenotype_diminutive
     }
+    icon = "dusk_adapted.dds"
 
     intrigue = 2
     learning = 1
     owned_hostile_scheme_success_chance_add = 10
     enemy_hostile_scheme_success_chance_add = -5
-
     same_opinion = 5
-
-    # Long-lived, though not as long as the surface elves -- see phenotype_gracile for why these two
-    # modifiers are the pair that matters and how the ailment events read them.
     life_expectancy = 28
     health = 1.0
 }

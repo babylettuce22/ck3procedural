@@ -64,12 +64,33 @@ public sealed class MainForm : Form
     };
 
     private readonly ImageView _viewer = new() { Dock = DockStyle.Fill };
-    private readonly FlowLayoutPanel _viewStrip = new()
+
+    private readonly FlowLayoutPanel _categoryStrip = new()
     {
         Dock = DockStyle.Top,
-        Height = 32,
+        Height = 30,
         Padding = new Padding(4, 3, 4, 0),
         BackColor = Theme.Surface,
+    };
+
+    private readonly FlowLayoutPanel _modeStrip = new()
+    {
+        Dock = DockStyle.Top,
+        Height = 30,
+        Padding = new Padding(4, 2, 4, 0),
+        BackColor = Theme.Surface,
+    };
+
+    // Wraps rather than clips: Terrain and Climate carry a dozen-plus classes each, and vertical
+    // space is the cheap axis under a 2:1 map. Hidden entirely for modes with no fixed palette.
+    private readonly FlowLayoutPanel _legendBar = new()
+    {
+        Dock = DockStyle.Top,
+        AutoSize = true,
+        WrapContents = true,
+        Padding = new Padding(6, 2, 4, 2),
+        BackColor = Theme.Surface,
+        Visible = false,
     };
 
     private readonly TextBox _log = new()
@@ -107,7 +128,7 @@ public sealed class MainForm : Form
     private readonly Label _readout = new()
     {
         Dock = DockStyle.Right,
-        Width = 260,
+        Width = 560,
         TextAlign = ContentAlignment.MiddleRight,
         ForeColor = Theme.TextDim,
         Font = Theme.Ui,
@@ -142,51 +163,13 @@ public sealed class MainForm : Form
     private SplitContainer _body = null!;
     private SplitContainer _right = null!;
 
-    private static readonly (string Name,
-        Func<GenerationResult, Emit.WrittenContent?, PreviewRenderer.Image> Render)[] Views =
-        [
-        ("Relief", (r, _) => PreviewRenderer.RenderRelief(r)),
-        ("Heightmap", (r, _) => PreviewRenderer.RenderHeightmap(r)),
-        ("Terrain", (r, _) => PreviewRenderer.RenderTerrain(r)),
-        ("Climate", (r, _) => PreviewRenderer.RenderClimate(r)),
-        ("Drainage", (r, _) => PreviewRenderer.RenderDrainage(r)),
-        ("Rivers", (r, _) => PreviewRenderer.RenderRivers(r)),
-        ("Provinces", (r, _) => PreviewRenderer.RenderProvinces(r)),
-        ("Counties", (r, _) => PreviewRenderer.RenderCounties(r)),
-        ("Duchies", (r, _) => PreviewRenderer.RenderDuchies(r)),
-        ("Kingdoms", (r, _) => PreviewRenderer.RenderKingdoms(r)),
-        ("Empires", (r, _) => PreviewRenderer.RenderEmpires(r)),
-        ("Realms", (r, w) => PreviewRenderer.RenderRealms(r, w?.Realms, w?.Wilderness)),
-        ("Cultures", (r, w) => PreviewRenderer.RenderCultures(r, w?.Cultures, w?.Wilderness)),
-        ("Faiths", (r, w) => PreviewRenderer.RenderFaiths(r, w?.Faiths, w?.Wilderness)),
-        ("Government", (r, _) => PreviewRenderer.RenderGovernment(r)),
-        ("Wilderness", (r, _) => PreviewRenderer.RenderWilderness(r)),
-    ];
-
-    private enum Pick { Title, Culture, Faith }
-
-    private static readonly Dictionary<string, (Pick Kind, string Tier)> ClickableViews = new()
-    {
-        ["Counties"] = (Pick.Title, "c"),
-        ["Duchies"] = (Pick.Title, "d"),
-        ["Kingdoms"] = (Pick.Title, "k"),
-        ["Empires"] = (Pick.Title, "e"),
-        ["Realms"] = (Pick.Title, "c"),
-        ["Cultures"] = (Pick.Culture, "c"),
-        ["Faiths"] = (Pick.Faith, "c"),
-    };
-
-    private static bool Repaints(Pick kind, Emit.WorldAspect touched) => kind switch
-    {
-        Pick.Title => touched.HasFlag(Emit.WorldAspect.TitleColors),
-        Pick.Culture => touched.HasFlag(Emit.WorldAspect.Cultures),
-        _ => touched.HasFlag(Emit.WorldAspect.Faiths),
-    };
-
     private readonly Dictionary<string, Button> _viewButtons = [];
+    private readonly Dictionary<string, Button> _categoryButtons = [];
+    private readonly Dictionary<string, string> _lastInCategory = [];
     private readonly Dictionary<string, Bitmap> _rendered = [];
     private GenerationResult? _result;
     private string _view = "Counties";
+    private string _category = "Divisions";
 
     private readonly WorldEdits _edits = new();
     private readonly TitleEditor _titles;
@@ -344,7 +327,14 @@ public sealed class MainForm : Form
         _titles.SelectionChanged += titles => { if (titles.Count > 0) Inspect([.. titles]); };
         _edits.Changed += OnEditsChanged;
 
-        if (_state.View is { } remembered && Views.Any(v => v.Name == remembered)) _view = remembered;
+        foreach (var (category, mode) in _state.CategoryViews ?? new Dictionary<string, string>())
+            if (MapModes.Find(mode)?.Category == category) _lastInCategory[category] = mode;
+
+        if (_state.View is { } remembered && MapModes.Find(remembered) is { } rememberedMode)
+        {
+            _view = remembered;
+            _category = rememberedMode.Category;
+        }
 
         Controls.Add(BuildBody());
         Controls.Add(BuildPendingBar());
@@ -433,16 +423,28 @@ public sealed class MainForm : Form
         settings.Controls.Add(_grid);
         settings.Controls.Add(presets);
 
-        foreach (var (name, _) in Views)
+        foreach (string category in MapModes.Categories)
         {
-            var button = ViewButton(name);
-            _viewButtons[name] = button;
-            _viewStrip.Controls.Add(button);
+            var button = StripButton(category, bold: true);
+            button.Click += (_, _) => SelectCategory(category);
+            _categoryButtons[category] = button;
+            _categoryStrip.Controls.Add(button);
         }
 
+        foreach (var mode in MapModes.All)
+        {
+            var button = StripButton(mode.Clickable ? $"{mode.Name} ✎" : mode.Name, bold: false);
+            button.Click += (_, _) => OnModeClicked(mode);
+            _viewButtons[mode.Name] = button;
+        }
+
+        // The fill is added first and each Top bar after, so the bars stack top-down in reverse
+        // order of addition: categories, then modes, then the legend, with the map under them all.
         var viewer = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
         viewer.Controls.Add(_viewer);
-        viewer.Controls.Add(_viewStrip);
+        viewer.Controls.Add(_legendBar);
+        viewer.Controls.Add(_modeStrip);
+        viewer.Controls.Add(_categoryStrip);
 
         var tabs = Theme.MakeTabs();
 
@@ -808,15 +810,16 @@ public sealed class MainForm : Form
     private static Control Separator()
         => new Panel { Width = 1, Height = 22, BackColor = Theme.Border, Margin = new Padding(8, 4, 8, 0) };
 
-    private Button ViewButton(string name)
+    private static Button StripButton(string text, bool bold)
     {
         var button = new Button
         {
-            Text = name,
-            Width = 84,
+            Text = text,
+            AutoSize = true,
             Height = 24,
+            Padding = new Padding(6, 0, 6, 0),
             FlatStyle = FlatStyle.Flat,
-            Font = Theme.Ui,
+            Font = bold ? Theme.UiBold : Theme.Ui,
             BackColor = Theme.SurfaceHigh,
             ForeColor = Theme.Text,
             UseVisualStyleBackColor = false,
@@ -824,8 +827,32 @@ public sealed class MainForm : Form
         };
         button.FlatAppearance.BorderSize = 0;
         button.FlatAppearance.MouseOverBackColor = Theme.Border;
-        button.Click += (_, _) => SelectView(name);
         return button;
+    }
+
+    private bool Available(MapMode mode) => !mode.AfterWrite || _written is not null;
+
+    private void OnModeClicked(MapMode mode)
+    {
+        if (!Available(mode))
+        {
+            _status.Text = $"{mode.Name} shows written content — write the mod first";
+            return;
+        }
+
+        SelectView(mode.Name);
+    }
+
+    private void SelectCategory(string category)
+    {
+        var modes = MapModes.All.Where(m => m.Category == category).ToList();
+
+        string pick = _lastInCategory.TryGetValue(category, out var last)
+                      && MapModes.Find(last) is { } remembered && Available(remembered)
+            ? last
+            : (modes.FirstOrDefault(Available) ?? modes[0]).Name;
+
+        SelectView(pick);
     }
 
     protected override void OnLoad(EventArgs e)
@@ -959,6 +986,7 @@ public sealed class MainForm : Form
         _state.ViewerHeight = _right.SplitterDistance;
         _state.HeightmapPath = _heightmapPath;
         _state.View = _view;
+        _state.CategoryViews = new Dictionary<string, string>(_lastInCategory);
 
         _state.GameDir = Core.GameLocator.IsGameDir(_options.GameDir) ? _options.GameDir : null;
         _state.ModRoot = _modRoot;
@@ -987,9 +1015,51 @@ public sealed class MainForm : Form
             case Keys.Escape when _busy:
                 RequestCancel();
                 return true;
+
+            case Keys.Oem4 when !TypingInText():   // [
+                CycleMode(-1);
+                return true;
+
+            case Keys.Oem6 when !TypingInText():   // ]
+                CycleMode(+1);
+                return true;
+
+            case Keys.Control | Keys.Oem4:
+                CycleCategory(-1);
+                return true;
+
+            case Keys.Control | Keys.Oem6:
+                CycleCategory(+1);
+                return true;
         }
 
         return base.ProcessCmdKey(ref message, key);
+    }
+
+    private void CycleMode(int step)
+    {
+        var modes = MapModes.All.Where(m => m.Category == _category && Available(m)).ToList();
+        if (modes.Count == 0) return;
+
+        int at = modes.FindIndex(m => m.Name == _view);
+        SelectView(modes[(Math.Max(0, at) + step + modes.Count) % modes.Count].Name);
+    }
+
+    private void CycleCategory(int step)
+    {
+        int at = Math.Max(0, Array.IndexOf(MapModes.Categories, _category));
+        int next = (at + step + MapModes.Categories.Length) % MapModes.Categories.Length;
+        SelectCategory(MapModes.Categories[next]);
+    }
+
+    /// <summary>The bracket keys cycle map modes — except while the user is typing somewhere.</summary>
+    private bool TypingInText()
+    {
+        Control? active = ActiveControl;
+        while (active is ContainerControl container && container.ActiveControl is not null)
+            active = container.ActiveControl;
+
+        return active is TextBoxBase or NumericUpDown or ComboBox or PropertyGrid;
     }
 
     private void PickHeightmap()
@@ -1582,6 +1652,7 @@ public sealed class MainForm : Form
     private void ShowResult(GenerationResult result)
     {
         _result = result;
+        _probeBaronies = null;
 
         _edits.Detach();
 
@@ -1594,39 +1665,143 @@ public sealed class MainForm : Form
 
     private void SelectView(string name)
     {
-        _view = name;
+        var mode = MapModes.Find(name) ?? MapModes.All[0];
 
-        foreach (var (key, button) in _viewButtons)
+        // A remembered or restored mode can point at written content that does not exist yet;
+        // land on the nearest thing in its category that does.
+        if (!Available(mode))
         {
-            bool on = key == name;
-            button.BackColor = on ? Theme.Accent : Theme.SurfaceHigh;
-            button.ForeColor = on ? Theme.AccentText : Theme.Text;
-            button.FlatAppearance.MouseOverBackColor = on ? Theme.Accent : Theme.Border;
+            mode = MapModes.All.FirstOrDefault(m => m.Category == mode.Category && Available(m))
+                   ?? MapModes.All[0];
         }
 
-        _viewer.ViewName = name;
+        bool switched = _view != mode.Name;
 
-        if (_result is null && !_rendered.ContainsKey(name))
+        _view = mode.Name;
+        _category = mode.Category;
+        _lastInCategory[_category] = _view;
+
+        RestyleStrip();
+        ShowLegend(mode);
+
+        _viewer.ViewName = mode.Name;
+        _viewer.Cursor = mode.Clickable && _result is not null ? Cursors.Hand : Cursors.Default;
+
+        // Only on an actual switch: this also runs to repaint after an edit, and the hint would
+        // otherwise stamp over the "Culture Suebi — Lugia" confirmation the edit just wrote.
+        if (switched && !_busy && _result is not null && mode.Pick is { } pick)
+        {
+            _status.Text = pick.Kind switch
+            {
+                MapPick.Culture => "Click a county to inspect and edit its culture",
+                MapPick.Faith => "Click a county to inspect and edit its faith",
+                _ => $"Click a {TierWord(pick.Tier)} to inspect and edit it",
+            };
+        }
+
+        if (_result is null && !_rendered.ContainsKey(mode.Name))
         {
             _viewer.SetImage(null);
             return;
         }
 
-        if (!_rendered.TryGetValue(name, out var bitmap) && _result is not null)
+        if (!_rendered.TryGetValue(mode.Name, out var bitmap) && _result is not null)
         {
-            var render = Views.First(v => v.Name == name).Render;
-            using (new WaitCursorFor(this)) bitmap = ToBitmap(render(_result, _written));
-            _rendered[name] = bitmap;
+            using (new WaitCursorFor(this)) bitmap = ToBitmap(mode.Render(_result, _written));
+            _rendered[mode.Name] = bitmap;
         }
 
         _viewer.SetImage(bitmap);
         ShowReadout(_viewer.Zoom, null);
     }
 
+    private static string TierWord(string tier) => tier switch
+    {
+        "e" => "empire",
+        "k" => "kingdom",
+        "d" => "duchy",
+        _ => "county",
+    };
+
+    /// <summary>
+    /// Restyles both strip rows for the current selection, and reparents the mode row to the
+    /// active category. Runs whole rather than incrementally because availability can change out
+    /// from under any button — a preview build clears <see cref="_written"/> and every post-write
+    /// mode dims at once.
+    /// </summary>
+    private void RestyleStrip()
+    {
+        foreach (var (key, button) in _categoryButtons)
+        {
+            bool on = key == _category;
+            button.BackColor = on ? Theme.Accent : Theme.SurfaceHigh;
+            button.ForeColor = on ? Theme.AccentText : Theme.Text;
+            button.FlatAppearance.MouseOverBackColor = on ? Theme.Accent : Theme.Border;
+        }
+
+        _modeStrip.SuspendLayout();
+        _modeStrip.Controls.Clear();
+
+        foreach (var mode in MapModes.All)
+        {
+            if (mode.Category != _category) continue;
+
+            var button = _viewButtons[mode.Name];
+            bool on = mode.Name == _view;
+            bool available = Available(mode);
+
+            button.BackColor = on ? Theme.Accent : available ? Theme.SurfaceHigh : Theme.Surface;
+            button.ForeColor = on ? Theme.AccentText : available ? Theme.Text : Theme.TextDim;
+            button.FlatAppearance.MouseOverBackColor = on ? Theme.Accent : Theme.Border;
+
+            _tips.SetToolTip(button, available
+                ? mode.Clickable ? "Click the map in this mode to inspect and edit" : null
+                : "Shows written content — available after Write mod");
+
+            _modeStrip.Controls.Add(button);
+        }
+
+        _modeStrip.ResumeLayout();
+    }
+
+    private void ShowLegend(MapMode mode)
+    {
+        _legendBar.SuspendLayout();
+
+        var old = _legendBar.Controls.Cast<Control>().ToList();
+        _legendBar.Controls.Clear();
+        foreach (var control in old) control.Dispose();
+
+        if (mode.Legend is { } legend)
+        {
+            foreach (var ((r, g, b), label) in legend)
+            {
+                _legendBar.Controls.Add(new Panel
+                {
+                    Width = 10,
+                    Height = 10,
+                    BackColor = Color.FromArgb(r, g, b),
+                    Margin = new Padding(8, 5, 3, 0),
+                });
+                _legendBar.Controls.Add(new Label
+                {
+                    Text = label,
+                    AutoSize = true,
+                    Font = Theme.Ui,
+                    ForeColor = Theme.TextDim,
+                    Margin = new Padding(0, 3, 0, 0),
+                });
+            }
+        }
+
+        _legendBar.Visible = mode.Legend is not null;
+        _legendBar.ResumeLayout();
+    }
+
     private void PickTitleAt(Point pixel)
     {
         if (_busy || _edits.Target is not { } target || _result is null) return;
-        if (!ClickableViews.TryGetValue(_view, out var view)) return;
+        if (MapModes.Find(_view)?.Pick is not { } view) return;
 
         var map = _result.Provinces;
         int step = PreviewRenderer.StepFor(map.Width);
@@ -1651,18 +1826,18 @@ public sealed class MainForm : Form
 
         switch (view.Kind)
         {
-            case Pick.Title:
+            case MapPick.Title:
                 _titles.Reveal(title);
                 _status.Text = $"{TitleInspector.TierName(title)} {title.Name}";
                 break;
 
-            case Pick.Culture:
+            case MapPick.Culture:
                 var culture = target.Written.Cultures.For(title);
                 Inspect([culture]);
                 _status.Text = $"Culture {culture.Name} — {title.Name}";
                 break;
 
-            case Pick.Faith:
+            case MapPick.Faith:
                 var faith = target.Written.Faiths.For(title);
                 Inspect([faith]);
                 _status.Text = $"Faith {faith.Name} — {title.Name}";
@@ -1745,7 +1920,8 @@ public sealed class MainForm : Form
     {
         ShowPending();
 
-        if (_redrawQueued || !ClickableViews.Values.Any(v => Repaints(v.Kind, touched))) return;
+        if (_redrawQueued || !MapModes.All.Any(
+                m => m.RepaintKind is { } kind && MapModes.Repaints(kind, touched))) return;
 
         _staleAspects |= touched;
         _redrawQueued = Post(RedrawTitleViews);
@@ -1761,15 +1937,15 @@ public sealed class MainForm : Form
         var stale = _staleAspects;
         _staleAspects = Emit.WorldAspect.None;
 
-        bool showing = ClickableViews.TryGetValue(_view, out var current)
-                       && Repaints(current.Kind, stale);
+        bool showing = MapModes.Find(_view)?.RepaintKind is { } kind
+                       && MapModes.Repaints(kind, stale);
 
         if (showing) _viewer.SetImage(null);
 
-        foreach (var (name, view) in ClickableViews)
+        foreach (var mode in MapModes.All)
         {
-            if (!Repaints(view.Kind, stale)) continue;
-            if (_rendered.Remove(name, out var dead)) dead.Dispose();
+            if (mode.RepaintKind is not { } repaint || !MapModes.Repaints(repaint, stale)) continue;
+            if (_rendered.Remove(mode.Name, out var dead)) dead.Dispose();
         }
 
         if (showing) SelectView(_view);
@@ -1777,8 +1953,86 @@ public sealed class MainForm : Form
 
     private void ShowReadout(float zoom, Point? pixel)
     {
-        string where = pixel is { } p ? $"   {p.X}, {p.Y} px" : "";
-        _readout.Text = _result is null ? "" : $"{_view}   {zoom * 100:F0}%{where}";
+        if (_result is null)
+        {
+            _readout.Text = "";
+            return;
+        }
+
+        string probe = pixel is { } p ? Probe(p) : "";
+        _readout.Text = probe.Length > 0
+            ? $"{probe}   ·   {zoom * 100:F0}%"
+            : $"{_view}   {zoom * 100:F0}%";
+    }
+
+    private MapGen.Title?[]? _probeBaronies;
+
+    /// <summary>Baronies by province id, built once per result so a mouse move costs lookups only.</summary>
+    private MapGen.Title?[] ProbeBaronies()
+    {
+        if (_probeBaronies is not null) return _probeBaronies;
+
+        var byId = new MapGen.Title?[_result!.BaronyCount + 1];
+        foreach (var title in MapGen.Titles.Flatten(_result.Titles))
+            if (title.Tier == "b" && title.ProvinceId >= 1 && title.ProvinceId <= _result.BaronyCount)
+                byId[title.ProvinceId] = title;
+
+        return _probeBaronies = byId;
+    }
+
+    /// <summary>
+    /// What is under the cursor: county, duchy and kingdom on land, the water's written name at
+    /// sea, plus whatever line the active mode adds — terrain class, temperature, culture and so
+    /// on. Coordinates go through the current bitmap's size rather than a fixed step because the
+    /// heightmap mode renders at a different resolution from every other view.
+    /// </summary>
+    private string Probe(Point pixel)
+    {
+        if (_result is null || !_rendered.TryGetValue(_view, out var bitmap)) return "";
+
+        var map = _result.Provinces;
+        int mx = Math.Clamp(pixel.X * map.Width / Math.Max(1, bitmap.Width), 0, map.Width - 1);
+        int my = Math.Clamp(pixel.Y * map.Height / Math.Max(1, bitmap.Height), 0, map.Height - 1);
+        int cell = my * map.Width + mx;
+        int id = _result.ProvinceOrder[map.Label[cell]];
+
+        MapGen.Title? county = null;
+        string place;
+
+        if (id >= 1 && id <= _result.BaronyCount)
+        {
+            var barony = ProbeBaronies()[id];
+            string? duchy = null, kingdom = null;
+
+            for (var walk = barony; walk is not null; walk = walk.Parent)
+            {
+                if (walk.Tier == "c") county = walk;
+                else if (walk.Tier == "d") duchy = walk.Name;
+                else if (walk.Tier == "k") kingdom = walk.Name;
+            }
+
+            place = county is null
+                ? barony?.Name ?? $"province {id}"
+                : string.Join(" · ", new[] { county.Name, duchy, kingdom }.Where(n => n is not null));
+        }
+        else if (id <= _result.LandCount)
+        {
+            place = "Impassable";
+        }
+        else
+        {
+            place = _written is not null && _written.WaterNames.TryGetValue(id, out var water)
+                ? water
+                : "Sea";
+        }
+
+        if (MapModes.Find(_view)?.Probe is { } probe
+            && probe(_result, _written, cell, county) is { } extra)
+        {
+            place = $"{place} · {extra}";
+        }
+
+        return place;
     }
 
     private sealed class WaitCursorFor : IDisposable

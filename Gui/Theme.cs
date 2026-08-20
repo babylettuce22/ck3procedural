@@ -40,6 +40,7 @@ internal static class Theme
     public static readonly Color NoticeText = Color.FromArgb(94, 71, 16);
 
     public static readonly Font Ui = new("Segoe UI", 9f);
+    public static readonly Font UiBold = new("Segoe UI", 9f, FontStyle.Bold);
     /// <summary>Consolas rather than anything newer: it is on every Windows install, and a font
     /// family that is not silently falls back to a proportional face, which is worse than plain.</summary>
     public static readonly Font Mono = new("Consolas", 9f);

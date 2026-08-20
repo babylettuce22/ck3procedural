@@ -1,0 +1,114 @@
+﻿# common/scripted_effects/00_phenotype_birth_effects.txt
+
+gen_resolve_child_phenotype_effect = {
+    # 1. Clean up any invalid combinations
+    gen_sanitize_phenotypes_effect = yes
+
+    # 2. If both parents exist, pick one parent's race lineage
+    if = {
+        limit = {
+            exists = mother
+            exists = real_father
+        }
+        random_list = {
+            50 = {
+                # Inherit from Mother
+                gen_inherit_parent_race_effect = { PARENT = mother }
+            }
+            50 = {
+                # Inherit from Father
+                gen_inherit_parent_race_effect = { PARENT = real_father }
+            }
+        }
+    }
+    else_if = {
+        limit = { exists = mother }
+        gen_inherit_parent_race_effect = { PARENT = mother }
+    }
+    else_if = {
+        limit = { exists = real_father }
+        gen_inherit_parent_race_effect = { PARENT = real_father }
+    }
+    else = {
+        # Spontaneous / pool character fallback: assign from culture
+        gen_assign_phenotype_effect = yes
+    }
+}
+
+gen_inherit_parent_race_effect = {
+    save_scope_as = child_target
+    $PARENT$ = {
+        save_scope_as = race_donor
+    }
+
+    # Apply donor's trait
+    if = {
+        limit = { scope:race_donor = { has_trait = phenotype_gracile } }
+        scope:child_target = { add_trait = phenotype_gracile }
+    }
+    else_if = {
+        limit = { scope:race_donor = { has_trait = phenotype_stocky } }
+        scope:child_target = { add_trait = phenotype_stocky }
+    }
+    else_if = {
+        limit = { scope:race_donor = { has_trait = phenotype_rough_hewn } }
+        scope:child_target = { add_trait = phenotype_rough_hewn }
+    }
+    else_if = {
+        limit = { scope:race_donor = { has_trait = phenotype_towering } }
+        scope:child_target = { add_trait = phenotype_towering }
+    }
+    else_if = {
+        limit = { scope:race_donor = { has_trait = phenotype_diminutive } }
+        scope:child_target = { add_trait = phenotype_diminutive }
+    }
+    else_if = {
+        limit = { scope:race_donor = { has_trait = phenotype_dusk_adapted } }
+        scope:child_target = { add_trait = phenotype_dusk_adapted }
+    }
+
+    # CRITICAL: Overwrite the interpolated DNA with the clean donor parent DNA
+    # This prevents the engine from blending UV coordinates into the Orc green band
+    scope:child_target = {
+        copy_inheritable_appearance_from = scope:race_donor
+    }
+}
+
+gen_sanitize_phenotypes_effect = {
+    # Ensure no character holds more than one trait
+    if = {
+        limit = {
+            has_trait = phenotype_rough_hewn
+            has_trait = phenotype_gracile
+        }
+        remove_trait = phenotype_gracile
+    }
+    if = {
+        limit = {
+            has_trait = phenotype_rough_hewn
+            has_trait = phenotype_stocky
+        }
+        remove_trait = phenotype_stocky
+    }
+    if = {
+        limit = {
+            has_trait = phenotype_rough_hewn
+            has_trait = phenotype_towering
+        }
+        remove_trait = phenotype_towering
+    }
+    if = {
+        limit = {
+            has_trait = phenotype_rough_hewn
+            has_trait = phenotype_diminutive
+        }
+        remove_trait = phenotype_diminutive
+    }
+    if = {
+        limit = {
+            has_trait = phenotype_rough_hewn
+            has_trait = phenotype_dusk_adapted
+        }
+        remove_trait = phenotype_dusk_adapted
+    }
+}
