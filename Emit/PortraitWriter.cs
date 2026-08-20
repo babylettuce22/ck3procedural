@@ -27,8 +27,12 @@ public static class PortraitWriter
         Culture Culture
     );
 
+    /// <summary>One <c>key={ ... }</c> line inside a DNA <c>genes = { }</c> block.</summary>
+    private static readonly Regex GeneLineRegex =
+        new(@"(?<ind>^[ \t]*)(?<key>[a-z_0-9]+)=\{[^{}]*\}", RegexOptions.Multiline);
+
     public static void WriteAll(string modDir, string gameDir,
-        List<CharacterPortraitRequest> requests, int seed = 0)
+        List<CharacterPortraitRequest> requests, EthnicityMap ethnicities, int seed = 0)
     {
         string sourceDir = Path.Combine(gameDir, "common", "bookmark_portraits");
         string bmDestDir = Path.Combine(modDir, "common", "bookmark_portraits");
@@ -56,6 +60,10 @@ public static class PortraitWriter
             // Sanitize invalid/obsolete modifiers that vanilla templates sometimes retain
             body = Regex.Replace(body, @"[ \t]*custom_headgear\s*=\s*male_empty\r?\n?", "");
             body = Regex.Replace(body, @"[ \t]*custom_headgear\s*=\s*female_empty\r?\n?", "");
+
+            // Repaint the borrowed DNA in the character's own ethnicity before anything is written,
+            // so the bookmark screen and the in-game portrait agree and both match the realm.
+            body = ApplyEthnicity(body, ethnicities.For(req.Culture), rng);
 
             string renamedBookmark = IdentityRegex.Replace(body, $"{req.Key} = {{", 1);
 
@@ -88,6 +96,78 @@ public static class PortraitWriter
         ParadoxText.WriteBom(Path.Combine(dnaDestDir, "00_generated_dna.txt"), dnaFileBuilder.ToString());
 
         Console.WriteLine($"  portraits: {requests.Count} culture-matched portraits written to bookmark_portraits and dna_data");
+    }
+
+    /// <summary>
+    /// Rewrites a borrowed vanilla DNA template's genes in terms of the character's own generated
+    /// ethnicity.
+    ///
+    /// Without this a bookmark character wore whichever vanilla ruler's DNA the culture's clothing
+    /// most resembled — skin, hair, eyes, bone structure and all. DNA overrides ethnicity outright,
+    /// so the drow leading a drow realm came out an ordinary brown-skinned human on the bookmark
+    /// screen and stayed one in the campaign. These are the handful of characters a player looks at
+    /// hardest, which is why it read as "some drow are still human coloured".
+    ///
+    /// Only genes the ethnicity actually defines are touched, and only lines the template already
+    /// carries are rewritten, so nothing invalid can be introduced. Generated humans define no
+    /// <c>skin_color</c> at all — they inherit complexion from their vanilla template ethnicity —
+    /// so their borrowed DNA keeps the skin it came with, which is the intended behaviour rather
+    /// than an omission.
+    /// </summary>
+    private static string ApplyEthnicity(string body, EthnicityDef? eth, Rng rng)
+    {
+        if (eth is null) return body;
+
+        var genes = GenesRegex.Match(body);
+        if (!genes.Success) return body;
+
+        var content = genes.Groups["content"];
+
+        string rewritten = GeneLineRegex.Replace(content.Value, m =>
+        {
+            string key = m.Groups["key"].Value;
+            string ind = m.Groups["ind"].Value;
+
+            if (eth.ColorGenes.TryGetValue(key, out var palettes) && palettes.Count > 0)
+            {
+                var p = PickWeighted(palettes, e => e.Weight, rng);
+                int x = Byte255(rng.Float(p.X1, p.X2));
+                int y = Byte255(rng.Float(p.Y1, p.Y2));
+                return $"{ind}{key}={{ {x} {y} {x} {y} }}";
+            }
+
+            if (eth.MorphGenes.TryGetValue(key, out var entries) && entries.Count > 0)
+            {
+                var e = PickWeighted(entries, x => x.Weight, rng);
+                int v = Byte255(rng.Float(e.Min, e.Max));
+                return $"{ind}{key}={{ \"{e.SubGeneName}\" {v} \"{e.SubGeneName}\" {v} }}";
+            }
+
+            return m.Value;
+        });
+
+        return string.Concat(
+            body.AsSpan(0, content.Index),
+            rewritten,
+            body.AsSpan(content.Index + content.Length));
+    }
+
+    /// <summary>A DNA gene value, which the format stores as a byte rather than a 0..1 float.</summary>
+    private static int Byte255(float v) => Math.Clamp((int)MathF.Round(v * 255f), 0, 255);
+
+    private static T PickWeighted<T>(List<T> items, Func<T, int> weight, Rng rng)
+    {
+        int total = 0;
+        foreach (var i in items) total += Math.Max(0, weight(i));
+        if (total <= 0) return items[rng.Int(0, items.Count - 1)];
+
+        int roll = rng.Int(0, total - 1);
+        foreach (var i in items)
+        {
+            roll -= Math.Max(0, weight(i));
+            if (roll < 0) return i;
+        }
+        return items[^1];
     }
 
     private record TemplatePool(

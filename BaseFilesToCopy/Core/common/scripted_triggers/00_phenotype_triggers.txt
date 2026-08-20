@@ -1,0 +1,20 @@
+﻿# Does this character already carry a racial phenotype?
+#
+# The guard for everything in 00_phenotype_effects.txt. All six traits live in the same three
+# `group`s and list each other as `opposites`, so adding a second one to a character who already has
+# one is never right — and because they are `inherit_chance = 100` from both parents, anyone born
+# in-game to a carrier already has theirs before any of our script runs.
+#
+# Kept as a trigger rather than inlined because it is asked once per character per year by
+# gen_phenotype_assign_on_action, and the six-way OR wants one place to be corrected when a seventh
+# race is added. Traits are declared in common/traits/00_phenotype_traits.txt.
+gen_has_phenotype_trigger = {
+	OR = {
+		has_trait = phenotype_gracile
+		has_trait = phenotype_stocky
+		has_trait = phenotype_rough_hewn
+		has_trait = phenotype_towering
+		has_trait = phenotype_diminutive
+		has_trait = phenotype_dusk_adapted
+	}
+}

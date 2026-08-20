@@ -100,6 +100,7 @@ public sealed class PrehistoryMap
     private const int MaxRivalsPerRuler = 2;
     private const int MaxFriendsPerRuler = 2;
     private const int MaxAlliancesPerRuler = 3;
+    private const int MaxLiegeHouseMarriages = 4;
 
     public static PrehistoryMap Build(
         List<Title> counties,
@@ -493,6 +494,10 @@ public sealed class PrehistoryMap
 
         var marriedRulers = new HashSet<Title>();
 
+        // Each marriage into the top liege's house is an alliance the liege must carry; without a
+        // cap a large empire handed its emperor one alliance per vassal (50+ observed).
+        var liegeHouseMarriages = new Dictionary<Title, int>();
+
         foreach (var ruler in sortedRulers)
         {
             if (marriedRulers.Contains(ruler)) continue;
@@ -542,7 +547,8 @@ public sealed class PrehistoryMap
             else
             {
                 // A) Liege's Royal House (Liege-Vassal Alliance)
-                bool canMarryLiege = map.CharacterHouseMap.GetValueOrDefault(topLiege) != map.CharacterHouseMap.GetValueOrDefault(ruler);
+                bool canMarryLiege = map.CharacterHouseMap.GetValueOrDefault(topLiege) != map.CharacterHouseMap.GetValueOrDefault(ruler) &&
+                                     liegeHouseMarriages.GetValueOrDefault(topLiege) < MaxLiegeHouseMarriages;
 
                 // B) Fellow Co-Vassals (Intra-Realm Alliance)
                 var coVassals = vassalsByLiege.GetValueOrDefault(topLiege, [])
@@ -576,16 +582,18 @@ public sealed class PrehistoryMap
                 {
                     brideOriginCounty = coVassals[mRng.Int(0, coVassals.Count - 1)];
                 }
-            }
 
-            // consider re-enabling brideFather
+                if (brideOriginCounty == topLiege)
+                    liegeHouseMarriages[topLiege] = liegeHouseMarriages.GetValueOrDefault(topLiege) + 1;
+            }
 
             // === 3. GENERATE SPOUSE CHARACTER ===
             string brideDynasty;
             string? brideHouse;
-            string? brideFather;
+            string? brideFather = null;
             Culture brideCulture;
             Faith brideFaith;
+            int brideBirthYear = cfg.StartYear - mRng.Int(20, 44);
 
             if (brideOriginCounty != null)
             {
@@ -593,7 +601,16 @@ public sealed class PrehistoryMap
                 brideFaith = faiths.For(brideOriginCounty);
                 brideDynasty = map.CharacterDynastyMap.GetValueOrDefault(brideOriginCounty, map.CharacterDynastyMap[ruler]);
                 brideHouse = map.CharacterHouseMap.GetValueOrDefault(brideOriginCounty);
-                //brideFather = map.DeceasedParents.TryGetValue(brideOriginCounty, out var df) ? df.Id : HistoryWriter.CharacterId(brideOriginCounty);
+
+                // The bride must be close kin of the origin ruler or the engine dissolves the
+                // marriage alliance on the first tick — house membership alone is not kinship.
+                // Sharing his deceased father makes her his sister.
+                if (map.DeceasedParents.TryGetValue(brideOriginCounty, out var df))
+                {
+                    brideFather = df.Id;
+                    int fatherBirthYear = int.Parse(df.BirthDate.Split('.')[0]);
+                    brideBirthYear = Math.Max(brideBirthYear, fatherBirthYear + 17);
+                }
             }
             else
             {
@@ -627,17 +644,12 @@ public sealed class PrehistoryMap
                         Prefix = CulturePrefix(brideCulture.Key)
                     };
                 }
-
-                brideFather = null;
             }
 
             string femaleName = brideCulture.FemaleNames.Count > 0
                 ? brideCulture.FemaleNames[mRng.Int(0, brideCulture.FemaleNames.Count - 1)]
                 : $"{brideCulture.Name}a";
 
-
-
-            int brideBirthYear = cfg.StartYear - mRng.Int(20, 44);
             int earliestMarriageYear = Math.Max(rulerBirthYear + 16, brideBirthYear + 16);
             int marriageYear = Math.Min(cfg.StartYear - 2, earliestMarriageYear + mRng.Int(0, 8));
             string weddingDate = $"{marriageYear}.{mRng.Int(1, 12)}.{mRng.Int(1, 28)}";
@@ -652,7 +664,7 @@ public sealed class PrehistoryMap
                 CultureKey = brideCulture.Key,
                 FaithKey = brideFaith.Key,
                 BirthDate = $"{brideBirthYear}.{mRng.Int(1, 12)}.{mRng.Int(1, 28)}",
-                FatherId = null,
+                FatherId = brideFather,
                 AssociatedCounty = ruler,
                 MarriageDate = weddingDate
             };
@@ -661,10 +673,11 @@ public sealed class PrehistoryMap
             map.AllExtraCharacters.Add(spouse);
             marriedRulers.Add(ruler);
 
-            // Establish Alliance and House Amity if married into an existing ruler's house
-            if (brideOriginCounty != null)
+            // Establish Alliance and House Amity if married into an existing ruler's house.
+            // No kinship link means no alliance: the engine would only dissolve it again.
+            if (brideOriginCounty != null && brideFather != null)
             {
-                AddMarriageAlliance(map, ruler, brideOriginCounty, spouse.Id, HistoryWriter.CharacterId(brideOriginCounty), weddingDate);
+                AddMarriageAlliance(map, ruler, brideOriginCounty, spouse.Id, weddingDate);
 
                 if (map.CharacterHouseMap.TryGetValue(ruler, out var hA) &&
                     map.CharacterHouseMap.TryGetValue(brideOriginCounty, out var hB) && hA != hB)
@@ -749,15 +762,21 @@ public sealed class PrehistoryMap
         }
     }
 
-    private static void AddMarriageAlliance(PrehistoryMap map, Title a, Title b, string brideId, string brideRelativeId, string weddingDate)
+    private static void AddMarriageAlliance(PrehistoryMap map, Title groomCounty, Title brideOriginCounty, string brideId, string weddingDate)
     {
-        if (!map.Alliances.TryGetValue(a, out var listA)) map.Alliances[a] = listA = [];
-        if (!map.Alliances.TryGetValue(b, out var listB)) map.Alliances[b] = listB = [];
+        if (!map.Alliances.TryGetValue(groomCounty, out var listA)) map.Alliances[groomCounty] = listA = [];
+        if (!map.Alliances.TryGetValue(brideOriginCounty, out var listB)) map.Alliances[brideOriginCounty] = listB = [];
 
-        if (!listA.Any(al => al.PartnerCounty == b))
-            listA.Add(new AllianceLink { PartnerCounty = b, ThroughSpouseId = brideId, ThroughPartnerId = brideRelativeId, FormationDate = weddingDate });
-        if (!listB.Any(al => al.PartnerCounty == a))
-            listB.Add(new AllianceLink { PartnerCounty = a, ThroughSpouseId = brideRelativeId, ThroughPartnerId = brideId, FormationDate = weddingDate });
+        // The through-characters must be the wedded pair itself: the groom-ruler on his side, and
+        // the bride — his wife and the origin ruler's sister — on her family's side. Anything else
+        // (e.g. the origin ruler directly) fails the engine's marriage-alliance check and the
+        // alliance is dissolved on the first tick after game start.
+        string groomId = HistoryWriter.CharacterId(groomCounty);
+
+        if (!listA.Any(al => al.PartnerCounty == brideOriginCounty))
+            listA.Add(new AllianceLink { PartnerCounty = brideOriginCounty, ThroughSpouseId = groomId, ThroughPartnerId = brideId, FormationDate = weddingDate });
+        if (!listB.Any(al => al.PartnerCounty == groomCounty))
+            listB.Add(new AllianceLink { PartnerCounty = groomCounty, ThroughSpouseId = brideId, ThroughPartnerId = groomId, FormationDate = weddingDate });
     }
 
     private static void AddDirectAlliance(PrehistoryMap map, Title a, Title b, string allianceDate)

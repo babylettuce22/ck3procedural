@@ -155,9 +155,10 @@ public readonly record struct HeightfieldView(
     public HeightfieldView Orbited(double dYaw, double dPitch) => this with
     {
         Yaw = Yaw + dYaw,
-        // Stops short of straight down: the projection is an off-axis one, and the principal point
-        // runs away to infinity as the pitch approaches vertical.
-        Pitch = Math.Clamp(Pitch + dPitch, 0.12, 1.15),
+        // Stops just short of straight down and of grazing the ground. The projection handles both
+        // extremes now, but at exactly vertical the yaw stops meaning anything to the eye and an
+        // orbit drag becomes a spin around a point the user cannot see.
+        Pitch = Math.Clamp(Pitch + dPitch, 0.12, 1.55),
     };
 
     public HeightfieldView Zoomed(double factor) => this with
@@ -195,10 +196,15 @@ public readonly record struct HeightfieldView(
 /// flat RGB buffer, which is what let it drop in beside the existing 2D views rather than dragging
 /// in a GPU context and a second rendering path.
 ///
-/// The camera is off-axis rather than rotated: pitch is applied by sliding the principal point up
-/// the screen instead of turning the view vector. That is a real camera — a tilt-shift lens — not
-/// an approximation, and it is what keeps every terrain column vertical and one pixel wide. Its one
-/// limit is that it cannot look straight down, which <see cref="HeightfieldView.Orbited"/> clamps.
+/// The camera is a genuinely pitched perspective camera, not the shifted-principal-point shortcut
+/// column marchers usually take. Shifting the principal point keeps columns exactly vertical, but
+/// its depth scale grows with tan(pitch) while the width scale stays put, so the steeper the view
+/// the more the map stretched into a tall smear. Projecting every sample through the rotated camera
+/// instead gives the correct sin(pitch) foreshortening at every angle, up to and including nearly
+/// straight down. The one approximation left is the column's ground track, whose lateral spread is
+/// scaled by the depth of the water plane rather than of each sample — that is what keeps a screen
+/// column a single march. Its error is proportional to the relief, about one percent of the map's
+/// width at the screen edges, and reads as nothing at all.
 /// </summary>
 public static class HeightfieldRenderer
 {
@@ -218,55 +224,48 @@ public static class HeightfieldRenderer
     private const double HorizontalFov = 1.15;
 
     /// <summary>
-    /// How far back over the ground the camera sits, in field samples, before the user's zoom.
+    /// The slant orbit radius, in field samples, that frames the whole map at the reference pitch,
+    /// before the user's zoom.
     ///
-    /// Ground distance, not slant range. In this projection <c>z</c> is horizontal depth, so a
-    /// point's scale is <c>focal / z</c> and it is the *horizontal* distance that decides how big
-    /// the map draws. Swinging the camera at a constant slant radius shortens that horizontal leg
-    /// as the pitch rises, which magnifies the map instead of leaving it alone. Holding the ground
-    /// distance fixed and letting the height follow from the pitch keeps the scale put — and the
-    /// focus lands on the middle row of the screen at every pitch, because the height and the
-    /// horizon offset both scale with tan(pitch) and cancel.
+    /// A slant radius and not a ground distance: a pitched camera draws the focus at a scale of
+    /// <c>focal</c> over the slant range, so holding the radius fixed while the camera tilts is
+    /// what keeps a tilt from reading as an unasked-for zoom.
     ///
-    /// Solved once, at a *reference* pitch, then held: an off-axis camera sees a band of ground
-    /// whose edges both move with pitch, so a fit evaluated live changes the distance every time
-    /// the camera tilts and tilting reads as an unasked-for zoom.
-    ///
-    /// Yaw-independent for the same reason, by taking the map's half-diagonal — the largest value
-    /// the extent along or across the view can reach — for both axes. It frames a little loosely at
-    /// yaws where the map is not presenting its diagonal, which the wheel is for, and in exchange
-    /// spinning the map does not pump the zoom in and out.
+    /// Solved once, at a *reference* pitch, then held — a fit evaluated live changes the radius
+    /// every time the camera tilts. Yaw-independent too, by taking the map's half-diagonal — the
+    /// largest extent any yaw can present. It frames a little loosely at yaws where the map is not
+    /// presenting its diagonal, which the wheel is for, and in exchange spinning the map does not
+    /// pump the zoom in and out.
     /// </summary>
-    private static double GroundDistance(int cols, int rows, double focal, int width, int height)
+    private static double OrbitRadius(double extent, double focal, int width, int height)
     {
-        double extent = 0.5 * Math.Sqrt((double)cols * cols + (double)rows * rows);
+        // The binding constraint is the near edge: the closest the map comes to the camera must
+        // still project above the bottom of the screen. With a the vertical half-angle of the
+        // screen and p the pitch, that solves to extent * sin(p + a) / sin(a).
+        double a = Math.Atan2(height * 0.5, focal);
+        double near = Math.Sin(HeightfieldView.ReferencePitch + a) / Math.Sin(a);
 
-        double half = height * 0.5;
-        double k = focal * Math.Tan(HeightfieldView.ReferencePitch);
+        // And it has to fit sideways at the focus, the widest point of the diagonal.
+        double lateral = focal / (width * 0.5);
 
-        // Near edge: the map's nearest corner must still project above the bottom of the screen.
-        double near = extent * (half + k) / half;
-
-        // Far edge: its furthest corner must stay below the horizon. Only binds once the horizon is
-        // off the top of the screen, which is what k > half means.
-        double far = k > half ? extent * (k - half) / half : 0;
-
-        // And it has to fit sideways.
-        double lateral = extent * focal / (width * 0.5);
-
-        return Math.Max(Math.Max(near, far), lateral);
+        return extent * Math.Max(near, lateral);
     }
 
     /// <summary>How far below the water plane the block is cut, as a fraction of the map's width.</summary>
     private const double BlockThickness = 0.03;
 
+    /// <param name="supersample">
+    /// Render at this multiple of the requested size, then box-filter back down. 1 is the draft
+    /// path; 2 is what smooths the staircase off ridgelines and coasts on the settled frame.
+    /// </param>
     public static PreviewRenderer.Image Render(Heightfield field, HeightfieldView view,
-        int width, int height)
+        int width, int height, int supersample = 1)
     {
         width = Math.Max(16, width);
         height = Math.Max(16, height);
+        int sw = width * supersample, sh = height * supersample;
 
-        var rgb = new byte[(long)width * height * 3];
+        var rgb = new byte[(long)sw * sh * 3];
 
         int cols = field.Cols, rows = field.Rows;
         var samples = field.Samples;
@@ -286,47 +285,69 @@ public static class HeightfieldRenderer
         double dirX = Math.Sin(view.Yaw), dirY = Math.Cos(view.Yaw);
         double rightX = Math.Cos(view.Yaw), rightY = -Math.Sin(view.Yaw);
 
-        double focal = width * 0.5 / Math.Tan(HorizontalFov * 0.5);
+        double sinP = Math.Sin(view.Pitch), cosP = Math.Cos(view.Pitch);
+        double focal = sw * 0.5 / Math.Tan(HorizontalFov * 0.5);
+        double cy = sh * 0.5;
 
-        // Pitch as a principal-point offset. Looking down pushes the horizon off the top of the
-        // screen, which is why this is negative and why the far plane below is finite.
-        double k = focal * Math.Tan(view.Pitch);
-        double horizon = height * 0.5 - k;
+        double extent = 0.5 * Math.Sqrt((double)cols * cols + (double)rows * rows);
+        double radius = OrbitRadius(extent, focal, sw, sh) * Math.Max(0.05, view.Distance);
 
-        double camHoriz = GroundDistance(cols, rows, focal, width, height)
-                          * Math.Max(0.05, view.Distance);
-
-        double camZ = focusZ + camHoriz * Math.Tan(view.Pitch);
+        double camHoriz = radius * cosP;
+        double camZ = focusZ + radius * sinP;
         double camX = focusX - dirX * camHoriz;
         double camY = focusY - dirY * camHoriz;
 
-        double span = camHoriz;
+        // Camera height over the water plane. Sets the marching pace below, and the lateral spread
+        // of each column's ground track.
+        double above = Math.Max(1.0, camZ - focusZ);
 
-        double topZ = camZ - field.LandMax * zScale;
-        double zNear = Math.Max(1.0, topZ * focal / Math.Max(1.0, height - 1 - horizon));
-        double zFar = horizon < -1.0
-            ? camZ * focal / -horizon
-            : Math.Max(cols, rows) * 4.0;
-        zFar = Math.Min(zFar, (Math.Max(cols, rows) + span) * 2.5);
+        // Nothing nearer than this can be on screen even at the map's highest point: solve the
+        // projection for the screen's bottom row at the height of the tallest land. Negative at a
+        // steep pitch, and deliberately so — a camera looking nearly straight down sees ground
+        // *behind* its own footprint, so the march has to be allowed to start back there. How far
+        // back is bounded by the map itself, there being nothing beyond it to hit.
+        double topClear = camZ - field.LandMax * zScale;
+        double bottomHalf = sh - 1 - cy;
+        double zNear = topClear <= 0 ? 0.5 : Math.Max(-(camHoriz + extent * 2.0),
+            topClear * (focal * cosP - bottomHalf * sinP) / (focal * sinP + bottomHalf * cosP));
 
-        Sky(rgb, width, height);
+        // And past the farthest corner the map can reach there is nothing left to hit. When the
+        // pitch is steep enough to push the horizon off the top of the screen, the water plane
+        // leaves the screen earlier than that — and everything above it leaves even sooner.
+        double zFar = camHoriz + extent * 2.0;
+        double steep = focal * sinP - cy * cosP;
+        if (steep > 0)
+            zFar = Math.Min(zFar, above * (focal * cosP + cy * sinP) / steep);
 
-        Parallel.For(0, width, sx =>
+        // Haze by distance from the *camera*, not by march position: the march can start behind
+        // the camera's footprint, and at a steep pitch the whole map is roughly equidistant — it
+        // should read uniformly crisp from above, and recede only where it actually recedes.
+        double fogNear = radius;
+        double fogSpan = Math.Max(1.0, extent * 1.6);
+
+        Sky(rgb, sw, sh);
+
+        Parallel.For(0, sw, sx =>
         {
-            double u = sx - width * 0.5;
-            double lateral = u / focal;
+            double lateral = (sx - sw * 0.5) / focal;
 
-            int floorRow = height;
+            int floorRow = sh;
 
             for (double z = zNear; z < zFar && floorRow > 0;)
             {
-                double px = camX + dirX * z + rightX * lateral * z;
-                double py = camY + dirY * z + rightY * lateral * z;
+                // The column's ground track. The lateral spread is scaled by the depth of the
+                // water plane — the approximation that keeps one screen column one march.
+                double depth = z * cosP + above * sinP;
+
+                double px = camX + dirX * z + rightX * lateral * depth;
+                double py = camY + dirY * z + rightY * lateral * depth;
+
+                double zs = z;
 
                 // One screen row per step near the camera, coarsening with distance because that
-                // is exactly how fast the projection stops resolving it.
-                double dz = Math.Max(0.5, z * z / Math.Max(1.0, camZ * focal));
-                z += dz;
+                // is exactly how fast the projection stops resolving it — but never coarser than a
+                // hundredth of the distance, or a low camera would step clean over whole ridges.
+                z += Math.Clamp(depth * depth / (focal * above), 0.35, Math.Max(2.0, z * 0.01));
 
                 if (px < 0 || py < 0 || px >= cols - 1 || py >= rows - 1) continue;
 
@@ -334,7 +355,10 @@ public static class HeightfieldRenderer
                 bool sea = h <= water;
                 double worldZ = (sea ? water : h) * zScale;
 
-                int row = (int)(horizon + (camZ - worldZ) * focal / z);
+                double dF = zs * cosP + (camZ - worldZ) * sinP;
+                if (dF < 1.0) continue;
+
+                int row = (int)(cy - focal * (zs * sinP + (worldZ - camZ) * cosP) / dF);
                 if (row >= floorRow) continue;
                 if (row < 0) row = 0;
 
@@ -342,7 +366,7 @@ public static class HeightfieldRenderer
                 // surface colour smears grass or sea down the whole screen in vertical stripes,
                 // because neighbouring columns cross the boundary at different depths. Draw it as
                 // what it is: the cut side of a solid block.
-                bool cut = floorRow >= height;
+                bool cut = floorRow >= sh;
 
                 var (r, g, b) = cut ? Earth
                     : sea ? SeaColour(h, water)
@@ -350,7 +374,7 @@ public static class HeightfieldRenderer
 
                 // Distance haze. Without it the far edge of the map is as saturated as the near
                 // edge and the whole thing reads flat.
-                double fog = Math.Clamp((z - zNear) / Math.Max(1.0, zFar - zNear), 0, 1);
+                double fog = Math.Clamp((dF - fogNear) / fogSpan, 0, 1);
                 fog *= fog;
 
                 r = (byte)(r + (SkyTop.R - r) * fog * 0.75);
@@ -362,19 +386,24 @@ public static class HeightfieldRenderer
                 int bottom = floorRow;
                 if (cut)
                 {
-                    int baseRow = (int)(horizon + (camZ - baseZ) * focal / z);
+                    double bF = zs * cosP + (camZ - baseZ) * sinP;
+                    int baseRow = bF < 1.0 ? floorRow
+                        : (int)(cy - focal * (zs * sinP + (baseZ - camZ) * cosP) / bF);
                     if (baseRow < bottom) bottom = baseRow;
                 }
 
                 // The face of the column, shaded down so a tall step reads as a wall rather than as
-                // a band of flat colour.
+                // a band of flat colour. Only a genuinely tall step, though: near the camera the
+                // march's minimum stride covers a few rows even on flat ground, and putting the
+                // gradient on those spans turns calm water into a field of sawtooth scanlines.
                 int face = bottom - row;
+                bool wall = face > 3;
                 for (int y = row; y < bottom; y++)
                 {
-                    double drop = face <= 1 ? 0 : (double)(y - row) / face;
+                    double drop = wall ? (double)(y - row) / face : 0;
                     double shade = 1.0 - drop * 0.45;
 
-                    long o = ((long)y * width + sx) * 3;
+                    long o = ((long)y * sw + sx) * 3;
                     rgb[o] = (byte)(r * shade);
                     rgb[o + 1] = (byte)(g * shade);
                     rgb[o + 2] = (byte)(b * shade);
@@ -384,7 +413,42 @@ public static class HeightfieldRenderer
             }
         });
 
-        return new PreviewRenderer.Image(rgb, width, height);
+        return supersample <= 1
+            ? new PreviewRenderer.Image(rgb, sw, sh)
+            : Downscale(rgb, sw, width, height, supersample);
+    }
+
+    private static PreviewRenderer.Image Downscale(byte[] src, int srcWidth,
+        int width, int height, int ss)
+    {
+        var dst = new byte[(long)width * height * 3];
+        int area = ss * ss;
+
+        Parallel.For(0, height, y =>
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int r = 0, g = 0, b = 0;
+                for (int oy = 0; oy < ss; oy++)
+                {
+                    long o = (((long)y * ss + oy) * srcWidth + (long)x * ss) * 3;
+                    for (int ox = 0; ox < ss; ox++)
+                    {
+                        r += src[o];
+                        g += src[o + 1];
+                        b += src[o + 2];
+                        o += 3;
+                    }
+                }
+
+                long d = ((long)y * width + x) * 3;
+                dst[d] = (byte)(r / area);
+                dst[d + 1] = (byte)(g / area);
+                dst[d + 2] = (byte)(b / area);
+            }
+        });
+
+        return new PreviewRenderer.Image(dst, width, height);
     }
 
     private static readonly (byte R, byte G, byte B) SkyTop = (26, 32, 44);
@@ -429,12 +493,13 @@ public static class HeightfieldRenderer
     private static double Slope(ushort[] samples, int cols, int rows, double px, double py,
         double zScale)
     {
-        int x = Math.Clamp((int)px, 1, cols - 2);
-        int y = Math.Clamp((int)py, 1, rows - 2);
+        // Bilinear central differences rather than the nearest cell's: a point-sampled gradient
+        // snaps once per cell, and the lighting cracks into tiles as soon as the camera gets close.
+        double x = Math.Clamp(px, 1.0, cols - 2.001);
+        double y = Math.Clamp(py, 1.0, rows - 2.001);
 
-        long i = (long)y * cols + x;
-        double dx = (samples[i + 1] - samples[i - 1]) * 0.5 * zScale;
-        double dy = (samples[i + cols] - samples[i - cols]) * 0.5 * zScale;
+        double dx = (Sample(samples, cols, x + 1, y) - Sample(samples, cols, x - 1, y)) * 0.5 * zScale;
+        double dy = (Sample(samples, cols, x, y + 1) - Sample(samples, cols, x, y - 1)) * 0.5 * zScale;
 
         // Normal is (-dx, -dy, 1) unnormalised. The field runs +Y northward, so a light in the
         // north-west sits at (-0.55, +0.55, 0.63) and the dot product turns the Y term negative.

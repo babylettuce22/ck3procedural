@@ -38,7 +38,10 @@ public static class MapDataWriter
     public const byte RiverIndexLand = 255;
     public const byte RiverIndexWater = 254;
 
-    public static void WriteAll(string modDir, MapConfig cfg, ProvinceMap provinces,
+    /// <returns>The heightmap this run shipped — see <see cref="WriteHeightmap"/>. The scatter
+    /// passes in <see cref="ContentWriter"/> need it, and recomputing it there would repeat the
+    /// coastline work and its console report for an array we already hold.</returns>
+    public static ushort[] WriteAll(string modDir, MapConfig cfg, ProvinceMap provinces,
             int[] order, int baronyCount, int landCount, int riverCount, bool writePacked,
             MapGen.TerrainData terra, MapGen.Drainage? drainage = null)
     {
@@ -53,30 +56,70 @@ public static class MapDataWriter
         else
             WriteRiversPng(Path.Combine(dir, "rivers.png"), cfg, provinces, null!);
 
-        WriteHeightmap(dir, cfg, writePacked, provinces, order, landCount, terra);
+        var shipped = WriteHeightmap(dir, cfg, writePacked, provinces, order, landCount, terra);
         WriteDefaultMap(Path.Combine(dir, "default.map"), provinces.Count, baronyCount, landCount, riverCount);
         WriteStubs(dir);
 
-        AssertNoEmptyFiles(dir);
+        AssertMapDataComplete(dir, writePacked);
 
         Console.WriteLine($"  map_data written: {baronyCount} baronied + " +
                           $"{landCount - baronyCount} impassable land, " +
                           $"{riverCount - landCount} major river provinces, " +
                           $"{provinces.Count - riverCount} sea zones");
+
+        return shipped;
     }
 
-    public static void WriteAll(string modDir, MapConfig cfg, ProvinceMap provinces,
+    public static ushort[] WriteAll(string modDir, MapConfig cfg, ProvinceMap provinces,
     int[] order, int baronyCount, int landCount, bool writePacked, MapGen.TerrainData terra)
     {
         int riverCount = landCount;
         for (int i = 0; i < provinces.Count; i++)
             if (!provinces.Seeds[i].IsLand && provinces.Seeds[i].IsMajorRiver) riverCount++;
 
-        WriteAll(modDir, cfg, provinces, order, baronyCount, landCount, riverCount, writePacked, terra);
+        return WriteAll(modDir, cfg, provinces, order, baronyCount, landCount, riverCount, writePacked, terra);
     }
 
-    private static void AssertNoEmptyFiles(string dir)
+    /// <summary>
+    /// The files <c>default.map</c> declares and this writer produces. They have to be on disk
+    /// when map_data is finished: CK3 gives no error for a missing one, the load just stops.
+    ///
+    /// continent.txt is deliberately not among them, and deliberately not written. Every CK3 map
+    /// declares it and none ships it — not vanilla 1.19, and not any of the three total conversions
+    /// checked, AGOT included, which replaces the world map outright. It is a legacy declaration
+    /// the engine does not consume. Writing one would mean inventing a format with no vanilla file
+    /// to verify it against, which is the one thing this emitter does not do; dropping the
+    /// declaration would deviate from every shipped CK3 map for no gain. So it stays declared and
+    /// unwritten, exactly as vanilla has it.
+    /// </summary>
+    private static readonly string[] DeclaredFiles =
+    [
+        "definition.csv", "provinces.png", "rivers.png", "adjacencies.csv",
+        "island_region.txt", "seasons.txt", "default.map", "heightmap.png",
+    ];
+
+    /// <summary>
+    /// Written only when the heightmap is packed here. Without <c>writePacked</c> they are either
+    /// left over from an earlier run or absent pending a repack in -mapeditor, and WriteHeightmap
+    /// has already said which.
+    /// </summary>
+    private static readonly string[] PackedFiles =
+    [
+        "heightmap.heightmap", "packed_heightmap.png", "indirection_heightmap.png",
+    ];
+
+    private static void AssertMapDataComplete(string dir, bool writePacked)
     {
+        var required = writePacked ? DeclaredFiles.Concat(PackedFiles) : DeclaredFiles.AsEnumerable();
+
+        var missing = required.Where(f => !File.Exists(Path.Combine(dir, f))).ToList();
+
+        if (missing.Count > 0)
+            throw new InvalidOperationException(
+                $"map_data is missing {missing.Count} file(s) it is supposed to write: " +
+                $"{string.Join(", ", missing)}. CK3 logs nothing for a missing map_data file; " +
+                "the load stops with a core spinning.");
+
         var empty = Directory.GetFiles(dir, "*", SearchOption.AllDirectories)
                              .Where(f => new FileInfo(f).Length == 0)
                              .Select(Path.GetFileName)
@@ -417,6 +460,20 @@ public static class MapDataWriter
                           $"land coast smoothed over {landReach} px");
     }
 
+    /// <summary>
+    /// Simulation elevation back onto the 16-bit heightmap scale — the inverse of
+    /// <see cref="MapGen.HeightmapSource.ToSimulationScale"/>.
+    ///
+    /// Two straight lines meeting at the water plane rather than one across the whole range,
+    /// because the water plane is a fixed value in the file and not a fraction of it: 4883 of
+    /// 65535 is where CK3 puts sea level, and stretching one line across both halves would move
+    /// the coastline whenever the deepest trench or the highest peak changed.
+    ///
+    /// This is the only conversion in the tool, and it is private on purpose. There used to be a
+    /// public second copy on HeightmapSource, and the two had already drifted — it rounded where
+    /// this truncates. Anything that wants to know what the engine will render wants
+    /// <see cref="ShippedHeightmap"/> anyway, which is this plus the two coastline passes.
+    /// </summary>
     private static ushort[] ElevationTo16(float[] elevation, MapConfig cfg)
     {
         float sea = cfg.Limits.SeaLevelUpper;
@@ -465,6 +522,16 @@ public static class MapDataWriter
                           $"empty tile at {packing.EmptyR},{packing.EmptyG}");
     }
 
+    /// <summary>
+    /// The heightmap as it goes into heightmap.png: the elevation conversion plus the two passes
+    /// that move the shoreline — forcing it to agree with provinces.png, then plunging the
+    /// shelf and smoothing the land side.
+    ///
+    /// Public so a caller can ask what the engine will actually render. Round-tripping this
+    /// through <see cref="HeightmapPacker.Reconstruct"/> is the only way to find out where the
+    /// shoreline ends up once the terrain has been quantised into a tile atlas and reassembled,
+    /// which is what the scatter passes need and what the preview draws.
+    /// </summary>
     public static ushort[] ShippedHeightmap(MapConfig cfg, ProvinceMap provinces, int[] order,
         int landCount, MapGen.TerrainData terra)
     {
@@ -474,7 +541,9 @@ public static class MapDataWriter
         return full;
     }
 
-    private static void WriteHeightmap(string dir, MapConfig cfg, bool writePacked,
+    /// <returns>The heightmap as shipped, so the caller can hand it to anything that has to
+    /// reason about the surface the engine will render rather than the one we computed.</returns>
+    private static ushort[] WriteHeightmap(string dir, MapConfig cfg, bool writePacked,
         ProvinceMap provinces, int[] order, int landCount, MapGen.TerrainData terra)
     {
         var full = ShippedHeightmap(cfg, provinces, order, landCount, terra);
@@ -492,7 +561,7 @@ public static class MapDataWriter
             Console.WriteLine(have
                 ? "  heightmap: kept existing packed/indirection (repacked in -mapeditor)"
                 : "  heightmap: no packed/indirection present — open in -mapeditor and repack");
-            return;
+            return full;
         }
 
         var packing = HeightmapPacker.Pack(full, cfg.Width, cfg.Height);
@@ -522,6 +591,8 @@ public static class MapDataWriter
               empty_tile_offset={ {{packing.EmptyR}} {{packing.EmptyG}} }
 
               """);
+
+        return full;
     }
 
 
@@ -540,6 +611,8 @@ public static class MapDataWriter
             ? $"sea_zones = RANGE {{ {riverCount + 1} {provinceCount} }}"
             : "";
 
+        // continent.txt is declared here and never written, which is correct: no CK3 map ships
+        // one. See DeclaredFiles for the evidence and the reasoning.
         ParadoxText.WriteNoBom(path,
             $$"""
           definitions = "definition.csv"

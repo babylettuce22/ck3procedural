@@ -51,13 +51,13 @@ public static class CoatOfArmsWriter
 
         foreach (var dyn in prehistory.Dynasties.Values)
         {
-            var rng = new Rng(dyn.Id.GetHashCode() ^ 0x51A3);
+            var rng = new Rng(Rng.StableHash(dyn.Id) ^ 0x51A3UL);
             AppendCoa(sb, dyn.Id, rng);
         }
 
         foreach (var house in prehistory.Houses.Values)
         {
-            var rng = new Rng(house.Key.GetHashCode() ^ 0x27C1);
+            var rng = new Rng(Rng.StableHash(house.Key) ^ 0x27C1UL);
             AppendCoa(sb, house.Key, rng);
         }
 

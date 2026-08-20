@@ -100,7 +100,7 @@ public static class Generator
 
         // 3. Climate
         var climate = Stage.Time("climate",
-            () => MapGen.ClimateModel.Build(cfg, provinceElevation, landMask, new Rng(cfg.Seed ^ 0x0C11)));
+            () => MapGen.ClimateModel.Build(cfg, provinceElevation, landMask, new Rng(cfg.Seed ^ 0x0C11), azgaar));
         onPreview?.Invoke("Climate", PreviewRenderer.RenderClimate(climate, cfg));
 
         // 4. Drainage & Major Rivers
@@ -204,7 +204,9 @@ public static class Generator
 
         Emit.ModWriter.WriteDescriptors(modDir, options.ModName);
 
-        Stage.Time("map_data (heightmap, provinces, rivers)",
+        // The array comes back so the scatter passes can read the surface the game will
+        // actually render; see ContentWriter.
+        var shippedHeightmap = Stage.Time("map_data (heightmap, provinces, rivers)",
                     () => Emit.MapDataWriter.WriteAll(modDir, cfg, result.Provinces, result.ProvinceOrder,
                         result.BaronyCount, result.LandCount, result.RiverCount, options.WritePacked,
                         result.Terra, result.Drainage));
@@ -213,6 +215,7 @@ public static class Generator
                             modDir, options.GameDir, cfg, result.Provinces, result.ProvinceOrder,
                             result.BaronyCount, result.LandCount,
                             result.RiverCount, result.Titles, result.Terra, result.Terrain, rng,
+                            shippedHeightmap,
                             options.WriteHistory, result.Drainage, result.Azgaar);
 
         Console.WriteLine($"  done in {sw.ElapsedMilliseconds} ms");

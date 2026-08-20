@@ -199,22 +199,39 @@ public static class HistoryWriter
             int birthYear = GetRulerBirthYear(county.Index, cfg.StartYear);
             string birthDate = $"{birthYear}.{rng.Int(1, 12)}.{rng.Int(1, 28)}";
 
+            // Everything about the man rather than the land — schooling, skills, byname, the
+            // standing he starts with. See Emit/RulerProfile.cs for what each number is worth.
+            var profile = RulerProfile.Build(
+                county, primaryTitle.Tier, governments.For(county), culture.Ethos,
+                cfg.StartYear - birthYear, liegeCounties.Contains(county));
+
             string dynId = prehistory.CharacterDynastyMap.GetValueOrDefault(county, DynastyId(county));
             string houseKey = prehistory.CharacterHouseMap.GetValueOrDefault(county, $"house_gen_{county.Index}");
             string? fatherId = prehistory.DeceasedParents.TryGetValue(county, out var f) ? f.Id : null;
 
             int gold = primaryTitle.Tier switch
             {
-                "e" => rng.Int(450, 650),
-                "k" => rng.Int(250, 380),
-                "d" => rng.Int(120, 180),
+                "e" => rng.Int(850, 1200),
+                "k" => rng.Int(480, 700),
+                "d" => rng.Int(150, 210),
                 _ => rng.Int(60, 90)
             };
+
+            // Prestige is graded against the thresholds, not to taste. Vanilla's defines put
+            // LEVELS_PRESTIGE at { 1000 2000 5000 10000 25000 }, and prestige LEVEL is an opinion
+            // modifier on everyone — PRESTIGIOUS = { -10 0 5 10 20 30 } — so a starting emperor on
+            // 500 prestige was not merely poor, he was standing at the level that pays nothing while
+            // his vassals judged him. Kings and emperors are now written above the second threshold
+            // under either reading of it, which is worth +5 opinion realm-wide and reads on the
+            // character sheet as a crowned ruler rather than a jumped-up count.
+            //
+            // Counts are left where they were on purpose: the ladder only means something if the
+            // bottom of it stays modest.
             int prestige = primaryTitle.Tier switch
             {
-                "e" => rng.Int(350, 550),
-                "k" => rng.Int(200, 350),
-                "d" => rng.Int(90, 130),
+                "e" => rng.Int(3400, 4600),
+                "k" => rng.Int(2000, 2700),
+                "d" => rng.Int(350, 600),
                 _ => rng.Int(35, 65)
             };
             int renown = primaryTitle.Tier switch
@@ -234,8 +251,26 @@ public static class HistoryWriter
             }
 
             sb.Append($"\tdynasty_house = {houseKey}\n");
+
+            // Base skills, in vanilla's own order. Written rather than left out because an omitted
+            // skill is rolled by the engine from RANDOM_CHARACTER_*_MIN/MAX — a flat 0-10 that takes
+            // no notice of whether the character is an emperor or a backwater count.
+            sb.Append($"\tmartial = {profile.Martial}\n");
+            sb.Append($"\tprowess = {profile.Prowess}\n");
+            sb.Append($"\tdiplomacy = {profile.Diplomacy}\n");
+            sb.Append($"\tintrigue = {profile.Intrigue}\n");
+            sb.Append($"\tstewardship = {profile.Stewardship}\n");
+            sb.Append($"\tlearning = {profile.Learning}\n");
+
             sb.Append($"\treligion = {faiths.For(county).Key}\n");
             sb.Append($"\tculture = {culture.Key}\n");
+
+            // The education trait. Left unwritten, the engine picks one at random for every ruler on
+            // the map, so a khan was as likely to have been raised a scholar as a soldier and no
+            // ruler's schooling had anything to do with the realm he was raised in. Written here it
+            // also becomes something the rest of this block can lean on: it names the lifestyle the
+            // perk points below are spendable in.
+            sb.Append($"\ttrait = {profile.EducationTrait}\n");
 
             if (GetPhenotypeTrait(culture, ethnicities) is { } rulerTrait)
                 sb.Append($"\ttrait = {rulerTrait}\n");
@@ -261,6 +296,10 @@ public static class HistoryWriter
             {
                 foreach (var allyLink in allies)
                 {
+                    // Every link is stored on both counties; create_alliance is symmetric, so
+                    // emitting from both sides created each alliance twice.
+                    if (county.Index > allyLink.PartnerCounty.Index) continue;
+
                     string targetCharId = CharacterId(allyLink.PartnerCounty);
                     string ownerThrough = allyLink.ThroughSpouseId ?? CharacterId(county);
                     string targetThrough = allyLink.ThroughPartnerId ?? targetCharId;
@@ -345,6 +384,20 @@ public static class HistoryWriter
                 sb.Append($"\t\t\tdynasty = {{ add_dynasty_prestige = {renown} }}\n");
             }
 
+            // Lifestyle perk points, in the tree his education belongs to and scaled by how long he
+            // has been an adult. A man of fifty who has held a duchy since his twenties should not
+            // arrive with the same empty lifestyle tree as the boy who inherited last spring, and
+            // for the AI these are not decoration: it spends them at once, so the perks are the
+            // difference between a duke who merely has a high martial and one who fields better
+            // knights for it.
+            sb.Append($"\t\t\tadd_{profile.Lifestyle}_lifestyle_perk_points = {profile.PerkPoints}\n");
+
+            if (profile.SecondLifestyle is not null && profile.SecondPerkPoints > 0)
+            {
+                sb.Append($"\t\t\tadd_{profile.SecondLifestyle}_lifestyle_perk_points = " +
+                          $"{profile.SecondPerkPoints}\n");
+            }
+
             // Claims
             if (prehistory.Claims.TryGetValue(county, out var claims))
             {
@@ -370,30 +423,52 @@ public static class HistoryWriter
             }
 
 
-            // A khan's standing, written only for nomads with vassals to hold.
+            // The standing of a man who has people to hold, written only for rulers who have any.
             //
             // obedience_value docks a subject 5 for an overlord whose dread is under 10 and 15 for
             // one whose legitimacy has not reached level 3, and pays back half the overlord's dread
             // and a flat 25 once both clear. Left unwritten — as they were — every khan on the map
             // started feared by nobody and legitimate to nobody, which is 40 points of a 100-point
-            // obedience threshold given away before anything else is counted.
-            if (governments.IsNomad(county) && liegeCounties.Contains(county))
+            // obedience threshold given away before anything else is counted. The argument was never
+            // specific to nomads: a generated king inherits a realm of strangers on the same terms,
+            // so RulerProfile now grades both by tier and hands the khans the same numbers they had.
+            //
+            // Republics and theocracies are skipped for legitimacy — their government types do not
+            // declare `legitimacy = yes`, so there is no currency there to add to.
+            if (profile.Dread > 0)
             {
-                sb.Append($"\t\t\tadd_dread = {rng.Int(15, 30)}\n");
-                sb.Append("\t\t\tadd_legitimacy = legitimacy_level_3\n");
+                sb.Append($"\t\t\tadd_dread = {profile.Dread}\n");
+            }
+
+            if (profile.Legitimacy is not null)
+            {
+                sb.Append($"\t\t\tadd_legitimacy = {profile.Legitimacy}\n");
             }
 
             bool isHigherTier = primaryTitle.Tier is "d" or "k" or "e";
 
+            // The grace period, scaled by how much realm there is to settle. Three years is enough
+            // for a duke's handful of vassals to get used to him; an emperor's crown vassals are
+            // themselves kings with their own inheritances to digest, and a window that closes on
+            // all of them at once, at the same moment as every other realm on the map, is what turns
+            // year four of a generated world into a simultaneous continent-wide civil war.
             if (independent || isHigherTier)
             {
                 sb.Append("\t\t\tadd_character_modifier = {\n");
                 sb.Append("\t\t\t\tmodifier = gen_early_realm_stability\n");
-                sb.Append("\t\t\t\tyears = 3\n");
+                sb.Append($"\t\t\t\tyears = {profile.StabilityYears}\n");
                 sb.Append("\t\t\t}\n");
             }
 
             sb.Append("\t\t}\n");
+
+            // A byname, for the few who have earned one. Sits beside the effect block rather than
+            // inside it because that is where vanilla's own history puts give_nickname.
+            if (profile.Nickname is not null)
+            {
+                sb.Append($"\t\tgive_nickname = {profile.Nickname}\n");
+            }
+
             sb.Append("\t}\n");
 
             // Living characters do NOT have death = yes
@@ -455,7 +530,7 @@ public static class HistoryWriter
             var culture = cultures.For(sampleCounty);
             var (firstName, _) = RulerNames(sampleCounty, culture);
 
-            var rng = new Rng(faith.Key.GetHashCode() ^ 0x48A1);
+            var rng = new Rng(Rng.StableHash(faith.Key) ^ 0x48A1UL);
             int birthYear = cfg.StartYear - rng.Int(35, 60);
 
             sb.Append($"gen_hof_{hofIndex++} = {{\n");

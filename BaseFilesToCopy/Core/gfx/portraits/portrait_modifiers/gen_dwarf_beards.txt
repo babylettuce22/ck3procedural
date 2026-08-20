@@ -1,0 +1,108 @@
+﻿# Every adult male dwarf wears a beard, no exceptions.
+#
+# An ethnicity cannot ask for this. `beards` is an ACCESSORY gene, and CK3 rejects an ethnicity that
+# names one outright -- "gene category 'beards' cannot be influenced by DNA", ethnicity.cpp:304 --
+# so the only place a beard can be forced is here, in a portrait modifier.
+#
+# **Why a group of our own rather than an entry in vanilla's.** Vanilla's beard logic lives in one
+# group called `beards` in gfx/portraits/portrait_modifiers/01_beards_base.txt. Declaring a second
+# group with that same name does not add to it; portrait modifier groups are a database keyed by
+# group name, files load in alphabetical order, and the later one REPLACES the earlier. A file
+# sorting after `01_` and calling itself `beards` would therefore delete vanilla's entire beard
+# system for every culture in the game. (Elder Kings does exactly this deliberately -- it blanks
+# 01_beards_base.txt to 18 bytes and owns the group -- which a total conversion can afford and a
+# generator that has to coexist with stock content cannot.)
+#
+# So this is a separate group, and `priority` is what makes it win -- higher wins, which vanilla
+# states outright where `clothes_base` calls itself "the lowest priority group of clothes" at 1, and
+# demonstrates where `hair_situational` sits at 10 to override the base `hairstyles` group. That is
+# this file's exact shape: a situational group overriding the base group for the same gene.
+# Vanilla's `beards` group declares no priority at all and the highest any stock group declares is
+# 50, so 100 clears the lot.
+# It stays well under the 9999 that Wilderness/gfx/portraits/portrait_modifiers uses to render the
+# wilderness dummy as nothing, which must keep beating everything -- though a dummy could not
+# qualify here anyway, carrying the `wilderness` trait rather than a phenotype.
+#
+# **Structure is load-bearing**: an outer GROUP carrying usage/priority, then named modifiers inside
+# it carrying dna_modifiers and weight. Putting dna_modifiers on the outer block parses cleanly as a
+# group containing no modifiers -- no error from the game, none from ck3-tiger, and no effect.
+#
+# `exists = this` guards every trigger: weights are evaluated for portraits with no character behind
+# them, and has_trait on nothing is an error rather than a no.
+#
+# ---------------------------------------------------------------------------------------------
+# CHILDREN ARE NOT COVERED, and cannot be from here.
+#
+# Under-18s are drawn on the `boy` portrait mesh -- PORTRAIT_MALE_ADULT_AGE = 18 in
+# common/defines/00_defines.txt -- and the `beards` accessory gene has NO `boy` block anywhere in
+# vanilla. Hairstyles declare `boy = male` 85 times and clothes 203 times; beards, zero. So a boy
+# resolving this gene finds no entity to attach and simply renders nothing. Forcing the accessory
+# harder does not help; there is nothing on the other end of it.
+#
+# Note that vanilla's own `no_beard_for_children` rule keys on `scope:age < 18`, the very same
+# threshold, so it is not what is stopping this -- removing that gate would gain nothing, because
+# everyone it excludes is on a mesh with no beard mapping in the first place.
+#
+# Giving a bearded toddler a beard therefore means adding a beards template with a `boy = { ... }`
+# block, which means owning all ~700 lines of common/genes/04_genes_special_accessories_beards.txt:
+# a re-sync on every patch that touches beards, and accessory template indices encode into saved
+# DNA, so a future index shift would silently repaint existing characters. Deliberately not done.
+# ---------------------------------------------------------------------------------------------
+
+gen_dwarf_beard = {
+
+	usage = game
+	selection_behavior = weighted_random
+	priority = 100
+
+	# Split by hair type the way vanilla splits its own regional beard sets, so a curly-haired dwarf
+	# does not end up with a straight beard. Dwarf ethnicities roll gene_hair_type at roughly
+	# 45% curly / 35% wavy / 20% straight -- see ApplyMorphGenes in MapGen/Ethnicities.cs -- and the
+	# straight entry below is the fallback for everything that is not curly.
+	#
+	# The northern sets are the ones worth having: inside northern_beards_straight the three big
+	# Norse beards carry weight 20 apiece against 5 for each short western one, so about two thirds
+	# of dwarves land on something substantial. `range = { 0 1 }` samples across that list, which is
+	# what vanilla's own entries do and comment as needed "for the randomness to work correctly".
+	gen_dwarf_beard_curly = {
+		dna_modifiers = {
+			accessory = {
+				mode = add
+				gene = beards
+				template = northern_beards_curly
+				range = { 0 1 }
+			}
+		}
+		weight = {
+			base = 0
+			modifier = {
+				add = 100
+				exists = this
+				is_female = no
+				has_trait = phenotype_stocky
+				has_gene = { category = gene_hair_type template = hair_curly }
+			}
+		}
+	}
+
+	gen_dwarf_beard_straight = {
+		dna_modifiers = {
+			accessory = {
+				mode = add
+				gene = beards
+				template = northern_beards_straight
+				range = { 0 1 }
+			}
+		}
+		weight = {
+			base = 0
+			modifier = {
+				add = 100
+				exists = this
+				is_female = no
+				has_trait = phenotype_stocky
+				NOT = { has_gene = { category = gene_hair_type template = hair_curly } }
+			}
+		}
+	}
+}

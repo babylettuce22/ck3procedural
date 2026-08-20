@@ -19,6 +19,13 @@ public sealed class Heritage
     public string? LanguageColor { get; init; }
 
     public List<Culture> Cultures { get; } = [];
+
+    /// <summary>
+    /// The race a fantasy-preset export tagged this heritage's dominant culture with, or null on a
+    /// generated map or an untagged export. Consumed by <see cref="Ethnicities"/>, which otherwise
+    /// guesses races from terrain — the export's own answer outranks the guess.
+    /// </summary>
+    public RaceArchetype? ImportedArchetype { get; set; }
 }
 
 /// <summary>
@@ -32,6 +39,11 @@ public sealed class Culture
     public required string Key { get; init; }
 
     public required string Name { get; set; }
+
+    /// <summary>Same as <see cref="Heritage.ImportedArchetype"/>, at culture grain — set by the
+    /// renamer when the export tags this culture's own ground, which can disagree with the
+    /// heritage's majority where two races share a region.</summary>
+    public RaceArchetype? ImportedArchetype { get; set; }
 
     /// <summary>Frozen: it owns the language every name here is drawn from.</summary>
     public required Heritage Heritage { get; init; }
@@ -238,6 +250,9 @@ public static class Cultures
         var byCounty = new Dictionary<Title, Culture>();
         var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // Where each heritage name was first planted, for the compass qualifier below.
+        var firstClaim = new Dictionary<string, (double X, double Y)>(StringComparer.OrdinalIgnoreCase);
+
         for (int h = 0; h < heritageTarget; h++)
         {
             var members = all.Where(i => heritageOf[i] == h).ToList();
@@ -263,22 +278,33 @@ public static class Cultures
                     ? Language.CreateAnglic(languageKey, rng)
                     : Language.Create(languageKey, rng); usedNames.Add(language.Name);
 
+            // A separate word from the language's own name, because they are separate things —
+            // vanilla pairs the North Germanic heritage with the Norse language, not with the
+            // North Germanic language, and naming both the same reads as a bug.
+            string baseName =
+                imported.Exists && azgaar!.World.Culture(imported.Id)?.Name is { Length: > 0 } n
+                    && AzgaarNaming.StripParenthetical(AzgaarNaming.StripArticle(n)) is { Length: > 0 } stripped
+                    ? stripped
+                    : language.Word(rng, 2, 3);
+
+            // Centre of the heritage's ground, for the qualifier a name collision resolves to.
+            double cx = 0, cy = 0;
+            foreach (int i in members) { cx += graph.Position[i].X; cy += graph.Position[i].Y; }
+            cx /= members.Count; cy /= members.Count;
+
             var heritage = new Heritage
             {
                 Key = $"heritage_gen_{heritages.Count}",
-
-                // A separate word from the language's own name, because they are separate things —
-                // vanilla pairs the North Germanic heritage with the Norse language, not with the
-                // North Germanic language, and naming both the same reads as a bug.
-                Name = Unique(
-                    imported.Exists && azgaar!.World.Culture(imported.Id)?.Name is { Length: > 0 } n
-                        ? n
-                        : language.Word(rng, 2, 3),
-                    usedNames),
+                Name = RegionalName(baseName, (cx, cy), firstClaim, usedNames),
                 Language = language,
                 Look = rng.Pick(vocab.Looks),
                 LanguageColor = vocab.LanguageColors.Count > 0 ? rng.Pick(vocab.LanguageColors) : null,
             };
+            heritage.ImportedArchetype = imported.Exists
+                && azgaar!.World.Culture(imported.Id)?.Name is { Length: > 0 } tagged
+                    ? AzgaarNaming.ParseRace(tagged)
+                    : null;
+
             heritages.Add(heritage);
 
             int within = Math.Max(1, (int)Math.Round(members.Count / cfg.CountiesPerCulture));
@@ -609,6 +635,49 @@ public static class Cultures
     /// the single most obvious generation artefact there is, and the phonology will collide
     /// eventually because a language only has so many short words in it.
     /// </summary>
+    /// <summary>
+    /// Claims a heritage name, resolving a collision the way history does rather than the way a
+    /// symbol table does.
+    ///
+    /// The collision is ordinary on an imported map: heritage grouping is geographic, so one
+    /// export culture that dominates three regions hands the same name to three heritages, and
+    /// Unique()'s answer — "Yotunn2", "Yotunn3" — is the generator showing through. But three
+    /// regions of one people is exactly what "East Francia" and "West Francia" were coined for, so
+    /// a later claim takes the compass direction from the name's first ground to its own: Yotunn,
+    /// then East Yotunn, then whichever of the third's directions is still free. The first keeps
+    /// the bare name, as the Franks kept Francia. Numbering survives only as the last resort for a
+    /// pathological map where every direction word is spoken for.
+    /// </summary>
+    private static string RegionalName(string baseName, (double X, double Y) centre,
+        Dictionary<string, (double X, double Y)> firstClaim, HashSet<string> used)
+    {
+        if (used.Add(baseName))
+        {
+            firstClaim[baseName] = centre;
+            return baseName;
+        }
+
+        var origin = firstClaim.TryGetValue(baseName, out var o) ? o : centre;
+        double dx = centre.X - origin.X;
+        double dy = centre.Y - origin.Y;
+
+        // The raster's y grows downward, so positive dy is south. The dominant axis names first;
+        // the other axis is the fallback when two later regions lie the same way.
+        string alongX = dx >= 0 ? "East" : "West";
+        string alongY = dy >= 0 ? "South" : "North";
+        string primary = Math.Abs(dx) >= Math.Abs(dy) ? alongX : alongY;
+        string secondary = Math.Abs(dx) >= Math.Abs(dy) ? alongY : alongX;
+
+        if (used.Add($"{primary} {baseName}")) return $"{primary} {baseName}";
+        if (used.Add($"{secondary} {baseName}")) return $"{secondary} {baseName}";
+
+        // Both cardinals spoken for: compound them, north-south first as compasses are read.
+        string compound = $"{alongY}{alongX.ToLowerInvariant()} {baseName}";
+        if (used.Add(compound)) return compound;
+
+        return Unique(baseName, used);
+    }
+
     private static string Unique(string name, HashSet<string> used)
     {
         if (used.Add(name)) return name;

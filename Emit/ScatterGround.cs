@@ -4,11 +4,12 @@ using Ck3MapGen.MapGen;
 namespace Ck3MapGen.Emit;
 
 /// <summary>
-/// The dry-land test the two scatter passes — <see cref="TreeWriter"/> and
-/// <see cref="AnimalWriter"/> — share.
+/// The dry-land test the three scatter passes — <see cref="TreeWriter"/>,
+/// <see cref="AnimalWriter"/> and <see cref="EnvEffectWriter"/> — share.
 ///
-/// Both seed instances from <see cref="TerrainClass"/>, which is province resolution, and then
-/// jitter to a sub-pixel position. That last step is where foliage ended up standing in the sea.
+/// All three seed instances from <see cref="TerrainClass"/>, which is province resolution, and
+/// then jitter to a sub-pixel position. That last step is where foliage ended up standing in
+/// the sea.
 /// <see cref="Raster.LandMask"/> calls a province pixel land when *half or more* of the four
 /// heightmap pixels behind it clear the waterline — a deliberate choice, since thresholding the
 /// averaged copy instead eats every headland and spit — so a two-of-four coastal pixel is
@@ -22,6 +23,12 @@ namespace Ck3MapGen.Emit;
 /// definition of how the two grids line up — including its measured -1 row offset. Deriving it
 /// again here is how the coastline and the scatter would drift apart by a pixel with nothing
 /// saying so.
+///
+/// The elevation passed in must be the surface the engine renders, not the one the simulation
+/// computed: <see cref="MapDataWriter.ShippedHeightmap"/> round-tripped through
+/// <see cref="HeightmapPacker.Reconstruct"/>. ContentWriter builds it once and hands the same
+/// array to all three. Passing the raw elevation instead compiles and looks right, and puts
+/// the trees back in the sea.
 /// </summary>
 internal static class ScatterGround
 {

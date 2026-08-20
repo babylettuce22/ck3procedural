@@ -43,6 +43,57 @@ public static class AzgaarNaming
         => name.StartsWith("the ", StringComparison.OrdinalIgnoreCase) ? name[4..].Trim() : name;
 
     /// <summary>
+    /// Drops parenthetical qualifiers from an export name — "Rohand (Human) Beliefs" is how a
+    /// fantasy preset tags a culture's race in Azgaar's own UI, and the tag reads as debug text in
+    /// the middle of a CK3 tooltip.
+    /// </summary>
+    internal static string StripParenthetical(string name)
+    {
+        int open;
+        while ((open = name.IndexOf('(')) >= 0)
+        {
+            int close = name.IndexOf(')', open);
+            if (close < 0) break;
+            name = name[..open] + name[(close + 1)..];
+        }
+
+        return string.Join(' ', name.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    /// <summary>
+    /// The race a fantasy-preset export tags a culture with, read from the parenthetical before
+    /// <see cref="StripParenthetical"/> throws it away — "Dunirr (Dwarven)" is the export telling
+    /// us these are dwarves, and it beats guessing the same fact back from terrain affinity.
+    ///
+    /// Matched against the parenthetical's content only, never the whole name: a culture is free
+    /// to be *called* Orkadal without being orcs. "Dark elf" is tested before "elf" because it
+    /// contains it; every other tag with no counterpart in our roster ("Arachnid", "Serpents",
+    /// "Draconic") lands on <see cref="RaceArchetype.Exotic"/>, whose availability the ethnicity
+    /// builder already gates by the map's fantasy mode. Null when there is no tag, which is every
+    /// culture on a non-fantasy export.
+    /// </summary>
+    internal static RaceArchetype? ParseRace(string name)
+    {
+        int open = name.IndexOf('(');
+        if (open < 0) return null;
+
+        int close = name.IndexOf(')', open);
+        if (close < 0) return null;
+
+        string tag = name[(open + 1)..close].Trim().ToLowerInvariant();
+        if (tag.Length == 0) return null;
+
+        if (tag.Contains("human")) return RaceArchetype.Human;
+        if (tag.Contains("dark elf") || tag.Contains("drow")) return RaceArchetype.Deepkin;
+        if (tag.Contains("elf") || tag.Contains("elv")) return RaceArchetype.HighElf;
+        if (tag.Contains("dwarf") || tag.Contains("dwarv")) return RaceArchetype.Dwarf;
+        if (tag.Contains("orc") || tag.Contains("ork") || tag.Contains("goblin")) return RaceArchetype.Orc;
+        if (tag.Contains("gnom") || tag.Contains("halfling") || tag.Contains("hobbit")) return RaceArchetype.Gnome;
+        if (tag.Contains("giant")) return RaceArchetype.Giantkin;
+        return RaceArchetype.Exotic;
+    }
+
+    /// <summary>
     /// Drops the form word from a full name when CK3 is going to say it anyway.
     ///
     /// The game renders a kingdom called "Kingdom of Fortimia" as "Kingdom of Kingdom of Fortimia".
@@ -238,7 +289,13 @@ public static class AzgaarNaming
             if (azgaar.World.Culture(share.Id) is not { } source) continue;
             if (string.IsNullOrWhiteSpace(source.Name)) continue;
 
-            string name = StripArticle(source.Name);
+            // The race tag is read before the parenthetical carrying it is stripped for display —
+            // the tag is data (these people are dwarves), the parenthetical is Azgaar's UI showing
+            // that data, and only the second has no place in a CK3 tooltip.
+            culture.ImportedArchetype = ParseRace(source.Name) ?? culture.ImportedArchetype;
+
+            string name = StripParenthetical(StripArticle(source.Name));
+            if (name.Length == 0) continue;
 
             // The generated name is freed as the imported one is claimed, so a later culture can
             // still be called what this one used to be.

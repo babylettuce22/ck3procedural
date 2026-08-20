@@ -139,6 +139,22 @@ public static class Program
                         System.Globalization.CultureInfo.InvariantCulture);
                     break;
 
+                // Fantasy races. The GUI's checkbox and dropdown, reachable from a terminal —
+                // "low", "high" or "exotic" turn ethnicities on at that intensity, "off" is the
+                // default human-only palette.
+                case "--races" when i + 1 < args.Length:
+                    string races = args[++i].ToLowerInvariant();
+                    cfg.EnableFantasyEthnicities = races != "off";
+                    cfg.RaceMode = races switch
+                    {
+                        "off" => Config.MapConfig.FantasyRaceMode.HumanOnly,
+                        "low" => Config.MapConfig.FantasyRaceMode.LowFantasy,
+                        "high" => Config.MapConfig.FantasyRaceMode.HighFantasy,
+                        "exotic" => Config.MapConfig.FantasyRaceMode.ExoticSurreal,
+                        _ => throw new ArgumentException($"--races {races}: expected off, low, high or exotic"),
+                    };
+                    break;
+
                 // Render the heightmap in 3D and write the frames out, without generating
                 // anything. The same renderer the GUI's Source view drives, reachable headlessly
                 // so a heightmap can be judged from a terminal or a script.

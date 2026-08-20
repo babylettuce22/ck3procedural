@@ -228,6 +228,13 @@ public sealed class MainForm : Form
     private int _sourceGeneration;
     private readonly HeightfieldPanel _solid = new() { Dock = DockStyle.Fill };
 
+    // The shipped heightmap of the newest build, ready for the 3D tab. Built eagerly after every
+    // build so opening the tab later is instant, and dropped the moment the source or a
+    // normalisation setting changes, because it no longer describes what the next build will ship.
+    private Heightfield? _processedSource;
+    private Heightfield? _processedPacked;
+    private bool _processedPending;
+
     private readonly ComboBox _sourceMode = new()
     {
         DropDownStyle = ComboBoxStyle.DropDownList,
@@ -304,6 +311,7 @@ public sealed class MainForm : Form
         {
             string? changed = e.ChangedItem?.PropertyDescriptor?.Name;
             if (changed is null || !NormalizationSettings.Contains(changed)) return;
+            InvalidateProcessed();
             if (_sourceShown) _ = ShowSourceAsync();
         };
 
@@ -443,10 +451,21 @@ public sealed class MainForm : Form
         // for is a worse trade than a view that takes a moment to fill in.
         tabs.SelectedIndexChanged += (_, _) =>
         {
-            if (tabs.SelectedTab?.Text == "Source 3D" && !_sourceShown)
+            if (tabs.SelectedTab?.Text == "3D render" && !_sourceShown)
             {
                 _sourceShown = true;
-                _ = ShowSourceAsync();
+
+                if (_processedSource is not null)
+                {
+                    SetSourceStage(processed: true);
+                    _solid.SetField(_processedSource, _processedPacked, "Nothing to show.");
+                }
+                else if (!_processedPending)
+                {
+                    _ = ShowSourceAsync();
+                }
+                // else: a build just finished and its processed heightmap is still being prepared;
+                // that task publishes here itself when it lands, now that the tab is live.
             }
         };
 
@@ -456,7 +475,7 @@ public sealed class MainForm : Form
         var titleTab = new TabPage("Titles") { BackColor = Theme.Background };
         titleTab.Controls.Add(_titles);
 
-        var sourceTab = new TabPage("Source 3D") { BackColor = Theme.Background };
+        var sourceTab = new TabPage("3D render") { BackColor = Theme.Background };
         sourceTab.Controls.Add(BuildSourceView());
 
         tabs.TabPages.Add(mapTab);
@@ -489,7 +508,8 @@ public sealed class MainForm : Form
     }
 
     /// <summary>
-    /// The 3D view of the heightmap as loaded, before anything is generated.
+    /// The 3D view: the heightmap as loaded before anything is generated, then the processed
+    /// heightmap once a build has produced one.
     ///
     /// Its own tab rather than another entry in <see cref="Views"/> because every one of those
     /// takes a <see cref="GenerationResult"/>, and the entire point of this one is that it works
@@ -615,6 +635,7 @@ public sealed class MainForm : Form
             _loaded = loaded;
             _warnings = warnings;
 
+            SetSourceStage(processed: false);
             _solid.SetField(source, packed, "Nothing to show.");
             _grid.Refresh();
 
@@ -627,6 +648,76 @@ public sealed class MainForm : Form
             if (generation != _sourceGeneration) return;
             _solid.SetField(null, null, $"Could not read it: {error.Message}");
         }
+    }
+
+    /// <summary>
+    /// Prepares the heightmap a build actually produced — coastline forced to the provinces,
+    /// shoreline shaped, exactly what lands in heightmap.png — and swaps the 3D tab over to it.
+    /// The raw source comes back through <see cref="ShowSourceAsync"/> the moment the source file
+    /// or a normalisation setting changes, so the tab always shows the newest thing the pipeline
+    /// has made of the map.
+    /// </summary>
+    private async Task ShowProcessedAsync(GenerationResult result)
+    {
+        int generation = ++_sourceGeneration;
+        _processedPending = true;
+        _processedSource = _processedPacked = null;
+
+        try
+        {
+            var (source, packed) = await Task.Run(() =>
+            {
+                var cfg = result.Config;
+                var full = Emit.MapDataWriter.ShippedHeightmap(
+                    cfg, result.Provinces, result.ProvinceOrder, result.LandCount, result.Terra);
+
+                var field = Heightfield.Downsample(
+                    full, cfg.Width, cfg.Height, Heightfield.PreviewCols);
+                var asRendered = Heightfield.Downsample(
+                    Emit.HeightmapPacker.Reconstruct(full, cfg.Width, cfg.Height),
+                    cfg.Width, cfg.Height, Heightfield.PreviewCols);
+
+                return (field, asRendered);
+            });
+
+            if (generation != _sourceGeneration) return;
+
+            _processedPending = false;
+            _processedSource = source;
+            _processedPacked = packed;
+
+            if (_sourceShown)
+            {
+                SetSourceStage(processed: true);
+                _solid.SetField(source, packed, "Nothing to show.");
+            }
+        }
+        catch (Exception error)
+        {
+            if (generation != _sourceGeneration) return;
+            _processedPending = false;
+
+            // Not worth wiping a good frame over; the tab just keeps whatever it was showing.
+            Console.WriteLine($"Could not prepare the processed heightmap for the 3D view: {error.Message}");
+        }
+    }
+
+    /// <summary>Drops a processed heightmap that no longer describes what the next build ships.</summary>
+    private void InvalidateProcessed()
+    {
+        _processedSource = _processedPacked = null;
+        _processedPending = false;
+        _sourceGeneration++;   // orphans any in-flight processed build
+    }
+
+    /// <summary>
+    /// Renames the first view mode so the strip says what the 3D tab is looking at. The second mode
+    /// — the packer round-trip — applies to either stage, so it keeps its name.
+    /// </summary>
+    private void SetSourceStage(bool processed)
+    {
+        string label = processed ? "Processed heightmap" : "Heightmap as loaded";
+        if (!label.Equals(_sourceMode.Items[0])) _sourceMode.Items[0] = label;
     }
 
     private Control BuildLogHeader()
@@ -916,6 +1007,7 @@ public sealed class MainForm : Form
         _options.HeightmapPath = _heightmapPath;
         ApplySource();
 
+        InvalidateProcessed();
         if (_sourceShown) _ = ShowSourceAsync();
     }
 
@@ -1288,6 +1380,10 @@ public sealed class MainForm : Form
 
         ShowResult(result);
         ApplySource();
+
+        // The 3D tab tracks the pipeline: the raw heightmap before a build, the shipped one after.
+        _ = ShowProcessedAsync(result);
+
         _status.Text = modDir is null
             ? $"Preview — {result.Provinces.Count} provinces. Nothing written."
             : $"Mod written to {modDir} — {result.Provinces.Count} provinces";

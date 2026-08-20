@@ -37,7 +37,8 @@ public static class ClimateModel
     private const double LandRecycling = 0.48;
     private const double ReliefBlurPixels = 140;
 
-    public static ClimateField Build(MapConfig cfg, float[] provinceElevation, byte[] landMask, Rng rng)
+    public static ClimateField Build(MapConfig cfg, float[] provinceElevation, byte[] landMask, Rng rng,
+        AzgaarImport? azgaar = null)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -70,29 +71,56 @@ public static class ClimateModel
         var kilometres = Resample(pixelKm, pw, ph, cw, ch);
         var water = ResampleMask(landMask, pw, ph, cw, ch);
 
-        var latitude = Latitudes(cfg, ch);
+        // Read before the samples: the framing is what makes the imported temperatures mean
+        // anything, so it is taken whenever the export carries one, and the latitude field every
+        // seasonal term below is derived from follows it rather than the configured framing.
+        var framing = azgaar is null ? null : AzgaarClimate.ReadFraming(azgaar);
+
+        var latitude = Latitudes(cfg, ch, framing);
         var continentality = Continentality(water, cw, ch, cfg);
         var drift = TemperatureDrift(cw, ch, cfg, rng);
 
         var (annualC, seasonalRange) = Temperature(cfg, latitude, kilometres, continentality, drift, cw, ch);
+
+        // The export's climate, where there is one. Temperature is taken before the rainfall sweeps
+        // rather than after, so the circulation runs on Azgaar's temperatures and the seasonal split
+        // it produces belongs to the same world the totals will come from.
+        var imported = azgaar is null ? null : AzgaarClimate.Sample(azgaar, cw, ch);
+        if (imported is not null) AzgaarClimate.ApplyTemperature(annualC, imported);
 
         var july = Precipitation(cfg, latitude, kilometres, water, continentality, annualC, seasonalRange,
             cw, ch, ItczShiftDeg, rng);
         var january = Precipitation(cfg, latitude, kilometres, water, continentality, annualC, seasonalRange,
             cw, ch, -ItczShiftDeg, rng);
 
-        var field = Assemble(cfg, pixelKm, kilometres, landMask, july, january, annualC,
-            seasonalRange, cw, ch, pw, ph);
+        if (imported is not null)
+        {
+            AzgaarClimate.ApplyPrecipitation(july, january, imported);
+            Console.WriteLine("    climate reanchored on the azgaar export: its temperature and " +
+                              "rainfall pattern, our seasons and relief detail");
+        }
+        else if (azgaar is not null)
+        {
+            Console.WriteLine("    ! the export carries no background grid (a \"Minimal\" save) — " +
+                              "climate is generated, not imported");
+        }
 
-        Report(field, landMask, cfg, sw.ElapsedMilliseconds);
+        var field = Assemble(cfg, pixelKm, kilometres, landMask, july, january, annualC,
+            seasonalRange, cw, ch, pw, ph, imported is not null, framing);
+
+        Report(field, landMask, cfg, sw.ElapsedMilliseconds, framing);
         return field;
     }
 
-    private static float[] Latitudes(MapConfig cfg, int rows)
+    /// <summary>
+    /// Latitude per row, from the export's framing when there is one and the configuration's
+    /// otherwise. See <see cref="AzgaarClimate.ReadFraming"/> for why an import must bring its own.
+    /// </summary>
+    private static float[] Latitudes(MapConfig cfg, int rows, AzgaarClimate.Framing? framing = null)
     {
         var latitude = new float[rows];
-        double span = Math.Clamp(cfg.MapLatitudeSpan, 1, 180);
-        double equatorRow = cfg.EquatorPosition * rows;
+        double span = Math.Clamp(framing?.Span ?? cfg.MapLatitudeSpan, 1, 180);
+        double equatorRow = (framing?.EquatorFraction ?? cfg.EquatorPosition) * rows;
 
         for (int y = 0; y < rows; y++)
             latitude[y] = (float)((equatorRow - (y + 0.5)) / rows * span);
@@ -354,15 +382,25 @@ public static class ClimateModel
 
     private static ClimateField Assemble(MapConfig cfg, float[] pixelKm, float[] coarseKm,
         byte[] landMask, float[] julyRain, float[] januaryRain, float[] annualC,
-        float[] seasonalRange, int cw, int ch, int pw, int ph)
+        float[] seasonalRange, int cw, int ch, int pw, int ph, bool imported,
+        AzgaarClimate.Framing? framing)
     {
-        var meanUp = Field.Upsample(Field.Blur(annualC, cw, ch, 3, 3), cw, ch, pw, ph);
+        // The blur is there to take the grain off our own advection sweeps, which resolve rainfall
+        // cell by cell and come out noisy. An imported field has no such grain — it arrives off a
+        // lattice several times coarser than this grid and is already smooth by the time it is
+        // interpolated onto it — so the same blur only flattens the extremes it was never meant to
+        // touch, dragging deserts wetter and rainforests drier than the export says. A light pass
+        // still hides the interpolation seams.
+        int rainBlur = imported ? 1 : 4;
+        int tempBlur = imported ? 1 : 3;
+
+        var meanUp = Field.Upsample(Field.Blur(annualC, cw, ch, tempBlur, 3), cw, ch, pw, ph);
         var rangeUp = Field.Upsample(Field.Blur(seasonalRange, cw, ch, 3, 3), cw, ch, pw, ph);
-        var julyUp = Field.Upsample(Field.Blur(julyRain, cw, ch, 4, 3), cw, ch, pw, ph);
-        var januaryUp = Field.Upsample(Field.Blur(januaryRain, cw, ch, 4, 3), cw, ch, pw, ph);
+        var julyUp = Field.Upsample(Field.Blur(julyRain, cw, ch, rainBlur, 3), cw, ch, pw, ph);
+        var januaryUp = Field.Upsample(Field.Blur(januaryRain, cw, ch, rainBlur, 3), cw, ch, pw, ph);
 
         var coarseKmUp = Field.Upsample(coarseKm, cw, ch, pw, ph);
-        var latitude = Latitudes(cfg, ph);
+        var latitude = Latitudes(cfg, ph, framing);
 
         var mean = new float[pw * ph];
         var warm = new float[pw * ph];
@@ -429,7 +467,8 @@ public static class ClimateModel
         };
     }
 
-    private static void Report(ClimateField field, byte[] landMask, MapConfig cfg, long elapsedMs)
+    private static void Report(ClimateField field, byte[] landMask, MapConfig cfg, long elapsedMs,
+        AzgaarClimate.Framing? framing)
     {
         var temperatures = new List<float>();
         var rainfall = new List<float>();
@@ -449,9 +488,12 @@ public static class ClimateModel
         double north = field.LatitudeDeg[0];
         double south = field.LatitudeDeg[^1];
 
+        double span = framing?.Span ?? cfg.MapLatitudeSpan;
+        double equator = framing?.EquatorFraction ?? cfg.EquatorPosition;
+
         Console.WriteLine($"  climate: map spans {north:F0}° to {south:F0}° latitude " +
-                          $"({cfg.MapLatitudeSpan:F0}° tall, equator at " +
-                          $"{cfg.EquatorPosition * 100:F0}% down)");
+                          $"({span:F0}° tall, equator at {equator * 100:F0}% down)" +
+                          (framing is null ? "" : " — from the export, not the configuration"));
         Console.WriteLine($"    land temperature p10 {Percentile(temperatures, 0.1):F0}°C / " +
                           $"median {Percentile(temperatures, 0.5):F0}°C / " +
                           $"p90 {Percentile(temperatures, 0.9):F0}°C");

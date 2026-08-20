@@ -17,9 +17,14 @@ public static class ContentWriter
     /// The handful of things a later edit needs — see <see cref="WrittenContent"/>. Ignored by the
     /// command line, which writes once and exits.
     /// </returns>
+    /// <param name="shippedHeightmap">The heightmap <see cref="MapDataWriter.WriteAll"/> just
+    /// wrote. The scatter passes need it, and it is required rather than optional on purpose: the
+    /// bug it fixes was a scatter quietly reading a surface the game never renders, and a default
+    /// would let that back in with no compile error to catch it.</param>
     public static WrittenContent WriteAll(string modDir, string gameDir, MapConfig cfg,
             ProvinceMap provinces, int[] order, int baronyCount, int landCount, int riverCount,
             List<Title> empires, TerrainData terra, TerrainClassifier.Result classified, Rng rng,
+            ushort[] shippedHeightmap,
             bool writeHistory = true, MapGen.Drainage? drainage = null,
             MapGen.AzgaarImport? azgaar = null)
     {
@@ -138,9 +143,12 @@ public static class ContentWriter
 
         var faiths = Core.Stage.Time("faiths", () => MapGen.Faiths.Build(empires, provinces, order,
             landCount, provinceTerrain, development, governments, vocabulary, wilderness, cfg, worldCenters,
-            new Rng(cfg.Seed ^ 0x0FA1)));
+            new Rng(cfg.Seed ^ 0x0FA1), azgaar));
 
-        if (azgaar is not null)
+        // The Tier 1 renamer only runs when the structure is still ours. Built from the export's
+        // own tree, the faiths already carry its names, and a rename by majority vote could only
+        // disagree with the geography they were cut from.
+        if (azgaar is not null && !faiths.ImportedStructure)
         {
             var (namedFaiths, namedReligions) = MapGen.AzgaarNaming.RenameFaiths(azgaar, faiths);
             Console.WriteLine($"  azgaar: {namedFaiths} of {faiths.Faiths.Count} faiths and " +
@@ -223,19 +231,29 @@ public static class ContentWriter
             modDir, cfg, provinces, order, landCount, provinceElevation, provinceTerrain));
 
         Core.Stage.Time("terrain masks", () => TerrainMaskWriter.WriteAll(modDir, gameDir, cfg));
-        // Trees are placed against the heightmap *as the engine will reconstruct it*, not against
-        // the one we computed. The packer quantises and reassembles the terrain from a tile atlas,
-        // and near a shore that moves the surface by enough to leave trunks standing in water — so
-        // the elevation is round-tripped through the packer first and the scatter reads the result.
-        var full = HeightmapSource.ToHeightmap16(terra.Elevation, cfg);
-        var raw = HeightmapPacker.Reconstruct(full, cfg.Width, cfg.Height);
-        var renderedElevation = HeightmapSource.ToSimulationScale(raw, cfg);
 
-        // terra.Elevation, not the province-resolution copy: both scatters jitter to sub-pixel
-        // positions and have to ask the heightmap the engine renders whether that spot is dry.
+        // The scatters are placed against the heightmap *as the engine will reconstruct it*, not
+        // against the one we computed. Two passes move that surface and both have to be in it.
+        //
+        // First the coastline work MapDataWriter does before writing heightmap.png — forcing
+        // the shore to agree with provinces.png, then plunging the shelf and smoothing the land
+        // side. That is precisely what moves the shoreline, so this takes the array that writer
+        // shipped rather than converting terra.Elevation a second time and missing it.
+        //
+        // Then the packer, which quantises the terrain into a tile atlas and reassembles it, near
+        // a shore by enough to leave trunks standing in water. Reconstruct shares its LOD
+        // assignment with Pack, so feeding it the shipped array is also what makes the surface the
+        // scatter reads agree with the packed one tile for tile.
+        var renderedElevation = Core.Stage.Time("rendered heightmap", () =>
+            HeightmapSource.ToSimulationScale(
+                HeightmapPacker.Reconstruct(shippedHeightmap, cfg.Width, cfg.Height), cfg));
+
+        // renderedElevation for all three, not terra.Elevation: every one of them seeds from
+        // province-resolution terrain and then jitters to a sub-pixel position, and has to ask the
+        // heightmap the engine renders whether that spot is dry. See ScatterGround.
         Core.Stage.Time("trees", () => TreeWriter.WriteAll(modDir, cfg, terrain, classified.Climate, renderedElevation, rng));
-        Core.Stage.Time("animals", () => AnimalWriter.WriteAll(modDir, cfg, terrain, terra.Elevation, rng));
-        Core.Stage.Time("env effects", () => EnvEffectWriter.WriteAll(modDir, cfg, terrain, terra.Elevation, rng));
+        Core.Stage.Time("animals", () => AnimalWriter.WriteAll(modDir, cfg, terrain, renderedElevation, rng));
+        Core.Stage.Time("env effects", () => EnvEffectWriter.WriteAll(modDir, cfg, terrain, renderedElevation, rng));
         Core.Stage.Time("map table", () => MapTableWriter.WriteAll(modDir, cfg));
         Core.Stage.Time("holding models", () => HoldingModelWriter.WriteAll(modDir, gameDir, cfg));
 
@@ -266,7 +284,7 @@ public static class ContentWriter
                     bookmarkResult.BookmarkDnaMap);
 
                 WarWriter.WriteAll(modDir, prehistory);
-                PortraitWriter.WriteAll(modDir, gameDir, bookmarkResult.PortraitRequests, cfg.Seed);
+                PortraitWriter.WriteAll(modDir, gameDir, bookmarkResult.PortraitRequests, ethnicities, cfg.Seed);
             });
         }
         else Console.WriteLine("  history: SKIPPED (--no-history)");
@@ -295,14 +313,14 @@ public static class ContentWriter
     public static WrittenContent WriteAll(string modDir, string gameDir, MapConfig cfg,
         ProvinceMap provinces, int[] order, int baronyCount, int landCount, List<Title> empires,
         TerrainData terra, TerrainClassifier.Result classified, Rng rng,
-        bool writeHistory = true)
+        ushort[] shippedHeightmap, bool writeHistory = true)
     {
         int riverCount = landCount;
         for (int i = 0; i < provinces.Count; i++)
             if (!provinces.Seeds[i].IsLand && provinces.Seeds[i].IsMajorRiver) riverCount++;
 
         return WriteAll(modDir, gameDir, cfg, provinces, order, baronyCount, landCount, riverCount,
-            empires, terra, classified, rng, writeHistory);
+            empires, terra, classified, rng, shippedHeightmap, writeHistory);
     }
 
     /// <summary>

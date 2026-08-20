@@ -1584,7 +1584,7 @@ public static class Provinces
                     if (nx < 0 || ny < 0 || nx >= map.Width || ny >= map.Height) continue;
                     int nk = ny * map.Width + nx;
                     if (label[nk] >= 0) continue;
-                    if (matchDomain && domain[nk] != domain[cell]) continue;
+                    if (matchDomain && domain[nk] != map.Seeds[label[cell]].Domain) continue;
 
                     label[nk] = label[cell];
                     queue.Add(nk);

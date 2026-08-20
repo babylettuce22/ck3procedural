@@ -30,6 +30,29 @@ public sealed class Rng
         return r ^ (r >> 31);
     }
 
+    /// <summary>
+    /// A hash of a string that is the same in every process. <c>string.GetHashCode()</c> is not:
+    /// .NET randomises string hashing per process, so an Rng seeded from one produces a different
+    /// result on every run of the same seed — against the whole point of seeding it. Anything that
+    /// keys an Rng off a generated name (a dynasty id, a faith key) has to come through here.
+    ///
+    /// FNV-1a over the UTF-16 code units. The quality bar is only "spreads keys apart", because
+    /// SplitMix64 in the constructor does the actual mixing; what matters is that it is fixed.
+    /// </summary>
+    public static ulong StableHash(string text)
+    {
+        const ulong prime = 1099511628211UL;
+        ulong hash = 14695981039346656037UL; // FNV-1a 64-bit offset basis
+
+        foreach (char c in text)
+        {
+            hash = (hash ^ (byte)c) * prime;
+            hash = (hash ^ (byte)(c >> 8)) * prime;
+        }
+
+        return hash;
+    }
+
     private static ulong Rotl(ulong x, int k) => (x << k) | (x >> (64 - k));
 
     public ulong NextUInt64()

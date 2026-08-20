@@ -1,0 +1,103 @@
+﻿# Gives a character the racial phenotype of the culture they belong to.
+#
+# Emit/HistoryWriter.cs stamps a phenotype trait onto every character it writes at generation time,
+# and the traits inherit at 100% from either parent, so the whole starting world and everyone born
+# into it is already correct. This file exists for the characters the ENGINE invents mid-game, who
+# come from neither of those places: courtiers generated to fill a court, landless adventurers and
+# the companions they recruit, pool guests, low nobles created for a barony, mercenary captains.
+# Without this they are all humans, so a dwarven kingdom slowly fills up with human courtiers and
+# the phenotype reads as a quirk of the 867 bookmark rather than as what the culture is.
+#
+# **Keyed on culture, not on who is standing nearby.** Phenotype is a property of a culture in this
+# generator — Emit/HistoryWriter.cs derives the trait from the culture's ethnicity archetype — so the
+# culture is the correct axis, and it is also the self-correcting one: culture passes from parent to
+# child, so a human family living in a dwarven realm keeps its human culture and is never converted
+# by anything here. Copying from the liege instead would turn every human servant in a dwarf's
+# household into a dwarf.
+#
+# **Why it has to be indirect.** This file set ships identically for every seed and so may not name
+# a generated key (see BaseFilesToCopy/README.txt), which rules out asking whether the character's
+# culture is `culture:gen_culture_4` or their ethnicity `gen_ethnicity_7`. Nor can the genes be read:
+# the generated ethnicities distinguish races by gene VALUE ranges, while `has_gene` only tests the
+# template, and every race shares templates like `normal_height`. So the culture is identified by
+# example instead — find a character the culture already agrees is typical, and copy their trait.
+#
+# `culture_head` is that character. It is a real per-culture pointer needing no generated key, and
+# the head at game start is always a ruler out of history, which is to say one of the characters
+# HistoryWriter already stamped. `liege` and `host` are fallbacks for a culture whose head has died
+# or was never established, and both are gated on same-culture for the reason above.
+
+gen_assign_phenotype_effect = {
+	if = {
+		limit = { NOT = { gen_has_phenotype_trigger = yes } }
+
+		# Saved rather than leaning on `root`, because this is called from several on_actions and
+		# root is not the same character in all of them — in on_baron_found_or_created_for_title it
+		# is the new baron, in the pulses it is whoever the pulse fired for.
+		save_scope_as = gen_phenotype_target
+
+		if = {
+			limit = { culture.culture_head ?= { gen_has_phenotype_trigger = yes } }
+			culture.culture_head = { save_scope_as = gen_phenotype_source }
+		}
+		else_if = {
+			limit = {
+				liege ?= {
+					gen_has_phenotype_trigger = yes
+					has_same_culture_as = scope:gen_phenotype_target
+				}
+			}
+			liege = { save_scope_as = gen_phenotype_source }
+		}
+		else_if = {
+			limit = {
+				host ?= {
+					gen_has_phenotype_trigger = yes
+					has_same_culture_as = scope:gen_phenotype_target
+				}
+			}
+			host = { save_scope_as = gen_phenotype_source }
+		}
+
+		# No source is the normal case, not a failure: on a human map nobody anywhere carries one of
+		# these traits, so every character falls through here and the whole system costs one trigger
+		# per character per year. It is also what makes the effect safe to call unconditionally.
+		if = {
+			limit = { exists = scope:gen_phenotype_source }
+			gen_copy_phenotype_effect = yes
+		}
+	}
+}
+
+# Copies scope:gen_phenotype_source's phenotype onto the current character.
+#
+# Split out so the source-picking above stays readable, and written as one else_if chain rather than
+# six independent ifs so a source carrying two phenotypes — which the `opposites` lists are supposed
+# to prevent, but which a ruler designer character or a console command can still produce — hands
+# over exactly one instead of stacking them.
+gen_copy_phenotype_effect = {
+	if = {
+		limit = { scope:gen_phenotype_source = { has_trait = phenotype_gracile } }
+		add_trait = phenotype_gracile
+	}
+	else_if = {
+		limit = { scope:gen_phenotype_source = { has_trait = phenotype_stocky } }
+		add_trait = phenotype_stocky
+	}
+	else_if = {
+		limit = { scope:gen_phenotype_source = { has_trait = phenotype_rough_hewn } }
+		add_trait = phenotype_rough_hewn
+	}
+	else_if = {
+		limit = { scope:gen_phenotype_source = { has_trait = phenotype_towering } }
+		add_trait = phenotype_towering
+	}
+	else_if = {
+		limit = { scope:gen_phenotype_source = { has_trait = phenotype_diminutive } }
+		add_trait = phenotype_diminutive
+	}
+	else_if = {
+		limit = { scope:gen_phenotype_source = { has_trait = phenotype_dusk_adapted } }
+		add_trait = phenotype_dusk_adapted
+	}
+}

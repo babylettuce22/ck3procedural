@@ -37,8 +37,30 @@ phenotype_gracile = {
     prowess = 1
     movement_speed = 0.05
     stress_loss_mult = 0.05
-	health = 0.65
     same_opinion = 10
+
+    # Elves outlive men, and both halves of that are needed.
+    #
+    # `life_expectancy` is literally years before natural death, and it also makes a character
+    # visibly age slower -- which is the same idea gene_age's `no_aging` expresses on the portrait,
+    # so the two agree instead of one contradicting the other. Vanilla's own range runs -10..+10
+    # (fecund is +5), so +35 is far outside human scale on purpose: base expectancy sits around
+    # sixty, and this is what puts an elf comfortably past a hundred.
+    life_expectancy = 35
+
+    # Health does the other half, and it is the part that actually stops the age-related ailments
+    # -- faltering heart, clouded eyes, fragile bones, withering mind, infirm -- from arriving at a
+    # human's schedule. Each of those events carries `modifier = { health >= good_health  age < 60
+    # factor = 0 }`, so a character at or above good_health (5) simply cannot draw one before sixty.
+    # Engine-generated characters spawn at health 4.0-5.0 (RANDOM_CHARACTER_MIN/MAX_HEALTH), so the
+    # old +0.65 left roughly half of all elves under the bar and collecting ailments from 45. At
+    # +1.25 the whole spawn range clears it.
+    #
+    # It keeps paying afterwards: the tracked ailments advance through a random_list in
+    # health_on_actions.txt that subtracts 25 from the progression roll at `health >= fine_health`,
+    # so an elf who does pick one up past sixty climbs toward the lethal top of the track far more
+    # slowly than a man would.
+    health = 1.25
 }
 
 #dwarf
@@ -71,7 +93,7 @@ phenotype_stocky = {
     stewardship = 1
     prowess = 2
     health = 0.5
-    siege_defence = 0.10
+    defender_advantage = 3
 
     same_opinion = 5
 	
@@ -112,7 +134,7 @@ phenotype_rough_hewn = {
     health = -0.1
     martial = 1
     prowess = 3
-    natural_dread = 15
+    dread_baseline_add = 15
     dread_gain_mult = 0.3
     general_opinion = -5
     same_opinion = 10
@@ -182,8 +204,8 @@ phenotype_diminutive = {
 
     intrigue = 1
     prowess = -2
-    hostile_scheme_power_mult = 0.15
-    scheme_resistance_mult = 0.10
+    owned_hostile_scheme_success_chance_add = 15
+    scheme_resistance = 10
     stress_loss_mult = 0.10
 
     same_opinion = 5
@@ -217,8 +239,13 @@ phenotype_dusk_adapted = {
 
     intrigue = 2
     learning = 1
-    hostile_scheme_power_mult = 0.10
+    owned_hostile_scheme_success_chance_add = 10
     enemy_hostile_scheme_success_chance_add = -5
 
     same_opinion = 5
+
+    # Long-lived, though not as long as the surface elves -- see phenotype_gracile for why these two
+    # modifiers are the pair that matters and how the ailment events read them.
+    life_expectancy = 28
+    health = 1.0
 }

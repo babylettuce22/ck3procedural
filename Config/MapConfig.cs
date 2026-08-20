@@ -626,7 +626,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     [AdvancedSetting]
     [Category("05 Rivers")]
     [Description("Half-width of a major river's carved channel at its source, in heightmap pixels measured from the centreline — the channel is twice this across. Below about 7 it stops surviving the downsample into the province map and the river ceases to be navigable.")]
-    public double RiverChannelRadiusMin { get; set; } = 18.0;
+    public double RiverChannelRadiusMin { get; set; } = 14.0;
 
     /// <summary>
     /// Half-width of a major river's carved channel at its mouth, in vanilla heightmap pixels.
@@ -635,7 +635,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     [AdvancedSetting]
     [Category("05 Rivers")]
     [Description("Half-width of a major river's carved channel at its mouth, in heightmap pixels from the centreline. The channel opens from the source radius to this along its length.")]
-    public double RiverChannelRadiusMax { get; set; } = 38.0;
+    public double RiverChannelRadiusMax { get; set; } = 22.0;
 
     /// <summary>
     /// How much a major river's channel breathes in and out along its length, as a fraction of the
@@ -1382,8 +1382,38 @@ public sealed class MapConfig : CustomTypeDescriptor
     public bool TieRaceToHeritage { get; set; } = true;
 
     [Category("14 Fantasy & Ethnicities")]
-    [Description("How many distinct races the world must contain. Raises the heritage count if culture density would not otherwise produce enough regions to hold them, so a high value costs you smaller heritages. Capped at 8, or 9 in Exotic & Surreal.")]
-    public int GuaranteedRaceCount { get; set; } = 4;
+    [Description("How many distinct races the world must contain. Raises the heritage count if culture density would not otherwise produce enough regions to hold them, so a high value costs you smaller heritages. Capped at 8, or 9 in Exotic & Surreal. Require terrain can hold the delivered count below this.")]
+    public int GuaranteedRaceCount { get; set; } = 7;
+
+    /// <summary>
+    /// How much say the land has over who lives on it. Every race has terrain it wants —
+    /// dwarves mountains, wood elves forest, giantkin the arctic — and this decides whether
+    /// that is a preference or a precondition.
+    /// </summary>
+    public enum RaceTerrainRule
+    {
+        /// <summary>Terrain plays no part. Races land wherever the quota and the dice put them.</summary>
+        Ignore,
+
+        /// <summary>
+        /// Terrain biases placement but never blocks it, so <see cref="GuaranteedRaceCount"/> is
+        /// always delivered. A map with no mountains still gets its dwarves; they just settle on
+        /// the least unsuitable ground available.
+        /// </summary>
+        Prefer,
+
+        /// <summary>
+        /// A race may only take land where terrain it wants covers at least a fifth of the
+        /// region. Races with nowhere to live are dropped rather than misplaced, so a map with
+        /// no forest simply has no wood elves and the delivered race count falls short of
+        /// <see cref="GuaranteedRaceCount"/>. Humans are never blocked.
+        /// </summary>
+        Require
+    }
+
+    [Category("14 Fantasy & Ethnicities")]
+    [Description("How much say terrain has over where a race may appear. Prefer biases placement but always delivers the requested race count. Require only settles a race where terrain it wants covers at least a fifth of the region, and drops races that have nowhere to live — so a map with no mountains gets no dwarves rather than misplaced ones. Humans are never blocked.")]
+    public RaceTerrainRule RaceTerrain { get; set; } = RaceTerrainRule.Prefer;
 
 
     // =========================================================================

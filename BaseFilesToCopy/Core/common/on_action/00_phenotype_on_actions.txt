@@ -1,0 +1,55 @@
+﻿# Hooks that give engine-generated characters their culture's phenotype.
+#
+# See common/scripted_effects/00_phenotype_effects.txt for what the effect does and why it keys on
+# culture. This file is only about WHEN to ask.
+#
+# **Every entry appends, none overrides.** Each vanilla on_action below is re-declared with nothing
+# but an `on_actions` list, which is the additive firing list documented in
+# common/on_action/_on_actions.info. Writing a `trigger` or an `effect` into one of these blocks
+# instead would replace vanilla's own and silently delete whatever it did — the single commonest
+# compatibility bug in CK3 modding, and the reason this file looks more roundabout than it needs to.
+
+# The net. Fires for every character once a year, at a random point in their own year rather than on
+# a shared date, so the cost is spread across the calendar instead of landing on January 1st.
+#
+# This is the entry that actually does the work, because the obvious hook does not exist: there is no
+# on_action for "a character was generated". `on_join_court` looks right and is not — vanilla's own
+# comment on it reads "Not fired for just generated characters", which is precisely the population
+# this system is for. So rather than chase every site the engine can invent a character from, catch
+# them all shortly afterwards.
+random_yearly_everyone_pulse = {
+	on_actions = { gen_phenotype_assign_on_action }
+}
+
+# Pool characters specifically. They are not in anybody's court yet, so the yearly pulse above may
+# reach them before they have a liege or host to fall back on; this gives them a second look on the
+# engine's own pool cadence.
+three_year_pool_pulse = {
+	on_actions = { gen_phenotype_assign_on_action }
+}
+
+# Promptness, for the two cases where a newly generated character is immediately visible to the
+# player. Both would be picked up by the yearly pulse anyway — but a guest arriving in court, or a
+# low noble just handed a barony, is looked at straight away, and a dwarf realm's new baron being
+# briefly human is exactly the seam this system exists to hide.
+on_guest_arrived_from_pool = {
+	on_actions = { gen_phenotype_assign_on_action }
+}
+
+on_baron_found_or_created_for_title = {
+	on_actions = { gen_phenotype_assign_on_action }
+}
+
+# Deliberately NOT hooked: on_birth_child.
+#
+# The traits are `inherit_chance = 100` with `inherit_from_real_father` and `inherit_from_real_mother`
+# both set, so a child of any carrier already has the trait before script could add it. Hooking birth
+# would not add coverage, and it would do harm: this effect reads the CULTURE, so it would hand the
+# local phenotype to human children born into a phenotyped culture and overrule the one thing that
+# should always win at birth, which is the parents.
+
+gen_phenotype_assign_on_action = {
+	effect = {
+		gen_assign_phenotype_effect = yes
+	}
+}

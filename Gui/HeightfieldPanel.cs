@@ -5,10 +5,10 @@ namespace Ck3MapGen.Gui;
 /// <summary>
 /// The interactive 3D view of a loaded heightmap: drag to orbit, right-drag to pan, wheel to zoom.
 ///
-/// Rendering runs off the UI thread, at half resolution while the mouse is down and at full
-/// resolution once it settles. A frame at half resolution costs a quarter as much, which is what
-/// makes a software renderer feel like a viewport rather than like a slideshow; the sharp frame
-/// arrives a few tens of milliseconds after the drag stops and nobody sees the seam.
+/// Rendering runs off the UI thread, plain while the mouse is down and 2x supersampled once it
+/// settles. A supersampled frame costs four times as much, which is the wrong trade mid-drag,
+/// where frames are disposable; the antialiased frame arrives a few tens of milliseconds after
+/// the drag stops and nobody sees the seam.
 ///
 /// Only one render is ever in flight. Requests that arrive during one are collapsed into a single
 /// "do it again when you land" flag, so spinning the wheel or throwing the mouse across the control
@@ -126,11 +126,16 @@ public sealed class HeightfieldPanel : Control
         _running = true;
 
         var view = _view;
-        int scale = _draft ? 2 : 1;
-        int w = Math.Max(24, Width / scale);
-        int h = Math.Max(24, Height / scale);
+        int w = Math.Max(24, Width);
+        int h = Math.Max(24, Height);
 
-        Task.Run(() => HeightfieldRenderer.Render(field, view, w, h))
+        // Drafts render at full resolution but skip the supersampling; the settled frame adds it,
+        // which is what takes the staircase off ridgelines and coasts. Drafts used to drop to half
+        // resolution too, but the renderer measures a few milliseconds without supersampling, and
+        // the bilinear stretch back up read as the whole view going fuzzy mid-drag.
+        int ss = _draft ? 1 : 2;
+
+        Task.Run(() => HeightfieldRenderer.Render(field, view, w, h, ss))
             .ContinueWith(task =>
             {
                 _running = false;
@@ -238,7 +243,8 @@ public sealed class HeightfieldPanel : Control
             return;
         }
 
-        // Draft frames are half size, so they are stretched back up here rather than re-rendered.
+        // Frames normally match the control exactly; the stretch path only runs in the moment
+        // between a resize and the re-render it requests.
         g.InterpolationMode = _frame.Width < Width
             ? InterpolationMode.HighQualityBilinear
             : InterpolationMode.NearestNeighbor;
