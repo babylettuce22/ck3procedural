@@ -1,0 +1,47 @@
+﻿l_english:
+ # ============ World-Weary trait ============
+ trait_world_weary: "World-Weary"
+ trait_world_weary_desc: "The long-lived do not break as mortals do. They simply begin, one century at a time, to set the world down."
+ trait_world_weary_character_desc: "[ROOT.GetCharacter.GetFirstNameNoTooltip] has seen too many springs to be surprised by another. Little by little, [ROOT.GetCharacter.GetSheHe] is setting the world down."
+ trait_track_world_weary: "World-Weary"
+ trait_track_world_weary_desc: "Each passing year weighs a little more, and matters a little less."
+ TRAIT_FLAG_DESC_world_weary_yearly_xp_gain: "\n@time_icon!#help This [trait_level_track|E] deepens with the passing years#!"
+
+ # ============ Death reason ============
+ death_fading:0 "faded from the world"
+
+ # ============ Feed message ============
+ gen_world_weary_deepens_message_title: "The World Grows Distant"
+
+ # ============ Onset: The Weight of Centuries ============
+ gen_aging.0001.t: "The Weight of Centuries"
+ gen_aging.0001.desc: "It arrives without herald or hour: a morning on which the light through the leaves looks exactly as it did a hundred years ago, and the sameness is heavier than any grief. The faces around me are dear, and yet I find I am watching them from a slight remove, as one watches a river — fond of the water, certain it will pass.\n\nMy people do not wither. We are not taken. But I understand now what the old ones meant when they said the world is a garment, and that one day it simply grows loose upon the shoulders."
+ gen_aging.0001.a: "Then I will wear it lightly."
+ gen_aging.0001.b: "Not yet. There is work unfinished."
+
+ # ============ The Fading ============
+ gen_aging.0002.t: "The Fading"
+ gen_aging.0002.desc: "There is no pain. That is the first thing to know, and the last kindness of a long life: there is no pain.\n\nThe world has grown thin as worn linen, and the light behind it very bright. Names I have carried for centuries lie down gently, one by one, like tools at the end of a day's labor. Somewhere close by, someone is weeping; somewhere further, spring is arriving without my help, as it always did.\n\nIt is time to set the garment down."
+ gen_aging.0002.a: "I am ready."
+
+ # ============ Core debug inspector (console: event gen_aging.0090) ============
+ gen_aging.0090.t: "Core Debug: Phenotype & Aging"
+ gen_aging.0090.race_elf: "#weak Race:#! Elf (phenotype_gracile) — long-lived, fades.\n"
+ gen_aging.0090.race_deepkin: "#weak Race:#! Deepkin (phenotype_dusk_adapted) — long-lived, fades.\n"
+ gen_aging.0090.race_dwarf: "#weak Race:#! Dwarf (phenotype_stocky) — mortal aging.\n"
+ gen_aging.0090.race_orc: "#weak Race:#! Orc (phenotype_rough_hewn) — mortal aging.\n"
+ gen_aging.0090.race_giant: "#weak Race:#! Giant (phenotype_towering) — mortal aging.\n"
+ gen_aging.0090.race_gnome: "#weak Race:#! Gnome (phenotype_diminutive) — mortal aging.\n"
+ gen_aging.0090.race_human_flagged: "#weak Race:#! Human (gen_phenotype_human flag set — decided, will not be reassigned).\n"
+ gen_aging.0090.race_none: "#weak Race:#! Undecided — no phenotype trait, no human flag. The yearly pulse will assign by culture.\n"
+ gen_aging.0090.weary_maxed: "#weak Weariness:#! World-Weary at maximum — the fading is due this pulse.\n"
+ gen_aging.0090.weary_yes: "#weak Weariness:#! World-Weary present; the track climbs each year.\n"
+ gen_aging.0090.weary_eligible: "#weak Weariness:#! Not yet weary, but eligible — onset rolls every year from here.\n"
+ gen_aging.0090.weary_no: "#weak Weariness:#! Not weary, not eligible (wrong race, under 80, game rule off, or immortal).\n"
+ gen_aging.0090.ailment_leak: "#X Leak:#! this long-lived character carries a vanilla age ailment (infirm / withering mind / clouded eyes / faltering heart / fragile bones). The is_immortal flag should prevent this — worth investigating how it got here. The repair option or the next yearly pulse will strip it."
+ gen_aging.0090.ailment_clean: "#weak Vanilla ailments:#! none — the is_immortal gate is holding."
+ gen_aging.0090.grant: "Grant World-Weary now"
+ gen_aging.0090.add_xp: "Add 25 weariness"
+ gen_aging.0090.fade: "Fire the Fading"
+ gen_aging.0090.repair: "Run repairs (sanitize race, assign, strip ailments)"
+ gen_aging.0090.close: "Close"

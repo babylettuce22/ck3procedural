@@ -34,8 +34,17 @@ phenotype_gracile = {
     same_opinion = 10
     life_expectancy = 50
     health = 1.25
-	
+
 	opposite_opinion = -2
+
+    # Elves do not decay. `is_immortal` is a SCRIPT flag, not engine immortality (that is the
+    # separate `immortal = yes` property, which stays off): it is what every vanilla elderly-health
+    # gate checks — the five ailment events health.7000–7500 and
+    # age_ranked_health_vulnerability_threshold_trigger, which gates the incapable-with-age chain
+    # (harm.0001–0003). Natural death from life_expectancy still applies; the long decline is
+    # carried by world_weary instead — see 01_gen_aging_traits.txt.
+    flag = is_immortal
+    no_prowess_loss_from_age = yes
 }
 
 # Dwarf
@@ -165,6 +174,11 @@ phenotype_dusk_adapted = {
     enemy_hostile_scheme_success_chance_add = -5
     life_expectancy = 50
     health = 1.25
-	
+
 	opposite_opinion = -20
+
+    # Same deal as phenotype_gracile above: script-only flag that switches off the vanilla
+    # elderly-decay system; the deepkin fade (world_weary) instead of falling apart.
+    flag = is_immortal
+    no_prowess_loss_from_age = yes
 }

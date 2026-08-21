@@ -1,0 +1,23 @@
+﻿# "Faded from the world" — the long-lived races' death.
+#
+# Two ways a character reaches this reason:
+#  1. The intended one: the fading event gen_aging.0002 calls `death = { death_reason = death_fading }`
+#     directly when the world_weary track maxes.
+#  2. The catch-all: `natural_death_trigger` below. Vanilla picks the highest-priority matching
+#     reason whenever the ENGINE kills someone naturally (life_expectancy, health floor), so an elf
+#     the engine claims before — or without — the trait still fades in the chronicle instead of
+#     "dying of old age" at 300.
+#
+# Priority 15 beats every vanilla natural reason (old_age 10 … dungeon_passive 14). That means even
+# an imprisoned elder's passive death reads as fading, which is intended: they do not succumb to
+# the dungeon, they let go of it.
+death_fading = {
+	natural_death_trigger = {
+		OR = {
+			has_trait = world_weary
+			gen_long_lived_race_trigger = yes
+		}
+	}
+	priority = 15
+	icon = "death_natural.dds"
+}

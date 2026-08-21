@@ -1,0 +1,14 @@
+﻿# Starting weariness for a long-lived character who is already past onset age on day one of the
+# campaign. Without this, a 100-year-old elf in the starting cast begins their fade from zero and
+# outlives every expectation; with it, the game-start sweep (00_gen_aging_on_actions.txt) hands
+# them the years they have already carried: 3 XP per year past 80, capped at 85 so nobody dies to
+# the seeding itself — the oldest elders start near the brink but always get some farewell years.
+#
+# Character scope (evaluated on the character being seeded).
+gen_world_weary_seed_value = {
+	value = age
+	subtract = 80
+	multiply = 3
+	min = 0
+	max = 85
+}

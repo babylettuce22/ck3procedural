@@ -1,0 +1,34 @@
+﻿# When the world-weariness clock ticks. Same appending discipline as 00_phenotype_on_actions.txt
+# and for the same reason (see the header there): every vanilla on_action below is re-declared with
+# nothing but an `on_actions` list — writing a `trigger` or `effect` into one would silently replace
+# vanilla's own.
+
+# THE CLOCK — every living character, once a year, at a random point in their own year. The effect
+# opens with a two-trait race check, so on a map without long-lived races this is all it costs.
+# Rides the same pulse the phenotype assignment uses; the two entries stay separate on_actions so
+# either system can be reasoned about (or removed) without touching the other.
+random_yearly_everyone_pulse = {
+	on_actions = { gen_aging_yearly_on_action }
+}
+
+gen_aging_yearly_on_action = {
+	effect = {
+		gen_world_weary_pulse_effect = yes
+	}
+}
+
+# DAY ONE — elders who are already old when the campaign opens start mid-fade instead of fresh.
+# `on_game_start_after_lobby` for the same reason the phenotype sweep uses it: fires once, after
+# game rules are known, before the player looks at anything.
+on_game_start_after_lobby = {
+	on_actions = { gen_aging_game_start_on_action }
+}
+
+gen_aging_game_start_on_action = {
+	effect = {
+		every_living_character = {
+			limit = { gen_long_lived_race_trigger = yes }
+			gen_world_weary_seed_effect = yes
+		}
+	}
+}

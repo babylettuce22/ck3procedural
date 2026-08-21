@@ -1,0 +1,29 @@
+﻿# Who fades instead of decaying. The two long-lived races — see 00_phenotype_traits.txt for the
+# is_immortal flag that switches vanilla elderly health OFF for exactly this pair, and
+# 01_gen_aging_traits.txt for the world_weary trait that replaces it.
+gen_long_lived_race_trigger = {
+	OR = {
+		has_trait = phenotype_gracile
+		has_trait = phenotype_dusk_adapted
+	}
+}
+
+# May the weight of centuries settle on this character this year?
+#
+# Age 80: with life_expectancy = 50 on both race traits the engine's natural-death window opens
+# around 105, so onset at 80 gives a two-to-three-decade decline — the same proportional runway
+# vanilla gives a human between infirmity at ~50 and death at ~70.
+#
+# Respects off_elderly_health for the same reason vanilla's ailment events do: a player who turned
+# elderly decay off asked for no decay clock, and this is one — the life_expectancy backstop (and
+# the flavored death reason) still applies either way.
+gen_world_weary_eligible_trigger = {
+	gen_long_lived_race_trigger = yes
+	NOT = { has_trait = world_weary }
+	age >= 80
+	NOT = { has_game_rule = off_elderly_health }
+	# A truly immortal character (ruler designer / console) never fades. Checked by TRAIT, not by
+	# the is_immortal flag — the flag is deliberately on every elf and deepkin now, the engine
+	# `immortal = yes` property lives only on this trait.
+	NOT = { has_trait = immortal }
+}

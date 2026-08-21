@@ -1,0 +1,123 @@
+﻿# The world-weariness clock for the long-lived races. Who is long-lived, and why vanilla decay is
+# off for them, is documented in 00_phenotype_traits.txt and 00_gen_aging_triggers.txt; this file
+# is the machinery that runs once per long-lived character per year.
+#
+# Called from gen_aging_yearly_on_action (appended to random_yearly_everyone_pulse — every living
+# character, at a random point in their own year, same spreading trick the phenotype system uses).
+# The first limit is two has_trait checks, so on a map with no elves the whole system costs
+# essentially nothing, mirroring how the phenotype pulse stays cheap on a human map.
+gen_world_weary_pulse_effect = {
+	if = {
+		limit = { gen_long_lived_race_trigger = yes }
+
+		# --- Repair: strip vanilla age ailments. ---
+		# Nothing should ever assign these to an elf now that the race traits carry is_immortal,
+		# but saves from before that flag, the console, and the ruler designer all can. A character
+		# carrying both decay and fading is exactly the mixed state this feature exists to remove,
+		# so the pulse cleans it the same way the phenotype pulse repairs doubled races.
+		# remove_trait on an absent trait is a safe no-op.
+		remove_trait = infirm
+		remove_trait = withering_mind
+		remove_trait = clouded_eyes
+		remove_trait = faltering_heart
+		remove_trait = fragile_bones
+
+		if = {
+			limit = { has_trait = world_weary }
+
+			# --- Progression: the years accumulate. ---
+			# Vanilla's infirm gains 4–12 per year; this track is meant to take two to three
+			# decades, so the ladder sits lower: 2/4/6 with the heavy end weighted up by great age
+			# and by a life that presses on the spirit. ~4/year average → ~25 years from onset to
+			# the fading, on top of the 80-year onset — dead around 105–110, in the same window the
+			# life_expectancy backstop opens, which is what keeps the scripted fade the USUAL death
+			# rather than a rare one.
+			random_list = {
+				30 = {
+					modifier = {
+						age >= 100
+						add = 20
+					}
+					modifier = {
+						stress_level >= 2
+						add = 15
+					}
+					modifier = {
+						has_trait = depressed_genetic
+						add = 10
+					}
+					send_interface_message = {
+						type = msg_health_change
+						title = gen_world_weary_deepens_message_title
+						left_icon = root
+						add_trait_xp = { trait = world_weary track = world_weary value = 6 }
+					}
+				}
+				45 = {
+					send_interface_message = {
+						type = msg_health_change
+						title = gen_world_weary_deepens_message_title
+						left_icon = root
+						add_trait_xp = { trait = world_weary track = world_weary value = 4 }
+					}
+				}
+				25 = {
+					modifier = { # A tended spirit lingers: contentment slows the fade.
+						has_trait = content
+						add = 15
+					}
+					send_interface_message = {
+						type = msg_health_change
+						title = gen_world_weary_deepens_message_title
+						left_icon = root
+						add_trait_xp = { trait = world_weary track = world_weary value = 2 }
+					}
+				}
+			}
+
+			# --- The end: fade the same tick the track maxes. ---
+			# The event carries the death (with the death_fading reason); the trait's own
+			# health = -100 at level 4 is only the failsafe behind it.
+			if = {
+				limit = {
+					has_trait_xp = { trait = world_weary track = world_weary value >= 100 }
+				}
+				trigger_event = gen_aging.0002
+			}
+		}
+		else_if = {
+			# --- Onset: may the weight settle this year? ---
+			# ~12%/year from 80 climbing to ~30% past 95: half of all elders have it by ~85, and
+			# holding out past 100 untouched is rare without being impossible.
+			limit = { gen_world_weary_eligible_trigger = yes }
+			random = {
+				chance = 12
+				modifier = {
+					add = 8
+					age >= 90
+				}
+				modifier = {
+					add = 10
+					age >= 95
+				}
+				trigger_event = gen_aging.0001
+			}
+		}
+	}
+}
+
+# Day-one seeding, called from the game-start sweep in 00_gen_aging_on_actions.txt for every
+# living long-lived character. Elders already past onset start mid-fade instead of fresh —
+# gen_world_weary_seed_value gives 3 XP per year past 80, capped short of the killing threshold.
+# Silent (no event, no message): this is bookkeeping about the world as found, not news.
+gen_world_weary_seed_effect = {
+	if = {
+		limit = { gen_world_weary_eligible_trigger = yes }
+		add_trait = world_weary
+		add_trait_xp = {
+			trait = world_weary
+			track = world_weary
+			value = gen_world_weary_seed_value
+		}
+	}
+}

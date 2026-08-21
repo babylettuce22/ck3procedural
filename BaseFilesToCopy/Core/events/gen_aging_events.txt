@@ -1,0 +1,211 @@
+﻿namespace = gen_aging
+
+# The world-weariness events for the long-lived races. The system around them:
+#   common/traits/01_gen_aging_traits.txt        — the world_weary trait and its track
+#   common/scripted_effects/00_gen_aging_effects.txt — the yearly clock that fires these
+#   common/deathreasons/00_gen_deathreasons.txt  — death_fading, the flavored epitaph
+# Nothing in vanilla fires anything in this namespace; the only callers are the pulse effect and
+# the console.
+
+# =====================================================================================
+#  Onset: The Weight of Centuries
+# =====================================================================================
+# Fired by gen_world_weary_pulse_effect for an eligible elder (see
+# gen_world_weary_eligible_trigger). The trigger below re-checks the essentials so a console
+# firing on the wrong character does nothing strange.
+gen_aging.0001 = {
+	type = character_event
+	title = gen_aging.0001.t
+	desc = gen_aging.0001.desc
+	theme = mental_health
+
+	override_background = { reference = terrain }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+
+	trigger = {
+		gen_long_lived_race_trigger = yes
+		NOT = { has_trait = world_weary }
+	}
+
+	immediate = {
+		add_trait = world_weary
+	}
+
+	# Acceptance: the burden acknowledged weighs less.
+	option = {
+		name = gen_aging.0001.a
+		add_stress = minor_stress_loss
+	}
+
+	# Defiance: the world is held onto, white-knuckled.
+	option = {
+		name = gen_aging.0001.b
+		add_stress = minor_stress_gain
+		add_prestige = minor_prestige_gain
+	}
+}
+
+# =====================================================================================
+#  The Fading
+# =====================================================================================
+# Fired by the pulse the same tick the world_weary track reaches 100 (and by the debug event).
+# The death lives in the option rather than `immediate` so a player reads their farewell before
+# it happens; the AI auto-resolves the single option, so nobody lingers. If this event is somehow
+# never delivered, the trait's health = -100 at max level ends the fade anyway, and death_fading's
+# natural_death_trigger keeps the epitaph right.
+gen_aging.0002 = {
+	type = character_event
+	title = gen_aging.0002.t
+	desc = gen_aging.0002.desc
+	theme = physical_health
+
+	override_background = { reference = garden }
+
+	left_portrait = {
+		character = root
+		animation = prayer
+	}
+
+	trigger = {
+		has_trait = world_weary
+	}
+
+	option = {
+		name = gen_aging.0002.a
+		death = {
+			death_reason = death_fading
+		}
+	}
+}
+
+# =====================================================================================
+#  Core debug inspector — console only: `event gen_aging.0090` (optionally with a character id)
+# =====================================================================================
+# The Core counterpart of the Wilderness debug tooling (wilderness_colonization.0099's watchdog
+# and the console-fireable 0001): one visible event that reports the fired-on character's
+# phenotype and weariness state in its text, and whose options drive the machinery by hand —
+# grant the trait, pour in years, force the fading, or run the repair effects. Nothing fires it;
+# it costs nothing when unused.
+gen_aging.0090 = {
+	type = character_event
+	title = gen_aging.0090.t
+	theme = intrigue
+
+	desc = {
+		# Line 1: which race the character reads as.
+		first_valid = {
+			triggered_desc = {
+				trigger = { has_trait = phenotype_gracile }
+				desc = gen_aging.0090.race_elf
+			}
+			triggered_desc = {
+				trigger = { has_trait = phenotype_dusk_adapted }
+				desc = gen_aging.0090.race_deepkin
+			}
+			triggered_desc = {
+				trigger = { has_trait = phenotype_stocky }
+				desc = gen_aging.0090.race_dwarf
+			}
+			triggered_desc = {
+				trigger = { has_trait = phenotype_rough_hewn }
+				desc = gen_aging.0090.race_orc
+			}
+			triggered_desc = {
+				trigger = { has_trait = phenotype_towering }
+				desc = gen_aging.0090.race_giant
+			}
+			triggered_desc = {
+				trigger = { has_trait = phenotype_diminutive }
+				desc = gen_aging.0090.race_gnome
+			}
+			triggered_desc = {
+				trigger = { has_character_flag = gen_phenotype_human }
+				desc = gen_aging.0090.race_human_flagged
+			}
+			desc = gen_aging.0090.race_none
+		}
+		# Line 2: the weariness clock.
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					has_trait_xp = { trait = world_weary track = world_weary value >= 100 }
+				}
+				desc = gen_aging.0090.weary_maxed
+			}
+			triggered_desc = {
+				trigger = { has_trait = world_weary }
+				desc = gen_aging.0090.weary_yes
+			}
+			triggered_desc = {
+				trigger = { gen_world_weary_eligible_trigger = yes }
+				desc = gen_aging.0090.weary_eligible
+			}
+			desc = gen_aging.0090.weary_no
+		}
+		# Line 3: leftover vanilla decay that the pulse would strip.
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					gen_long_lived_race_trigger = yes
+					has_trait_with_flag = age_related_ailment
+				}
+				desc = gen_aging.0090.ailment_leak
+			}
+			desc = gen_aging.0090.ailment_clean
+		}
+	}
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+
+	immediate = {
+		debug_log = "gen_aging.0090 inspector fired for [ROOT.Char.GetNameNoTooltip] (age [ROOT.Char.GetAge])"
+	}
+
+	# Grant the trait, skipping the eligibility gate — that is the point of a debug hook.
+	option = {
+		name = gen_aging.0090.grant
+		trigger = { NOT = { has_trait = world_weary } }
+		add_trait = world_weary
+	}
+
+	# A quarter-century of weariness in one click.
+	option = {
+		name = gen_aging.0090.add_xp
+		trigger = { has_trait = world_weary }
+		add_trait_xp = { trait = world_weary track = world_weary value = 25 }
+	}
+
+	# Straight to the farewell.
+	option = {
+		name = gen_aging.0090.fade
+		trigger = { has_trait = world_weary }
+		trigger_event = gen_aging.0002
+	}
+
+	# The same repairs the pulses run, on demand: doubled-race cleanup, culture-based assignment,
+	# and the vanilla-ailment strip for long-lived races.
+	option = {
+		name = gen_aging.0090.repair
+		gen_sanitize_phenotype_effect = yes
+		gen_assign_phenotype_effect = yes
+		if = {
+			limit = { gen_long_lived_race_trigger = yes }
+			remove_trait = infirm
+			remove_trait = withering_mind
+			remove_trait = clouded_eyes
+			remove_trait = faltering_heart
+			remove_trait = fragile_bones
+		}
+	}
+
+	option = {
+		name = gen_aging.0090.close
+	}
+}

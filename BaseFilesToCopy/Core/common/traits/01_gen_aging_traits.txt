@@ -1,0 +1,85 @@
+﻿# The long-lived races' replacement for vanilla elderly decay.
+#
+# Elves (phenotype_gracile) and deepkin (phenotype_dusk_adapted) carry `flag = is_immortal` in
+# 00_phenotype_traits.txt, which turns off every vanilla age-ailment gate — no faltering heart, no
+# clouded eyes, no infirm. In their place this single trait arrives late in life (the onset event in
+# events/gen_aging_events.txt), climbs its track over decades (the yearly pulse in
+# common/on_action/00_gen_aging_on_actions.txt), and ends with the character fading from the world
+# (death_fading in common/deathreasons/00_gen_deathreasons.txt).
+#
+# Modelled on vanilla faltering_heart: same track shape (25/50/75/100), same `health = -100`
+# terminator at level 4. That terminator is a FAILSAFE — the pulse fires the ceremonial death event
+# gen_aging.0002 the same tick the track maxes, so a character should die by script with the
+# death_fading reason before the health floor ever kills them. If script somehow never runs (a save
+# edited sideways, an event lost to an invalid trigger), the -100 guarantees the fade still ends,
+# and death_fading's natural_death_trigger still flavors the epitaph.
+#
+# Flags: `death_on_max_level` and `is_healthy_trigger_flag` are script/loc-only, exactly as vanilla
+# uses them on the age ailments — the first paints the "at level 4 they will die" warning into the
+# tooltip, the second excludes the character from vanilla's basic_is_healthy event gate, which is
+# what keeps a fading elder out of tournaments-and-feasts flavor the same way an infirm human is.
+# `world_weary_yearly_xp_gain` exists only for its TRAIT_FLAG_DESC line.
+#
+# The modifiers stack cumulatively as levels are reached, vanilla-style. The theme is detachment,
+# not decay: the body stays sound (no prowess collapse — the races also carry
+# no_prowess_loss_from_age), but interest in the world drains away — and what remains is a long
+# memory, so learning climbs as everything else lets go.
+world_weary = {
+	category = health
+
+	flag = world_weary_yearly_xp_gain
+	flag = death_on_max_level
+	flag = is_healthy_trigger_flag
+
+	# Placeholder art: vanilla's fog-headed withering_mind icon reads well as "fading". Replace
+	# with a bespoke world_weary.dds in gfx/interface/icons/traits when one exists — the traits
+	# there (gracile.dds etc.) show the expected format.
+	icon = "withering_mind.dds"
+
+	ruler_designer_cost = -30
+
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					NOT = { exists = this }
+				}
+				desc = trait_world_weary_desc
+			}
+			desc = trait_world_weary_character_desc
+		}
+	}
+
+	learning = 1
+	fertility = -0.1
+	stress_loss_mult = 0.1
+	attraction_opinion = -5
+
+	tracks = {
+		world_weary = {
+			25 = {
+				learning = 1
+				diplomacy = -1
+				fertility = -0.15
+				attraction_opinion = -5
+			}
+			50 = {
+				learning = 1
+				diplomacy = -1
+				martial = -1
+				fertility = -0.25
+				health = -0.25
+			}
+			75 = {
+				learning = 2
+				diplomacy = -2
+				health = -0.5
+				fertility = -0.5
+				stress_loss_mult = 0.1
+			}
+			100 = {
+				health = -100
+			}
+		}
+	}
+}
