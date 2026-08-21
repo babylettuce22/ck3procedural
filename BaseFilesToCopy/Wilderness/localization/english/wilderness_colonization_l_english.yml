@@ -383,10 +383,10 @@ wilderness_colonization.0029.t:0 "The Starving Winter"
 wilderness_colonization.0010.d:0 "I will lead the column myself. No one else has more at stake."
  colonize_expedition_self_tt:0 "#V You#! lead the expedition personally. Your own attributes and traits determine its odds of survival."
 
- wilderness_colonization.0012.a:0 "Integrate [colony.GetName] into our personal domain."
- wilderness_colonization.0012.b:0 "Invest [expedition_leader.GetFirstName] as the new ruler of [colony.GetName]."
- colonize_keep_direct_control_tt:0 "You retain direct possession of [colony.GetName] as part of your domain."
- colonize_grant_to_leader_tt:0 "#V [expedition_leader.GetShortUIName]#! is granted [colony.GetName] and becomes your colonial vassal."
+ wilderness_colonization.0012.a:0 "The county stays in our own hands."
+ wilderness_colonization.0012.b:0 "Invest [expedition_leader.GetFirstName] as its first lord."
+ colonize_keep_direct_control_tt:0 "The new county is yours to hold directly, as part of your personal domain.\nIt takes the name you have entered."
+ colonize_grant_to_leader_tt:0 "#V [expedition_leader.GetShortUIName]#! is granted the new county and becomes your colonial vassal.\nIt takes the name you have entered."
 
  # --- Naming the colony ----------------------------------------------------------------------
  # `colony_entered_name` is the only one of these the game ever stores. The text widget on 0012

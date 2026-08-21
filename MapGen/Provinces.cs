@@ -785,12 +785,18 @@ public static class Provinces
         return slope;
     }
 
-    private static float LandLine(float[] field, byte[] mask, double fraction)
+    private static float LandLine(float[] field, byte[] mask, double fraction, float minValue = float.MinValue)
     {
         var land = new List<float>();
         for (int i = 0; i < field.Length; i += 7)
-            if (mask[i] != 0) land.Add(field[i]);
-        if (land.Count == 0) return float.MaxValue;
+        {
+            if (mask[i] != 0 && field[i] > minValue)
+                land.Add(field[i]);
+        }
+
+        // If fewer than e.g. 1% of land pixels have relief, the map has no true steep terrain
+        if (land.Count < (mask.Length / 7) * 0.01)
+            return float.MaxValue;
 
         land.Sort();
         return land[(int)Math.Clamp(land.Count * fraction, 0, land.Count - 1)];
@@ -805,7 +811,11 @@ public static class Provinces
         if (mountainLine == float.MaxValue) return;
 
         var slope = Slopes(elevation, map.Width, map.Height);
-        float steepLine = LandLine(slope, mask, 1.0 - Math.Clamp(cfg.SteepLineShare, 0, 1));
+
+        float minSlope = (float)Math.Max(0.01, cfg.MinPhysicalSlope);
+        float steepLine = MathF.Max(minSlope,
+            LandLine(slope, mask, 1.0 - Math.Clamp(cfg.SteepLineShare, 0, 1), minSlope));
+
 
         var total = new int[map.Count];
         var high = new int[map.Count];

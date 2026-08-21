@@ -10,6 +10,17 @@ public sealed class AdvancedSettingAttribute : Attribute
 
 
 /// <summary>
+/// Keeps a setting out of the property grid entirely. Unlike <see cref="AdvancedSettingAttribute"/>,
+/// which hides a row only until the user ticks Advanced, this hides unconditionally — there is no
+/// toggle that brings it back.
+/// </summary>
+[AttributeUsage(AttributeTargets.Property)]
+public sealed class HideInGeneratorAttribute : Attribute
+{
+}
+
+
+/// <summary>
 /// Marks a setting an Azgaar export decides instead of the user, so the property grid can say so on
 /// the row itself rather than leave a knob on screen that silently does nothing.
 ///
@@ -341,7 +352,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// </summary>
     [Category("03 Provinces")]
     [Description("Share of desert provinces that become oases. Only provinces holding a drainage sink — a depression water actually collects in — are eligible, and the wettest of those win. Oasis is vanilla's least-painted material; keep this small.")]
-    public double OasisShare { get; set; } = 0.015;
+    public double OasisShare { get; set; } = 0.005;
 
     /// <summary>
     /// How far, in vanilla province pixels, one biome's materials bleed across its boundary into
@@ -392,100 +403,75 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Description("How far inland, in vanilla province pixels, steep ground still counts as coastal cliff. Beyond this, steep ground gets its climate family's mountain rock instead.")]
     public double CliffCoastReach { get; set; } = 8;
 
-    /// <summary>
-    /// Share of land provinces declared impassable_mountains. Vanilla's ratio is 1,188 impassable
-    /// against 11,301 baronied. Impassable provinces get no barony and no holder.
-    /// </summary>
-    [Category("03 Provinces")]
-    [Description("Share of land provinces declared impassable_mountains, which get no barony and no holder. Vanilla runs 1,188 impassable against 11,301 baronied.")]
-    public double ImpassableShareOfLand { get; set; } = 0.095;
+    // =========================================================================
+    // Impassable Mountains & Relief Configuration
+    // =========================================================================
 
     /// <summary>
-    /// The impassability score a province must reach before it may be impassable at all — that is,
-    /// how much of it must be high, steep, or a mix of the two, per
-    /// <see cref="ImpassableSlopeWeight"/>.
-    ///
-    /// A backstop, not the main instrument. <see cref="ImpassableScoreDeviations"/> does the
-    /// ordinary work; this catches the one thing a spread test cannot see, which is a map with no
-    /// mountains on it at all. A flat map and a mountainous one have much the same distribution
-    /// *shape* — the top tenth of provinces sits about the same distance up the tail in both — so
-    /// only an absolute number can tell them apart, and that is all this is here for.
-    ///
-    /// Lowered from 0.45 when the adaptive floor went in. At 0.45 it was not a backstop at all: on
-    /// a vanilla-sized heightmap downsampled to a quarter, it rejected 33 of the 40 provinces the
-    /// map had asked for, while the same world at full size hit its target exactly. It was binding
-    /// on legitimate maps, which is the adaptive floor's job, and doing it on the one quantity that
-    /// does not survive a change of resolution.
+    /// Share of land provinces declared impassable_mountains. 
+    /// Vanilla's baseline is ~0.095 (1,188 impassable against 11,301 baronied).
+    /// Recommended: 0.08 (8% of land provinces on mountainous worlds; flat worlds will safely deliver fewer).
     /// </summary>
     [Category("03 Provinces")]
-    [Description("The impassability score a province must reach before it may be impassable at all. A backstop for a map with no mountains on it; the deviations setting does the ordinary work.")]
+    [Description("Share of land provinces declared impassable_mountains, which get no barony and no holder. Vanilla runs ~0.095.")]
+    public double ImpassableShareOfLand { get; set; } = 0.08;
+
+    /// <summary>
+    /// The impassability score a province must reach before it may be impassable at all.
+    /// Acts as an absolute backstop when terrain variance is low.
+    /// Recommended: 0.35 (requires at least 35% mountain/cliff score coverage).
+    /// </summary>
+    [Category("03 Provinces")]
+    [Description("The impassability score a province must reach before it may be impassable at all. A backstop for a map with little to no mountains.")]
     public double ImpassableMinMountainShare { get; set; } = 0.35;
 
     /// <summary>
-    /// How far above the map's own median impassability score a province must stand, in median
-    /// absolute deviations, before it may be impassable.
-    ///
-    /// This exists because the score's *mean is pinned and its spread is not*. Both halves of the
-    /// score are shares of a province lying above a percentile line, so averaged over provinces
-    /// they come back to the percentiles themselves: mean highShare is
-    /// <see cref="MountainLineShare"/> and mean steepShare is <see cref="SteepLineShare"/>, on
-    /// every map, at every resolution, by construction. Nothing about the terrain can move that
-    /// number. What terrain and resolution move is how far the tail reaches past it.
-    ///
-    /// And it reaches a long way less at low resolution. A province is a fixed area in *pixels*, so
-    /// a heightmap at a quarter scale gives provinces covering some nine times the ground, and each
-    /// one bundles the wall together with the valley beside it. Measured on one world at two sizes:
-    /// the marked provinces averaged 0.58 at 9216 px wide and 0.465 at 2304, against a mean that
-    /// sat at 0.2175 in both. The distribution did not move; it shrank.
-    ///
-    /// A constant floor under a distribution like that is either above the tail or below it, with
-    /// nothing in between, which is exactly what was observed. Measuring the cut in the tail's own
-    /// units instead makes it mean the same thing on both.
-    ///
-    /// Deviations about the median rather than standard deviations about the mean: the tail being
-    /// tested for is itself what inflates a standard deviation, so it would widen its own goalposts.
-    ///
-    /// Default set to sit below where the target share falls on an ordinary distribution, so on a
-    /// map with real relief the count is decided by <see cref="ImpassableShareOfLand"/> and this
-    /// only bites when the tail is genuinely thinner than that.
+    /// How far above the map's own median impassability score a province must stand, 
+    /// in median absolute deviations (MAD), before it may be impassable.
+    /// Recommended: 1.5.
     /// </summary>
     [Category("03 Provinces")]
-    [Description("How far above the map's own median impassability score a province must stand, in median absolute deviations, before it may be impassable. Measured in the score distribution's own units so it means the same thing at any heightmap resolution.")]
+    [Description("How far above the map's own median impassability score a province must stand, in median absolute deviations, before it may be impassable.")]
     public double ImpassableScoreDeviations { get; set; } = 1.5;
 
     /// <summary>
-    /// How much of the impassability score comes from steepness rather than from height.
-    ///
-    /// Height alone cannot tell a wall from a tableland. A high plateau is high everywhere and so
-    /// scores maximally on height while being perfectly crossable — armies have marched over the
-    /// Anatolian and Iranian plateaus for as long as there have been armies. What actually stops
-    /// them is relief: escarpments, gorges and ridge lines, which can sit well below the mountain
-    /// line and still be impassable. Vanilla's own impassables — Alps, Caucasus, Zagros, Atlas —
-    /// are all steep before they are tall.
-    ///
-    /// 0 is the old height-only behaviour, 1 ignores height entirely.
+    /// How much of the impassability score comes from steepness rather than elevation.
+    /// Recommended: 0.65 (65% slope relief / 35% absolute elevation).
     /// </summary>
     [Category("03 Provinces")]
-    [Description("How much of the impassability score comes from steepness rather than height. Height alone marks high plateaus, which are crossable; what stops an army is relief. 0 is height-only, 1 is slope-only.")]
-    public double ImpassableSlopeWeight { get; set; } = 0.725;
+    [Description("How much of the impassability score comes from steepness rather than height. 0 is height-only, 1 is slope-only.")]
+    public double ImpassableSlopeWeight { get; set; } = 0.65;
+
+    [AdvancedSetting]
+    [Category("03 Provinces")]
+    [Description("Absolute minimum gradient per pixel required for ground to count as steep. Prevents flat plains from being declared cliffs on low-relief maps.")]
+    public double MinPhysicalSlope { get; set; } = 0.15;
 
     /// <summary>
-    /// Share of land counted as steep ground, as a percentile of this map's own slopes — the same
-    /// basis as <see cref="MountainLineShare"/>, and for the same reason: an absolute gradient
-    /// classifies a wildly different fraction of the map from one seed and one heightmap to the next.
+    /// Share of land considered candidate steep ground, as a percentile of the map's slopes.
+    /// Recommended: 0.20 (the top 20% steepest relief).
     /// </summary>
     [Category("03 Provinces")]
-    [Description("Share of land counted as steep ground, as a percentile of this map's own slopes. A percentile rather than an absolute gradient, so it means the same thing on any heightmap.")]
-    public double SteepLineShare { get; set; } = 0.425;
+    [Description("Share of land counted as steep ground, as a percentile of this map's own slopes.")]
+    public double SteepLineShare { get; set; } = 0.20;
 
     /// <summary>
-    /// Largest a fused impassable mountain range may get, in baronies' worth of area. 0 disables
-    /// fusing and leaves every impassable province separate, as vanilla does.
+    /// Share of land put above the mountain elevation line. 
+    /// Vanilla's own heightmap has ~3.3% in its high mountain band.
+    /// Recommended: 0.035.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("7 Height scale")]
+    [Description("Share of land put above the mountain line. Vanilla's heightmap has 3.3% of its land in the high mountain band.")]
+    public double MountainLineShare { get; set; } = 0.035;
+
+    /// <summary>
+    /// Largest a fused impassable mountain range may get, in baronies' worth of area.
+    /// Recommended: 8.
     /// </summary>
     [Category("03 Provinces")]
-    [Description("Largest a fused impassable mountain range may get, measured in baronies' worth of area. Touching impassable provinces are merged so a range reads as one wall of rock instead of a scatter of provinces; 0 leaves them separate, as vanilla does.")]
+    [Description("Largest a fused impassable mountain range may get, measured in baronies' worth of area. Touching impassable provinces are merged so a range reads as one continuous wall.")]
     public double ImpassableRangeMaxBaronies { get; set; } = 8;
-
     [AdvancedSetting]
     [Category("03 Provinces")]
     [Description("Smallest allowed province in pixels. Below this CK3 cannot derive borders, a centroid or locator positions and crashes in geometry code without logging anything.")]
@@ -901,10 +887,6 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// Share of land put above the mountain line. Vanilla's own heightmap has 3.3% of its land in
     /// the 121-170 band, and that is the number this reproduces.
     /// </summary>
-    [AdvancedSetting]
-    [Category("7 Height scale")]
-    [Description("Share of land put above the mountain line. Vanilla's own heightmap has 3.3% of its land in the 121-170 band, and that is the number this reproduces.")]
-    public double MountainLineShare { get; set; } = 0.035;
 
     [AdvancedSetting]
     [Category("7 Height scale")]
@@ -1094,7 +1076,23 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// </summary>
     [Category("10 Cultures and faiths")]
     [Description("Cultures sharing one heritage and language. Higher values give large related families like vanilla's Frankish or North Germanic groups; 1 gives a world where no two cultures are relatives.")]
-    public double CulturesPerHeritage { get; set; } = 5;
+    public double CulturesPerHeritage { get; set; } = 2;
+
+    public enum CultureLookTheme
+    {
+        VariedGlobal,       // All vanilla looks
+        WesternEuropean,    // Western, Frankish, English, German, Iberian
+        NorthernNorse,      // Norse, Scandinavian, Northern
+        ByzantineGreek,     // Byzantine, Roman, Greek
+        MiddleEasternMena,  // Arabic, Persian, Bedouin, Berber, Egyptian
+        SteppeNomadic,      // Steppe, Mongol, Turkic, Cuman
+        SubSaharanAfrican,  // West African, Central/East African, Ethiopian
+        IndianEastAsian,    // Indian, Tamil, Bengali, Tibetan, Chinese
+    }
+
+    [Category("10 Cultures and faiths")]
+    [Description("Restricts culture clothing, unit models, holding graphics, and coat-of-arms palettes to a specific visual theme.")]
+    public CultureLookTheme CultureAestheticsTheme { get; set; } = CultureLookTheme.VariedGlobal;
 
     /// <summary>
     /// How strongly culture borders follow the ground. 0 ignores terrain entirely and gives a plain
@@ -1351,16 +1349,6 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Description("Share of generated faiths with one holy site out in unclaimed wilderness — a grove or peak nobody holds. Gives a reason to want one particular wilderness county rather than any of them. Never the faith's primary site.")]
     public double WildernessHolySiteShare { get; set; } = 0.15;
 
-
-
-
-
-
-
-
-
-
-
     // HIGHLY WIP //
 
     public enum FantasyRaceMode
@@ -1371,21 +1359,21 @@ public sealed class MapConfig : CustomTypeDescriptor
         ExoticSurreal   // Wild procedural morphs (exotic skin hues, vibrant hair/eyes, extreme heights)
     }
 
-    [Category("14 Fantasy & Ethnicities")]
+    [Category("14 Fantasy/Ethnicities")]
     [Description("Enable procedural fantasy racial phenotypes (Elves, Dwarves, Orcs, Giants, Deepkin, etc.).")]
     public bool EnableFantasyEthnicities { get; set; } = false;
 
-    [Category("14 Fantasy & Ethnicities")]
+    [Category("14 Fantasy/Ethnicities")]
     [Description("Race distribution mode across the generated world.")]
     public FantasyRaceMode RaceMode { get; set; } = FantasyRaceMode.LowFantasy;
 
-    [Category("14 Fantasy & Ethnicities")]
+    [Category("14 Fantasy/Ethnicities")]
     [Description("Tie race strictly to Heritage (all cultures under a heritage share the same core race with regional variations).")]
     public bool TieRaceToHeritage { get; set; } = true;
 
-    [Category("14 Fantasy & Ethnicities")]
-    [Description("How many distinct races the world must contain. Raises the heritage count if culture density would not otherwise produce enough regions to hold them, so a high value costs you smaller heritages. Capped at 8, or 9 in Exotic & Surreal. Require terrain can hold the delivered count below this.")]
-    public int GuaranteedRaceCount { get; set; } = 7;
+    [Category("14 Fantasy/Ethnicities")]
+    [Description("How many distinct races the world must contain. Raises the heritage count if culture density would not otherwise produce enough regions to hold them, so a high value costs you smaller heritages. Capped at 8, the number of races that exist. Require terrain can hold the delivered count below this.")]
+    public int GuaranteedRaceCount { get; set; } = 8;
 
     /// <summary>
     /// How much say the land has over who lives on it. Every race has terrain it wants —
@@ -1413,7 +1401,7 @@ public sealed class MapConfig : CustomTypeDescriptor
         Require
     }
 
-    [Category("14 Fantasy & Ethnicities")]
+    [Category("14 Fantasy/Ethnicities")]
     [Description("How much say terrain has over where a race may appear. Prefer biases placement but always delivers the requested race count. Require only settles a race where terrain it wants covers at least a fifth of the region, and drops races that have nowhere to live — so a map with no mountains gets no dwarves rather than misplaced ones. Humans are never blocked.")]
     public RaceTerrainRule RaceTerrain { get; set; } = RaceTerrainRule.Prefer;
 
@@ -1505,11 +1493,10 @@ public sealed class MapConfig : CustomTypeDescriptor
         bool hideAdvanced = !ShowAdvancedSettings;
         bool imported = !string.IsNullOrWhiteSpace(AzgaarJsonPath);
 
-        if (!hideAdvanced && !imported) return baseProps;
-
         var shown = new List<PropertyDescriptor>();
         foreach (PropertyDescriptor property in baseProps)
         {
+            if (property.Attributes[typeof(HideInGeneratorAttribute)] is not null) continue;
             if (hideAdvanced && property.Attributes[typeof(AdvancedSettingAttribute)] is not null) continue;
 
             shown.Add(imported && property.Attributes[typeof(AzgaarIncompatAttribute)]

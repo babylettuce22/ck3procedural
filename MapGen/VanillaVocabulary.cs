@@ -28,9 +28,10 @@ public sealed class VanillaVocabulary
     /// culture's look is known-good by construction, so we borrow whole looks and let a generated
     /// heritage wear one.
     /// </summary>
+    /// 
+    public static VanillaVocabulary? Current { get; private set; }
     public sealed record Look(
-        string CoaGfx, string BuildingGfx, string ClothingGfx, string UnitGfx, string Ethnicities);
-
+        string SourceCulture, string CoaGfx, string BuildingGfx, string ClothingGfx, string UnitGfx, string Ethnicities);
     public List<string> Ethos { get; } = [];
     public List<string> MartialCustoms { get; } = [];
     public List<string> HeadDeterminations { get; } = [];
@@ -113,6 +114,7 @@ public sealed class VanillaVocabulary
         Console.WriteLine($"  vocabulary: {v.Ethos.Count} ethos, {v.Traditions.Count} traditions, {v.Looks.Count} looks");
         Console.WriteLine($"  innovations harvested: {tribal} tribal, {early} early medieval, {high} high medieval, {late} late medieval");
 
+        Current = v;
         return v;
     }
 
@@ -161,7 +163,7 @@ public sealed class VanillaVocabulary
 
         foreach (string path in Directory.GetFiles(dir, "*.txt").OrderBy(p => p, StringComparer.Ordinal))
         {
-            foreach (var (_, body) in TopLevelBlocks(File.ReadAllText(path)))
+            foreach (var (key, body) in TopLevelBlocks(File.ReadAllText(path)))
             {
                 // Only the plain `traditions = { }` block. Traditions that reach a culture through
                 // dlc_tradition are gated on a flag we cannot evaluate, so they are not safe to
@@ -179,7 +181,7 @@ public sealed class VanillaVocabulary
 
                 if (coa is not null && building is not null && clothing is not null
                     && unit is not null && ethnicities is not null)
-                    looks.Add(new Look(coa, building, clothing, unit, ethnicities.Trim()));
+                    looks.Add(new Look(key, coa, building, clothing, unit, ethnicities.Trim()));
             }
         }
 

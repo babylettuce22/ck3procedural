@@ -335,6 +335,81 @@ public static class TerrainPalette
         double canopyDensity = 0.5, double zoneA = 0.5, double zoneB = 0.5,
         double rugged = 0.5)
     {
+        var blend = Biome(terrain, climate, relief, nA, nB, nC, canopyDensity, zoneA, zoneB, rugged);
+
+        // Normalised before the merge, and only for that reason: every case above authors its
+        // four layers as *relative* strengths, so their totals range from well under 255 to well
+        // over it, and Merge splits by weight. Handed an un-normalised blend the same 0.16 landed
+        // anywhere from 4% of a steppe pixel to 30% of a desert one — the share would have meant
+        // something different in every biome. Contrast is untouched here (the default is 1.0, a
+        // pure rescale), so the writer still applies it exactly once afterwards.
+        double slope = SlopeSoilShare(terrain, rugged);
+        if (slope > 0)
+            blend = Merge(Normalized(blend), Single(SlopeSoils[(int)climate]), slope);
+
+        return blend;
+    }
+
+    /// <summary>
+    /// The ground a slope shows through whatever is growing on it, per climate family.
+    ///
+    /// Measured over a real emitted heightmap, steep ground is mostly *not* in the classes that
+    /// respond to steepness: 16.7% of land comes out rugged above a half, and only 14.5% of that
+    /// sits in Hills or Mountains. Lowland-classed ground is 16.7% steep against the hill class's
+    /// 7.0% — more than twice as likely to be steep — because a terrain class is picked on an
+    /// elevation percentile and elevation rank runs *against* gradient rank on this terrain
+    /// (-0.40). The coastal cliff path covers almost none of it: confined to a shore band and
+    /// firing only above the 98th percentile of that band's own gradient, it paints 1.6% of the
+    /// map's steep ground, leaving 84% of it with no slope response at all.
+    ///
+    /// Soil rather than stone, and deliberately not the family's <c>mountain_transition</c>: that
+    /// is the shoulder-into-rock texture, and reaching for it here would put back one level down
+    /// exactly the rockfield-on-flat-ground problem <see cref="HillTexture"/> exists to remove. A
+    /// steep forest slope is scoured earth and leaf litter, not scree.
+    ///
+    /// Arid slopes are the one place stone is the honest answer — <c>desert_rocky</c> is what a
+    /// wadi wall is made of — so those two families keep it.
+    /// </summary>
+    private static readonly byte[] SlopeSoils =
+    [
+        ForestFloor,      // Tropical
+        ForestFloor,      // Central
+        PlainsDryMud,     // Steppe
+        DesertRocky,      // Desert
+        DrylandsCracked,  // Drylands
+        ForestFloor,      // Northern
+        MediDryMud,       // Mediterranean
+    ];
+
+    /// <summary>
+    /// How much of the pixel a lowland biome gives up to bare ground on a slope.
+    ///
+    /// Much gentler than the hill treatment on purpose: this is an acknowledgement that the ground
+    /// falls away, not a landform in its own right. At its ceiling it is a sixth of the pixel,
+    /// where <see cref="HillBlend"/> hands its stony layers better than a third. It also starts
+    /// later — nothing at all below the middle of the ruggedness range — so ordinary rolling
+    /// country is untouched and only genuinely broken ground shows earth.
+    ///
+    /// One material, not a rotated pair. It arrives through <see cref="Merge"/>, which folds it
+    /// onto the same material where the case already carries one — every forest case already has
+    /// forestfloor — so on those it deepens a layer the pixel had rather than spending a slot, and
+    /// the three layers varying underneath it are what keep a long slope from reading as tiled.
+    ///
+    /// Excluded: the classes that already answer to slope (hills, both mountains), the ones where
+    /// slope is meaningless or already handled (sea, beach — the shore is the cliff path's), and
+    /// oasis, which is a small hand-placed pocket rather than a landform.
+    /// </summary>
+    private static double SlopeSoilShare(TerrainClass terrain, double rugged) => terrain switch
+    {
+        TerrainClass.Sea or TerrainClass.Beach or TerrainClass.Oasis
+            or TerrainClass.Hills or TerrainClass.Mountains or TerrainClass.DesertMountains => 0.0,
+        _ => 0.16 * Ramp(rugged, 0.55, 0.35),
+    };
+
+    private static Blend Biome(TerrainClass terrain, Climate climate, double relief,
+        double nA, double nB, double nC,
+        double canopyDensity, double zoneA, double zoneB, double rugged)
+    {
         double hillTex = HillTexture(rugged);
         ref readonly var family = ref Families[(int)climate];
 

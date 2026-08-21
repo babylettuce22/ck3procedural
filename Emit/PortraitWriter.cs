@@ -122,11 +122,15 @@ public static class PortraitWriter
         if (!genes.Success) return body;
 
         var content = genes.Groups["content"];
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        string indent = "\t\t\t";
 
         string rewritten = GeneLineRegex.Replace(content.Value, m =>
         {
             string key = m.Groups["key"].Value;
             string ind = m.Groups["ind"].Value;
+            seen.Add(key);
+            if (ind.Length > 0) indent = ind;
 
             if (eth.ColorGenes.TryGetValue(key, out var palettes) && palettes.Count > 0)
             {
@@ -146,9 +150,31 @@ public static class PortraitWriter
             return m.Value;
         });
 
+        // Genes the ethnicity defines that the borrowed template has never heard of have to be
+        // appended rather than substituted. `gen_race_skin` is the case that matters: it is our own
+        // gene, so no vanilla DNA record mentions it, and without this a bookmark drow would keep a
+        // human hue no matter how the ethnicity was written.
+        var added = new StringBuilder();
+        foreach (var (key, entries) in eth.MorphGenes)
+        {
+            if (seen.Contains(key) || entries.Count == 0) continue;
+            seen.Add(key);
+            var e = PickWeighted(entries, x => x.Weight, rng);
+            int v = Byte255(rng.Float(e.Min, e.Max));
+            added.Append($"\n{indent}{key}={{ \"{e.SubGeneName}\" {v} \"{e.SubGeneName}\" {v} }}");
+        }
+
+        // A persistent DNA record must mention EVERY registered gene — the engine logs "Persistent
+        // portrait info missing gene X" per record per missing gene otherwise (portraitcontext.cpp).
+        // Human ethnicities deliberately define no gen_race_skin, so their records need the empty
+        // index-0 template written out explicitly.
+        if (!seen.Contains("gen_race_skin"))
+            added.Append($"\n{indent}gen_race_skin={{ \"gen_skin_human\" 0 \"gen_skin_human\" 0 }}");
+
         return string.Concat(
             body.AsSpan(0, content.Index),
             rewritten,
+            added.ToString(),
             body.AsSpan(content.Index + content.Length));
     }
 

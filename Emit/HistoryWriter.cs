@@ -272,6 +272,18 @@ public static class HistoryWriter
             // perk points below are spendable in.
             sb.Append($"\ttrait = {profile.EducationTrait}\n");
 
+            // Exactly 3 non-conflicting Personality traits (brave, greedy, just, etc.)
+            foreach (string personalityTrait in profile.PersonalityTraits)
+            {
+                sb.Append($"\ttrait = {personalityTrait}\n");
+            }
+
+            // Other traits (congenitals, commander traits, hobbies, scars, coping mechanisms)
+            foreach (string otherTrait in profile.OtherTraits)
+            {
+                sb.Append($"\ttrait = {otherTrait}\n");
+            }
+
             if (GetPhenotypeTrait(culture, ethnicities) is { } rulerTrait)
                 sb.Append($"\ttrait = {rulerTrait}\n");
 

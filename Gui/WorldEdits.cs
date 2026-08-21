@@ -44,8 +44,9 @@ public sealed class WorldEdits
     }
 
     private sealed record CultureSnapshot(Culture Target, string Name, (byte R, byte G, byte B) Color,
-        string Ethos, string MartialCustom, string HeadDetermination, List<string> Traditions)
-        : ISnapshot
+            string Ethos, string MartialCustom, string HeadDetermination, List<string> Traditions,
+            string CoaGfx, string BuildingGfx, string ClothingGfx, string UnitGfx)
+            : ISnapshot
     {
         public bool Differs()
             => !string.Equals(Target.Name, Name, StringComparison.Ordinal)
@@ -53,7 +54,11 @@ public sealed class WorldEdits
             || Target.Ethos != Ethos
             || Target.MartialCustom != MartialCustom
             || Target.HeadDetermination != HeadDetermination
-            || !Target.Traditions.SequenceEqual(Traditions);
+            || !Target.Traditions.SequenceEqual(Traditions)
+            || Target.CoaGfx != CoaGfx
+            || Target.BuildingGfx != BuildingGfx
+            || Target.ClothingGfx != ClothingGfx
+            || Target.UnitGfx != UnitGfx;
 
         public void Restore()
         {
@@ -63,6 +68,10 @@ public sealed class WorldEdits
             Target.MartialCustom = MartialCustom;
             Target.HeadDetermination = HeadDetermination;
             Target.Traditions = [.. Traditions];
+            Target.CoaGfx = CoaGfx;
+            Target.BuildingGfx = BuildingGfx;
+            Target.ClothingGfx = ClothingGfx;
+            Target.UnitGfx = UnitGfx;
         }
     }
 
@@ -241,8 +250,8 @@ public sealed class WorldEdits
     }
 
     private static CultureSnapshot Snapshot(Culture c)
-        => new(c, c.Name, c.Color, c.Ethos, c.MartialCustom, c.HeadDetermination, [.. c.Traditions]);
-
+        => new(c, c.Name, c.Color, c.Ethos, c.MartialCustom, c.HeadDetermination, [.. c.Traditions],
+               c.CoaGfx, c.BuildingGfx, c.ClothingGfx, c.UnitGfx);
     private static FaithSnapshot Snapshot(Faith f) => new(f, f.Name, f.Color, f.Icon, [.. f.Tenets]);
 
     /// <summary>

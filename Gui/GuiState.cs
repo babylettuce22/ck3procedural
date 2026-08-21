@@ -39,9 +39,13 @@ public sealed class GuiState
 
     /// <summary>Where the last exported view PNG went.</summary>
     public string? ExportDir { get; set; }
+
+    /// <summary>Whether the first-launch walkthrough has had its one uninvited showing.</summary>
+    public bool WelcomeShown { get; set; }
     public string? PresetDir { get; set; }
 
     public string? LaunchArgs { get; set; } = "-debug_mode -developer -skip";
+    public bool CloseOnLaunch { get; set; } = true;
     /// <summary>
     /// Where the game and the launcher's mod folder were last found, and what the last mod written
     /// was called.

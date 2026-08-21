@@ -28,6 +28,17 @@ public sealed record RulerProfile
     public required int EducationLevel { get; init; }
     public required string EducationTrait { get; init; }
 
+    /// <summary>
+    /// Exactly 3 core personality traits (e.g. brave, greedy, just). Dictates AI behavior,
+    /// stress impacts, and diplomatic opinion.
+    /// </summary>
+    public required IReadOnlyList<string> PersonalityTraits { get; init; }
+
+    /// <summary>
+    /// Non-personality traits: congenitals, commander traits, lifestyle masteries, scars, and coping habits.
+    /// </summary>
+    public required IReadOnlyList<string> OtherTraits { get; init; }
+
     /// <summary>Age in whole years at the start date.</summary>
     public required int Age { get; init; }
 
@@ -70,15 +81,32 @@ public sealed record RulerProfile
         IntrigueLifestyle, LearningLifestyle,
     ];
 
-    /// <summary>
-    /// The governments that grant legitimacy at all, read off `legitimacy = yes` in vanilla's
-    /// common/governments/00_government_types.txt. Republics and theocracies are absent there, and
-    /// adding legitimacy to one of them is an effect against a currency it does not have.
-    /// </summary>
     private static readonly HashSet<string> LegitimacyGovernments =
     [
         GovernmentMap.Feudal, GovernmentMap.Clan, GovernmentMap.Tribal,
         GovernmentMap.Administrative, GovernmentMap.Nomad,
+    ];
+
+    // Mutually exclusive opposing personality pairs in CK3
+    private static readonly (string Positive, string Negative)[] PersonalityOpposites =
+    [
+        ("brave", "craven"),
+        ("calm", "wrathful"),
+        ("temperate", "gluttonous"),
+        ("generous", "greedy"),
+        ("just", "arbitrary"),
+        ("diligent", "lazy"),
+        ("compassionate", "callous"),
+        ("honest", "deceitful"),
+        ("forgiving", "vengeful"),
+        ("humble", "arrogant"),
+        ("trusting", "paranoid"),
+        ("ambitious", "content"),
+        ("stubborn", "fickle"),
+        ("shy", "gregarious"),
+        ("zealous", "cynical"),
+        ("chaste", "lustful"),
+        ("patient", "impatient"),
     ];
 
     public static RulerProfile Build(
@@ -90,22 +118,12 @@ public sealed record RulerProfile
         string lifestyle = PickLifestyle(rng, government, ethos, null);
         int level = PickEducationLevel(rng, rank);
 
-        // Perk points are what makes the education mechanical rather than decorative: they are spent
-        // in the tree the education belongs to, so a ruler's schooling and the perks he has already
-        // taken tell the same story.
-        //
-        // Roughly one point per six years of adult life — deliberately below what a played character
-        // earns, since an AI ruler spends decades not concentrating on anything in particular. That
-        // puts a 24-year-old count on one point and a 50-year-old on five. A strong education
-        // multiplies lifestyle xp gain (0.3 at level 3, 0.4 at level 4), so the well-taught arrive
-        // faster; a great title carries the court, the tutors and the leisure to use them.
         int points = Math.Max(0, age - 16) / 6;
         if (level >= 3) points++;
         if (level >= 4) points++;
         points += rank switch { 4 => 3, 3 => 2, 2 => 1, _ => 0 };
         points = Math.Clamp(points, 1, 9);
 
-        // Only the great lords have had both the years and the court to look outside their own tree.
         string? second = null;
         int secondPoints = 0;
         if (rank >= 3 && age >= 36)
@@ -115,12 +133,19 @@ public sealed record RulerProfile
         }
 
         var skills = RollSkills(rng, rank, lifestyle);
+        int prowess = RollProwess(rng, rank, government, lifestyle);
+        string? nickname = PickNickname(rng, rank, lifestyle, level);
+
+        var personality = RollPersonality(rng, lifestyle, ethos, government, nickname);
+        var otherTraits = RollOtherTraits(rng, rank, age, prowess, lifestyle, government, level);
 
         return new RulerProfile
         {
             Lifestyle = lifestyle,
             EducationLevel = level,
             EducationTrait = $"education_{lifestyle}_{level}",
+            PersonalityTraits = personality,
+            OtherTraits = otherTraits,
             Age = age,
             PerkPoints = points,
             SecondLifestyle = second,
@@ -130,8 +155,8 @@ public sealed record RulerProfile
             Stewardship = skills[StewardshipLifestyle],
             Intrigue = skills[IntrigueLifestyle],
             Learning = skills[LearningLifestyle],
-            Prowess = RollProwess(rng, rank, government, lifestyle),
-            Nickname = PickNickname(rng, rank, lifestyle, level),
+            Prowess = prowess,
+            Nickname = nickname,
             Dread = RollDread(rng, rank, government, hasVassals),
             Legitimacy = PickLegitimacy(rank, government, hasVassals),
             StabilityYears = rank switch { 4 => 6, 3 => 5, _ => 3 },
@@ -139,17 +164,188 @@ public sealed record RulerProfile
     }
 
     /// <summary>
-    /// What a ruler was taught, as a weighted draw over the five lifestyles.
-    ///
-    /// The government sets the base — a khan's household raises soldiers, a merchant republic raises
-    /// accountants — and the culture's ethos leans it further, so a bellicose culture's dukes are
-    /// visibly a different breed from a spiritual one's. Intrigue takes no ethos lean of its own on
-    /// purpose: it is what is left when a court raises neither a warrior nor a bureaucrat, and that
-    /// is the right shape for it.
+    /// Selects exactly 3 personality traits that do not conflict, weighted by lifestyle,
+    /// ethos, government, and nickname.
     /// </summary>
+    private static List<string> RollPersonality(
+        Rng rng, string lifestyle, string ethos, string government, string? nickname)
+    {
+        var picked = new List<string>();
+        var excluded = new HashSet<string>();
+
+        void AddTrait(string trait)
+        {
+            if (picked.Contains(trait) || excluded.Contains(trait)) return;
+            picked.Add(trait);
+            excluded.Add(trait);
+
+            foreach (var (a, b) in PersonalityOpposites)
+            {
+                if (a == trait) excluded.Add(b);
+                if (b == trait) excluded.Add(a);
+            }
+            if (trait == "callous") excluded.Add("sadistic");
+            if (trait == "sadistic") { excluded.Add("compassionate"); excluded.Add("callous"); }
+        }
+
+        // 1. Nickname seed trait
+        if (nickname is not null)
+        {
+            string? seed = nickname switch
+            {
+                "nick_the_bold" or "nick_the_lionheart" or "nick_the_hammer" or "nick_the_ironside" => "brave",
+                "nick_the_just" or "nick_the_lawgiver" => "just",
+                "nick_the_good" or "nick_the_fair" => "compassionate",
+                "nick_the_generous" or "nick_the_magnificent" => "generous",
+                "nick_the_fox" or "nick_the_spider" or "nick_the_shrewd" => "deceitful",
+                "nick_the_pious" => "zealous",
+                "nick_the_wise" or "nick_the_scholar" => "patient",
+                "nick_the_builder" => "diligent",
+                _ => null
+            };
+            if (seed is not null) AddTrait(seed);
+        }
+
+        // 2. Personality pairs weighting
+        var candidates = PersonalityOpposites.ToList();
+        rng.Shuffle(candidates);
+
+        foreach (var (traitA, traitB) in candidates)
+        {
+            if (picked.Count >= 3) break;
+            if (excluded.Contains(traitA) || excluded.Contains(traitB)) continue;
+
+            int weightA = 10;
+            int weightB = 10;
+
+            // Lifestyle bias
+            switch (lifestyle)
+            {
+                case MartialLifestyle:
+                    if (traitA is "brave" or "stubborn") weightA += 18;
+                    if (traitB is "wrathful" or "arrogant") weightB += 15;
+                    break;
+                case IntrigueLifestyle:
+                    if (traitB is "deceitful" or "paranoid" or "cynical") weightB += 20;
+                    if (traitA is "ambitious") weightA += 15;
+                    break;
+                case StewardshipLifestyle:
+                    if (traitA is "diligent" or "temperate" or "just") weightA += 18;
+                    if (traitB is "greedy") weightB += 12;
+                    break;
+                case DiplomacyLifestyle:
+                    if (traitA is "generous" or "compassionate" or "trusting") weightA += 18;
+                    if (traitB is "gregarious") weightB += 15;
+                    break;
+                case LearningLifestyle:
+                    if (traitA is "patient" or "temperate" or "humble") weightA += 18;
+                    if (traitA is "zealous") weightA += (government == GovernmentMap.Theocracy ? 25 : 10);
+                    break;
+            }
+
+            // Ethos bias
+            switch (ethos)
+            {
+                case "ethos_bellicose":
+                    if (traitA is "brave") weightA += 20;
+                    if (traitB is "wrathful" or "callous") weightB += 15;
+                    break;
+                case "ethos_courtly":
+                    if (traitB is "arrogant" or "gregarious") weightB += 15;
+                    if (traitA is "generous") weightA += 10;
+                    break;
+                case "ethos_bureaucratic":
+                    if (traitA is "diligent" or "just" or "patient") weightA += 18;
+                    break;
+                case "ethos_spiritual":
+                    if (traitA is "zealous" or "temperate" or "humble") weightA += 20;
+                    break;
+                case "ethos_communal":
+                    if (traitA is "compassionate" or "generous" or "trusting") weightA += 16;
+                    break;
+                case "ethos_stoic":
+                    if (traitA is "calm" or "patient" or "stubborn") weightA += 15;
+                    break;
+            }
+
+            int roll = rng.Int(1, weightA + weightB);
+            AddTrait(roll <= weightA ? traitA : traitB);
+        }
+
+        return picked;
+    }
+
+    /// <summary>
+    /// Generates non-personality traits: congenitals, commander traits, lifestyle masteries,
+    /// scars, and coping habits based on rank, prowess, age, and lifestyle.
+    /// </summary>
+    private static List<string> RollOtherTraits(
+        Rng rng, int rank, int age, int prowess, string lifestyle, string government, int educationLevel)
+    {
+        var list = new List<string>();
+
+        // 1. Congenital / Genetic traits (~10% total chance)
+        if (rng.Chance(0.10))
+        {
+            string[] congenitals =
+            [
+                "beauty_good_1", "beauty_good_2", "intellect_good_1", "intellect_good_2",
+                "physique_good_1", "physique_good_2", "fecund", "giant",
+                "clubfooted", "lisp", "dwarf", "spindly"
+            ];
+            list.Add(rng.Pick(congenitals));
+        }
+
+        // 2. Commander traits (Martial rulers, Nomads, high rank)
+        if (lifestyle == MartialLifestyle || government is GovernmentMap.Nomad or GovernmentMap.Tribal)
+        {
+            double commanderChance = (rank >= 3 ? 0.60 : 0.35) + (age >= 30 ? 0.15 : 0.0);
+            if (rng.Chance(commanderChance))
+            {
+                string[] commanderPool = government == GovernmentMap.Nomad
+                    ? ["cavalry_leader", "organizer", "aggressive_attacker", "flexible_leader"]
+                    : ["rough_terrain_expert", "forest_fighter", "unyielding_defender",
+                       "aggressive_attacker", "organizer", "flexible_leader"];
+
+                list.Add(rng.Pick(commanderPool));
+            }
+        }
+
+        // 3. Lifestyle / Hobby traits (for mature rulers who excelled in schooling)
+        if (age >= 35 && educationLevel >= 3 && rng.Chance(0.40))
+        {
+            string? hobby = lifestyle switch
+            {
+                MartialLifestyle => rng.Pick(["lifestyle_hunter", "lifestyle_blademaster"]),
+                LearningLifestyle => rng.Pick(["lifestyle_mystic", "lifestyle_gardener", "lifestyle_herbalist"]),
+                DiplomacyLifestyle => rng.Pick(["lifestyle_reveler", "poet"]),
+                StewardshipLifestyle => "lifestyle_gardener",
+                _ => null,
+            };
+            if (hobby is not null) list.Add(hobby);
+        }
+
+        // 4. Physical wear, scars & stress coping (veterans and older rulers)
+        if (prowess >= 8 && age >= 28 && rng.Chance(0.30))
+        {
+            list.Add("scarred_1");
+            if (age >= 45 && rank >= 3 && rng.Chance(0.08))
+            {
+                list.Add("one_eyed");
+            }
+        }
+
+        if (age >= 45 && rng.Chance(0.20))
+        {
+            string[] coping = ["drunkard", "hashishiyah", "comfort_eater", "irritable"];
+            list.Add(rng.Pick(coping));
+        }
+
+        return list;
+    }
+
     private static string PickLifestyle(Rng rng, string government, string ethos, string? exclude)
     {
-        // diplomacy, martial, stewardship, intrigue, learning
         int[] w = government switch
         {
             GovernmentMap.Tribal => [16, 42, 14, 16, 12],
@@ -158,7 +354,7 @@ public sealed record RulerProfile
             GovernmentMap.Administrative => [26, 18, 30, 14, 12],
             GovernmentMap.Republic => [24, 12, 38, 16, 10],
             GovernmentMap.Theocracy => [20, 8, 18, 12, 42],
-            _ => [25, 30, 20, 12, 13], // feudal
+            _ => [25, 30, 20, 12, 13],
         };
 
         switch (ethos)
@@ -181,13 +377,6 @@ public sealed record RulerProfile
         return Lifestyles[PickIndex(rng, w)];
     }
 
-    /// <summary>
-    /// How well it took. A count is an ordinary man given whatever tutor his father could find; an
-    /// emperor was raised knowing what he was being raised for, by the best teacher in the realm.
-    ///
-    /// Level 5 is vanilla's <c>random_creation_weight = 0</c> education — the game never rolls it
-    /// for anybody — so it stays a once-a-map thing: a few percent of emperors, a fraction of kings.
-    /// </summary>
     private static int PickEducationLevel(Rng rng, int rank)
     {
         int[] w = rank switch
@@ -201,11 +390,6 @@ public sealed record RulerProfile
         return PickIndex(rng, w) + 1;
     }
 
-    /// <summary>
-    /// Base skills, before the education trait adds its own (+2 at level 1, rising to +10 at level
-    /// 5). Kept deliberately modest for exactly that reason: a level 4 education is already +8 by
-    /// itself, and a generous base stacked under it produces numbers no vanilla character has.
-    /// </summary>
     private static Dictionary<string, int> RollSkills(Rng rng, int rank, string lifestyle)
     {
         var (min, max) = rank switch
@@ -223,10 +407,6 @@ public sealed record RulerProfile
         return skills;
     }
 
-    /// <summary>
-    /// Prowess. Rank buys the armour, the horse and someone to teach him to use both; a martial
-    /// education and a culture that settles things personally do the rest.
-    /// </summary>
     private static int RollProwess(Rng rng, int rank, string government, string lifestyle)
     {
         int prowess = rank switch
@@ -244,13 +424,6 @@ public sealed record RulerProfile
         return prowess;
     }
 
-    /// <summary>
-    /// A byname, for kings and emperors only and not for all of them — one that every great lord
-    /// carries is not a distinction, it is a suffix.
-    ///
-    /// Only keys from vanilla's base common/nicknames/00_nicknames.txt, which this generator never
-    /// blanks and which needs no localisation of ours.
-    /// </summary>
     private static string? PickNickname(Rng rng, int rank, string lifestyle, int level)
     {
         if (rank < 3) return null;
@@ -271,8 +444,6 @@ public sealed record RulerProfile
             _ => ["nick_the_wise", "nick_the_pious", "nick_the_scholar"],
         };
 
-        // The bynames that judge a whole reign rather than a single talent, kept for the emperors
-        // who were also taught well.
         if (rank == 4 && level >= 4)
         {
             pool = lifestyle == MartialLifestyle
@@ -283,11 +454,6 @@ public sealed record RulerProfile
         return rng.Pick(pool);
     }
 
-    /// <summary>
-    /// Dread. A khan with vassals has always had it here — without it obedience starts 5 points down
-    /// before anything else is counted — and the same argument holds for any king or emperor whose
-    /// court has to be kept in line from the first day.
-    /// </summary>
     private static int RollDread(Rng rng, int rank, string government, bool hasVassals)
     {
         if (!hasVassals) return 0;
@@ -296,11 +462,6 @@ public sealed record RulerProfile
         return rank >= 3 ? rng.Int(8, 16) : 0;
     }
 
-    /// <summary>
-    /// Legitimacy, the other half of that same obedience sum: a subject docks an overlord 15 for not
-    /// having reached level 3, which is a good part of why a freshly generated realm sheds its
-    /// vassals inside a decade.
-    /// </summary>
     private static string? PickLegitimacy(int rank, string government, bool hasVassals)
     {
         if (!hasVassals || !LegitimacyGovernments.Contains(government)) return null;

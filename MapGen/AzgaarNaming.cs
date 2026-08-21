@@ -67,10 +67,10 @@ public static class AzgaarNaming
     ///
     /// Matched against the parenthetical's content only, never the whole name: a culture is free
     /// to be *called* Orkadal without being orcs. "Dark elf" is tested before "elf" because it
-    /// contains it; every other tag with no counterpart in our roster ("Arachnid", "Serpents",
-    /// "Draconic") lands on <see cref="RaceArchetype.Exotic"/>, whose availability the ethnicity
-    /// builder already gates by the map's fantasy mode. Null when there is no tag, which is every
-    /// culture on a non-fantasy export.
+    /// contains it. A tag with no counterpart in our roster ("Arachnid", "Serpents", "Draconic")
+    /// returns null rather than inventing a race for it — the ethnicity builder then falls back to
+    /// guessing from terrain, which is a better answer than a random look. Null is also what an
+    /// untagged culture returns, which is every culture on a non-fantasy export.
     /// </summary>
     internal static RaceArchetype? ParseRace(string name)
     {
@@ -90,7 +90,7 @@ public static class AzgaarNaming
         if (tag.Contains("orc") || tag.Contains("ork") || tag.Contains("goblin")) return RaceArchetype.Orc;
         if (tag.Contains("gnom") || tag.Contains("halfling") || tag.Contains("hobbit")) return RaceArchetype.Gnome;
         if (tag.Contains("giant")) return RaceArchetype.Giantkin;
-        return RaceArchetype.Exotic;
+        return null;
     }
 
     /// <summary>

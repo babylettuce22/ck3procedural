@@ -116,6 +116,9 @@ public static class ContentWriter
 
         Core.Stage.Time("ethnicity files", () => EthnicityWriter.WriteAll(modDir, ethnicities));
 
+        // The render-time enforcement of those ethnicities' races — same table, other end.
+        Core.Stage.Time("race morph modifiers", () => RaceMorphWriter.WriteAll(modDir, cfg, ethnicities));
+
         var worldCenters = Core.Stage.Time("world centers", () => WorldCenterMap.Build(
             counties, provinces, order, landCount, provinceTerrain, cultures, wilderness, cfg, new Rng(cfg.Seed ^ 0x93FA)));
 
@@ -220,6 +223,12 @@ public static class ContentWriter
         Core.Stage.Time("casus belli", () => CasusBelliWriter.WriteAll(modDir, gameDir, cfg));
         Core.Stage.Time("frontend", () => FrontendWriter.WriteFrontend(modDir, gameDir));
         Core.Stage.Time("GUI changes", () => GuiWriter.WriteAll(modDir, gameDir, cfg));
+
+        if (cfg.EnableFantasyEthnicities && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly)
+        {
+            Core.Stage.Time("character interactions",
+                () => InteractionWriter.PatchMarriageInteractions(modDir, gameDir));
+        }
 
         // Full-resolution heightmap elevation passed to detail texture generator
         Core.Stage.Time("terrain textures", () => TerrainTextureWriter.WriteAll(modDir, cfg, terrain,
@@ -616,6 +625,15 @@ public static class ContentWriter
             Path.Combine("common", "dynasties"),
             Path.Combine("common", "bookmarks", "challenge_characters"),
             Path.Combine("common", "bookmark_portraits"),
+
+            // Vanilla's 361 DNA records describe bookmark characters that `history/characters` and
+            // `bookmark_portraits` above have already deleted, so they were dead weight even before
+            // this. They have to go now rather than merely being ignorable, because a DNA record is
+            // validated against the full gene list and the mod adds one: `gen_race_skin`, from
+            // BaseFilesToCopy/Core/common/genes. Records written before that gene existed do not
+            // mention it, and the engine complains once per record on load. Elder Kings solves the
+            // same problem the same way, blanking every stock DNA file down to a comment.
+            Path.Combine("common", "dna_data"),
             Path.Combine("common", "coat_of_arms", "dynamic_definitions"),
         ];
 

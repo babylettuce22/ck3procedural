@@ -1,29 +1,52 @@
-﻿# Hooks that give engine-generated characters their culture's phenotype.
-#
-# See common/scripted_effects/00_phenotype_effects.txt for what the effect does and why it keys on
-# culture. This file is only about WHEN to ask.
+﻿# Hooks that decide a character's race. See common/scripted_effects/ for what the effects do; this
+# file is only about WHEN to ask.
 #
 # **Every entry appends, none overrides.** Each vanilla on_action below is re-declared with nothing
-# but an `on_actions` list, which is the additive firing list documented in
-# common/on_action/_on_actions.info. Writing a `trigger` or an `effect` into one of these blocks
-# instead would replace vanilla's own and silently delete whatever it did — the single commonest
-# compatibility bug in CK3 modding, and the reason this file looks more roundabout than it needs to.
+# but an `on_actions` list. That is the sanctioned pattern, spelled out in
+# common/on_action/_on_actions.info: data for an on-action may be declared in multiple files, and
+# only a second `trigger` or `effect` block would conflict. Vanilla relies on it itself —
+# `three_year_playable_pulse` is declared twice in the stock files. Writing a `trigger` or `effect`
+# into one of these blocks instead would replace vanilla's own and silently delete whatever it did —
+# the single commonest compatibility bug in CK3 modding.
 
-# The net. Fires for every character once a year, at a random point in their own year rather than on
-# a shared date, so the cost is spread across the calendar instead of landing on January 1st.
+# BIRTH — the authoritative moment.
 #
-# This is the entry that actually does the work, because the obvious hook does not exist: there is no
-# on_action for "a character was generated". `on_join_court` looks right and is not — vanilla's own
-# comment on it reads "Not fired for just generated characters", which is precisely the population
-# this system is for. So rather than chase every site the engine can invent a character from, catch
-# them all shortly afterwards.
+# `root` is the newborn; vanilla documents the scopes on its own declaration in
+# child_birth_on_actions.txt, and its birth.8001 confirms them with `is_grandparent_of = root`.
+#
+# This is where a child of two races is resolved to one of them, and it MUST run, because the traits
+# are `inherit_chance = 0` and pass nothing genetically. (An earlier version of this file argued the
+# exact opposite — that birth needed no hook because the traits inherited at 100% — and that block
+# survived, contradicting the hook below, long after the traits were changed. The pulse effects are
+# designed around births being handled here; without this hook they assign by CULTURE, which hands a
+# human child born into a dwarven culture the local race.)
+on_birth_child = {
+	on_actions = { gen_phenotype_birth_on_action }
+}
+
+gen_phenotype_birth_on_action = {
+	effect = {
+		gen_resolve_child_phenotype_effect = yes
+	}
+}
+
+# THE NET — for characters the engine invents rather than births.
+#
+# Courtiers generated to fill a court, landless adventurers and their companions, pool guests, low
+# nobles created for a barony, mercenary captains. Without this a dwarven kingdom slowly fills with
+# human courtiers and the phenotype reads as a quirk of the starting cast rather than as what the
+# culture is.
+#
+# Fires for every character once a year at a random point in their own year, so the cost spreads
+# across the calendar rather than landing on January 1st. The obvious hook does not exist: there is
+# no on_action for "a character was generated", and `on_join_court` is documented by vanilla as
+# "Not fired for just generated characters" — precisely this population.
 random_yearly_everyone_pulse = {
 	on_actions = { gen_phenotype_assign_on_action }
 }
 
-# Pool characters specifically. They are not in anybody's court yet, so the yearly pulse above may
-# reach them before they have a liege or host to fall back on; this gives them a second look on the
-# engine's own pool cadence.
+# Pool characters specifically — not in anybody's court yet, so the yearly pulse may reach them
+# before they have a liege or host to read a race from.
 three_year_pool_pulse = {
 	on_actions = { gen_phenotype_assign_on_action }
 }
@@ -40,28 +63,12 @@ on_baron_found_or_created_for_title = {
 	on_actions = { gen_phenotype_assign_on_action }
 }
 
-# Deliberately NOT hooked: on_birth_child.
-#
-# The traits are `inherit_chance = 100` with `inherit_from_real_father` and `inherit_from_real_mother`
-# both set, so a child of any carrier already has the trait before script could add it. Hooking birth
-# would not add coverage, and it would do harm: this effect reads the CULTURE, so it would hand the
-# local phenotype to human children born into a phenotyped culture and overrule the one thing that
-# should always win at birth, which is the parents.
-
 gen_phenotype_assign_on_action = {
 	effect = {
+		# Repair first, assign second. A character wearing two races has two sets of forced genes
+		# fighting over one portrait, and the repair is what makes the assignment meaningful —
+		# gen_has_phenotype_trigger would otherwise read the broken character as already decided.
+		gen_sanitize_phenotype_effect = yes
 		gen_assign_phenotype_effect = yes
 	}
-}
-
-# Child corrections
-
-on_birth_child = {
-    on_actions = { gen_phenotype_birth_on_action }
-}
-
-gen_phenotype_birth_on_action = {
-    effect = {
-        gen_resolve_child_phenotype_effect = yes
-    }
 }

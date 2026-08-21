@@ -1,13 +1,17 @@
 ﻿# 00_phenotype_traits.txt
 
 # Elf
+#
+# No `group` on any of these: CK3 trait groups are for LEVELLED tracks (education tiers),
+# and a grouped trait without a level is an error the engine "fixes" by unsetting the group at
+# load — one error.log line per trait per boot. Mutual exclusivity is carried entirely by the
+# `opposites` lists, which is also how vanilla does it for flat traits.
 phenotype_gracile = {
     physical = yes
     inherit_chance = 0
     shown_in_ruler_designer = yes
     ruler_designer_cost = 20
 
-    group = phenotype_race
     opposites = {
         phenotype_stocky
         phenotype_rough_hewn
@@ -28,8 +32,10 @@ phenotype_gracile = {
     movement_speed = 0.05
     stress_loss_mult = 0.05
     same_opinion = 10
-    life_expectancy = 35
+    life_expectancy = 50
     health = 1.25
+	
+	opposite_opinion = -2
 }
 
 # Dwarf
@@ -39,7 +45,6 @@ phenotype_stocky = {
     shown_in_ruler_designer = yes
     ruler_designer_cost = 20
 
-    group = phenotype_race
     opposites = {
         phenotype_gracile
         phenotype_rough_hewn
@@ -53,13 +58,15 @@ phenotype_stocky = {
     prowess = 2
     health = 0.5
     defender_advantage = 3
-    same_opinion = 5
+    same_opinion = 15
 	
     culture_modifier = {
         parameter = mountain_trait_bonuses
         mountains_attrition_mult = -0.15
         desert_mountains_attrition_mult = -0.15
     }
+	
+	opposite_opinion = -10
 }
 
 # Orc
@@ -69,7 +76,6 @@ phenotype_rough_hewn = {
     shown_in_ruler_designer = yes
     ruler_designer_cost = 15
 
-    group = phenotype_race
     opposites = {
         phenotype_gracile
         phenotype_stocky
@@ -85,7 +91,8 @@ phenotype_rough_hewn = {
     dread_baseline_add = 15
     dread_gain_mult = 0.3
     general_opinion = -5
-    same_opinion = 10
+    same_opinion = 5
+	opposite_opinion = -15
 }
 
 # Giant
@@ -95,7 +102,6 @@ phenotype_towering = {
     shown_in_ruler_designer = yes
     ruler_designer_cost = 25
 
-    group = phenotype_race
     opposites = {
         phenotype_gracile
         phenotype_stocky
@@ -110,6 +116,7 @@ phenotype_towering = {
     advantage = 2
     dread_gain_mult = 0.10
     same_opinion = 5
+	opposite_opinion = 5
 }
 
 # Gnome
@@ -119,7 +126,6 @@ phenotype_diminutive = {
     shown_in_ruler_designer = yes
     ruler_designer_cost = 10
 
-    group = phenotype_race
     opposites = {
         phenotype_gracile
         phenotype_stocky
@@ -130,11 +136,12 @@ phenotype_diminutive = {
     icon = "diminutive.dds"
 
     intrigue = 1
-    prowess = -2
+    prowess = -4
+	learning = 2
     owned_hostile_scheme_success_chance_add = 15
-    enemy_hostile_scheme_success_chance_add = -10
     stress_loss_mult = 0.10
     same_opinion = 5
+	opposite_opinion = 5
 }
 
 # Drow
@@ -144,7 +151,6 @@ phenotype_dusk_adapted = {
     shown_in_ruler_designer = yes
     ruler_designer_cost = 20
 
-    group = phenotype_race
     opposites = {
         phenotype_gracile
         phenotype_stocky
@@ -154,11 +160,11 @@ phenotype_dusk_adapted = {
     }
     icon = "dusk_adapted.dds"
 
-    intrigue = 2
-    learning = 1
+    intrigue = 4
     owned_hostile_scheme_success_chance_add = 10
     enemy_hostile_scheme_success_chance_add = -5
-    same_opinion = 5
-    life_expectancy = 28
-    health = 1.0
+    life_expectancy = 50
+    health = 1.25
+	
+	opposite_opinion = -20
 }

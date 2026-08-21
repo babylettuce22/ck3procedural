@@ -114,16 +114,20 @@ public static class CultureWriter
             sb.Append($"\tname_list = {culture.NameListKey}\n\n");
 
             // Borrowed whole off one vanilla culture so the four sets and the ethnicities agree.
-            sb.Append($"\tcoa_gfx = {look.CoaGfx}\n");
-            sb.Append($"\tbuilding_gfx = {look.BuildingGfx}\n");
-            sb.Append($"\tclothing_gfx = {look.ClothingGfx}\n");
-            sb.Append($"\tunit_gfx = {look.UnitGfx}\n\n");
+            // Culture visual graphics and holding models
+            sb.Append($"\tcoa_gfx = {culture.CoaGfx}\n");
+            sb.Append($"\tbuilding_gfx = {culture.BuildingGfx}\n");
+            sb.Append($"\tclothing_gfx = {culture.ClothingGfx}\n");
+            sb.Append($"\tunit_gfx = {culture.UnitGfx}\n\n");
 
             // One generated ethnicity rather than the vanilla culture's whole weighted list. The
             // borrowed list describes the people it was lifted from; a generated culture has its own
             // look to declare, and pointing at a single definition is what lets it.
             sb.Append("\tethnicities = {\n");
-            sb.Append($"\t\t100 = {ethnicity.Key}\n");
+            foreach (var (variantKey, weight) in ethnicityMap.VariantsFor(culture))
+            {
+                sb.Append($"\t\t{weight} = {variantKey}\n");
+            }
             sb.Append("\t}\n");
 
             sb.Append("}\n\n");

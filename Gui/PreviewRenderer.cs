@@ -1,11 +1,13 @@
 ﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
+using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
 
 namespace Ck3MapGen.Gui;
 
 public static class PreviewRenderer
 {
+    private static readonly Dictionary<RaceArchetype, DdsReader.DecodedImage?> IconCache = [];
     public readonly record struct Image(byte[] Rgb, int Width, int Height);
     private const int MaxWidth = 2048;
 
@@ -697,6 +699,11 @@ public static class PreviewRenderer
     /// they are portrait DNA, not map paint — so each gets a stable hue from its position on the
     /// golden-angle wheel, which keeps neighbours apart for any count of ethnicities.
     /// </summary>
+    /// <summary>
+    /// Counties by the ethnicity their culture wears. Ethnicities carry no colour of their own —
+    /// they are portrait DNA, not map paint — so each gets a stable hue from its position on the
+    /// golden-angle wheel, which keeps neighbours apart for any count of ethnicities.
+    /// </summary>
     public static Image RenderEthnicities(GenerationResult result, Emit.WrittenContent written)
     {
         var keys = written.Ethnicities.Ethnicities.Keys.Order(StringComparer.Ordinal).ToList();
@@ -704,10 +711,181 @@ public static class PreviewRenderer
         for (int i = 0; i < keys.Count; i++)
             hueOf[keys[i]] = HueColour(i * 137.508, 0.55, 0.82);
 
-        return RenderByCounty(result, written.Wilderness, county =>
+        // 1. Render standard base county map
+        var image = RenderByCounty(result, written.Wilderness, county =>
             written.Cultures.ByCounty.TryGetValue(county, out var culture)
                 ? hueOf.GetValueOrDefault(written.Ethnicities.For(culture).Key)
                 : null);
+
+        int step = StepFor(result.Provinces.Width);
+        var centroids = CalculateEthnicityCentroids(result, written);
+
+        // 2. Overlay icons onto the downsampled image
+        foreach (var (archetype, (cx, cy)) in centroids)
+        {
+            var icon = GetPhenotypeIcon(archetype);
+            if (icon is null) continue;
+
+            // Center coordinates in downsampled preview buffer
+            int targetX = cx / step;
+            int targetY = cy / step;
+
+            DrawIconBadge(image, targetX, targetY, icon.Value);
+        }
+
+        return image;
+    }
+
+    private static List<(RaceArchetype Archetype, (int X, int Y) Position)> CalculateEthnicityCentroids(
+        GenerationResult result, Emit.WrittenContent written)
+    {
+        var map = result.Provinces;
+        var order = result.ProvinceOrder;
+        int landCount = result.LandCount;
+
+        // Invert ProvinceOrder: map from province ID -> raw seed index in map.Seeds
+        var seedOfProvince = new int[landCount + 1];
+        for (int label = 0; label < order.Length; label++)
+        {
+            int id = order[label];
+            if (id >= 1 && id <= landCount)
+                seedOfProvince[id] = label;
+        }
+
+        var centroids = new List<(RaceArchetype Archetype, (int X, int Y) Position)>();
+
+        // Calculate centroid per culture so separate enclaves/cultures of a race get their own badge
+        foreach (var culture in written.Cultures.Cultures)
+        {
+            var eth = written.Ethnicities.For(culture);
+            if (eth.Archetype == RaceArchetype.Human) continue;
+
+            var points = new List<(int X, int Y)>();
+
+            foreach (var county in culture.Counties)
+            {
+                if (written.Wilderness?.Contains(county) == true) continue;
+
+                foreach (var barony in county.Children)
+                {
+                    int provId = barony.ProvinceId;
+                    if (provId < 1 || provId > landCount) continue;
+
+                    int seedIdx = seedOfProvince[provId];
+                    if (seedIdx >= 0 && seedIdx < map.Seeds.Count)
+                    {
+                        var seed = map.Seeds[seedIdx];
+                        points.Add((seed.X, seed.Y));
+                    }
+                }
+            }
+
+            if (points.Count == 0) continue;
+
+            long sumX = 0, sumY = 0;
+            foreach (var p in points) { sumX += p.X; sumY += p.Y; }
+            int avgX = (int)(sumX / points.Count);
+            int avgY = (int)(sumY / points.Count);
+
+            // Pick the barony seed closest to the geometric center
+            var closest = points.MinBy(p => {
+                long dx = p.X - avgX, dy = p.Y - avgY;
+                return dx * dx + dy * dy;
+            });
+
+            centroids.Add((eth.Archetype, closest));
+        }
+
+        return centroids;
+    }
+
+    private static void DrawIconBadge(Image dest, int cx, int cy, DdsReader.DecodedImage icon)
+    {
+        int targetSize = 28; // Icon display width/height in preview pixels
+        int radius = targetSize / 2 + 3;
+        int rSq = radius * radius;
+
+        // 1. Draw semi-transparent dark circle badge behind icon
+        for (int dy = -radius; dy <= radius; dy++)
+        {
+            int py = cy + dy;
+            if (py < 0 || py >= dest.Height) continue;
+
+            for (int dx = -radius; dx <= radius; dx++)
+            {
+                int px = cx + dx;
+                if (px < 0 || px >= dest.Width) continue;
+
+                int distSq = dx * dx + dy * dy;
+                if (distSq <= rSq)
+                {
+                    int o = (py * dest.Width + px) * 3;
+                    float alpha = distSq >= rSq - radius ? 0.9f : 0.75f;
+                    dest.Rgb[o + 0] = (byte)(dest.Rgb[o + 0] * (1 - alpha) + 20 * alpha);
+                    dest.Rgb[o + 1] = (byte)(dest.Rgb[o + 1] * (1 - alpha) + 22 * alpha);
+                    dest.Rgb[o + 2] = (byte)(dest.Rgb[o + 2] * (1 - alpha) + 26 * alpha);
+                }
+            }
+        }
+
+        // 2. Alpha-blend the icon on top
+        int half = targetSize / 2;
+        for (int y = 0; y < targetSize; y++)
+        {
+            int py = cy - half + y;
+            if (py < 0 || py >= dest.Height) continue;
+
+            int srcY = y * icon.Height / targetSize;
+
+            for (int x = 0; x < targetSize; x++)
+            {
+                int px = cx - half + x;
+                if (px < 0 || px >= dest.Width) continue;
+
+                int srcX = x * icon.Width / targetSize;
+                int srcOffset = (srcY * icon.Width + srcX) * 4;
+
+                byte b = icon.Bgra[srcOffset + 0];
+                byte g = icon.Bgra[srcOffset + 1];
+                byte r = icon.Bgra[srcOffset + 2];
+                float a = icon.Bgra[srcOffset + 3] / 255.0f;
+
+                if (a > 0.05f)
+                {
+                    int dstOffset = (py * dest.Width + px) * 3;
+                    dest.Rgb[dstOffset + 0] = (byte)(dest.Rgb[dstOffset + 0] * (1 - a) + r * a);
+                    dest.Rgb[dstOffset + 1] = (byte)(dest.Rgb[dstOffset + 1] * (1 - a) + g * a);
+                    dest.Rgb[dstOffset + 2] = (byte)(dest.Rgb[dstOffset + 2] * (1 - a) + b * a);
+                }
+            }
+        }
+    }
+
+    private static string? GetPhenotypeIconFilename(RaceArchetype archetype) => archetype switch
+    {
+        RaceArchetype.HighElf or RaceArchetype.WoodElf => "gracile.dds",
+        RaceArchetype.Dwarf => "stocky.dds",
+        RaceArchetype.Orc => "rough_hewn.dds",
+        RaceArchetype.Giantkin => "towering.dds",
+        RaceArchetype.Gnome => "diminutive.dds",
+        RaceArchetype.Deepkin => "dusk_adapted.dds",
+        _ => null // Humans have no special icon
+    };
+
+    private static DdsReader.DecodedImage? GetPhenotypeIcon(RaceArchetype archetype)
+    {
+        if (IconCache.TryGetValue(archetype, out var cached)) return cached;
+
+        string? filename = GetPhenotypeIconFilename(archetype);
+        if (filename is null) return IconCache[archetype] = null;
+
+        string traitDir = Path.Combine(
+            Emit.StaticFileWriter.SetDirectory(Emit.StaticFileWriter.Core),
+            "gfx", "interface", "icons", "traits");
+
+        string path = Path.Combine(traitDir, filename);
+        var loaded = DdsReader.Load(path);
+        return IconCache[archetype] = loaded;
     }
 
     public static (byte R, byte G, byte B) HueColour(double hueDegrees, double s, double v)

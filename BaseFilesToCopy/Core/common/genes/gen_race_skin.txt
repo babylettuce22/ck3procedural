@@ -1,0 +1,179 @@
+﻿# Fantasy skin colour, done the way Elder Kings does it: as an HSV rotation applied on top of the
+# stock human gradient, rather than as pigment painted into gfx/portraits/skin_palette.dds.
+#
+# WHY THE PALETTE APPROACH WAS ABANDONED
+# --------------------------------------
+# A `skin_color` gene is a COORDINATE PAIR into the palette texture, and CK3 inherits it by
+# interpolating between the parents' coordinates. That is fine while the palette is one continuous
+# human gradient -- any point between two human skins is another human skin. It stops being fine the
+# moment separate races live in separate painted blocks of the same texture, because the midpoint
+# between a drow's coordinate and a human's is simply whatever pixel happens to sit between them:
+# another race's stripe, or unpainted gradient. Children of mixed parentage came out arbitrary
+# colours, and no amount of careful band placement fixes it, because the engine is interpolating in
+# texture space and knows nothing about the bands.
+#
+# The shift gene has no such problem. Every character -- human, orc, drow -- samples the ordinary
+# stock gradient, so `skin_color` interpolation stays inside human skin tones where it is
+# well-behaved. Race lives in a SEPARATE gene that blends on its own axis, so a half-orc gets a
+# human-range base tone under a half-strength green rotation, which is exactly the intuitive answer.
+#
+# `sync_inheritance_with = skin_color` ties the two together: whichever parent a child took its
+# base tone from, it takes the matching race shift from as well, instead of pairing one parent's
+# tone with the other parent's hue.
+#
+# THE CURVE
+# ---------
+# `skin_hsv_shift_curve` maps this gene's value to { hue-rotation, +saturation, +value }, all
+# additive, hue wrapping at 1.0. It is a vanilla feature, not an EK invention -- vanilla's own
+# gene_hair_disease uses `hair_hsv_shift_curve` in 08_genes_special_visual_traits.txt.
+#
+# **The hue is deliberately constant along every curve below, and only saturation and value move.**
+# This is the one non-obvious rule here. Scaling a hue ROTATION toward zero does not weaken a
+# colour, it lands on a different one: a third of the dwarf's +0.98 red rotation is +0.31, which is
+# green, and nine tenths of the drow's +0.72 violet is +0.65, which is blue. Tier intensity
+# therefore rides on saturation, which does behave linearly -- a low-saturation rotation reads as a
+# faintly tinted human, and the same rotation at high saturation reads as vividly inhuman.
+#
+# So MapGen/Ethnicities.cs picks the tier by choosing WHERE IN THE RANGE 0..1 to sample:
+#   LowFantasy    range ~{ 0.06 0.20 }   desaturated, believable as an unusual human
+#   HighFantasy   range ~{ 0.50 0.70 }
+#   ExoticSurreal range ~{ 0.92 1.00 }   fully saturated
+# and the spread inside each range is what makes one orc greener than the next.
+#
+# Index 0 must stay the empty template: a character whose DNA does not mention this gene falls back
+# to it, which is what keeps every generated human, and every stock character, completely untouched.
+
+morph_genes = {
+
+	gen_race_skin = {
+		inheritable = yes
+		group = body
+		sync_inheritance_with = skin_color
+
+		gen_skin_human = {
+			index = 0
+			visible = no
+			male = {}
+			female = male
+			boy = male
+			girl = male
+		}
+
+		# Moonpale, faintly lavender. The rotation is into the blues but saturation stays negative
+		# at both ends, so it reads as bloodless rather than blue.
+		gen_skin_high_elf = {
+			index = 1
+			male = {
+				skin_hsv_shift_curve = {
+					curve = {
+						{ 0.0  { 0.58 -0.34  0.06 } }
+						{ 1.0  { 0.58 -0.22  0.16 } }
+					}
+				}
+			}
+			female = male
+			boy = male
+			girl = male
+		}
+
+		# Olive bark. Held clear of the orc's green by hue rather than by strength.
+		gen_skin_wood_elf = {
+			index = 2
+			male = {
+				skin_hsv_shift_curve = {
+					curve = {
+						{ 0.0  { 0.12 -0.06 -0.02 } }
+						{ 1.0  { 0.12  0.08 -0.06 } }
+					}
+				}
+			}
+			female = male
+			boy = male
+			girl = male
+		}
+
+		# Forge-flushed ruddy. Just short of a full turn, so it warms rather than recolours.
+		gen_skin_dwarf = {
+			index = 3
+			male = {
+				skin_hsv_shift_curve = {
+					curve = {
+						{ 0.0  { 0.98 -0.06  0.00 } }
+						{ 1.0  { 0.98  0.12 -0.03 } }
+					}
+				}
+			}
+			female = male
+			boy = male
+			girl = male
+		}
+
+		# Moss green. These are Elder Kings' own orsimer numbers, which is the one race whose
+		# rotation was already verified to land where it should against the stock gradient.
+		gen_skin_orc = {
+			index = 4
+			male = {
+				skin_hsv_shift_curve = {
+					curve = {
+						{ 0.0  { 0.21 -0.18 -0.02 } }
+						{ 1.0  { 0.21  0.16 -0.08 } }
+					}
+				}
+			}
+			female = male
+			boy = male
+			girl = male
+		}
+
+		# Ochre and clay. Warmer than the wood elf so the two do not converge at low tiers.
+		gen_skin_gnome = {
+			index = 5
+			male = {
+				skin_hsv_shift_curve = {
+					curve = {
+						{ 0.0  { 0.03 -0.02  0.00 } }
+						{ 1.0  { 0.03  0.20 -0.03 } }
+					}
+				}
+			}
+			female = male
+			boy = male
+			girl = male
+		}
+
+		# Frostpale, glacier blue. Same idea as the high elf but colder and less bleached.
+		gen_skin_giantkin = {
+			index = 6
+			male = {
+				skin_hsv_shift_curve = {
+					curve = {
+						{ 0.0  { 0.55 -0.20 -0.02 } }
+						{ 1.0  { 0.55 -0.06  0.02 } }
+					}
+				}
+			}
+			female = male
+			boy = male
+			girl = male
+		}
+
+		# Violet through deep purple. The only race whose value shift is strongly negative, which is
+		# why its ethnicity samples the pale end of the stock gradient -- darkening a base that is
+		# already deep just crushes to black.
+		gen_skin_deepkin = {
+			index = 7
+			male = {
+				skin_hsv_shift_curve = {
+					curve = {
+						{ 0.0  { 0.72 -0.24 -0.16 } }
+						{ 1.0  { 0.72  0.10 -0.30 } }
+					}
+				}
+			}
+			female = male
+			boy = male
+			girl = male
+		}
+
+	}
+}

@@ -1,114 +1,90 @@
-﻿# common/scripted_effects/00_phenotype_birth_effects.txt
+﻿# Decides WHICH RACE a child of mixed parentage is. It does not decide what the child looks like:
+# that is gfx/portraits/portrait_modifiers/99_gen_race_morphs.txt (a generated file — see
+# Emit/RaceMorphWriter.cs), which forces the race-defining genes by trait at render time while
+# everything else — nose, eyes, mouth, cheeks, hair, colouring — blends from the parents normally.
+#
+# History of this file, because the failure mode is worth remembering: an earlier version ran
+# `copy_inheritable_appearance_from` on EVERY birth in the game, unguarded. On a human map that made
+# every child a genetic near-clone of one randomly chosen parent, flattening family variation
+# world-wide; inside a race it made siblings identical; and it copied whole genomes across sexes,
+# which vanilla itself only ever does behind a `sex_same_as` check. Dropping the genome copy — and
+# letting the portrait modifier carry the race instead — fixes all three at once, and covers the
+# engine-generated characters the birth hook can never see.
 
 gen_resolve_child_phenotype_effect = {
-    # 1. Clean up any invalid combinations
-    gen_sanitize_phenotypes_effect = yes
+	# Nothing to decide unless a race is actually in play. On a human-only map no character ever
+	# carries a phenotype trait, so this is one trigger per birth and no further cost — which is
+	# also what keeps the human marker flag out of non-fantasy worlds entirely.
+	if = {
+		limit = {
+			OR = {
+				mother ?= { gen_has_phenotype_trigger = yes }
+				real_father ?= { gen_has_phenotype_trigger = yes }
+			}
+		}
 
-    # 2. If both parents exist, pick one parent's race lineage
-    if = {
-        limit = {
-            exists = mother
-            exists = real_father
-        }
-        random_list = {
-            50 = {
-                # Inherit from Mother
-                gen_inherit_parent_race_effect = { PARENT = mother }
-            }
-            50 = {
-                # Inherit from Father
-                gen_inherit_parent_race_effect = { PARENT = real_father }
-            }
-        }
-    }
-    else_if = {
-        limit = { exists = mother }
-        gen_inherit_parent_race_effect = { PARENT = mother }
-    }
-    else_if = {
-        limit = { exists = real_father }
-        gen_inherit_parent_race_effect = { PARENT = real_father }
-    }
-    else = {
-        # Spontaneous / pool character fallback: assign from culture
-        gen_assign_phenotype_effect = yes
-    }
+		# One parent is chosen and the child takes their race whole. When both parents are the same
+		# race the coin flip is a no-op, so it needs no special case; when one is human the child
+		# has an even chance of coming out human, which is what makes a mixed line thin out over
+		# generations instead of every descendant staying fantastical.
+		if = {
+			limit = {
+				exists = mother
+				exists = real_father
+			}
+			random_list = {
+				50 = { gen_take_parent_race_effect = { PARENT = mother } }
+				50 = { gen_take_parent_race_effect = { PARENT = real_father } }
+			}
+		}
+		else_if = {
+			limit = { exists = mother }
+			gen_take_parent_race_effect = { PARENT = mother }
+		}
+		else_if = {
+			limit = { exists = real_father }
+			gen_take_parent_race_effect = { PARENT = real_father }
+		}
+	}
 }
 
-gen_inherit_parent_race_effect = {
-    save_scope_as = child_target
-    $PARENT$ = {
-        save_scope_as = race_donor
-    }
+# Copies one parent's race onto the newborn.
+#
+# Written as an else_if chain rather than six independent ifs so a parent who somehow carries two
+# phenotypes — the `opposites` lists are meant to prevent it, but the ruler designer and the console
+# can still produce one — hands over exactly one instead of stacking them onto the child.
+gen_take_parent_race_effect = {
+	$PARENT$ = { save_scope_as = gen_race_donor }
 
-    # Apply donor's trait
-    if = {
-        limit = { scope:race_donor = { has_trait = phenotype_gracile } }
-        scope:child_target = { add_trait = phenotype_gracile }
-    }
-    else_if = {
-        limit = { scope:race_donor = { has_trait = phenotype_stocky } }
-        scope:child_target = { add_trait = phenotype_stocky }
-    }
-    else_if = {
-        limit = { scope:race_donor = { has_trait = phenotype_rough_hewn } }
-        scope:child_target = { add_trait = phenotype_rough_hewn }
-    }
-    else_if = {
-        limit = { scope:race_donor = { has_trait = phenotype_towering } }
-        scope:child_target = { add_trait = phenotype_towering }
-    }
-    else_if = {
-        limit = { scope:race_donor = { has_trait = phenotype_diminutive } }
-        scope:child_target = { add_trait = phenotype_diminutive }
-    }
-    else_if = {
-        limit = { scope:race_donor = { has_trait = phenotype_dusk_adapted } }
-        scope:child_target = { add_trait = phenotype_dusk_adapted }
-    }
-
-    # CRITICAL: Overwrite the interpolated DNA with the clean donor parent DNA
-    # This prevents the engine from blending UV coordinates into the Orc green band
-    scope:child_target = {
-        copy_inheritable_appearance_from = scope:race_donor
-    }
-}
-
-gen_sanitize_phenotypes_effect = {
-    # Ensure no character holds more than one trait
-    if = {
-        limit = {
-            has_trait = phenotype_rough_hewn
-            has_trait = phenotype_gracile
-        }
-        remove_trait = phenotype_gracile
-    }
-    if = {
-        limit = {
-            has_trait = phenotype_rough_hewn
-            has_trait = phenotype_stocky
-        }
-        remove_trait = phenotype_stocky
-    }
-    if = {
-        limit = {
-            has_trait = phenotype_rough_hewn
-            has_trait = phenotype_towering
-        }
-        remove_trait = phenotype_towering
-    }
-    if = {
-        limit = {
-            has_trait = phenotype_rough_hewn
-            has_trait = phenotype_diminutive
-        }
-        remove_trait = phenotype_diminutive
-    }
-    if = {
-        limit = {
-            has_trait = phenotype_rough_hewn
-            has_trait = phenotype_dusk_adapted
-        }
-        remove_trait = phenotype_dusk_adapted
-    }
+	if = {
+		limit = { scope:gen_race_donor = { has_trait = phenotype_gracile } }
+		add_trait = phenotype_gracile
+	}
+	else_if = {
+		limit = { scope:gen_race_donor = { has_trait = phenotype_stocky } }
+		add_trait = phenotype_stocky
+	}
+	else_if = {
+		limit = { scope:gen_race_donor = { has_trait = phenotype_rough_hewn } }
+		add_trait = phenotype_rough_hewn
+	}
+	else_if = {
+		limit = { scope:gen_race_donor = { has_trait = phenotype_towering } }
+		add_trait = phenotype_towering
+	}
+	else_if = {
+		limit = { scope:gen_race_donor = { has_trait = phenotype_diminutive } }
+		add_trait = phenotype_diminutive
+	}
+	else_if = {
+		limit = { scope:gen_race_donor = { has_trait = phenotype_dusk_adapted } }
+		add_trait = phenotype_dusk_adapted
+	}
+	else = {
+		# The chosen donor is human. Say so explicitly: an unmarked child is indistinguishable from
+		# one the birth hook never reached, and the yearly pulse would hand it the local culture's
+		# race — overruling the parents, which is the one thing that must always win at birth.
+		# A flag rather than a trait so it shows nowhere — see 00_phenotype_triggers.txt.
+		add_character_flag = gen_phenotype_human
+	}
 }

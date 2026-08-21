@@ -77,7 +77,6 @@ public sealed class CultureInspector : InspectorForm
                      + "the name.")]
         [ReadOnly(true)]
         public string Prefix => culture.Prefix;
-
         [Category("Appearance")]
         [Description("The colour of this culture on the culture map mode.")]
         public Color Color
@@ -86,8 +85,71 @@ public sealed class CultureInspector : InspectorForm
             set => edits.EditCulture(culture, c => c.Color = (value.R, value.G, value.B));
         }
 
+        [Category("Visual Appearance")]
+        [Description("Convenience preset: applies all 4 visual graphic sets (Clothing, Unit, Building, CoA) from a vanilla culture simultaneously.")]
+        [TypeConverter(typeof(LookPresetConverter))]
+        public string PresetLook
+        {
+            get => VanillaVocabulary.Current?.Looks.FirstOrDefault(l =>
+                l.ClothingGfx == culture.ClothingGfx &&
+                l.UnitGfx == culture.UnitGfx &&
+                l.BuildingGfx == culture.BuildingGfx &&
+                l.CoaGfx == culture.CoaGfx)?.SourceCulture ?? "(Custom)";
+            set
+            {
+                var match = VanillaVocabulary.Current?.Looks.FirstOrDefault(l =>
+                    string.Equals(l.SourceCulture, value.Trim(), StringComparison.OrdinalIgnoreCase));
+                if (match is null) return;
+
+                edits.EditCulture(culture, c =>
+                {
+                    c.ClothingGfx = match.ClothingGfx;
+                    c.UnitGfx = match.UnitGfx;
+                    c.BuildingGfx = match.BuildingGfx;
+                    c.CoaGfx = match.CoaGfx;
+                });
+            }
+        }
+
+        [Category("Visual Appearance")]
+        [Description("The clothing, armor, and headgear graphic set for portraits.")]
+        [TypeConverter(typeof(ClothingGfxConverter))]
+        public string ClothingGfx
+        {
+            get => culture.ClothingGfx;
+            set => edits.EditCulture(culture, c => c.ClothingGfx = value.Trim());
+        }
+
+        [Category("Visual Appearance")]
+        [Description("The 3D map unit soldier, armor and weapon model set.")]
+        [TypeConverter(typeof(UnitGfxConverter))]
+        public string UnitGfx
+        {
+            get => culture.UnitGfx;
+            set => edits.EditCulture(culture, c => c.UnitGfx = value.Trim());
+        }
+
+        [Category("Visual Appearance")]
+        [Description("The 3D settlement and holding model set.")]
+        [TypeConverter(typeof(BuildingGfxConverter))]
+        public string BuildingGfx
+        {
+            get => culture.BuildingGfx;
+            set => edits.EditCulture(culture, c => c.BuildingGfx = value.Trim());
+        }
+
+        [Category("Visual Appearance")]
+        [Description("Coat of arms heraldic styling and charge palettes.")]
+        [TypeConverter(typeof(CoaGfxConverter))]
+        public string CoaGfx
+        {
+            get => culture.CoaGfx;
+            set => edits.EditCulture(culture, c => c.CoaGfx = value.Trim());
+        }
+
         [Category("Character")]
         [Description("The culture's ethos pillar — a CK3 script key such as ethos_bellicose.")]
+        [TypeConverter(typeof(EthosConverter))]
         public string Ethos
         {
             get => culture.Ethos;
@@ -95,8 +157,8 @@ public sealed class CultureInspector : InspectorForm
         }
 
         [Category("Character")]
-        [Description("The martial custom pillar — a CK3 script key such as "
-                     + "martial_custom_male_only.")]
+        [Description("The martial custom pillar — a CK3 script key such as martial_custom_male_only.")]
+        [TypeConverter(typeof(MartialCustomConverter))]
         public string MartialCustom
         {
             get => culture.MartialCustom;
@@ -105,6 +167,7 @@ public sealed class CultureInspector : InspectorForm
 
         [Category("Character")]
         [Description("How this culture picks a cultural head — a CK3 script key.")]
+        [TypeConverter(typeof(HeadDeterminationConverter))]
         public string HeadDetermination
         {
             get => culture.HeadDetermination;

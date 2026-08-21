@@ -1,4 +1,28 @@
-"""Builds the mod's custom gfx/portraits/skin_palette.dds and skin_properties_palette.dds.
+"""RETIRED -- this script's output is no longer part of the mod. Kept for its research, not to run.
+
+The mod used to give each fantasy race its own block of pigment painted into a custom
+gfx/portraits/skin_palette.dds, and this script built it. That is gone: see
+BaseFilesToCopy/Core/common/genes/gen_race_skin.txt and the RaceSkin class in
+MapGen/Ethnicities.cs for what replaced it and why.
+
+The short version of why: the texture side of this approach was sound -- the invariants below do
+hold, and the shipped palette provably never touched a pixel a stock ethnicity samples. The
+inheritance side could not be made sound at all. `skin_color` is a coordinate into this texture and
+CK3 inherits it by interpolating between the parents' coordinates, so a child of two different
+races landed on whatever pixel sat between their blocks, which is a third race's stripe or bare
+gradient. Nothing about the layout fixes that; the engine interpolates in texture space.
+
+**Running this again will write skin_palette.dds and skin_properties_palette.dds back into
+BaseFilesToCopy/Core/gfx/portraits, which the mod no longer ships and no longer reads.** Pass --out
+somewhere harmless if you only want to look at the output.
+
+What is still worth reading here: the claimed-rect rasterisation that proves which palette
+coordinates are free, the sRGB/linear handling, and the notes on multiply semantics and the
+properties palette channel meanings, none of which changed.
+
+--- original documentation follows ---
+
+Builds the mod's custom gfx/portraits/skin_palette.dds and skin_properties_palette.dds.
 
 WHY THIS EXISTS
 ---------------

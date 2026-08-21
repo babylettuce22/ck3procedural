@@ -55,6 +55,11 @@ public sealed class Culture
     public required string HeadDetermination { get; set; }
     public required List<string> Traditions { get; set; }
 
+    public required string CoaGfx { get; set; }
+    public required string BuildingGfx { get; set; }
+    public required string ClothingGfx { get; set; }
+    public required string UnitGfx { get; set; }
+
     public string NameListKey => $"name_list_{Key}";
 
     /// <summary>
@@ -253,6 +258,9 @@ public static class Cultures
         // Where each heritage name was first planted, for the compass qualifier below.
         var firstClaim = new Dictionary<string, (double X, double Y)>(StringComparer.OrdinalIgnoreCase);
 
+        var eligibleLooks = FilterLooks(vocab.Looks, cfg.CultureAestheticsTheme);
+        var lookPool = eligibleLooks.Count > 0 ? eligibleLooks : vocab.Looks;
+
         for (int h = 0; h < heritageTarget; h++)
         {
             var members = all.Where(i => heritageOf[i] == h).ToList();
@@ -297,7 +305,7 @@ public static class Cultures
                 Key = $"heritage_gen_{heritages.Count}",
                 Name = RegionalName(baseName, (cx, cy), firstClaim, usedNames),
                 Language = language,
-                Look = rng.Pick(vocab.Looks),
+                Look = rng.Pick(lookPool),
                 LanguageColor = vocab.LanguageColors.Count > 0 ? rng.Pick(vocab.LanguageColors) : null,
             };
             heritage.ImportedArchetype = imported.Exists
@@ -453,6 +461,10 @@ public static class Cultures
             MartialCustom = PickMartialCustom(vocab, rng),
             HeadDetermination = PickHeadDetermination(dominant, vocab, rng),
             Traditions = PickTraditions(terrainCounts, meanDevelopment, vocab, rng),
+            CoaGfx = heritage.Look.CoaGfx,
+            BuildingGfx = heritage.Look.BuildingGfx,
+            ClothingGfx = heritage.Look.ClothingGfx,
+            UnitGfx = heritage.Look.UnitGfx,
             MaleNames = Names(language, rng, 60, male: true, usedNames: null),
             FemaleNames = Names(language, rng, 45, male: false, usedNames: null),
             DynastyNames = Names(language, rng, 40, male: true, usedNames: null),
@@ -500,7 +512,10 @@ public static class Cultures
             MartialCustom = PickMartialCustom(vocab, rng),
             HeadDetermination = PickHeadDetermination(TerrainClass.Arctic, vocab, rng),
             Traditions = PickTraditions(terrain, 0, vocab, rng),
-
+            CoaGfx = heritage.Look.CoaGfx,
+            BuildingGfx = heritage.Look.BuildingGfx,
+            ClothingGfx = heritage.Look.ClothingGfx,
+            UnitGfx = heritage.Look.UnitGfx,
             // Short lists rather than none. Nobody is born into this culture, but the dummy holder
             // belongs to it and CK3 will read a name for him; an empty list is a crash waiting for
             // the one character that uses it.
@@ -676,6 +691,62 @@ public static class Cultures
         if (used.Add(compound)) return compound;
 
         return Unique(baseName, used);
+    }
+
+    /// <summary>
+    /// Filters vanilla culture aesthetic looks against the user's selected theme.
+    /// Checks both the source culture name and the gfx definitions.
+    /// </summary>
+    public static List<VanillaVocabulary.Look> FilterLooks(
+        List<VanillaVocabulary.Look> looks, MapConfig.CultureLookTheme theme)
+    {
+        if (theme == MapConfig.CultureLookTheme.VariedGlobal) return looks;
+
+        return looks.Where(l => MatchesTheme(l, theme)).ToList();
+
+        static bool MatchesTheme(VanillaVocabulary.Look l, MapConfig.CultureLookTheme t)
+        {
+            string src = l.SourceCulture.ToLowerInvariant();
+            string cloth = l.ClothingGfx.ToLowerInvariant();
+            string unit = l.UnitGfx.ToLowerInvariant();
+            string bld = l.BuildingGfx.ToLowerInvariant();
+
+            return t switch
+            {
+                MapConfig.CultureLookTheme.NorthernNorse =>
+                    cloth.Contains("norse") || cloth.Contains("northern") || src.Contains("norse")
+                    || src.Contains("swedish") || src.Contains("norwegian") || src.Contains("danish"),
+
+                MapConfig.CultureLookTheme.WesternEuropean =>
+                    cloth.Contains("western") || cloth.Contains("frankish") || cloth.Contains("iberian")
+                    || cloth.Contains("english") || cloth.Contains("german") || cloth.Contains("french")
+                    || unit.Contains("western") || bld.Contains("western"),
+
+                MapConfig.CultureLookTheme.ByzantineGreek =>
+                    cloth.Contains("byzantine") || cloth.Contains("greek") || cloth.Contains("roman")
+                    || unit.Contains("byzantine") || bld.Contains("byzantine") || src.Contains("greek"),
+
+                MapConfig.CultureLookTheme.MiddleEasternMena =>
+                    cloth.Contains("mena") || cloth.Contains("arabic") || cloth.Contains("persian")
+                    || cloth.Contains("bedouin") || cloth.Contains("berber") || unit.Contains("mena")
+                    || bld.Contains("mena"),
+
+                MapConfig.CultureLookTheme.SteppeNomadic =>
+                    cloth.Contains("steppe") || cloth.Contains("mongol") || cloth.Contains("turkic")
+                    || cloth.Contains("cuman") || unit.Contains("steppe") || bld.Contains("yurt"),
+
+                MapConfig.CultureLookTheme.SubSaharanAfrican =>
+                    cloth.Contains("african") || cloth.Contains("ethiopian") || cloth.Contains("nubian")
+                    || cloth.Contains("sahelian") || unit.Contains("african") || bld.Contains("african"),
+
+                MapConfig.CultureLookTheme.IndianEastAsian =>
+                    cloth.Contains("indian") || cloth.Contains("dravidian") || cloth.Contains("chinese")
+                    || cloth.Contains("han") || cloth.Contains("tibetan") || unit.Contains("indian")
+                    || bld.Contains("indian") || bld.Contains("asian"),
+
+                _ => true
+            };
+        }
     }
 
     private static string Unique(string name, HashSet<string> used)

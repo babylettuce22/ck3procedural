@@ -1,9 +1,10 @@
 ﻿# Gives a character the racial phenotype of the culture they belong to.
 #
 # Emit/HistoryWriter.cs stamps a phenotype trait onto every character it writes at generation time,
-# and the traits inherit at 100% from either parent, so the whole starting world and everyone born
-# into it is already correct. This file exists for the characters the ENGINE invents mid-game, who
-# come from neither of those places: courtiers generated to fill a court, landless adventurers and
+# and 00_phenotype_birth_effects.txt resolves every child born in-game to one parent's race. The
+# traits are `inherit_chance = 0` and pass nothing genetically, so those two are the whole of it —
+# this file exists only for the characters the ENGINE invents mid-game, who come from neither of
+# those places: courtiers generated to fill a court, landless adventurers and
 # the companions they recruit, pool guests, low nobles created for a barony, mercenary captains.
 # Without this they are all humans, so a dwarven kingdom slowly fills up with human courtiers and
 # the phenotype reads as a quirk of the 867 bookmark rather than as what the culture is.
@@ -14,6 +15,12 @@
 # child, so a human family living in a dwarven realm keeps its human culture and is never converted
 # by anything here. Copying from the liege instead would turn every human servant in a dwarf's
 # household into a dwarf.
+#
+# Culture is right for this population and wrong for a newborn, which is why births are handled
+# somewhere else entirely: a child has parents to read, a courtier invented out of nothing does not,
+# and its culture is the only honest signal available. gen_has_phenotype_trigger now includes
+# the gen_phenotype_human flag, so a child who came out human is already decided and this effect
+# will not reach past its parents to convert it.
 #
 # **Why it has to be indirect.** This file set ships identically for every seed and so may not name
 # a generated key (see BaseFilesToCopy/README.txt), which rules out asking whether the character's
@@ -99,5 +106,67 @@ gen_copy_phenotype_effect = {
 	else_if = {
 		limit = { scope:gen_phenotype_source = { has_trait = phenotype_dusk_adapted } }
 		add_trait = phenotype_dusk_adapted
+	}
+	else_if = {
+		# The source can legitimately be a marked human: a human child of a mixed line who rose to
+		# culture head. Copying the marker settles the target permanently instead of leaving it
+		# blank to be re-examined every year.
+		limit = { scope:gen_phenotype_source = { has_character_flag = gen_phenotype_human } }
+		add_character_flag = gen_phenotype_human
+	}
+}
+
+# Strips a character back to one race.
+#
+# Should never fire: all six traits share `group = phenotype_race` and list each other as
+# `opposites`, and the human flag is only set by script. The ruler designer and the console can still produce a doubled character, and two
+# races means two sets of forced genes fighting over one portrait, so the yearly pulse checks.
+#
+# Priority order is fixed rather than random so the same character repairs to the same race every
+# time it is asked, instead of flickering between races year to year. remove_trait on a trait the
+# character does not hold is a safe no-op, and so is removing an absent flag — what keeps this short.
+gen_sanitize_phenotype_effect = {
+	if = {
+		limit = { gen_has_conflicting_phenotype_trigger = yes }
+
+		if = {
+			limit = { has_trait = phenotype_gracile }
+			remove_trait = phenotype_stocky
+			remove_trait = phenotype_rough_hewn
+			remove_trait = phenotype_towering
+			remove_trait = phenotype_diminutive
+			remove_trait = phenotype_dusk_adapted
+			remove_character_flag = gen_phenotype_human
+		}
+		else_if = {
+			limit = { has_trait = phenotype_stocky }
+			remove_trait = phenotype_rough_hewn
+			remove_trait = phenotype_towering
+			remove_trait = phenotype_diminutive
+			remove_trait = phenotype_dusk_adapted
+			remove_character_flag = gen_phenotype_human
+		}
+		else_if = {
+			limit = { has_trait = phenotype_rough_hewn }
+			remove_trait = phenotype_towering
+			remove_trait = phenotype_diminutive
+			remove_trait = phenotype_dusk_adapted
+			remove_character_flag = gen_phenotype_human
+		}
+		else_if = {
+			limit = { has_trait = phenotype_towering }
+			remove_trait = phenotype_diminutive
+			remove_trait = phenotype_dusk_adapted
+			remove_character_flag = gen_phenotype_human
+		}
+		else_if = {
+			limit = { has_trait = phenotype_diminutive }
+			remove_trait = phenotype_dusk_adapted
+			remove_character_flag = gen_phenotype_human
+		}
+		else_if = {
+			limit = { has_trait = phenotype_dusk_adapted }
+			remove_character_flag = gen_phenotype_human
+		}
 	}
 }

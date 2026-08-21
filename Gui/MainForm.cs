@@ -49,6 +49,15 @@ public sealed class MainForm : Form
         Margin = new Padding(2, 5, 4, 3),
     };
 
+    private readonly CheckBox _closeOnLaunch = new()
+    {
+        Text = "Close On Launch",
+        AutoSize = true,
+        ForeColor = Theme.Text,
+        Font = Theme.Ui,
+        Margin = new Padding(2, 6, 4, 0),
+    };
+
     private readonly Button _gameFolder = Theme.MakeButton("Game folder…", 104);
 
     private readonly ToolTip _tips = new() { AutoPopDelay = 20000, InitialDelay = 400 };
@@ -98,6 +107,10 @@ public sealed class MainForm : Form
     private bool _drapeRefreshing;
 
     private readonly Button _recent = Theme.MakeButton("▾", 26);
+    private readonly Button _azgaar = Theme.MakeButton("Azgaar…", 74);
+    private readonly Button _help = Theme.MakeButton("?", 26);
+    private AzgaarGuide? _guide;
+    private WelcomeGuide? _welcome;
     private TabControl _tabs = null!;
 
     private readonly ImageView _viewer = new() { Dock = DockStyle.Fill };
@@ -357,7 +370,12 @@ public sealed class MainForm : Form
         _grid.PropertyValueChanged += (_, e) =>
         {
             string? changed = e.ChangedItem?.PropertyDescriptor?.Name;
-            if (changed is null || !NormalizationSettings.Contains(changed)) return;
+            if (changed is null) return;
+
+            // The toolbar chip mirrors the grid row, whichever of them took the edit.
+            if (changed == nameof(MapConfig.AzgaarJsonPath)) ApplyAzgaarChip();
+
+            if (!NormalizationSettings.Contains(changed)) return;
             InvalidateProcessed();
             if (_sourceShown) _ = ShowSourceAsync();
         };
@@ -369,9 +387,18 @@ public sealed class MainForm : Form
         _launchArgs.Text = _state.LaunchArgs ?? "-debug_mode";
         _tips.SetToolTip(_launchArgs, "Launch arguments passed to ck3.exe (e.g. -debug_mode -mapeditor -novid)");
 
+        _closeOnLaunch.Checked = _state.CloseOnLaunch;
+        _tips.SetToolTip(_closeOnLaunch, "Close the map generator when launching Crusader Kings III");
+
         _browse.Click += (_, _) => PickHeightmap();
         _recent.Click += (_, _) => ShowRecentHeightmaps();
         _tips.SetToolTip(_recent, "Recent heightmaps");
+        _azgaar.AutoSize = true;
+        _azgaar.Click += (_, _) => ShowAzgaarMenu();
+        ApplyAzgaarChip();
+
+        _help.Click += (_, _) => ShowWelcomeGuide();
+        _tips.SetToolTip(_help, "How this tool works — the walkthrough from first launch");
         _roll.Click += (_, _) => _seed.Value = Random.Shared.Next(1, int.MaxValue);
         _preview.Click += async (_, _) => await PreviewAsync();
         _writeMod.Click += async (_, _) => await WriteModAsync();
@@ -447,8 +474,12 @@ public sealed class MainForm : Form
             BackColor = Color.Transparent,
         };
 
+        // First, not tucked in the far corner: it is the "start here" for anyone who has not.
+        build.Controls.Add(_help);
+        build.Controls.Add(Separator());
         build.Controls.Add(_browse);
         build.Controls.Add(_recent);
+        build.Controls.Add(_azgaar);
         build.Controls.Add(Separator());
         build.Controls.Add(Caption("Seed"));
         build.Controls.Add(_seed);
@@ -474,6 +505,7 @@ public sealed class MainForm : Form
 
         made.Controls.Add(_gameFolder);
         made.Controls.Add(Separator());
+        made.Controls.Add(_closeOnLaunch);
         made.Controls.Add(_launchArgs);
         made.Controls.Add(_launchGame);
         made.Controls.Add(_openMod);
@@ -1144,6 +1176,7 @@ public sealed class MainForm : Form
         _state.ModName = _modName;
         _state.LastModDir = _lastModDir;
         _state.LaunchArgs = _launchArgs.Text;
+        _state.CloseOnLaunch = _closeOnLaunch.Checked;
         _state.Save();
 
         Stage.Entering -= OnStageEntered;
@@ -1251,6 +1284,144 @@ public sealed class MainForm : Form
         ApplySource();
         InvalidateProcessed();
         if (_sourceShown) _ = ShowSourceAsync();
+    }
+
+    private void ShowAzgaarMenu()
+    {
+        var menu = new ContextMenuStrip();
+        menu.Closed += (_, _) => BeginInvoke(menu.Dispose);
+
+        var choose = new ToolStripMenuItem("Choose Full export (.json)…");
+        choose.Click += (_, _) => PickAzgaar();
+        menu.Items.Add(choose);
+
+        if (!string.IsNullOrWhiteSpace(_options.Config.AzgaarJsonPath))
+        {
+            var clear = new ToolStripMenuItem("Stop using the export");
+            clear.Click += (_, _) => SetAzgaar("");
+            menu.Items.Add(clear);
+        }
+
+        menu.Items.Add(new ToolStripSeparator());
+
+        var guide = new ToolStripMenuItem("How to export from Azgaar…");
+        guide.Click += (_, _) => ShowAzgaarGuide();
+        menu.Items.Add(guide);
+
+        menu.Show(_azgaar, new Point(0, _azgaar.Height));
+    }
+
+    private void PickAzgaar()
+    {
+        string current = _options.Config.AzgaarJsonPath;
+
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Choose an Azgaar 'Full' JSON export",
+            Filter = "Azgaar export (*.json)|*.json|All files (*.*)|*.*",
+            // Exports usually land beside the heightmap PNG from the same map.
+            InitialDirectory = !string.IsNullOrWhiteSpace(current)
+                ? Path.GetDirectoryName(current) ?? ""
+                : _heightmapPath is null ? "" : Path.GetDirectoryName(_heightmapPath) ?? "",
+        };
+
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        SetAzgaar(dialog.FileName);
+    }
+
+    /// <summary>The one route the export comes in by — the menu, the guide and the grid row agree.</summary>
+    private void SetAzgaar(string path)
+    {
+        _options.Config.AzgaarJsonPath = path;
+        ApplyAzgaarChip();
+        RefreshSettings();   // the rows the export decides grey out, or come back
+
+        if (path.Length == 0)
+        {
+            _status.Text = "Azgaar export cleared — every name and state is generated again";
+            return;
+        }
+
+        _status.Text = $"Azgaar export: {Path.GetFileName(path)} — pair it with the heightmap "
+                       + "PNG exported from the same view of the same map";
+        OfferStretch();
+    }
+
+    /// <summary>
+    /// The one settings change every Azgaar import needs, offered at the moment it becomes
+    /// needed instead of left as folklore. Offered, not applied: normalisation belongs to the
+    /// user, and there is more dialling-in to do on the code side before it can be silent.
+    /// </summary>
+    private void OfferStretch()
+    {
+        if (_options.Config.Normalization == HeightmapNormalization.Stretch) return;
+
+        var answer = MessageBox.Show(this,
+            "Azgaar heightmaps sit compressed against CK3's height scale, and Stretch "
+            + "normalization is what makes the relief land right in game.\n\n"
+            + "Set Normalization to Stretch now? It lives under Height scale if you change "
+            + "your mind.",
+            "Azgaar export chosen", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+        if (answer != DialogResult.Yes) return;
+
+        _options.Config.Normalization = HeightmapNormalization.Stretch;
+        RefreshSettings();
+        InvalidateProcessed();
+        if (_sourceShown) _ = ShowSourceAsync();
+    }
+
+    private void ApplyAzgaarChip()
+    {
+        string path = _options.Config.AzgaarJsonPath;
+        bool loaded = !string.IsNullOrWhiteSpace(path);
+
+        _azgaar.Text = loaded ? $"Azgaar: {Clipped(Path.GetFileName(path), 22)}" : "Azgaar…";
+        _tips.SetToolTip(_azgaar, loaded
+            ? path
+            : "Borrow names, states and cultures from an Azgaar 'Full' JSON export — optional. "
+              + "The menu has the full walkthrough.");
+    }
+
+    private void ShowAzgaarGuide()
+    {
+        if (_guide is null || _guide.IsDisposed)
+        {
+            _guide = new AzgaarGuide();
+            _guide.ChooseExport += PickAzgaar;
+        }
+
+        // Show(owner) throws on a form that is already visible, so re-opening only fronts it.
+        if (!_guide.Visible) _guide.Show(this);
+        _guide.BringToFront();
+    }
+
+    private void ShowWelcomeGuide()
+    {
+        if (_welcome is null || _welcome.IsDisposed)
+        {
+            _welcome = new WelcomeGuide();
+            _welcome.ChooseHeightmap += PickHeightmap;
+            _welcome.OpenAzgaarGuide += ShowAzgaarGuide;
+        }
+
+        if (!_welcome.Visible) _welcome.Show(this);
+        _welcome.BringToFront();
+    }
+
+    /// <summary>
+    /// The walkthrough's one uninvited appearance, on the very first launch. From then on it
+    /// waits behind the ? in the toolbar. The flag is set before the window opens, so closing
+    /// the app mid-read does not earn a second ambush.
+    /// </summary>
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+
+        if (_state.WelcomeShown) return;
+        _state.WelcomeShown = true;
+        ShowWelcomeGuide();
     }
 
     private void ShowRecentHeightmaps()
@@ -1423,6 +1594,7 @@ public sealed class MainForm : Form
             // The preset may have flipped the advanced flag; the checkbox follows the config, and
             // its CheckedChanged (when it fires) or this call (when it does not) rebuilds the rows.
             _advanced.Checked = _options.Config.ShowAdvancedSettings;
+            ApplyAzgaarChip();
             RefreshSettings();
 
             _status.Text = $"Loaded {applied} settings from {Path.GetFileName(dialog.FileName)}";
@@ -1471,7 +1643,7 @@ public sealed class MainForm : Form
 
         // Launching closes this window, and the pending edits are the one thing it holds that only
         // lives in memory — everything else is on disk or saved by OnFormClosing on the way out.
-        if (_edits.HasPending)
+        if (_closeOnLaunch.Checked && _edits.HasPending)
         {
             var answer = MessageBox.Show(this,
                 $"Launching closes the generator, which discards "
@@ -1499,11 +1671,10 @@ public sealed class MainForm : Form
 
             Process.Start(startInfo);
 
-            // ShellExecute has already handed the game to the OS by the time Start returns, and
-            // nothing about it is tied to this process, so closing now leaves it running. Going
-            // out through Close() rather than Application.Exit is what keeps OnFormClosing — and
-            // so the saved window state — exactly as it is for a window closed by hand.
-            Close();
+            if (_closeOnLaunch.Checked)
+            {
+                Close();
+            }
         }
         catch (Exception ex)
         {
@@ -1897,11 +2068,13 @@ public sealed class MainForm : Form
         _roll.Enabled = enabled;
         _browse.Enabled = enabled;
         _recent.Enabled = enabled;
+        _azgaar.Enabled = enabled;
         _drape.Enabled = enabled && _result is not null;
         _savePreset.Enabled = enabled;
         _loadPreset.Enabled = enabled;
         _gameFolder.Enabled = enabled;
         _launchGame.Enabled = enabled;
+        _closeOnLaunch.Enabled = enabled;
         _launchArgs.Enabled = enabled;
         _cancel.Enabled = !enabled;
         _cancel.Visible = !enabled;

@@ -13,99 +13,177 @@ public enum RaceArchetype
     Orc,
     Gnome,
     Giantkin,
-    Deepkin,
-    Exotic
+    Deepkin
 }
 
 /// <summary>
-/// The layout of the mod's own <c>gfx/portraits/skin_palette.dds</c>, built by
-/// tools/palettes/build_skin_palettes.py and shipped from BaseFilesToCopy/Core.
+/// How a fantasy race gets its colour, now that it is a gene rather than a painted texture.
 ///
-/// CK3 turns a <c>skin_color</c> rectangle into a UV lookup in that texture, and stock CK3
-/// fills it with one continuous human gradient — there is nowhere in it for a green orc to
-/// point. Our copy is the same 256x256, and stock ethnicities read the same texture, so it
-/// only repaints coordinates no stock ethnicity samples: the generator rasterises every
-/// <c>skin_color</c> rect in the game's own ethnicity files and refuses to write if a race
-/// band overlaps one. Stock only claims about 46% of the palette; the race strips live in
-/// the free left-hand column below the midtones.
+/// **The old approach and why it is gone.** This used to repaint free space in the mod's own copy
+/// of <c>gfx/portraits/skin_palette.dds</c>, giving every race its own block of pigment and
+/// pointing that race's <c>skin_color</c> rect at it. The texture side of that worked — the
+/// builder proved it never touched a pixel a stock ethnicity samples — but the *inheritance* side
+/// could not be made to work at all. <c>skin_color</c> is a coordinate into that texture and CK3
+/// inherits it by interpolating between the parents' coordinates, so the child of a drow and a
+/// human landed on whatever pixel sat between their two blocks: a third race's stripe, or bare
+/// gradient. The engine interpolates in texture space and cannot be told the blocks mean anything.
 ///
-/// That leaves human complexions entirely alone — generated humans emit no
-/// <c>skin_color</c> at all and inherit it from their vanilla template. See
-/// <see cref="Ethnicities.PickVanillaTemplate"/>.
+/// **The replacement**, which is what Elder Kings does. Every character now samples the ordinary
+/// stock human gradient, so <c>skin_color</c> interpolation stays inside human skin tones where it
+/// is well behaved, and the race rides on a separate gene — <c>gen_race_skin</c>, declared in
+/// BaseFilesToCopy/Core/common/genes/gen_race_skin.txt — that rotates hue and pushes saturation on
+/// whatever tone came out. A half-orc gets a human base tone under a half-strength green rotation,
+/// which is the answer you would want and the answer the old scheme could not give.
 ///
-/// Each race is painted <see cref="TiersPerRace"/> times over, once per
-/// <see cref="FantasyRaceMode"/>, so the same orc is a faintly olive man on a low-fantasy
-/// map and vividly green on a surreal one — see <see cref="TierOf"/>.
-///
-/// Every coordinate this file emits is derived from the constants below rather than written
-/// out by hand, so the palette and the ethnicities cannot drift apart. They mirror
-/// FANTASY_COL1 / FANTASY_ROW0 / TIER_ROWS / TIERS in the generator — change them together,
-/// and reorder BANDS or TIERS there if you reorder <see cref="BandOf"/> or
-/// <see cref="TierOf"/> here.
+/// So a race contributes two things here: <see cref="BaseTone"/>, a rect in stock territory saying
+/// roughly how light the race is, and <see cref="TemplateOf"/>, the shift that gives it its
+/// character. <see cref="TierRange"/> then decides how hard the shift is pushed, replacing the
+/// three painted intensity strips the palette used to carry.
 /// </summary>
-internal static class SkinPalette
+internal static class RaceSkin
 {
-    private const int PaletteSize = 256;
-
-    /// <summary>Last column of the free block. Stock's papuan rect starts at column 76.</summary>
-    private const int FantasyCol1 = 73;
-
-    /// <summary>First painted row. The stock rect above this one ends at row 102.</summary>
-    private const int FantasyRow0 = 105;
-
-    private const int TierRows = 6;
-
-    /// <summary>How many intensity strips each race gets — one per fantasy race mode.</summary>
-    private const int TiersPerRace = 3;
-
     /// <summary>
-    /// How lurid a race's pigment is, chosen by the map's <see cref="FantasyRaceMode"/>. Each
-    /// race is painted three times over: the low-fantasy strip sits close to a real human
-    /// complexion of the same brightness, the exotic one is pushed well past it.
-    /// <see cref="FantasyRaceMode.HumanOnly"/> generates no fantasy races at all, so its tier
-    /// is never actually sampled.
+    /// The <c>gen_race_skin</c> template a race wears, or null for
+    /// <see cref="RaceArchetype.Human"/>, which sets the gene at all and so falls to the empty
+    /// index-0 template.
     /// </summary>
-    public static int TierOf(FantasyRaceMode mode) => mode switch
+    public static string? TemplateOf(RaceArchetype archetype) => archetype switch
     {
-        FantasyRaceMode.HighFantasy => 1,
-        FantasyRaceMode.ExoticSurreal => 2,
-        _ => 0
+        RaceArchetype.HighElf => "gen_skin_high_elf",
+        RaceArchetype.WoodElf => "gen_skin_wood_elf",
+        RaceArchetype.Dwarf => "gen_skin_dwarf",
+        RaceArchetype.Orc => "gen_skin_orc",
+        RaceArchetype.Gnome => "gen_skin_gnome",
+        RaceArchetype.Giantkin => "gen_skin_giantkin",
+        RaceArchetype.Deepkin => "gen_skin_deepkin",
+        _ => null
     };
 
     /// <summary>
-    /// The band a race occupies, or -1 for <see cref="RaceArchetype.Human"/>, which has no
-    /// band because it never overrides <c>skin_color</c> in the first place.
+    /// Where in the stock gradient a race's base tone is drawn from, before the shift.
+    ///
+    /// <c>x</c> is the undertone axis stock uses — cool European around 0.0-0.5, warm Asian from
+    /// 0.6 up — and <c>y</c> is lightness, running from the palest skin at 0.12 to the deepest at
+    /// 0.96. Choosing this well matters most for <see cref="RaceArchetype.Deepkin"/>, whose shift
+    /// is strongly negative in value: darkening a base that is already deep only crushes it to
+    /// black, so the drow draw from the pale half and let the gene do the darkening.
     /// </summary>
-    public static int BandOf(RaceArchetype archetype) => archetype switch
+    public static (float X1, float Y1, float X2, float Y2) BaseTone(RaceArchetype archetype) => archetype switch
     {
-        RaceArchetype.HighElf => 0,
-        RaceArchetype.WoodElf => 1,
-        RaceArchetype.Dwarf => 2,
-        RaceArchetype.Orc => 3,
-        RaceArchetype.Gnome => 4,
-        RaceArchetype.Giantkin => 5,
-        RaceArchetype.Deepkin => 6,
-        RaceArchetype.Exotic => 7,
-        _ => -1
+        RaceArchetype.HighElf => (0.00f, 0.15f, 0.45f, 0.32f),
+        RaceArchetype.WoodElf => (0.30f, 0.40f, 0.70f, 0.62f),
+        RaceArchetype.Dwarf => (0.20f, 0.32f, 0.60f, 0.55f),
+        RaceArchetype.Orc => (0.30f, 0.42f, 0.80f, 0.68f),
+        RaceArchetype.Gnome => (0.30f, 0.35f, 0.80f, 0.58f),
+        RaceArchetype.Giantkin => (0.00f, 0.30f, 0.45f, 0.52f),
+        RaceArchetype.Deepkin => (0.00f, 0.30f, 0.50f, 0.52f),
+        _ => (0.10f, 0.25f, 0.70f, 0.55f)
     };
 
     /// <summary>
-    /// Maps a rectangle in a band's own space onto palette coordinates: <paramref name="u1"/>
-    /// and <paramref name="u2"/> run across that race's hue variants, <paramref name="t1"/>
-    /// and <paramref name="t2"/> from its lightest tone to its darkest. Both axes stop half a
-    /// texel short of the painted edge, so bilinear filtering cannot reach the neighbouring
-    /// band or the stock gradient beside it.
+    /// How hard to push the shift, by the map's fantasy level — the same job the three painted
+    /// strips per race used to do. The spread inside each band is what makes one orc greener than
+    /// the next rather than every orc in a culture being identical.
     /// </summary>
-    public static (float X1, float Y1, float X2, float Y2) Swatch(
-        int band, int tier, float u1, float t1, float u2, float t2)
+    public static (float Min, float Max) TierRange(FantasyRaceMode mode) => mode switch
     {
-        const float n = PaletteSize - 1;
-        float width = (FantasyCol1 - 0.5f) / n;
-        int row0 = FantasyRow0 + (band * TiersPerRace + tier) * TierRows;
-        float top = (row0 + 0.5f) / n;
-        float span = (TierRows - 2f) / n;
-        return (u1 * width, top + t1 * span, u2 * width, top + t2 * span);
-    }
+        FantasyRaceMode.HighFantasy => (0.50f, 0.70f),
+        FantasyRaceMode.ExoticSurreal => (0.92f, 1.00f),
+        _ => (0.06f, 0.20f)
+    };
+}
+
+/// <summary>
+/// The genes whose values ARE the race — the set that snaps rather than blends.
+///
+/// This table is read from two places, and that is its whole reason to exist as a table:
+/// <see cref="Ethnicities.ApplyMorphGenes"/> feeds it through <c>Shape</c> so a race's ethnicity
+/// carries these values with tier scaling, jitter and bell weighting; and
+/// <see cref="Emit.RaceMorphWriter"/> emits the same values into
+/// gfx/portraits/portrait_modifiers/99_gen_race_morphs.txt, where they are forced by phenotype
+/// trait at render time so a mixed-parentage child (or an engine-generated courtier) reads as its
+/// race no matter what its inherited DNA says. Tune a value here and both stay in step; the drift
+/// between an ethnicity and its enforcement is exactly the bug class this prevents.
+///
+/// Everything NOT in this table — nose, eyes, mouth, cheeks, wrinkles, hair, colouring — is
+/// authored in <see cref="Ethnicities.ApplyMorphGenes"/> alone and inherits from parents normally,
+/// which is what keeps family resemblance alive.
+/// </summary>
+internal sealed record RaceMorph(string Gene, string Template, float Min, float Max, bool Tiered = true);
+
+internal static class RaceMorphs
+{
+    public static IReadOnlyList<RaceMorph> Of(RaceArchetype archetype) => archetype switch
+    {
+        RaceArchetype.HighElf =>
+        [
+            new("gene_height", "normal_height", 0.60f, 0.70f),
+            new("gene_bs_body_type", "body_fat_head_fat_low", 0.46f, 0.56f),
+            new("gene_bs_body_shape", "body_shape_hourglass_half", 0.14f, 0.30f, Tiered: false),
+            new("gene_bs_ear_angle", "ear_angle_pos", 0.62f, 0.80f),
+            new("gene_bs_ear_bend", "ear_both_bend_pos", 0.85f, 1.00f),
+            new("gene_bs_ear_outward", "ear_outward_pos", 0.20f, 0.40f),
+            new("gene_bs_ear_size", "ear_size_pos", 0.30f, 0.50f),
+            new("gene_jaw_width", "jaw_width_neg", 0.34f, 0.44f),
+        ],
+        RaceArchetype.WoodElf =>
+        [
+            new("gene_height", "normal_height", 0.46f, 0.56f),
+            new("gene_bs_body_type", "body_fat_head_fat_low", 0.47f, 0.57f),
+            new("gene_bs_body_shape", "body_shape_triangle_half", 0.35f, 0.55f, Tiered: false),
+            new("gene_bs_ear_angle", "ear_angle_pos", 0.58f, 0.76f),
+            new("gene_bs_ear_bend", "ear_both_bend_pos", 0.75f, 0.95f),
+            new("gene_bs_ear_outward", "ear_outward_pos", 0.20f, 0.40f),
+            new("gene_bs_ear_size", "ear_size_pos", 0.25f, 0.45f),
+            new("gene_jaw_width", "jaw_width_neg", 0.25f, 0.45f),
+        ],
+        RaceArchetype.Dwarf =>
+        [
+            new("gene_height", "normal_height", 0.34f, 0.44f),
+            new("gene_bs_body_type", "body_fat_head_fat_medium", 0.60f, 0.75f),
+            new("gene_bs_body_shape", "body_shape_rectangle_full", 0.75f, 1.00f, Tiered: false),
+            new("gene_jaw_width", "jaw_width_pos", 0.80f, 1.00f),
+            new("gene_bs_forehead_brow_forward", "forehead_brow_forward_pos", 0.65f, 0.90f),
+            new("gene_bs_ear_size", "ear_size_neg", 0.35f, 0.55f),
+        ],
+        RaceArchetype.Orc =>
+        [
+            new("gene_height", "normal_height", 0.58f, 0.72f),
+            new("gene_bs_body_type", "body_fat_head_fat_medium", 0.52f, 0.64f),
+            new("gene_bs_body_shape", "body_shape_triangle_full", 0.80f, 1.00f, Tiered: false),
+            new("gene_jaw_width", "jaw_width_pos", 0.88f, 1.00f),
+            new("gene_bs_forehead_brow_forward", "forehead_brow_forward_pos", 0.80f, 1.00f),
+        ],
+        RaceArchetype.Gnome =>
+        [
+            new("gene_height", "normal_height", 0.06f, 0.22f),
+            new("gene_bs_body_type", "body_fat_head_fat_low", 0.22f, 0.38f),
+            new("gene_bs_body_shape", "body_shape_average", 0.00f, 0.14f, Tiered: false),
+            new("gene_bs_ear_size", "ear_size_pos", 0.85f, 1.00f),
+            new("gene_bs_ear_outward", "ear_outward_pos", 0.80f, 1.00f),
+            new("gene_bs_ear_bend", "ear_both_bend_pos", 0.70f, 0.95f),
+        ],
+        RaceArchetype.Giantkin =>
+        [
+            new("gene_height", "normal_height", 0.86f, 1.00f),
+            new("gene_bs_body_type", "body_fat_head_fat_full", 0.52f, 0.62f),
+            new("gene_bs_body_shape", "body_shape_triangle_full", 0.72f, 0.95f, Tiered: false),
+            new("gene_jaw_width", "jaw_width_pos", 0.75f, 1.00f),
+            new("gene_bs_forehead_brow_forward", "forehead_brow_forward_pos", 0.65f, 0.90f),
+            new("gene_bs_ear_size", "ear_size_neg", 0.50f, 0.80f),
+        ],
+        RaceArchetype.Deepkin =>
+        [
+            new("gene_height", "normal_height", 0.46f, 0.58f),
+            new("gene_bs_body_type", "body_fat_head_fat_low", 0.45f, 0.55f),
+            new("gene_bs_body_shape", "body_shape_hourglass_half", 0.08f, 0.26f, Tiered: false),
+            new("gene_bs_ear_angle", "ear_angle_pos", 0.60f, 0.78f),
+            new("gene_bs_ear_bend", "ear_both_bend_pos", 0.80f, 1.00f),
+            new("gene_bs_ear_outward", "ear_outward_pos", 0.25f, 0.45f),
+            new("gene_jaw_width", "jaw_width_neg", 0.32f, 0.42f),
+        ],
+        _ => []
+    };
 }
 
 public sealed class GeneMorphEntry
@@ -146,6 +224,39 @@ public sealed class EthnicityDef
 
     public Dictionary<string, List<GeneMorphEntry>> MorphGenes { get; } = [];
     public Dictionary<string, List<ColorPaletteRange>> ColorGenes { get; } = [];
+
+    /// <summary>
+    /// Colouring variants over this look, and the only thing a culture ever points at.
+    ///
+    /// This mirrors how vanilla is built rather than being an invention. `caucasian_base` carries
+    /// the face genes, is `visible = no`, and is referenced by no culture at all; the four things
+    /// cultures actually name — `caucasian_blond`, `_ginger`, `_brown_hair`, `_dark_hair` — declare
+    /// no genes of their own, only `template = caucasian_base` and a different `hair_color` block.
+    /// A European culture then lists all four with weights, which is where within-culture variety
+    /// comes from. Measured across stock: 244 cultures share 38 ethnicities, and 92 of those
+    /// cultures name more than one.
+    ///
+    /// We had neither half. One ethnicity per heritage carried both the race and the colouring, and
+    /// every culture emitted a single `100 = key`, so a 42-culture world had seven looks in it and
+    /// no two siblings could differ in hair. Splitting the two lets the number of LOOKS scale with
+    /// the world while the number of RACES stays what the user asked for.
+    ///
+    /// Safe only because race-defining genes are now forced by phenotype trait at render time —
+    /// see Emit/RaceMorphWriter.cs. Before that, more colouring variety per race would have been
+    /// more chances to drift out of the race.
+    /// </summary>
+    public List<EthnicityVariant> Variants { get; } = [];
+}
+
+/// <summary>
+/// One colouring of a base look: a hair palette, an eye palette, and nothing else. Emitted as
+/// `template = &lt;base key&gt;` plus those two blocks, exactly as vanilla's `caucasian_blond` is.
+/// </summary>
+public sealed class EthnicityVariant
+{
+    public required string Key { get; init; }
+    public required string LocalizedName { get; init; }
+    public Dictionary<string, List<ColorPaletteRange>> ColorGenes { get; } = [];
 }
 
 public sealed class EthnicityMap
@@ -155,6 +266,20 @@ public sealed class EthnicityMap
     public required Dictionary<Heritage, EthnicityDef> ByHeritage { get; init; }
     public required Dictionary<string, EthnicityDef> ByCultureKey { get; init; }
     public required Dictionary<string, EthnicityDef> ByHeritageKey { get; init; }
+
+    /// <summary>
+    /// The weighted ethnicity list each culture actually writes, which is a selection of its base's
+    /// variants rather than the base itself. Held per culture, not per base, because that is the
+    /// whole point: under TieRaceToHeritage every culture in a heritage shares one base, and the
+    /// differing selections here are what stop them being the same people.
+    /// </summary>
+    public required Dictionary<Culture, List<(string Key, int Weight)>> VariantsByCulture { get; init; }
+
+    /// <summary>The list a culture should emit, falling back to its base when it has no selection.</summary>
+    public List<(string Key, int Weight)> VariantsFor(Culture culture) =>
+        VariantsByCulture.TryGetValue(culture, out var picked) && picked.Count > 0
+            ? picked
+            : [(For(culture).Key, 100)];
 
     public EthnicityDef For(Culture culture)
     {
@@ -191,6 +316,7 @@ public static class Ethnicities
         var byCulture = new Dictionary<Culture, EthnicityDef>();
         var byHeritage = new Dictionary<Heritage, EthnicityDef>();
         var byCultureKey = new Dictionary<string, EthnicityDef>(StringComparer.OrdinalIgnoreCase);
+        var byCultureVariants = new Dictionary<Culture, List<(string Key, int Weight)>>();
         var byHeritageKey = new Dictionary<string, EthnicityDef>(StringComparer.OrdinalIgnoreCase);
 
         int ethIndex = 0;
@@ -209,8 +335,25 @@ public static class Ethnicities
             byHeritageKey[heritage.Key] = heritageEth;
         }
 
-        // 3. Track unique assigned races so far
-        var usedArchetypes = new HashSet<RaceArchetype>(heritageArchetypes.Values);
+        // 3. Track unique assigned races so far.
+        //
+        // Seeded from the heritage assignments ONLY when cultures actually wear them. Under
+        // TieRaceToHeritage = false a culture builds its own ethnicity and the heritage's is never
+        // worn by anybody, so counting those races as "placed" is counting races nobody has. That
+        // miscount is what made a high GuaranteedRaceCount deliver FEWER races than a low one: with
+        // a quota above the eight-race pool, usedArchetypes could never reach it, so every culture
+        // took the quota branch below, found `available` empty, and fell through to the terrain
+        // roll — throwing away the 70% inherit-your-heritage's-race path that was doing most of the
+        // spreading. On a terrain-skewed map the roll then piled onto whatever the terrain favoured.
+        var usedArchetypes = cfg.TieRaceToHeritage
+            ? new HashSet<RaceArchetype>(heritageArchetypes.Values)
+            : [];
+
+        // The quota can never exceed the pool it draws from, and asking for more used to be actively
+        // harmful rather than merely unmet — see above. Clamped once here so both the branch below
+        // and the shortfall report agree on what was actually achievable.
+        var quotaPool = FantasyPoolFor(cfg);
+        int targetQuota = Math.Clamp(cfg.GuaranteedRaceCount, 1, Math.Max(1, quotaPool.Count));
 
         // 4. Assign Culture Ethnicities
         foreach (var culture in cultures)
@@ -232,7 +375,7 @@ public static class Ethnicities
             // is not scatter, it is the map, and the tie yields to it.
             var importedRace = culture.ImportedArchetype is { } tagged
                 && cfg.EnableFantasyEthnicities && cfg.RaceMode != FantasyRaceMode.HumanOnly
-                && (cfg.RaceMode == FantasyRaceMode.ExoticSurreal || tagged != RaceArchetype.Exotic)
+                && FantasyPoolFor(cfg).Contains(tagged)
                     ? culture.ImportedArchetype
                     : null;
 
@@ -251,13 +394,29 @@ public static class Ethnicities
                 RaceArchetype subArchetype;
 
                 // If we still haven't met the quota (e.g. very few heritages), guarantee it at culture level
-                int targetQuota = Math.Max(1, cfg.GuaranteedRaceCount);
                 if (usedArchetypes.Count < targetQuota && cfg.EnableFantasyEthnicities && cfg.RaceMode != FantasyRaceMode.HumanOnly)
                 {
-                    var available = Enum.GetValues<RaceArchetype>()
-                        .Cast<RaceArchetype>()
-                        .Where(a => !usedArchetypes.Contains(a) && (cfg.RaceMode == FantasyRaceMode.ExoticSurreal || a != RaceArchetype.Exotic))
+                    // Require has to be honoured here too. This branch used to pick from the
+                    // unplaced races with no terrain test at all, which is how an all-forest map
+                    // under Require still produced dwarves, giantkin and drow: the rule was applied
+                    // in the heritage phase and in PickArchetypeForCulture, but not on the path
+                    // between them. Falling back to the unfiltered list when nothing fits keeps the
+                    // quota meaningful on a map where no race is a clean match.
+                    var available = quotaPool
+                        .Where(a => !usedArchetypes.Contains(a))
                         .ToList();
+
+                    // No "if nothing fits, use the unfiltered list anyway" fallback here. That is
+                    // precisely the behaviour Require exists to forbid, and it silently reinstated
+                    // the bug: once the two races a forest can hold were placed, every later
+                    // culture found `fitting` empty and helped itself to dwarves and giantkin.
+                    // Emptying `available` instead drops through to PickArchetypeForCulture, which
+                    // honours the rule and settles on Human when the land suits nobody.
+                    if (cfg.RaceTerrain == RaceTerrainRule.Require)
+                    {
+                        var shares = GetTerrainShares([culture], provinceTerrain, rng);
+                        available = available.Where(a => FitsTerrain(a, shares)).ToList();
+                    }
 
                     subArchetype = available.Count > 0 ? rng.Pick(available) : PickArchetypeForCulture(culture, provinceTerrain, cfg, rng);
                 }
@@ -274,28 +433,42 @@ public static class Ethnicities
 
             byCulture[culture] = cultureEth;
             byCultureKey[culture.Key] = cultureEth;
+            byCultureVariants[culture] = PickCultureVariants(cultureEth, rng);
         }
 
         var tallies = byCulture.Values
             .GroupBy(e => e.Archetype)
             .Select(g => $"{g.Count()} {g.Key}");
 
-        Console.WriteLine($"  ethnicities: {byCulture.Count} cultures across {usedArchetypes.Count} distinct races -> {string.Join(", ", tallies)}");
+        // Counted from byCulture, not from usedArchetypes: the tally beside it comes from the
+        // cultures, and the two used to be able to disagree.
+        int deliveredRaces = byCulture.Values.Select(e => e.Archetype).Distinct().Count();
+
+        Console.WriteLine($"  ethnicities: {byCulture.Count} cultures across {deliveredRaces} distinct races -> {string.Join(", ", tallies)}");
 
         // Delivering fewer races than asked for used to be silent, which made a clipped quota
         // look like bad luck in the seed. Say which constraint actually bound.
         int wanted = Math.Max(1, cfg.GuaranteedRaceCount);
         if (cfg.EnableFantasyEthnicities && cfg.RaceMode != FantasyRaceMode.HumanOnly
-            && usedArchetypes.Count < wanted)
+            && deliveredRaces < wanted)
         {
-            string reason = cfg.RaceTerrain == RaceTerrainRule.Require
+            // Ordered by which constraint actually binds first. The pool cap leads because it is
+            // the only one the user cannot fix by changing culture density — telling someone who
+            // asked for ten races to make more heritages sends them after a limit that was never
+            // the problem.
+            string reason = wanted > quotaPool.Count
+                ? $"only {quotaPool.Count} races exist in this mode"
+                  + (cfg.RaceMode == FantasyRaceMode.ExoticSurreal
+                        ? " — that is the ceiling"
+                        : " — ExoticSurreal adds a ninth")
+                : cfg.RaceTerrain == RaceTerrainRule.Require
                 ? "RaceTerrain is Require, so races with no suitable terrain anywhere on this map were left unplaced rather than misplaced — set it to Prefer to settle them anyway"
                 : !cfg.TieRaceToHeritage && byCulture.Count < wanted
                 ? $"only {byCulture.Count} culture(s) exist — lower CountiesPerCulture to make more"
-                : heritages.Count < wanted
-                    ? $"only {heritages.Count} heritage(s) exist — lower CulturesPerHeritage or CountiesPerCulture to make more"
-                    : "the candidate pool ran out — ExoticSurreal adds a ninth race";
-            Console.WriteLine($"  WARNING: asked for {wanted} distinct races but delivered {usedArchetypes.Count}: {reason}");
+                : cfg.TieRaceToHeritage && heritages.Count < wanted
+                    ? $"only {heritages.Count} heritage(s) exist — lower CulturesPerHeritage or CountiesPerCulture to make more, or untick TieRaceToHeritage to place races per culture instead"
+                    : "the terrain roll did not spread them this seed — try another";
+            Console.WriteLine($"  WARNING: asked for {wanted} distinct races but delivered {deliveredRaces}: {reason}");
         }
 
         return new EthnicityMap
@@ -304,7 +477,8 @@ public static class Ethnicities
             ByCulture = byCulture,
             ByHeritage = byHeritage,
             ByCultureKey = byCultureKey,
-            ByHeritageKey = byHeritageKey
+            ByHeritageKey = byHeritageKey,
+            VariantsByCulture = byCultureVariants
         };
     }
 
@@ -334,21 +508,35 @@ public static class Ethnicities
             heritageTerrain[heritage] = GetTerrainShares(heritageCultures, provinceTerrain, rng);
         }
 
-        // Pool of available candidate races
-        var candidatePool = new List<RaceArchetype>
+        // Which races Require would let each heritage hold. Judged against the aggregate AND
+        // against every member culture, and a race passes if either does. The aggregate alone is
+        // how a whole race class went missing on a large map: a heritage spanning half a continent
+        // averages its terrain toward the map-wide mix, so the mountains its dwarves would live in
+        // are 2% of the whole even when one member culture is nothing but mountains. The culture
+        // is the scale a race actually settles at; the aggregate is kept in the union for the
+        // opposite case, where the wanted terrain is real but spread thinly across members.
+        Dictionary<Heritage, HashSet<RaceArchetype>>? heritageFits = null;
+        if (cfg.RaceTerrain == RaceTerrainRule.Require)
         {
-            RaceArchetype.Human,
-            RaceArchetype.Dwarf,
-            RaceArchetype.WoodElf,
-            RaceArchetype.HighElf,
-            RaceArchetype.Orc,
-            RaceArchetype.Gnome,
-            RaceArchetype.Giantkin,
-            RaceArchetype.Deepkin
-        };
+            heritageFits = new Dictionary<Heritage, HashSet<RaceArchetype>>();
+            foreach (var heritage in heritages)
+            {
+                var fits = TerrainRaces.Where(r => FitsTerrain(r, heritageTerrain[heritage])).ToHashSet();
+                foreach (var culture in cultures)
+                {
+                    if (culture.Heritage != heritage && culture.Heritage?.Key != heritage.Key) continue;
+                    var cultureShares = GetTerrainShares([culture], provinceTerrain, rng);
+                    foreach (var r in TerrainRaces)
+                        if (!fits.Contains(r) && FitsTerrain(r, cultureShares))
+                            fits.Add(r);
+                }
+                heritageFits[heritage] = fits;
+            }
+        }
 
-        if (cfg.RaceMode == FantasyRaceMode.ExoticSurreal)
-            candidatePool.Add(RaceArchetype.Exotic);
+        // Pool of available candidate races
+        // FantasyPoolFor already includes Exotic in ExoticSurreal; adding it again here would put
+        var candidatePool = FantasyPoolFor(cfg).ToList();
 
         // Calculate how many distinct races we must guarantee
         int targetUnique = Math.Clamp(cfg.GuaranteedRaceCount, 1, Math.Min(heritages.Count, candidatePool.Count));
@@ -397,8 +585,12 @@ public static class Ethnicities
                 {
                     // Require refuses the pair outright rather than scoring it low, which is what
                     // separates it from Prefer: an unsuited race is not merely unlikely here, it is
-                    // ineligible, and if no heritage will take it the race goes unplaced.
-                    if (cfg.RaceTerrain == RaceTerrainRule.Require && !FitsTerrain(race, shares))
+                    // ineligible, and if no heritage will take it the race goes unplaced. The
+                    // fitness is the culture-granular union computed above, never the raw
+                    // aggregate — see heritageFits for why the difference decides whole races.
+                    if (heritageFits is not null
+                        && race != RaceArchetype.Human
+                        && !heritageFits[h].Contains(race))
                         continue;
 
                     // Ignore flattens the affinity term so only the jitter is left, which turns the
@@ -429,10 +621,17 @@ public static class Ethnicities
             remainingHeritages.Remove(bestHeritage);
         }
 
-        // 2. Remainder Phase: Remaining heritages roll probabilistically according to their biomes
+        // 2. Remainder Phase: remaining heritages roll probabilistically according to their
+        //    biomes — but a race nobody has yet is always preferred over a second helping of one
+        //    somebody does. Without that, a map whose commonest terrain suits one race stacks
+        //    culture after culture onto it while rarer-terrain races never appear at all; with it,
+        //    duplicates only begin once every race that fits somewhere is on the map. assignedRaces
+        //    keeps accumulating here so the rule holds across the whole remainder, not per roll.
         foreach (var h in remainingHeritages)
         {
-            assignments[h] = PickWeightedArchetype(heritageTerrain[h], cfg, rng);
+            var pick = PickWeightedArchetype(heritageTerrain[h], heritageFits?[h], assignedRaces, cfg, rng);
+            assignments[h] = pick;
+            assignedRaces.Add(pick);
         }
 
         return assignments;
@@ -441,6 +640,23 @@ public static class Ethnicities
     /// <summary>Terrain the heritage has most of — the old modal reading, kept for the remainder roll.</summary>
     private static TerrainClass DominantOf(Dictionary<TerrainClass, double> shares) =>
         shares.OrderByDescending(kv => kv.Value).First().Key;
+
+    /// <summary>
+    /// The races a map may draw on, given its mode. One definition so the culture-level quota, the
+    /// heritage diversity phase and the shortfall report cannot disagree about what was achievable
+    /// — they previously each built their own list and could disagree about what was reachable.
+    /// </summary>
+    private static IReadOnlyList<RaceArchetype> FantasyPoolFor(MapConfig cfg)
+    {
+        // ExoticSurreal is an INTENSITY setting, not a ninth race. It pushes every race's colour
+        // and morphology further from human; it does not add a people of its own. The roster is the
+        // same eight in every mode.
+        return
+        [
+            RaceArchetype.Human, RaceArchetype.Dwarf, RaceArchetype.WoodElf, RaceArchetype.HighElf,
+            RaceArchetype.Orc, RaceArchetype.Gnome, RaceArchetype.Giantkin, RaceArchetype.Deepkin
+        ];
+    }
 
     /// <summary>A race needs at least this share of a heritage before its terrain counts at all.</summary>
     private const double AffinityMinShare = 0.05;
@@ -498,12 +714,10 @@ public static class Ethnicities
     /// <see cref="RaceArchetype.Human"/> always passes: humans are the fallback every other
     /// branch falls back *to*, so blocking them on a map whose terrain none of their affinities
     /// cover would leave a region with nobody to put in it.
-    /// <see cref="RaceArchetype.Exotic"/> always passes because it is defined as the race that
-    /// belongs nowhere in particular.
     /// </summary>
     private static bool FitsTerrain(RaceArchetype race, Dictionary<TerrainClass, double> shares)
     {
-        if (race is RaceArchetype.Human or RaceArchetype.Exotic) return true;
+        if (race is RaceArchetype.Human) return true;
 
         foreach (var (terrain, share) in shares)
             if (GetTerrainAffinityScore(race, terrain) > 1 && Reach(share) >= RequiredReach)
@@ -513,8 +727,8 @@ public static class Ethnicities
     }
 
     /// <summary>
-    /// The fantasy races a terrain roll may land on, Human and Exotic excluded — both are
-    /// decided before this point by their own rolls rather than competing on terrain.
+    /// The fantasy races a terrain roll may land on, Human excluded — it is decided before this
+    /// point by its own roll rather than competing on terrain.
     /// </summary>
     private static readonly RaceArchetype[] TerrainRaces =
     [
@@ -522,7 +736,7 @@ public static class Ethnicities
         RaceArchetype.Gnome, RaceArchetype.Giantkin, RaceArchetype.Deepkin
     ];
 
-    /// <summary>Every race a culture-level roll may produce, Exotic excluded.</summary>
+    /// <summary>Every race a culture-level roll may produce.</summary>
     private static readonly RaceArchetype[] CultureRaces =
     [
         RaceArchetype.Human, RaceArchetype.Dwarf, RaceArchetype.HighElf, RaceArchetype.WoodElf,
@@ -612,12 +826,19 @@ public static class Ethnicities
     ///
     /// <see cref="RaceTerrainRule.Prefer"/> keeps the hand-written table below, which is keyed on
     /// the heritage's *modal* terrain and so carries flavour the raw affinity scores do not — a
-    /// desert may throw up a high elf, which no affinity score would allow. Require cannot use it,
-    /// because the mode hides exactly the minority terrain a race needs (the reason
-    /// <see cref="HeritageAffinity"/> scores shares instead), so it goes to the shares directly.
+    /// desert may throw up a high elf, which no affinity score would allow. Require draws from the
+    /// culture-granular fitness set computed by the caller instead, because the mode hides exactly
+    /// the minority terrain a race needs.
+    ///
+    /// Whatever the rule produces as candidates, a race not yet on the map wins over one that is —
+    /// see the remainder phase for why that ordering is a guarantee and not a preference.
     /// </summary>
     private static RaceArchetype PickWeightedArchetype(
-        Dictionary<TerrainClass, double> shares, MapConfig cfg, Rng rng)
+        Dictionary<TerrainClass, double> shares,
+        HashSet<RaceArchetype>? requireFits,
+        HashSet<RaceArchetype> used,
+        MapConfig cfg,
+        Rng rng)
     {
         double fantasyChance = cfg.RaceMode switch
         {
@@ -630,40 +851,49 @@ public static class Ethnicities
         if (!rng.Chance(fantasyChance))
             return RaceArchetype.Human;
 
-        if (cfg.RaceMode == FantasyRaceMode.ExoticSurreal && rng.Chance(0.25))
-            return RaceArchetype.Exotic;
+        IReadOnlyList<RaceArchetype> candidates;
 
         if (cfg.RaceTerrain == RaceTerrainRule.Ignore)
-            return rng.Pick(TerrainRaces);
-
-        if (cfg.RaceTerrain == RaceTerrainRule.Require)
         {
-            var fitting = TerrainRaces.Where(r => FitsTerrain(r, shares)).ToList();
-            return fitting.Count > 0 ? rng.Pick(fitting) : RaceArchetype.Human;
+            candidates = TerrainRaces;
+        }
+        else if (requireFits is not null)
+        {
+            var fitting = TerrainRaces.Where(requireFits.Contains).ToList();
+            if (fitting.Count == 0) return RaceArchetype.Human;
+            candidates = fitting;
+        }
+        else
+        {
+            candidates = DominantOf(shares) switch
+            {
+                TerrainClass.Mountains or TerrainClass.DesertMountains
+                    => [RaceArchetype.Dwarf, RaceArchetype.Orc, RaceArchetype.Giantkin],
+
+                TerrainClass.Hills
+                    => [RaceArchetype.Dwarf, RaceArchetype.Orc, RaceArchetype.Gnome, RaceArchetype.Human],
+
+                TerrainClass.Forest or TerrainClass.Taiga or TerrainClass.Jungle
+                    => [RaceArchetype.WoodElf, RaceArchetype.Gnome, RaceArchetype.Orc],
+
+                TerrainClass.Arctic
+                    => [RaceArchetype.Giantkin, RaceArchetype.Deepkin, RaceArchetype.Dwarf],
+
+                TerrainClass.Desert
+                    => [RaceArchetype.Orc, RaceArchetype.Gnome, RaceArchetype.Deepkin, RaceArchetype.HighElf],
+
+                TerrainClass.Wetlands
+                    => [RaceArchetype.Gnome, RaceArchetype.Deepkin, RaceArchetype.WoodElf],
+
+                _ => [RaceArchetype.HighElf, RaceArchetype.Giantkin, RaceArchetype.Orc, RaceArchetype.Human, RaceArchetype.Dwarf]
+            };
         }
 
-        return DominantOf(shares) switch
-        {
-            TerrainClass.Mountains or TerrainClass.DesertMountains
-                => rng.Pick([RaceArchetype.Dwarf, RaceArchetype.Orc, RaceArchetype.Giantkin]),
-
-            TerrainClass.Hills
-                => rng.Pick([RaceArchetype.Dwarf, RaceArchetype.Orc, RaceArchetype.Gnome, RaceArchetype.Human]),
-
-            TerrainClass.Forest or TerrainClass.Taiga or TerrainClass.Jungle
-                => rng.Pick([RaceArchetype.WoodElf, RaceArchetype.Gnome, RaceArchetype.Orc]),
-
-            TerrainClass.Arctic
-                => rng.Pick([RaceArchetype.Giantkin, RaceArchetype.Deepkin, RaceArchetype.Dwarf]),
-
-            TerrainClass.Desert
-                => rng.Pick([RaceArchetype.Orc, RaceArchetype.Gnome, RaceArchetype.Deepkin, RaceArchetype.HighElf]),
-
-            TerrainClass.Wetlands
-                => rng.Pick([RaceArchetype.Gnome, RaceArchetype.Deepkin, RaceArchetype.WoodElf]),
-
-            _ => rng.Pick([RaceArchetype.HighElf, RaceArchetype.Giantkin, RaceArchetype.Orc, RaceArchetype.Human, RaceArchetype.Dwarf])
-        };
+        // One of each before seconds of any: a candidate the map does not have yet always beats
+        // one it does. Only when every candidate is already represented does this fall back to a
+        // straight pick, which is where duplicates legitimately begin.
+        var fresh = candidates.Where(r => !used.Contains(r)).ToList();
+        return fresh.Count > 0 ? rng.Pick(fresh) : rng.Pick(candidates);
     }
 
     /// <summary>
@@ -722,6 +952,7 @@ public static class Ethnicities
 
         ApplyMorphGenes(def, archetype, mode, rng);
         ApplyColorGenes(def, archetype, family, mode, rng);
+        BuildVariants(def, rng);
 
         return def;
     }
@@ -792,33 +1023,31 @@ public static class Ethnicities
             case RaceArchetype.HighElf:
                 // Tall, narrow and unmuscled. The height alone does not read as elven — it is the
                 // absence of bulk beside it that does.
-                Shape(def, rng, f, "gene_height", "normal_height", 0.60f, 0.70f);
-                Shape(def, rng, f, "gene_bs_body_type", "body_fat_head_fat_low", 0.26f, 0.40f);
-                Shape(def, rng, Untiered, "gene_bs_body_shape", "body_shape_rectangle_half", 0.02f, 0.16f);
-                Shape(def, rng, f, "gene_neck_length", "neck_length_pos", 0.65f, 0.90f);
-                Shape(def, rng, f, "gene_neck_width", "neck_width_neg", 0.20f, 0.40f);
+                // The race-defining genes come from the shared table so the ethnicity and the
+                // portrait-modifier enforcement (Emit/RaceMorphWriter.cs) cannot drift apart.
+                foreach (var m in RaceMorphs.Of(archetype))
+                    Shape(def, rng, m.Tiered ? f : Untiered, m.Gene, m.Template, m.Min, m.Max);
+                Shape(def, rng, f, "gene_neck_length", "neck_length_pos", 0.58f, 0.74f);
+                Shape(def, rng, f, "gene_neck_width", "neck_width_neg", 0.34f, 0.44f);
                 // Ears swept up and back, NOT enlarged and NOT pushed off the skull. Vanilla's ear
                 // genes make a round ear bigger and splay it outward; pushing all four toward 1.0
                 // gets a comic ear rather than an elegant one, so size and outward stay low while
                 // angle and bend — the two that sweep it — carry the shape.
-                Shape(def, rng, f, "gene_bs_ear_angle", "ear_angle_pos", 0.80f, 1.0f);
-                Shape(def, rng, f, "gene_bs_ear_bend", "ear_both_bend_pos", 0.85f, 1.0f);
-                Shape(def, rng, f, "gene_bs_ear_outward", "ear_outward_pos", 0.20f, 0.40f);
-                Shape(def, rng, f, "gene_bs_ear_size", "ear_size_pos", 0.30f, 0.50f);
                 // Upswept eyes are the strongest elf cue stock geometry has after height, so the
                 // high elf takes it harder than the wood elf does.
-                Shape(def, rng, f, "gene_eye_angle", "eye_angle_pos", 0.70f, 0.95f);
-                Shape(def, rng, f, "gene_eye_distance", "eye_distance_neg", 0.20f, 0.40f);
-                Shape(def, rng, f, "gene_bs_eye_fold_shape", "eye_fold_shape_02_pos", 0.40f, 0.70f);
-                Shape(def, rng, f, "gene_head_height", "head_height_pos", 0.62f, 0.85f);
-                Shape(def, rng, f, "gene_forehead_height", "forehead_height_pos", 0.62f, 0.85f);
-                Shape(def, rng, f, "gene_forehead_brow_height", "forehead_brow_height_pos", 0.65f, 0.85f);
+                Shape(def, rng, f, "gene_eye_angle", "eye_angle_pos", 0.58f, 0.70f);
+                // No gene_eye_distance. Close-set eyes read as unsettling in a human face at any
+                // strength, and vanilla holds this gene to 0.45-0.55 for a beautiful character —
+                // pushing it to 0.20 was working directly against the look this race wants.
+                Shape(def, rng, f, "gene_bs_eye_fold_shape", "eye_fold_shape_02_pos", 0.18f, 0.34f);
+                Shape(def, rng, f, "gene_head_height", "head_height_pos", 0.54f, 0.64f);
+                Shape(def, rng, f, "gene_forehead_height", "forehead_height_pos", 0.54f, 0.64f);
+                Shape(def, rng, f, "gene_forehead_brow_height", "forehead_brow_height_pos", 0.56f, 0.68f);
                 Shape(def, rng, f, "gene_bs_forehead_brow_curve", "forehead_brow_curve_pos", 0.55f, 0.80f);
                 Shape(def, rng, f, "gene_bs_cheek_forward", "cheek_forward_pos", 0.60f, 0.85f);
                 Shape(def, rng, f, "gene_bs_cheek_height", "cheek_height_pos", 0.55f, 0.80f);
-                Shape(def, rng, f, "gene_jaw_width", "jaw_width_neg", 0.15f, 0.35f);
-                Shape(def, rng, f, "gene_chin_width", "chin_width_neg", 0.20f, 0.40f);
-                Shape(def, rng, f, "gene_bs_nose_length", "nose_length_pos", 0.35f, 0.55f);
+                Shape(def, rng, f, "gene_chin_width", "chin_width_neg", 0.36f, 0.46f);
+                Shape(def, rng, f, "gene_bs_nose_length", "nose_length_pos", 0.25f, 0.45f);
                 // gene_bs_nose_profile has no "straight" template — only _neg, _pos, and the two
                 // hawk variants — so the straight elven nose is a *weak* _pos rather than a template
                 // of its own. On a bs gene the neutral end is 0, not 0.5, so this range is correct.
@@ -830,7 +1059,7 @@ public static class Ethnicities
                 AddGene(def, "gene_age", "no_aging", 0.0f, 1.0f, weight: 35);
                 AddGene(def, "gene_eyebrows_shape", "close_spacing_low_thickness", 0.0f, 1.0f);
                 AddGene(def, "gene_eyebrows_fullness", "layer_2_low_thickness", 0.0f, 1.0f);
-                AddGene(def, "complexion", "complexion_smooth_1", 0.30f, 0.60f);
+                AddGene(def, "complexion", "complexion_beauty_1", 0.55f, 0.90f);
                 AddGene(def, "gene_body_hair", "body_hair_sparse", 0.10f, 0.40f);
                 AddGene(def, "gene_baldness", "no_baldness", 0.0f, 0.15f);
                 AddGene(def, "gene_hair_type", "hair_straight", 0.0f, 1.0f, weight: 70);
@@ -840,30 +1069,26 @@ public static class Ethnicities
             case RaceArchetype.WoodElf:
                 // Human height, and a hunter rather than an aristocrat — broader skull, sharper
                 // cheekbones and appreciably more muscle than the high elf carries.
-                Shape(def, rng, f, "gene_height", "normal_height", 0.46f, 0.56f);
-                Shape(def, rng, f, "gene_bs_body_type", "body_fat_head_fat_low", 0.32f, 0.46f);
-                Shape(def, rng, Untiered, "gene_bs_body_shape", "body_shape_triangle_half", 0.35f, 0.55f);
+                // The race-defining genes come from the shared table so the ethnicity and the
+                // portrait-modifier enforcement (Emit/RaceMorphWriter.cs) cannot drift apart.
+                foreach (var m in RaceMorphs.Of(archetype))
+                    Shape(def, rng, m.Tiered ? f : Untiered, m.Gene, m.Template, m.Min, m.Max);
                 Shape(def, rng, f, "gene_neck_length", "neck_length_pos", 0.50f, 0.75f);
-                Shape(def, rng, f, "gene_bs_ear_angle", "ear_angle_pos", 0.70f, 0.95f);
-                Shape(def, rng, f, "gene_bs_ear_bend", "ear_both_bend_pos", 0.75f, 0.95f);
-                Shape(def, rng, f, "gene_bs_ear_outward", "ear_outward_pos", 0.20f, 0.40f);
-                Shape(def, rng, f, "gene_bs_ear_size", "ear_size_pos", 0.25f, 0.45f);
                 // Slanted eyes come from gene_eye_angle alone. There is no gene_bs_eye_slant in
                 // vanilla — nothing matching "slant" exists at all.
                 Shape(def, rng, f, "gene_eye_angle", "eye_angle_pos", 0.55f, 0.75f);
-                Shape(def, rng, f, "gene_bs_eye_size", "eye_size_pos", 0.45f, 0.70f);
-                Shape(def, rng, f, "gene_head_width", "head_width_pos", 0.55f, 0.72f);
-                Shape(def, rng, f, "gene_jaw_width", "jaw_width_neg", 0.25f, 0.45f);
+                Shape(def, rng, f, "gene_bs_eye_size", "eye_size_pos", 0.30f, 0.52f);
+                Shape(def, rng, f, "gene_head_width", "head_width_pos", 0.52f, 0.64f);
                 Shape(def, rng, f, "gene_bs_cheek_forward", "cheek_forward_pos", 0.45f, 0.70f);
-                Shape(def, rng, f, "gene_bs_cheek_height", "cheek_height_pos", 0.70f, 0.95f);
-                Shape(def, rng, f, "gene_bs_nose_size", "nose_size_neg", 0.45f, 0.70f);
+                Shape(def, rng, f, "gene_bs_cheek_height", "cheek_height_pos", 0.50f, 0.70f);
+                Shape(def, rng, f, "gene_bs_nose_size", "nose_size_neg", 0.26f, 0.44f);
                 Shape(def, rng, f, "gene_bs_nose_ridge_angle", "nose_ridge_angle_pos", 0.45f, 0.70f);
                 AddGene(def, "gene_age", "old_beauty_1", 0.0f, 0.7f, weight: 70);
                 AddGene(def, "gene_age", "no_aging", 0.0f, 1.0f, weight: 30);
                 AddGene(def, "gene_eyebrows_fullness", "layer_2_avg_thickness", 0.0f, 1.0f);
                 // The lightest and blotchiest of the numbered head textures: +2.4 lightness and
                 // +1.2 unevenness against the base, which is as close to freckled as stock gets.
-                AddGene(def, "complexion", "complexion_2", 0.35f, 0.70f);
+                AddGene(def, "complexion", "complexion_beauty_1", 0.35f, 0.65f);
                 AddGene(def, "gene_body_hair", "body_hair_sparse", 0.35f, 0.65f);
                 AddGene(def, "gene_hair_type", "hair_wavy", 0.0f, 1.0f, weight: 45);
                 AddGene(def, "gene_hair_type", "hair_curly", 0.0f, 1.0f, weight: 30);
@@ -876,18 +1101,16 @@ public static class Ethnicities
                 // makes a dwarf a dwarf comes from the two body genes underneath instead. Dropping
                 // to the old 0.02-0.10 put bs_dwarf_1 at ~0.90 and made this indistinguishable from
                 // the gnome, which really does want the bottom of the ramp.
-                Shape(def, rng, f, "gene_height", "normal_height", 0.34f, 0.44f);
-                Shape(def, rng, f, "gene_bs_body_type", "body_fat_head_fat_medium", 0.60f, 0.75f);
-                Shape(def, rng, Untiered, "gene_bs_body_shape", "body_shape_rectangle_full", 0.75f, 1.0f);
+                // The race-defining genes come from the shared table so the ethnicity and the
+                // portrait-modifier enforcement (Emit/RaceMorphWriter.cs) cannot drift apart.
+                foreach (var m in RaceMorphs.Of(archetype))
+                    Shape(def, rng, m.Tiered ? f : Untiered, m.Gene, m.Template, m.Min, m.Max);
                 Shape(def, rng, f, "gene_neck_width", "neck_width_pos", 0.85f, 1.0f);
                 Shape(def, rng, f, "gene_neck_length", "neck_length_neg", 0.05f, 0.25f);
                 Shape(def, rng, f, "gene_head_width", "head_width_pos", 0.70f, 0.95f);
-                Shape(def, rng, f, "gene_jaw_width", "jaw_width_pos", 0.80f, 1.0f);
                 Shape(def, rng, f, "gene_jaw_forward", "jaw_forward_pos", 0.55f, 0.85f);
                 Shape(def, rng, f, "gene_bs_jaw_def", "jaw_def_pos", 0.60f, 0.90f);
                 Shape(def, rng, f, "gene_chin_width", "chin_width_pos", 0.75f, 0.95f);
-                Shape(def, rng, f, "gene_bs_forehead_brow_forward", "forehead_brow_forward_pos", 0.65f, 0.90f);
-                Shape(def, rng, f, "gene_bs_ear_size", "ear_size_neg", 0.35f, 0.55f);
                 Shape(def, rng, f, "gene_bs_nose_length", "nose_length_pos", 0.50f, 0.80f);
                 Shape(def, rng, f, "gene_bs_nose_size", "nose_size_pos", 0.55f, 0.80f);
                 // The weathering is carried by these three, not by `complexion`. They are genuine
@@ -910,21 +1133,20 @@ public static class Ethnicities
                 // body_type sat well onto the fat side at 0.58-0.72 while musculature was only
                 // 0.65-0.92, which reads as a heavy bodybuilder. Mass now comes from the muscle
                 // axis and body_type sits barely above neutral.
-                Shape(def, rng, f, "gene_height", "normal_height", 0.58f, 0.72f);
-                Shape(def, rng, f, "gene_bs_body_type", "body_fat_head_fat_medium", 0.52f, 0.64f);
-                Shape(def, rng, Untiered, "gene_bs_body_shape", "body_shape_triangle_full", 0.80f, 1.0f);
+                // The race-defining genes come from the shared table so the ethnicity and the
+                // portrait-modifier enforcement (Emit/RaceMorphWriter.cs) cannot drift apart.
+                foreach (var m in RaceMorphs.Of(archetype))
+                    Shape(def, rng, m.Tiered ? f : Untiered, m.Gene, m.Template, m.Min, m.Max);
                 Shape(def, rng, f, "gene_neck_width", "neck_width_pos", 0.80f, 1.0f);
                 // A brow that juts without also sitting low over a sunken eye reads as a bump
                 // rather than a scowl, so the ridge, its height, the forehead slope and the eye
                 // behind it all move together.
-                Shape(def, rng, f, "gene_bs_forehead_brow_forward", "forehead_brow_forward_pos", 0.80f, 1.0f);
                 Shape(def, rng, f, "gene_forehead_brow_height", "forehead_brow_height_neg", 0.15f, 0.35f);
                 Shape(def, rng, f, "gene_forehead_angle", "forehead_angle_neg", 0.20f, 0.40f);
                 Shape(def, rng, f, "gene_eye_depth", "eye_depth_pos", 0.65f, 0.90f);
                 Shape(def, rng, f, "gene_bs_eye_size", "eye_size_neg", 0.45f, 0.70f);
-                Shape(def, rng, f, "gene_jaw_width", "jaw_width_pos", 0.75f, 1.0f);
-                Shape(def, rng, f, "gene_jaw_forward", "jaw_forward_pos", 0.70f, 0.95f);
-                Shape(def, rng, f, "gene_bs_jaw_def", "jaw_def_pos", 0.70f, 1.0f);
+                Shape(def, rng, f, "gene_jaw_forward", "jaw_forward_pos", 0.82f, 1.0f);
+                Shape(def, rng, f, "gene_bs_jaw_def", "jaw_def_pos", 0.85f, 1.0f);
                 // Vanilla has no tusk gene of any kind. What a tusked mouth actually reads as is a
                 // heavy padded lower lip under a thin upper one with the corners pulled down, and
                 // all four of those are stock genes.
@@ -933,7 +1155,7 @@ public static class Ethnicities
                 Shape(def, rng, f, "gene_mouth_upper_lip_size", "mouth_upper_lip_size_neg", 0.20f, 0.40f);
                 Shape(def, rng, f, "gene_bs_mouth_lower_lip_pad", "mouth_lower_lip_pad_pos", 0.55f, 0.85f);
                 Shape(def, rng, f, "gene_mouth_corner_height", "mouth_corner_height_neg", 0.15f, 0.35f);
-                Shape(def, rng, f, "gene_bs_cheek_width", "cheek_width_pos", 0.55f, 0.85f);
+                Shape(def, rng, f, "gene_bs_cheek_width", "cheek_width_pos", 0.70f, 0.95f);
                 Shape(def, rng, f, "gene_bs_nose_nostril_width", "nose_nostril_width_pos", 0.60f, 0.90f);
                 // No ear gene at all. Vanilla's only make a round ear bigger or splay it outward,
                 // neither of which is orcish, and EK2 sweeps its orc ears back with ear_angle_neg
@@ -962,14 +1184,12 @@ public static class Ethnicities
                 // the short-limbed, large-headed silhouette a gnome reads as — and paired with
                 // near-zero muscle and a thin neck it no longer collides with the dwarf. The big
                 // splayed ears here are deliberate and are why the elves gave theirs up.
-                Shape(def, rng, f, "gene_height", "normal_height", 0.06f, 0.22f);
-                Shape(def, rng, f, "gene_bs_body_type", "body_fat_head_fat_low", 0.22f, 0.38f);
-                Shape(def, rng, Untiered, "gene_bs_body_shape", "body_shape_average", 0.0f, 0.14f);
+                // The race-defining genes come from the shared table so the ethnicity and the
+                // portrait-modifier enforcement (Emit/RaceMorphWriter.cs) cannot drift apart.
+                foreach (var m in RaceMorphs.Of(archetype))
+                    Shape(def, rng, m.Tiered ? f : Untiered, m.Gene, m.Template, m.Min, m.Max);
                 Shape(def, rng, f, "gene_neck_length", "neck_length_pos", 0.55f, 0.80f);
                 Shape(def, rng, f, "gene_neck_width", "neck_width_neg", 0.20f, 0.40f);
-                Shape(def, rng, f, "gene_bs_ear_size", "ear_size_pos", 0.85f, 1.0f);
-                Shape(def, rng, f, "gene_bs_ear_outward", "ear_outward_pos", 0.80f, 1.0f);
-                Shape(def, rng, f, "gene_bs_ear_bend", "ear_both_bend_pos", 0.70f, 0.95f);
                 Shape(def, rng, f, "gene_bs_eye_size", "eye_size_pos", 0.55f, 0.85f);
                 Shape(def, rng, f, "gene_chin_width", "chin_width_neg", 0.10f, 0.30f);
                 Shape(def, rng, f, "gene_mouth_width", "mouth_width_pos", 0.65f, 0.95f);
@@ -988,18 +1208,16 @@ public static class Ethnicities
                 // skips bs_dwarf_1 entirely, but it pins body_height to a fixed 0.38-0.5 regardless
                 // of the value written, so it cannot respond to MorphIntensity. normal_height at the
                 // ceiling reaches the same place and still scales with the map's fantasy level.
-                Shape(def, rng, f, "gene_height", "normal_height", 0.86f, 1.0f);
-                Shape(def, rng, f, "gene_bs_body_type", "body_fat_head_fat_full", 0.58f, 0.74f);
-                Shape(def, rng, Untiered, "gene_bs_body_shape", "body_shape_rectangle_full", 0.55f, 0.85f);
+                // The race-defining genes come from the shared table so the ethnicity and the
+                // portrait-modifier enforcement (Emit/RaceMorphWriter.cs) cannot drift apart.
+                foreach (var m in RaceMorphs.Of(archetype))
+                    Shape(def, rng, m.Tiered ? f : Untiered, m.Gene, m.Template, m.Min, m.Max);
                 Shape(def, rng, f, "gene_neck_width", "neck_width_pos", 0.85f, 1.0f);
                 Shape(def, rng, f, "gene_head_width", "head_width_pos", 0.60f, 0.85f);
                 Shape(def, rng, f, "gene_head_height", "head_height_pos", 0.55f, 0.80f);
-                Shape(def, rng, f, "gene_jaw_width", "jaw_width_pos", 0.75f, 1.0f);
                 Shape(def, rng, f, "gene_chin_width", "chin_width_pos", 0.70f, 0.95f);
-                Shape(def, rng, f, "gene_bs_forehead_brow_forward", "forehead_brow_forward_pos", 0.65f, 0.90f);
                 // Small ears on a large skull is what sells the scale — a big head with big ears
                 // just reads as a normal head. EK2's giant does the same thing.
-                Shape(def, rng, f, "gene_bs_ear_size", "ear_size_neg", 0.50f, 0.80f);
                 AddGene(def, "complexion", "complexion_5", 0.40f, 0.80f);
                 AddGene(def, "expression_forehead_wrinkles", "forehead_wrinkles_01", 0.45f, 0.85f);
                 AddGene(def, "gene_body_hair", "body_hair_dense", 0.55f, 0.90f);
@@ -1011,51 +1229,29 @@ public static class Ethnicities
                 // The third elf, and it has to hold its own shape against the other two. Large
                 // light-adapted eyes are the distinguishing feature; the old values sank the eye
                 // with eye_depth_pos 0.60-0.85 instead, which is the opposite read.
-                Shape(def, rng, f, "gene_height", "normal_height", 0.46f, 0.58f);
-                Shape(def, rng, f, "gene_bs_body_type", "body_fat_head_fat_low", 0.24f, 0.38f);
-                Shape(def, rng, Untiered, "gene_bs_body_shape", "body_shape_hourglass_half", 0.08f, 0.26f);
-                Shape(def, rng, f, "gene_neck_length", "neck_length_pos", 0.60f, 0.85f);
-                Shape(def, rng, f, "gene_neck_width", "neck_width_neg", 0.15f, 0.35f);
-                Shape(def, rng, f, "gene_bs_ear_angle", "ear_angle_pos", 0.75f, 1.0f);
-                Shape(def, rng, f, "gene_bs_ear_bend", "ear_both_bend_pos", 0.80f, 1.0f);
-                Shape(def, rng, f, "gene_bs_ear_outward", "ear_outward_pos", 0.25f, 0.45f);
-                Shape(def, rng, f, "gene_bs_eye_size", "eye_size_pos", 0.65f, 0.90f);
-                Shape(def, rng, f, "gene_eye_depth", "eye_depth_pos", 0.20f, 0.40f);
-                Shape(def, rng, f, "gene_eye_angle", "eye_angle_pos", 0.60f, 0.85f);
-                Shape(def, rng, f, "gene_bs_cheek_forward", "cheek_forward_pos", 0.70f, 0.95f);
-                Shape(def, rng, f, "gene_bs_cheek_height", "cheek_height_pos", 0.65f, 0.90f);
-                Shape(def, rng, f, "gene_jaw_width", "jaw_width_neg", 0.10f, 0.30f);
-                Shape(def, rng, f, "gene_chin_width", "chin_width_neg", 0.15f, 0.35f);
-                Shape(def, rng, f, "gene_bs_nose_length", "nose_length_neg", 0.30f, 0.50f);
+                // The race-defining genes come from the shared table so the ethnicity and the
+                // portrait-modifier enforcement (Emit/RaceMorphWriter.cs) cannot drift apart.
+                foreach (var m in RaceMorphs.Of(archetype))
+                    Shape(def, rng, m.Tiered ? f : Untiered, m.Gene, m.Template, m.Min, m.Max);
+                Shape(def, rng, f, "gene_neck_length", "neck_length_pos", 0.56f, 0.72f);
+                Shape(def, rng, f, "gene_neck_width", "neck_width_neg", 0.32f, 0.42f);
+                Shape(def, rng, f, "gene_bs_eye_size", "eye_size_pos", 0.45f, 0.68f);
+                Shape(def, rng, f, "gene_eye_depth", "eye_depth_pos", 0.36f, 0.46f);
+                Shape(def, rng, f, "gene_eye_angle", "eye_angle_pos", 0.56f, 0.70f);
+                Shape(def, rng, f, "gene_bs_cheek_forward", "cheek_forward_pos", 0.52f, 0.74f);
+                Shape(def, rng, f, "gene_bs_cheek_height", "cheek_height_pos", 0.50f, 0.72f);
+                Shape(def, rng, f, "gene_chin_width", "chin_width_neg", 0.34f, 0.44f);
+                Shape(def, rng, f, "gene_bs_nose_length", "nose_length_neg", 0.20f, 0.38f);
                 AddGene(def, "gene_age", "old_beauty_1", 0.0f, 0.6f, weight: 65);
                 AddGene(def, "gene_age", "no_aging", 0.0f, 1.0f, weight: 35);
                 AddGene(def, "gene_eyebrows_fullness", "layer_2_low_thickness", 0.0f, 1.0f);
-                AddGene(def, "complexion", "complexion_smooth_1", 0.40f, 0.75f);
+                AddGene(def, "complexion", "complexion_beauty_1", 0.50f, 0.85f);
                 AddGene(def, "gene_body_hair", "body_hair_sparse", 0.15f, 0.40f);
                 AddGene(def, "gene_baldness", "no_baldness", 0.0f, 0.15f);
                 AddGene(def, "gene_hair_type", "hair_straight", 0.0f, 1.0f, weight: 80);
                 AddGene(def, "gene_hair_type", "hair_wavy", 0.0f, 1.0f, weight: 20);
                 break;
 
-            case RaceArchetype.Exotic:
-                // Rolled rather than authored, but rolled inside the same three-gene frame as the
-                // others so the result still reads as one coherent people: a height, a mass to go
-                // with it, and a silhouette to carry the mass.
-                Shape(def, rng, f, "gene_height", "normal_height", rng.Float(0.05f, 0.35f), rng.Float(0.62f, 1.0f));
-                Shape(def, rng, f, "gene_bs_body_type", rng.Pick(["body_fat_head_fat_low", "body_fat_head_fat_medium", "body_fat_head_fat_full"]),
-                    rng.Float(0.20f, 0.45f), rng.Float(0.55f, 0.80f));
-                Shape(def, rng, Untiered, "gene_bs_body_shape", rng.Pick([
-                        "body_shape_average", "body_shape_apple_full", "body_shape_pear_full",
-                        "body_shape_rectangle_full", "body_shape_triangle_full", "body_shape_hourglass_full"]),
-                    rng.Float(0.0f, 0.3f), rng.Float(0.5f, 1.0f));
-                Shape(def, rng, f, "gene_bs_ear_outward", "ear_outward_pos", rng.Float(0.1f, 0.2f), rng.Float(0.8f, 1.0f));
-                Shape(def, rng, f, "gene_bs_ear_bend", "ear_both_bend_pos", rng.Float(0.1f, 0.2f), rng.Float(0.8f, 1.0f));
-                Shape(def, rng, f, "gene_bs_ear_size", rng.Pick(["ear_size_pos", "ear_size_neg"]), rng.Float(0.3f, 0.5f), rng.Float(0.8f, 1.0f));
-                Shape(def, rng, f, "gene_bs_cheek_forward", "cheek_forward_pos", rng.Float(0.1f, 0.2f), rng.Float(0.8f, 1.0f));
-                Shape(def, rng, f, "gene_bs_eye_size", rng.Pick(["eye_size_pos", "eye_size_neg"]), rng.Float(0.2f, 0.5f), rng.Float(0.7f, 1.0f));
-                AddGene(def, "complexion", rng.Pick(["complexion_3", "complexion_7", "complexion_ugly_1"]), 0.40f, 0.90f);
-                AddGene(def, "gene_hair_type", rng.Pick(["hair_straight", "hair_wavy", "hair_curly", "hair_afro"]), 0.0f, 1.0f);
-                break;
 
             case RaceArchetype.Human:
             default:
@@ -1074,19 +1270,19 @@ public static class Ethnicities
     /// blend-shape genes, 0.5 for the signed ones. See <see cref="ApplyMorphGenes"/> for why the
     /// two families differ and why <c>gene_bs_body_type</c> is not one of the blend-shape ones.
     /// </summary>
-    private static float NeutralOf(string geneKey) =>
+    internal static float NeutralOf(string geneKey) =>
         geneKey.StartsWith("gene_bs_", StringComparison.Ordinal) && geneKey != "gene_bs_body_type"
             ? 0.0f
             : 0.5f;
 
     /// <summary>
     /// How far a race's body may depart from a plain human, by the map's fantasy level — the same
-    /// idea <see cref="SkinPalette.TierOf"/> applies to skin, applied to shape. On a low-fantasy map
+    /// idea <see cref="RaceSkin.TierRange"/> applies to skin, applied to shape. On a low-fantasy map
     /// a dwarf should be a short broad people rather than a caricature, so every racial gene is
     /// pulled most of the way back toward neutral; on a surreal one it is pushed past its authored
     /// value and clamped at the gene's limit.
     /// </summary>
-    private static float MorphIntensity(FantasyRaceMode mode) => mode switch
+    internal static float MorphIntensity(FantasyRaceMode mode) => mode switch
     {
         FantasyRaceMode.HighFantasy => 1.0f,
         FantasyRaceMode.ExoticSurreal => 1.25f,
@@ -1105,7 +1301,7 @@ public static class Ethnicities
     /// How far one culture's band may slide from the authored one, in gene units.
     ///
     /// Without this every dwarven people on a map is byte-identical, because the archetype tables
-    /// are fixed and only <see cref="RaceArchetype.Exotic"/> rolls anything. A small per-gene shift
+    /// are fixed and nothing else varies them. A small per-gene shift
     /// gives each culture its own face while keeping it recognisably its race, and it is applied
     /// after the fantasy-level scale so peoples stay distinguishable from each other even on a
     /// low-fantasy map where they are all closer to human.
@@ -1218,9 +1414,7 @@ public static class Ethnicities
         switch (archetype)
         {
             case RaceArchetype.HighElf:
-                AddSkin(def, archetype, mode, 0.00f, 0.00f, 0.18f, 0.30f, weight: 55); // moonpale ivory
-                AddSkin(def, archetype, mode, 0.40f, 0.05f, 0.60f, 0.35f, weight: 30); // pearl blue-white
-                AddSkin(def, archetype, mode, 0.82f, 0.10f, 1.00f, 0.40f, weight: 15); // warm alabaster
+                ApplyRaceSkin(def, archetype, mode, rng);
                 AddColor(def, "hair_color", Hair.Platinum, weight: 35);
                 AddColor(def, "hair_color", Hair.GoldBlonde, weight: 25);
                 AddColor(def, "hair_color", Hair.Silver, weight: 20);
@@ -1233,9 +1427,7 @@ public static class Ethnicities
                 break;
 
             case RaceArchetype.WoodElf:
-                AddSkin(def, archetype, mode, 0.00f, 0.20f, 0.18f, 0.55f, weight: 45); // birch tan
-                AddSkin(def, archetype, mode, 0.40f, 0.25f, 0.60f, 0.60f, weight: 35); // olive bark
-                AddSkin(def, archetype, mode, 0.82f, 0.35f, 1.00f, 0.75f, weight: 20); // umber loam
+                ApplyRaceSkin(def, archetype, mode, rng);
                 AddColor(def, "hair_color", Hair.Brown, weight: 30);
                 AddColor(def, "hair_color", Hair.DarkBrown, weight: 25);
                 AddColor(def, "hair_color", Hair.Auburn, weight: 20);
@@ -1248,9 +1440,7 @@ public static class Ethnicities
                 break;
 
             case RaceArchetype.Dwarf:
-                AddSkin(def, archetype, mode, 0.00f, 0.20f, 0.20f, 0.55f, weight: 50); // forge-flushed ruddy
-                AddSkin(def, archetype, mode, 0.40f, 0.25f, 0.60f, 0.60f, weight: 30); // granite tan
-                AddSkin(def, archetype, mode, 0.80f, 0.30f, 1.00f, 0.70f, weight: 20); // iron-dust grey-brown
+                ApplyRaceSkin(def, archetype, mode, rng);
                 AddColor(def, "hair_color", Hair.Ginger, weight: 25);
                 AddColor(def, "hair_color", Hair.Auburn, weight: 20);
                 AddColor(def, "hair_color", Hair.DarkBrown, weight: 20);
@@ -1265,9 +1455,7 @@ public static class Ethnicities
                 break;
 
             case RaceArchetype.Orc:
-                AddSkin(def, archetype, mode, 0.00f, 0.15f, 0.20f, 0.55f, weight: 50); // moss green
-                AddSkin(def, archetype, mode, 0.80f, 0.35f, 1.00f, 0.80f, weight: 30); // bog olive
-                AddSkin(def, archetype, mode, 0.40f, 0.20f, 0.60f, 0.60f, weight: 20); // sage grey-green
+                ApplyRaceSkin(def, archetype, mode, rng);
                 // Coarse black hair. The old values put 75% of orcs on bright ginger, because the
                 // rect meant as "near-black desaturated" sat at x 0.80-0.95 — the fiery end of the
                 // warmth axis — rather than at the dark end of the darkness axis.
@@ -1281,9 +1469,7 @@ public static class Ethnicities
                 break;
 
             case RaceArchetype.Gnome:
-                AddSkin(def, archetype, mode, 0.00f, 0.15f, 0.20f, 0.50f, weight: 45); // ochre
-                AddSkin(def, archetype, mode, 0.40f, 0.20f, 0.60f, 0.55f, weight: 35); // clay tan
-                AddSkin(def, archetype, mode, 0.80f, 0.30f, 1.00f, 0.70f, weight: 20); // russet umber
+                ApplyRaceSkin(def, archetype, mode, rng);
                 AddColor(def, "hair_color", Hair.Ginger, weight: 30);
                 AddColor(def, "hair_color", Hair.GoldBlonde, weight: 20);
                 AddColor(def, "hair_color", Hair.Brown, weight: 20);
@@ -1296,9 +1482,7 @@ public static class Ethnicities
                 break;
 
             case RaceArchetype.Giantkin:
-                AddSkin(def, archetype, mode, 0.00f, 0.00f, 0.18f, 0.35f, weight: 45); // frostpale
-                AddSkin(def, archetype, mode, 0.40f, 0.10f, 0.60f, 0.45f, weight: 35); // glacier blue
-                AddSkin(def, archetype, mode, 0.82f, 0.20f, 1.00f, 0.60f, weight: 20); // storm grey
+                ApplyRaceSkin(def, archetype, mode, rng);
                 AddColor(def, "hair_color", Hair.Platinum, weight: 25);
                 AddColor(def, "hair_color", Hair.Silver, weight: 20);
                 AddColor(def, "hair_color", Hair.AshBlonde, weight: 20);
@@ -1314,9 +1498,7 @@ public static class Ethnicities
                 // Reaches the bottom of the ramp on purpose. Stopping at t=0.70 left the
                 // darkest third of the band unreachable, which is the third that makes a
                 // drow look like a drow.
-                AddSkin(def, archetype, mode, 0.00f, 0.35f, 0.18f, 1.00f, weight: 50); // obsidian
-                AddSkin(def, archetype, mode, 0.82f, 0.30f, 1.00f, 0.95f, weight: 30); // violet ash
-                AddSkin(def, archetype, mode, 0.40f, 0.25f, 0.60f, 0.85f, weight: 20); // slate graphite
+                ApplyRaceSkin(def, archetype, mode, rng);
                 // White and silver against near-black skin is the whole drow silhouette. This is
                 // the one race whose old colours were accidentally right — its "black" entry
                 // landed on platinum, which is what a drow wants anyway.
@@ -1329,24 +1511,6 @@ public static class Ethnicities
                 AddColor(def, "eye_color", Eye.Gold, weight: 20);
                 break;
 
-            case RaceArchetype.Exotic:
-                // The Exotic band sweeps teal -> violet -> crimson -> amber across u, so each
-                // Exotic ethnicity takes a narrow window of it and reads as one coherent people
-                // rather than a bag of unrelated skin colours.
-                float hue = rng.Float(0.0f, 1.0f);
-                float shade = rng.Float(0.0f, 0.35f);
-                AddSkin(def, archetype, mode, Math.Max(0f, hue - 0.07f), shade, Math.Min(1f, hue + 0.07f), shade + 0.35f, weight: 60);
-                AddSkin(def, archetype, mode, Math.Max(0f, hue - 0.14f), shade + 0.20f, Math.Min(1f, hue + 0.14f), shade + 0.60f, weight: 40);
-                // Rolled across the whole warmth axis but held to a single narrow darkness band,
-                // so an Exotic people reads as one hair colour rather than every colour at once.
-                float hairX = rng.Float(0.0f, 0.80f);
-                float hairY = rng.Float(0.02f, 0.85f);
-                AddColor(def, "hair_color", hairX, hairY, Math.Min(1f, hairX + 0.18f), Math.Min(1f, hairY + 0.10f), weight: 65);
-                AddColor(def, "hair_color", Hair.BlueBlack, weight: 35);
-                float eyeX = rng.Float(0.0f, 0.85f);
-                AddColor(def, "eye_color", eyeX, 0.12f, Math.Min(1f, eyeX + 0.15f), 0.34f, weight: 60);
-                AddColor(def, "eye_color", Eye.Crimson, weight: 40);
-                break;
 
             case RaceArchetype.Human:
             default:
@@ -1402,6 +1566,90 @@ public static class Ethnicities
     private static void AddColor(EthnicityDef def, string colorType, Swatch s, int weight = 10)
         => AddColor(def, colorType, s.X1, s.Y1, s.X2, s.Y2, weight);
 
+    /// <summary>
+    /// Splits a finished look into colouring variants, one per hair band it already carries.
+    ///
+    /// A variant is NOT "only blonde". It is the same palette re-weighted to lean on one band, which
+    /// is what vanilla's `caucasian_blond` actually is — the blond entry is heavy, the others are
+    /// still there. That distinction matters: per-CHARACTER variety already came from the weighted
+    /// bands inside one ethnicity and was never the problem. What was missing was per-CULTURE
+    /// variety, because every culture in a heritage pointed at the same single definition and
+    /// therefore the same single distribution.
+    ///
+    /// Deriving the variants from the base's own bands rather than from a fresh palette is what
+    /// keeps them in-race: a drow cannot acquire blonde hair here, because a drow's band list never
+    /// contained any. The race envelope is set once in ApplyColorGenes and this only redistributes
+    /// inside it.
+    /// </summary>
+    private static void BuildVariants(EthnicityDef def, Rng rng)
+    {
+        if (!def.ColorGenes.TryGetValue("hair_color", out var bands) || bands.Count < 2)
+            return;
+
+        // Four is vanilla's own ceiling for one base, and past it the leans stop being tellable
+        // apart on a portrait.
+        int count = Math.Min(4, bands.Count);
+
+        for (int i = 0; i < count; i++)
+        {
+            var variant = new EthnicityVariant
+            {
+                Key = $"{def.Key}_v{i}",
+                LocalizedName = def.LocalizedName
+            };
+
+            var reweighted = new List<ColorPaletteRange>(bands.Count);
+            for (int b = 0; b < bands.Count; b++)
+            {
+                // The lean, not an exclusion. The dominant band takes most of the mass and the rest
+                // keep a real minority share, so a culture that leans dark still throws the
+                // occasional fair head — which is the whole texture the split is trying to buy.
+                int weight = b == i ? 70 : Math.Max(4, 30 / Math.Max(1, bands.Count - 1));
+                reweighted.Add(new ColorPaletteRange
+                {
+                    X1 = bands[b].X1, Y1 = bands[b].Y1,
+                    X2 = bands[b].X2, Y2 = bands[b].Y2,
+                    Weight = weight
+                });
+            }
+
+            variant.ColorGenes["hair_color"] = reweighted;
+            def.Variants.Add(variant);
+        }
+    }
+
+    /// <summary>
+    /// The variants one culture draws from, and their weights.
+    ///
+    /// Two or three of the base's variants rather than all of them, so neighbouring cultures on the
+    /// same base are visibly different peoples rather than the same distribution twice. The base
+    /// itself is never named here — it is `visible = no` and carries the morphology, exactly as
+    /// `caucasian_base` does.
+    /// </summary>
+    private static List<(string Key, int Weight)> PickCultureVariants(EthnicityDef def, Rng rng)
+    {
+        // A look with nothing to vary — a race whose palette had a single band — still has to give
+        // the culture something to point at, so it points at the base.
+        if (def.Variants.Count == 0)
+            return [(def.Key, 100)];
+
+        var pool = new List<EthnicityVariant>(def.Variants);
+        rng.Shuffle(pool);
+
+        int take = Math.Min(pool.Count, rng.Chance(0.55) ? 2 : 3);
+        var picked = new List<(string Key, int Weight)>(take);
+
+        // A clear lead and a tail, rather than an even split: an even split makes every culture the
+        // same blend of the same variants, which is the sameness this is meant to break.
+        int lead = take == 2 ? 70 : 55;
+        int rest = (100 - lead) / Math.Max(1, take - 1);
+
+        for (int i = 0; i < take; i++)
+            picked.Add((pool[i].Key, i == 0 ? lead : rest));
+
+        return picked;
+    }
+
     private static void AddGene(EthnicityDef def, string geneKey, string subGeneName, float min, float max, int weight = 10)
     {
         if (!def.MorphGenes.TryGetValue(geneKey, out var list))
@@ -1432,22 +1680,32 @@ public static class Ethnicities
     }
 
     /// <summary>
-    /// A skin swatch inside a fantasy race's own band of the palette. <paramref name="u1"/> and
-    /// <paramref name="u2"/> select across that race's hue variants, <paramref name="t1"/> and
-    /// <paramref name="t2"/> run from its lightest tone to its darkest — see
-    /// <see cref="SkinPalette"/> for why the coordinates are derived rather than literal.
+    /// A fantasy race's colouring: a base tone drawn from the stock human gradient, plus the
+    /// <c>gen_race_skin</c> shift that turns it into that race's. See <see cref="RaceSkin"/> for
+    /// why this is two genes rather than one coordinate into a repainted palette.
+    ///
+    /// The base tone is emitted as three overlapping bands rather than one flat rect so a
+    /// population has light and dark members the way vanilla ethnicities do, and the shift is a
+    /// single entry because every member of a people shares its hue.
     /// </summary>
-    private static void AddSkin(
-        EthnicityDef def, RaceArchetype archetype, FantasyRaceMode mode,
-        float u1, float t1, float u2, float t2, int weight)
+    private static void ApplyRaceSkin(
+        EthnicityDef def, RaceArchetype archetype, FantasyRaceMode mode, Rng rng)
     {
-        int band = SkinPalette.BandOf(archetype);
-        if (band < 0)
-            throw new ArgumentOutOfRangeException(
-                nameof(archetype), archetype,
-                "has no palette band — humans inherit skin from their vanilla template instead");
+        string? template = RaceSkin.TemplateOf(archetype);
 
-        var (x1, y1, x2, y2) = SkinPalette.Swatch(band, SkinPalette.TierOf(mode), u1, t1, u2, t2);
-        AddColor(def, "skin_color", x1, y1, x2, y2, weight);
+        // Humans set neither, and that is the whole reason they are unaffected by any of this:
+        // no skin_color means they inherit their vanilla template's complexion, and no
+        // gen_race_skin means they fall to its empty index-0 template and take no shift.
+        if (template is null) return;
+
+        var (x1, y1, x2, y2) = RaceSkin.BaseTone(archetype);
+        float midY = (y1 + y2) / 2f;
+        float qY = (y2 - y1) / 4f;
+        AddColor(def, "skin_color", x1, y1, x2, midY + qY, weight: 40);          // lighter half
+        AddColor(def, "skin_color", x1, midY - qY, x2, y2, weight: 40);          // darker half
+        AddColor(def, "skin_color", x1, y1, x2, y2, weight: 20);                 // the whole spread
+
+        var (lo, hi) = RaceSkin.TierRange(mode);
+        AddGene(def, "gen_race_skin", template, lo, hi, weight: 10);
     }
 }
