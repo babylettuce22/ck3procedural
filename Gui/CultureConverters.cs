@@ -55,3 +55,7 @@ public sealed class HeadDeterminationConverter()
 // Look Presets (e.g. "norse", "french", "byzantine")
 public sealed class LookPresetConverter()
     : DynamicVocabularyConverter(v => v.Looks.Select(l => l.SourceCulture));
+
+// Faith
+public sealed class FaithIconConverter()
+    : DynamicVocabularyConverter(v => v.FaithIcons);

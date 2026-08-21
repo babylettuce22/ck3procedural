@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using Ck3MapGen.MapGen;
 
 namespace Ck3MapGen.Gui;
@@ -6,11 +6,12 @@ namespace Ck3MapGen.Gui;
 /// <summary>
 /// Everything editable about a generated culture.
 ///
-/// Traditions, ethos and martial custom are free text rather than dropdowns. Every one of them is a
-/// CK3 script key, and the set that exists depends on which DLC the install has — the generator
-/// harvests them from the game's own files at write time rather than shipping a list. Offering a
-/// closed dropdown would mean either duplicating that harvest or presenting keys the install does
-/// not have, and a wrong key here costs one line in the error log rather than a broken mod.
+/// Every pickable field draws its options from <see cref="VanillaVocabulary.Current"/> — the same
+/// harvest of the install's own files the generator writes from — rather than a shipped list. That
+/// is what keeps the dropdowns honest across DLC differences: nothing is offered that this install
+/// lacks, and nothing the install has goes missing. The dropdowns stay editable and the list
+/// pickers keep a custom-keys box, so a key the harvest missed can still be typed; a wrong key
+/// costs one line in the error log rather than a broken mod.
 /// </summary>
 public sealed class CultureInspector : InspectorForm
 {
@@ -175,10 +176,9 @@ public sealed class CultureInspector : InspectorForm
         }
 
         [Category("Character")]
-        [Description("The culture's traditions, one CK3 script key per line. Vanilla cultures carry "
-                     + "three to five.")]
-        [Editor("System.Windows.Forms.Design.StringArrayEditor, System.Design",
-                typeof(System.Drawing.Design.UITypeEditor))]
+        [Description("The culture's traditions. Opens a picker over the install's harvested "
+                     + "tradition list — vanilla cultures carry three to five.")]
+        [Editor(typeof(TraditionListEditor), typeof(System.Drawing.Design.UITypeEditor))]
         public string[] Traditions
         {
             get => [.. culture.Traditions];

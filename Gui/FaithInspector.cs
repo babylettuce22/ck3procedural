@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using Ck3MapGen.MapGen;
 
 namespace Ck3MapGen.Gui;
@@ -105,7 +105,8 @@ public sealed class FaithInspector : InspectorForm
         }
 
         [Category("Appearance")]
-        [Description("The faith's icon, a CK3 gfx key harvested from the install.")]
+        [Description("The faith's icon, picked from the gfx keys harvested off this install.")]
+        [TypeConverter(typeof(FaithIconConverter))]
         public string Icon
         {
             get => faith.Icon;
@@ -113,9 +114,9 @@ public sealed class FaithInspector : InspectorForm
         }
 
         [Category("Doctrine")]
-        [Description("The faith's tenets, one CK3 script key per line. Vanilla faiths carry three.")]
-        [Editor("System.Windows.Forms.Design.StringArrayEditor, System.Design",
-                typeof(System.Drawing.Design.UITypeEditor))]
+        [Description("The faith's tenets. Opens a picker over the install's own tenet pool — "
+                     + "vanilla faiths carry exactly three.")]
+        [Editor(typeof(TenetListEditor), typeof(System.Drawing.Design.UITypeEditor))]
         public string[] Tenets
         {
             get => [.. faith.Tenets];
