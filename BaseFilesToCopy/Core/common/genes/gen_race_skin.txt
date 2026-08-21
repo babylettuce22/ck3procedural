@@ -82,8 +82,8 @@ morph_genes = {
 			male = {
 				skin_hsv_shift_curve = {
 					curve = {
-						{ 0.0  { 0.12 -0.06 -0.02 } }
-						{ 1.0  { 0.12  0.08 -0.06 } }
+						{ 0.0  { 0.12 -0.12 -0.02 } }
+						{ 1.0  { 0.12  0.01 -0.04 } }
 					}
 				}
 			}
@@ -160,13 +160,14 @@ morph_genes = {
 		# Violet through deep purple. The only race whose value shift is strongly negative, which is
 		# why its ethnicity samples the pale end of the stock gradient -- darkening a base that is
 		# already deep just crushes to black.
+		# Violet through deep obsidian/charcoal.
 		gen_skin_deepkin = {
 			index = 7
 			male = {
 				skin_hsv_shift_curve = {
 					curve = {
-						{ 0.0  { 0.72 -0.24 -0.16 } }
-						{ 1.0  { 0.72  0.10 -0.30 } }
+						{ 0.0  { 0.72 -0.20 -0.28 } }
+						{ 1.0  { 0.72  0.08 -0.45 } }
 					}
 				}
 			}
@@ -174,6 +175,4 @@ morph_genes = {
 			boy = male
 			girl = male
 		}
-
-	}
 }

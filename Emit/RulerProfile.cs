@@ -1,4 +1,4 @@
-using Ck3MapGen.Core;
+﻿using Ck3MapGen.Core;
 using Ck3MapGen.MapGen;
 
 namespace Ck3MapGen.Emit;
@@ -284,60 +284,101 @@ public sealed record RulerProfile
     {
         var list = new List<string>();
 
-        // 1. Congenital / Genetic traits (~10% total chance)
-        if (rng.Chance(0.10))
+        // Every name below exists as a top-level key in vanilla's common/traits/00_traits.txt —
+        // this list previously carried four that did not (`scarred_1` for `scarred`, `lisp` for
+        // `lisping`, `poet` for `lifestyle_poet`, and `cavalry_leader`, which is a CK2 trait with
+        // no CK3 counterpart at all). A missing trait is not an error the game surfaces at the
+        // character: the line is silently dropped, so ~40 rulers per map were simply less scarred
+        // and less interesting than the rolls intended, and tiger reported each one.
+
+        // 1. Congenital / genetic traits. Blessings are rarer than quirks, matching the shape of
+        // vanilla's own birth weights, and the two rolls are independent so a ruler can be a
+        // beautiful stutterer — vanilla's favourite kind of character.
+        if (rng.Chance(0.07))
         {
-            string[] congenitals =
+            string[] blessings =
             [
                 "beauty_good_1", "beauty_good_2", "intellect_good_1", "intellect_good_2",
-                "physique_good_1", "physique_good_2", "fecund", "giant",
-                "clubfooted", "lisp", "dwarf", "spindly"
+                "physique_good_1", "physique_good_2", "fecund", "shrewd", "strong", "pure_blooded"
             ];
-            list.Add(rng.Pick(congenitals));
+            list.Add(rng.Pick(blessings));
+        }
+        if (rng.Chance(0.08))
+        {
+            string[] quirks =
+            [
+                "giant", "dwarf", "clubfooted", "lisping", "stuttering", "spindly",
+                "hunchbacked", "wheezing", "bleeder", "albino"
+            ];
+            list.Add(rng.Pick(quirks));
         }
 
-        // 2. Commander traits (Martial rulers, Nomads, high rank)
+        // 2. Commander traits (martial rulers, nomads, tribes, high rank). A seasoned great lord
+        // can carry two — a doctrine and a knack — which is how vanilla's famous commanders read.
         if (lifestyle == MartialLifestyle || government is GovernmentMap.Nomad or GovernmentMap.Tribal)
         {
             double commanderChance = (rank >= 3 ? 0.60 : 0.35) + (age >= 30 ? 0.15 : 0.0);
             if (rng.Chance(commanderChance))
             {
+                // The nomad pool leans open-steppe and mobility; there is no cavalry trait in CK3
+                // to reach for, open_terrain_expert is the horse-lord knack it actually ships.
                 string[] commanderPool = government == GovernmentMap.Nomad
-                    ? ["cavalry_leader", "organizer", "aggressive_attacker", "flexible_leader"]
+                    ? ["open_terrain_expert", "organizer", "aggressive_attacker", "flexible_leader",
+                       "winter_soldier", "reckless"]
                     : ["rough_terrain_expert", "forest_fighter", "unyielding_defender",
-                       "aggressive_attacker", "organizer", "flexible_leader"];
+                       "aggressive_attacker", "organizer", "flexible_leader", "military_engineer",
+                       "logistician", "cautious_leader", "gallant"];
 
-                list.Add(rng.Pick(commanderPool));
+                string first = rng.Pick(commanderPool);
+                list.Add(first);
+
+                if (rank >= 3 && age >= 35 && rng.Chance(0.25))
+                {
+                    string second = rng.Pick(commanderPool);
+                    if (second != first) list.Add(second);
+                }
             }
         }
 
-        // 3. Lifestyle / Hobby traits (for mature rulers who excelled in schooling)
-        if (age >= 35 && educationLevel >= 3 && rng.Chance(0.40))
+        // 3. Lifestyle / hobby traits (mature rulers who excelled in schooling). Intrigue rulers
+        // used to fall through to nothing here; schemer-by-night is exactly their hobby.
+        if (age >= 35 && educationLevel >= 3 && rng.Chance(0.45))
         {
             string? hobby = lifestyle switch
             {
                 MartialLifestyle => rng.Pick(["lifestyle_hunter", "lifestyle_blademaster"]),
-                LearningLifestyle => rng.Pick(["lifestyle_mystic", "lifestyle_gardener", "lifestyle_herbalist"]),
-                DiplomacyLifestyle => rng.Pick(["lifestyle_reveler", "poet"]),
-                StewardshipLifestyle => "lifestyle_gardener",
+                LearningLifestyle => rng.Pick(["lifestyle_mystic", "lifestyle_herbalist", "lifestyle_physician"]),
+                DiplomacyLifestyle => rng.Pick(["lifestyle_reveler", "lifestyle_poet", "lifestyle_traveler"]),
+                StewardshipLifestyle => rng.Pick(["lifestyle_gardener", "lifestyle_surveyor"]),
+                IntrigueLifestyle => rng.Pick(["schemer", "schemer", "torturer"]),
                 _ => null,
             };
             if (hobby is not null) list.Add(hobby);
         }
 
-        // 4. Physical wear, scars & stress coping (veterans and older rulers)
+        // 4. Physical wear and scars (veterans and older rulers). `scarred` is a leveled trait in
+        // CK3 — history grants level 1 by the bare name. The grimmer wounds stay rare and stack
+        // with the scar rather than replacing it: a one-eyed man is usually scarred too.
         if (prowess >= 8 && age >= 28 && rng.Chance(0.30))
         {
-            list.Add("scarred_1");
+            list.Add("scarred");
             if (age >= 45 && rank >= 3 && rng.Chance(0.08))
             {
                 list.Add("one_eyed");
             }
+            else if (age >= 40 && rng.Chance(0.05))
+            {
+                list.Add(rng.Pick(["one_legged", "maimed", "disfigured"]));
+            }
         }
 
-        if (age >= 45 && rng.Chance(0.20))
+        // 5. Stress coping (older rulers). The rulership has cost them something; how they pay
+        // varies with what they spend their days on.
+        if (age >= 45 && rng.Chance(0.22))
         {
-            string[] coping = ["drunkard", "hashishiyah", "comfort_eater", "irritable"];
+            string[] coping = lifestyle == LearningLifestyle
+                ? ["journaller", "confider", "flagellant", "contrite", "comfort_eater"]
+                : ["drunkard", "hashishiyah", "comfort_eater", "irritable", "confider", "inappetetic"];
             list.Add(rng.Pick(coping));
         }
 

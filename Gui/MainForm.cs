@@ -219,7 +219,7 @@ public sealed class MainForm : Form
     private readonly Dictionary<string, Bitmap> _rendered = [];
     private GenerationResult? _result;
     private string _view = "Counties";
-    private string _category = "Divisions";
+    private string _category = "De Jure";
 
     private readonly WorldEdits _edits = new();
     private readonly TitleEditor _titles;
@@ -2205,7 +2205,7 @@ public sealed class MainForm : Form
             {
                 MapPick.Culture => "Click a county to inspect and edit its culture",
                 MapPick.Faith => "Click a county to inspect and edit its faith",
-                MapPick.Realm => "Click a realm to focus it · Ctrl+click for the county · Esc steps back",
+                MapPick.Realm => "Click a realm to focus it · Ctrl+click jumps to a county · Esc steps back",
                 _ => $"Click a {TierWord(pick.Tier)} to inspect and edit it",
             };
         }
@@ -2356,7 +2356,7 @@ public sealed class MainForm : Form
 
             _legendBar.Controls.Add(new Label
             {
-                Text = "   Esc steps back · Ctrl+click opens the county",
+                Text = "   Esc steps back · Ctrl+click jumps to a county",
                 AutoSize = true,
                 Font = Theme.Ui,
                 ForeColor = Theme.TextDim,
@@ -2420,10 +2420,10 @@ public sealed class MainForm : Form
         switch (view.Kind)
         {
             // The colours on the Realms view are whole de facto realms, so a plain click resolves
-            // to the realm and drills; the county under the cursor stays reachable with Ctrl held.
+            // to the realm and drills a rung at a time; Ctrl held takes the county under the
+            // cursor directly, and the focus with it.
             case MapPick.Realm when ModifierKeys.HasFlag(Keys.Control) || Realm is null:
-                _titles.Reveal(title);
-                _status.Text = $"{TitleInspector.TierName(title)} {title.Name}";
+                FocusCounty(title);
                 break;
 
             case MapPick.Realm:
@@ -2494,6 +2494,39 @@ public sealed class MainForm : Form
                     $"Demesne of {graph.Primary(path[at]).Name} — county {county.Name}";
             }
         }
+
+        SelectView("Realms");
+    }
+
+    /// <summary>
+    /// Ctrl+click: the county itself, and the map focused on whoever holds it.
+    ///
+    /// The plain click descends a rung at a time, which is the right pace for a hierarchy you do
+    /// not know yet. This is the other question — one county already in view, and "who holds this,
+    /// and what else do they hold?" — so it takes the whole chain in one step and leaves the
+    /// breadcrumb as the way back up. Landing focused on the holder rather than merely opening the
+    /// county is what makes the answer visible: their other holdings light up around the one that
+    /// was clicked.
+    /// </summary>
+    private void FocusCounty(MapGen.Title county)
+    {
+        _titles.Reveal(county);
+
+        // Before a write there is no realm structure to focus, and the county is the whole answer.
+        if (Realm is not { } graph)
+        {
+            _status.Text = $"{TitleInspector.TierName(county)} {county.Name}";
+            return;
+        }
+
+        var seat = graph.SeatOfCounty(county);
+
+        _realmFocus.Clear();
+        _realmFocus.AddRange(graph.PathFromTop(seat));
+
+        var holder = graph.Primary(seat);
+        _status.Text = $"County {county.Name} — held by {TitleInspector.TierName(holder)} "
+                       + holder.Name + (county == seat ? " (their seat)" : "");
 
         SelectView("Realms");
     }

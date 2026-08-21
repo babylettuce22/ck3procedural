@@ -275,6 +275,13 @@ public sealed class EthnicityMap
     /// </summary>
     public required Dictionary<Culture, List<(string Key, int Weight)>> VariantsByCulture { get; init; }
 
+    /// <summary>
+    /// Races the mode's land ratio could not give a realm, seated instead as ~13% minorities in
+    /// the listed human host culture. They count as delivered for GuaranteedRaceCount; their
+    /// members look the race but carry no phenotype trait, since traits are stamped per culture.
+    /// </summary>
+    public required List<(RaceArchetype Race, Culture Host)> MinorityPlacements { get; init; }
+
     /// <summary>The list a culture should emit, falling back to its base when it has no selection.</summary>
     public List<(string Key, int Weight)> VariantsFor(Culture culture) =>
         VariantsByCulture.TryGetValue(culture, out var picked) && picked.Count > 0
@@ -310,8 +317,21 @@ public static class Ethnicities
         List<Culture> cultures,
         TerrainClass[] provinceTerrain,
         MapConfig cfg,
-        Rng rng)
+        Rng rng,
+        WildernessMap? wilderness = null)
     {
+        // A culture whose every county fell to wilderness writes no province history: it exists as
+        // a definition and holds nothing a player will ever see. Before this set existed such
+        // ghosts were not only eligible for races, they were MAGNETS for them — GetTerrainShares
+        // hands a landless culture a random terrain at 100% share, so a ghost that rolled Arctic
+        // out-scored every real arctic culture for the giantkin seat, and the race vanished from
+        // the visible map. Ghosts are now human, spend no ratio budget, host no minorities, and
+        // are invisible to every seeding pass.
+        int LandCount(Culture c) => c.Counties.Count(k => wilderness?.Contains(k) != true);
+        var ghosts = cultures.Where(c => LandCount(c) == 0).ToHashSet();
+        if (ghosts.Count > 0)
+            Console.WriteLine($"  ethnicities: {ghosts.Count} culture(s) hold only wilderness — kept human and out of every race roll");
+
         var ethnicities = new Dictionary<string, EthnicityDef>(StringComparer.OrdinalIgnoreCase);
         var byCulture = new Dictionary<Culture, EthnicityDef>();
         var byHeritage = new Dictionary<Heritage, EthnicityDef>();
@@ -321,8 +341,22 @@ public static class Ethnicities
 
         int ethIndex = 0;
 
+        // The mode's human:fantasy ratio, expressed as the counties fantasy races may hold.
+        // Under TieRaceToHeritage the heritage phase spends it; otherwise the culture loop does,
+        // and the heritage phase runs budgetless because its output is only the suggestion the
+        // 70%-follow drift reads.
+        int totalCounties = Math.Max(1, cultures.Sum(c => c.Counties.Count));
+        double fantasyBudget = (1.0 - HumanShareFor(cfg.RaceMode)) * totalCounties;
+        double fantasySpent = 0;
+        var minorityQueue = new List<RaceArchetype>();
+
         // 1. Determine Archetypes with Guaranteed Variety Guarantee
-        var heritageArchetypes = AssignDiverseArchetypes(heritages, cultures, provinceTerrain, cfg, rng);
+        var heritageArchetypes = AssignDiverseArchetypes(heritages, cultures, provinceTerrain, cfg, rng,
+            wilderness,
+            cfg.TieRaceToHeritage ? fantasyBudget : null,
+            cfg.TieRaceToHeritage && cfg.AllowMinorityRaces,
+            out var heritageOverflow);
+        minorityQueue.AddRange(heritageOverflow);
 
         // 2. Generate Heritage Ethnicities
         foreach (var heritage in heritages)
@@ -355,8 +389,17 @@ public static class Ethnicities
         var quotaPool = FantasyPoolFor(cfg);
         int targetQuota = Math.Clamp(cfg.GuaranteedRaceCount, 1, Math.Max(1, quotaPool.Count));
 
-        // 4. Assign Culture Ethnicities
-        foreach (var culture in cultures)
+        // 4. Assign Culture Ethnicities.
+        //
+        // Iterated in a shuffled order: the land budget below runs out partway through, and in
+        // list order that would make everything after the cut-off human — one contiguous end of
+        // the map, since the culture list is built region by region. Shuffling turns the cut-off
+        // into scatter. Ethnicity keys come out in a different order than list order as a result,
+        // which nothing depends on.
+        var cultureOrder = new List<Culture>(cultures);
+        rng.Shuffle(cultureOrder);
+
+        foreach (var culture in cultureOrder)
         {
             Heritage? heritage = culture.Heritage ?? heritages.FirstOrDefault(h => culture.Heritage != null && h.Key == culture.Heritage.Key) ?? heritages.FirstOrDefault();
             EthnicityDef? heritageEth = null;
@@ -384,6 +427,7 @@ public static class Ethnicities
                 cultureEth = CreateEthnicity($"gen_ethnicity_{ethIndex++}", race, culture.Name, cfg.RaceMode, rng);
                 ethnicities[cultureEth.Key] = cultureEth;
                 usedArchetypes.Add(race);
+                if (race != RaceArchetype.Human) fantasySpent += LandCount(culture);
             }
             else if (cfg.TieRaceToHeritage && heritageEth != null)
             {
@@ -393,8 +437,16 @@ public static class Ethnicities
             {
                 RaceArchetype subArchetype;
 
+                // A ghost takes Human unconditionally: it holds no visible land, so a race seated
+                // here vanishes from the map — the observed bug was the gnomes AND the giants both
+                // living on cultures with zero province history while the preview and the game
+                // showed neither. Checked before the quota so a ghost can never satisfy it.
+                if (ghosts.Contains(culture))
+                {
+                    subArchetype = RaceArchetype.Human;
+                }
                 // If we still haven't met the quota (e.g. very few heritages), guarantee it at culture level
-                if (usedArchetypes.Count < targetQuota && cfg.EnableFantasyEthnicities && cfg.RaceMode != FantasyRaceMode.HumanOnly)
+                else if (usedArchetypes.Count < targetQuota && cfg.EnableFantasyEthnicities && cfg.RaceMode != FantasyRaceMode.HumanOnly)
                 {
                     // Require has to be honoured here too. This branch used to pick from the
                     // unplaced races with no terrain test at all, which is how an all-forest map
@@ -418,13 +470,41 @@ public static class Ethnicities
                         available = available.Where(a => FitsTerrain(a, shares)).ToList();
                     }
 
-                    subArchetype = available.Count > 0 ? rng.Pick(available) : PickArchetypeForCulture(culture, provinceTerrain, cfg, rng);
+                    // The ratio gate, quota edition. A race still owed when the land budget is
+                    // gone arrives as a minority inside a human culture rather than as a realm —
+                    // the guarantee and the ratio both hold, which neither could alone. With
+                    // minorities disallowed the guarantee simply wins the land, as its name says
+                    // it should, and the ratio shortfall is reported at the end. The first
+                    // fantasy culture is always seated for the same reason the heritage phase
+                    // seats its first seed: a fantasy mode should never produce zero fantasy.
+                    bool overBudget = fantasySpent > 0
+                        && fantasySpent + LandCount(culture) > fantasyBudget;
+
+                    if (available.Count > 0 && overBudget && cfg.AllowMinorityRaces)
+                    {
+                        var demoted = rng.Pick(available);
+                        minorityQueue.Add(demoted);
+                        usedArchetypes.Add(demoted); // spoken for, just not with land
+                        subArchetype = RaceArchetype.Human;
+                    }
+                    else
+                    {
+                        subArchetype = available.Count > 0 ? rng.Pick(available) : PickArchetypeForCulture(culture, provinceTerrain, cfg, rng);
+                    }
                 }
                 else
                 {
                     var baseArchetype = heritageEth?.Archetype ?? RaceArchetype.Human;
                     subArchetype = rng.Chance(0.70) ? baseArchetype : PickArchetypeForCulture(culture, provinceTerrain, cfg, rng);
+
+                    // The ratio gate, drift edition. Following the heritage or the terrain roll
+                    // is flavour, not a guarantee, so over budget it simply yields to human.
+                    if (subArchetype != RaceArchetype.Human
+                        && fantasySpent + LandCount(culture) > fantasyBudget)
+                        subArchetype = RaceArchetype.Human;
                 }
+
+                if (subArchetype != RaceArchetype.Human) fantasySpent += LandCount(culture);
 
                 cultureEth = CreateEthnicity($"gen_ethnicity_{ethIndex++}", subArchetype, culture.Name, cfg.RaceMode, rng);
                 ethnicities[cultureEth.Key] = cultureEth;
@@ -436,13 +516,79 @@ public static class Ethnicities
             byCultureVariants[culture] = PickCultureVariants(cultureEth, rng);
         }
 
+        // 5. Seat the minorities. Each race the land budget could not give a realm gets a small
+        // presence (~13% of generated characters, weight 15 against a 70/30 variant list) inside
+        // the human culture whose terrain suits it best — the dwarves live among the humans of
+        // the mountains, not in a randomly chosen fishing village. The ethnicity is real and
+        // emitted like any other; only the culture's ethnicities list carries the smallness.
+        //
+        // Minority members look their race but hold no phenotype trait: HistoryWriter stamps
+        // traits per culture and the culture is human, so the script layer treats them as humans
+        // and the portrait-modifier forcing never touches them. Their look is genes alone, which
+        // is exactly what lets them exist inside a human culture without any script conflict.
+        var minorityPlaced = new List<(RaceArchetype Race, Culture Host)>();
+        var hostsUsed = new HashSet<Culture>();
+        foreach (var minorityRace in minorityQueue.Distinct().ToList())
+        {
+            Culture? bestHost = null;
+            double bestScore = double.MinValue;
+            foreach (var candidate in cultures)
+            {
+                if (byCulture[candidate].Archetype != RaceArchetype.Human) continue;
+                if (ghosts.Contains(candidate)) continue; // a minority nobody can meet is no minority
+
+                // Each race gets its own host while hosts last. Without this every minority piles
+                // into whichever single culture scores best map-wide — the observed case was the
+                // dwarves AND the gnomes both inside one people while every other human culture
+                // carried nobody — and one culture with three minorities reads as a bug where
+                // three cultures with one each read as a world.
+                if (hostsUsed.Contains(candidate) && hostsUsed.Count < cultures.Count(c => byCulture[c].Archetype == RaceArchetype.Human)) continue;
+
+                double score = HeritageAffinity(minorityRace, GetTerrainShares([candidate], provinceTerrain, rng))
+                    + rng.Double(0.0, 0.3);
+                if (score > bestScore) { bestScore = score; bestHost = candidate; }
+            }
+
+            // No human culture to host them — a fully fantastical map. Nothing to do; the race
+            // was only demoted because the world was too fantasy-heavy already, so this cannot
+            // happen with a sane budget, but a zero-human world should not crash over it.
+            if (bestHost is null) break;
+
+            var minorityEth = CreateEthnicity($"gen_ethnicity_{ethIndex++}", minorityRace,
+                bestHost.Name, cfg.RaceMode, rng);
+            ethnicities[minorityEth.Key] = minorityEth;
+
+            string entry = minorityEth.Variants.Count > 0
+                ? rng.Pick(minorityEth.Variants).Key
+                : minorityEth.Key;
+            byCultureVariants[bestHost].Add((entry, 15));
+            minorityPlaced.Add((minorityRace, bestHost));
+            hostsUsed.Add(bestHost);
+        }
+
         var tallies = byCulture.Values
             .GroupBy(e => e.Archetype)
             .Select(g => $"{g.Count()} {g.Key}");
 
         // Counted from byCulture, not from usedArchetypes: the tally beside it comes from the
-        // cultures, and the two used to be able to disagree.
-        int deliveredRaces = byCulture.Values.Select(e => e.Archetype).Distinct().Count();
+        // cultures, and the two used to be able to disagree. Minorities count as delivered — a
+        // race living among the humans is on the map, which is what the guarantee promises.
+        int deliveredRaces = byCulture.Values.Select(e => e.Archetype)
+            .Concat(minorityPlaced.Select(m => m.Race))
+            .Distinct().Count();
+
+        if (minorityPlaced.Count > 0)
+            Console.WriteLine("  ethnicities: minorities — " + string.Join(", ",
+                minorityPlaced.Select(m => $"{m.Race} among the {m.Host.Name}")));
+
+        if (cfg.EnableFantasyEthnicities && cfg.RaceMode != FantasyRaceMode.HumanOnly)
+        {
+            int humanCounties = byCulture
+                .Where(kv => kv.Value.Archetype == RaceArchetype.Human)
+                .Sum(kv => kv.Key.Counties.Count);
+            Console.WriteLine($"  ethnicities: humans hold {(double)humanCounties / totalCounties:P0} " +
+                              $"of counties (mode target ~{HumanShareFor(cfg.RaceMode):P0})");
+        }
 
         Console.WriteLine($"  ethnicities: {byCulture.Count} cultures across {deliveredRaces} distinct races -> {string.Join(", ", tallies)}");
 
@@ -461,6 +607,8 @@ public static class Ethnicities
                   + (cfg.RaceMode == FantasyRaceMode.ExoticSurreal
                         ? " — that is the ceiling"
                         : " — ExoticSurreal adds a ninth")
+                : !cfg.AllowMinorityRaces
+                ? "the mode's human:fantasy ratio left no land for them and AllowMinorityRaces is off — turn it on to seat them as minorities, or accept fewer races"
                 : cfg.RaceTerrain == RaceTerrainRule.Require
                 ? "RaceTerrain is Require, so races with no suitable terrain anywhere on this map were left unplaced rather than misplaced — set it to Prefer to settle them anyway"
                 : !cfg.TieRaceToHeritage && byCulture.Count < wanted
@@ -478,17 +626,29 @@ public static class Ethnicities
             ByHeritage = byHeritage,
             ByCultureKey = byCultureKey,
             ByHeritageKey = byHeritageKey,
-            VariantsByCulture = byCultureVariants
+            VariantsByCulture = byCultureVariants,
+            MinorityPlacements = minorityPlaced
         };
     }
 
+    /// <param name="fantasyBudget">Counties fantasy races may hold in total, or null when the
+    /// caller enforces the ratio itself (the culture-level loop under TieRaceToHeritage = false,
+    /// where these assignments are only suggestions that the 70%-follow drift reads).</param>
+    /// <param name="allowOverflow">Whether a guaranteed race the budget cannot seat becomes a
+    /// minority (returned in <paramref name="overflow"/>) instead of taking land anyway. False
+    /// means the guarantee wins the land and the ratio is knowingly sacrificed.</param>
     private static Dictionary<Heritage, RaceArchetype> AssignDiverseArchetypes(
         List<Heritage> heritages,
         List<Culture> cultures,
         TerrainClass[] provinceTerrain,
         MapConfig cfg,
-        Rng rng)
+        Rng rng,
+        WildernessMap? wilderness,
+        double? fantasyBudget,
+        bool allowOverflow,
+        out List<RaceArchetype> overflow)
     {
+        overflow = [];
         var assignments = new Dictionary<Heritage, RaceArchetype>();
         if (heritages.Count == 0) return assignments;
 
@@ -507,6 +667,17 @@ public static class Ethnicities
             var heritageCultures = cultures.Where(c => c.Heritage == heritage || (c.Heritage != null && c.Heritage.Key == heritage.Key)).ToList();
             heritageTerrain[heritage] = GetTerrainShares(heritageCultures, provinceTerrain, rng);
         }
+
+        // Land bookkeeping for the mode ratio. Imported assignments spend budget too — the
+        // export's races are as much land as generated ones — but they are never demoted to
+        // minorities, because the export said they hold ground and that word stands.
+        var heritageCounties = new Dictionary<Heritage, int>();
+        foreach (var heritage in heritages)
+            heritageCounties[heritage] = cultures
+                .Where(c => c.Heritage == heritage || c.Heritage?.Key == heritage.Key)
+                .Sum(c => c.Counties.Count(k => wilderness?.Contains(k) != true));
+        double meanCounties = Math.Max(1.0, heritageCounties.Values.DefaultIfEmpty(1).Average());
+        double fantasySpent = 0;
 
         // Which races Require would let each heritage hold. Judged against the aggregate AND
         // against every member culture, and a race passes if either does. The aggregate alone is
@@ -543,6 +714,16 @@ public static class Ethnicities
         var remainingHeritages = new List<Heritage>(heritages);
         rng.Shuffle(remainingHeritages);
 
+        // A heritage with no real land cannot seat a race a player will ever meet — and worse,
+        // its zero county count made it look FREE to the budget, so the greedy treated ghost
+        // heritages as the cheapest seats on the map. Human, out of the running, before anything
+        // is paired.
+        foreach (var h in remainingHeritages.Where(h => heritageCounties[h] == 0).ToList())
+        {
+            assignments[h] = RaceArchetype.Human;
+            remainingHeritages.Remove(h);
+        }
+
         var assignedRaces = new HashSet<RaceArchetype>();
 
         // 0. Imported Phase: heritages the export tagged with a race take that race outright,
@@ -559,6 +740,7 @@ public static class Ethnicities
             assignments[h] = race;
             assignedRaces.Add(race);
             remainingHeritages.Remove(h);
+            if (race != RaceArchetype.Human) fantasySpent += heritageCounties[h];
             importedCount++;
         }
 
@@ -600,7 +782,15 @@ public static class Ethnicities
                         ? 0.0
                         : HeritageAffinity(race, shares);
 
-                    double score = affinity + rng.Double(0.0, 0.3);
+                    // A guaranteed race should cost as little of the human land budget as its
+                    // affinities allow, so bigger-than-average heritages are penalised — hard on
+                    // a low-fantasy map, barely at all on a surreal one. Human seeds are free
+                    // land and take no penalty.
+                    double sizePenalty = fantasyBudget is null || race == RaceArchetype.Human
+                        ? 0.0
+                        : SizePressureFor(cfg.RaceMode) * (heritageCounties[h] / meanCounties);
+
+                    double score = affinity - sizePenalty + rng.Double(0.0, 0.3);
                     if (score > bestScore)
                     {
                         bestScore = score;
@@ -616,6 +806,26 @@ public static class Ethnicities
             // settle them on races that do fit, and the shortfall is reported by the caller.
             if (!found) break;
 
+            // The ratio gate. A fantasy seed that would blow the land budget becomes a minority
+            // instead of a realm — except the FIRST one, which is always seated: a fantasy mode
+            // whose budget is smaller than the smallest heritage should still put one fantasy
+            // realm on the map rather than none, because "rare realms" is the mode's own promise.
+            if (bestRace != RaceArchetype.Human && fantasyBudget is { } budget)
+            {
+                bool firstSeed = fantasySpent == 0;
+                if (!firstSeed && fantasySpent + heritageCounties[bestHeritage] > budget)
+                {
+                    if (allowOverflow)
+                    {
+                        overflow.Add(bestRace);
+                        assignedRaces.Add(bestRace); // spoken for, just not with land
+                        continue;
+                    }
+                    // Guarantee wins the land; the caller reports the broken ratio.
+                }
+                fantasySpent += heritageCounties[bestHeritage];
+            }
+
             assignments[bestHeritage] = bestRace;
             assignedRaces.Add(bestRace);
             remainingHeritages.Remove(bestHeritage);
@@ -629,9 +839,49 @@ public static class Ethnicities
         //    keeps accumulating here so the rule holds across the whole remainder, not per roll.
         foreach (var h in remainingHeritages)
         {
+            // The mode ratio, enforced in land rather than by the old per-heritage coin flip: a
+            // remainder heritage goes fantasy while the budget holds and human once it is spent.
+            // With no budget (the tie=false suggestion pass) every remainder rolls fantasy and
+            // the culture loop applies the ratio itself.
+            if (fantasyBudget is { } b && fantasySpent + heritageCounties[h] > b)
+            {
+                assignments[h] = RaceArchetype.Human;
+                continue;
+            }
+
             var pick = PickWeightedArchetype(heritageTerrain[h], heritageFits?[h], assignedRaces, cfg, rng);
             assignments[h] = pick;
             assignedRaces.Add(pick);
+            if (pick != RaceArchetype.Human) fantasySpent += heritageCounties[h];
+        }
+
+        // 3. Top-up Phase: races the heritage COUNT could not seat. targetUnique clamps to the
+        //    number of heritages, so a seven-heritage world asked for eight races never even
+        //    attempts the eighth — it was not squeezed out by the land budget, it was clamped away
+        //    before the greedy began, and no overflow entry was ever written for it. With
+        //    minorities allowed the guarantee is not a land promise, so those races are owed a
+        //    minority seat. Run AFTER the remainder on purpose: the remainder prefers unseated
+        //    races for its realms, and a race that can still get land should, with the minority
+        //    list as the fallback rather than the first resort.
+        if (allowOverflow)
+        {
+            int wanted = Math.Clamp(cfg.GuaranteedRaceCount, 1, candidatePool.Count);
+
+            // Distinct union, not a sum. The greedy adds a budget-demoted race to BOTH
+            // assignedRaces (so nothing re-attempts it) and overflow (so it gets its minority
+            // seat), and summing the two lists counted every demoted race twice — which is how a
+            // seven-heritage world asked for eight races delivered seven: the sum hit `wanted`
+            // while a pool race the clamp had never let the greedy attempt was still missing.
+            var delivered = new HashSet<RaceArchetype>(assignedRaces);
+            delivered.UnionWith(overflow);
+
+            foreach (var race in candidatePool)
+            {
+                if (delivered.Count >= wanted) break;
+                if (race == RaceArchetype.Human) continue; // humans need no minority seat
+                if (!delivered.Add(race)) continue;
+                overflow.Add(race);
+            }
         }
 
         return assignments;
@@ -640,6 +890,40 @@ public static class Ethnicities
     /// <summary>Terrain the heritage has most of — the old modal reading, kept for the remainder roll.</summary>
     private static TerrainClass DominantOf(Dictionary<TerrainClass, double> shares) =>
         shares.OrderByDescending(kv => kv.Value).First().Key;
+
+    /// <summary>
+    /// The share of the world's COUNTIES humans should hold, per mode — the ratio each mode's own
+    /// documentation promises ("Humans dominant (~85%)" for LowFantasy) and the number the whole
+    /// budget system below steers toward.
+    ///
+    /// Counties, not cultures or heritages, because land share is what the ratio reads as on the
+    /// map: one sprawling elven heritage outweighs five human duchies. The old implementation had
+    /// no budget at all — the mode ratio lived in a single per-heritage coin flip that only ran
+    /// AFTER the guarantee phase, and the guarantee phase usually consumed every heritage (the
+    /// heritage floor in Cultures.cs raises the heritage count to GuaranteedRaceCount, so the two
+    /// were equal on all but huge maps). Measured result: LowFantasy delivered ~10% human. The
+    /// mode was decorative.
+    /// </summary>
+    private static double HumanShareFor(FantasyRaceMode mode) => mode switch
+    {
+        FantasyRaceMode.LowFantasy => 0.85,
+        FantasyRaceMode.HighFantasy => 0.35,
+        FantasyRaceMode.ExoticSurreal => 0.12,
+        _ => 1.0
+    };
+
+    /// <summary>
+    /// How hard the guarantee phase is pushed toward SMALL heritages, per mode. A guaranteed race
+    /// has to exist somewhere; on a low-fantasy map it should exist somewhere small, so the
+    /// guarantee costs as little of the human land budget as it can. Scaled by the heritage's
+    /// county count relative to the mean and subtracted from the greedy's affinity score.
+    /// </summary>
+    private static double SizePressureFor(FantasyRaceMode mode) => mode switch
+    {
+        FantasyRaceMode.LowFantasy => 4.0,
+        FantasyRaceMode.HighFantasy => 1.5,
+        _ => 0.5
+    };
 
     /// <summary>
     /// The races a map may draw on, given its mode. One definition so the culture-level quota, the
@@ -797,9 +1081,12 @@ public static class Ethnicities
 
         if (total == 0)
         {
-            var fallback = rng.Pick([TerrainClass.Mountains, TerrainClass.Hills, TerrainClass.Forest,
-                                     TerrainClass.Desert, TerrainClass.Plains, TerrainClass.Arctic]);
-            return new Dictionary<TerrainClass, double> { [fallback] = 1.0 };
+            // Empty on purpose, NOT a random terrain. The old fallback handed a landless culture
+            // one random terrain at 100% share — full affinity reach, undiluted by any real mix —
+            // which made ghost cultures out-score every real candidate for whichever race their
+            // roll happened to suit. An empty profile scores the affinity floor everywhere:
+            // neutral, ineligible under Require, and never anyone's best offer.
+            return [];
         }
 
         return terrainCounts.ToDictionary(kv => kv.Key, kv => kv.Value / (double)total);
@@ -840,17 +1127,12 @@ public static class Ethnicities
         MapConfig cfg,
         Rng rng)
     {
-        double fantasyChance = cfg.RaceMode switch
-        {
-            FantasyRaceMode.LowFantasy => 0.35,
-            FantasyRaceMode.HighFantasy => 0.75,
-            FantasyRaceMode.ExoticSurreal => 0.90,
-            _ => 0.0
-        };
-
-        if (!rng.Chance(fantasyChance))
-            return RaceArchetype.Human;
-
+        // No human coin flip here any more. The mode's human:fantasy ratio is enforced upstream
+        // as a COUNTY budget (see HumanShareFor) — the caller only reaches this while the budget
+        // still holds, so this picks the best-fitting fantasy race and nothing else. The old coin
+        // was the only place the ratio lived, and it ran per heritage regardless of size, after a
+        // guarantee phase that usually consumed every heritage anyway; the measured result was
+        // ~10% human in every mode.
         IReadOnlyList<RaceArchetype> candidates;
 
         if (cfg.RaceTerrain == RaceTerrainRule.Ignore)

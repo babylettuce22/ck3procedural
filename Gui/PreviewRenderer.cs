@@ -720,8 +720,10 @@ public static class PreviewRenderer
         int step = StepFor(result.Provinces.Width);
         var centroids = CalculateEthnicityCentroids(result, written);
 
-        // 2. Overlay icons onto the downsampled image
-        foreach (var (archetype, (cx, cy)) in centroids)
+        // 2. Overlay icons onto the downsampled image. Minorities draw smaller — a race seated
+        // inside a human culture by the ratio budget is real but holds no land of its own, and the
+        // badge size is what tells the two apart at a glance.
+        foreach (var (archetype, (cx, cy), minority) in centroids)
         {
             var icon = GetPhenotypeIcon(archetype);
             if (icon is null) continue;
@@ -730,13 +732,13 @@ public static class PreviewRenderer
             int targetX = cx / step;
             int targetY = cy / step;
 
-            DrawIconBadge(image, targetX, targetY, icon.Value);
+            DrawIconBadge(image, targetX, targetY, icon.Value, minority ? 20 : 28);
         }
 
         return image;
     }
 
-    private static List<(RaceArchetype Archetype, (int X, int Y) Position)> CalculateEthnicityCentroids(
+    private static List<(RaceArchetype Archetype, (int X, int Y) Position, bool Minority)> CalculateEthnicityCentroids(
         GenerationResult result, Emit.WrittenContent written)
     {
         var map = result.Provinces;
@@ -752,14 +754,12 @@ public static class PreviewRenderer
                 seedOfProvince[id] = label;
         }
 
-        var centroids = new List<(RaceArchetype Archetype, (int X, int Y) Position)>();
+        var centroids = new List<(RaceArchetype Archetype, (int X, int Y) Position, bool Minority)>();
 
-        // Calculate centroid per culture so separate enclaves/cultures of a race get their own badge
-        foreach (var culture in written.Cultures.Cultures)
+        // The barony seed closest to a culture's geometric centre, or null for a culture with no
+        // drawable ground. Shared by the majority badges and the minority ones below.
+        (int X, int Y)? CentroidOf(MapGen.Culture culture)
         {
-            var eth = written.Ethnicities.For(culture);
-            if (eth.Archetype == RaceArchetype.Human) continue;
-
             var points = new List<(int X, int Y)>();
 
             foreach (var county in culture.Counties)
@@ -780,28 +780,51 @@ public static class PreviewRenderer
                 }
             }
 
-            if (points.Count == 0) continue;
+            if (points.Count == 0) return null;
 
             long sumX = 0, sumY = 0;
             foreach (var p in points) { sumX += p.X; sumY += p.Y; }
             int avgX = (int)(sumX / points.Count);
             int avgY = (int)(sumY / points.Count);
 
-            // Pick the barony seed closest to the geometric center
-            var closest = points.MinBy(p => {
+            return points.MinBy(p => {
                 long dx = p.X - avgX, dy = p.Y - avgY;
                 return dx * dx + dy * dy;
             });
+        }
 
-            centroids.Add((eth.Archetype, closest));
+        // Calculate centroid per culture so separate enclaves/cultures of a race get their own badge
+        foreach (var culture in written.Cultures.Cultures)
+        {
+            var eth = written.Ethnicities.For(culture);
+            if (eth.Archetype == RaceArchetype.Human) continue;
+
+            if (CentroidOf(culture) is { } pos)
+                centroids.Add((eth.Archetype, pos, false));
+        }
+
+        // The minorities. These races exist — the ratio budget seated them inside a human culture
+        // instead of giving them land — and leaving them unbadged is exactly how "the map only
+        // made five races" gets misread off a preview that is actually showing all eight. Drawn at
+        // the host culture's centre; a host carrying several gets them fanned out sideways so the
+        // badges do not stack into one.
+        var perHost = new Dictionary<MapGen.Culture, int>();
+        foreach (var (race, host) in written.Ethnicities.MinorityPlacements)
+        {
+            if (CentroidOf(host) is not { } pos) continue;
+
+            int already = perHost.GetValueOrDefault(host);
+            perHost[host] = already + 1;
+
+            centroids.Add((race, (pos.X + already * 24 * StepFor(result.Provinces.Width), pos.Y), true));
         }
 
         return centroids;
     }
 
-    private static void DrawIconBadge(Image dest, int cx, int cy, DdsReader.DecodedImage icon)
+    private static void DrawIconBadge(Image dest, int cx, int cy, DdsReader.DecodedImage icon, int targetSize = 28)
     {
-        int targetSize = 28; // Icon display width/height in preview pixels
+        // targetSize: icon display width/height in preview pixels; minorities draw at 20.
         int radius = targetSize / 2 + 3;
         int rSq = radius * radius;
 

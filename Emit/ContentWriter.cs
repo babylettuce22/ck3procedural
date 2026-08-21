@@ -112,7 +112,8 @@ public static class ContentWriter
         });
 
         var ethnicities = Core.Stage.Time("ethnicities", () => MapGen.Ethnicities.Build(
-            cultures.Heritages, cultures.Cultures, provinceTerrain, cfg, new Rng(cfg.Seed ^ 0x38F1)));
+            cultures.Heritages, cultures.Cultures, provinceTerrain, cfg, new Rng(cfg.Seed ^ 0x38F1),
+            wilderness));
 
         Core.Stage.Time("ethnicity files", () => EthnicityWriter.WriteAll(modDir, ethnicities));
 

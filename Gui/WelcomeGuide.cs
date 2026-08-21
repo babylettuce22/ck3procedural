@@ -24,7 +24,7 @@ public sealed class WelcomeGuide : GuideForm
         Step(2, "Preview (F5). Everything generates without writing a file — provinces, titles, "
               + "rivers, climate, cultures. A big map takes a few minutes the first time; the "
               + "progress bar learns your machine's pace as it goes.");
-        Step(3, "Read the result. Map modes group into Physical, Climate, Divisions and World; "
+        Step(3, "Read the result. Map modes group into Physical, Climate, De Jure and World; "
               + "the [ and ] keys flip through a group. Hover the map for what is under the "
               + "cursor, and check the 3D render tab — its Surface picker can drape any map mode "
               + "over the relief.");
@@ -45,7 +45,7 @@ public sealed class WelcomeGuide : GuideForm
         Shortcut("[  ]", "Previous / next map mode");
         Shortcut("Ctrl+[  ]", "Previous / next mode group");
         Shortcut("Esc", "Cancel a run · step out of a focused realm");
-        Shortcut("Ctrl+click", "In Realms mode: the county instead of the realm");
+        Shortcut("Ctrl+click", "In Realms mode: jump straight to a county and its holder");
 
         Note("Importing a map from Azgaar (azgaar.github.io) has its own walkthrough — the "
            + "Azgaar button in the toolbar, or right here:");

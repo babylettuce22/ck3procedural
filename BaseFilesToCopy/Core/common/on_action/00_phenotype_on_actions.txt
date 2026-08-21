@@ -30,6 +30,32 @@ gen_phenotype_birth_on_action = {
 	}
 }
 
+# GAME START — one sweep over everyone alive on day one.
+#
+# The generator stamps every HISTORY character's trait at generation time, but the engine invents
+# more people during setup — pool wanderers, filler courtiers, lowborn spouses — and before this
+# hook they went a year or more looking human in a dwarven court until the yearly pulse reached
+# them. One pass at the start closes that window. It also runs the sanitizer, so a save edited by
+# console or ruler designer is repaired the moment it loads rather than at its first birthday.
+#
+# `on_game_start_after_lobby` rather than `on_game_start`, because vanilla documents it as the one
+# that knows the game rules and the players — and it fires once, after the lobby, which is exactly
+# the "before the player looks at anything" moment this wants. Vanilla declares its own `effect`
+# block on it, which is precisely why this file must append via the on_actions list and never write
+# an effect block of its own — see the header.
+on_game_start_after_lobby = {
+	on_actions = { gen_phenotype_game_start_on_action }
+}
+
+gen_phenotype_game_start_on_action = {
+	effect = {
+		every_living_character = {
+			gen_sanitize_phenotype_effect = yes
+			gen_assign_phenotype_effect = yes
+		}
+	}
+}
+
 # THE NET — for characters the engine invents rather than births.
 #
 # Courtiers generated to fill a court, landless adventurers and their companions, pool guests, low

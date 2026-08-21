@@ -54,7 +54,7 @@ public sealed record MapMode(
 
 public static class MapModes
 {
-    public static readonly string[] Categories = ["Physical", "Climate", "Divisions", "World"];
+    public static readonly string[] Categories = ["Physical", "Climate", "De Jure", "World"];
 
     /// <summary>Does a pending edit of these aspects change what this pick kind paints?</summary>
     public static bool Repaints(MapPick kind, Emit.WorldAspect touched) => kind switch
@@ -122,15 +122,15 @@ public static class MapModes
                 [(0.05, "Barren"), (0.3, "Poor"), (0.55, "Fair"), (0.8, "Good"), (1.0, "Rich")]),
         },
 
-        // --- Divisions ------------------------------------------------------------------------
-        new("Provinces", "Divisions", (r, _) => PreviewRenderer.RenderProvinces(r)),
-        new("Counties", "Divisions", (r, _) => PreviewRenderer.RenderCounties(r))
+        // --- De Jure --------------------------------------------------------------------------
+        new("Provinces", "De Jure", (r, _) => PreviewRenderer.RenderProvinces(r)),
+        new("Counties", "De Jure", (r, _) => PreviewRenderer.RenderCounties(r))
             { Pick = (MapPick.Title, "c") },
-        new("Duchies", "Divisions", (r, _) => PreviewRenderer.RenderDuchies(r))
+        new("Duchies", "De Jure", (r, _) => PreviewRenderer.RenderDuchies(r))
             { Pick = (MapPick.Title, "d") },
-        new("Kingdoms", "Divisions", (r, _) => PreviewRenderer.RenderKingdoms(r))
+        new("Kingdoms", "De Jure", (r, _) => PreviewRenderer.RenderKingdoms(r))
             { Pick = (MapPick.Title, "k") },
-        new("Empires", "Divisions", (r, _) => PreviewRenderer.RenderEmpires(r))
+        new("Empires", "De Jure", (r, _) => PreviewRenderer.RenderEmpires(r))
             { Pick = (MapPick.Title, "e") },
 
         // --- World ----------------------------------------------------------------------------

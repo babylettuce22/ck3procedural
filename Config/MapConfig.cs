@@ -1373,7 +1373,7 @@ public sealed class MapConfig : CustomTypeDescriptor
 
     [Category("14 Fantasy/Ethnicities")]
     [Description("How many distinct races the world must contain. Raises the heritage count if culture density would not otherwise produce enough regions to hold them, so a high value costs you smaller heritages. Capped at 8, the number of races that exist. Require terrain can hold the delivered count below this.")]
-    public int GuaranteedRaceCount { get; set; } = 8;
+    public int GuaranteedRaceCount { get; set; } = 10;
 
     /// <summary>
     /// How much say the land has over who lives on it. Every race has terrain it wants —
@@ -1404,6 +1404,10 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Category("14 Fantasy/Ethnicities")]
     [Description("How much say terrain has over where a race may appear. Prefer biases placement but always delivers the requested race count. Require only settles a race where terrain it wants covers at least a fifth of the region, and drops races that have nowhere to live — so a map with no mountains gets no dwarves rather than misplaced ones. Humans are never blocked.")]
     public RaceTerrainRule RaceTerrain { get; set; } = RaceTerrainRule.Prefer;
+
+    [Category("14 Fantasy/Ethnicities")]
+    [Description("When the mode's human:fantasy land ratio leaves no room for every guaranteed race to hold territory of its own, let the overflow races live as small minorities (~13% of characters) inside a well-suited human culture instead of not appearing at all. Minority members look their race but carry no racial trait or bonuses — they are flavour, not a faction. Off means the guarantee simply wins the land and the ratio is sacrificed with a warning.")]
+    public bool AllowMinorityRaces { get; set; } = true;
 
 
     // =========================================================================
