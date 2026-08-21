@@ -6,7 +6,7 @@
          process inherits the parent's stdout handle, so driving the CLI through dotnet run prints
          exactly as before. -->
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net9.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
 
     <!-- Embedded Executable Icon -->
@@ -19,8 +19,17 @@
 	<InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <!-- The heightmap pipeline (CK3 Heightmap Forge) lives in its own repo beside this one and is
+         referenced as source, so the Heightmap tab and the Forge app share one implementation.
+         Override NoiseToolDir on the command line or in Directory.Build.props if it lives elsewhere. -->
+    <NoiseToolDir Condition="'$(NoiseToolDir)' == ''">..\noisetool\</NoiseToolDir>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="SixLabors.ImageSharp" Version="4.0.0" />
+    <ProjectReference Include="$(NoiseToolDir)NoiseTool.Core\NoiseTool.Core.csproj" />
+    <ProjectReference Include="$(NoiseToolDir)NoiseTool.Ui\NoiseTool.Ui.csproj" />
   </ItemGroup>
 
   <ItemGroup>

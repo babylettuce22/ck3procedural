@@ -1,3 +1,5 @@
 <Solution>
   <Project Path="Ck3MapGen.csproj" />
+  <Project Path="../noisetool/NoiseTool.Core/NoiseTool.Core.csproj" />
+  <Project Path="../noisetool/NoiseTool.Ui/NoiseTool.Ui.csproj" />
 </Solution>

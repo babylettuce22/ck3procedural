@@ -18,9 +18,9 @@
 #
 # Culture is right for this population and wrong for a newborn, which is why births are handled
 # somewhere else entirely: a child has parents to read, a courtier invented out of nothing does not,
-# and its culture is the only honest signal available. gen_has_phenotype_trigger now includes
-# the gen_phenotype_human flag, so a child who came out human is already decided and this effect
-# will not reach past its parents to convert it.
+# and its culture is the only honest signal available. gen_has_phenotype_trigger includes
+# phenotype_human, so a child who came out human is already decided and this effect will not reach
+# past its parents to convert it.
 #
 # **Why it has to be indirect.** This file set ships identically for every seed and so may not name
 # a generated key (see BaseFilesToCopy/README.txt), which rules out asking whether the character's
@@ -66,9 +66,11 @@ gen_assign_phenotype_effect = {
 			host = { save_scope_as = gen_phenotype_source }
 		}
 
-		# No source is the normal case, not a failure: on a human map nobody anywhere carries one of
-		# these traits, so every character falls through here and the whole system costs one trigger
-		# per character per year. It is also what makes the effect safe to call unconditionally.
+		# No source is still possible, not a failure: a culture whose head, liege and host are all
+		# dead or untagged simply waits for next year's pulse. (This file set only ships on fantasy
+		# maps now — see Emit/StaticFileWriter.cs — so the old "human maps fall through here for
+		# free" case no longer arises; on a fantasy map nearly everyone finds a source, humans
+		# included, which is what stamps phenotype_human onto engine-generated human courtiers.)
 		if = {
 			limit = { exists = scope:gen_phenotype_source }
 			gen_copy_phenotype_effect = yes
@@ -79,9 +81,9 @@ gen_assign_phenotype_effect = {
 # Copies scope:gen_phenotype_source's phenotype onto the current character.
 #
 # Split out so the source-picking above stays readable, and written as one else_if chain rather than
-# six independent ifs so a source carrying two phenotypes — which the `opposites` lists are supposed
-# to prevent, but which a ruler designer character or a console command can still produce — hands
-# over exactly one instead of stacking them.
+# seven independent ifs so a source carrying two phenotypes — which the `opposites` lists are
+# supposed to prevent, but which a ruler designer character or a console command can still produce —
+# hands over exactly one instead of stacking them.
 gen_copy_phenotype_effect = {
 	if = {
 		limit = { scope:gen_phenotype_source = { has_trait = phenotype_gracile } }
@@ -108,23 +110,30 @@ gen_copy_phenotype_effect = {
 		add_trait = phenotype_dusk_adapted
 	}
 	else_if = {
-		# The source can legitimately be a marked human: a human child of a mixed line who rose to
-		# culture head. Copying the marker settles the target permanently instead of leaving it
-		# blank to be re-examined every year.
-		limit = { scope:gen_phenotype_source = { has_character_flag = gen_phenotype_human } }
-		add_character_flag = gen_phenotype_human
+		# The human race spreads through the pulse like any other: a courtier invented for a human
+		# court takes phenotype_human from the culture head and is settled permanently instead of
+		# being re-examined every year. Deliberately NOT copied: the gen_phenotype_human FLAG. The
+		# flag means "mixed-line human, reset inherited skin at render" and is a fact about a
+		# bloodline, not a culture — copying it from a mixed-line culture head would snap the skin
+		# of every minority-race member of that culture back to human.
+		limit = { scope:gen_phenotype_source = { has_trait = phenotype_human } }
+		add_trait = phenotype_human
 	}
 }
 
 # Strips a character back to one race.
 #
-# Should never fire: all six traits share `group = phenotype_race` and list each other as
-# `opposites`, and the human flag is only set by script. The ruler designer and the console can still produce a doubled character, and two
-# races means two sets of forced genes fighting over one portrait, so the yearly pulse checks.
+# Should never fire: all seven traits list each other as `opposites`, and the mixed-line flag is
+# only set by script. The ruler designer and the console can still produce a doubled character, and
+# two races means two sets of forced genes fighting over one portrait, so the yearly pulse checks.
 #
 # Priority order is fixed rather than random so the same character repairs to the same race every
-# time it is asked, instead of flickering between races year to year. remove_trait on a trait the
-# character does not hold is a safe no-op, and so is removing an absent flag — what keeps this short.
+# time it is asked, instead of flickering between races year to year — fantasy traits outrank
+# phenotype_human, so a designer character who stacked "human" on top of a race keeps the race.
+# Every fantasy branch also clears the mixed-line flag: the flag means "human whose inherited skin
+# must reset", which is nonsense beside a fantasy trait. Beside phenotype_human it is consistent
+# and kept. remove_trait on a trait the character does not hold is a safe no-op, and so is removing
+# an absent flag — what keeps this short.
 gen_sanitize_phenotype_effect = {
 	if = {
 		limit = { gen_has_conflicting_phenotype_trigger = yes }
@@ -136,6 +145,7 @@ gen_sanitize_phenotype_effect = {
 			remove_trait = phenotype_towering
 			remove_trait = phenotype_diminutive
 			remove_trait = phenotype_dusk_adapted
+			remove_trait = phenotype_human
 			remove_character_flag = gen_phenotype_human
 		}
 		else_if = {
@@ -144,6 +154,7 @@ gen_sanitize_phenotype_effect = {
 			remove_trait = phenotype_towering
 			remove_trait = phenotype_diminutive
 			remove_trait = phenotype_dusk_adapted
+			remove_trait = phenotype_human
 			remove_character_flag = gen_phenotype_human
 		}
 		else_if = {
@@ -151,21 +162,25 @@ gen_sanitize_phenotype_effect = {
 			remove_trait = phenotype_towering
 			remove_trait = phenotype_diminutive
 			remove_trait = phenotype_dusk_adapted
+			remove_trait = phenotype_human
 			remove_character_flag = gen_phenotype_human
 		}
 		else_if = {
 			limit = { has_trait = phenotype_towering }
 			remove_trait = phenotype_diminutive
 			remove_trait = phenotype_dusk_adapted
+			remove_trait = phenotype_human
 			remove_character_flag = gen_phenotype_human
 		}
 		else_if = {
 			limit = { has_trait = phenotype_diminutive }
 			remove_trait = phenotype_dusk_adapted
+			remove_trait = phenotype_human
 			remove_character_flag = gen_phenotype_human
 		}
 		else_if = {
 			limit = { has_trait = phenotype_dusk_adapted }
+			remove_trait = phenotype_human
 			remove_character_flag = gen_phenotype_human
 		}
 	}

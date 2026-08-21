@@ -1,4 +1,4 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 
 namespace Ck3MapGen.MapGen;
@@ -22,12 +22,29 @@ public sealed class Drainage
     public required byte[] LandMask { get; init; }
 
     /// <summary>
+    /// Which body of water each water cell belongs to (-1 on land), with each body's area and
+    /// whether it is sea. Sea is every body that touches the map border; everything else is a
+    /// lake, and lakes drain: they are not sinks for the flood but terrain it fills to the lowest
+    /// point on the rim, so their whole catchment flows on over the spill to the sea exactly as a
+    /// real lake overflows. Before this every water cell was a sink, which is why a lake never had
+    /// an outlet and a major river traced up from the sea stopped dead on the hill above it.
+    /// </summary>
+    public required int[] WaterBody { get; init; }
+    public required int[] WaterBodyArea { get; init; }
+    public required bool[] WaterBodyIsSea { get; init; }
+
+    /// <summary>
     /// The elevation the drainage was solved from, kept so <see cref="LakeDepth(int)"/> can be
     /// asked without the caller having to supply the right array.
     /// </summary>
     public required float[] Source { get; init; }
 
     public bool IsLand(int i) => LandMask[i] != 0;
+    public bool IsLake(int i) => LandMask[i] == 0 && !WaterBodyIsSea[WaterBody[i]];
+    public bool IsSea(int i) => LandMask[i] == 0 && WaterBodyIsSea[WaterBody[i]];
+
+    /// <summary>Land and lake alike: every cell the water runs across rather than ends in.</summary>
+    public bool Drains(int i) => LandMask[i] != 0 || !WaterBodyIsSea[WaterBody[i]];
 
     /// <summary>
     /// How deep the fill stands over the original ground — the depth of a closed depression, and
@@ -71,13 +88,24 @@ public sealed class Drainage
             }
         });
 
-        // 2. Monotonic Priority Flood (guarantees every cell has a strictly lower downhill route)
+        // 2. Sea against lake, so the flood knows which water is base level and which is terrain.
+        var (body, area, isSea) = WaterBodies(landMask, width, height);
+        var drains = new byte[n];
+        int lakes = 0, lakeCells = 0;
+        for (int i = 0; i < n; i++)
+        {
+            drains[i] = landMask[i] != 0 || !isSea[body[i]] ? (byte)1 : (byte)0;
+            if (landMask[i] == 0 && !isSea[body[i]]) lakeCells++;
+        }
+        for (int b = 0; b < area.Length; b++) if (!isSea[b]) lakes++;
+
+        // 3. Monotonic Priority Flood (guarantees every cell has a strictly lower downhill route)
         var filled = new float[n];
         var receiver = new int[n];
-        FloodMonotonic(contouredElev, landMask, width, height, filled, receiver);
+        FloodMonotonic(contouredElev, drains, landMask, width, height, filled, receiver);
 
-        // 3. Exact In-Degree Topological Flow Accumulation
-        var flow = AccumulateTopological(landMask, width, height, receiver, Weights(runoffMm, landMask));
+        // 4. Exact In-Degree Topological Flow Accumulation
+        var flow = AccumulateTopological(drains, width, height, receiver, Weights(runoffMm, landMask));
 
         var drainage = new Drainage
         {
@@ -88,20 +116,42 @@ public sealed class Drainage
             Flow = flow,
             LandMask = landMask,
             Source = elevation,
+            WaterBody = body,
+            WaterBodyArea = area,
+            WaterBodyIsSea = isSea,
         };
+
+        Console.WriteLine($"  drainage: {area.Length} water bodies, {lakes} of them lakes " +
+                          $"({lakeCells:N0} cells) draining over their rims to the sea");
 
         drainage.Report(elevation);
         return drainage;
     }
 
     private static void FloodMonotonic(
-        float[] elevation, byte[] landMask, int width, int height,
+        float[] elevation, byte[] drains, byte[] landMask, int width, int height,
         float[] filled, int[] receiver)
     {
         int n = width * height;
         var closed = new bool[n];
         var open = new PriorityQueue<int, double>();
-        const double Epsilon = 1e-5;
+
+        // Inside a filled depression every cell sits a hair above the one it drains to, and that
+        // hair is what decides the shape of the tree: the flood is a shortest-path search over these
+        // increments, so the route from the far side of a basin back to its spill is the cheapest
+        // chain of them. Water is made cheaper than land so that where a basin holds a lake the
+        // route across the basin runs through the lake rather than over a peninsula or along the
+        // shore — that route is what a major river traced through the lake will follow, and it has
+        // to stay wet.
+        //
+        // The levels are kept in double while the flood runs. Filled is float, and at a few
+        // hundred units a float cannot resolve increments this small: each new cell would round
+        // back onto its parent's level, the queue would see a flat plateau and the tree inside
+        // every large basin would be heap order rather than distance. It always was, quietly; it
+        // only started to matter once the path through a basin was something to be drawn.
+        const double EpsilonLand = 1e-5;
+        const double EpsilonWater = 1e-6;
+        var level = new double[n];
 
         for (int y = 0; y < height; y++)
         {
@@ -109,12 +159,12 @@ public sealed class Drainage
             for (int x = 0; x < width; x++)
             {
                 int i = y * width + x;
-                if (landMask[i] != 0 && !edgeRow && x != 0 && x != width - 1) continue;
+                if (drains[i] != 0 && !edgeRow && x != 0 && x != width - 1) continue;
 
-                filled[i] = elevation[i];
+                level[i] = elevation[i];
                 receiver[i] = i;
                 closed[i] = true;
-                open.Enqueue(i, filled[i]);
+                open.Enqueue(i, level[i]);
             }
         }
 
@@ -122,7 +172,7 @@ public sealed class Drainage
         {
             int c = open.Dequeue();
             int cx = c % width, cy = c / width;
-            double curLevel = filled[c];
+            double curLevel = level[c];
 
             for (int k = 0; k < 8; k++)
             {
@@ -139,17 +189,82 @@ public sealed class Drainage
                 if (nextLevel <= curLevel)
                 {
                     // Slightly lift flooded depression so water slopes strictly towards outlet
-                    nextLevel = curLevel + Epsilon;
+                    nextLevel = curLevel + (landMask[nb] != 0 ? EpsilonLand : EpsilonWater);
                 }
 
-                filled[nb] = (float)nextLevel;
+                level[nb] = nextLevel;
                 open.Enqueue(nb, nextLevel);
             }
         }
+
+        for (int i = 0; i < n; i++) filled[i] = (float)level[i];
+    }
+
+    /// <summary>
+    /// Labels the 8-connected bodies of water in a land mask and tells sea from lake. Sea is any
+    /// body touching the map border — the ocean border guarantees the ocean does — and if nothing
+    /// touches the border the largest body stands in for it, so a map without an ocean border
+    /// still has somewhere for the water to go rather than draining everything off the edge.
+    /// </summary>
+    public static (int[] Body, int[] Area, bool[] IsSea) WaterBodies(byte[] landMask, int width, int height)
+    {
+        int n = width * height;
+        var body = new int[n];
+        Array.Fill(body, -1);
+
+        var area = new List<int>();
+        var touchesEdge = new List<bool>();
+        var frontier = new Queue<int>();
+
+        for (int start = 0; start < n; start++)
+        {
+            if (landMask[start] != 0 || body[start] >= 0) continue;
+
+            int id = area.Count;
+            int count = 0;
+            bool edge = false;
+
+            body[start] = id;
+            frontier.Enqueue(start);
+
+            while (frontier.Count > 0)
+            {
+                int c = frontier.Dequeue();
+                count++;
+
+                int cx = c % width, cy = c / width;
+                if (cx == 0 || cy == 0 || cx == width - 1 || cy == height - 1) edge = true;
+
+                for (int k = 0; k < 8; k++)
+                {
+                    int nx = cx + Dx[k], ny = cy + Dy[k];
+                    if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+
+                    int nb = ny * width + nx;
+                    if (landMask[nb] != 0 || body[nb] >= 0) continue;
+
+                    body[nb] = id;
+                    frontier.Enqueue(nb);
+                }
+            }
+
+            area.Add(count);
+            touchesEdge.Add(edge);
+        }
+
+        var isSea = touchesEdge.ToArray();
+        if (area.Count > 0 && !isSea.Any(s => s))
+        {
+            int largest = 0;
+            for (int b = 1; b < area.Count; b++) if (area[b] > area[largest]) largest = b;
+            isSea[largest] = true;
+        }
+
+        return (body, area.ToArray(), isSea);
     }
 
     private static float[] AccumulateTopological(
-        byte[] landMask, int width, int height, int[] receiver, float[]? weight)
+        byte[] drains, int width, int height, int[] receiver, float[]? weight)
     {
         int n = width * height;
         var flow = new float[n];
@@ -157,9 +272,10 @@ public sealed class Drainage
 
         Parallel.For(0, n, i =>
         {
-            flow[i] = landMask[i] == 0 ? 0f : (weight?[i] ?? 1f);
+            // Rain falls on a lake as it does on land, so a lake counts towards its own outflow.
+            flow[i] = drains[i] == 0 ? 0f : (weight?[i] ?? 1f);
             int into = receiver[i];
-            if (into != i && landMask[i] != 0)
+            if (into != i && drains[i] != 0)
             {
                 Interlocked.Increment(ref inDegree[into]);
             }
@@ -169,7 +285,7 @@ public sealed class Drainage
         var queue = new Queue<int>();
         for (int i = 0; i < n; i++)
         {
-            if (landMask[i] != 0 && inDegree[i] == 0)
+            if (drains[i] != 0 && inDegree[i] == 0)
             {
                 queue.Enqueue(i);
             }
@@ -183,7 +299,7 @@ public sealed class Drainage
 
             flow[into] += flow[c];
 
-            if (--inDegree[into] == 0 && landMask[into] != 0)
+            if (--inDegree[into] == 0 && drains[into] != 0)
             {
                 queue.Enqueue(into);
             }

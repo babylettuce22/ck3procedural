@@ -372,10 +372,10 @@ public static class TreeWriter
                             continue;
                         }
 
-                        float px = (float)jx;
-
-                        // Image rows run top-down; the map's Z axis runs bottom-up.
-                        float pz = (float)(height - jy);
+                        // Image rows run top-down; the map's Z axis runs bottom-up. The jitter
+                        // stays in the frame ScatterGround tested it in — see WorldSpace.
+                        var (wx, wz) = WorldSpace.FromImage(jx, jy, height);
+                        float px = (float)wx, pz = (float)wz;
 
                         // Scaled with the map: the meshes are authored against vanilla's world size,
                         // and on a larger one an unscaled tree is a shrub next to its own province.

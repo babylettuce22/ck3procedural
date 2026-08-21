@@ -21,6 +21,7 @@ public static class Program
         bool staticOnly = false;
         bool guiOnly = false;
         bool preview3d = false;
+        bool fitHeightmap = false;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -77,10 +78,39 @@ public static class Program
                     scale = int.Parse(args[++i]);
                     break;
 
-                // The heightmap the whole mod is built around. Required outside the GUI.
+                // The heightmap the whole mod is built around. Required outside the GUI, unless
+                // --forge produces one instead.
                 case "--heightmap" when i + 1 < args.Length:
+                    if (options.Heightmap is not null)
+                    {
+                        Console.Error.WriteLine("--heightmap and --forge are alternatives; give one of them.");
+                        return 1;
+                    }
                     options.HeightmapPath = args[++i];
                     break;
+
+                // A Forge pipeline preset instead of a PNG: the heightmap is produced in memory at
+                // the preset's base resolution, exactly as the GUI's Heightmap tab does it. The
+                // preset is the one CK3 Heightmap Forge saves, so a map tuned there can be built
+                // from a terminal without exporting it first.
+                case "--forge" when i + 1 < args.Length:
+                {
+                    if (options.Heightmap is not null)
+                    {
+                        Console.Error.WriteLine("--heightmap and --forge are alternatives; give one of them.");
+                        return 1;
+                    }
+
+                    string presetPath = args[++i];
+                    var pipeline = new NoiseTool.Pipeline.HeightPipeline();
+                    var loaded = NoiseTool.Pipeline.PresetIO.Load(pipeline, presetPath);
+                    foreach (string warning in loaded.Warnings)
+                        Console.Error.WriteLine($"  {Path.GetFileName(presetPath)}: {warning}");
+
+                    options.Heightmap = new MapGen.ForgeHeightmapProvider(
+                        pipeline, Path.GetFileNameWithoutExtension(presetPath));
+                    break;
+                }
 
                 // Optional. An Azgaar "Full" JSON export to borrow from, alongside — never instead
                 // of — the heightmap. Without it every name and border is generated as before.
@@ -104,6 +134,13 @@ public static class Program
                 // pair, which is what both the wiki and ck2rpg's tutorial prescribe.
                 case "--no-packed":
                     options.WritePacked = false;
+                    break;
+
+                // Resample --heightmap onto a size the packer can tile, rather than refusing it.
+                // A mode rather than a size, because the size to fit to is not known until the
+                // file's own dimensions have been read, which happens below.
+                case "--fit-heightmap":
+                    fitHeightmap = true;
                     break;
 
                 // Rescale a heightmap drawn on somebody else's height scale onto CK3's. The value
@@ -170,15 +207,45 @@ public static class Program
             }
         }
 
-        if (preview3d)
+        if (fitHeightmap)
         {
-            if (options.HeightmapPath is null)
+            if (options.Heightmap is not MapGen.FileHeightmapProvider file)
             {
-                Console.Error.WriteLine("--preview3d needs --heightmap <path>.");
+                Console.Error.WriteLine(
+                    "--fit-heightmap applies to --heightmap. A Forge preset already chooses its "
+                    + $"own output size, so set that to {MapGen.TileFit.KnownList} instead.");
                 return 1;
             }
 
-            return Preview3d(options.HeightmapPath, cfg, outDir);
+            if (!File.Exists(file.Path))
+            {
+                Console.Error.WriteLine($"No heightmap at {file.Path}");
+                return 1;
+            }
+
+            var (fileWidth, fileHeight) = MapGen.TileFit.Measure(file.Path);
+            var target = MapGen.TileFit.Nearest(fileWidth, fileHeight);
+
+            if (MapGen.TileFit.Fits(fileWidth, fileHeight))
+                Console.WriteLine($"--fit-heightmap: {fileWidth}x{fileHeight} is a size CK3 renders; "
+                                  + "nothing to resample.");
+            else
+            {
+                options.Heightmap = new MapGen.FileHeightmapProvider(file.Path, target);
+                Console.WriteLine($"--fit-heightmap: {fileWidth}x{fileHeight} -> "
+                                  + $"{target.Width}x{target.Height}");
+            }
+        }
+
+        if (preview3d)
+        {
+            if (options.Heightmap is null)
+            {
+                Console.Error.WriteLine("--preview3d needs --heightmap <path> or --forge <preset.json>.");
+                return 1;
+            }
+
+            return Preview3d(options.Heightmap, cfg, outDir);
         }
 
         // Handle static-only copy before checking GUI or Heightmap constraints
@@ -192,6 +259,10 @@ public static class Program
             if (cfg.EnableWilderness)
             {
                 sets.Add(Ck3MapGen.Emit.StaticFileWriter.Wilderness);
+            }
+            if (cfg.EnableFantasyEthnicities && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly)
+            {
+                sets.Add(Ck3MapGen.Emit.StaticFileWriter.Fantasy);
             }
 
             // Using UtcNow as runStarted ensures all previously existing files in the target
@@ -231,20 +302,25 @@ public static class Program
             return 0;
         }
 
-        if (options.HeightmapPath is null)
+        if (options.Heightmap is null)
         {
             Console.Error.WriteLine(
-                "Usage: Ck3MapGen --heightmap <file.png> [--mod [name|dir]] [--game dir]");
+                "Usage: Ck3MapGen --heightmap <file.png> | --forge <preset.json>");
+            Console.Error.WriteLine(
+                "       [--mod [name|dir]] [--game dir]");
             Console.Error.WriteLine(
                 "       [--seed n] [--out dir]");
             Console.Error.WriteLine(
                 "       [--normalize-heightmap | --shift-heightmap [source sea level 0-255]]");
             Console.Error.WriteLine(
+                $"       [--fit-heightmap]  resamples the PNG to the nearest of {MapGen.TileFit.KnownList}");
+            Console.Error.WriteLine(
                 "       [--land-top 0-255] [--land-top-percentile 0-100]");
             Console.Error.WriteLine(
                 "       [--azgaar <export.json>]  optional; borrows names from an Azgaar map");
             Console.Error.WriteLine(
-                "This tool builds a CK3 mod around a heightmap; it does not generate terrain.");
+                "This tool builds a CK3 mod around a heightmap: one you supply as a 16-bit PNG, or "
+                + "one produced from a CK3 Heightmap Forge preset.");
             return 1;
         }
 
@@ -262,22 +338,22 @@ public static class Program
     /// Renders the heightmap in 3D from four sides, plus one frame of what CK3 will actually draw
     /// after the packer has decimated it, and writes them as PNGs.
     /// </summary>
-    private static int Preview3d(string path, MapConfig cfg, string outDir)
+    private static int Preview3d(MapGen.HeightmapProvider source, MapConfig cfg, string outDir)
     {
-        if (!File.Exists(path))
+        if (source is MapGen.FileHeightmapProvider onDisk && !File.Exists(onDisk.Path))
         {
-            Console.Error.WriteLine($"No heightmap at {path}");
+            Console.Error.WriteLine($"No heightmap at {onDisk.Path}");
             return 1;
         }
 
         Directory.CreateDirectory(outDir);
 
-        var loaded = MapGen.HeightmapSource.Read(path, cfg);
+        var loaded = source.Produce(cfg, CancellationToken.None, MapGen.ConsoleProgress.Instance);
         MapGen.HeightmapSource.Diagnose(loaded, cfg);
 
         // What the game will be handed, not what was drawn — the normaliser is the whole reason a
         // heightmap that looks fine in an image editor can ship as a plateau.
-        var normalized = MapGen.HeightmapNormalizer.Normalize(loaded.Raw, cfg);
+        var normalized = loaded.Levels(cfg);
 
         const int Width = 1600, Height = 900;
         var field = Gui.Heightfield.Downsample(normalized, loaded.Width, loaded.Height, Gui.Heightfield.PreviewCols);

@@ -158,7 +158,10 @@ public static class Realms
                                            .Select(kv => kv.Value))
             {
                 if (weight.GetValueOrDefault(top) <= 0) continue;
-                RealizeChain(top, realized, holderCounty, weight, [.. countries.Where(t => t != top)]);
+
+                var foreign = countries.Where(t => t != top).ToHashSet();
+                RealizeChain(top, realized, holderCounty, weight, foreign,
+                             MainBlock(top, countyAdj, weight, foreign));
             }
 
             // Internal vassals: most duchies inside a country get their own duke, so a kingdom is a
@@ -173,7 +176,8 @@ public static class Realms
                     if (holderCounty.TryGetValue(duchy, out var held) && held == capital) continue;
                     if (!rng.Chance(0.85)) continue;
 
-                    RealizeChain(duchy, realized, holderCounty, weight);
+                    RealizeChain(duchy, realized, holderCounty, weight,
+                                 avoid: null, MainBlock(duchy, countyAdj, weight));
                 }
             }
         }
@@ -192,7 +196,8 @@ public static class Realms
 
         foreach (var emp in chosenEmpires)
         {
-            RealizeChain(emp, realized, holderCounty, weight);
+            RealizeChain(emp, realized, holderCounty, weight,
+                         avoid: null, MainBlock(emp, countyAdj, weight));
         }
 
         // --- Step 2: Realize Kingdoms ---
@@ -201,7 +206,9 @@ public static class Realms
         // 2A. Subordinate Kingdoms under Empires (Vassal Kings)
         foreach (var emp in chosenEmpires)
         {
-            var empCap = holderCounty[emp];
+            // Not indexed: RealizeChain declines a title with no seat it may hold, so an empire is
+            // no longer guaranteed to be in the map by the time this reads it.
+            holderCounty.TryGetValue(emp, out var empCap);
 
             foreach (var k in emp.Children)
             {
@@ -215,7 +222,8 @@ public static class Realms
 
                 if (rng.Chance(0.75))
                 {
-                    RealizeChain(k, realized, holderCounty, weight);
+                    RealizeChain(k, realized, holderCounty, weight,
+                                 avoid: null, MainBlock(k, countyAdj, weight));
                     realizedKingdoms.Add(k);
                 }
             }
@@ -238,7 +246,8 @@ public static class Realms
 
         foreach (var king in chosenIndepKingdoms)
         {
-            RealizeChain(king, realized, holderCounty, weight);
+            RealizeChain(king, realized, holderCounty, weight,
+                         avoid: null, MainBlock(king, countyAdj, weight));
             realizedKingdoms.Add(king);
         }
 
@@ -247,13 +256,13 @@ public static class Realms
         {
             foreach (var k in emp.Children)
             {
-                EnsureKingdomDuchiesRealized(k, realized, holderCounty, weight, rng, isUnderActiveRealm: true);
+                EnsureKingdomDuchiesRealized(k, realized, holderCounty, weight, rng, isUnderActiveRealm: true, countyAdj);
             }
         }
 
         foreach (var k in chosenIndepKingdoms)
         {
-            EnsureKingdomDuchiesRealized(k, realized, holderCounty, weight, rng, isUnderActiveRealm: true);
+            EnsureKingdomDuchiesRealized(k, realized, holderCounty, weight, rng, isUnderActiveRealm: true, countyAdj);
         }
 
         var unruledKingdoms = fromExport ? [] : empires
@@ -264,7 +273,8 @@ public static class Realms
 
         foreach (var k in unruledKingdoms)
         {
-            EnsureKingdomDuchiesRealized(k, realized, holderCounty, weight, rng, isUnderActiveRealm: false, cfg.DuchyTitleShare);
+            EnsureKingdomDuchiesRealized(k, realized, holderCounty, weight, rng, isUnderActiveRealm: false, countyAdj,
+                                         cfg.DuchyTitleShare);
         }
 
         // --- Step 3b: Personal Demesne ---
@@ -293,6 +303,12 @@ public static class Realms
                 primary[county] = title;
         }
 
+        // Which country each state title is, for the override below.
+        var countryOf = new Dictionary<Title, int>();
+        if (stateTitles is not null)
+            foreach (var (id, title) in stateTitles)
+                if (!countryOf.ContainsKey(title)) countryOf[title] = id;
+
         var liege = new Dictionary<Title, Title>();
         foreach (var (county, top) in primary)
         {
@@ -300,8 +316,25 @@ public static class Realms
             {
                 if (!holderCounty.TryGetValue(above, out var lord) || lord == county) continue;
 
+                // The export's own answer about who owns this ground outranks the terrain test.
+                //
+                // Contiguity below is a heuristic for a world we invented, and it is measured against
+                // crossings a medieval realm plausibly spanned — the widest is about a hundred vanilla
+                // pixels. Azgaar is under no such rule: it drew Ignisar across an ocean seven times
+                // that, and CK3 is perfectly happy with an overseas realm. Refusing the link there
+                // did not make the map more plausible, it left nineteen duchies of a country the
+                // export had drawn as one with no liege at all.
+                //
+                // Narrow on purpose. It fires only where the export names *both* ends as the same
+                // country, so ground Azgaar left unclaimed is still governed by the terrain test —
+                // an empty island is not a province of whoever happens to own it de jure.
+                bool sameCountry = azgaar is not null
+                                && countryOf.TryGetValue(above, out int state)
+                                && state > 0
+                                && azgaar.For(county)?.State.Id == state;
+
                 // Ensure realm contiguity: never link across wilderness
-                if (countyAdj != null && !IsReachable(county, lord, countyAdj))
+                if (!sameCountry && countyAdj != null && !IsReachable(county, lord, countyAdj))
                     continue;
 
                 liege[top] = above;
@@ -508,6 +541,7 @@ public static class Realms
         Dictionary<Title, int> weight,
         Rng rng,
         bool isUnderActiveRealm,
+        Dictionary<Title, HashSet<Title>>? countyAdj = null,
         double independentDuchyShare = 0.5)
     {
         bool kingdomHeld = holderCounty.TryGetValue(kingdom, out var kingCap);
@@ -523,35 +557,46 @@ public static class Realms
 
             if (rng.Chance(chance))
             {
-                RealizeChain(duchy, realized, holderCounty, weight);
+                RealizeChain(duchy, realized, holderCounty, weight,
+                             avoid: null, MainBlock(duchy, countyAdj, weight));
             }
         }
     }
 
-    private static void RealizeChain(
+    /// <summary>
+    /// Seats a holder of <paramref name="title"/>, and every tier between it and his capital, in the
+    /// one county the descent lands on.
+    ///
+    /// Returns false when the descent cannot reach a county it is allowed to hold — every child
+    /// belongs to another country, or none of them reach <paramref name="allowed"/>. Nothing is
+    /// realized in that case: a title with no seat of its own is better left unheld than seated in
+    /// somebody else's capital.
+    /// </summary>
+    private static bool RealizeChain(
         Title title,
         HashSet<Title> realized,
         Dictionary<Title, Title> holderCounty,
         Dictionary<Title, int> weight,
-        HashSet<Title>? avoid = null)
+        HashSet<Title>? avoid = null,
+        HashSet<Title>? allowed = null)
     {
-        var capital = Capital(title, weight, avoid);
-        var current = title;
+        if (Descend(title, weight, avoid, allowed) is not { } path) return false;
 
-        while (current.Tier != "c")
+        var capital = path[^1];
+
+        foreach (var step in path)
         {
-            realized.Add(current);
-            holderCounty[current] = capital;
-
-            var next = Strongest(current, weight, avoid);
-            if (next is null) break;
-            current = next;
+            if (step.Tier == "c") break;
+            realized.Add(step);
+            holderCounty[step] = capital;
         }
+
+        return true;
     }
 
     /// <summary>
-    /// The county a holder of <paramref name="title"/> sits in — its strongest child, all the way
-    /// down.
+    /// The chain from <paramref name="title"/> down to the county its holder sits in — its strongest
+    /// child, all the way down — or null when no such county is reachable.
     ///
     /// <paramref name="avoid"/> names children the descent must step around. It exists for imported
     /// maps, where a small country can be a duchy inside a larger neighbour's de jure kingdom: left
@@ -559,28 +604,124 @@ public static class Realms
     /// king comes out holding it — so the two states share one character and one of them stops
     /// existing. Skipping it takes the second-strongest instead, which is the same rule with one
     /// exception rather than a different rule.
+    ///
+    /// Returns the whole path rather than just its end so that <see cref="RealizeChain"/> seats the
+    /// tiers on the way down from the same walk that chose the capital. Walking it twice was fine
+    /// only while both walks agreed, which is a property no future filter here is obliged to keep.
     /// </summary>
-    private static Title Capital(Title title, Dictionary<Title, int> weight,
-        HashSet<Title>? avoid = null)
+    private static List<Title>? Descend(Title title, Dictionary<Title, int> weight,
+        HashSet<Title>? avoid = null, HashSet<Title>? allowed = null)
     {
-        while (title.Tier != "c")
+        var path = new List<Title> { title };
+
+        while (path[^1].Tier != "c")
         {
-            var next = Strongest(title, weight, avoid);
-            if (next is null) break;
-            title = next;
+            var next = Strongest(path[^1], weight, avoid, allowed);
+            if (next is null) return null;
+            path.Add(next);
         }
-        return title;
+
+        return path;
     }
 
     private static Title? Strongest(Title title, Dictionary<Title, int> weight,
+        HashSet<Title>? avoid = null, HashSet<Title>? allowed = null)
+    {
+        var children = title.Children.AsEnumerable();
+
+        // Refused rather than ignored when it leaves nothing to pick.
+        //
+        // This used to fall back to the full child list "because a shared capital beats none at all",
+        // and the case that triggers it is precisely the one that must not be allowed: a title whose
+        // every child is another country has no ground of its own. On the Lumbaris export the single
+        // child of Ignisar's kingdom tier was Hauls, so the fallback fired, the emperor of Ignisar
+        // was seated in Hauls, and the contiguity test then refused to make anyone in Ignisar proper
+        // his vassal — 43% of his own empire, split across fourteen realms.
+        if (avoid is { Count: > 0 }) children = children.Where(c => !avoid.Contains(c));
+
+        // Only where the title's own main block reaches. Development alone picks the richest county
+        // anywhere in the subtree, and on a country with an island exclave that is the island: Zraz's
+        // king was seated on a two-county island and held three per cent of his kingdom.
+        if (allowed is not null) children = children.Where(c => Reaches(c, allowed));
+
+        return Strongest([.. children], weight);
+    }
+
+    /// <summary>Whether any county under <paramref name="title"/> is in <paramref name="allowed"/>.</summary>
+    private static bool Reaches(Title title, HashSet<Title> allowed)
+        => title.Tier == "c"
+            ? allowed.Contains(title)
+            : title.Children.Any(c => Reaches(c, allowed));
+
+    /// <summary>
+    /// The counties of <paramref name="title"/> that lie in its largest contiguous block, or null
+    /// when there is no adjacency graph to measure against.
+    ///
+    /// A capital outside the main block is not a cosmetic problem. The liege walk in
+    /// <see cref="Build"/> refuses to link a vassal to a lord his county cannot reach, so a ruler
+    /// seated in an exclave loses every vassal on his mainland at once — which is how a map with
+    /// twelve countries on it came out with a hundred and thirty-six independent realms.
+    ///
+    /// Counties under an avoided child are left out of the measurement as well as out of the descent,
+    /// so a country's main block is its own ground rather than its ground plus a neighbour's.
+    /// </summary>
+    private static HashSet<Title>? MainBlock(Title title,
+        Dictionary<Title, HashSet<Title>>? countyAdj,
+        Dictionary<Title, int> weight,
         HashSet<Title>? avoid = null)
     {
-        // Only while something is left to pick. A duchy whose every child is spoken for still needs
-        // a capital, and a shared one beats none at all.
-        if (avoid is { Count: > 0 } && title.Children.Any(c => !avoid.Contains(c)))
-            return Strongest(title.Children.Where(c => !avoid.Contains(c)).ToList(), weight);
+        if (countyAdj is null) return null;
 
-        return Strongest(title.Children, weight);
+        var owned = new List<Title>();
+        Collect(title);
+
+        if (owned.Count == 0) return null;
+
+        var members = owned.ToHashSet();
+        var seen = new HashSet<Title>();
+        HashSet<Title>? best = null;
+
+        // Seeded in tree order rather than in hash order, so that two blocks of equal size always
+        // resolve the same way and the same export produces the same map twice.
+        foreach (var start in owned)
+        {
+            if (!seen.Add(start)) continue;
+
+            var block = new HashSet<Title> { start };
+            var queue = new Queue<Title>();
+            queue.Enqueue(start);
+
+            while (queue.Count > 0)
+            {
+                if (!countyAdj.TryGetValue(queue.Dequeue(), out var near)) continue;
+
+                foreach (var next in near)
+                {
+                    if (!members.Contains(next) || !block.Add(next)) continue;
+                    seen.Add(next);
+                    queue.Enqueue(next);
+                }
+            }
+
+            if (best is null || block.Count > best.Count) best = block;
+        }
+
+        return best;
+
+        void Collect(Title node)
+        {
+            if (node.Tier == "c")
+            {
+                if (weight.GetValueOrDefault(node) > 0) owned.Add(node);
+                return;
+            }
+
+            foreach (var child in node.Children)
+            {
+                if (avoid is not null && avoid.Contains(child)) continue;
+                Collect(child);
+            }
+        }
     }
 
     private static Title? Strongest(IReadOnlyList<Title> children, Dictionary<Title, int> weight)

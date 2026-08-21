@@ -127,8 +127,9 @@ public static class EnvEffectWriter
                         float h = ScatterGround.HeightAt(elevation, cfg, (int)jx, (int)jy);
                         if (h < spec.MinElevation || h > spec.MaxElevation) continue;
 
-                        float px = (float)jx;
-                        float pz = (float)(height - jy); // Engine Z runs bottom-up
+                        // Engine Z runs bottom-up — see WorldSpace.
+                        var (wx, wz) = WorldSpace.FromImage(jx, jy, height);
+                        float px = (float)wx, pz = (float)wz;
 
                         float scale = (float)(minS + rng.NextDouble() * (maxS - minS));
 

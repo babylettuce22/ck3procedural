@@ -66,6 +66,9 @@ public static class GuiWriter
         Add:
         [
             ("using = Window_Background_Sidebar", "placeholder", TitlePlaceholder),
+            ("using = Window_Background_Sidebar", "lore panel", TitleLorePanel),
+            ("position = { 0 0 }", "lore reset", TitleLoreReset),
+            ("button_sidepanel_right = {", "lore button", TitleLoreButton),
         ]),
 
     // No target for gui/shared/portraits.gui, deliberately.
@@ -115,6 +118,131 @@ public static class GuiWriter
             "[TitleViewWindow.Close]",
             "[TitleViewWindow.CloseHistory]",
             "[TitleViewWindow.CloseClaimants]");
+
+    // --- The realm-lore panel -------------------------------------------------------------------
+    //
+    // Three pieces, all spliced into window_title.gui, because a fourth Target for the same file
+    // would not work: Patch() reads vanilla and writes the mod once per Target, so a second entry
+    // naming window_title.gui would overwrite the wilderness placeholder rather than join it.
+    //
+    // Nothing here is generated yet. The button opens a panel that says so. What it is FOR is a
+    // per-title history blurb the generator writes as `gen_lore_<title key>` into its own
+    // localisation file, read back with `Localize( Concatenate( 'gen_lore_', Title.GetKey ) )` --
+    // that chain is valid, ck3-tiger accepts it, and it needs no scripted_gui, no variable and no
+    // on_action, which is why it is the shape the rest of this is built around. When the lore
+    // exists, the button gains
+    //
+    //     visible = "[Not( StringIsEmpty( Localize( Concatenate( 'gen_lore_', Title.GetKey ) ) ) )]"
+    //
+    // and the panel's text_multi swaps its placeholder key for the same expression. Until then the
+    // button shows on every title, which is the point of this step.
+
+    /// <summary>
+    /// The button, spliced in above vanilla's "view_claimants" as a third entry in the vertical
+    /// flowcontainer that already holds it and "title history".
+    ///
+    /// No `visible` of its own. It lives inside `title_view_main_tab`, which the wilderness Insert
+    /// above stamps a `visible` onto, so unclaimed land hides it without this having to ask.
+    ///
+    /// GetVariableSystem rather than a scripted_gui: the panel is pure UI state with nothing to
+    /// tell the game, and vanilla toggles its own expandables exactly this way (see
+    /// tournament_progress_to_victory_widget.gui).
+    /// </summary>
+    private const string TitleLoreButton = """
+        button_sidepanel_right = {
+            name = "gen_title_lore_button"
+            parentanchor = right
+
+            onclick = "[GetVariableSystem.Toggle( 'gen_title_lore' )]"
+            tooltip = "GEN_TITLE_LORE_TOOLTIP"
+
+            blockoverride "button_text"
+            {
+                text = "GEN_TITLE_LORE"
+                max_width = 110
+            }
+        }
+        """;
+
+    /// <summary>
+    /// The panel the button opens.
+    ///
+    /// A widget at the window's root rather than a `window` of its own: a standalone window is only
+    /// instantiated if the engine knows about it, and there is no way to register a new game view
+    /// from script. A root-level child with `allow_outside` is the same picture — it is what
+    /// vanilla's own pop-outs look like, and what the colony widget in BaseFilesToCopy already does.
+    ///
+    /// Root level costs it the `Title` datacontext, which is set further down on the main vbox, so
+    /// it sets its own. x = 660 clears the 650-wide title window completely; the vanilla pop-outs
+    /// sit at 630 and overlap by twenty pixels, which they can afford because they are separate
+    /// windows on their own layer and this is a sibling drawn underneath.
+    ///
+    /// The wilderness half of the `visible` is not redundant with the button's placement: the
+    /// variable outlives the window, so opening the panel on a real title and then clicking
+    /// unclaimed land would otherwise leave it up over the placeholder.
+    /// </summary>
+    private const string TitleLorePanel = """
+        widget = {
+            name = "gen_title_lore_panel"
+            datacontext = "[TitleViewWindow.GetTitle]"
+            visible = "[And( GetVariableSystem.Exists( 'gen_title_lore' ), Not( {SHOW_RAW} ) )]"
+
+            position = { 660 80 }
+            size = { 420 60% }
+            allow_outside = yes
+
+            using = Window_Background
+            using = Window_Decoration
+
+            vbox = {
+                using = Window_Margins
+                spacing = 8
+
+                hbox = {
+                    layoutpolicy_horizontal = expanding
+
+                    text_single = {
+                        text = "[Title.GetNameNoTooltip]"
+                        default_format = "#high"
+                        using = Font_Size_Medium
+                    }
+
+                    expand = {}
+
+                    button_close = {
+                        onclick = "[GetVariableSystem.Clear( 'gen_title_lore' )]"
+                    }
+                }
+
+                scrollbox = {
+                    layoutpolicy_horizontal = expanding
+                    layoutpolicy_vertical = expanding
+
+                    blockoverride "scrollbox_content"
+                    {
+                        text_multi = {
+                            layoutpolicy_horizontal = expanding
+                            autoresize = yes
+                            max_width = 370
+                            text = "GEN_TITLE_LORE_PLACEHOLDER"
+                        }
+                    }
+                }
+            }
+        }
+        """;
+
+    /// <summary>
+    /// One line into vanilla's `_show` state, so the panel starts closed every time the title
+    /// window opens.
+    ///
+    /// GetVariableSystem is global to the UI and survives both the panel and the window, so without
+    /// this the panel would follow you from title to title once opened. Vanilla clears
+    /// `display_allegiance` in the same block for the same reason; this just adds a third on_start
+    /// beside the two already there.
+    /// </summary>
+    private const string TitleLoreReset =
+        "on_start = \"[GetVariableSystem.Clear( 'gen_title_lore' )]\"";
 
     private const string SettleButton = """
         vbox = {

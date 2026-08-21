@@ -12,6 +12,11 @@ a file's path below the set folder is its path in the mod.
             events/...
             gfx/interface/icons/holding_types_tab/
             localization/english/...
+        Fantasy/                                    copied only when MapConfig.EnableFantasyEthnicities
+            common/...                              is on AND RaceMode is not HumanOnly
+            events/...
+            gfx/interface/icons/traits/
+            localization/english/...
 
 Two rules:
   - A file the pipeline generated always wins. The copy never overwrites, so putting a file here
@@ -52,3 +57,28 @@ checkerboard. Both are copies of vanilla's tribal_holding.dds and want replacing
 Nothing in this set references a generated culture, faith or title key, and it must stay that way:
 these files ship identically for every seed, so a reference to `culture:something_generated` would
 be a dangling pointer on any map that did not happen to roll it.
+
+--- Fantasy ---
+
+The static half of the fantasy race system: the seven phenotype race traits (the six fantasy races
+plus the visible Human trait), the scripted triggers/effects/on_actions that assign them at birth
+and through the culture pulse, the long-lived races' world_weary fading (traits, events, death
+reason, script values), the race trait icons, and the forced dwarf beards portrait modifier.
+
+Gated so a realistic map ships none of it: no race chips in the ruler designer, no fading events,
+no phenotype pulses. Two fantasy-adjacent things deliberately stay in Core because they are written
+into every mod regardless of mode:
+  - common/genes/gen_race_skin.txt — Emit/PortraitWriter.cs writes this gene into every persistent
+    DNA record on every map, so the declaration must always exist (it is inert without the traits).
+  - the gen_race_skin loc line in localization/english/gen_req_localization_l_english.yml.
+
+What the generator emits alongside it, and which these files therefore assume exists:
+  - phenotype traits stamped onto history characters by Emit/HistoryWriter.cs (humans get
+    phenotype_human; the culture pulse spreads traits to engine-generated characters from there)
+  - gfx/portraits/portrait_modifiers/99_gen_race_morphs.txt from Emit/RaceMorphWriter.cs, which
+    forces each race's look by trait — and resets inherited skin shifts on mixed-line humans via
+    the gen_phenotype_human character FLAG (narrow marker; not the same thing as the Human trait)
+  - the marriage-reluctance patch from Emit/InteractionWriter.cs, which calls
+    gen_is_different_race_than from this set's scripted triggers
+
+The same no-generated-keys rule as Wilderness applies: this set ships identically for every seed.

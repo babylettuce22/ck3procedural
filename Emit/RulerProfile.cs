@@ -118,18 +118,22 @@ public sealed record RulerProfile
         string lifestyle = PickLifestyle(rng, government, ethos, null);
         int level = PickEducationLevel(rng, rank);
 
-        int points = Math.Max(0, age - 16) / 6;
-        if (level >= 3) points++;
+        // Vanilla auto-assigns baseline perks on game start for adult characters based on age and
+        // education, so explicit perk points are kept modest (halved) to avoid over-stacking perks.
+        // Roughly 1 explicit point per 12 years of adulthood, with a small bonus for Tier 4 education
+        // and high imperial/royal court rank.
+        int points = Math.Max(0, age - 16) / 12;
         if (level >= 4) points++;
-        points += rank switch { 4 => 3, 3 => 2, 2 => 1, _ => 0 };
-        points = Math.Clamp(points, 1, 9);
+        points += rank switch { 4 => 2, 3 => 1, _ => 0 };
+        points = Math.Clamp(points, 0, 4);
 
+        // Only kings and emperors of advanced age dabble in a secondary tree, giving at most 1 point.
         string? second = null;
         int secondPoints = 0;
-        if (rank >= 3 && age >= 36)
+        if (rank >= 3 && age >= 45)
         {
             second = PickLifestyle(rng, government, ethos, lifestyle);
-            secondPoints = age >= 48 ? 2 : 1;
+            secondPoints = 1;
         }
 
         var skills = RollSkills(rng, rank, lifestyle);
@@ -284,16 +288,7 @@ public sealed record RulerProfile
     {
         var list = new List<string>();
 
-        // Every name below exists as a top-level key in vanilla's common/traits/00_traits.txt —
-        // this list previously carried four that did not (`scarred_1` for `scarred`, `lisp` for
-        // `lisping`, `poet` for `lifestyle_poet`, and `cavalry_leader`, which is a CK2 trait with
-        // no CK3 counterpart at all). A missing trait is not an error the game surfaces at the
-        // character: the line is silently dropped, so ~40 rulers per map were simply less scarred
-        // and less interesting than the rolls intended, and tiger reported each one.
-
-        // 1. Congenital / genetic traits. Blessings are rarer than quirks, matching the shape of
-        // vanilla's own birth weights, and the two rolls are independent so a ruler can be a
-        // beautiful stutterer — vanilla's favourite kind of character.
+        // 1. Congenital / genetic traits
         if (rng.Chance(0.07))
         {
             string[] blessings =
@@ -313,15 +308,12 @@ public sealed record RulerProfile
             list.Add(rng.Pick(quirks));
         }
 
-        // 2. Commander traits (martial rulers, nomads, tribes, high rank). A seasoned great lord
-        // can carry two — a doctrine and a knack — which is how vanilla's famous commanders read.
+        // 2. Commander traits (martial rulers, nomads, tribes, high rank)
         if (lifestyle == MartialLifestyle || government is GovernmentMap.Nomad or GovernmentMap.Tribal)
         {
             double commanderChance = (rank >= 3 ? 0.60 : 0.35) + (age >= 30 ? 0.15 : 0.0);
             if (rng.Chance(commanderChance))
             {
-                // The nomad pool leans open-steppe and mobility; there is no cavalry trait in CK3
-                // to reach for, open_terrain_expert is the horse-lord knack it actually ships.
                 string[] commanderPool = government == GovernmentMap.Nomad
                     ? ["open_terrain_expert", "organizer", "aggressive_attacker", "flexible_leader",
                        "winter_soldier", "reckless"]
@@ -340,8 +332,7 @@ public sealed record RulerProfile
             }
         }
 
-        // 3. Lifestyle / hobby traits (mature rulers who excelled in schooling). Intrigue rulers
-        // used to fall through to nothing here; schemer-by-night is exactly their hobby.
+        // 3. Lifestyle / hobby traits (mature rulers who excelled in schooling)
         if (age >= 35 && educationLevel >= 3 && rng.Chance(0.45))
         {
             string? hobby = lifestyle switch
@@ -356,9 +347,7 @@ public sealed record RulerProfile
             if (hobby is not null) list.Add(hobby);
         }
 
-        // 4. Physical wear and scars (veterans and older rulers). `scarred` is a leveled trait in
-        // CK3 — history grants level 1 by the bare name. The grimmer wounds stay rare and stack
-        // with the scar rather than replacing it: a one-eyed man is usually scarred too.
+        // 4. Physical wear and scars (veterans and older rulers)
         if (prowess >= 8 && age >= 28 && rng.Chance(0.30))
         {
             list.Add("scarred");
@@ -372,8 +361,7 @@ public sealed record RulerProfile
             }
         }
 
-        // 5. Stress coping (older rulers). The rulership has cost them something; how they pay
-        // varies with what they spend their days on.
+        // 5. Stress coping (older rulers)
         if (age >= 45 && rng.Chance(0.22))
         {
             string[] coping = lifestyle == LearningLifestyle

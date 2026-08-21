@@ -25,6 +25,18 @@ public sealed class GuiState
     public int ViewerHeight { get; set; } = 620;
 
     public string? HeightmapPath { get; set; }
+
+    /// <summary>
+    /// The size <see cref="HeightmapPath"/> is resampled to on load, when its own size is one the
+    /// heightmap packer cannot tile and the offer to fix it was accepted. Kept so the offer is
+    /// answered once per file rather than at every launch; re-checked against the file on the way
+    /// back in, because the file may have been redrawn since.
+    /// </summary>
+    public int? HeightmapFitWidth { get; set; }
+
+    /// <inheritdoc cref="HeightmapFitWidth"/>
+    public int? HeightmapFitHeight { get; set; }
+
     public string? View { get; set; }
 
     /// <summary>The last mode chosen in each strip category, so switching categories lands back
@@ -43,6 +55,12 @@ public sealed class GuiState
     /// <summary>Whether the first-launch walkthrough has had its one uninvited showing.</summary>
     public bool WelcomeShown { get; set; }
     public string? PresetDir { get; set; }
+
+    /// <summary>The Heightmap tab's own window facts: its splitter, and where its preset dialogs open.</summary>
+    public int ForgeLeftWidth { get; set; }
+
+    /// <inheritdoc cref="ForgeLeftWidth"/>
+    public string? ForgePresetDir { get; set; }
 
     public string? LaunchArgs { get; set; } = "-debug_mode -developer -skip";
     public bool CloseOnLaunch { get; set; } = true;

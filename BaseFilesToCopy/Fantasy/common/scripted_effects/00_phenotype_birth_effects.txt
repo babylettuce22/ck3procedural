@@ -12,9 +12,11 @@
 # engine-generated characters the birth hook can never see.
 
 gen_resolve_child_phenotype_effect = {
-	# Nothing to decide unless a race is actually in play. On a human-only map no character ever
-	# carries a phenotype trait, so this is one trigger per birth and no further cost — which is
-	# also what keeps the human marker flag out of non-fantasy worlds entirely.
+	# Nothing to decide unless a race is actually in play — including the human race, which on a
+	# fantasy map is a trait like any other, so a child of two humans is settled here at birth
+	# rather than waiting for the culture pulse. A truly untagged parent pair (pre-pulse engine
+	# characters) still falls through at the cost of one trigger per birth. (This file only ships
+	# on fantasy maps — see Emit/StaticFileWriter.cs.)
 	if = {
 		limit = {
 			OR = {
@@ -84,7 +86,35 @@ gen_take_parent_race_effect = {
 		# The chosen donor is human. Say so explicitly: an unmarked child is indistinguishable from
 		# one the birth hook never reached, and the yearly pulse would hand it the local culture's
 		# race — overruling the parents, which is the one thing that must always win at birth.
-		# A flag rather than a trait so it shows nowhere — see 00_phenotype_triggers.txt.
-		add_character_flag = gen_phenotype_human
+		add_trait = phenotype_human
+
+		# The mixed-line flag rides along only when this bloodline actually touches a fantasy race:
+		# a parent who is fantasy-traited (this birth is the mixed one), or a parent already flagged
+		# (the mix is further up the line — gen_race_skin is inheritable, so an elven skin shift can
+		# resurface generations later and the render-time reset must keep following the line).
+		# Two plain-human parents — which since the human trait spread broadly includes every
+		# minority-race couple — set no flag, and that is load-bearing: minority members LOOK their
+		# race through rolled ethnicity genes while counting as human, and the flag would snap their
+		# skin back to the human template at render (see gen_race_skin_human in the generated
+		# 99_gen_race_morphs.txt).
+		if = {
+			limit = {
+				OR = {
+					mother ?= {
+						OR = {
+							gen_has_fantasy_phenotype_trigger = yes
+							has_character_flag = gen_phenotype_human
+						}
+					}
+					real_father ?= {
+						OR = {
+							gen_has_fantasy_phenotype_trigger = yes
+							has_character_flag = gen_phenotype_human
+						}
+					}
+				}
+			}
+			add_character_flag = gen_phenotype_human
+		}
 	}
 }

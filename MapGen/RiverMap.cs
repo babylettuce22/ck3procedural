@@ -1,4 +1,4 @@
-﻿using Ck3MapGen.Config;
+using Ck3MapGen.Config;
 
 namespace Ck3MapGen.MapGen;
 
@@ -12,6 +12,56 @@ public static class RiverMap
     public const byte PaletteWater = 254;  // #ff0080 (Magenta) - Sea & Major Rivers
     public const byte PaletteLand = 255;   // #ffffff (White) - Land
 
+    private static readonly int[] OrthoDx = [-1, 1, 0, 0];
+    private static readonly int[] OrthoDy = [0, 0, -1, 1];
+
+    /// <summary>
+    /// How a traced course ended: in water, or beside another river it now joins.
+    /// </summary>
+    private enum Ending { Mouth, Join }
+
+    /// <summary>
+    /// Draws the tributary rivers of rivers.png, obeying the rules the engine reads them by.
+    ///
+    /// The engine traces each river as a run of orthogonally connected normal pixels — a
+    /// segment — and reads its direction off the one marker that terminates it: a green at its
+    /// head, from which water flows away, or a red at its end, towards which water flows. A red
+    /// is the last pixel of a tributary, lying beside an interior pixel of the river it joins; a
+    /// normal pixel may touch no more than two other normal pixels. Vanilla bears this out: its
+    /// rivers.png has 631 greens and 630 reds with 710 rivers starting bare, so a tributary has
+    /// no green of its own — only a river that reaches water does. Rivers two pixels wide, or
+    /// connected only through a diagonal, fail to render, and a red placed *on* the trunk rather
+    /// than beside it ends the trunk's segment there, which is how a river came to fade out in
+    /// the middle of a plain with its lower half drawn as a sourceless fragment.
+    ///
+    /// So the raster is built so that every one of those rules holds by construction, and the
+    /// markers are a record of how each course was drawn rather than something read back off a
+    /// neighbourhood afterwards:
+    ///
+    /// - A course is traced down the receivers, made orthogonal, then straightened so that no
+    ///   pixel of it touches any pixel of its own except the one before and the one after. That
+    ///   rules out the 2x2 blocks and the three-way pixels a corner laid against an earlier bend
+    ///   used to make.
+    /// - A course ends the moment one of its pixels lies orthogonally beside a river already
+    ///   drawn. That pixel is its red; the trunk pixel it touches keeps its own colour and its
+    ///   two trunk neighbours, with the red beside it not counting against the limit. Courses
+    ///   therefore never run alongside one another, and the last step to the trunk is always
+    ///   orthogonal because it is the adjacency itself that ends the course.
+    /// - A course ending in water carries on a pixel or two into the water so the engine can
+    ///   read its direction at the mouth, as the wiki advises — but only onto water no other
+    ///   river is using.
+    /// - A join is refused where the pixel it would touch is a marker or the end of a segment —
+    ///   another course's red or green, the pixel after a green, a tributary's bare start or the
+    ///   last pixel before its red — since a segment with a marker at both ends has no single
+    ///   direction; and a trunk pixel is asked to take at most one tributary. The course is
+    ///   dropped rather than drawn wrong, and the count is reported.
+    ///
+    /// Greens go on the heads of courses that reach water, reds on the recorded ends of those
+    /// that join. A final audit re-derives the segments and counts anything that still breaks a
+    /// rule — the same model ck3-tiger checks, minus a bug in its segment builder that splits
+    /// chains at corner-shaped turns and reports the pieces as orphans — so a regression here
+    /// shows up in the log rather than in the game.
+    /// </summary>
     public static byte[] Generate(MapConfig cfg, ProvinceMap provinces, Drainage drainage)
     {
         int width = cfg.ProvinceWidth;
@@ -22,11 +72,13 @@ public static class RiverMap
         Array.Fill(indices, PaletteLand);
 
         // 1. Mark water from province partition (both open ocean and carved major rivers)
+        var isWater = new bool[n];
         Parallel.For(0, n, i =>
         {
             if (!provinces.Seeds[provinces.Label[i]].IsLand)
             {
                 indices[i] = PaletteWater;
+                isWater[i] = true;
             }
         });
 
@@ -37,6 +89,9 @@ public static class RiverMap
         float minFlowThreshold = (float)Math.Max(350.0, cfg.Scaled(800.0) / Math.Max(0.1, cfg.RiverDensity));
         float maxFlowThreshold = (float)Math.Max(minFlowThreshold * 10f, cfg.Scaled(25000.0));
         int minLength = (int)Math.Max(10, cfg.Scaled(16.0));
+        // A tributary may be shorter than a river that has to reach the sea on its own, but it
+        // still needs a head, a body and its red — a two-pixel stub is a green touching a red.
+        int minJoinLength = Math.Max(3, minLength / 2);
 
         // 2. Identify candidate river sources
         var sourceCandidates = new List<int>();
@@ -70,71 +125,106 @@ public static class RiverMap
         sourceCandidates.Sort((a, b) => drainage.Flow[b].CompareTo(drainage.Flow[a]));
 
         var isRiverPixel = new bool[n];
-
-        // Width is painted now; the markers are derived later, so the flow-derived band each pixel
-        // belongs to has to survive until then rather than being overwritten by a marker.
+        var isMarker = new bool[n];      // greens and reds: nothing may join beside these
+        var isEndpoint = new bool[n];    // first and last normal pixel of a segment: nor beside these
+        var hasJoin = new bool[n];       // trunk pixels already taking a tributary
         var widthBand = new byte[n];
-        var isHead = new bool[n];
 
-        // Where one course ran into another is knowledge the raster does not carry: once both are
-        // painted, a merge looks like any other neighbourhood, and the pixel it happened at is not
-        // always one the geometry would call a confluence. Remembered here and re-applied once the
-        // thinning has settled, because ck3-tiger ends a tributary's segment at its join marker and
-        // a tributary whose segment never ends is reported as an orphan.
-        var mergeJoins = new List<int>();
-        int drawnRivers = 0;
+        var heads = new List<int>();
+        var ends = new List<int>();
+        int drawnRivers = 0, mouths = 0, joins = 0, refusedAtMarker = 0, refusedSecondJoin = 0;
+        int tooShort = 0, stranded = 0;
+
+        var course = new List<int>();
+        var neighbours = new List<int>(4);
 
         foreach (int source in sourceCandidates)
         {
-            var path = new List<int>();
+            if (isRiverPixel[source]) continue;
+
+            // Follow the receivers until water or an already-drawn river; the straightened,
+            // orthogonal course is then cut back to wherever it first touches that river.
+            course.Clear();
             int curr = source;
-            bool hitWater = false;
-            bool hitExisting = false;
-            int mergeTarget = -1;
-
-            while (curr >= 0 && path.Count < 3000)
+            while (curr >= 0 && course.Count < 3000)
             {
-                if (indices[curr] == PaletteWater)
-                {
-                    hitWater = true;
-                    // Extend 1-2 pixels into water for engine spline direction
-                    path.Add(curr);
-                    int intoWater = drainage.Receiver[curr];
-                    if (intoWater != curr && indices[intoWater] == PaletteWater)
-                        path.Add(intoWater);
-                    break;
-                }
-
-                if (isRiverPixel[curr])
-                {
-                    hitExisting = true;
-                    mergeTarget = curr;
-                    break;
-                }
-
-                path.Add(curr);
+                course.Add(curr);
+                if (isWater[curr] || isRiverPixel[curr]) break;
                 int into = drainage.Receiver[curr];
                 if (into == curr) break;
                 curr = into;
             }
 
-            if (path.Count < minLength && !hitExisting) continue;
-            if (!hitWater && !hitExisting) continue;
+            course = Straighten(MakeOrthogonal(course, width, height), width);
 
-            // Convert 8-connected diagonal path to strict 4-connected orthogonal path
-            var orthoPath = MakeOrthogonal(path, width, height);
+            // Walk the course forward and decide where it ends.
+            int endIndex = -1;
+            Ending ending = Ending.Mouth;
+            bool refused = false;
 
-            // Paint width only. A source and a join are statements *about* the finished geometry,
-            // and the geometry is not finished here: a later course can run into this one's head,
-            // and thinning can shift a confluence by a pixel or dissolve it entirely. Deciding the
-            // markers now means deciding them against a raster that is still moving, which is how a
-            // green ended up mid-course and how two reds ended up side by side with no plain water
-            // between them. EnforceEngineTopology assigns them once nothing is moving any more.
-            for (int k = 0; k < orthoPath.Count; k++)
+            for (int k = 0; k < course.Count; k++)
             {
-                int c = orthoPath[k];
+                int p = course[k];
 
-                float f = drainage.Flow[c];
+                if (isWater[p] && !isRiverPixel[p])
+                {
+                    // The mouth. The shore pixel before it is on land; extend into the water by
+                    // up to two pixels if no other river is already using them.
+                    endIndex = k - 1;
+                    for (int ext = k; ext < course.Count && ext < k + 2; ext++)
+                    {
+                        int w = course[ext];
+                        if (!isWater[w] || isRiverPixel[w]) break;
+                        if (TouchesRiver(w, ext > 0 ? course[ext - 1] : -1)) break;
+                        endIndex = ext;
+                    }
+                    ending = Ending.Mouth;
+                    break;
+                }
+
+                if (isRiverPixel[p])
+                {
+                    // Stepped onto a river without having touched it first: only possible at
+                    // the head, since every later step is orthogonal. Nothing to draw.
+                    refused = true;
+                    break;
+                }
+
+                OrthoRiverNeighbours(p, k > 0 ? course[k - 1] : -1);
+                if (neighbours.Count == 0) continue;
+
+                // Beside a river: this pixel is the red, provided the neighbourhood is one the
+                // engine can read.
+                bool clean = true;
+                foreach (int t in neighbours)
+                {
+                    if (isMarker[t] || isEndpoint[t]) { clean = false; refusedAtMarker++; break; }
+                    if (hasJoin[t]) { clean = false; refusedSecondJoin++; break; }
+                }
+                if (!clean) { refused = true; break; }
+
+                endIndex = k;
+                ending = Ending.Join;
+                break;
+            }
+
+            if (refused) continue;
+            if (endIndex < 0) { stranded++; continue; }     // ran out on land, touching nothing
+
+            int length = endIndex + 1;
+            if (length < (ending == Ending.Join ? minJoinLength : minLength)) { tooShort++; continue; }
+
+            // Paint the width band; the markers are laid at the end, once every course is in.
+            // The band follows the running maximum of discharge down the course: flow only grows
+            // downstream along the receivers, and the corner pixels inserted to keep the course
+            // orthogonal sit off the drainage path with a flow of their own, which used to make
+            // a staircase flicker wide, narrow, wide with every step.
+            float f = 0f;
+            for (int k = 0; k < length; k++)
+            {
+                int c = course[k];
+
+                f = Math.Max(f, drainage.Flow[c]);
                 double t = Math.Clamp(Math.Log(Math.Max(1f, f / minFlowThreshold)) /
                                       Math.Log(Math.Max(1.01f, maxFlowThreshold / minFlowThreshold)), 0, 1);
                 int band = PaletteNarrow + (int)Math.Round(t * (PaletteWide - PaletteNarrow));
@@ -144,222 +234,225 @@ public static class RiverMap
                 isRiverPixel[c] = true;
             }
 
-            // A course that began by running into a river already drawn has no head of its own;
-            // only a trunk that started on dry land is a candidate source.
-            if (!hitExisting) isHead[orthoPath[0]] = true;
-            else if (mergeTarget >= 0) mergeJoins.Add(mergeTarget);
+            if (ending == Ending.Join)
+            {
+                // A tributary: bare start, red end. Its segment runs from course[0] to the pixel
+                // before the red.
+                int end = course[endIndex];
+                ends.Add(end);
+                isMarker[end] = true;
+                isEndpoint[course[0]] = true;
+                isEndpoint[course[endIndex - 1]] = true;
+                OrthoRiverNeighbours(end, course[endIndex - 1]);
+                foreach (int t in neighbours) hasJoin[t] = true;
+                joins++;
+            }
+            else
+            {
+                // A river reaching water: green head. Its segment runs from the pixel after the
+                // green to the last pixel in the water.
+                heads.Add(course[0]);
+                isMarker[course[0]] = true;
+                isEndpoint[course[1]] = true;
+                isEndpoint[course[endIndex]] = true;
+                mouths++;
+            }
 
             drawnRivers++;
         }
 
-        // Geometry first, then orphans: thinning can sever a fragment from its outlet, and
-        // whatever it leaves stranded should be pruned rather than shipped.
-        EnforceEngineTopology(indices, widthBand, isHead, mergeJoins, width, height);
-        Console.WriteLine($"  minor rivers: generated {drawnRivers} engine-compliant tributary streams in rivers.png");
-        return indices;
-    }
+        // 3. Markers, from the record of how each course was drawn.
+        foreach (int e in ends) indices[e] = PaletteJoin;
 
-    /// <summary>
-    /// Make the painted raster obey the two geometric rules the engine imposes on rivers.png: no
-    /// river pixel orthogonally adjacent to more than two others (three for a join or a split), and
-    /// no river two pixels wide.
-    ///
-    /// Both are hard rules rather than preferences — a malformed river map is documented as a crash,
-    /// and two-pixel-wide rivers and diagonal-only links simply fail to render. Measured on a
-    /// generated map, 11,412 of 81,754 river pixels (14.0%) had too many orthogonal neighbours and
-    /// 5,807 solid 2x2 blocks were two pixels wide, which is very likely why courses appeared to
-    /// stop halfway: the engine gave up drawing where the geometry stopped making sense.
-    ///
-    /// They come from painting many traced paths into one raster. <see cref="MakeOrthogonal"/>
-    /// guarantees a single path is 4-connected, but it inserts corner pixels to do it, and a corner
-    /// laid beside a path already drawn — or two courses converging a pixel apart before they meet —
-    /// makes a block no single path ever contained.
-    ///
-    /// The repair is to thin rather than to redraw. A pixel is removed only where its own
-    /// neighbourhood stays connected without it, so a course can lose its redundant width but never
-    /// be cut in half; anything left with three neighbours after thinning is a genuine confluence
-    /// and is marked as a join, which is the one thing the engine allows three neighbours.
-    ///
-    /// Thinning runs before any marker exists, and the markers are read off the result afterwards.
-    /// Doing it the other way round is what left ck3-tiger complaining: markers were exempt from
-    /// thinning, so a 2x2 block with a marker in it could never be narrowed, and a marker decided
-    /// against a half-finished raster could end up mid-course or pressed against another marker.
-    ///
-    /// The one thing that cannot be read back off the geometry is which course flowed into which,
-    /// so <paramref name="mergeJoins"/> carries it here. A tributary landing on the end of a trunk
-    /// leaves a pixel with two arms, indistinguishable from ordinary water, and dropping its marker
-    /// leaves the tributary's segment with nothing to terminate it — measured at 1,217 orphaned
-    /// segments against 13 without.
-    /// </summary>
-    private static void EnforceEngineTopology(byte[] indices, byte[] widthBand, bool[] isHead,
-                                              List<int> mergeJoins, int width, int height)
-    {
-        static bool IsRiver(byte v) => v <= PaletteWide;
-
-        // The eight neighbours in ring order, so that consecutive entries are themselves adjacent.
-        int[] ringX = [-1, 0, 1, 1, 1, 0, -1, -1];
-        int[] ringY = [-1, -1, -1, 0, 1, 1, 1, 0];
-
-        // A pixel may go only if what is left behind still hangs together: its river neighbours must
-        // form one group around it, and there must be at least two of them, or removal would be
-        // eroding the end of a course rather than narrowing it.
-        bool Removable(int i)
+        int sources = 0;
+        foreach (int h in heads)
         {
-            if (!IsRiver(indices[i])) return false;
-
-            int x = i % width, y = i / width;
-            int ring = 0, count = 0;
-            for (int k = 0; k < 8; k++)
+            int degree = 0, sole = -1;
+            for (int k = 0; k < 4; k++)
             {
-                int nx = x + ringX[k], ny = y + ringY[k];
+                int nx = h % width + OrthoDx[k], ny = h / width + OrthoDy[k];
                 if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
-                if (!IsRiver(indices[ny * width + nx])) continue;
-
-                ring |= 1 << k;
-                count++;
+                int nb = ny * width + nx;
+                if (!isRiverPixel[nb]) continue;
+                degree++;
+                sole = nb;
             }
-            if (count < 2) return false;
-
-            // One run of river around the ring means one group, so nothing is severed by leaving.
-            int runs = 0;
-            for (int k = 0; k < 8; k++)
-                if ((ring & (1 << k)) != 0 && (ring & (1 << ((k + 7) % 8))) == 0) runs++;
-
-            return runs == 1;
-        }
-
-        var candidates = new int[4];
-        int thinned = 0;
-
-        for (int pass = 0; pass < 4; pass++)
-        {
-            int before = thinned;
-
-            for (int y = 0; y + 1 < height; y++)
-            {
-                for (int x = 0; x + 1 < width; x++)
-                {
-                    int a = y * width + x, b = a + 1, c = a + width, d = c + 1;
-                    if (!IsRiver(indices[a]) || !IsRiver(indices[b]) ||
-                        !IsRiver(indices[c]) || !IsRiver(indices[d])) continue;
-
-                    // The diagonal partners first: dropping one of those keeps the block's own
-                    // corner-to-corner run intact, which is the shape a course actually needs.
-                    candidates[0] = d; candidates[1] = a; candidates[2] = b; candidates[3] = c;
-                    for (int k = 0; k < 4; k++)
-                    {
-                        if (!Removable(candidates[k])) continue;
-
-                        indices[candidates[k]] = PaletteLand;
-                        thinned++;
-                        break;
-                    }
-                }
-            }
-
-            if (thinned == before) break;
-        }
-
-        int OrthogonalDegree(int i)
-        {
-            int x = i % width, y = i / width, degree = 0;
-            if (x > 0 && IsRiver(indices[i - 1])) degree++;
-            if (x + 1 < width && IsRiver(indices[i + 1])) degree++;
-            if (y > 0 && IsRiver(indices[i - width])) degree++;
-            if (y + 1 < height && IsRiver(indices[i + width])) degree++;
-            return degree;
-        }
-
-        int stubborn = 0;
-        for (int i = 0; i < indices.Length; i++)
-        {
-            if (!IsRiver(indices[i])) continue;
-
-            int degree = OrthogonalDegree(i);
-            if (degree <= 2) continue;
-
-            if (degree > 3)
-            {
-                // Four ways out is beyond what even a join may have; give up one arm if any arm can
-                // be spared, and count the rest rather than cutting a course in half to satisfy a
-                // rule.
-                int x = i % width, y = i / width;
-                candidates[0] = y > 0 ? i - width : -1;
-                candidates[1] = y + 1 < height ? i + width : -1;
-                candidates[2] = x > 0 ? i - 1 : -1;
-                candidates[3] = x + 1 < width ? i + 1 : -1;
-
-                bool relieved = false;
-                for (int k = 0; k < 4 && !relieved; k++)
-                {
-                    if (candidates[k] < 0 || !Removable(candidates[k])) continue;
-
-                    indices[candidates[k]] = PaletteLand;
-                    thinned++;
-                    relieved = true;
-                }
-
-                if (!relieved) stubborn++;
-            }
-        }
-
-        // The geometry has stopped moving, so the markers can finally be read off it. Doing this in
-        // one sweep at the end is what keeps them consistent: every marker is a statement about the
-        // neighbourhood as it actually ships, not as it looked when some earlier path was drawn.
-        //
-        // ck3-tiger enforces the two readings precisely. A join must have at least two ordinary
-        // river arms — the tributary arriving and the water it joins — or it is "not joining another
-        // river". A source must be a free end whose one arm is ordinary river, or it is "not at the
-        // source of a river". Both failures are the same underlying mistake: a marker whose arm
-        // turned out to be another marker rather than water.
-        int joins = 0, sources = 0;
-        for (int i = 0; i < indices.Length; i++)
-        {
-            if (!IsRiver(indices[i])) continue;
-
-            // Three arms is a confluence, and red is how the engine is told so: a tributary joining
-            // here, flowing towards this pixel. A crossing left over-connected above is still better
-            // described as a join than as plain water.
-            indices[i] = OrthogonalDegree(i) >= 3 ? PaletteJoin : widthBand[i];
-            if (indices[i] == PaletteJoin) joins++;
-        }
-
-        // The remembered merges, for the ones whose pixel survived the thinning. Geometry alone
-        // cannot find these: a tributary that lands on the end of a trunk leaves a pixel with only
-        // two arms, which reads as ordinary water however closely it is examined.
-        foreach (int m in mergeJoins)
-        {
-            if (!IsRiver(indices[m]) || indices[m] == PaletteJoin) continue;
-
-            indices[m] = PaletteJoin;
-            joins++;
-        }
-
-        // Sources afterwards, because whether a head qualifies depends on the joins being placed. A
-        // head that opens directly onto a confluence is a stub the engine cannot trace a course
-        // from, so it stays ordinary water rather than claiming to be a spring.
-        for (int i = 0; i < indices.Length; i++)
-        {
-            if (!isHead[i] || !IsRiver(indices[i])) continue;
-
-            int x = i % width, y = i / width, degree = 0, sole = -1;
-            if (x > 0 && IsRiver(indices[i - 1])) { degree++; sole = i - 1; }
-            if (x + 1 < width && IsRiver(indices[i + 1])) { degree++; sole = i + 1; }
-            if (y > 0 && IsRiver(indices[i - width])) { degree++; sole = i - width; }
-            if (y + 1 < height && IsRiver(indices[i + width])) { degree++; sole = i + width; }
-
-            if (degree != 1 || indices[sole] == PaletteJoin) continue;
-
-            indices[i] = PaletteSource;
+            if (degree != 1 || indices[sole] < PaletteNarrow) continue;
+            indices[h] = PaletteSource;
             sources++;
         }
 
-        if (thinned > 0 || joins > 0)
-            Console.WriteLine($"  minor rivers: thinned {thinned:N0} px to keep courses one pixel wide, " +
-                              $"marked {joins:N0} confluence(s) as joins and {sources:N0} head(s) as sources" +
-                              (stubborn > 0 ? $", {stubborn:N0} crossing(s) left over-connected" : ""));
+        Console.WriteLine($"  minor rivers: {drawnRivers} streams in rivers.png — {mouths} reaching water ({sources} with a " +
+                          $"green source), {joins} tributaries joining another river; skipped {tooShort} too short, " +
+                          $"{stranded} stranded on land, {refusedAtMarker} landing beside a marker or segment end, " +
+                          $"{refusedSecondJoin} landing on a pixel already taking a tributary");
+
+        Audit(indices, width, height);
+        return indices;
+
+        // Orthogonal neighbours of p that are river pixels, other than the course's own previous
+        // pixel. Into the shared list to avoid allocating per step.
+        void OrthoRiverNeighbours(int p, int previous)
+        {
+            neighbours.Clear();
+            int x = p % width, y = p / width;
+            for (int k = 0; k < 4; k++)
+            {
+                int nx = x + OrthoDx[k], ny = y + OrthoDy[k];
+                if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+                int nb = ny * width + nx;
+                if (nb == previous || !isRiverPixel[nb]) continue;
+                neighbours.Add(nb);
+            }
+        }
+
+        bool TouchesRiver(int p, int previous)
+        {
+            OrthoRiverNeighbours(p, previous);
+            return neighbours.Count > 0;
+        }
     }
 
+    /// <summary>
+    /// Counts what is left that breaks the engine's rules, so that a regression shows in the log.
+    /// Tiger counts a pixel's neighbours among normal river pixels only, and so does this. Then
+    /// the segments — the 4-connected runs of normal pixels — are rebuilt and each is asked for
+    /// exactly one marker beside one of its two ends, with no marker terminating two segments.
+    /// </summary>
+    private static void Audit(byte[] indices, int width, int height)
+    {
+        static bool IsRiver(byte v) => v <= PaletteWide;
+        static bool IsNormal(byte v) => v >= PaletteNarrow && v <= PaletteWide;
+        static bool IsSpecial(byte v) => v <= PaletteSplit;
+
+        int overConnected = 0, badJoins = 0, badSources = 0, blocks = 0;
+
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int i = y * width + x;
+                byte v = indices[i];
+                if (!IsRiver(v)) continue;
+
+                int normal = 0;
+                if (x > 0 && IsNormal(indices[i - 1])) normal++;
+                if (x + 1 < width && IsNormal(indices[i + 1])) normal++;
+                if (y > 0 && IsNormal(indices[i - width])) normal++;
+                if (y + 1 < height && IsNormal(indices[i + width])) normal++;
+
+                if (IsNormal(v) && normal > 2) overConnected++;
+                else if (v == PaletteJoin && normal < 2) badJoins++;
+                else if (v == PaletteSource && normal != 1) badSources++;
+
+                // A red in the inner corner of a bend touches two trunk pixels and fills a 2x2
+                // with them; that is a legal join, not a river two pixels wide. Only a block of
+                // four normal pixels is the shape the engine cannot trace.
+                if (x + 1 < width && y + 1 < height && IsNormal(v) &&
+                    IsNormal(indices[i + 1]) && IsNormal(indices[i + width]) && IsNormal(indices[i + width + 1]))
+                    blocks++;
+            }
+        }
+
+        // Segments: label each 4-connected run of normal pixels, collect its ends (pixels with
+        // fewer than two normal neighbours), and count the markers beside those ends.
+        int n = width * height;
+        var segment = new int[n];
+        Array.Fill(segment, -1);
+        var terminators = new List<int>();           // per segment: markers beside its ends
+        var terminates = new Dictionary<int, int>(); // marker -> segments it terminates
+        var stack = new Stack<int>();
+
+        for (int start = 0; start < n; start++)
+        {
+            if (!IsNormal(indices[start]) || segment[start] >= 0) continue;
+
+            int id = terminators.Count;
+            int count = 0;
+            segment[start] = id;
+            stack.Push(start);
+
+            while (stack.Count > 0)
+            {
+                int i = stack.Pop();
+                int x = i % width, y = i / width;
+                int normal = 0;
+
+                for (int k = 0; k < 4; k++)
+                {
+                    int nx = x + OrthoDx[k], ny = y + OrthoDy[k];
+                    if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+                    int nb = ny * width + nx;
+                    if (!IsNormal(indices[nb])) continue;
+                    normal++;
+                    if (segment[nb] >= 0) continue;
+                    segment[nb] = id;
+                    stack.Push(nb);
+                }
+
+                // An end of the chain: count the markers beside it.
+                if (normal >= 2) continue;
+                for (int k = 0; k < 4; k++)
+                {
+                    int nx = x + OrthoDx[k], ny = y + OrthoDy[k];
+                    if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+                    int nb = ny * width + nx;
+                    if (!IsSpecial(indices[nb])) continue;
+                    count++;
+                    terminates[nb] = terminates.GetValueOrDefault(nb) + 1;
+                }
+            }
+
+            terminators.Add(count);
+        }
+
+        int orphans = terminators.Count(t => t == 0);
+        int doubly = terminators.Count(t => t > 1);
+        int overloaded = terminates.Count(kv => kv.Value > 1);
+
+        if (overConnected + badJoins + badSources + blocks + orphans + doubly + overloaded > 0)
+            Console.WriteLine($"  minor rivers: audit found {overConnected} over-connected pixel(s), {badJoins} red(s) not " +
+                              $"joining, {badSources} green(s) not at a source, {blocks} two-pixel-wide block(s); of " +
+                              $"{terminators.Count} segments {orphans} have no marker, {doubly} have two, and " +
+                              $"{overloaded} marker(s) terminate more than one segment");
+        else
+            Console.WriteLine($"  minor rivers: audit clean — {terminators.Count} segments, each with exactly one marker");
+    }
+
+    /// <summary>
+    /// Removes every pixel of an orthogonal course that a later pixel could reach directly, so
+    /// that no pixel touches any pixel of its own course except its two neighbours along it. A
+    /// course that doubled back, or whose inserted corner landed beside a later step, would
+    /// otherwise hold a 2x2 block or a pixel with three arms, and the engine would stop there.
+    /// </summary>
+    private static List<int> Straighten(List<int> path, int width)
+    {
+        if (path.Count < 3) return path;
+
+        var position = new Dictionary<int, int>(path.Count);
+        for (int i = 0; i < path.Count; i++) position[path[i]] = i;   // last occurrence wins
+
+        var result = new List<int>(path.Count);
+        int k = 0;
+        while (k < path.Count)
+        {
+            int p = path[k];
+            result.Add(p);
+
+            // The furthest pixel along the course that is orthogonally beside this one.
+            int jump = k + 1;
+            int x = p % width, y = p / width;
+            for (int d = 0; d < 4; d++)
+            {
+                int nx = x + OrthoDx[d], ny = y + OrthoDy[d];
+                if (nx < 0 || nx >= width || ny < 0) continue;
+                if (position.TryGetValue(ny * width + nx, out int j) && j > jump) jump = j;
+            }
+            k = jump;
+        }
+
+        return result;
+    }
 
     /// <summary>
     /// Ensures strictly 4-connected (orthogonal) river pixels without diagonal-only corners.

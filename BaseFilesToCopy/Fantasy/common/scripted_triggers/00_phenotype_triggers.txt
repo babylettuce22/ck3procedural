@@ -1,0 +1,115 @@
+﻿# The six fantasy races, as one question. Not the same as gen_has_phenotype_trigger below —
+# phenotype_human is a race too, just not a fantastical one.
+gen_has_fantasy_phenotype_trigger = {
+	OR = {
+		has_trait = phenotype_gracile
+		has_trait = phenotype_stocky
+		has_trait = phenotype_rough_hewn
+		has_trait = phenotype_towering
+		has_trait = phenotype_diminutive
+		has_trait = phenotype_dusk_adapted
+	}
+}
+
+# Has this character's race already been decided?
+#
+# The guard for everything in 00_phenotype_effects.txt. All seven traits list each other as
+# `opposites`, so a character should never hold two.
+#
+# Humans used to be marked with the `gen_phenotype_human` character FLAG instead of a trait,
+# because a marker that exists only for bookkeeping should not render a chip in the character view.
+# Now that humans carry a visible identity of their own, phenotype_human is the seventh trait here
+# and answers "was this character considered and found human" — which is a different state from
+# "nobody has looked at this character yet", and is what stops the yearly culture pulse converting
+# a human child of a mixed marriage to the local race, overruling the parents.
+#
+# The flag still exists, with a NARROWER meaning: "human born of a mixed line — snap any inherited
+# skin shift off at render time" (consumed by gen_race_skin_human in the generated
+# 99_gen_race_morphs.txt). It always travels WITH the trait, so it no longer needs to be in this
+# OR; a minority-race member holds the trait but never the flag, which is what keeps their looks.
+#
+# NOTE: the traits are `inherit_chance = 0`. They pass NOTHING genetically; every assignment is
+# script, from either the birth hook or the culture pulse. An earlier version of this comment said
+# they inherited at 100%, which is what the rest of this system used to be designed around — if the
+# code and a comment here ever disagree again, suspect the comment.
+gen_has_phenotype_trigger = {
+	OR = {
+		has_trait = phenotype_human
+		gen_has_fantasy_phenotype_trigger = yes
+	}
+}
+
+# Is this character carrying more than one race at once?
+#
+# Should be impossible — `opposites` covers all seven and the flag is only set by script — but the
+# ruler designer and the console can both produce it, and a character wearing two races has two
+# sets of forced genes fighting over the same portrait. Cheap enough to ask once a year alongside
+# the assignment; repaired by gen_sanitize_phenotype_effect.
+#
+# The mixed-line flag conflicts only with a FANTASY trait (it means "human whose inherited skin
+# shift must be reset" — nonsense on an orc). Flag beside phenotype_human is the normal, consistent
+# state of a mixed-line human.
+gen_has_conflicting_phenotype_trigger = {
+	OR = {
+		# Two or more of the seven race traits at once.
+		calc_true_if = {
+			amount = 2
+			has_trait = phenotype_human
+			has_trait = phenotype_gracile
+			has_trait = phenotype_stocky
+			has_trait = phenotype_rough_hewn
+			has_trait = phenotype_towering
+			has_trait = phenotype_diminutive
+			has_trait = phenotype_dusk_adapted
+		}
+		AND = {
+			has_character_flag = gen_phenotype_human
+			gen_has_fantasy_phenotype_trigger = yes
+		}
+	}
+}
+
+# Checks if root/this and scope:target have different racial phenotypes
+# Usage:
+#   root = { gen_is_different_race_than = { TARGET = scope:other_char } }
+gen_is_different_race_than = {
+	$TARGET$ = { save_temporary_scope_as = gen_target_char }
+	OR = {
+		# One is human (trait, or still untagged), the other is a fantasy race. Anyone without a
+		# fantasy trait counts as human here, so a pre-pulse engine courtier compares the same as
+		# their traited culture-mates.
+		AND = {
+			NOT = { gen_has_fantasy_phenotype_trigger = yes }
+			scope:gen_target_char = { gen_has_fantasy_phenotype_trigger = yes }
+		}
+		AND = {
+			gen_has_fantasy_phenotype_trigger = yes
+			scope:gen_target_char = { NOT = { gen_has_fantasy_phenotype_trigger = yes } }
+		}
+		# Both are fantasy races, but different traits
+		AND = {
+			has_trait = phenotype_gracile
+			scope:gen_target_char = { NOT = { has_trait = phenotype_gracile } }
+		}
+		AND = {
+			has_trait = phenotype_stocky
+			scope:gen_target_char = { NOT = { has_trait = phenotype_stocky } }
+		}
+		AND = {
+			has_trait = phenotype_rough_hewn
+			scope:gen_target_char = { NOT = { has_trait = phenotype_rough_hewn } }
+		}
+		AND = {
+			has_trait = phenotype_towering
+			scope:gen_target_char = { NOT = { has_trait = phenotype_towering } }
+		}
+		AND = {
+			has_trait = phenotype_diminutive
+			scope:gen_target_char = { NOT = { has_trait = phenotype_diminutive } }
+		}
+		AND = {
+			has_trait = phenotype_dusk_adapted
+			scope:gen_target_char = { NOT = { has_trait = phenotype_dusk_adapted } }
+		}
+	}
+}

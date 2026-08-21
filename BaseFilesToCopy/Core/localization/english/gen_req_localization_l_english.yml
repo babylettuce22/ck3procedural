@@ -1,6 +1,9 @@
 ﻿l_english:
  # The racial skin-shift gene. Named because a gene key without localisation shows up raw in the
- # ruler designer, which is where this one is legitimately useful to pick.
+ # ruler designer, which is where this one is legitimately useful to pick. The gene DECLARATION
+ # stays in Core even though the fantasy content lives in the Fantasy set: Emit/PortraitWriter.cs
+ # writes gen_race_skin into every persistent DNA record on every map, so the gene must always
+ # be registered. (Trait localisation lives in Fantasy/localization/gen_fantasy_traits_l_english.yml.)
  gen_race_skin:0 "Racial Complexion"
 
  gen_early_realm_stability:0 "A Stable Realm"
@@ -8,32 +11,11 @@
 
   MOD_GITHUB_BUTTON_TEXT: "Check Mod Updates"
  MOD_GITHUB_BUTTON_TOOLTIP: "View the latest releases, changelogs, and bugfixes on GitHub"
- 
- # RACE PHENOTYPE TRAITS (Generic Descriptions for Ruler Designer & Encyclopedia)
- trait_phenotype_gracile:0 "Gracile"
- trait_phenotype_gracile_desc:0 "Possessing an elongated, lithesome build and sharp bone structure, individuals with this trait move with natural poise and effortless grace."
- trait_phenotype_gracile_character_desc:0 "Possessing an elongated, lithesome build and sharp bone structure, [ROOT.GetCharacter.GetFirstNameNoTooltip] moves with natural poise and effortless grace."
 
- trait_phenotype_stocky:0 "Stocky"
- trait_phenotype_stocky_desc:0 "Built low to the ground with broad shoulders and dense bone structure, individuals with this trait possess immense physical stamina and stability."
- trait_phenotype_stocky_character_desc:0 "Built low to the ground with broad shoulders and dense bone structure, [ROOT.GetCharacter.GetFirstNameNoTooltip] possesses immense physical stamina and stability."
+ # The realm-lore button on the title window, spliced in by Emit/GuiWriter.cs beside vanilla's
+ # "Claimants" and "Title History". The panel has nothing to show yet; the placeholder says so
+ # rather than opening empty, because an empty panel reads as a bug and this one is on purpose.
+ GEN_TITLE_LORE:0 "Realm Lore"
+ GEN_TITLE_LORE_TOOLTIP:0 "What is remembered of this realm."
+ GEN_TITLE_LORE_PLACEHOLDER:0 "#italic Nothing is yet recorded of this place.#!\n\nThe chroniclers have not finished their work."
 
- trait_phenotype_rough_hewn:0 "Rough-Hewn"
- trait_phenotype_rough_hewn_desc:0 "Marked by a pronounced brow, heavy jaw, and thick skin, individuals with this trait are naturally intimidating and hardened against hardship."
- trait_phenotype_rough_hewn_character_desc:0 "Marked by a pronounced brow, heavy jaw, and thick skin, [ROOT.GetCharacter.GetFirstNameNoTooltip] is naturally intimidating and hardened against hardship."
-
- trait_phenotype_towering:0 "Towering"
- trait_phenotype_towering_desc:0 "Standing heads above others with massive physical reach, individuals with this trait command an overwhelming presence on and off the battlefield."
- trait_phenotype_towering_character_desc:0 "Standing heads above others with massive physical reach, [ROOT.GetCharacter.GetFirstNameNoTooltip] commands an overwhelming presence on and off the battlefield."
-
- trait_phenotype_diminutive:0 "Diminutive"
- trait_phenotype_diminutive_desc:0 "Noticeably small in stature, these individuals find themselves making up for their stature with their abiltiy to easily slip through tight spaces and their natural intellect."
- trait_phenotype_diminutive_character_desc:0 "Noticeably small in stature and light of step, [ROOT.GetCharacter.GetFirstNameNoTooltip] easily slips through tight spaces and goes unnoticed in the shadows."
-
- trait_phenotype_dusk_adapted:0 "Dusk-Adapted"
- trait_phenotype_dusk_adapted_desc:0 "Adapted to subterranean depths and nocturnal life, individuals with this trait possess acute senses and a calm, calculating demeanor in the dark."
- trait_phenotype_dusk_adapted_character_desc:0 "Adapted to subterranean depths and nocturnal life, [ROOT.GetCharacter.GetFirstNameNoTooltip] possesses acute senses and a calm, calculating demeanor in the dark."
- 
- # Marriage stuff
- AI_DIFFERENT_RACE_MARRIAGE_PENALTY:0 "Different Heritage/Race: $VALUE|=+0$"
- AI_DIFFERENT_RACE_ISOLATIONIST_PENALTY:0 "Isolationist Culture: $VALUE|=+0$"

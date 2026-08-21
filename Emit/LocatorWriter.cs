@@ -19,9 +19,6 @@ namespace Ck3MapGen.Emit;
 /// directory also removes the layer declarations the locators reference, so those are re-emitted
 /// verbatim; without them every locator names a layer that does not exist.
 ///
-/// Format matches vanilla field-for-field, and the instance list matches ck2rpg's
-/// writeLocators.js — one instance per province, id = province id, position = province seed with
-/// the Z axis flipped, since the map's Z runs bottom-up while image rows run top-down.
 /// </summary>
 public static class LocatorWriter
 {
@@ -101,10 +98,9 @@ public static class LocatorWriter
             // elsewhere is what vanilla does and keeps the files a third smaller.
             if (!provinces.Seeds[label].IsLand && !kind.Sea) continue;
 
-            var (x, y) = anchors[label];
-
-            // Image rows run top-down, the map's Z axis runs bottom-up.
-            double z = provinces.Height - y;
+            // Image rows run top-down, the map's Z axis runs bottom-up — see WorldSpace, which
+            // every scatter pass shares with this one.
+            var (x, z) = WorldSpace.FromImage(anchors[label].X, anchors[label].Y, provinces.Height);
 
             sb.Append("\t\t{\n");
             sb.Append($"\t\t\tid={id}\n");

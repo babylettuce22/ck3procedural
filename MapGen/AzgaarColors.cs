@@ -1,4 +1,5 @@
-using System.Globalization;
+﻿using System.Globalization;
+using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 
 namespace Ck3MapGen.MapGen;
@@ -38,8 +39,14 @@ public static class AzgaarColors
 
     /// <summary>
     /// Paints the state tier from the export and reshades everything beneath it.
+    ///
+    /// <paramref name="deJure"/> off drops the reshading: the state still takes the export's colour,
+    /// but the tiers below it keep the independent hues <see cref="Titles"/> gave them, which is
+    /// what <see cref="MapConfig.DeJureColorCoding"/> asks for. The empire borrow below stays either
+    /// way — it exists so a realm the export never drew still shows a colour the export chose, which
+    /// is a fidelity question rather than a legibility one.
     /// </summary>
-    public static void Apply(List<Title> roots, AzgaarImport azgaar, Rng rng)
+    public static void Apply(List<Title> roots, AzgaarImport azgaar, Rng rng, bool deJure = true)
     {
         // Shallowest first, so a state that swallowed another as a vassal cannot cascade its own
         // shading over the vassal's colour after the vassal has been painted. Depth then id keeps
@@ -58,7 +65,7 @@ public static class AzgaarColors
             if (!TryParseColor(azgaar.World.State(stateId)?.Color, out var rgb)) { unpainted++; continue; }
 
             title.Color = rgb;
-            Titles.RecolorChildren(title, rng);
+            if (deJure) Titles.RecolorChildren(title, rng);
             painted++;
         }
 

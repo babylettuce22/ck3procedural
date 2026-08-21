@@ -1,0 +1,33 @@
+﻿l_english:
+ # RACE PHENOTYPE TRAITS (Generic Descriptions for Ruler Designer & Encyclopedia)
+ trait_phenotype_human:0 "Human"
+ trait_phenotype_human_desc:0 "Short-lived and endlessly adaptable, humans learn quickly, multiply faster than any of the elder peoples, and treat every corner of the world as somewhere to settle."
+ trait_phenotype_human_character_desc:0 "Short-lived and endlessly adaptable, [ROOT.GetCharacter.GetFirstNameNoTooltip] carries the restless ambition of humankind."
+
+ trait_phenotype_gracile:0 "Gracile"
+ trait_phenotype_gracile_desc:0 "Possessing an elongated, lithesome build and sharp bone structure, individuals with this trait move with natural poise and effortless grace."
+ trait_phenotype_gracile_character_desc:0 "Possessing an elongated, lithesome build and sharp bone structure, [ROOT.GetCharacter.GetFirstNameNoTooltip] moves with natural poise and effortless grace."
+
+ trait_phenotype_stocky:0 "Stocky"
+ trait_phenotype_stocky_desc:0 "Built low to the ground with broad shoulders and dense bone structure, individuals with this trait possess immense physical stamina and stability."
+ trait_phenotype_stocky_character_desc:0 "Built low to the ground with broad shoulders and dense bone structure, [ROOT.GetCharacter.GetFirstNameNoTooltip] possesses immense physical stamina and stability."
+
+ trait_phenotype_rough_hewn:0 "Rough-Hewn"
+ trait_phenotype_rough_hewn_desc:0 "Marked by a pronounced brow, heavy jaw, and thick skin, individuals with this trait are naturally intimidating and hardened against hardship."
+ trait_phenotype_rough_hewn_character_desc:0 "Marked by a pronounced brow, heavy jaw, and thick skin, [ROOT.GetCharacter.GetFirstNameNoTooltip] is naturally intimidating and hardened against hardship."
+
+ trait_phenotype_towering:0 "Towering"
+ trait_phenotype_towering_desc:0 "Standing heads above others with massive physical reach, individuals with this trait command an overwhelming presence on and off the battlefield."
+ trait_phenotype_towering_character_desc:0 "Standing heads above others with massive physical reach, [ROOT.GetCharacter.GetFirstNameNoTooltip] commands an overwhelming presence on and off the battlefield."
+
+ trait_phenotype_diminutive:0 "Diminutive"
+ trait_phenotype_diminutive_desc:0 "Noticeably small in stature, these individuals find themselves making up for their stature with their ability to easily slip through tight spaces and their natural intellect."
+ trait_phenotype_diminutive_character_desc:0 "Noticeably small in stature and light of step, [ROOT.GetCharacter.GetFirstNameNoTooltip] easily slips through tight spaces and goes unnoticed in the shadows."
+
+ trait_phenotype_dusk_adapted:0 "Dusk-Adapted"
+ trait_phenotype_dusk_adapted_desc:0 "Adapted to subterranean depths and nocturnal life, individuals with this trait possess acute senses and a calm, calculating demeanor in the dark."
+ trait_phenotype_dusk_adapted_character_desc:0 "Adapted to subterranean depths and nocturnal life, [ROOT.GetCharacter.GetFirstNameNoTooltip] possesses acute senses and a calm, calculating demeanor in the dark."
+
+ # Marriage stuff
+ AI_DIFFERENT_RACE_MARRIAGE_PENALTY:0 "Different Heritage/Race: $VALUE|=+0$"
+ AI_DIFFERENT_RACE_ISOLATIONIST_PENALTY:0 "Isolationist Culture: $VALUE|=+0$"

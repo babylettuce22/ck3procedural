@@ -105,18 +105,24 @@ public static class RaceMorphWriter
         // The human reset. gen_race_skin is INHERITABLE — that is what makes half-breeds work —
         // so the human child of an elf carries the elven shift in its DNA, and without this entry
         // nothing ever turns it off: the observed bug was literally a wood-elf-coloured human
-        // child. Anyone the birth hook resolved to human wears the marker flag, and this snaps
-        // their shift to the empty index-0 template. Range { 0 0 } because there is nothing to
-        // vary — off is off.
+        // child. Range { 0 0 } because there is nothing to vary — off is off.
+        //
+        // Keyed on the gen_phenotype_human FLAG, deliberately NOT the phenotype_human TRAIT. The
+        // trait is broad racial identity and sits on every member of a human culture — including
+        // the minority-race members whose fantasy looks come from rolled ethnicity genes, and who
+        // must keep them. The flag is set only for humans of a mixed line (see
+        // 00_phenotype_birth_effects.txt), which is exactly the population whose inherited shift
+        // needs snapping off.
         sb.Append("\tgen_race_skin_human = {\n\t\tdna_modifiers = {\n");
         sb.Append("\t\t\tmorph = { mode = replace  gene = gen_race_skin  template = gen_skin_human  range = { 0 0 } }\n");
         sb.Append("\t\t}\n");
         sb.Append("\t\tweight = {\n\t\t\tbase = 0\n\t\t\tmodifier = {\n\t\t\t\tadd = 100\n\t\t\t\texists = this\n\t\t\t\thas_character_flag = gen_phenotype_human\n\t\t\t}\n\t\t}\n\t}\n\n");
 
-        // The six phenotype traits and the human flag are the whole roster; a character with none
-        // of them (a plain human, or a pre-pulse engine character) has no entry fire and keeps its
-        // inherited appearance. Exotic maps to no trait — its shape is rolled per people rather
-        // than authored — so it has no entry either.
+        // The six fantasy traits and the mixed-line flag are the whole roster; a character with
+        // none of them (a traited-but-unmixed human, a minority-race member, or a pre-pulse engine
+        // character) has no entry fire and keeps its inherited appearance — phenotype_human
+        // deliberately forces nothing, human looks belong to the ethnicity. Exotic maps to no
+        // trait — its shape is rolled per people rather than authored — so it has no entry either.
         sb.Append("}\n");
 
         ParadoxText.WriteBom(path, sb.ToString());

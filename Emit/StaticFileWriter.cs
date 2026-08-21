@@ -26,6 +26,16 @@ public static class StaticFileWriter
     public const string Wilderness = "Wilderness";
 
     /// <summary>
+    /// The static half of the fantasy race system: the phenotype traits (including the visible
+    /// Human trait), their assignment scripts, the long-lived races' fading, and the race trait
+    /// icons. Gated on fantasy ethnicities being enabled, so a realistic map ships none of it —
+    /// no race chips in the ruler designer, no fading events, no phenotype pulses.
+    /// (The gen_race_skin GENE stays in Core: PortraitWriter writes it into every persistent DNA
+    /// record on every map, so the declaration must always exist.)
+    /// </summary>
+    public const string Fantasy = "Fantasy";
+
+    /// <summary>
     /// Files that document or configure a set rather than belong in a mod.
     /// </summary>
     private static readonly string[] NotModContent = ["README.txt", "ignore.txt", ".ignore.txt"];

@@ -1508,8 +1508,9 @@ public static class Provinces
             if (pts.Count < 2) continue;
 
             // Only place river province seeds where the river is navigable (t >= 0.20),
-            // not at the tapered dry tip!
-            int startIndex = (int)(pts.Count * 0.20f);
+            // not at the tapered dry tip — unless the course leaves a lake, in which case it
+            // has no dry tip and is navigable from its first point.
+            int startIndex = river.SourceIsWater ? 1 : Math.Max(1, (int)(pts.Count * 0.20f));
             double accumulated = segmentLength * 0.5;
 
             for (int i = startIndex; i < pts.Count; i++)

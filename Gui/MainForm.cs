@@ -112,6 +112,11 @@ public sealed class MainForm : Form
     private AzgaarGuide? _guide;
     private WelcomeGuide? _welcome;
     private TabControl _tabs = null!;
+    private TabPage _sourceTab = null!;
+    private TabPage _forgeTab = null!;
+
+    /// <summary>The Heightmap tab: CK3 Heightmap Forge, embedded. See <see cref="Forge.ForgePanel"/>.</summary>
+    private readonly Forge.ForgePanel _forge = new() { Dock = DockStyle.Fill };
 
     private readonly ImageView _viewer = new() { Dock = DockStyle.Fill };
 
@@ -295,9 +300,20 @@ public sealed class MainForm : Form
     };
 
     private MapGen.HeightmapImage? _loaded;
+
+    /// <summary>The <see cref="MapGen.HeightmapProvider.Stamp"/> that <see cref="_loaded"/> was made from.</summary>
+    private string? _loadedStamp;
     private IReadOnlyList<MapGen.HeightmapWarning> _warnings = [];
     private Emit.WrittenContent? _written;
-    private string? _heightmapPath;
+    /// <summary>Where the heights come from: a PNG, or the Forge pipeline on the Heightmap tab.</summary>
+    private MapGen.HeightmapProvider? _source;
+
+    /// <summary>
+    /// The last heightmap <em>file</em> chosen, kept apart from <see cref="_source"/> so the file
+    /// dialogs still open beside it and the saved state still remembers it while a Forge source is
+    /// the one in use.
+    /// </summary>
+    private string? _lastHeightmapFile;
     private bool _busy;
     private CancellationTokenSource? _cancellation;
     private string _modRoot = "";
@@ -308,9 +324,12 @@ public sealed class MainForm : Form
     {
         _options = options;
 
-        _heightmapPath = options.HeightmapPath
-            ?? (File.Exists(_state.HeightmapPath) ? _state.HeightmapPath : null);
-        options.HeightmapPath = _heightmapPath;
+        _source = options.Heightmap
+            ?? (File.Exists(_state.HeightmapPath)
+                ? new MapGen.FileHeightmapProvider(_state.HeightmapPath!, RestoredFit(_state))
+                : null);
+        options.Heightmap = _source;
+        _lastHeightmapFile = options.HeightmapPath ?? _state.HeightmapPath;
 
         if (Core.GameLocator.IsGameDir(_state.GameDir)) options.GameDir = _state.GameDir!;
 
@@ -607,10 +626,14 @@ public sealed class MainForm : Form
 
         // Loaded when the tab is first opened, not at startup: decoding a vanilla-sized heightmap
         // is several seconds, and a window that takes that long to appear for a view nobody asked
-        // for is a worse trade than a view that takes a moment to fill in.
+        // for is a worse trade than a view that takes a moment to fill in. The Heightmap tab is
+        // lazy for the same reason — its first preview is a noise pass nobody asked for until
+        // they open it.
         tabs.SelectedIndexChanged += (_, _) =>
         {
-            if (tabs.SelectedTab?.Text == "3D render" && !_sourceShown)
+            if (tabs.SelectedTab == _forgeTab) _forge.EnsureStarted();
+
+            if (tabs.SelectedTab == _sourceTab && !_sourceShown)
             {
                 _sourceShown = true;
 
@@ -634,10 +657,16 @@ public sealed class MainForm : Form
         var titleTab = new TabPage("Titles") { BackColor = Theme.Background };
         titleTab.Controls.Add(_titles);
 
-        var sourceTab = new TabPage("3D render") { BackColor = Theme.Background };
+        var sourceTab = _sourceTab = new TabPage("3D render") { BackColor = Theme.Background };
         sourceTab.Controls.Add(BuildSourceView());
 
+        var forgeTab = _forgeTab = new TabPage("Heightmap (WIP)") { BackColor = Theme.Background };
+        forgeTab.Controls.Add(_forge);
+        _forge.UseForGeneration += UseForgeForGeneration;
+        _forge.PresetDir = _state.ForgePresetDir;
+
         tabs.TabPages.Add(mapTab);
+        tabs.TabPages.Add(forgeTab);
         tabs.TabPages.Add(sourceTab);
         tabs.TabPages.Add(titleTab);
 
@@ -772,29 +801,37 @@ public sealed class MainForm : Form
     /// </summary>
     private async Task ShowSourceAsync()
     {
-        if (_heightmapPath is null)
+        if (_source is null)
         {
             _solid.SetField(null, null, "Choose a heightmap to see it in 3D.");
             return;
         }
 
-        string path = _heightmapPath;
+        var source = _source;
         var cfg = _options.Config;
 
         // Settings can be changed faster than a full-size heightmap can be normalised and packed,
         // and the tasks do not finish in the order they started. Only the newest one is allowed to
-        // publish, or a stale frame silently wins and the view stops matching the settings.
+        // publish, or a stale frame silently wins and the view stops matching the settings. A
+        // Forge source can also be genuinely slow — it runs the whole pipeline at full size — so
+        // the superseded task is cancelled rather than just ignored.
         int generation = ++_sourceGeneration;
+        _sourceCts?.Cancel();
+        _sourceCts?.Dispose();
+        var cts = _sourceCts = new CancellationTokenSource();
 
-        _solid.SetField(null, null, "Reading the heightmap…");
+        _solid.SetField(null, null, source is MapGen.ForgeHeightmapProvider
+            ? "Running the Forge pipeline at full resolution…"
+            : "Reading the heightmap…");
 
         try
         {
-            var (source, packed, warnings, loaded) = await Task.Run(() =>
+            var (field3d, packed, warnings, loaded, stamp) = await Task.Run(() =>
             {
-                var image = _loaded is not null && _loaded.StillStandsFor(path)
+                string stamp = source.Stamp;
+                var image = _loaded is not null && _loadedStamp == stamp
                     ? _loaded
-                    : MapGen.HeightmapSource.Read(path, cfg);
+                    : source.Produce(cfg, cts.Token, MapGen.ConsoleProgress.Instance);
 
                 MapGen.HeightmapSource.Apply(image, cfg);
                 var found = MapGen.HeightmapSource.Diagnose(image, cfg);
@@ -802,28 +839,33 @@ public sealed class MainForm : Form
                 // Normalised, because that is what the game is handed. A heightmap drawn on
                 // somebody else's height scale looks perfectly reasonable as a PNG and ships as a
                 // plateau with a wall at every shoreline, and this view exists to show that.
-                var levels = MapGen.HeightmapNormalizer.Normalize(image.Raw, cfg);
+                var levels = image.Levels(cfg);
 
                 var field = Heightfield.Downsample(levels, image.Width, image.Height, Heightfield.PreviewCols);
                 var asRendered = Heightfield.Downsample(
                     Emit.HeightmapPacker.Reconstruct(levels, image.Width, image.Height),
                     image.Width, image.Height, Heightfield.PreviewCols);
 
-                return (field, asRendered, found, image);
-            });
+                return (field, asRendered, found, image, stamp);
+            }, cts.Token);
 
             if (generation != _sourceGeneration) return;
 
             _loaded = loaded;
+            _loadedStamp = stamp;
             _warnings = warnings;
 
             SetSourceStage(processed: false);
-            _solid.SetField(source, packed, "Nothing to show.");
+            _solid.SetField(field3d, packed, "Nothing to show.");
             _grid.Refresh();
 
-            _status.Text = $"{Path.GetFileName(path)} — {loaded.Width}×{loaded.Height}, " +
-                           $"{100 * source.LandShare:F1}% land" +
+            _status.Text = $"{source.Label} — {loaded.Width}×{loaded.Height}, " +
+                           $"{100 * field3d.LandShare:F1}% land" +
                            (warnings.Count == 0 ? "" : $", {warnings.Count} warning(s)");
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a newer request, which is showing its own message.
         }
         catch (Exception error)
         {
@@ -831,6 +873,8 @@ public sealed class MainForm : Form
             _solid.SetField(null, null, $"Could not read it: {error.Message}");
         }
     }
+
+    private CancellationTokenSource? _sourceCts;
 
     /// <summary>
     /// Prepares the heightmap a build actually produced — coastline forced to the provinces,
@@ -1043,6 +1087,7 @@ public sealed class MainForm : Form
 
         Place(_body, 300, 400, _state.SettingsWidth);
         Place(_right, 200, 80, _state.ViewerHeight);
+        if (_state.ForgeLeftWidth > 0) _forge.LeftWidth = _state.ForgeLeftWidth;
 
         ReportFolders();
     }
@@ -1164,7 +1209,9 @@ public sealed class MainForm : Form
         _state.Maximized = WindowState == FormWindowState.Maximized;
         _state.SettingsWidth = _body.SplitterDistance;
         _state.ViewerHeight = _right.SplitterDistance;
-        _state.HeightmapPath = _heightmapPath;
+        _state.ForgeLeftWidth = _forge.LeftWidth;
+        _state.ForgePresetDir = _forge.PresetDir;
+        _state.HeightmapPath = _lastHeightmapFile;
         _state.View = _view;
         _state.CategoryViews = new Dictionary<string, string>(_lastInCategory);
         _state.SettingsSection = _sections.SelectedIndex > 0
@@ -1186,6 +1233,10 @@ public sealed class MainForm : Form
 
     protected override bool ProcessCmdKey(ref Message message, Keys key)
     {
+        // The Heightmap tab owns the brush keys while it is the one on screen, and says so by
+        // handling them; anything it passes on falls through to the window's own shortcuts.
+        if (_tabs.SelectedTab == _forgeTab && !TypingInText() && _forge.HandleKey(key)) return true;
+
         switch (key)
         {
             case Keys.F5 when _preview.Enabled:
@@ -1261,7 +1312,7 @@ public sealed class MainForm : Form
         {
             Title = "Build the mod around a heightmap",
             Filter = "Heightmap PNG (*.png)|*.png|All files (*.*)|*.*",
-            InitialDirectory = _heightmapPath is null ? "" : Path.GetDirectoryName(_heightmapPath) ?? "",
+            InitialDirectory = LastHeightmapDir(),
         };
 
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
@@ -1269,11 +1320,79 @@ public sealed class MainForm : Form
         SetHeightmap(dialog.FileName);
     }
 
-    /// <summary>The one route a heightmap comes in by — the dialog and the recents menu both land here.</summary>
+    /// <summary>
+    /// The fit to load the saved heightmap through: the one agreed against it, or a fresh one.
+    ///
+    /// Re-measured rather than trusted, in both directions. A saved fit is only ever the right
+    /// answer for the file it was chosen against and for the rule in force when it was chosen —
+    /// a heightmap since redrawn at a size that ships on its own would otherwise keep being
+    /// resampled, moving its coastline for nothing.
+    ///
+    /// And a fit that no longer satisfies <see cref="MapGen.TileFit"/> is replaced rather than
+    /// dropped. <see cref="MapGen.TileFit.Known"/> has been narrowed more than once as sizes were
+    /// found to clip, which strands every fit agreed under an older rule. Dropping those left the
+    /// provider with no fit at all, so the size check inside
+    /// <see cref="MapGen.HeightmapSource.Read"/> failed on the build thread and surfaced as an
+    /// unhandled exception instead of as anything anyone could act on.
+    /// </summary>
+    private static (int Width, int Height)? RestoredFit(GuiState state)
+    {
+        if (state.HeightmapPath is not { } path) return null;
+
+        int fileWidth, fileHeight;
+        try
+        {
+            (fileWidth, fileHeight) = MapGen.TileFit.Measure(path);
+        }
+        catch
+        {
+            // A file that cannot even be identified is the decode's problem to report.
+            return null;
+        }
+
+        if (MapGen.TileFit.Fits(fileWidth, fileHeight)) return null;
+
+        return state.HeightmapFitWidth is { } width && state.HeightmapFitHeight is { } height
+            && MapGen.TileFit.Fits(width, height)
+                ? (width, height)
+                : MapGen.TileFit.Nearest(fileWidth, fileHeight);
+    }
+
+    /// <summary>
+    /// Where a heightmap or Azgaar file dialog should open: beside the heightmap in use, else
+    /// beside the most recent one that still exists, else let the shell decide.
+    ///
+    /// Reconstructed after being deleted by accident, so it is worth saying what it is for rather
+    /// than what it was: an empty <c>InitialDirectory</c> is not an error, it just drops the user
+    /// wherever the shell last was, which for a file picked once per project is rarely useful.
+    /// </summary>
+    private string LastHeightmapDir()
+    {
+        foreach (string? candidate in new[] { _options.HeightmapPath, _state.HeightmapPath })
+        {
+            if (string.IsNullOrWhiteSpace(candidate)) continue;
+
+            string? dir = Path.GetDirectoryName(candidate);
+            if (!string.IsNullOrWhiteSpace(dir) && Directory.Exists(dir)) return dir;
+        }
+
+        foreach (string recent in _state.RecentHeightmaps ?? [])
+        {
+            string? dir = Path.GetDirectoryName(recent);
+            if (!string.IsNullOrWhiteSpace(dir) && Directory.Exists(dir)) return dir;
+        }
+
+        return "";
+    }
+
     private void SetHeightmap(string path)
     {
-        _heightmapPath = path;
-        _options.HeightmapPath = path;
+        // Asked before the file is adopted, because declining leaves nothing usable: a size the
+        // packer cannot tile fails the decode, so the 3D view and every build would error too.
+        var (load, fit) = OfferTileFit(path);
+        if (!load) return;
+
+        _lastHeightmapFile = path;
 
         var recent = _state.RecentHeightmaps ?? [];
         recent.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
@@ -1281,9 +1400,93 @@ public sealed class MainForm : Form
         if (recent.Count > 8) recent.RemoveRange(8, recent.Count - 8);
         _state.RecentHeightmaps = recent;
 
+        _state.HeightmapFitWidth = fit?.Width;
+        _state.HeightmapFitHeight = fit?.Height;
+
+        SetSource(new MapGen.FileHeightmapProvider(path, fit));
+    }
+
+    /// <summary>
+    /// The one size rule a heightmap file can break silently, offered as a fix at the moment it
+    /// becomes relevant rather than left to fail at the end of a build.
+    ///
+    /// Same shape as <see cref="OfferStretch"/> and for the same reason, with one difference:
+    /// this one is not optional. <see cref="MapGen.TileFit"/> explains what a size it refuses does
+    /// in game — a clipped map edge and province borders drifting off the terrain, neither logged
+    /// — so declining means not loading the file at all rather than loading it and hoping.
+    /// </summary>
+    /// <returns>
+    /// Whether to load the file at all, and the size to resample it to. Two values rather than a
+    /// nullable size, because "no fit needed" and "the offer was declined" are different answers
+    /// that a null size alone cannot tell apart.
+    /// </returns>
+    private (bool Load, (int Width, int Height)? Fit) OfferTileFit(string path)
+    {
+        int width, height;
+        try
+        {
+            (width, height) = MapGen.TileFit.Measure(path);
+        }
+        catch (Exception error)
+        {
+            // Not this method's problem: load it and let the decode report it properly.
+            Console.WriteLine($"Could not read the size of {path}: {error.Message}");
+            return (true, null);
+        }
+
+        if (MapGen.TileFit.Fits(width, height)) return (true, null);
+
+        var target = MapGen.TileFit.Nearest(width, height);
+
+        var answer = MessageBox.Show(this,
+            $"{Path.GetFileName(path)} is {width} x {height}, which is not one of the sizes "
+            + $"CK3 is known to render correctly ({MapGen.TileFit.KnownList}).\n\n"
+            + "At other sizes the engine leaves terrain undrawn along the north and east "
+            + "edges, in the map editor as much as in game, and whatever the heightmap is "
+            + "packed with. Nothing is logged when it happens.\n\n"
+            + $"Resample it to {target.Width} x {target.Height} as it loads? The file on disk is "
+            + "not touched.",
+            "This heightmap is not a size CK3 renders", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+        if (answer != DialogResult.Yes)
+        {
+            _status.Text = $"{Path.GetFileName(path)} not loaded: {width} x {height} is not "
+                         + $"one of {MapGen.TileFit.KnownList}. Resize it to "
+                         + $"{target.Width} x {target.Height} and choose it again.";
+            return (false, null);
+        }
+
+        _status.Text = $"{Path.GetFileName(path)}: resampling {width} x {height} to "
+                     + $"{target.Width} x {target.Height}, a size CK3 renders correctly.";
+        return (true, target);
+    }
+
+    /// <summary>
+    /// The one route a heightmap source comes in by — a file from <see cref="SetHeightmap"/> or
+    /// the Forge pipeline from the Heightmap tab. Everything that depends on "built from what?"
+    /// is refreshed here and nowhere else.
+    /// </summary>
+    private void SetSource(MapGen.HeightmapProvider source)
+    {
+        _source = source;
+        _options.Heightmap = source;
+
         ApplySource();
         InvalidateProcessed();
         if (_sourceShown) _ = ShowSourceAsync();
+    }
+
+    /// <summary>
+    /// The Heightmap tab's pipeline becomes the source. By reference: every later edit on that tab
+    /// changes the provider's stamp, so the next Preview or Write runs the pipeline again at full
+    /// size, and an unchanged one is served from the same decode cache a file is.
+    /// </summary>
+    private void UseForgeForGeneration()
+    {
+        _forge.EnsureStarted();
+        SetSource(_forge.Session.ProviderForGeneration());
+        _status.Text = $"Building from the Heightmap tab's pipeline ({_forge.Session.Name}) — " +
+                       "press Preview to generate from it";
     }
 
     private void ShowAzgaarMenu()
@@ -1322,7 +1525,7 @@ public sealed class MainForm : Form
             // Exports usually land beside the heightmap PNG from the same map.
             InitialDirectory = !string.IsNullOrWhiteSpace(current)
                 ? Path.GetDirectoryName(current) ?? ""
-                : _heightmapPath is null ? "" : Path.GetDirectoryName(_heightmapPath) ?? "",
+                : LastHeightmapDir(),
         };
 
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
@@ -1427,7 +1630,7 @@ public sealed class MainForm : Form
     private void ShowRecentHeightmaps()
     {
         var recent = (_state.RecentHeightmaps ?? [])
-            .Where(p => File.Exists(p) && !string.Equals(p, _heightmapPath, StringComparison.OrdinalIgnoreCase))
+            .Where(p => File.Exists(p) && !string.Equals(p, _options.HeightmapPath, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         var menu = new ContextMenuStrip();
@@ -1444,6 +1647,18 @@ public sealed class MainForm : Form
             menu.Items.Add(item);
         }
 
+        menu.Items.Add(new ToolStripSeparator());
+        var forge = new ToolStripMenuItem("Use the Heightmap tab's pipeline")
+        {
+            Enabled = _source is not MapGen.ForgeHeightmapProvider,
+        };
+        forge.Click += (_, _) =>
+        {
+            UseForgeForGeneration();
+            _tabs.SelectedTab = _forgeTab;
+        };
+        menu.Items.Add(forge);
+
         menu.Show(_recent, new Point(0, _recent.Height));
     }
 
@@ -1453,7 +1668,7 @@ public sealed class MainForm : Form
         Bitmap? frame;
         string name;
 
-        if (_tabs.SelectedTab?.Text == "3D render")
+        if (_tabs.SelectedTab == _sourceTab)
         {
             frame = _solid.CurrentFrame;
             name = "terrain-3d";
@@ -1530,11 +1745,11 @@ public sealed class MainForm : Form
     private void ApplySource()
     {
         // The button is the label: it always answers "built from what?" without a trip elsewhere.
-        _browse.Text = _heightmapPath is null
+        _browse.Text = _source is null
             ? "Choose heightmap…"
-            : Clipped(Path.GetFileName(_heightmapPath), 30);
+            : Clipped(_source.Label, 30);
 
-        _tips.SetToolTip(_browse, _heightmapPath ?? "The heightmap PNG the whole mod is built from.");
+        _tips.SetToolTip(_browse, _source?.Detail ?? "The heightmap the whole mod is built from: a 16-bit PNG, or the Heightmap tab's pipeline.");
 
         _openMod.Enabled = ModFolderToOpen() is not null;
         SetEnabled(!_busy);
@@ -1687,7 +1902,7 @@ public sealed class MainForm : Form
 
     private async Task WriteModAsync()
     {
-        if (_busy || _heightmapPath is null) return;
+        if (_busy || _source is null) return;
 
         if (_edits.EditedCount > 0)
         {
@@ -1876,18 +2091,29 @@ public sealed class MainForm : Form
 
     private async Task BuildAsync(string? modDir)
     {
+        // A Forge source with an unbaked erosion stage will bake it inside the run, which can be
+        // the longest phase of the lot. Say so first, as the tab's own export does.
+        if (_source is MapGen.ForgeHeightmapProvider && !_forge.ConfirmStaleBakes(this)) return;
+
         var (result, cancelled) = await RunAsync(
             modDir is null ? "Building preview…" : "Writing mod…",
             () =>
             {
                 var cfg = _options.Config;
+                var source = _source!;
 
-                Stage.Time("heightmap decode", () =>
+                Stage.Time(source.PhaseName, () =>
                 {
-                    if (_loaded is null || !_loaded.StillStandsFor(_heightmapPath!))
-                        _loaded = MapGen.HeightmapSource.Read(_heightmapPath!, cfg);
+                    string stamp = source.Stamp;
+                    if (_loaded is null || _loadedStamp != stamp)
+                    {
+                        _loaded = source.Produce(cfg, Stage.Cancellation, MapGen.ConsoleProgress.Instance);
+                        _loadedStamp = stamp;
+                    }
                     else
+                    {
                         MapGen.HeightmapSource.Apply(_loaded, cfg);
+                    }
 
                     _warnings = MapGen.HeightmapSource.Diagnose(_loaded, cfg);
                 });
@@ -2080,9 +2306,10 @@ public sealed class MainForm : Form
         _cancel.Visible = !enabled;
 
         _titles.Enabled = enabled;
+        _forge.Enabled = enabled;
         ShowPending();
 
-        bool ready = enabled && _heightmapPath is not null;
+        bool ready = enabled && _source is not null;
         _writeMod.Enabled = ready;
         _preview.Enabled = ready;
     }

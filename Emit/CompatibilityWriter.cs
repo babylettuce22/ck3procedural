@@ -62,6 +62,32 @@ public static class CompatibilityWriter
     private const int VanillaFlatMapZoomStep = 21;
 
     /// <summary>
+    /// Vanilla's SURROUND_MAP_INNER_RECT, in the order the define writes it:
+    /// <c>x-start, z-start, x-end, z-end</c>.
+    ///
+    /// World-space XZ, on vanilla's 9216x4608 map. gfx/FX/surroundmap.shader settles that: the
+    /// surround is a flat plane whose vertices arrive as <c>float2 position</c> and are lifted
+    /// straight to <c>float3( position.x, FlatMapHeight, position.y )</c>, with the mask sampled at
+    /// <c>position / MapSize</c>. The rect is not in the shader's constant buffer, so it is what
+    /// builds that mesh on the CPU — and the inner one is the hole in the middle where the map
+    /// shows through.
+    ///
+    /// Left at vanilla's numbers the hole is cut for a world twice ours across: on a 5760x2848 map
+    /// the z-end of 3700 is 850 units past the southern edge. The surround plane then overlaps the
+    /// map plane — both at FLAT_MAP_HEIGHT — and the overlap has hard, axis-aligned rectangular
+    /// edges, which is what the clipped map corners in the flat map view actually are.
+    ///
+    /// The component semantics are genuinely unclear and are not worth guessing at: 500 and 500 on
+    /// x read as insets from either edge, while 1000 and 3700 on z read as absolute coordinates
+    /// spanning the middle 59% of the map. It does not matter. Every reading is a length along one
+    /// axis of a 9216x4608 world, linear in that dimension with no constant term, so scaling the x
+    /// pair by the width ratio and the z pair by the height ratio reproduces vanilla's geometry
+    /// proportionally under all of them — and reduces to vanilla's own numbers exactly when the map
+    /// is vanilla-sized.
+    /// </summary>
+    private static readonly double[] VanillaSurroundInnerRect = [500.0, 1000.0, 500.0, 3700.0];
+
+    /// <summary>
     /// Vanilla's government list, plus ours.
     ///
     /// A government type declared in <c>common/governments</c> is NOT registered until its key also
@@ -163,7 +189,13 @@ public static class CompatibilityWriter
     }
 
     /// <summary>
-    /// Overrides NCamera so the camera is bounded by the map we ship rather than by vanilla's.
+    /// Overrides the two blocks that place the map and the camera in world space, so both are
+    /// bounded by the map we ship rather than by vanilla's.
+    ///
+    /// NGraphics carries the pair that decide where the flat map begins:
+    /// <c>FLAT_MAP_ZOOM_STEP</c>, which has to travel with the map-table layer fades
+    /// <see cref="MapTableWriter"/> moves, and <c>SURROUND_MAP_INNER_RECT</c>, the world-space
+    /// hole the surround plane leaves for the map to show through.
     ///
     /// Written into <c>common/defines/graphic/</c>, next to vanilla's own 00_graphics.txt, rather
     /// than alongside our NJominiMap override one directory up. Defines merge across the whole
@@ -191,9 +223,24 @@ public static class CompatibilityWriter
         int startStep = NearestZoomStep(VanillaStartZoomHeight * ViewScale(cfg));
         int flatStep = ScaleZoomStep(VanillaFlatMapZoomStep, cfg);
 
+        // Two blocks, because the four keys do not live in one. FLAT_MAP_ZOOM_STEP and
+        // SURROUND_MAP_INNER_RECT are NGraphics; the panning bounds and the start view are NCamera.
+        // Writing either into the other block is silently ignored — it parses, it merges, and it
+        // governs nothing.
+        double widthRatio = cfg.MapScale;
+        double heightRatio = (double)cfg.ProvinceHeight / VanillaProvinceHeight;
+
+        string innerRect = string.Join(" ", VanillaSurroundInnerRect.Select((v, i) =>
+            (v * (i % 2 == 0 ? widthRatio : heightRatio)).ToString("F1", Invariant)));
+
         ParadoxText.WriteBom(Path.Combine(dir, "zz_generated_graphics.txt"),
             $$"""
-              # Camera extents must match map_data/provinces.png, not vanilla's map.
+              # Map geometry and camera extents must match map_data/provinces.png, not vanilla's map.
+              NGraphics = {
+              	FLAT_MAP_ZOOM_STEP = {{flatStep}}
+              	SURROUND_MAP_INNER_RECT = { {{innerRect}} }
+              }
+
               NCamera = {
               	PANNING_WIDTH = {{panWidth.ToString(Invariant)}}
               	PANNING_HEIGHT = {{panHeight.ToString(Invariant)}}
@@ -207,6 +254,7 @@ public static class CompatibilityWriter
                           $"{lookX:F0},{lookZ:F0}, zoom step {startStep} ({ZoomSteps[startStep]}), " +
                           $"flat map at step {flatStep} ({ZoomSteps[flatStep]}) " +
                           $"(vanilla 9090 x 4696, 5000,2300, 33, 21)");
+        Console.WriteLine($"  surround: inner rect {innerRect} (vanilla 500.0 1000.0 500.0 3700.0)");
     }
 
     /// <summary>

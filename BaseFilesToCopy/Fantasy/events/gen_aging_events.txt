@@ -123,8 +123,15 @@ gen_aging.0090 = {
 				desc = gen_aging.0090.race_gnome
 			}
 			triggered_desc = {
-				trigger = { has_character_flag = gen_phenotype_human }
+				trigger = {
+					has_trait = phenotype_human
+					has_character_flag = gen_phenotype_human
+				}
 				desc = gen_aging.0090.race_human_flagged
+			}
+			triggered_desc = {
+				trigger = { has_trait = phenotype_human }
+				desc = gen_aging.0090.race_human
 			}
 			desc = gen_aging.0090.race_none
 		}

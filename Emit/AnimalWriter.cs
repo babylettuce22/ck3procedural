@@ -178,8 +178,9 @@ public static class AnimalWriter
 
             if (!ScatterGround.IsDryLand(elevation, cfg, fx, fy)) continue;
 
-            px = (float)fx;
-            pz = (float)(cfg.ProvinceHeight - fy);
+            var (wx, wz) = WorldSpace.FromImage(fx, fy, cfg.ProvinceHeight);
+            px = (float)wx;
+            pz = (float)wz;
             return true;
         }
 

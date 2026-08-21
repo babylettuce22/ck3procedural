@@ -7,6 +7,15 @@ public sealed class MajorRiverPath
 {
     public required List<(float X, float Y)> Points { get; init; }
     public required float TotalLength { get; init; }
+
+    /// <summary>
+    /// True when the course begins in a lake rather than on dry ground. A river rising in the
+    /// hills tapers to nothing at its head; a lake's outlet is full width from the first metre,
+    /// and the channel has to be carved that way or the water in the lake and the water in the
+    /// river never meet. Read by the carve, which skips the taper, and by the province seeding,
+    /// which otherwise leaves the first fifth of a course unseeded as "the dry tip".
+    /// </summary>
+    public bool SourceIsWater { get; init; }
 }
 
 public static class MajorRivers
@@ -24,7 +33,6 @@ public static class MajorRivers
 
         int pw = cfg.ProvinceWidth;
         int ph = cfg.ProvinceHeight;
-        float sea = cfg.Limits.SeaLevelUpper;
 
         // 1. Find sea outlets and rank by catchment flow.
         var candidateOutlets = FindSeaOutlets(drainage, cfg, pw, ph);
@@ -33,75 +41,179 @@ public static class MajorRivers
         var paths = new List<MajorRiverPath>();
         var occupied = new bool[pw * ph];
         int targetRivers = cfg.MajorRiverCount;
+        int systems = 0, lakeCrossings = 0;
 
+        // Lakes feed as land does: a lake cell's receiver is the next cell towards the spill, so
+        // the trace can walk in over the outlet, across the water and out again up the strongest
+        // inflow, which is what makes one river of a chain of lakes.
         var feeders = new List<int>[pw * ph];
         for (int i = 0; i < drainage.Receiver.Length; i++)
         {
             int into = drainage.Receiver[i];
-            if (into != i && drainage.LandMask[i] != 0)
+            if (into != i && drainage.Drains(i))
             {
                 (feeders[into] ??= []).Add(i);
             }
         }
 
+        int minLength = (int)Math.Max(15, cfg.Scaled(30));
+        int lakeSystems = 0;
+
+        // Lakes first, and over and above the count. A lake's outlet is not something to be
+        // chosen by discharge against the other rivers on the map: the lake is there, the water in
+        // it has to get to the sea, and the course from the spill downhill always exists — it is
+        // walked downstream along the receivers, so unlike a trace up from the sea it cannot be
+        // stopped by a dry bowl in between. Upstream of the lake the usual trace runs, in over the
+        // spill, across the water and up the strongest inflow, so a chain of lakes becomes one
+        // system. Going by falling discharge means the lower lake of a chain is traced first and
+        // the upper one found already occupied.
+        foreach (var (exit, flow) in FindLakeExits(drainage, cfg))
+        {
+            if (occupied[exit]) continue;
+
+            var rawCells = TraceUpstream(exit, drainage, feeders, pw, ph, occupied, cfg);
+            rawCells.Reverse(); // Source -> lake exit
+            rawCells.AddRange(TraceDownstream(drainage.Receiver[exit], drainage, occupied));
+
+            if (AddCourses(rawCells)) { systems++; lakeSystems++; }
+        }
+
         foreach (var (outlet, flow) in candidateOutlets)
         {
-            if (paths.Count >= targetRivers) break;
+            if (systems - lakeSystems >= targetRivers) break;
             if (occupied[outlet]) continue;
 
-            var rawPoints = TraceUpstream(outlet, drainage, feeders, pw, ph, occupied, sea, cfg);
+            var rawCells = TraceUpstream(outlet, drainage, feeders, pw, ph, occupied, cfg);
+            if (rawCells.Count < minLength) continue;
 
-            if (rawPoints.Count >= (int)Math.Max(15, cfg.Scaled(30)))
+            rawCells.Reverse(); // Source -> mouth
+            if (AddCourses(rawCells)) systems++;
+        }
+
+        // One trace, several courses: the water between the inflow of a lake and its outlet is
+        // the lake's own, not a channel to carve or a corridor to seed, so the course is cut
+        // there and each dry stretch becomes a river of its own. Each keeps one wet cell at
+        // either end it touches water, so the carve reaches into the lake it leaves or enters
+        // rather than stopping on the shore.
+        bool AddCourses(List<int> rawCells)
+        {
+            int added = 0;
+            for (int start = 0; start < rawCells.Count;)
             {
-                rawPoints.Reverse(); // Source -> mouth
+                if (!drainage.IsLand(rawCells[start])) { start++; continue; }
 
-                // Smooth out 45°/90° raster staircase steps into natural meanders
-                var smoothedPoints = SmoothAndResamplePath(rawPoints, stepSize: 1.0f);
+                int end = start;
+                while (end < rawCells.Count && drainage.IsLand(rawCells[end])) end++;
 
-                if (smoothedPoints.Count >= 2)
+                // Runs are maximal, so whatever precedes this one is water; and every run ends in
+                // water — the last at the sea outlet, the others in the lake the trace walked on
+                // into.
+                bool fromWater = start > 0;
+                int from = fromWater ? start - 1 : start;
+                int to = Math.Min(rawCells.Count - 1, end);
+
+                var rawPoints = new List<(float X, float Y)>(to - from + 1);
+                for (int k = from; k <= to; k++)
+                    rawPoints.Add((rawCells[k] % pw, rawCells[k] / pw));
+
+                // A short dry stretch is still worth carving when it joins two waters — that is
+                // the connection this is all for — but a short stub at the head of a system is
+                // not a river.
+                if (rawPoints.Count >= minLength || (fromWater && rawPoints.Count >= 2))
                 {
-                    paths.Add(new MajorRiverPath
+                    // Smooth out 45°/90° raster staircase steps into natural meanders
+                    var smoothedPoints = SmoothAndResamplePath(rawPoints, stepSize: 1.0f);
+
+                    if (smoothedPoints.Count >= 2)
                     {
-                        Points = smoothedPoints,
-                        TotalLength = smoothedPoints.Count,
-                    });
+                        paths.Add(new MajorRiverPath
+                        {
+                            Points = smoothedPoints,
+                            TotalLength = smoothedPoints.Count,
+                            SourceIsWater = fromWater,
+                        });
+                        added++;
+                        if (fromWater) lakeCrossings++;
+                    }
                 }
+
+                start = end;
             }
+
+            return added > 0;
         }
 
         // 2. Carve channels aggressively with sheer vertical drops to black (carvedBedElevation)
         CarveHeightmapChannels(fullElev, fullWidth, fullHeight, paths, cfg);
 
-        Console.WriteLine($"  major rivers: extracted, spline-smoothed and aggressively carved {paths.Count} major river system(s)");
+        Console.WriteLine($"  major rivers: {systems} system(s) ({lakeSystems} from lakes) traced into {paths.Count} course(s), " +
+                          $"{lakeCrossings} of them flowing out of a lake; spline-smoothed and carved");
         return paths;
     }
 
-    private static List<(float X, float Y)> TraceUpstream(
+    /// <summary>
+    /// Walks up the strongest feeder from a sea outlet, or from the cell a lake drains through,
+    /// and returns the cells, mouth first.
+    ///
+    /// Two stops and one suspension. The trace stops where the filled surface climbs past the
+    /// configured rise above sea, and where the discharge falls under the major-river floor. It
+    /// is suspended, not stopped, on entering a filled depression: a dry bowl in the heightmap is
+    /// no place to trench a navigable river, but a bowl with a lake at the bottom is exactly
+    /// where one belongs, and there is no telling the two apart from the rim. So the trace carries
+    /// on provisionally: if it reaches water the bowl was a lake basin and every cell of it is
+    /// kept, and if it climbs out the far side dry the bowl was a bowl, the trace ends on the near
+    /// rim as it always did, and the cells inside are given back. Coming out of a lake the same
+    /// basin is crossed in the other direction, and that crossing is always kept — it is the lake's
+    /// own shore, and the river upstream of the lake has to climb it to get anywhere.
+    /// </summary>
+    private static List<int> TraceUpstream(
         int outlet,
         Drainage drainage,
         List<int>[] feeders,
         int width,
         int height,
         bool[] occupied,
-        float sea,
         MapConfig cfg)
     {
-        var pts = new List<(float X, float Y)>();
+        var cells = new List<int>();
         int curr = outlet;
+        int committed = 0;
+        bool leavingLake = false;   // on land inside the basin of a lake just walked out of
+        bool inDryDip = false;      // inside a filled bowl entered from dry ground, not yet proven a lake basin
 
+        float sea = cfg.Limits.SeaLevelUpper;
         // Stop major river before it cuts into high mountains
         float maxMajorRiverElevation = sea + (float)cfg.RiverMaxRiseAboveSea;
         float minTraceFlow = (float)cfg.RiverTraceMinFlow;
 
-        while (curr >= 0 && pts.Count < 2000)
+        while (curr >= 0 && cells.Count < 4000)
         {
-            int cx = curr % width, cy = curr / width;
-            pts.Add((cx, cy));
+            cells.Add(curr);
             occupied[curr] = true;
 
-            // 1. Stop if entering a genuine lake basin or deep depression (<= 2.0m tolerated)
-            if (drainage.LakeDepth(curr) > 2.0f)
-                break;
+            // 1. Where the course may end: water, drained ground (<= 2.0m of fill tolerated), or
+            //    the basin of a lake it has just left. A bowl entered from dry ground is provisional
+            //    until water proves it a lake basin; climbing out of it dry ends the trace.
+            if (!drainage.IsLand(curr))
+            {
+                committed = cells.Count;
+                leavingLake = true;
+                inDryDip = false;
+            }
+            else if (drainage.LakeDepth(curr) <= 2.0f)
+            {
+                if (inDryDip) break;
+                committed = cells.Count;
+                leavingLake = false;
+            }
+            else if (leavingLake)
+            {
+                committed = cells.Count;
+            }
+            else
+            {
+                inDryDip = true;
+            }
 
             // 2. Stop if elevation climbs into the mountain foothills
             if (drainage.Filled[curr] > maxMajorRiverElevation)
@@ -129,7 +241,77 @@ public static class MajorRivers
             curr = bestFeeder;
         }
 
-        return pts;
+        // Give back the dry bowl the trace wandered into without finding a lake in it.
+        for (int k = committed; k < cells.Count; k++) occupied[cells[k]] = false;
+        cells.RemoveRange(committed, cells.Count - committed);
+
+        return cells;
+    }
+
+    /// <summary>
+    /// Walks the receivers from a lake's spill down to the sea, or into the first cell some
+    /// earlier course already holds, where this one joins it. Always arrives: the flood guarantees
+    /// every drained cell a route to the sea, and lakes on the way are drained cells like any
+    /// other and are walked straight through.
+    /// </summary>
+    private static List<int> TraceDownstream(int spill, Drainage drainage, bool[] occupied)
+    {
+        var cells = new List<int>();
+        int curr = spill;
+
+        while (cells.Count < 8000)
+        {
+            cells.Add(curr);
+            if (occupied[curr]) break;          // joined a course already traced
+            occupied[curr] = true;
+
+            int into = drainage.Receiver[curr];
+            if (into == curr || drainage.IsSea(into)) break;
+            curr = into;
+        }
+
+        return cells;
+    }
+
+    /// <summary>
+    /// The cell each qualifying lake drains through — the lake cell whose receiver is land and
+    /// which carries the most flow — paired with that flow, largest first. A lake qualifies on
+    /// area, against <see cref="MapConfig.LakeOutletMinSeaZones"/>, and on discharge, against the
+    /// same floor any major river must clear.
+    /// </summary>
+    private static List<(int Cell, float Flow)> FindLakeExits(Drainage drainage, MapConfig cfg)
+    {
+        int bodies = drainage.WaterBodyArea.Length;
+        var exit = new int[bodies];
+        Array.Fill(exit, -1);
+
+        for (int c = 0; c < drainage.Receiver.Length; c++)
+        {
+            if (!drainage.IsLake(c)) continue;
+            int into = drainage.Receiver[c];
+            if (into == c || !drainage.IsLand(into)) continue;
+
+            int b = drainage.WaterBody[c];
+            if (exit[b] < 0 || drainage.Flow[c] > drainage.Flow[exit[b]]) exit[b] = c;
+        }
+
+        long minArea = (long)Math.Max(1.0, cfg.SeaZonePixels * cfg.LakeOutletMinSeaZones);
+        float minFlow = (float)cfg.RiverTraceMinFlow;
+
+        var exits = new List<(int Cell, float Flow)>();
+        int lakes = 0;
+        for (int b = 0; b < bodies; b++)
+        {
+            if (drainage.WaterBodyIsSea[b]) continue;
+            lakes++;
+            if (exit[b] < 0 || drainage.WaterBodyArea[b] < minArea || drainage.Flow[exit[b]] < minFlow) continue;
+            exits.Add((exit[b], drainage.Flow[exit[b]]));
+        }
+
+        exits.Sort((a, b) => b.Flow.CompareTo(a.Flow));
+        Console.WriteLine($"  major rivers: {exits.Count} of {lakes} lake(s) large enough for a carved outlet " +
+                          $"(at least {minArea:N0} px and {minFlow:N0} discharge)");
+        return exits;
     }
 
     /// <summary>
@@ -217,7 +399,6 @@ public static class MajorRivers
     private static List<(int Cell, float Flow)> FindSeaOutlets(
         Drainage drainage, MapConfig cfg, int pw, int ph)
     {
-        var (waterBody, bodyArea) = LabelWaterBodies(drainage.LandMask, pw, ph);
         long minOutletArea = (long)Math.Max(1.0, cfg.SeaZonePixels * cfg.MinOutletSeaZones);
         float minOutletFlow = (float)cfg.RiverTraceMinFlow;
 
@@ -229,13 +410,16 @@ public static class MajorRivers
             for (int x = 1; x < pw - 1; x++)
             {
                 int c = y * pw + x;
-                if (drainage.LandMask[c] == 0) continue;
+                if (!drainage.IsLand(c)) continue;
 
                 int into = drainage.Receiver[c];
-                if (drainage.LandMask[into] != 0 || drainage.Flow[c] < minOutletFlow) continue;
+                if (drainage.IsLand(into) || drainage.Flow[c] < minOutletFlow) continue;
 
-                int body = waterBody[into];
-                if (body < 0 || bodyArea[body] < minOutletArea)
+                // A lake big enough to count as a sea is a mouth in its own right, and the river
+                // that reaches it is its own system; a smaller lake is something the trace from
+                // the sea passes through on its way upstream, so nothing starts there.
+                int body = drainage.WaterBody[into];
+                if (body < 0 || drainage.WaterBodyArea[body] < minOutletArea)
                 {
                     rejected++;
                     continue;
@@ -245,58 +429,11 @@ public static class MajorRivers
             }
         }
 
-        Console.WriteLine($"  major rivers: {outlets.Count} sea outlets over {bodyArea.Count} water " +
-                          $"bodies, {rejected} rejected as inland sinks under {minOutletArea:N0} px");
+        Console.WriteLine($"  major rivers: {outlets.Count} outlets over {drainage.WaterBodyArea.Length} water " +
+                          $"bodies, {rejected} rejected as mouths on lakes under {minOutletArea:N0} px");
 
         return outlets;
     }
-
-    private static (int[] Body, List<int> Area) LabelWaterBodies(byte[] landMask, int width, int height)
-    {
-        int n = width * height;
-        var body = new int[n];
-        Array.Fill(body, -1);
-
-        var area = new List<int>();
-        var frontier = new Queue<int>();
-
-        for (int start = 0; start < n; start++)
-        {
-            if (landMask[start] != 0 || body[start] >= 0) continue;
-
-            int id = area.Count;
-            int count = 0;
-
-            body[start] = id;
-            frontier.Enqueue(start);
-
-            while (frontier.Count > 0)
-            {
-                int c = frontier.Dequeue();
-                count++;
-
-                int cx = c % width, cy = c / width;
-                for (int k = 0; k < 8; k++)
-                {
-                    int nx = cx + Dx8[k], ny = cy + Dy8[k];
-                    if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-
-                    int nb = ny * width + nx;
-                    if (landMask[nb] != 0 || body[nb] >= 0) continue;
-
-                    body[nb] = id;
-                    frontier.Enqueue(nb);
-                }
-            }
-
-            area.Add(count);
-        }
-
-        return (body, area);
-    }
-
-    private static readonly int[] Dx8 = [-1, 0, 1, -1, 1, -1, 0, 1];
-    private static readonly int[] Dy8 = [-1, -1, -1, 0, 0, 1, 1, 1];
 
     private const double NavigableRadius = 7.0;
 
@@ -333,6 +470,10 @@ public static class MajorRivers
             int count = pts.Count;
             if (count < 2) continue;
 
+            // A lake outlet leaves the lake already a river; only a course rising on dry ground
+            // narrows to nothing at its head.
+            bool taperHead = !path.SourceIsWater;
+
             double lane = pathIndex * 37.7;
             double arc = 0;
 
@@ -356,7 +497,7 @@ public static class MajorRivers
                 float t = (float)i / (count - 1);
 
                 // Smooth cubic taper: 0 at vertex 0, opening over first 15%
-                float taper = t < 0.15f ? (t / 0.15f) * (t / 0.15f) * (3f - 2f * (t / 0.15f)) : 1.0f;
+                float taper = taperHead && t < 0.15f ? (t / 0.15f) * (t / 0.15f) * (3f - 2f * (t / 0.15f)) : 1.0f;
 
                 double radius = minWidthFull + (maxWidthFull - minWidthFull) * Math.Pow(t, 0.65);
 
@@ -400,7 +541,7 @@ public static class MajorRivers
                         float py = y - ay;
                         float u = Math.Clamp((px * segDx + py * segDy) / segLenSq, 0.0f, 1.0f);
 
-                        if (i == 0 && u <= 0.0f) continue;
+                        if (i == 0 && u <= 0.0f && taperHead) continue;
 
                         float qx = ax + u * segDx;
                         float qy = ay + u * segDy;

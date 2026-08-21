@@ -301,6 +301,8 @@ public static class ContentWriter
 
         List<string> sets = [StaticFileWriter.Core];
         if (cfg.EnableWilderness) sets.Add(StaticFileWriter.Wilderness);
+        if (cfg.EnableFantasyEthnicities && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly)
+            sets.Add(StaticFileWriter.Fantasy);
         Core.Stage.Time("static files", () => StaticFileWriter.WriteAll(modDir, sets, runStarted));
 
         // After the write rather than during it: cultures and faiths both gain their unsettled

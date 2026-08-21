@@ -1,5 +1,6 @@
 ﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
+using Ck3MapGen.Io;
 
 namespace Ck3MapGen.MapGen;
 
@@ -233,6 +234,20 @@ public static class Cultures
         var graph = BuildCountyGraph(counties, provinces, order, landCount, provinceTerrain,
             cfg.CultureTerrainWeight);
 
+        // An export decides its own peoples, exactly as it decides its own borders.
+        //
+        // The density knobs below are how a *generated* world is given a plausible number of
+        // languages; they are the wrong authority over a map somebody drew, and letting them keep it
+        // is why a twelve-culture export came out with forty-seven cultures whose names it had never
+        // heard of. Where the export has cultures, they are the cultures.
+        if (azgaar is not null
+            && ImportedCultures(counties, graph, provinceTerrain, development, vocab, cfg, rng, azgaar)
+               is { } importedMap)
+        {
+            Report(importedMap.Heritages, importedMap.Cultures, counties.Count, sw.ElapsedMilliseconds);
+            return importedMap;
+        }
+
         int cultureTarget = Math.Max(1, (int)Math.Round(counties.Count / cfg.CountiesPerCulture));
         int heritageTarget = Math.Max(1, (int)Math.Round(cultureTarget / cfg.CulturesPerHeritage));
 
@@ -335,6 +350,233 @@ public static class Cultures
 
         Report(heritages, cultures, counties.Count, sw.ElapsedMilliseconds);
         return new CultureMap { Heritages = heritages, Cultures = cultures, ByCounty = byCounty };
+    }
+
+    /// <summary>
+    /// The export's own peoples, as heritages and cultures, or null when it has none to give.
+    ///
+    /// One CK3 culture per live Azgaar culture, over the counties that culture actually holds. The
+    /// grouping above them is Azgaar's <c>origins</c> ancestry rather than geometry: a culture whose
+    /// origin is another live culture joins that one's heritage, and a culture descended from
+    /// Wildlands founds its own. On the Lumbaris export that turns twelve cultures into seven
+    /// families — Ignisari with Dhezi and Krighi under it, Dratkonian with Luminari and Dhalgvolan —
+    /// which is the same relationship CK3 means by heritage, already stated by the export.
+    ///
+    /// Deliberately ignores <see cref="MapConfig.CountiesPerCulture"/> and
+    /// <see cref="MapConfig.CulturesPerHeritage"/>. Those exist to give an invented world a plausible
+    /// density of peoples; against an export they are a second opinion nobody asked for, and honouring
+    /// them is what produced thirty-six cultures the export had never heard of alongside the eleven
+    /// it had.
+    /// </summary>
+    private static CultureMap? ImportedCultures(List<Title> counties, RegionGrowth.Graph graph,
+        TerrainClass[] provinceTerrain, Dictionary<Title, int> development,
+        VanillaVocabulary vocab, MapConfig cfg, Rng rng, AzgaarImport azgaar)
+    {
+        var live = azgaar.World.RealCultures.ToDictionary(c => c.I);
+        if (live.Count == 0) return null;
+
+        // --- Which people holds each county -------------------------------------------------------
+        var held = new Dictionary<int, List<Title>>();
+        var homeless = new List<Title>();
+
+        for (int i = 0; i < counties.Count; i++)
+        {
+            int id = azgaar.For(counties[i])?.Culture.Id ?? 0;
+
+            // Culture 0 is Wildlands — Azgaar's word for ground no people has claimed, not a people.
+            // Left in a bucket of its own and handed to the neighbours below, because a "Wildlands"
+            // culture with traditions and a name list is a thing the export never described.
+            if (id <= 0 || !live.ContainsKey(id)) { homeless.Add(counties[i]); continue; }
+
+            if (!held.TryGetValue(id, out var list)) held[id] = list = [];
+            list.Add(counties[i]);
+        }
+
+        if (held.Count == 0) return null;
+
+        Spread(counties, graph, held, homeless);
+
+        // --- Families, from the export's own ancestry ---------------------------------------------
+        var family = new Dictionary<int, int>();
+        foreach (int id in held.Keys) family[id] = Ancestor(id, live);
+
+        var heritages = new List<Heritage>();
+        var cultures = new List<Culture>();
+        var byCounty = new Dictionary<Title, Culture>();
+
+        // Culture names are the export's, verbatim, and unique within it — so the pool they are
+        // checked against starts empty and nothing here can rename one. Heritages are checked against
+        // a pool of their own: a family and the culture it is named after share a word on purpose,
+        // and merging the two namespaces turns "Ignisari" into "North Ignisari" to avoid a clash
+        // that only existed inside this method.
+        var usedCultureNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var usedHeritageNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var firstClaim = new Dictionary<string, (double X, double Y)>(StringComparer.OrdinalIgnoreCase);
+
+        var eligibleLooks = FilterLooks(vocab.Looks, cfg.CultureAestheticsTheme);
+        var lookPool = eligibleLooks.Count > 0 ? eligibleLooks : vocab.Looks;
+
+        var index = new Dictionary<Title, int>();
+        for (int i = 0; i < counties.Count; i++) index[counties[i]] = i;
+
+        foreach (var (root, members) in family.GroupBy(kv => kv.Value, kv => kv.Key)
+                                              .ToDictionary(g => g.Key, g => g.OrderBy(i => i).ToList())
+                                              .OrderBy(kv => kv.Key))
+        {
+            var founder = live[root];
+            string languageKey = $"language_gen_{heritages.Count}";
+
+            // From the founder's name base, so every culture in the family names its people from one
+            // corpus — which is what makes them read as related rather than as neighbours.
+            var language = azgaar.NamesForBase(founder.Base) is { } corpus
+                ? Language.FromNameBase(languageKey, corpus, rng)
+                : heritages.Count == 0
+                    ? Language.CreateAnglic(languageKey, rng)
+                    : Language.Create(languageKey, rng);
+
+            double cx = 0, cy = 0;
+            int counted = 0;
+            foreach (int id in members)
+                foreach (var county in held[id])
+                    if (index.TryGetValue(county, out int at))
+                    {
+                        cx += graph.Position[at].X;
+                        cy += graph.Position[at].Y;
+                        counted++;
+                    }
+
+            if (counted > 0) { cx /= counted; cy /= counted; }
+
+            string family_ = AzgaarNaming.StripParenthetical(AzgaarNaming.StripArticle(founder.Name));
+            if (family_.Length == 0) family_ = language.Name;
+
+            var heritage = new Heritage
+            {
+                Key = $"heritage_gen_{heritages.Count}",
+                Name = RegionalName(family_, (cx, cy), firstClaim, usedHeritageNames),
+                Language = language,
+                Look = rng.Pick(lookPool),
+                LanguageColor = vocab.LanguageColors.Count > 0 ? rng.Pick(vocab.LanguageColors) : null,
+                ImportedArchetype = AzgaarNaming.ParseRace(founder.Name),
+            };
+
+            heritages.Add(heritage);
+
+            foreach (int id in members)
+            {
+                var owned = held[id];
+                if (owned.Count == 0) continue;
+
+                var source = live[id];
+                var culture = Create(heritage, owned, provinceTerrain, development, vocab,
+                                     usedCultureNames, cultures.Count, rng);
+
+                // The export's word for this people, and its own colour, over the generated ones.
+                // Written after Create rather than threaded through it so the character the ground
+                // gives a culture — its ethos, its traditions, its terrain — is still measured the
+                // same way for an imported culture as for an invented one.
+                string name = AzgaarNaming.StripParenthetical(AzgaarNaming.StripArticle(source.Name));
+                if (name.Length > 0)
+                {
+                    usedCultureNames.Remove(culture.Name);
+                    culture.Name = Unique(name, usedCultureNames);
+                }
+
+                if (AzgaarColors.TryParseColor(source.Color, out var rgb)) culture.Color = rgb;
+                culture.ImportedArchetype = AzgaarNaming.ParseRace(source.Name) ?? heritage.ImportedArchetype;
+
+                heritage.Cultures.Add(culture);
+                cultures.Add(culture);
+                culture.Counties.AddRange(owned);
+                foreach (var county in owned) byCounty[county] = culture;
+            }
+        }
+
+        if (heritages.Count == 0) return null;
+
+        Console.WriteLine($"    cultures follow the export: {cultures.Count} of its peoples in " +
+                          $"{heritages.Count} families from its own ancestry" +
+                          (homeless.Count > 0 ? $", {homeless.Count} wildlands counties joined a neighbour" : ""));
+
+        return new CultureMap { Heritages = heritages, Cultures = cultures, ByCounty = byCounty };
+    }
+
+    /// <summary>
+    /// Hands every county the export left on Wildlands to whichever neighbouring people surrounds it.
+    ///
+    /// Grown outward one ring at a time rather than assigned by nearest centre, so a pocket of
+    /// unclaimed ground is split along the border already running through it instead of all going to
+    /// whichever culture happens to have the closest midpoint. Anything with no settled neighbour at
+    /// all — an island nobody reached — falls back to the largest culture, since leaving a county
+    /// with no culture at all is not something CK3 will load.
+    /// </summary>
+    private static void Spread(List<Title> counties, RegionGrowth.Graph graph,
+        Dictionary<int, List<Title>> held, List<Title> homeless)
+    {
+        if (homeless.Count == 0) return;
+
+        var index = new Dictionary<Title, int>();
+        for (int i = 0; i < counties.Count; i++) index[counties[i]] = i;
+
+        var owner = new int[counties.Count];
+        foreach (var (id, members) in held)
+            foreach (var county in members)
+                if (index.TryGetValue(county, out int at)) owner[at] = id;
+
+        var pending = homeless.Where(index.ContainsKey).Select(c => index[c]).ToHashSet();
+
+        while (pending.Count > 0)
+        {
+            // Every claim in a round is decided against the same board, so the result does not depend
+            // on which county the enumeration reached first.
+            var claimed = new Dictionary<int, int>();
+
+            foreach (int at in pending.OrderBy(i => i))
+            {
+                var votes = new Dictionary<int, int>();
+                foreach (int near in graph.Neighbours[at])
+                    if (owner[near] > 0) votes[owner[near]] = votes.GetValueOrDefault(owner[near]) + 1;
+
+                if (votes.Count == 0) continue;
+                claimed[at] = votes.OrderByDescending(v => v.Value).ThenBy(v => v.Key).First().Key;
+            }
+
+            if (claimed.Count == 0) break;
+
+            foreach (var (at, id) in claimed)
+            {
+                owner[at] = id;
+                held[id].Add(counties[at]);
+                pending.Remove(at);
+            }
+        }
+
+        if (pending.Count == 0) return;
+
+        int biggest = held.OrderByDescending(kv => kv.Value.Count).ThenBy(kv => kv.Key).First().Key;
+        foreach (int at in pending.OrderBy(i => i)) held[biggest].Add(counties[at]);
+    }
+
+    /// <summary>
+    /// The culture at the head of <paramref name="id"/>'s line of descent — the first ancestor that
+    /// is itself descended from Wildlands, or <paramref name="id"/> when it already is.
+    ///
+    /// Azgaar writes <c>origins</c> as a list because a culture can be a blend; the first entry is
+    /// the one its own generator treats as the parent, so that is the one followed. Guarded against a
+    /// cycle, which the map editor makes it perfectly possible to draw by hand.
+    /// </summary>
+    private static int Ancestor(int id, Dictionary<int, AzgaarCulture> live)
+    {
+        var seen = new HashSet<int>();
+
+        while (seen.Add(id) && live.TryGetValue(id, out var culture))
+        {
+            int? parent = culture.Origins.FirstOrDefault(o => o is > 0 && o != id);
+            if (parent is not { } up || !live.ContainsKey(up)) break;
+            id = up;
+        }
+
+        return id;
     }
 
     /// <summary>

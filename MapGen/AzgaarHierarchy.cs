@@ -113,6 +113,12 @@ public static class AzgaarHierarchy
         var rootState = new Dictionary<Title, int>();
         var rootPosition = new Dictionary<Title, (double X, double Y)>();
 
+        // The titles a state actually *is*, kept apart from `rootState` because the grouping pass
+        // registers its own wrappers there too. Reading the country off the combined map picked the
+        // synthetic empire built over a state rather than the state's own title, which turned every
+        // king on the map into an emperor and moved the export's name up a tier with him.
+        var stateRoots = new Dictionary<Title, int>();
+
         var byState = new Dictionary<int, List<int>>();
         for (int i = 0; i < counties.Count; i++)
         {
@@ -120,6 +126,8 @@ public static class AzgaarHierarchy
             if (!byState.TryGetValue(state, out var list)) byState[state] = list = [];
             list.Add(i);
         }
+
+        int promoted = 0;
 
         foreach (var (state, members) in byState.OrderBy(kv => kv.Key))
         {
@@ -131,10 +139,13 @@ public static class AzgaarHierarchy
                 ? Ownerless(members, counties, countyAdjacency, countyPosition, cfg, rng)
                 : BuildState(members, tier, counties, countyAdjacency, countyPosition, cfg, rng);
 
+            if (state > 0 && subtree.Count > 0 && TierOf(subtree[0].Tier) > tier) promoted++;
+
             foreach (var root in subtree)
             {
                 roots.Add(root);
                 rootState[root] = state;
+                stateRoots[root] = state;
                 rootPosition[root] = Centre(root, counties, countyPosition);
             }
         }
@@ -146,6 +157,10 @@ public static class AzgaarHierarchy
         foreach (string tier in (string[])["d", "k", "e"])
             current = RaiseTo(tier, current, affinity, rootState, rootPosition,
                               countyAdjacency, countySea, counties, countyPosition, cfg, rng);
+
+        if (promoted > 0)
+            Console.WriteLine($"    {promoted} duchy-ranked states hold more than a duchy's worth of " +
+                              "counties and were built as kingdoms instead");
 
         // Every title made here starts at index 0, which is fine for correctness — AssignNames
         // dedupes keys — and produces a pile of "_2", "_3" suffixes in localisation. Numbering per
@@ -186,7 +201,7 @@ public static class AzgaarHierarchy
         // produced several roots is represented by its highest, which is the one that reads as the
         // country — the others are fragments the grouping pass will have parented elsewhere.
         var stateTitles = new Dictionary<int, Title>();
-        foreach (var (title, state) in rootState)
+        foreach (var (title, state) in stateRoots)
         {
             if (state <= 0) continue;
             if (!stateTitles.TryGetValue(state, out var held) || TierOf(title.Tier) > TierOf(held.Tier))
@@ -196,8 +211,8 @@ public static class AzgaarHierarchy
 
         // Generated colours first, so every title has one; the export then overrides the tier it
         // actually has an opinion about and reshades what hangs below it.
-        Titles.AssignColorsTo(current, rng);
-        AzgaarColors.Apply(current, azgaar, rng);
+        Titles.AssignColorsTo(current, rng, cfg.DeJureColorCoding);
+        AzgaarColors.Apply(current, azgaar, rng, cfg.DeJureColorCoding);
 
         int kingdoms = Titles.Flatten(current).Count(t => t.Tier == "k");
         int duchies = Titles.Flatten(current).Count(t => t.Tier == "d");
@@ -238,6 +253,22 @@ public static class AzgaarHierarchy
     }
 
     /// <summary>
+    /// The most counties a duchy-ranked state may keep in a single duchy before it is built as a
+    /// kingdom instead.
+    ///
+    /// Half again the county band's own ceiling, so "Grand Duchy" still buys a duchy that reads as a
+    /// large one rather than an average one. Past that the tier stops being a description: Hauls came
+    /// out as a single duchy of fifty-three counties, nine times the band, sitting under a kingdom
+    /// with an invented name — so the export's own word for the country was buried a tier below the
+    /// title the game actually shows, and the realm the player sees was one this tool made up.
+    ///
+    /// Promoting costs nothing in fidelity. <see cref="Emit.TitleTierWriter.StateForms"/> writes the
+    /// export's form word against the state's title key at whatever rung it sits on, so a promoted
+    /// Hauls is still rendered "Grand Duchy of Hauls" under a Grand Duke.
+    /// </summary>
+    private static int DuchyCeiling => (int)Math.Round(Titles.MaxCountiesPerDuchy * 1.5);
+
+    /// <summary>
     /// Builds one state's counties up to the tier it was granted, and returns the roots.
     ///
     /// Returns a list rather than one title because a state granted county tier has nothing above its
@@ -249,6 +280,11 @@ public static class AzgaarHierarchy
     {
         if (members.Count == 0) return [];
         if (tier <= AzgaarTiers.County) return [.. members.Select(i => counties[i])];
+
+        // A duchy-ranked state whose land will not fit in a duchy is built as a kingdom of ordinary
+        // duchies. See <see cref="DuchyCeiling"/> — the tier is raised rather than the duchy stretched
+        // because CK3 has no way to render a fifty-county duchy as anything but a mistake.
+        if (tier == AzgaarTiers.Duchy && members.Count > DuchyCeiling) tier = AzgaarTiers.Kingdom;
 
         var inside = Restrict(countyAdjacency, members);
 
@@ -366,7 +402,11 @@ public static class AzgaarHierarchy
                 continue;
             }
 
-            wrapped.Add(Wrap(tier, members));
+            // Registered under the state of its largest member, so the next pass up still knows which
+            // country this title is. Leaving it unregistered is what broke the empire tier: the
+            // wrapper read back as state 0, fell through to the loose branch below, and was placed by
+            // a distance it had no position for.
+            wrapped.Add(Wrap(tier, members, Represents(members)));
         }
 
         // Roots with no affinity at all — ownerless ground, and any state the export left out of its
@@ -383,7 +423,11 @@ public static class AzgaarHierarchy
         // at the end of Build exists because of exactly this.
         if (loose.Count > 0)
         {
-            var hosts = above.Where(r => TierOf(r.Tier) == target).ToList();
+            // Titles wrapped a moment ago count as hosts too. Drawing the pool from `above` alone
+            // meant a scrap could only ever join a realm that already stood at this tier, so on a map
+            // whose every country was raised in this same pass there was nothing adjacent to join and
+            // everything fell through to the distance test.
+            var hosts = above.Where(r => TierOf(r.Tier) == target).Concat(wrapped).ToList();
             var stillLoose = new List<Title>();
 
             if (hosts.Count > 0)
@@ -403,7 +447,7 @@ public static class AzgaarHierarchy
                                        .OrderBy(h => h.Children.Count)
                                        .FirstOrDefault();
 
-                    home ??= Nearest(loose[i], hosts, rootPosition);
+                    home ??= Nearest(loose[i], hosts, Locate);
                     if (home is null) { stillLoose.Add(loose[i]); continue; }
 
                     loose[i].Parent = home;
@@ -419,7 +463,7 @@ public static class AzgaarHierarchy
                 for (int i = 0; i < stillLoose.Count; i++)
                 {
                     index[i] = stillLoose[i];
-                    positions[i] = rootPosition.GetValueOrDefault(stillLoose[i]);
+                    positions[i] = Locate(stillLoose[i]);
                 }
 
                 var neighbours = Neighbours(stillLoose, counties, countyAdjacency);
@@ -427,14 +471,50 @@ public static class AzgaarHierarchy
                              neighbours, 2, Math.Max(2, cfg.MinChildrenPerTitle), rng, positions))
                 {
                     if (cluster.Count == 0) continue;
-                    wrapped.Add(Wrap(tier, [.. cluster.Select(i => index[i])]));
+                    var members = cluster.Select(i => index[i]).ToList();
+                    wrapped.Add(Wrap(tier, members, Represents(members)));
                 }
             }
         }
 
         return [.. above, .. wrapped];
 
-        static Title Wrap(string tier, List<Title> children)
+        // Where a root sits, measured from its own counties the first time it is asked for.
+        //
+        // Every caller used to read the dictionary directly and take (0,0) when a title was missing
+        // from it — the top-left corner of the map, which the nearest-host test then treated as a
+        // real position and answered with whichever realm lay furthest north-west. Measuring instead
+        // of defaulting means a title that slips past the registration above still lands somewhere
+        // true rather than somewhere silently wrong.
+        (double X, double Y) Locate(Title title)
+        {
+            if (rootPosition.TryGetValue(title, out var known)) return known;
+
+            var measured = Centre(title, counties, countyPosition);
+            rootPosition[title] = measured;
+            return measured;
+        }
+
+        // The state a group of roots stands for: the one holding most of its counties, so a title
+        // wrapping a country and a few scraps is recorded as the country.
+        int Represents(List<Title> members)
+        {
+            var votes = new Dictionary<int, int>();
+
+            foreach (var member in members)
+            {
+                int state = rootState.GetValueOrDefault(member);
+                if (state <= 0) continue;
+
+                votes[state] = votes.GetValueOrDefault(state)
+                             + Titles.Flatten([member]).Count(t => t.Tier == "c");
+            }
+
+            return votes.Count == 0 ? 0
+                 : votes.OrderByDescending(v => v.Value).ThenBy(v => v.Key).First().Key;
+        }
+
+        Title Wrap(string tier, List<Title> children, int state)
         {
             var title = new Title { Tier = tier, Index = 0 };
             foreach (var child in children)
@@ -442,6 +522,9 @@ public static class AzgaarHierarchy
                 child.Parent = title;
                 title.Children.Add(child);
             }
+
+            rootState[title] = state;
+            rootPosition[title] = Centre(title, counties, countyPosition);
             return title;
         }
     }
@@ -517,19 +600,24 @@ public static class AzgaarHierarchy
 
     // --- Small helpers -------------------------------------------------------------------------
 
-    /// <summary>The candidate whose centre is closest, or null when there are none.</summary>
+    /// <summary>
+    /// The candidate whose centre is closest, or null when there are none.
+    ///
+    /// Takes a resolver rather than a dictionary so that a title nobody registered is measured rather
+    /// than answered with a zero — see the Locate helper in <see cref="RaiseTo"/>.
+    /// </summary>
     private static Title? Nearest(Title of, List<Title> candidates,
-        Dictionary<Title, (double X, double Y)> position)
+        Func<Title, (double X, double Y)> position)
     {
         if (candidates.Count == 0) return null;
-        var (x, y) = position.GetValueOrDefault(of);
+        var (x, y) = position(of);
 
         Title? best = null;
         double bestCost = double.PositiveInfinity;
 
         foreach (var candidate in candidates)
         {
-            var (cx, cy) = position.GetValueOrDefault(candidate);
+            var (cx, cy) = position(candidate);
             double cost = (cx - x) * (cx - x) + (cy - y) * (cy - y);
             if (cost >= bestCost) continue;
             bestCost = cost;

@@ -537,6 +537,25 @@ public sealed class MapConfig : CustomTypeDescriptor
     public int MinChildrenPerTitle { get; set; } = 4;
 
     /// <summary>
+    /// Whether a title's colour is shaded from its parent's, so a duchy reads as part of its
+    /// kingdom in the de jure map modes, or whether every title is given a hue of its own.
+    ///
+    /// On, the empires are spread as far apart in hue as a golden angle will put them and each tier
+    /// below shades away from its parent — legible de jure borders, at the cost of neighbouring
+    /// counties inside one realm looking nearly identical. Off, every title from empire down to
+    /// barony takes its own place in the same golden-angle sequence, which is the patchwork look:
+    /// adjacent counties are always told apart, and nothing about the colour says who their liege
+    /// is.
+    ///
+    /// On an imported map the export still wins at the state tier either way — this only decides
+    /// whether the tiers below a state are shaded from that state's colour or keep hues of their
+    /// own.
+    /// </summary>
+    [Category("04 Titles")]
+    [Description("Shade each title's colour from its parent's, so a duchy reads as part of its kingdom in the de jure map modes. Off, every title gets a hue of its own and neighbouring counties are always told apart. Azgaar imports paint the state tier from the export either way.")]
+    public bool DeJureColorCoding { get; set; } = true;
+
+    /// <summary>
     /// How wide a stretch of water a kingdom or empire may still reach across, in *vanilla*
     /// province pixels. Counties and duchies ignore this and stay on one landmass.
     ///
@@ -601,6 +620,23 @@ public sealed class MapConfig : CustomTypeDescriptor
     public double MinOutletSeaZones { get; set; } = 0.5;
 
     /// <summary>
+    /// How large a lake has to be, in sea zones, before it is given a navigable outlet river
+    /// carved from its spill down to the sea.
+    ///
+    /// Every lake drains — the drainage treats a lake as terrain the flood fills to its rim, so its
+    /// whole catchment flows on over the spill — but only a lake of some size earns a carved
+    /// corridor, because the channel is a fixed width and a pond narrower than the river leaving
+    /// it reads as a mistake. Smaller lakes still get their outlet drawn as a tributary in
+    /// rivers.png wherever the discharge merits one. Lakes that qualify are traced over and above
+    /// <see cref="MajorRiverCount"/>: that cap is for rivers the generator chooses, and a lake's
+    /// outlet is not a choice.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("05 Rivers")]
+    [Description("How big a lake must be, counted in sea zones, before a navigable river is carved from it to the sea. Lakes that qualify come on top of the major river count. Lower to connect smaller lakes; raise to leave them to tributaries in rivers.png.")]
+    public double LakeOutletMinSeaZones { get; set; } = 0.1;
+
+    /// <summary>
     /// Half-width of a major river's carved channel at its source, in vanilla *heightmap* pixels.
     ///
     /// A radius, measured perpendicular from the centreline — the carve tests
@@ -614,7 +650,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     [AdvancedSetting]
     [Category("05 Rivers")]
     [Description("Half-width of a major river's carved channel at its source, in heightmap pixels measured from the centreline — the channel is twice this across. Below about 7 it stops surviving the downsample into the province map and the river ceases to be navigable.")]
-    public double RiverChannelRadiusMin { get; set; } = 14.0;
+    public double RiverChannelRadiusMin { get; set; } = 12.0;
 
     /// <summary>
     /// Half-width of a major river's carved channel at its mouth, in vanilla heightmap pixels.
@@ -623,7 +659,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     [AdvancedSetting]
     [Category("05 Rivers")]
     [Description("Half-width of a major river's carved channel at its mouth, in heightmap pixels from the centreline. The channel opens from the source radius to this along its length.")]
-    public double RiverChannelRadiusMax { get; set; } = 22.0;
+    public double RiverChannelRadiusMax { get; set; } = 18.0;
 
     /// <summary>
     /// How much a major river's channel breathes in and out along its length, as a fraction of the
@@ -763,7 +799,7 @@ public sealed class MapConfig : CustomTypeDescriptor
 
     [Category("06 Map Objects")]
     [Description("Density multiplier for trees and ground foliage (1.0 = the tuned default, 0.5 = sparser, 2.0 = denser). Costs load time and memory in the game at high values — every instance is written out individually.")]
-    public double TreeDensity { get; set; } = 5.0;
+    public double TreeDensity { get; set; } = 4.0;
 
     [Category("06 Map Objects")]
     [Description("Global multiplier for atmospheric environmental visual effects (dust plumes, forest mist, mountain snow clouds). 1.0 matches vanilla density scaled to this map's resolution.")]
@@ -1406,7 +1442,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     public RaceTerrainRule RaceTerrain { get; set; } = RaceTerrainRule.Prefer;
 
     [Category("14 Fantasy/Ethnicities")]
-    [Description("When the mode's human:fantasy land ratio leaves no room for every guaranteed race to hold territory of its own, let the overflow races live as small minorities (~13% of characters) inside a well-suited human culture instead of not appearing at all. Minority members look their race but carry no racial trait or bonuses — they are flavour, not a faction. Off means the guarantee simply wins the land and the ratio is sacrificed with a warning.")]
+    [Description("When the mode's human:fantasy land ratio leaves no room for every guaranteed race to hold territory of its own, let the overflow races live as small minorities (~13% of characters) inside a well-suited human culture instead of not appearing at all. Minority members look their race but carry the Human trait like the rest of their culture, not their race's trait or bonuses — they are flavour, not a faction. Off means the guarantee simply wins the land and the ratio is sacrificed with a warning.")]
     public bool AllowMinorityRaces { get; set; } = true;
 
 

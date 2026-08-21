@@ -42,6 +42,61 @@ public sealed class ImageView : Control
     private Point _dragFrom;
     private bool _dragging;
 
+    /// <summary>What the left button does. Panning is always available on the middle button.</summary>
+    public enum Interaction
+    {
+        Pan,
+        Paint,
+    }
+
+    private Interaction _mode = Interaction.Pan;
+    private bool _painting;
+
+    /// <summary>
+    /// Left-drag pans, or paints. In <see cref="Interaction.Paint"/> the middle button pans
+    /// instead, so a brush never loses the ability to move around the map.
+    /// </summary>
+    [System.ComponentModel.DesignerSerializationVisibility(
+        System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public Interaction Mode
+    {
+        get => _mode;
+        set
+        {
+            if (_mode == value) return;
+            _mode = value;
+            Invalidate();
+        }
+    }
+
+    /// <summary>A stroke, in image pixels: pressed, dragged (many), released.</summary>
+    public event Action<PointF>? StrokeBegan;
+
+    /// <inheritdoc cref="StrokeBegan"/>
+    public event Action<PointF>? StrokeMoved;
+
+    /// <inheritdoc cref="StrokeBegan"/>
+    public event Action? StrokeEnded;
+
+    /// <summary>
+    /// Drawn over the image after it, in control coordinates — a brush ring, a stroke in
+    /// progress. The second argument is the current zoom, so an overlay can size itself in
+    /// image pixels.
+    /// </summary>
+    public event Action<Graphics, float>? Overlay;
+
+    /// <summary>Where the cursor last was, in control coordinates, or null when it is elsewhere.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(
+        System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public Point? CursorAt { get; private set; }
+
+    /// <summary>Converts a point in this control to one in the image. Fractional, and may fall outside.</summary>
+    public PointF ToImagePoint(PointF control) => ToImage(control);
+
+    /// <summary>The inverse: where an image pixel sits on screen. For overlays drawn in image space.</summary>
+    public PointF ToControlPoint(PointF image)
+        => new(_origin.X + image.X * _zoom, _origin.Y + image.Y * _zoom);
+
     /// <summary>Fires on any view change and on mouse movement, for the status readout.</summary>
     public event Action<float, Point?>? ViewChanged;
 
@@ -84,6 +139,11 @@ public sealed class ImageView : Control
     [System.ComponentModel.DesignerSerializationVisibility(
         System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public string ViewName { get; set; } = "preview";
+
+    /// <summary>What the pane says when it has no image. The map view and the Forge canvas differ.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(
+        System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public string EmptyText { get; set; } = "Choose a heightmap and press Preview.";
 
     /// <summary>
     /// WinForms delivers the wheel to whichever control has focus, so without this the map only
@@ -235,7 +295,20 @@ public sealed class ImageView : Control
         base.OnMouseDown(e);
         Focus();
 
-        if (e.Button != MouseButtons.Left || _image is null) return;
+        if (_image is null) return;
+
+        if (_mode == Interaction.Paint && e.Button == MouseButtons.Left)
+        {
+            _painting = true;
+            StrokeBegan?.Invoke(ToImage(e.Location));
+            return;
+        }
+
+        bool panButton = _mode == Interaction.Paint
+            ? e.Button == MouseButtons.Middle
+            : e.Button == MouseButtons.Left;
+        if (!panButton) return;
+
         _dragging = true;
         _dragFrom = e.Location;
         _pressAt = e.Location;
@@ -246,6 +319,16 @@ public sealed class ImageView : Control
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
+
+        CursorAt = e.Location;
+
+        if (_painting)
+        {
+            StrokeMoved?.Invoke(ToImage(e.Location));
+            Announce(e.Location);
+            if (_mode == Interaction.Paint) Invalidate();
+            return;
+        }
 
         if (_dragging)
         {
@@ -261,11 +344,21 @@ public sealed class ImageView : Control
         }
 
         Announce(e.Location);
+
+        // The brush ring follows the cursor, so a plain move has to repaint.
+        if (_mode == Interaction.Paint) Invalidate();
     }
 
     protected override void OnMouseUp(MouseEventArgs e)
     {
         base.OnMouseUp(e);
+
+        if (_painting && e.Button == MouseButtons.Left)
+        {
+            _painting = false;
+            StrokeEnded?.Invoke();
+            return;
+        }
 
         bool clicked = _dragging && !_moved && e.Button == MouseButtons.Left;
 
@@ -282,14 +375,16 @@ public sealed class ImageView : Control
     protected override void OnMouseLeave(EventArgs e)
     {
         base.OnMouseLeave(e);
+        CursorAt = null;
         Announce(null);
+        if (_mode == Interaction.Paint) Invalidate();
     }
 
     /// <summary>Double-click toggles between filling the pane and the raster's own pixels.</summary>
     protected override void OnMouseDoubleClick(MouseEventArgs e)
     {
         base.OnMouseDoubleClick(e);
-        if (e.Button != MouseButtons.Left) return;
+        if (e.Button != MouseButtons.Left || _mode == Interaction.Paint) return;
 
         if (_fit) SetZoom(1f, e.Location);
         else Fit();
@@ -319,7 +414,7 @@ public sealed class ImageView : Control
 
         if (_image is null)
         {
-            TextRenderer.DrawText(g, "Choose a heightmap and press Preview.",
+            TextRenderer.DrawText(g, EmptyText,
                 Font, ClientRectangle, Theme.TextDim,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
             return;
@@ -346,6 +441,11 @@ public sealed class ImageView : Control
             _size = Size.Empty;
             Console.WriteLine("Preview dropped a stale image: " + ex.Message);
         }
+
+        if (Overlay is null) return;
+
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        Overlay.Invoke(g, _zoom);
     }
 
     private void Export()

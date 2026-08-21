@@ -588,7 +588,7 @@ public static class Titles
             kingdomPosition);
         var empires = Wrap("e", empireClusters, c => c.Select(i => kingdoms[i]));
 
-        AssignColors(empires, rng);
+        AssignColors(empires, rng, cfg.DeJureColorCoding);
 
         int seaLinked = seaAdjacency.Values.Sum(s => s.Count) / 2;
         Console.WriteLine($"  titles: {empires.Count} empires, {kingdoms.Count} kingdoms, " +
@@ -634,17 +634,21 @@ public static class Titles
     /// Colours a finished hierarchy. The Azgaar-constrained builder assembles its own roots and so
     /// never reaches the colouring at the end of <see cref="Build"/>; this is that step, exposed.
     /// </summary>
-    internal static void AssignColorsTo(List<Title> empires, Rng rng) => AssignColors(empires, rng);
+    internal static void AssignColorsTo(List<Title> empires, Rng rng, bool deJure = true)
+        => AssignColors(empires, rng, deJure);
 
     public static void RecolorChildren(Title parent, Rng rng)
         => DistributeChildren(parent, Hsl.FromRgb(parent.Color), rng);
 
-    private static void AssignColors(List<Title> empires, Rng rng)
+    private const float GoldenAngle = 137.507764f;
+
+    private static void AssignColors(List<Title> empires, Rng rng, bool deJure = true)
     {
         if (empires.Count == 0) return;
 
         float baseHue = rng.Float(0f, 360f);
-        const float GoldenAngle = 137.507764f;
+
+        if (!deJure) { AssignIndependent(empires, baseHue, rng); return; }
 
         for (int i = 0; i < empires.Count; i++)
         {
@@ -657,6 +661,30 @@ public static class Titles
 
             DistributeChildren(empires[i], empireHsl, rng);
         }
+    }
+
+    /// <summary>
+    /// Gives every title in the tree its own place in the golden-angle sequence rather than a shade
+    /// of its parent's colour.
+    ///
+    /// Walking the tree depth-first is what makes this useful: consecutive indices land far apart in
+    /// hue, and a title's neighbours are mostly its siblings and its parent's neighbours, so the
+    /// titles that share a border are the ones the sequence separates hardest. The cost is that the
+    /// colour no longer says anything about who a title's liege is, which is the whole point of the
+    /// option.
+    /// </summary>
+    private static void AssignIndependent(List<Title> roots, float baseHue, Rng rng)
+    {
+        int n = 0;
+
+        void Paint(Title title)
+        {
+            float hue = (baseHue + n++ * GoldenAngle + rng.Float(-6f, 6f)) % 360f;
+            title.Color = new Hsl(hue, rng.Float(0.50f, 0.85f), rng.Float(0.38f, 0.62f)).ToRgb();
+            foreach (var child in title.Children) Paint(child);
+        }
+
+        foreach (var root in roots) Paint(root);
     }
 
     private static void DistributeChildren(Title parent, Hsl parentHsl, Rng rng)

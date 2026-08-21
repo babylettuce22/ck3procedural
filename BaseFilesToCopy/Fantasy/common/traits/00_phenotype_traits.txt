@@ -1,11 +1,46 @@
 ﻿# 00_phenotype_traits.txt
 
-# Elf
-#
 # No `group` on any of these: CK3 trait groups are for LEVELLED tracks (education tiers),
 # and a grouped trait without a level is an error the engine "fixes" by unsetting the group at
 # load — one error.log line per trait per boot. Mutual exclusivity is carried entirely by the
 # `opposites` lists, which is also how vanilla does it for flat traits.
+
+# Human — the baseline race, made visible. On a fantasy map every character of a human culture
+# carries this (stamped by Emit/HistoryWriter.cs, spread by the culture pulse), which is what lets
+# humans participate in the same_opinion/opposite_opinion web instead of being the one people with
+# no stance. Deliberately light on modifiers: the fantasy races are the deviation, humans are what
+# the rest of the game already balances for — their identity is fecundity and fast learning.
+#
+# Note this trait is NOT the same thing as the `gen_phenotype_human` character FLAG. The trait is
+# broad, visible racial identity; the flag is a narrow render-time marker meaning "human born of a
+# mixed line, snap any inherited skin shift off" (see gen_race_skin_human in the generated
+# 99_gen_race_morphs.txt). Minority-race members hold this trait but never the flag — that is what
+# lets them keep their fantasy looks while counting as members of a human culture.
+phenotype_human = {
+    physical = yes
+    inherit_chance = 0
+    shown_in_ruler_designer = yes
+    ruler_designer_cost = 0
+
+    opposites = {
+        phenotype_gracile
+        phenotype_stocky
+        phenotype_rough_hewn
+        phenotype_towering
+        phenotype_diminutive
+        phenotype_dusk_adapted
+    }
+    # Placeholder art, same policy as world_weary in 01_gen_aging_traits.txt: a vanilla icon that
+    # reads well enough until a bespoke human.dds exists beside the race icons.
+    icon = "human_phenotype.dds"
+
+    fertility = 0.1
+    monthly_lifestyle_xp_gain_mult = 0.1
+    same_opinion = 5
+    opposite_opinion = -5
+}
+
+# Elf
 phenotype_gracile = {
     physical = yes
     inherit_chance = 0
@@ -13,6 +48,7 @@ phenotype_gracile = {
     ruler_designer_cost = 20
 
     opposites = {
+        phenotype_human
         phenotype_stocky
         phenotype_rough_hewn
         phenotype_towering
@@ -34,6 +70,7 @@ phenotype_gracile = {
     same_opinion = 10
     life_expectancy = 50
     health = 1.25
+    fertility = -0.5
 
 	opposite_opinion = -2
 
@@ -55,6 +92,7 @@ phenotype_stocky = {
     ruler_designer_cost = 20
 
     opposites = {
+        phenotype_human
         phenotype_gracile
         phenotype_rough_hewn
         phenotype_towering
@@ -86,6 +124,7 @@ phenotype_rough_hewn = {
     ruler_designer_cost = 15
 
     opposites = {
+        phenotype_human
         phenotype_gracile
         phenotype_stocky
         phenotype_towering
@@ -112,6 +151,7 @@ phenotype_towering = {
     ruler_designer_cost = 25
 
     opposites = {
+        phenotype_human
         phenotype_gracile
         phenotype_stocky
         phenotype_rough_hewn
@@ -136,6 +176,7 @@ phenotype_diminutive = {
     ruler_designer_cost = 10
 
     opposites = {
+        phenotype_human
         phenotype_gracile
         phenotype_stocky
         phenotype_rough_hewn
@@ -161,6 +202,7 @@ phenotype_dusk_adapted = {
     ruler_designer_cost = 20
 
     opposites = {
+        phenotype_human
         phenotype_gracile
         phenotype_stocky
         phenotype_rough_hewn
@@ -174,7 +216,7 @@ phenotype_dusk_adapted = {
     enemy_hostile_scheme_success_chance_add = -5
     life_expectancy = 50
     health = 1.25
-
+    fertility = -0.50
 	opposite_opinion = -20
 
     # Same deal as phenotype_gracile above: script-only flag that switches off the vanilla

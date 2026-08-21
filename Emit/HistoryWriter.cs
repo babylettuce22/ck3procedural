@@ -170,7 +170,7 @@ public static class HistoryWriter
             var ancestorCulture = cultures.Cultures.FirstOrDefault(c => c.Key == ancestor.CultureKey);
             if (ancestorCulture is not null)
             {
-                string? ancestorTrait = GetPhenotypeTrait(ancestorCulture, ethnicities);
+                string? ancestorTrait = GetPhenotypeTrait(ancestorCulture, ethnicities, cfg);
                 if (ancestorTrait is not null)
                     sb.Append($"\ttrait = {ancestorTrait}\n");
             }
@@ -284,7 +284,7 @@ public static class HistoryWriter
                 sb.Append($"\ttrait = {otherTrait}\n");
             }
 
-            if (GetPhenotypeTrait(culture, ethnicities) is { } rulerTrait)
+            if (GetPhenotypeTrait(culture, ethnicities, cfg) is { } rulerTrait)
                 sb.Append($"\ttrait = {rulerTrait}\n");
 
             if (fatherId is not null)
@@ -396,13 +396,14 @@ public static class HistoryWriter
                 sb.Append($"\t\t\tdynasty = {{ add_dynasty_prestige = {renown} }}\n");
             }
 
-            // Lifestyle perk points, in the tree his education belongs to and scaled by how long he
-            // has been an adult. A man of fifty who has held a duchy since his twenties should not
-            // arrive with the same empty lifestyle tree as the boy who inherited last spring, and
-            // for the AI these are not decoration: it spends them at once, so the perks are the
-            // difference between a duke who merely has a high martial and one who fields better
-            // knights for it.
-            sb.Append($"\t\t\tadd_{profile.Lifestyle}_lifestyle_perk_points = {profile.PerkPoints}\n");
+            // Lifestyle perk points, in the tree his education belongs to. Vanilla already
+            // auto-assigns baseline perks on game start for adult characters based on age and
+            // education; these points provide the explicit bonus reflecting high rank, leisure,
+            // and top-tier tutors.
+            if (profile.PerkPoints > 0)
+            {
+                sb.Append($"\t\t\tadd_{profile.Lifestyle}_lifestyle_perk_points = {profile.PerkPoints}\n");
+            }
 
             if (profile.SecondLifestyle is not null && profile.SecondPerkPoints > 0)
             {
@@ -508,7 +509,7 @@ public static class HistoryWriter
             var characterCulture = cultures.Cultures.FirstOrDefault(c => c.Key == character.CultureKey);
             if (characterCulture is not null)
             {
-                string? characterTrait = GetPhenotypeTrait(characterCulture, ethnicities);
+                string? characterTrait = GetPhenotypeTrait(characterCulture, ethnicities, cfg);
                 if (characterTrait is not null)
                     sb.Append($"\ttrait = {characterTrait}\n");
             }
@@ -550,7 +551,7 @@ public static class HistoryWriter
 
             if (culture is not null)
             {
-                string? hofTrait = GetPhenotypeTrait(culture, ethnicities);
+                string? hofTrait = GetPhenotypeTrait(culture, ethnicities, cfg);
                 if (hofTrait is not null)
                     sb.Append($"\ttrait = {hofTrait}\n");
             }
@@ -728,8 +729,15 @@ public static class HistoryWriter
     /// Written onto the character rather than left to the portrait alone because a phenotype the
     /// game does not know about is only a look: the trait is what makes a dwarf's height and an
     /// orc's frame survive inheritance, show in the character sheet, and reach the AI.
+    ///
+    /// On a fantasy map humans are a race among races and get a visible trait of their own —
+    /// phenotype_human — which is what lets them take part in the same/opposite-opinion web and
+    /// what the culture pulse copies onto engine-generated human courtiers from the culture head,
+    /// like any other race. On a realistic map the traits do not exist at all (the Fantasy file
+    /// set is not shipped — see <see cref="StaticFileWriter.Fantasy"/>), so human cultures must
+    /// map to null there or every history character would reference an undefined trait.
     /// </summary>
-    private static string? GetPhenotypeTrait(Culture culture, EthnicityMap ethnicityMap)
+    private static string? GetPhenotypeTrait(Culture culture, EthnicityMap ethnicityMap, MapConfig cfg)
     {
         var ethnicity = ethnicityMap.For(culture);
 
@@ -741,6 +749,8 @@ public static class HistoryWriter
             RaceArchetype.Giantkin => "phenotype_towering",
             RaceArchetype.Gnome => "phenotype_diminutive",
             RaceArchetype.Deepkin => "phenotype_dusk_adapted",
+            RaceArchetype.Human when cfg.EnableFantasyEthnicities
+                && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly => "phenotype_human",
             _ => null,
         };
     }
