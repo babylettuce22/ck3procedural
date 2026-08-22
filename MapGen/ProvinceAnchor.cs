@@ -120,7 +120,98 @@ public static class ProvinceAnchor
                 anchor[label] = (map.Seeds[label].X, map.Seeds[label].Y);
 
         Report(map, depth, slope, anchor);
-        return anchor;
+
+        var special = SpecialAnchors(map, depth, slope, elevation, anchor, reference, cfg);
+        return new Anchors(anchor, special);
+    }
+
+    /// <summary>Directions tried around the holding. Sixteen is fine enough that the ring is not
+    /// visibly square, and cheap enough to run for every province at three radii.</summary>
+    private const int Directions = 16;
+
+    /// <summary>
+    /// A companion point <see cref="MapConfig.SpecialBuildingOffset"/> away from the holding, for
+    /// the wonder to stand on.
+    ///
+    /// The constraint that actually matters is that the point stays on dry land inside the same
+    /// province. Neither is automatic: a province is a region of the label map, not of the
+    /// heightmap, so a land province's own pixels can still sit below sea level near its coast, and
+    /// a step of nine pixels out of a small province can easily land in the neighbour. So a
+    /// candidate has to be in the same province, above water, and at least two pixels deep into the
+    /// province before it is considered at all — and among those the flattest ground wins, on the
+    /// same reasoning as the holding anchor.
+    ///
+    /// The offset shrinks rather than failing. A full-distance ring is tried first, then closer
+    /// ones; a province with no valid candidate at any radius — a one-pixel islet, a province that
+    /// is all coastline — keeps the holding anchor, which is exactly the behaviour before this
+    /// existed, so the worst case is no worse than not offsetting at all.
+    /// </summary>
+    private static (double X, double Y)[] SpecialAnchors(ProvinceMap map, int[] depth, float[] slope,
+        float[] elevation, (double X, double Y)[] anchor, double reference, MapConfig cfg)
+    {
+        int width = map.Width, height = map.Height;
+        float sea = cfg.Limits.SeaLevelUpper;
+        var special = new (double X, double Y)[map.Count];
+
+        // Progressively closer rings. The last is under half the requested gap, which on a small
+        // province is the difference between an offset wonder and one back on top of the castle.
+        double[] scales = [1.0, 0.72, 0.45];
+        int placed = 0, shortened = 0;
+
+        for (int label = 0; label < map.Count; label++)
+        {
+            special[label] = anchor[label];
+            if (!map.Seeds[label].IsLand) continue;
+
+            double ax = anchor[label].X, ay = anchor[label].Y;
+
+            // Rotate each province's ring by its own amount, so wonders across the map are not all
+            // sitting due east of their castle in lockstep.
+            double phase = (label * 2.399963) % (Math.PI * 2);
+
+            for (int s = 0; s < scales.Length; s++)
+            {
+                double radius = cfg.SpecialBuildingOffset * scales[s];
+                double bestScore = double.PositiveInfinity;
+                (double X, double Y) best = default;
+
+                for (int d = 0; d < Directions; d++)
+                {
+                    double theta = phase + d * (Math.PI * 2 / Directions);
+                    int cx = (int)Math.Round(ax + radius * Math.Cos(theta));
+                    int cy = (int)Math.Round(ay + radius * Math.Sin(theta));
+
+                    if (cx < 0 || cy < 0 || cx >= width || cy >= height) continue;
+
+                    int cell = cy * width + cx;
+                    if (map.Label[cell] != label) continue;   // stayed in its own province
+                    if (elevation[cell] <= sea) continue;     // not in the water
+                    if (depth[cell] < 2) continue;            // not straddling the border
+
+                    double score = slope[cell] / reference;
+                    if (score >= bestScore) continue;
+
+                    bestScore = score;
+                    best = (cx, cy);
+                }
+
+                if (double.IsPositiveInfinity(bestScore)) continue;
+
+                special[label] = best;
+                placed++;
+                if (s > 0) shortened++;
+                break;
+            }
+        }
+
+        int land = 0;
+        for (int label = 0; label < map.Count; label++) if (map.Seeds[label].IsLand) land++;
+
+        Console.WriteLine($"  special building anchors: {placed}/{land} offset " +
+                          $"{cfg.SpecialBuildingOffset:F1} world units ({shortened} shortened, " +
+                          $"{land - placed} left on the holding)");
+
+        return special;
     }
 
     /// <summary>

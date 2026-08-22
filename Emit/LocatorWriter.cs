@@ -60,7 +60,13 @@ public static class LocatorWriter
         var anchors = ProvinceAnchor.Compute(provinces, provinceElevation, cfg);
 
         int seaCount = provinces.Count - landCount;
-        foreach (var kind in Kinds) WriteLocators(dir, kind, provinces, byId, anchors);
+        foreach (var kind in Kinds)
+        {
+            // The special building is the one thing that shares a province with the holding rather
+            // than replacing it, so it is the one thing that needs its own point to stand on.
+            var points = kind.Name == "special_building" ? anchors.Special : anchors.Holding;
+            WriteLocators(dir, kind, provinces, byId, points);
+        }
 
         Console.WriteLine($"  locators: {Kinds.Length} files, {landCount} land " +
                           $"(+{seaCount} sea on combat/stack layers)");
