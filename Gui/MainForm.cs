@@ -850,7 +850,8 @@ public sealed class MainForm : Form
                 var field = Heightfield.Downsample(levels, image.Width, image.Height, Heightfield.PreviewCols);
                 var asRendered = Heightfield.Downsample(
                     Emit.HeightmapPacker.Reconstruct(
-                        levels, image.Width, image.Height, cfg.HeightmapSagBudget),
+                        levels, image.Width, image.Height, cfg.HeightmapSagBudget,
+                        Emit.HeightmapPacker.TileStepFor(cfg), cfg.BalanceNeighbourLods),
                     image.Width, image.Height, Heightfield.PreviewCols);
 
                 return (field, asRendered, found, image, stamp);
@@ -908,7 +909,8 @@ public sealed class MainForm : Form
                     full, cfg.Width, cfg.Height, Heightfield.PreviewCols);
                 var asRendered = Heightfield.Downsample(
                     Emit.HeightmapPacker.Reconstruct(
-                        full, cfg.Width, cfg.Height, cfg.HeightmapSagBudget),
+                        full, cfg.Width, cfg.Height, cfg.HeightmapSagBudget,
+                        Emit.HeightmapPacker.TileStepFor(cfg), cfg.BalanceNeighbourLods),
                     cfg.Width, cfg.Height, Heightfield.PreviewCols);
 
                 return (field, asRendered);

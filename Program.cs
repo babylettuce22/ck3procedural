@@ -120,6 +120,18 @@ public static class Program
                     cfg.AzgaarJsonPath = options.AzgaarJsonPath;
                     break;
 
+                // Optional. A black-and-white PNG painted over provinces.png saying where the
+                // impassable mountains go, for the ranges a relief score will not find on its own.
+                case "--impassable-mask" when i + 1 < args.Length:
+                    cfg.ImpassableMaskPath = args[++i];
+                    break;
+
+                // Whether the paint cuts the province partition or merely picks provinces out of
+                // it; see ImpassableMaskMode. Snap is the default.
+                case "--impassable-mask-mode" when i + 1 < args.Length:
+                    cfg.ImpassableMaskMode = Enum.Parse<ImpassableMaskMode>(args[++i], ignoreCase: true);
+                    break;
+
                 // How big a barony is relative to vanilla's. 2 makes each one twice as wide and a
                 // quarter as numerous; the rest of the title hierarchy follows.
                 case "--county-scale" when i + 1 < args.Length:
@@ -156,6 +168,40 @@ public static class Program
                 // from everything else that moves when a map is regenerated.
                 case "--no-relief-scale":
                     cfg.ScaleReliefWithMapSize = false;
+                    break;
+
+                // Extra zoom steps of 3D terrain before the map goes flat to the paper map. See
+                // MapConfig.FlatMapHandoffBias; 0 is vanilla's own handoff.
+                case "--flat-map-bias" when i + 1 < args.Length:
+                    cfg.FlatMapHandoffBias = int.Parse(args[++i],
+                        System.Globalization.CultureInfo.InvariantCulture);
+                    break;
+
+                // The packer's tile step, in heightmap pixels: 32, 64 or 128, or 0 to choose by map
+                // width. Here because the three are worth measuring against each other on a real
+                // map, and the packer reports its atlas size and worst error on every build.
+                case "--tile-step" when i + 1 < args.Length:
+                    cfg.HeightmapTileStep = int.Parse(args[++i],
+                        System.Globalization.CultureInfo.InvariantCulture);
+                    break;
+
+                // Refine tiles so no two neighbours differ by more than one detail level. Off by
+                // default because vanilla does not do it; see MapConfig.BalanceNeighbourLods.
+                case "--balance-lods":
+                    cfg.BalanceNeighbourLods = true;
+                    break;
+
+                // The scale, in heightmap pixels, that separates mountains from detail when relief
+                // is scaled with map size. 0 goes back to compressing all relief uniformly.
+                case "--relief-detail" when i + 1 < args.Length:
+                    cfg.ReliefDetailRadius = int.Parse(args[++i],
+                        System.Globalization.CultureInfo.InvariantCulture);
+                    break;
+
+                // Diagnostic: ship vanilla's camera ladder instead of this map's, to rule the
+                // camera overrides out while looking at a rendering artefact.
+                case "--vanilla-camera":
+                    cfg.VanillaCamera = true;
                     break;
 
                 // Resample --heightmap onto a size the packer can tile, rather than refusing it.
@@ -371,6 +417,10 @@ public static class Program
             Console.Error.WriteLine(
                 "       [--azgaar <export.json>]  optional; borrows names from an Azgaar map");
             Console.Error.WriteLine(
+                "       [--impassable-mask <mask.png>]  optional; white = impassable, black = passable, painted over provinces.png");
+            Console.Error.WriteLine(
+                "       [--impassable-mask-mode snap|touch]  snap (default) cuts provinces to the paint; touch turns whole provinces");
+            Console.Error.WriteLine(
                 "This tool builds a CK3 mod around a heightmap: one you supply as a 16-bit PNG, or "
                 + "one produced from a CK3 Heightmap Forge preset.");
             return 1;
@@ -442,7 +492,8 @@ public static class Program
 
         // The same angle again, through the packer, so the two can be flipped between.
         var packed = Emit.HeightmapPacker.Reconstruct(
-            normalized, loaded.Width, loaded.Height, cfg.HeightmapSagBudget);
+            normalized, loaded.Width, loaded.Height, cfg.HeightmapSagBudget,
+            Emit.HeightmapPacker.TileStepFor(cfg), cfg.BalanceNeighbourLods);
 
         long changed = 0, sum = 0;
         int worst = 0;

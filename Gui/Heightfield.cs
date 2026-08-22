@@ -1,3 +1,4 @@
+using Ck3MapGen.Config;
 using Ck3MapGen.Emit;
 
 namespace Ck3MapGen.Gui;
@@ -17,11 +18,11 @@ public sealed class Heightfield
     public required ushort LandMax { get; init; }
 
     /// <summary>
-    /// The 98th percentile of land, which the colour ramp is normalised against.
+    /// The 98th percentile of land. Reported, not drawn with — see
+    /// <see cref="HeightfieldRenderer.RampTop"/> for why the colour ramp stopped using it.
     ///
     /// A percentile and not <see cref="LandMax"/>: one freak peak — and an imported heightmap
-    /// usually has one — would otherwise set the top of the ramp and push every real mountain range
-    /// down into the green.
+    /// usually has one — would otherwise stand for the map's high ground.
     /// </summary>
     public required ushort LandTop { get; init; }
 
@@ -221,6 +222,30 @@ public static class HeightfieldRenderer
     /// </summary>
     private const double ReliefFraction = 0.011;
 
+    /// <summary>
+    /// The height the colour ramp treats as the top of the scale, on the 0-255 scale: vanilla's own
+    /// highest land pixel, the same number <see cref="MapConfig.LandTop"/> defaults to.
+    ///
+    /// A fixed reference, and that is the whole point of it. The ramp used to be normalised against
+    /// the field's own 98th percentile, which made every setting under Height scale invisible here:
+    /// <see cref="MapConfig.LandTop"/> multiplies every land pixel by one factor, so the percentile
+    /// moves by that factor too and every band lands on exactly the same terrain. A world built to
+    /// top out at 100/255 was painted with the same snow caps as one built to top out at 255 —
+    /// in the one view the program has for judging relief.
+    ///
+    /// It also settles a disagreement inside a single frame. The mesh is on CK3's absolute scale
+    /// (<see cref="ReliefFraction"/> divides the full 16-bit range), so a low world was already
+    /// being drawn flat while being painted alpine — a pancake wearing snow caps. Both halves now
+    /// answer to the same ruler, and against vanilla's ruler at that, so two maps' previews are
+    /// comparable and 191 reads exactly as high as vanilla's own mountains do.
+    ///
+    /// The cost is a heightmap on a foreign scale — Normalization Off over an export that never
+    /// climbs past 40/255 — which now renders uniformly green rather than showing its shape through
+    /// the bands. That map ships as a plateau, this view exists to say so, and the Lambert shading
+    /// still carries the shape.
+    /// </summary>
+    private const double RampTop = 191;
+
     private const double HorizontalFov = 1.15;
 
     /// <summary>
@@ -279,7 +304,7 @@ public static class HeightfieldRenderer
 
         const double water = MapDataWriter.WaterLevel16;
         double zScale = field.Cols * ReliefFraction / 65535.0 * Math.Max(0.05, view.Exaggeration);
-        double landSpan = Math.Max(1.0, field.LandTop - water);
+        double landSpan = Math.Max(1.0, RampTop * MapDataWriter.Step255 - water);
 
         // Both offsets are in units of the field's width — see HeightfieldView — and the map's own
         // extent is what bounds them, a quarter of a map's overscroll past each edge.
@@ -545,9 +570,8 @@ public static class HeightfieldRenderer
     /// The same bands <see cref="PreviewRenderer.RenderRelief"/> paints, so the 3D view and the
     /// Relief view agree about what is high ground.
     ///
-    /// Normalised against the map's own highest land rather than against the full 16-bit range: a
-    /// heightmap that only climbs to a quarter of the scale is not a flat green world, it is a
-    /// world with lower mountains, and the ramp has to show its shape either way.
+    /// Normalised against <see cref="RampTop"/>, a fixed height on CK3's own scale, so that a
+    /// lower world reads as a lower world instead of being restretched back to snow.
     /// </summary>
     private static (byte R, byte G, byte B) LandColour(double h, double water, double landSpan,
         double shade)

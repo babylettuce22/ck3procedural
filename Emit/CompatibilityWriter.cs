@@ -101,27 +101,89 @@ public static partial class CompatibilityWriter
     /// </summary>
     private const int MaxTiltCeiling = 89;
 
-    /// <summary>
-    /// Extra zoom steps of 3D terrain before the paper map takes over — the camera gets this much
-    /// further from the ground while still looking at real terrain than a straight scale of
-    /// vanilla's handoff would allow.
-    ///
-    /// Applied inside <see cref="ScaleZoomStep"/> rather than to FLAT_MAP_ZOOM_STEP alone, because
-    /// the handoff is a pair, not a value. The map-table layer fades in <see cref="MapTableWriter"/>
-    /// come through the same function, so biasing there moves the tabletop's appearance and the
-    /// map going flat by the same number of steps and keeps them on the same frame. Bias only
-    /// FLAT_MAP_ZOOM_STEP and you reopen exactly the bug that comment warns about, pointing the
-    /// other way: a window of zoom steps where the table is drawn under 3D terrain.
-    ///
-    /// The ladder is roughly geometric at about 15% a step, so two steps is ~30% more camera
-    /// height. The cost is that the terrain renderer keeps working further out, where it has the
-    /// least detail to show — this is the knob to walk back if distant terrain looks mushy or the
-    /// far zoom gets expensive.
-    /// </summary>
-    private const int FlatMapHandoffBias = 2;
+    // The handoff bias moved to MapConfig.FlatMapHandoffBias, which carries the whole argument for
+    // it — most of all that ScaleZoomStep is the only place it may be applied, because the map
+    // going flat and the map table fading in are a pair that has to move together.
 
-    /// <summary>Vanilla's START_ZOOM_STEP, 33, is this height on its 9216-wide map.</summary>
-    private const double VanillaStartZoomHeight = 5464;
+    /// <summary>Vanilla's START_ZOOM_STEP.</summary>
+    private const int VanillaStartZoomStep = 33;
+
+    /// <summary>
+    /// Vanilla's ZOOM_AUDIO_PARAMETER_SCALE. The audio system is handed camera height times this,
+    /// so scaling the ladder without scaling this inversely would tell it the camera is lower than
+    /// vanilla ever reports.
+    /// </summary>
+    private const double VanillaZoomAudioScale = 0.1;
+
+    /// <summary>
+    /// The zoom ladder moved onto this map — vanilla's heights times <see cref="MapConfig.MapScale"/>.
+    ///
+    /// **Why this is here: the indices.** Vanilla ships around twenty-five
+    /// <c>*_VISIBLE_ZOOM_STEPS</c> settings — forts, units, combats, holdings, realm capitals — plus
+    /// <c>MAX_PAN_TO_ZOOM_STEP</c> and <c>WATER_BORDERS_ZOOM_STEP</c>, all of them *indices* into
+    /// this ladder, and none of them overridden here. While the ladder kept vanilla's absolute
+    /// heights on a smaller map, every one of those was mis-framed: things appeared and vanished at
+    /// the wrong share of the zoom. Moving the heights fixes all of them at once, for free, and is
+    /// why <c>NearestZoomStep</c>, <c>ViewScale</c> and the height-rescaling half of
+    /// <see cref="ScaleZoomStep"/> could be deleted rather than fixed.
+    ///
+    /// **What it is not here for.** It was built to fix terrain visibly stopping mid-morph at
+    /// maximum zoom on a small map, and it did not. That theory came from real measurements —
+    /// on a 4607-wide map the live pipeline reports <c>NormQuadtreeToWorld</c> 8191 and
+    /// <c>QuadtreeLeafNodeScale</c> 0.00195, exactly 1/512, so the quadtree leaf is 16 world units
+    /// where vanilla's 9215-wide map gets 16384/512 = 32 — and the inference that LOD therefore
+    /// ran out of ladder was wrong. Captured in game afterwards: the finest node actually rendered
+    /// is <c>NodeScale</c> 256, a 32 world-unit node, which at 2 heightmap px per world unit puts
+    /// one vertex on every texel; the engine declines to go finer because there is nothing left to
+    /// resolve. And <c>LodLerpFactor</c> read 2526 of 65535 — the morph was 96% settled.
+    ///
+    /// The artefact turned out to be resolution-dependent and largely CK3's own: it is faintly
+    /// present on vanilla's map under the same widened tilt, and absent from this generator's
+    /// output at vanilla dimensions. Everything in the renderer that produces it works in absolute
+    /// world units — 32-unit nodes, a 0.8-unit normal probe, a 6-unit border ribbon lifted 0.02 —
+    /// while a smaller map resamples the same world into fewer pixels, so terrain features shrink
+    /// toward those fixed scales. <see cref="MapConfig.ScaleReliefWithMapSize"/> corrects the
+    /// vertical half of that and nothing can correct the horizontal half but more pixels.
+    ///
+    /// All 35 entries, and strictly increasing: the five tilt and stick arrays are indexed in
+    /// parallel with it, and two steps landing on the same height after rounding would give the
+    /// zoom two rungs it cannot tell apart.
+    /// </summary>
+    private static int[] ScaledZoomSteps(Config.MapConfig cfg)
+    {
+        var ladder = new int[ZoomSteps.Length];
+        int last = 0;
+
+        for (int i = 0; i < ZoomSteps.Length; i++)
+        {
+            int height = Math.Max(MinNearZoomHeight, (int)Math.Round(ZoomSteps[i] * cfg.MapScale));
+            ladder[i] = last = Math.Max(height, last + 1);
+        }
+
+        return ladder;
+    }
+
+    /// <summary>
+    /// Floor on the near end of the scaled ladder, in world units, so the camera cannot be zoomed
+    /// into the ground on a small map.
+    ///
+    /// <c>NCamera.ZNEAR</c> is 10, and at the most oblique angle this writer allows — step 0's
+    /// widened minimum tilt, 25 degrees — a step of S puts the camera S*sin(25) = 0.42*S above the
+    /// point it looks at. 40 gives 16.9 world units, clear of the near plane with terrain relief to
+    /// spare. Unfloored, a 0.222-scale map would open step 0 at 16 world units, which is 6.8 above
+    /// ground: the near plane would start cutting away the hillside in front of the camera.
+    ///
+    /// It binds only below half scale — at MapScale 0.5 step 0 lands on 35 and is nudged to 40, at
+    /// vanilla size it never applies. And it costs nothing this scaling is kept for: the flat-map
+    /// handoff, the start view, and the two dozen vanilla <c>*_VISIBLE_ZOOM_STEPS</c> indices that
+    /// ride on the ladder all live at the far end, well above the floor.
+    ///
+    /// The monotonic pass below is what absorbs it. Several near steps can clamp to the same height
+    /// and then get pushed apart by one unit each, which is a squashed close end rather than a
+    /// broken one — the alternative, clamping the *scale factor*, would drag the far end off
+    /// vanilla's framing to protect the near end, and the far end is the half that matters.
+    /// </summary>
+    private const int MinNearZoomHeight = 40;
 
     /// <summary>
     /// Vanilla's FLAT_MAP_ZOOM_STEP — the step at which the terrain gives way to the paper map on
@@ -296,14 +358,37 @@ public static partial class CompatibilityWriter
         string dir = Path.Combine(modDir, "common", "defines", "graphic");
         Directory.CreateDirectory(dir);
 
-        double panWidth = Math.Round(cfg.Scaled(VanillaPanningWidth));
-        double panHeight = Math.Round(VanillaPanningHeight * cfg.ProvinceHeight / VanillaProvinceHeight);
+        // START_LOOK_AT is deliberately not reverted under VanillaCamera — see that setting.
+        double panWidth = cfg.VanillaCamera
+            ? VanillaPanningWidth
+            : Math.Round(cfg.Scaled(VanillaPanningWidth));
+        double panHeight = cfg.VanillaCamera
+            ? VanillaPanningHeight
+            : Math.Round(VanillaPanningHeight * cfg.ProvinceHeight / VanillaProvinceHeight);
 
         double lookX = cfg.ProvinceWidth / 2.0;
         double lookZ = cfg.ProvinceHeight / 2.0;
 
-        int startStep = NearestZoomStep(VanillaStartZoomHeight * ViewScale(cfg));
+        // Vanilla's own indices now, both of them. With the ladder scaled they already mean the
+        // same share of the map in view that they mean in vanilla — which is what the old
+        // height-rescaling was trying and failing to reproduce.
+        int startStep = VanillaStartZoomStep;
         int flatStep = ScaleZoomStep(VanillaFlatMapZoomStep, cfg);
+
+        var ladder = cfg.VanillaCamera ? ZoomSteps : ScaledZoomSteps(cfg);
+
+        string zoomBlock = cfg.VanillaCamera
+            ? ""
+            : $$"""
+
+                	# The ladder scaled onto this map, because every zoom-step *index* in the game rides on
+                	# it — the two dozen *_VISIBLE_ZOOM_STEPS, MAX_PAN_TO_ZOOM_STEP, WATER_BORDERS_ZOOM_STEP,
+                	# the flat-map handoff. Left at vanilla's absolute heights on a smaller map, all of them
+                	# frame the wrong share of the zoom. The near end is floored so the camera cannot end up
+                	# inside the ground.
+                	ZOOM_STEPS = { {{string.Join(" ", ladder)}} }
+                	ZOOM_AUDIO_PARAMETER_SCALE = {{(VanillaZoomAudioScale / cfg.MapScale).ToString("F4", Invariant)}}
+                """;
 
         // Two blocks, because the four keys do not live in one. FLAT_MAP_ZOOM_STEP and
         // SURROUND_MAP_INNER_RECT are NGraphics; the panning bounds and the start view are NCamera.
@@ -333,7 +418,7 @@ public static partial class CompatibilityWriter
               	PANNING_HEIGHT = {{panHeight.ToString(Invariant)}}
               	START_LOOK_AT = { {{lookX.ToString("F1", Invariant)}} 0 {{lookZ.ToString("F1", Invariant)}} }
               	START_ZOOM_STEP = {{startStep}}
-
+              {{zoomBlock}}
               	# Tilt bounds widened {{TiltWidening}} degrees past vanilla at both ends. Degrees from
               	# horizontal: 90 is straight down, 0 is the horizon. ZOOM_STEPS_TILT is left at
               	# vanilla's, so the camera still rests where the base game puts it.
@@ -343,10 +428,21 @@ public static partial class CompatibilityWriter
 
               """);
 
+        if (cfg.VanillaCamera)
+            Console.WriteLine("  camera: VANILLA CAMERA DIAGNOSTIC — vanilla zoom ladder, panning "
+                              + "and flat-map handoff. Tilt stays widened, start view stays on this "
+                              + "map's centre. Not a release setting.");
+
         Console.WriteLine($"  camera: panning {panWidth} x {panHeight}, look at " +
-                          $"{lookX:F0},{lookZ:F0}, zoom step {startStep} ({ZoomSteps[startStep]}), " +
-                          $"flat map at step {flatStep} ({ZoomSteps[flatStep]}) " +
+                          $"{lookX:F0},{lookZ:F0}, zoom step {startStep} ({ladder[startStep]}), " +
+                          $"flat map at step {flatStep} ({ladder[flatStep]}) " +
                           $"(vanilla 9090 x 4696, 5000,2300, 33, 21)");
+
+        if (!cfg.VanillaCamera)
+            Console.WriteLine($"  camera: zoom ladder scaled to {ladder[0]}..{ladder[^1]} world units "
+                              + $"(vanilla {ZoomSteps[0]}..{ZoomSteps[^1]}), so every vanilla "
+                              + "zoom-step index — visibility ranges, pan-to, flat map — frames the "
+                              + $"same share of the map it does there{(ladder[0] == MinNearZoomHeight ? "; near end floored" : "")}");
         Console.WriteLine($"  surround: inner rect {innerRect} (vanilla 500.0 1000.0 500.0 3700.0)");
         Console.WriteLine($"  camera: tilt widened {TiltWidening} deg, "
                           + $"closest step {Math.Max(VanillaMinTilt[0] - TiltWidening, MinTiltFloor)}"
@@ -358,52 +454,24 @@ public static partial class CompatibilityWriter
     }
 
     /// <summary>
-    /// A zoom-ladder index authored against vanilla's map, moved onto this one — step to camera
-    /// height, height scaled, back to the nearest step.
+    /// A zoom-ladder index authored against vanilla's map, moved onto this one — which, now that
+    /// <see cref="ScaledZoomSteps"/> moves the ladder itself, is just
+    /// <see cref="MapConfig.FlatMapHandoffBias"/> and nothing else. An index already means the same
+    /// share of the map in view here that it means in vanilla.
+    ///
+    /// It used to convert the index to a camera height, scale that, and find the nearest step back.
+    /// That reproduced vanilla's *framing* while leaving vanilla's absolute heights in place, which
+    /// is exactly the mistake this whole area was built on: it is the heights that have to move,
+    /// because the terrain LOD reads them against a quadtree that scales with the map.
     ///
     /// Indices outside the ladder come back untouched. That is not defensiveness: vanilla's map
     /// table layers use <c>fade_out=80</c> against a 35-step ladder, which is how the format spells
-    /// "never", and scaling it would land it on a real step and start fading the table out.
-    ///
-    /// <see cref="FlatMapHandoffBias"/> is applied here, after the scale and inside the in-range
-    /// branch, which is deliberate on both counts: every step this function returns has to move
-    /// together, and the "never" sentinel has to keep meaning never.
+    /// "never", and biasing it would land it on a real step and start fading the table out.
     /// </summary>
     internal static int ScaleZoomStep(int step, Config.MapConfig cfg)
-        => step < 0 || step >= ZoomSteps.Length
+        => step < 0 || step >= ZoomSteps.Length || cfg.VanillaCamera
             ? step
-            : Math.Clamp(NearestZoomStep(ZoomSteps[step] * ViewScale(cfg)) + FlatMapHandoffBias,
-                         0, ZoomSteps.Length - 1);
-
-    /// <summary>
-    /// The ratio a camera *height* scales by: the larger of the two axis ratios.
-    ///
-    /// Camera height buys a footprint of ground with the screen's aspect, so "the whole map is in
-    /// view" is governed by whichever axis runs out last. On vanilla's 2:1 map that is the width,
-    /// which is why the width ratio alone was enough for a long time. On a square 5000x5000 map the
-    /// height ratio is twice the width ratio, and scaling by width alone opens the camera too low
-    /// and drops FLAT_MAP_ZOOM_STEP — and with it the map table's fade — below the height where the
-    /// map actually fits.
-    ///
-    /// Same rule as the map table's mesh, and for the same reason: cover the demanding axis and let
-    /// the other one have slack.
-    /// </summary>
-    private static double ViewScale(Config.MapConfig cfg)
-        => Math.Max(cfg.MapScale, (double)cfg.ProvinceHeight / VanillaProvinceHeight);
-
-    /// <summary>
-    /// The ladder step closest to <paramref name="height"/>. Camera height buys a fixed amount of
-    /// ground at a fixed field of view, so opening on the same *share* of the map as vanilla means
-    /// scaling its start height by the map scale and then landing on a real step.
-    /// </summary>
-    private static int NearestZoomStep(double height)
-    {
-        int best = 0;
-        for (int i = 1; i < ZoomSteps.Length; i++)
-            if (Math.Abs(ZoomSteps[i] - height) < Math.Abs(ZoomSteps[best] - height))
-                best = i;
-        return best;
-    }
+            : Math.Clamp(step + cfg.FlatMapHandoffBias, 0, ZoomSteps.Length - 1);
 
     /// <summary>
     /// Re-declares every vanilla empire, kingdom, duchy and holy-order title as a landless

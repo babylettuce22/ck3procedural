@@ -51,6 +51,7 @@ gen_phenotype_game_start_on_action = {
 	effect = {
 		every_living_character = {
 			gen_sanitize_phenotype_effect = yes
+			gen_reconcile_phenotype_with_genes_effect = yes
 			gen_assign_phenotype_effect = yes
 		}
 	}
@@ -95,6 +96,15 @@ gen_phenotype_assign_on_action = {
 		# fighting over one portrait, and the repair is what makes the assignment meaningful —
 		# gen_has_phenotype_trigger would otherwise read the broken character as already decided.
 		gen_sanitize_phenotype_effect = yes
+
+		# Between the two: a character the culture already called human, whose genome names a
+		# fantasy race, is corrected before the assignment step looks at them. It has to run here
+		# and not only at game start, because the pulse itself can produce the same disagreement —
+		# an engine-generated courtier in a minority's host culture takes phenotype_human from the
+		# culture head on some earlier pass, and the gene branch in gen_assign_phenotype_effect
+		# never gets to see them again.
+		gen_reconcile_phenotype_with_genes_effect = yes
+
 		gen_assign_phenotype_effect = yes
 	}
 }

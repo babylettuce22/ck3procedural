@@ -16,8 +16,10 @@ public sealed class ProvinceSeed
 
     /// <summary>
     /// Why this province is impassable, for the preview and hover readout. <c>Score</c> means it
-    /// ranked in on relief; <c>Trapped</c> means the connectivity pass filled it because it was
-    /// landlocked behind other impassables; <c>None</c> for every passable province.
+    /// ranked in on relief; <c>Mask</c> means the user painted it in
+    /// <see cref="MapConfig.ImpassableMaskPath"/>; <c>Trapped</c> means the connectivity pass
+    /// filled it because it was landlocked behind other impassables; <c>None</c> for every
+    /// passable province.
     /// </summary>
     public ImpassableCause ImpassableCause;
 
@@ -38,7 +40,7 @@ public sealed class ProvinceSeed
     public int Domain;
 }
 
-public enum ImpassableCause : byte { None, Score, Trapped }
+public enum ImpassableCause : byte { None, Score, Trapped, Mask }
 
 /// <summary>
 /// What the impassable pass measured on this map, kept so the preview can show the same lines
@@ -64,6 +66,12 @@ public sealed class ProvinceMap
 
     /// <summary>Set by the impassable pass; null when it was skipped or found no mountains.</summary>
     public ImpassableDiagnostics? Impassability;
+
+    /// <summary>
+    /// True when <see cref="MapConfig.ImpassableMaskPath"/> decided the impassables instead of the
+    /// relief scoring, so the preview can say "not painted" rather than "no pass ran".
+    /// </summary>
+    public bool ImpassableMaskUsed;
 
     public int Count => Seeds.Count;
 
@@ -130,10 +138,16 @@ public static class Provinces
                           $"{seeds.Count(s => !s.IsLand && s.IsMajorRiver)} major river / " +
                           $"{seeds.Count(s => !s.IsLand && !s.IsMajorRiver)} sea provinces ({sw.ElapsedMilliseconds} ms)");
 
+        // The hand-painted impassable mask, if any. Read before the domain field because in Snap
+        // mode it *is* part of the domain field: the paint becomes a region the partition may not
+        // cross, which is what makes the wall come out the shape it was drawn.
+        var painted = ImpassableMask.Load(cfg, width, height);
+        bool snap = painted is not null && cfg.ImpassableMaskMode == ImpassableMaskMode.Snap;
+
         // The region each pixel grows inside. Without an import this is the land mask by another
         // name; with one it is the export's provinces, and the partition below cannot cross them.
         var domain = Core.Stage.Detail("  · domain field",
-            () => ProvinceDomain.Build(mask, azgaar, width, height, cfg));
+            () => ProvinceDomain.Build(mask, azgaar, width, height, cfg, snap ? painted : null));
 
         foreach (var seed in seeds) seed.Domain = domain[seed.Y * width + seed.X];
 
@@ -155,12 +169,16 @@ public static class Provinces
         Core.Stage.Detail("  · dissolve tiny", () => DissolveTinyProvinces(map, mask, cfg));
         Core.Stage.Detail("  · impassable", () =>
         {
-            MarkImpassable(map, elevation, mask, cfg);
+            // A painted mask replaces the relief scoring outright; the pocket fill and the range
+            // fusing run either way, since a drawn wall can enclose land just as a ridge can.
+            if (snap) MarkSnappedImpassable(map);
+            else if (painted is not null) MarkPaintedImpassable(map, painted, cfg);
+            else MarkImpassable(map, elevation, mask, cfg);
             MarkTrappedProvincesImpassable(map);
             MergeImpassableRanges(map, cfg);
         });
         Core.Stage.Detail("  · province report", () => Report(map, elevation, cfg));
-        if (azgaar is not null) VerifyDomains(map, domain);
+        if (azgaar is not null || snap) VerifyDomains(map, domain);
         return map;
     }
 
@@ -845,6 +863,82 @@ public static class Provinces
 
         land.Sort();
         return land[(int)Math.Clamp(land.Count * fraction, 0, land.Count - 1)];
+    }
+
+    /// <summary>
+    /// Snap mode's marking, and there is almost nothing to it: the partition was cut against the
+    /// mask's domain, so a province either grew inside the paint or outside it and its seed's
+    /// domain says which. Nothing is counted per pixel because nothing straddles; VerifyDomains
+    /// asserts that afterwards.
+    /// </summary>
+    private static void MarkSnappedImpassable(ProvinceMap map)
+    {
+        map.ImpassableMaskUsed = true;
+
+        var area = new int[map.Count];
+        foreach (int label in map.Label) area[label]++;
+
+        int land = 0, marked = 0;
+        long pixels = 0;
+        for (int i = 0; i < map.Count; i++)
+        {
+            var seed = map.Seeds[i];
+            if (!seed.IsLand || area[i] == 0) continue;
+            land++;
+            if (!ProvinceDomain.IsPainted(seed.Domain)) continue;
+            seed.IsImpassable = true;
+            seed.ImpassableCause = ImpassableCause.Mask;
+            marked++;
+            pixels += area[i];
+        }
+
+        Console.WriteLine($"  impassable: {marked} of {land} land provinces cut to the mask ({pixels} px)");
+    }
+
+    /// <summary>
+    /// The mask's answer to <see cref="MarkImpassable"/>: a land province turns impassable when
+    /// the share of its pixels painted white reaches <see cref="MapConfig.ImpassableMaskMinShare"/>
+    /// — and at the default of 0, when a single white pixel lands on it, so a stroke drawn across
+    /// the map turns every province it touches and the wall it traces has no gaps. White on water
+    /// is ignored. No relief score is computed, so the preview's score readout is empty on these
+    /// maps; <see cref="ProvinceMap.ImpassableMaskUsed"/> tells it why.
+    /// </summary>
+    private static void MarkPaintedImpassable(ProvinceMap map, bool[] painted, MapConfig cfg)
+    {
+        map.ImpassableMaskUsed = true;
+
+        var total = new int[map.Count];
+        var white = new int[map.Count];
+        long onWater = 0;
+        for (int i = 0; i < map.Label.Length; i++)
+        {
+            int label = map.Label[i];
+            if (!map.Seeds[label].IsLand)
+            {
+                if (painted[i]) onWater++;
+                continue;
+            }
+            total[label]++;
+            if (painted[i]) white[label]++;
+        }
+
+        double minShare = Math.Clamp(cfg.ImpassableMaskMinShare, 0, 1);
+        int land = 0, marked = 0, touched = 0;
+        for (int i = 0; i < map.Count; i++)
+        {
+            if (!map.Seeds[i].IsLand || total[i] == 0) continue;
+            land++;
+            if (white[i] == 0) continue;
+            touched++;
+            if ((double)white[i] / total[i] < minShare) continue;
+            map.Seeds[i].IsImpassable = true;
+            map.Seeds[i].ImpassableCause = ImpassableCause.Mask;
+            marked++;
+        }
+
+        string skipped = touched > marked ? $", {touched - marked} touched but under the {minShare:P0} share" : "";
+        string water = onWater > 0 ? $", {onWater} white pixels on water ignored" : "";
+        Console.WriteLine($"  impassable: {marked} of {land} land provinces painted in the mask{skipped}{water}");
     }
 
     private static void MarkImpassable(ProvinceMap map, float[] elevation, byte[] mask, MapConfig cfg)
@@ -1712,12 +1806,13 @@ public static class Provinces
 
         if (impure.Count == 0)
         {
-            Console.WriteLine($"  domain check: all {land} land provinces sit inside one azgaar province");
+            Console.WriteLine($"  domain check: all {land} land provinces sit inside one region " +
+                              "(azgaar province / painted wall)");
             return;
         }
 
-        Console.WriteLine($"  ! domain check: {impure.Count} of {land} land provinces straddle an " +
-                          $"azgaar border ({strayPixels} px)");
+        Console.WriteLine($"  ! domain check: {impure.Count} of {land} land provinces straddle a " +
+                          $"region border ({strayPixels} px)");
     }
 }
 

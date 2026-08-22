@@ -22,17 +22,30 @@
 # phenotype_human, so a child who came out human is already decided and this effect will not reach
 # past its parents to convert it.
 #
-# **Why it has to be indirect.** This file set ships identically for every seed and so may not name
-# a generated key (see BaseFilesToCopy/README.txt), which rules out asking whether the character's
-# culture is `culture:gen_culture_4` or their ethnicity `gen_ethnicity_7`. Nor can the genes be read:
-# the generated ethnicities distinguish races by gene VALUE ranges, while `has_gene` only tests the
-# template, and every race shares templates like `normal_height`. So the culture is identified by
-# example instead — find a character the culture already agrees is typical, and copy their trait.
+# **Why the culture route has to be indirect.** This file set ships identically for every seed and
+# so may not name a generated key (see BaseFilesToCopy/README.txt), which rules out asking whether
+# the character's culture is `culture:gen_culture_4` or their ethnicity `gen_ethnicity_7`. So the
+# culture is identified by example instead — find a character the culture already agrees is typical,
+# and copy their trait.
 #
 # `culture_head` is that character. It is a real per-culture pointer needing no generated key, and
 # the head at game start is always a ruler out of history, which is to say one of the characters
 # HistoryWriter already stamped. `liege` and `host` are fallbacks for a culture whose head has died
 # or was never established, and both are gated on same-culture for the reason above.
+#
+# **The genome is asked FIRST, and this is the correction to a long-standing claim.** An earlier
+# version of this comment said the genes could not be read, because the ethnicities distinguish
+# races by gene VALUE range while `has_gene` tests only the template. That is true of every shared
+# gene — `normal_height` is the same template at a gnome's 0.06 and a giant's 0.98 — and false of
+# exactly one: `gen_race_skin`, our own gene, has a uniquely named template per race and ships in
+# Core on every map. See gen_has_fantasy_race_gene_trigger.
+#
+# Asking it first is what fixes the minority-race member, who is the one population where culture
+# and genome genuinely disagree: they roll their race's ethnicity out of a HUMAN culture's weighted
+# ethnicity list (MapGen/Ethnicities.cs seats them at weight 15), so the culture head says human and
+# their own body says gnome. Culture remains the fallback, and remains the right answer for the
+# population this file was written for — a courtier the engine invented for a dwarven court whose
+# genome the ethnicity roll left ordinary still becomes a dwarf from the head.
 
 gen_assign_phenotype_effect = {
 	if = {
@@ -44,7 +57,24 @@ gen_assign_phenotype_effect = {
 		save_scope_as = gen_phenotype_target
 
 		if = {
-			limit = { culture.culture_head ?= { gen_has_phenotype_trigger = yes } }
+			limit = { gen_has_fantasy_race_gene_trigger = yes }
+			gen_assign_phenotype_from_genes_effect = yes
+		}
+		else_if = {
+			limit = {
+				culture.culture_head ?= {
+					gen_has_phenotype_trigger = yes
+
+					# A minority-race head is not a template for their own culture. The Rohand are
+					# human with a gnome minority seated among them; if the head happens to be one
+					# of the gnomes, copying from them would hand phenotype_diminutive to every
+					# human Rohand courtier the engine invents — a 13% minority quietly taking over
+					# the culture, and worse, the trait would then FORCE gnome genes onto human
+					# bodies at render (see 99_gen_race_morphs.txt). The flag marks exactly the
+					# characters whose race came from their own genome rather than their culture.
+					NOT = { has_character_flag = gen_phenotype_from_gene }
+				}
+			}
 			culture.culture_head = { save_scope_as = gen_phenotype_source }
 		}
 		else_if = {
@@ -71,10 +101,108 @@ gen_assign_phenotype_effect = {
 		# maps now — see Emit/StaticFileWriter.cs — so the old "human maps fall through here for
 		# free" case no longer arises; on a fantasy map nearly everyone finds a source, humans
 		# included, which is what stamps phenotype_human onto engine-generated human courtiers.)
+		#
+		# Re-asks gen_has_phenotype_trigger rather than trusting the branch structure above. The gene
+		# branch assigns directly and saves no source, so it should fall through here harmlessly —
+		# but `save_scope_as` inside an `every_living_character` loop is exactly the place not to bet
+		# on a stale scope from the previous iteration being invisible. If the genome already
+		# answered, nothing here may run.
 		if = {
-			limit = { exists = scope:gen_phenotype_source }
+			limit = {
+				NOT = { gen_has_phenotype_trigger = yes }
+				exists = scope:gen_phenotype_source
+			}
 			gen_copy_phenotype_effect = yes
 		}
+	}
+}
+
+# Gives a character the race their own genome names.
+#
+# The `gen_race_skin` template IS the race — one uniquely named template each, set by the ethnicity
+# the character rolled out of their culture's weighted list. This is the only place in the system
+# where a race is decided from the character rather than from the people around them, which is what
+# makes it the right answer for a minority: a gnome seated among the Rohand rolls the gnome
+# ethnicity, so the gene says gnome no matter what the culture says.
+#
+# Both elf archetypes map to phenotype_gracile — one trait, two skins — matching the split
+# Emit/RaceMorphWriter.cs makes at render time, where the culture decides which of the two skin
+# entries applies.
+#
+# There is deliberately NO gen_skin_human branch. Index 0 is the empty template every character
+# falls back to when their DNA does not mention the gene at all, so a human branch here would match
+# essentially everyone and make the culture route below dead code — including for the dwarven
+# courtier whose ethnicity roll left them ordinary, who should still take the culture's race. Absent
+# a fantasy gene, the genome has said nothing, not "human".
+#
+# gen_phenotype_from_gene records that this character's race came from their body rather than their
+# culture. Read by gen_assign_phenotype_effect to refuse a minority-race culture head as a source —
+# see the comment there for why that matters.
+gen_assign_phenotype_from_genes_effect = {
+	if = {
+		limit = {
+			OR = {
+				has_gene = { category = gen_race_skin template = gen_skin_high_elf }
+				has_gene = { category = gen_race_skin template = gen_skin_wood_elf }
+			}
+		}
+		add_trait = phenotype_gracile
+		add_character_flag = gen_phenotype_from_gene
+	}
+	else_if = {
+		limit = { has_gene = { category = gen_race_skin template = gen_skin_dwarf } }
+		add_trait = phenotype_stocky
+		add_character_flag = gen_phenotype_from_gene
+	}
+	else_if = {
+		limit = { has_gene = { category = gen_race_skin template = gen_skin_orc } }
+		add_trait = phenotype_rough_hewn
+		add_character_flag = gen_phenotype_from_gene
+	}
+	else_if = {
+		limit = { has_gene = { category = gen_race_skin template = gen_skin_giantkin } }
+		add_trait = phenotype_towering
+		add_character_flag = gen_phenotype_from_gene
+	}
+	else_if = {
+		limit = { has_gene = { category = gen_race_skin template = gen_skin_gnome } }
+		add_trait = phenotype_diminutive
+		add_character_flag = gen_phenotype_from_gene
+	}
+	else_if = {
+		limit = { has_gene = { category = gen_race_skin template = gen_skin_deepkin } }
+		add_trait = phenotype_dusk_adapted
+		add_character_flag = gen_phenotype_from_gene
+	}
+}
+
+# Repairs a character the CULTURE called human whose own genome says otherwise.
+#
+# gen_assign_phenotype_effect above only ever looks at characters who hold no phenotype yet, so it
+# cannot reach this population: Emit/HistoryWriter.cs derives the trait from the culture's ethnicity
+# archetype and stamps it on every history character at generation time, and a minority's host
+# culture is human by definition. The minority members among them are therefore born already
+# labelled phenotype_human and permanently invisible to the pulse — which is why a map could ship
+# with gnome-bodied characters, no phenotype_diminutive anywhere in history, and no short people in
+# the game at all.
+#
+# The generator cannot fix this at emit time. It does not know who the gnomes are: history
+# characters carry no `dna` (only the bookmark cast does), so the ENGINE rolls each character's
+# ethnicity out of the culture's weighted list when the save is created, long after the files are
+# written. The genome only exists at runtime, so the correction has to live here.
+#
+# Narrow on purpose. It fires only on phenotype_human — never on a character already holding a
+# fantasy race — and never on the mixed-line flag, so an inherited skin shift several generations
+# down a half-elven line stays what the birth roll made it. Everywhere else trait and genome agree
+# by construction and this is one trigger that answers no.
+gen_reconcile_phenotype_with_genes_effect = {
+	if = {
+		limit = { gen_phenotype_contradicts_genes_trigger = yes }
+
+		# Removed first: the seven traits list each other as `opposites`, so add_trait would be
+		# refused while phenotype_human is still on.
+		remove_trait = phenotype_human
+		gen_assign_phenotype_from_genes_effect = yes
 	}
 }
 

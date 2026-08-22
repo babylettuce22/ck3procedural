@@ -80,6 +80,41 @@ public sealed class AzgaarJsonFileEditor : FileNameEditor
 }
 
 /// <summary>
+/// The file picker behind <see cref="MapConfig.ImpassableMaskPath"/>: a black-and-white PNG
+/// painted over provinces.png. Filtered to images so the dialog does not offer the preset JSONs
+/// and heightmaps that share the same folders.
+/// </summary>
+public sealed class ImpassableMaskFileEditor : FileNameEditor
+{
+    protected override void InitializeDialog(OpenFileDialog openFileDialog)
+    {
+        base.InitializeDialog(openFileDialog);
+        openFileDialog.Title = "Choose an impassable mask (white = impassable, black = passable)";
+        openFileDialog.Filter = "Mask image (*.png;*.bmp)|*.png;*.bmp|All files (*.*)|*.*";
+    }
+}
+
+/// <summary>
+/// How <see cref="MapConfig.ImpassableMaskPath"/> is read against the province partition.
+/// </summary>
+public enum ImpassableMaskMode : byte
+{
+    /// <summary>
+    /// The painted pixels are a region of their own that the partition may not cross (see
+    /// <see cref="MapGen.ProvinceDomain"/>), so provinces are cut to the stroke and the wall's edge
+    /// in game is the edge that was painted. Every province inside the stroke is impassable.
+    /// </summary>
+    Snap,
+
+    /// <summary>
+    /// Provinces are partitioned as if there were no mask, and then every land province the paint
+    /// lands on (by at least <see cref="MapConfig.ImpassableMaskMinShare"/>) turns impassable whole.
+    /// Forgiving of a thin scribble, accurate only to the province.
+    /// </summary>
+    Touch,
+}
+
+/// <summary>
 /// Shows <see cref="MapConfig.EraAnchorYear"/>'s zero as what it means rather than as a number.
 ///
 /// Zero is a sentinel — "however advanced the world's own year would make it" — and a grid row
@@ -534,6 +569,57 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Category("03 Provinces")]
     [Description("Share of land provinces declared impassable_mountains, which get no barony and no holder. Vanilla runs ~0.095.")]
     public double ImpassableShareOfLand { get; set; } = 0.08;
+
+    /// <summary>
+    /// A hand-painted impassable mask, or empty for none.
+    ///
+    /// A binary image at provinces.png resolution — white where provinces should be impassable,
+    /// black elsewhere. The intended workflow is to generate once, open the written provinces.png
+    /// in GIMP, paint a thick white stroke over the wall you want on a black layer, export that
+    /// layer as a PNG and point this at it. The painted land becomes impassable_mountains — how
+    /// exactly is <see cref="ImpassableMaskMode"/>'s call — and the relief-scored selection (share,
+    /// floor, deviations, slope weight) is skipped entirely. The trapped-pocket fill and range
+    /// fusing still run afterwards, so a closed ring fills in and long walls are still capped by
+    /// ImpassableRangeMaxBaronies.
+    ///
+    /// An image of another size is nearest-sampled onto the province raster, so a mask painted over
+    /// heightmap.png (2x) works too; anything not black-and-white is thresholded at mid grey.
+    /// </summary>
+    [Category("03 Provinces")]
+    [RefreshProperties(RefreshProperties.All)]
+    [Description("Optional. A black-and-white PNG at provinces.png resolution: white = impassable, black = passable. " +
+                 "The painted land becomes impassable_mountains (see ImpassableMaskMode) and the relief-scored " +
+                 "selection below is skipped. Paint it in GIMP over the provinces.png of an earlier run with the same " +
+                 "seed and settings. Leave empty for the built-in relief scoring.")]
+    [Editor(typeof(ImpassableMaskFileEditor), typeof(System.Drawing.Design.UITypeEditor))]
+    public string ImpassableMaskPath { get; set; } = "";
+
+    /// <summary>
+    /// Whether the mask cuts provinces (<see cref="Config.ImpassableMaskMode.Snap"/>) or merely
+    /// picks them (<see cref="Config.ImpassableMaskMode.Touch"/>). Snap is the default because a
+    /// stroke thick enough to be worth painting is thick enough to be a province, and the wall then
+    /// has exactly the shape that was drawn; Touch is the fallback for a scribble too thin to hold
+    /// one — under Snap a painted fragment below <see cref="MinProvincePixels"/> is folded back into
+    /// its surroundings and turns nothing.
+    /// </summary>
+    [Category("03 Provinces")]
+    [Description("Only with ImpassableMaskPath. Snap: the paint is a region the province partition may not cross, " +
+                 "so provinces are cut to the stroke and the wall is exactly the shape drawn (paint it at least a " +
+                 "barony wide; fragments under MinProvincePixels are absorbed and turn nothing). Touch: provinces " +
+                 "are laid out as usual and every land province the paint lands on turns impassable whole.")]
+    public ImpassableMaskMode ImpassableMaskMode { get; set; } = ImpassableMaskMode.Snap;
+
+    /// <summary>
+    /// Touch mode only. How much of a land province the mask has to cover before the province
+    /// counts as painted. 0 means a single white pixel is enough, which is what a drawn stroke
+    /// wants: the wall it traces must not break at the provinces it only clips. Raise it towards 1
+    /// when the mask is a filled region rather than a line and only provinces mostly inside it
+    /// should turn.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("03 Provinces")]
+    [Description("Only with ImpassableMaskPath in Touch mode. Share of a land province's pixels that must be white before it turns impassable. 0 means any white pixel is enough (right for a drawn line); raise towards 1 for a painted region that should only take provinces mostly inside it.")]
+    public double ImpassableMaskMinShare { get; set; } = 0;
 
     /// <summary>
     /// The impassability score a province must reach before it may be impassable at all.
@@ -1024,6 +1110,69 @@ public sealed class MapConfig : CustomTypeDescriptor
     public double LandFloorDensity { get; set; } = 0.10;
 
     /// <summary>
+    /// Diagnostic. Ships vanilla's zoom ladder, panning bounds and flat-map handoff instead of this
+    /// map's, to take every camera override out of the picture while looking at a rendering
+    /// artefact.
+    ///
+    /// The tilt limits stay widened — they are what makes the artefact visible in the first place —
+    /// and START_LOOK_AT stays on this map's centre, because vanilla's { 5000 0 2300 } is off the
+    /// edge of any smaller map and the game would open looking at nothing, which tests nothing.
+    ///
+    /// FLAT_MAP_ZOOM_STEP and the map-table layer fades move together, as always: this makes
+    /// <see cref="Emit.CompatibilityWriter.ScaleZoomStep"/> the identity so both land on vanilla's
+    /// values rather than desyncing.
+    ///
+    /// Worth knowing before reading anything into the result: nothing in common/defines reaches
+    /// CK3's terrain LOD. The vertex shader takes NodeScale, LodDirection, LodLerpFactor,
+    /// QuadtreeLeafNodeScale and NormQuadtreeToWorld, all engine-computed, and the only
+    /// mod-controlled inputs to the drawn surface are the packed heightmap and its indirection
+    /// texture. What this *can* change is how much 3D terrain you are shown before the paper map
+    /// takes over, which is a visibility question rather than an LOD one.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("7 Height scale")]
+    [Description("Diagnostic: ship vanilla's zoom ladder, panning bounds and flat-map handoff instead of this map's, to rule the camera overrides out while investigating a rendering artefact. Tilt limits stay widened and the start view stays on this map's centre, since vanilla's is off the edge of a smaller map. Not for release builds — vanilla's panning bounds and surround geometry are authored for a 9216-wide map.")]
+    public bool VanillaCamera { get; set; }
+
+    /// <summary>
+    /// Extra zoom steps of 3D terrain before the paper map takes over — how much further the
+    /// camera gets from the ground while still looking at real terrain than vanilla's own handoff
+    /// index would allow.
+    ///
+    /// Read by <see cref="Emit.CompatibilityWriter.ScaleZoomStep"/>, which is the only place it may
+    /// be applied, because the handoff is a pair and not a value. The map-table layer fades in
+    /// <see cref="Emit.MapTableWriter"/> come through that same function, so biasing there moves
+    /// the tabletop's appearance and the map going flat by the same number of steps and keeps them
+    /// on one frame. Bias FLAT_MAP_ZOOM_STEP alone and you open a window of zoom where the table is
+    /// drawn underneath 3D terrain.
+    ///
+    /// The ladder is roughly geometric at about 15% a step. Measured on a 9216-wide map, where the
+    /// scaled ladder puts vanilla's step 21 at 672 world units against a 4607-unit world:
+    ///
+    ///     bias  flat step  height  share of world width  vs vanilla's 13.4%
+    ///        2         23     804                 17.5%               1.3x
+    ///        5         26    1080                 23.4%               1.7x
+    ///        8         29    1525                 33.1%               2.5x
+    ///
+    /// 5 by default: a small map is mostly the part you want to look at, and vanilla's framing was
+    /// authored for a map twice as wide.
+    ///
+    /// Nothing breaks at the top of the range. Vanilla's layers.txt fades on steps 0, 6, 9, 20 and
+    /// 21 — its 80s are the format's way of spelling "never" and are returned untouched — and both
+    /// halves of the handoff pair go through one function with one input, so they clamp together
+    /// and stay in sync even past the end of the ladder. What a large bias does cost is render
+    /// time and honesty at distance: the terrain renderer keeps working further out, in the regime
+    /// where the engine's own runtime LOD is coarsest and where distant props float. That half is
+    /// unreachable from a mod — see <see cref="ScaleReliefWithMapSize"/> and
+    /// <see cref="HeightmapSagBudget"/> for the halves that are not. Walk this back first if
+    /// far terrain looks mushy.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("7 Height scale")]
+    [Description("Extra zoom steps of 3D terrain before the map goes flat to the paper map, past vanilla's own handoff. The zoom ladder is about 15% a step, so 5 is roughly 1.7x vanilla's share of the world visible as terrain — worth having because vanilla's framing was authored for a map twice as wide. The map-table fades move with it automatically. Lower it if terrain at far zoom looks mushy or costs frames; 0 is vanilla's own handoff.")]
+    public int FlatMapHandoffBias { get; set; } = 5;
+
+    /// <summary>
     /// Whether land relief shrinks with map size, so slopes come out the same in *world units* at
     /// any resolution.
     ///
@@ -1057,10 +1206,69 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// that method along with terrain generation, leaving the world-height side reverted and
     /// nothing doing the terrain side.
     /// </summary>
+    [Category("7 Height scale")]
+    [Description("Shrinks land relief in proportion to map size so slopes match vanilla's in world units at any resolution. TURN ON IF TREES AND OTHER OBJECTS ARE FOUND TO BE FLOATING.")]
+    public bool ScaleReliefWithMapSize { get; set; } = false;
+
+    /// <summary>
+    /// The scale, in heightmap pixels, at which <see cref="MapGen.HeightmapNormalizer.CompressRelief"/>
+    /// divides terrain into "mountain" and "detail". Broader than this keeps its full height; finer
+    /// than this is what <see cref="ReliefScale"/> compresses.
+    ///
+    /// This is what stops relief scaling and normalisation fighting over the same byte. Uniform
+    /// compression cannot leave both intact on a small map: to end on <see cref="LandTop"/> 191
+    /// after a 0.5 multiply, normalisation would have to hand over a pre-compression top of
+    /// 20 + 171/0.5 = 362 on a scale that stops at 255. So one of vanilla's hypsometry and
+    /// vanilla's gradient had to go, and it was always hypsometry, because compression ran last.
+    ///
+    /// The split dissolves that, because the two passes turn out not to want the same thing after
+    /// all. Hypsometry is a per-pixel *height* distribution; LOD sag is *curvature* — the drawn
+    /// mesh interpolates linearly between vertices, so a long smooth slope costs nothing however
+    /// steep it is, and a ridge crest between two vertices is not lowered, it is absent (see
+    /// <see cref="HeightmapSagBudget"/>, which fixes the baked half of the same effect). Total
+    /// relief is simply the wrong quantity to have been scaling. Compressing only the residual
+    /// above this scale aims at the curvature and leaves the height distribution alone.
+    ///
+    /// 32 px is where the two box passes that build the mean reach ±64 px, and at the invariant
+    /// 2 heightmap px per world unit that is ±32 world units — one of the 32-world-unit nodes
+    /// <see cref="Emit.CompatibilityWriter"/> records as the finest the engine actually renders,
+    /// either side of every pixel. Detail the coarsest node cannot resolve is exactly the part
+    /// LOD cannot follow.
+    ///
+    /// It is also the measured knee. Swept on a 9216x4608 Azgaar import at
+    /// <see cref="ReliefScale"/> 0.5, land percentiles against per-tile reconstruction sag in
+    /// world units (mean / p99 over land tiles, decimation 4):
+    ///
+    ///     radius   p50 p75 p90 p99 max   sag mean  sag p99   atlas
+    ///     off       29  54  86 128 168      1.738   10.710   11.0M
+    ///     16        29  54  85 124 157      1.172    7.947   10.4M
+    ///     32        28  54  84 120 153      1.125    6.762   10.6M
+    ///     64        29  53  80 115 150      1.119    6.332   11.7M
+    ///     128       29  51  74 106 145      1.151    5.853   12.4M
+    ///     uniform   24  37  53  74  94      1.000    5.600    9.4M
+    ///
+    /// Read the sag column first: it is flat from 16 px up, and sag p90 is 2.321 at *every* radius
+    /// including uniform. The whole benefit arrives at the smallest split there is, so the radius
+    /// is not buying sag — past 32 it only spends hypsometry, a third of the way back to uniform by
+    /// 128 for a p99 that moves 0.9 world units. The atlas turns around at the same place, because
+    /// a wider mean raises more and deeper hollows and the sag budget then pays for them in tiles.
+    ///
+    /// Note what the off row means for the pass as a whole: the split gets 88% of uniform's mean
+    /// sag reduction and all of its p90, for 2 points of p90 height instead of 33.
+    ///
+    /// Symmetric, like the sag budget and for the same reason: decimation loses height across a
+    /// ridge and gains it across a valley, so a valley floor well below its surroundings is raised
+    /// toward them by the same rule that lowers a crest. Land at or below the waterline is still
+    /// returned bit for bit, so the land/water split every downstream consumer keys on is
+    /// untouched.
+    ///
+    /// 0 restores the old behaviour — uniform compression of all relief toward the waterline — and
+    /// is the way back if the split ever turns out to buy less in game than it does on paper.
+    /// </summary>
     [AdvancedSetting]
     [Category("7 Height scale")]
-    [Description("Shrinks land relief in proportion to map size so slopes match vanilla's in world units at any resolution. CK3 fixes world *height* at 50 units on every map but takes world *width* from the province map, and a smaller map resamples the same world into fewer pixels — so without this, a half-width map has exactly twice vanilla's gradient everywhere. Steep terrain is what makes trees and province borders float: the engine's distance LOD cannot follow slopes that steep, so the terrain it draws sits below the full-resolution heightmap props are snapped to. Land is compressed toward the waterline, so sea level, water depths and the land/water split are untouched. Identity at vanilla map size. Turn off to keep the source heightmap's relief exactly as authored, and expect proportionally more floating the smaller you generate.")]
-    public bool ScaleReliefWithMapSize { get; set; } = true;
+    [Description("The scale, in heightmap pixels, that separates mountains from detail when relief is scaled with map size. Terrain broader than this keeps its full height; only finer detail is compressed. That is the part the engine's terrain LOD cannot follow, because sag comes from curvature rather than from total relief — a long smooth slope costs nothing however steep it is. Splitting this way is what lets a half-size map keep vanilla's height distribution and vanilla's LOD behaviour at once, which uniform compression cannot do at any setting. 32 reaches one LOD node either side of each pixel, and is the measured knee: sag stops improving above it and only height is lost. 0 goes back to compressing all relief uniformly toward the waterline.")]
+    public int ReliefDetailRadius { get; set; } = 32;
 
     /// <summary>
     /// What the highest land pixel becomes after normalisation, on the 0-255 scale.
@@ -1071,7 +1279,6 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// towards 255 for a deliberately alpine map; that is the knob that decides how flat the
     /// result reads.
     /// </summary>
-    [AdvancedSetting]
     [Category("7 Height scale")]
     [Description("What the highest land pixel becomes, on the 0-255 scale. 191 is vanilla's own highest; vanilla never uses the top of the range. Raise towards 255 for a more dramatic map — this is the knob that decides how flat the result reads.")]
     public double LandTop { get; set; } = 191;
@@ -1118,6 +1325,51 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Category("7 Height scale")]
     [Description("How far the drawn terrain may depart, in either direction, from the heightmap props and borders are snapped to, in world units. This is the floating-props knob: terrain below that surface floats a tree, terrain above it comes up through a province border. It is also the error that survives zooming in, since the engine's own terrain LOD blending fades out up close and leaves this behind. Lower is sharper and costs atlas space; 0.5 beats vanilla's own fidelity for less than vanilla spends. 0 restores the old copy-vanilla's-histogram behaviour.")]
     public double HeightmapSagBudget { get; set; } = 0.5;
+
+    /// <summary>
+    /// The packer's tile step in heightmap pixels, or 0 to take
+    /// <see cref="Emit.HeightmapPacker.TileStepFor"/>'s answer for this map's width.
+    ///
+    /// Only 32, 64 and 128 are legal — CK3 reads <c>tile_size</c> 33, 65 and 129 and nothing else,
+    /// and its own map editor offers exactly those three. An override is here because the three
+    /// are worth measuring against each other on a real map: the packer reports its atlas size and
+    /// worst error on every build, so the comparison is a rerun rather than an argument.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("7 Height scale")]
+    [Description("Packer tile step in heightmap pixels: 32, 64, 128, or 0 to choose by map width (64 above 9216 wide, 32 at or below). Smaller tiles let the level assignment follow coastlines instead of committing whole blocks to one level, at the cost of a larger shared edge — 6.4% overhead at 32 against 3.2% at 64. CK3 only accepts these three.")]
+    public int HeightmapTileStep { get; set; }
+
+    /// <summary>
+    /// Whether the packer refines tiles so no two neighbours differ by more than one level.
+    ///
+    /// Off, because vanilla does not do it and the cost is large. Measured on vanilla's own
+    /// indirection texture: 7,880 adjacent tile pairs differ by more than one level, which a
+    /// balance pass would drive to zero by construction. So this is not a rule CK3 enforces and
+    /// not one it needs — the shared edge sample that <c>tile_size = step + 1</c> exists for is
+    /// what keeps neighbouring tiles meeting at all.
+    ///
+    /// What it costs when on, measured on a 9216x4608 map against vanilla at the same tile step:
+    /// a level-0 coastal tile forces its neighbours to 1, 2, 3, 4 outward, so fine detail cascades
+    /// up to four tiles — 128 world units at a step of 64 — into open water. 64.3% of pure-ocean
+    /// tiles were held above the coarsest level, reaching a 95th percentile of 96 world units
+    /// offshore, where vanilla holds 93.8% of its ocean at the coarsest level and 6.2% above it.
+    /// That is atlas spent on flat water instead of on the land the sag budget is for.
+    ///
+    /// It also cannot be trusted to preserve the budget: refining a tile is not automatically safe
+    /// because error is not monotonic in level, which is the whole reason
+    /// <c>AssignLevels</c> takes the longest passing *prefix* rather than the coarsest passing
+    /// level. With this off, that prefix rule is merely conservative rather than load-bearing.
+    ///
+    /// Turn on only to test a seam: adjacent tiles at different decimation share edge samples, but
+    /// the coarse side draws a straight line between the ones it kept while the fine side follows
+    /// the heightmap, and that difference is a crack. Vanilla ships 7,880 such adjacencies, so if
+    /// it is visible here and not there, the cause is something else.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("7 Height scale")]
+    [Description("Refine tiles so no two neighbours differ by more than one detail level. Off, because vanilla does not do it — its own indirection texture has 7,880 adjacencies a balance pass would forbid — and because it is expensive: it cascades fine detail up to four tiles into open ocean, holding 64% of pure-water tiles above the coarsest level against vanilla's 6%. Turn on only to test whether a visible seam is a tile-boundary crack.")]
+    public bool BalanceNeighbourLods { get; set; }
 
     /// <summary>
     /// Which percentile of land the top anchor is taken at, rather than the maximum.
@@ -1663,7 +1915,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     public RaceTerrainRule RaceTerrain { get; set; } = RaceTerrainRule.Prefer;
 
     [Category("14 Fantasy/Ethnicities")]
-    [Description("When the mode's human:fantasy land ratio leaves no room for every guaranteed race to hold territory of its own, let the overflow races live as small minorities (~13% of characters) inside a well-suited human culture instead of not appearing at all. Minority members look their race but carry the Human trait like the rest of their culture, not their race's trait or bonuses — they are flavour, not a faction. Off means the guarantee simply wins the land and the ratio is sacrificed with a warning.")]
+    [Description("When the mode's human:fantasy land ratio leaves no room for every guaranteed race to hold territory of its own, let the overflow races live as small minorities (~13% of characters) inside a well-suited human culture instead of not appearing at all. Minority members look their race and carry their race's phenotype trait, resolved at game start from their own genes rather than from their host culture — they are a people living among another, not a faction with land. Off means the guarantee simply wins the land and the ratio is sacrificed with a warning.")]
     public bool AllowMinorityRaces { get; set; } = true;
 
 

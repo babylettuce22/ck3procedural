@@ -1,0 +1,99 @@
+﻿# Elves are clean-shaven, with a rare exception. The mirror of gen_dwarf_beards.txt, and everything
+# structural in that file's header applies here too -- read it first. In short: `beards` is an
+# ACCESSORY gene that an ethnicity may not name ("gene category 'beards' cannot be influenced by
+# DNA"), so a portrait modifier is the only place a beard can be forced; the group must be one of
+# ours rather than an entry in vanilla's `beards`, because a second group of that name REPLACES
+# vanilla's entire beard system instead of adding to it; and priority 100 clears the highest stock
+# group at 50 while staying under the wilderness dummy's 9999.
+#
+# **A separate group from gen_dwarf_beard, not extra entries inside it.** Portrait modifier groups
+# apply exactly one entry each, and two groups apply independently -- so dwarves and elves cannot
+# collide no matter what, because no character holds phenotype_stocky and phenotype_gracile at once
+# (the seven phenotype traits list each other as `opposites`). Keeping them apart also means the
+# dwarf file keeps its name honest, and neither has to be touched to change the other.
+#
+# **Both elf archetypes are covered by one trait.** phenotype_gracile is high elf and wood elf
+# together -- Emit/RaceMorphWriter.cs makes the same merge for shape, and splits only the skin -- so
+# there is nothing to branch on here.
+#
+# THE 3%
+# ------
+# `selection_behavior = weighted_random` picks one entry in proportion to weight, and the roll is
+# stable for a given character rather than re-rolled per frame (vanilla's own `has_no_beard` at
+# base 30 is how every clean-shaven human in the game is decided). So 97 against 3 is a real
+# "almost always", not a flicker.
+#
+# Making it ALWAYS is a one-line change: drop gen_elf_beard_rare and let the no_beard entry carry
+# the whole weight. The exception is kept because a hundred percent of anything reads as a rule the
+# player can see the edge of, and one bearded elder in a court of smooth faces reads as a world.
+#
+# `thin_beards_straight` is the right template for that exception and the only one worth using: it
+# is two sparse steppe beards, where the northern sets the dwarves draw from are deliberately the
+# big Norse ones. An elf who does grow a beard should not out-beard a dwarf.
+#
+# `range = { 0 1 }` samples across the template's list, which is what vanilla's own entries do and
+# comment as needed "for the randomness to work correctly".
+#
+# `exists = this` guards every trigger: weights are evaluated for portraits with no character behind
+# them, and has_trait on nothing is an error rather than a no.
+#
+# Children need no handling and could not get it here anyway -- under-18s render on the `boy` mesh,
+# which no beards template maps, so they are already beardless. See the long note in
+# gen_dwarf_beards.txt for why that cannot be worked around from a portrait modifier.
+
+gen_elf_beard = {
+
+	usage = game
+	selection_behavior = weighted_random
+	priority = 100
+
+	gen_elf_no_beard = {
+		dna_modifiers = {
+			accessory = {
+				mode = add
+				gene = beards
+				template = no_beard
+				range = { 0 1 }
+			}
+		}
+		weight = {
+			base = 0
+			modifier = {
+				add = 97
+				exists = this
+				has_trait = phenotype_gracile
+			}
+
+			# Women take the exception's 3 as well, so they sit at a flat 100 here. The rare beard
+			# below is male-only, and without this an elven woman would reach the group with 97
+			# against nothing -- which still resolves to no_beard, but only by accident of there
+			# being one entry left. Stated rather than relied on.
+			modifier = {
+				add = 3
+				exists = this
+				has_trait = phenotype_gracile
+				is_female = yes
+			}
+		}
+	}
+
+	gen_elf_beard_rare = {
+		dna_modifiers = {
+			accessory = {
+				mode = add
+				gene = beards
+				template = thin_beards_straight
+				range = { 0 1 }
+			}
+		}
+		weight = {
+			base = 0
+			modifier = {
+				add = 3
+				exists = this
+				is_female = no
+				has_trait = phenotype_gracile
+			}
+		}
+	}
+}

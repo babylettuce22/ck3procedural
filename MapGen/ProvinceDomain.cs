@@ -54,9 +54,27 @@ public static class ProvinceDomain
     private const int AbsorbPasses = 3;
 
     /// <summary>
-    /// The domain of every pixel, at province-raster resolution.
+    /// Set on the domain of land painted white in <see cref="MapConfig.ImpassableMaskPath"/> when
+    /// the mask is in <see cref="ImpassableMaskMode.Snap"/> mode.
+    ///
+    /// A bit on top of the region id rather than a region of its own, so the painted land stays
+    /// inside whatever Azgaar province or state it was painted over: a wall across an export's
+    /// province is still that province's land, just impassable, and the majority votes that place
+    /// baronies in states stay unanimous. With no import the only ids in play are
+    /// <see cref="UnclaimedLand"/> and <see cref="UnclaimedLand"/> | <see cref="Painted"/>, which is
+    /// the two-region map the mode describes.
     /// </summary>
-    public static int[] Build(byte[] mask, AzgaarImport? azgaar, int width, int height, MapConfig cfg)
+    public const int Painted = 1 << 30;
+
+    public static bool IsPainted(int domain) => (domain & Painted) != 0;
+
+    /// <summary>
+    /// The domain of every pixel, at province-raster resolution.
+    /// <paramref name="painted"/> is the impassable mask to cut provinces against, or null when
+    /// there is none or it is in Touch mode; white on water is ignored, water is water.
+    /// </summary>
+    public static int[] Build(byte[] mask, AzgaarImport? azgaar, int width, int height, MapConfig cfg,
+                              bool[]? painted = null)
     {
         var domain = new int[width * height];
 
@@ -64,35 +82,110 @@ public static class ProvinceDomain
         {
             for (int i = 0; i < domain.Length; i++)
                 domain[i] = mask[i] == 1 ? UnclaimedLand : Water;
-            return domain;
+        }
+        else
+        {
+            var raster = azgaar.Raster;
+            int limit = Math.Min(domain.Length, raster.CellByPixel.Length);
+
+            // Province ids are pushed clear of the block reserved for states, so the two never collide.
+            int stateSpan = azgaar.World.Pack.States.Count + 1;
+
+            Parallel.For(0, height, y =>
+            {
+                int row = y * width;
+                for (int x = 0; x < width; x++)
+                {
+                    int i = row + x;
+                    if (mask[i] != 1) { domain[i] = Water; continue; }
+                    if (i >= limit) { domain[i] = UnclaimedLand; continue; }
+
+                    int province = raster.ProvinceAt(i);
+                    if (province > 0) { domain[i] = 1 + stateSpan + province; continue; }
+
+                    int state = raster.StateAt(i);
+                    domain[i] = state > 0 ? 1 + state : UnclaimedLand;
+                }
+            });
         }
 
-        var raster = azgaar.Raster;
-        int limit = Math.Min(domain.Length, raster.CellByPixel.Length);
+        if (painted is not null)
+            for (int i = 0; i < domain.Length; i++)
+                if (painted[i] && domain[i] != Water) domain[i] |= Painted;
 
-        // Province ids are pushed clear of the block reserved for states, so the two never collide.
-        int stateSpan = azgaar.World.Pack.States.Count + 1;
-
-        Parallel.For(0, height, y =>
-        {
-            int row = y * width;
-            for (int x = 0; x < width; x++)
-            {
-                int i = row + x;
-                if (mask[i] != 1) { domain[i] = Water; continue; }
-                if (i >= limit) { domain[i] = UnclaimedLand; continue; }
-
-                int province = raster.ProvinceAt(i);
-                if (province > 0) { domain[i] = 1 + stateSpan + province; continue; }
-
-                int state = raster.StateAt(i);
-                domain[i] = state > 0 ? 1 + state : UnclaimedLand;
-            }
-        });
+        // With neither an import nor a mask the field is the land mask by another name and has no
+        // slivers to absorb; every pass over it would be a no-op and a second or two.
+        if (azgaar is null && painted is null) return domain;
 
         AbsorbSlivers(domain, width, height, cfg);
-        Report(domain, cfg);
+        if (azgaar is not null) Report(domain, cfg);
+        if (painted is not null) ReportPainted(domain, width, height, cfg);
         return domain;
+    }
+
+    /// <summary>
+    /// What the mask came to once it met the coastline and the sliver floor: how many separate
+    /// walls there are and how much land they hold. Said here, before the partition, because a
+    /// stroke drawn too thin is absorbed by <see cref="AbsorbSlivers"/> and simply vanishes, and
+    /// the user who painted it deserves to be told so rather than left to look for it in game.
+    /// </summary>
+    private static void ReportPainted(int[] domain, int width, int height, MapConfig cfg)
+    {
+        long pixels = 0;
+        int components = 0, underBarony = 0;
+        var seen = new bool[domain.Length];
+        var stack = new Stack<int>();
+        int smallest = int.MaxValue;
+
+        // Eight-connected, to count the same components AbsorbSlivers kept — a stroke one pixel
+        // wide on a diagonal is one region to it, and must be one region here or the "smallest"
+        // figure lies.
+        for (int start = 0; start < domain.Length; start++)
+        {
+            if (seen[start] || !IsPainted(domain[start])) continue;
+            components++;
+            int size = 0;
+            seen[start] = true;
+            stack.Push(start);
+            while (stack.Count > 0)
+            {
+                int cell = stack.Pop();
+                size++;
+                int cx = cell % width, cy = cell / width;
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    int ny = cy + dy;
+                    if (ny < 0 || ny >= height) continue;
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        int nx = cx + dx;
+                        if (nx < 0 || nx >= width || (dx == 0 && dy == 0)) continue;
+                        int nk = ny * width + nx;
+                        if (seen[nk] || !IsPainted(domain[nk])) continue;
+                        seen[nk] = true;
+                        stack.Push(nk);
+                    }
+                }
+            }
+            pixels += size;
+            smallest = Math.Min(smallest, size);
+            if (size < cfg.BaronyPixels) underBarony++;
+        }
+
+        if (components == 0)
+        {
+            Console.WriteLine("  domain: impassable mask — WARNING: no painted land survived the sliver floor; " +
+                              $"paint the wall at least {cfg.MinProvincePixels} px in area (a barony is " +
+                              $"{cfg.BaronyPixels:F0} px) or switch ImpassableMaskMode to Touch");
+            return;
+        }
+
+        string thin = underBarony > 0
+            ? $"; {underBarony} under one barony of {cfg.BaronyPixels:F0} px — thin paint makes thin provinces"
+            : "";
+        Console.WriteLine($"  domain: impassable mask cut into {components} wall region(s), " +
+                          $"{pixels} px ({pixels / cfg.BaronyPixels:F1} baronies' worth), " +
+                          $"smallest {smallest} px{thin}");
     }
 
     /// <summary>

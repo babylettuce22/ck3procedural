@@ -267,7 +267,8 @@ public static class ContentWriter
         var renderedElevation = Core.Stage.Time("rendered heightmap", () =>
             HeightmapSource.ToSimulationScale(
                 HeightmapPacker.Reconstruct(
-                    shippedHeightmap, cfg.Width, cfg.Height, cfg.HeightmapSagBudget), cfg));
+                    shippedHeightmap, cfg.Width, cfg.Height, cfg.HeightmapSagBudget,
+                    HeightmapPacker.TileStepFor(cfg), cfg.BalanceNeighbourLods), cfg));
 
         // renderedElevation for all three, not terra.Elevation: every one of them seeds from
         // province-resolution terrain and then jitters to a sub-pixel position, and has to ask the

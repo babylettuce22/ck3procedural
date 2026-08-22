@@ -108,19 +108,24 @@ public static class RaceMorphWriter
         // child. Range { 0 0 } because there is nothing to vary — off is off.
         //
         // Keyed on the gen_phenotype_human FLAG, deliberately NOT the phenotype_human TRAIT. The
-        // trait is broad racial identity and sits on every member of a human culture — including
-        // the minority-race members whose fantasy looks come from rolled ethnicity genes, and who
-        // must keep them. The flag is set only for humans of a mixed line (see
-        // 00_phenotype_birth_effects.txt), which is exactly the population whose inherited shift
-        // needs snapping off.
+        // trait is broad racial identity and sits on every member of a human culture; the flag is
+        // set only for humans of a mixed line (see 00_phenotype_birth_effects.txt), which is
+        // exactly the population whose inherited shift needs snapping off.
+        //
+        // Minority-race members used to be the reason for the split — they held the human trait
+        // while their looks came from rolled ethnicity genes, so keying the reset on the trait
+        // erased them. They now hold their own race's trait instead (resolved from their genes by
+        // gen_reconcile_phenotype_with_genes_effect), so they are no longer the argument. The split
+        // still is the right one: a mixed-line human is precisely "human whose inherited shift must
+        // go", and no trait describes that.
         sb.Append("\tgen_race_skin_human = {\n\t\tdna_modifiers = {\n");
         sb.Append("\t\t\tmorph = { mode = replace  gene = gen_race_skin  template = gen_skin_human  range = { 0 0 } }\n");
         sb.Append("\t\t}\n");
         sb.Append("\t\tweight = {\n\t\t\tbase = 0\n\t\t\tmodifier = {\n\t\t\t\tadd = 100\n\t\t\t\texists = this\n\t\t\t\thas_character_flag = gen_phenotype_human\n\t\t\t}\n\t\t}\n\t}\n\n");
 
         // The six fantasy traits and the mixed-line flag are the whole roster; a character with
-        // none of them (a traited-but-unmixed human, a minority-race member, or a pre-pulse engine
-        // character) has no entry fire and keeps its inherited appearance — phenotype_human
+        // none of them (a traited-but-unmixed human, or a pre-pulse engine character) has no entry
+        // fire and keeps its inherited appearance — phenotype_human
         // deliberately forces nothing, human looks belong to the ethnicity. Exotic maps to no
         // trait — its shape is rolled per people rather than authored — so it has no entry either.
         sb.Append("}\n");

@@ -574,7 +574,9 @@ public static class MapDataWriter
             return full;
         }
 
-        var packing = HeightmapPacker.Pack(full, cfg.Width, cfg.Height, cfg.HeightmapSagBudget);
+        int tileStep = HeightmapPacker.TileStepFor(cfg);
+        var packing = HeightmapPacker.Pack(full, cfg.Width, cfg.Height, cfg.HeightmapSagBudget,
+                                           tileStep, cfg.BalanceNeighbourLods);
 
 
         PngWriter.WriteGray16(Path.Combine(dir, "packed_heightmap.png"),
@@ -594,7 +596,7 @@ public static class MapDataWriter
               heightmap_file="map_data/packed_heightmap.png"
               indirection_file="map_data/indirection_heightmap.png"
               original_heightmap_size={ {{cfg.Width}} {{cfg.Height}} }
-              tile_size={{HeightmapPacker.TileSize(0)}}
+              tile_size={{HeightmapPacker.TileSize(0, tileStep)}}
               should_wrap_x=no
               level_offsets={ {{levelOffsets}} }
               max_compress_level={{HeightmapPacker.Levels - 1}}

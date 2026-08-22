@@ -69,6 +69,45 @@ gen_has_conflicting_phenotype_trigger = {
 	}
 }
 
+# Does this character's own GENOME name a fantasy race?
+#
+# `gen_race_skin` is the mod's own morph gene (BaseFilesToCopy/Core/common/genes/gen_race_skin.txt)
+# and it is the one gene in the whole system with a uniquely named template per race. Every other
+# race-defining gene is shared — `normal_height` is normal_height whether it is sampled at a gnome's
+# 0.06 or a giant's 0.98, and `has_gene` tests the TEMPLATE, not the value, so those genes cannot
+# tell races apart. This one can, and the template names are FIXED strings shipped in Core on every
+# map, not generated keys, so naming them here does not break the BaseFilesToCopy rule.
+#
+# That makes this the per-character race probe the culture pulse never had. The pulse asks what a
+# character's CULTURE is, which is right for a courtier invented out of nothing and wrong for a
+# minority-race member: they roll their race's ethnicity out of a human culture's weighted list, so
+# the culture says human while the genome says gnome. This trigger reads the genome.
+gen_has_fantasy_race_gene_trigger = {
+	OR = {
+		has_gene = { category = gen_race_skin template = gen_skin_high_elf }
+		has_gene = { category = gen_race_skin template = gen_skin_wood_elf }
+		has_gene = { category = gen_race_skin template = gen_skin_dwarf }
+		has_gene = { category = gen_race_skin template = gen_skin_orc }
+		has_gene = { category = gen_race_skin template = gen_skin_gnome }
+		has_gene = { category = gen_race_skin template = gen_skin_giantkin }
+		has_gene = { category = gen_race_skin template = gen_skin_deepkin }
+	}
+}
+
+# A character whose trait says human and whose genome says otherwise — the minority-race case, and
+# the ONLY case this fires on, because everywhere else the two agree by construction.
+#
+# The `gen_phenotype_human` flag is the exclusion that makes this safe. It means "human of a mixed
+# line": gen_race_skin is inheritable, so the human child of a drow carries the violet shift in its
+# DNA for generations, and that character is a tinted human by design, not a drow. Reading the
+# genome without this guard would convert every half-breed descendant back into the fantasy race
+# the birth roll deliberately dropped.
+gen_phenotype_contradicts_genes_trigger = {
+	has_trait = phenotype_human
+	NOT = { has_character_flag = gen_phenotype_human }
+	gen_has_fantasy_race_gene_trigger = yes
+}
+
 # Checks if root/this and scope:target have different racial phenotypes
 # Usage:
 #   root = { gen_is_different_race_than = { TARGET = scope:other_char } }

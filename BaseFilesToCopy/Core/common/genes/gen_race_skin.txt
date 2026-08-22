@@ -175,4 +175,5 @@ morph_genes = {
 			boy = male
 			girl = male
 		}
+	}
 }

@@ -935,6 +935,7 @@ public static class PreviewRenderer
     // Impassable diagnostics palette. Shared with the legend in MapModes so the key matches the paint.
     public static readonly (byte R, byte G, byte B)
         ImpassableFill = (204, 44, 44),      // ranked in on relief
+        MaskFill = (44, 120, 220),           // painted in the user's impassable mask
         TrappedFill = (196, 64, 200),        // filled by the connectivity pass
         QualifiesFill = (232, 200, 64),      // over the floor, cut by the target share
         SteepTint = (236, 140, 36),          // pixel at or above the steep line
@@ -998,6 +999,7 @@ public static class PreviewRenderer
                 var colour = seed.ImpassableCause switch
                 {
                     ImpassableCause.Score => Mix(ground, ImpassableFill, 0.6),
+                    ImpassableCause.Mask => Mix(ground, MaskFill, 0.6),
                     ImpassableCause.Trapped => Mix(ground, TrappedFill, 0.6),
                     _ when seed.IsImpassable => Mix(ground, ImpassableFill, 0.6),
                     _ when diag is not null && diag.Qualifies(seed.ImpassableScore)
@@ -1028,6 +1030,17 @@ public static class PreviewRenderer
         var seed = map.Seeds[map.Label[cell]];
         if (!seed.IsLand) return null;
 
+        // The mask pass computes no score, so these maps answer by cause alone and never reach the
+        // "no pass ran" line below — a pass did run, it just was not the scored one.
+        if (map.ImpassableMaskUsed)
+            return seed.ImpassableCause switch
+            {
+                ImpassableCause.Mask => "impassable — painted in the mask",
+                ImpassableCause.Trapped => "impassable — trapped (landlocked behind the painted wall)",
+                _ when seed.IsImpassable => "impassable",
+                _ => "passable — not painted in the mask",
+            };
+
         var diag = map.Impassability;
         if (diag is null) return "no impassable pass ran";
         if (float.IsNaN(seed.ImpassableScore))
@@ -1036,6 +1049,7 @@ public static class PreviewRenderer
         string verdict = seed.ImpassableCause switch
         {
             ImpassableCause.Score => "impassable",
+            ImpassableCause.Mask => "impassable — painted in the mask",
             ImpassableCause.Trapped => "impassable — trapped (landlocked behind impassables)",
             _ when seed.IsImpassable => "impassable",
             _ when diag.Qualifies(seed.ImpassableScore) => "clears the floor, cut by target share",

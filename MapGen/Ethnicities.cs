@@ -522,10 +522,24 @@ public static class Ethnicities
         // the mountains, not in a randomly chosen fishing village. The ethnicity is real and
         // emitted like any other; only the culture's ethnicities list carries the smallness.
         //
-        // Minority members look their race but hold no phenotype trait: HistoryWriter stamps
-        // traits per culture and the culture is human, so the script layer treats them as humans
-        // and the portrait-modifier forcing never touches them. Their look is genes alone, which
-        // is exactly what lets them exist inside a human culture without any script conflict.
+        // Minority members get their race's phenotype trait at RUNTIME, not from HistoryWriter.
+        // HistoryWriter stamps traits per culture and the host culture is human, so at emit time
+        // every minority member is written as phenotype_human — and the generator cannot do better,
+        // because it does not know who the gnomes are. History characters carry no `dna` (only the
+        // bookmark cast does), so the engine rolls each one's ethnicity out of this weighted list
+        // when the save is created, long after these files are written.
+        //
+        // The correction lives in BaseFilesToCopy/Fantasy: gen_race_skin has a uniquely named
+        // template per race, so gen_reconcile_phenotype_with_genes_effect reads the genome at game
+        // start and swaps phenotype_human for the race the body actually names.
+        //
+        // Their LOOK never needed the trait — ApplyMorphGenes bakes RaceMorphs.Of(archetype) into
+        // the ethnicity, so a minority gnome is short and splay-eared from its genes alone. What
+        // the trait carries is everything else: the chip in the character view, the same/opposite
+        // opinion web, InteractionWriter's marriage reluctance, and — the one that compounds —
+        // gen_resolve_child_phenotype_effect, which reads TRAITS at birth. An untraited minority
+        // was invisible to it, so a gnome's children were resolved as two plain humans and the line
+        // dissolved into whatever the inherited genes happened to drift to within a generation.
         var minorityPlaced = new List<(RaceArchetype Race, Culture Host)>();
         var hostsUsed = new HashSet<Culture>();
         foreach (var minorityRace in minorityQueue.Distinct().ToList())

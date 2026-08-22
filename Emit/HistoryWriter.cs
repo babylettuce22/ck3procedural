@@ -673,6 +673,14 @@ public static class HistoryWriter
     /// like any other race. On a realistic map the traits do not exist at all (the Fantasy file
     /// set is not shipped — see <see cref="StaticFileWriter.Fantasy"/>), so human cultures must
     /// map to null there or every history character would reference an undefined trait.
+    ///
+    /// **Per culture is as fine-grained as this can get, and that is not always right.** A culture
+    /// hosting a minority (see <c>MinorityPlacements</c>) is human here while ~13% of the people
+    /// written under it will roll the minority's ethnicity — and which ones is not knowable at emit
+    /// time, because history characters carry no <c>dna</c> and the engine rolls their ethnicity out
+    /// of the culture's weighted list when the save is created. Those characters are written
+    /// phenotype_human and corrected at game start from their own genome by
+    /// <c>gen_reconcile_phenotype_with_genes_effect</c> in BaseFilesToCopy/Fantasy.
     /// </summary>
     private static string? GetPhenotypeTrait(Culture culture, EthnicityMap ethnicityMap, MapConfig cfg)
     {

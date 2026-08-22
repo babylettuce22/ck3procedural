@@ -127,8 +127,10 @@ public static class TileFit
     /// still be refused.
     /// </summary>
     public static (int Width, int Height) Covered(int width, int height)
-        => (width / HeightmapPacker.TileStep * HeightmapPacker.TileStep,
-            height / HeightmapPacker.TileStep * HeightmapPacker.TileStep);
+    {
+        int step = HeightmapPacker.TileStepFor(width);
+        return (width / step * step, height / step * step);
+    }
 
     /// <summary>The size of a heightmap on disk, read from the PNG header alone.</summary>
     public static (int Width, int Height) Measure(string path)
@@ -166,6 +168,22 @@ public static class TileFit
     /// free to overshoot could lift a sample across the water plane and mint a pixel of land in
     /// open ocean, or punch a hole through a coastline.
     ///
+    /// When the fit *shrinks* an axis, the source is low-passed along that axis first. Catmull-Rom
+    /// is an interpolator: at a 2:1 fit it reads four source texels per output texel and lets
+    /// texel-scale detail — ridge noise, erosion stipple, single-pixel channels — alias straight
+    /// into the output as new, unrelated texel-scale detail. That is exactly the curvature the
+    /// engine's terrain LOD cannot follow (it draws one vertex per texel at best and averages
+    /// neighbours at distance), so an aliased fit is a noisier map than either the source or a
+    /// clean downsample. The prefilter is a separable Gaussian with
+    /// sigma = 0.5 * sqrt(ratio^2 - 1) per axis — zero at ratio 1, 0.87 texels at 2:1, 1.94 at 4:1 —
+    /// the standard antialiasing width for a resampling ratio. Upscaling axes are left alone:
+    /// there is nothing to alias, and blurring would only soften the source.
+    ///
+    /// A blur moves the land/water threshold crossing, but no further than the area it averages
+    /// over, and the coastline the downsampled map should have is the one of the averaged field
+    /// rather than of whichever texel the interpolator happened to land on. The normaliser and
+    /// <see cref="Emit.MapDataWriter"/>'s coastline passes run on the result as they always did.
+    ///
     /// Costs two float copies of the map — 680 MB a side at vanilla's 18432x9216 — so it runs
     /// only when a fit was actually asked for.
     /// </summary>
@@ -174,7 +192,79 @@ public static class TileFit
         var field = new HeightField(width, height);
         for (int i = 0; i < raw.Length; i++) field.Data[i] = raw[i] / 65535f;
 
+        double sigmaX = PrefilterSigma((double)width / newWidth);
+        double sigmaY = PrefilterSigma((double)height / newHeight);
+        if (sigmaX > 0 || sigmaY > 0)
+            GaussianBlur(field.Data, width, height, sigmaX, sigmaY);
+
         return field.ResampleCubic(newWidth, newHeight).ToUInt16();
+    }
+
+    /// <summary>Antialiasing sigma, in source texels, for one axis shrinking by <paramref name="ratio"/>.</summary>
+    public static double PrefilterSigma(double ratio)
+        => ratio <= 1.0 ? 0.0 : 0.5 * Math.Sqrt(ratio * ratio - 1.0);
+
+    /// <summary>
+    /// Separable Gaussian, in place, edges clamped. A sigma of 0 skips that axis. The kernel is
+    /// cut at three sigma and renormalised, so it always sums to one and the field's mean is kept.
+    /// </summary>
+    internal static void GaussianBlur(float[] data, int width, int height, double sigmaX, double sigmaY)
+    {
+        if (sigmaX > 0)
+        {
+            var kernel = Kernel(sigmaX);
+            int r = kernel.Length / 2;
+            var tmp = new float[data.Length];
+
+            Parallel.For(0, height, y =>
+            {
+                long row = (long)y * width;
+                for (int x = 0; x < width; x++)
+                {
+                    double sum = 0;
+                    for (int k = -r; k <= r; k++)
+                        sum += kernel[k + r] * data[row + Math.Clamp(x + k, 0, width - 1)];
+                    tmp[row + x] = (float)sum;
+                }
+            });
+
+            Array.Copy(tmp, data, data.Length);
+        }
+
+        if (sigmaY > 0)
+        {
+            var kernel = Kernel(sigmaY);
+            int r = kernel.Length / 2;
+            var tmp = new float[data.Length];
+
+            Parallel.For(0, height, y =>
+            {
+                long row = (long)y * width;
+                for (int x = 0; x < width; x++)
+                {
+                    double sum = 0;
+                    for (int k = -r; k <= r; k++)
+                        sum += kernel[k + r] * data[(long)Math.Clamp(y + k, 0, height - 1) * width + x];
+                    tmp[row + x] = (float)sum;
+                }
+            });
+
+            Array.Copy(tmp, data, data.Length);
+        }
+    }
+
+    private static double[] Kernel(double sigma)
+    {
+        int r = Math.Max(1, (int)Math.Ceiling(3.0 * sigma));
+        var k = new double[2 * r + 1];
+        double sum = 0;
+        for (int i = -r; i <= r; i++)
+        {
+            k[i + r] = Math.Exp(-(i * i) / (2.0 * sigma * sigma));
+            sum += k[i + r];
+        }
+        for (int i = 0; i < k.Length; i++) k[i] /= sum;
+        return k;
     }
 }
 
@@ -334,9 +424,15 @@ public static class HeightmapSource
             (width, height) = target;
             histogram = Histogram(raw);
 
+            double sx = TileFit.PrefilterSigma((double)image.Width / width);
+            double sy = TileFit.PrefilterSigma((double)image.Height / height);
+            string prefilter = sx > 0 || sy > 0
+                ? $", antialiased with sigma {sx:F2}x{sy:F2} source texels before the cubic"
+                : "";
+
             Console.WriteLine($"  fitted {image.Width}x{image.Height} -> {width}x{height} " +
                               "onto a size CK3 renders correctly " +
-                              $"(aspect {before:F3}:1 -> {after:F3}:1)");
+                              $"(aspect {before:F3}:1 -> {after:F3}:1){prefilter}");
         }
 
         if (width % 2 != 0 || height % 2 != 0)
