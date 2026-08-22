@@ -95,7 +95,11 @@ public static class Development
         // the score, so counties on identical terrain do not all land on the same number.
         scored.Sort((a, b) => a.Score.CompareTo(b.Score));
 
-        double yearsPassed = cfg.StartYear - 867;
+        // Against the era year, not the calendar year: 867 here is vanilla's own baseline, so the
+        // question being asked is "how far past vanilla's earliest bookmark is this world", which a
+        // world with a calendar of its own answers through MapConfig.EraAnchorYear rather than
+        // through what its people call the year.
+        double yearsPassed = cfg.EraYear - 867;
         double yearDevBonus = yearsPassed / 50.0; // Subtracts 1 dev level per 50 years prior to 867
 
         var result = new Dictionary<Title, int>(scored.Count);

@@ -12,7 +12,7 @@ namespace Ck3MapGen.Emit;
 /// A missing key is a hard script error, not a warning, because base-game and DLC content
 /// hardcodes region and title keys everywhere.
 /// </summary>
-public static class CompatibilityWriter
+public static partial class CompatibilityWriter
 {
     private static readonly System.Globalization.CultureInfo Invariant =
         System.Globalization.CultureInfo.InvariantCulture;
@@ -42,6 +42,83 @@ public static class CompatibilityWriter
         1036, 1130, 1233, 1345, 1470, 1609, 1768, 1949, 2159, 2406, 2699, 3050, 3477, 4000, 4649,
         5464, 6500
     ];
+
+    /// <summary>
+    /// Vanilla's ZOOM_STEPS_MIN_TILT and ZOOM_STEPS_MAX_TILT — how far the player is allowed to
+    /// tilt the camera at each step, in degrees from horizontal, so 90 is straight down and 0 is
+    /// looking at the horizon. Both are parallel to <see cref="ZoomSteps"/> and must stay exactly
+    /// as long: the engine indexes them by zoom step, and a short array is not a narrower range,
+    /// it is whatever is past the end.
+    ///
+    /// Copied rather than computed because the curves are hand-authored, not a formula — the min
+    /// climbs 40 to 55 and then holds, and both drop back at step 34, which is the map-table view
+    /// rather than a further-out map view.
+    ///
+    /// Unlike the panning bounds these are map-size independent. A tilt limit is an angle, and the
+    /// angle that looks right at a given camera height does not change because the world under it
+    /// got smaller.
+    /// </summary>
+    private static readonly int[] VanillaMinTilt =
+    [
+        40, 41, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 52, 53, 54, 54, 54, 55, 55, 55, 55, 55, 55,
+        55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 55, 50
+    ];
+
+    private static readonly int[] VanillaMaxTilt =
+    [
+        70, 73, 76, 78, 80, 82, 84, 85, 86, 87, 88, 88, 89, 89, 89, 89, 89, 89, 89, 89, 89, 89, 89,
+        89, 89, 89, 89, 89, 89, 89, 89, 89, 89, 89, 89
+    ];
+
+    /// <summary>
+    /// How far past vanilla each tilt bound is pushed, in degrees, to give the camera more freedom
+    /// at both ends than the base game allows.
+    ///
+    /// Only the bounds move. ZOOM_STEPS_TILT — the angle the camera rests at, and returns to — is
+    /// deliberately not written, which leaves vanilla's. That is what makes this change purely
+    /// permissive: a widened range still contains vanilla's resting angle at every step, so nothing
+    /// looks different until the player actually tilts, and the engine never has to clamp a resting
+    /// angle that fell outside its own bounds.
+    /// </summary>
+    private const int TiltWidening = 15;
+
+    /// <summary>
+    /// Floor on the oblique end. Below roughly this the camera is flat enough to look past the map
+    /// entirely, and on a generated map — which is smaller than vanilla's — that means the far edge
+    /// and the surround plane in frame.
+    ///
+    /// Slack at the current widening: vanilla's tightest min is 40, so 25 is the real floor. It is
+    /// here so that raising <see cref="TiltWidening"/> runs into a documented limit rather than
+    /// walking the near steps down to zero.
+    /// </summary>
+    private const int MinTiltFloor = 20;
+
+    /// <summary>
+    /// Ceiling on the top-down end, and it is 89 rather than 90 on purpose. At exactly 90 the view
+    /// direction is parallel to the world up axis and the camera basis is degenerate — vanilla caps
+    /// every step at 89 for the same reason. This bound binds hard: vanilla is already at 89 from
+    /// step 12 out, so widening the top end only buys anything at close zoom.
+    /// </summary>
+    private const int MaxTiltCeiling = 89;
+
+    /// <summary>
+    /// Extra zoom steps of 3D terrain before the paper map takes over — the camera gets this much
+    /// further from the ground while still looking at real terrain than a straight scale of
+    /// vanilla's handoff would allow.
+    ///
+    /// Applied inside <see cref="ScaleZoomStep"/> rather than to FLAT_MAP_ZOOM_STEP alone, because
+    /// the handoff is a pair, not a value. The map-table layer fades in <see cref="MapTableWriter"/>
+    /// come through the same function, so biasing there moves the tabletop's appearance and the
+    /// map going flat by the same number of steps and keeps them on the same frame. Bias only
+    /// FLAT_MAP_ZOOM_STEP and you reopen exactly the bug that comment warns about, pointing the
+    /// other way: a window of zoom steps where the table is drawn under 3D terrain.
+    ///
+    /// The ladder is roughly geometric at about 15% a step, so two steps is ~30% more camera
+    /// height. The cost is that the terrain renderer keeps working further out, where it has the
+    /// least detail to show — this is the knob to walk back if distant terrain looks mushy or the
+    /// far zoom gets expensive.
+    /// </summary>
+    private const int FlatMapHandoffBias = 2;
 
     /// <summary>Vanilla's START_ZOOM_STEP, 33, is this height on its 9216-wide map.</summary>
     private const double VanillaStartZoomHeight = 5464;
@@ -179,7 +256,7 @@ public static class CompatibilityWriter
               	WORLD_EXTENTS_Z = {{cfg.ProvinceHeight - 1}}
               	WATERLEVEL = {{waterLevel}}
               }
-              {{GovernmentTypes(gameDir, cfg)}}
+              {{EndDate(cfg)}}{{GovernmentTypes(gameDir, cfg)}}
               """);
 
         Console.WriteLine($"  defines: WORLD_EXTENTS {cfg.ProvinceWidth - 1} x {extentY} x {cfg.ProvinceHeight - 1}, " +
@@ -233,6 +310,11 @@ public static class CompatibilityWriter
         string innerRect = string.Join(" ", VanillaSurroundInnerRect.Select((v, i) =>
             (v * (i % 2 == 0 ? widthRatio : heightRatio)).ToString("F1", Invariant)));
 
+        // Array defines are replaced whole, not merged element by element, so both rows go out at
+        // full length even though the max row only changes at its near end.
+        string minTilt = string.Join(" ", VanillaMinTilt.Select(v => Math.Max(v - TiltWidening, MinTiltFloor)));
+        string maxTilt = string.Join(" ", VanillaMaxTilt.Select(v => Math.Min(v + TiltWidening, MaxTiltCeiling)));
+
         ParadoxText.WriteBom(Path.Combine(dir, "zz_generated_graphics.txt"),
             $$"""
               # Map geometry and camera extents must match map_data/provinces.png, not vanilla's map.
@@ -246,6 +328,12 @@ public static class CompatibilityWriter
               	PANNING_HEIGHT = {{panHeight.ToString(Invariant)}}
               	START_LOOK_AT = { {{lookX.ToString("F1", Invariant)}} 0 {{lookZ.ToString("F1", Invariant)}} }
               	START_ZOOM_STEP = {{startStep}}
+
+              	# Tilt bounds widened {{TiltWidening}} degrees past vanilla at both ends. Degrees from
+              	# horizontal: 90 is straight down, 0 is the horizon. ZOOM_STEPS_TILT is left at
+              	# vanilla's, so the camera still rests where the base game puts it.
+              	ZOOM_STEPS_MIN_TILT = { {{minTilt}} }
+              	ZOOM_STEPS_MAX_TILT = { {{maxTilt}} }
               }
 
               """);
@@ -255,6 +343,13 @@ public static class CompatibilityWriter
                           $"flat map at step {flatStep} ({ZoomSteps[flatStep]}) " +
                           $"(vanilla 9090 x 4696, 5000,2300, 33, 21)");
         Console.WriteLine($"  surround: inner rect {innerRect} (vanilla 500.0 1000.0 500.0 3700.0)");
+        Console.WriteLine($"  camera: tilt widened {TiltWidening} deg, "
+                          + $"closest step {Math.Max(VanillaMinTilt[0] - TiltWidening, MinTiltFloor)}"
+                          + $"-{Math.Min(VanillaMaxTilt[0] + TiltWidening, MaxTiltCeiling)}, "
+                          + $"furthest {Math.Max(VanillaMinTilt[^1] - TiltWidening, MinTiltFloor)}"
+                          + $"-{Math.Min(VanillaMaxTilt[^1] + TiltWidening, MaxTiltCeiling)} "
+                          + $"(vanilla {VanillaMinTilt[0]}-{VanillaMaxTilt[0]}, "
+                          + $"{VanillaMinTilt[^1]}-{VanillaMaxTilt[^1]})");
     }
 
     /// <summary>
@@ -264,9 +359,16 @@ public static class CompatibilityWriter
     /// Indices outside the ladder come back untouched. That is not defensiveness: vanilla's map
     /// table layers use <c>fade_out=80</c> against a 35-step ladder, which is how the format spells
     /// "never", and scaling it would land it on a real step and start fading the table out.
+    ///
+    /// <see cref="FlatMapHandoffBias"/> is applied here, after the scale and inside the in-range
+    /// branch, which is deliberate on both counts: every step this function returns has to move
+    /// together, and the "never" sentinel has to keep meaning never.
     /// </summary>
     internal static int ScaleZoomStep(int step, Config.MapConfig cfg)
-        => step < 0 || step >= ZoomSteps.Length ? step : NearestZoomStep(ZoomSteps[step] * ViewScale(cfg));
+        => step < 0 || step >= ZoomSteps.Length
+            ? step
+            : Math.Clamp(NearestZoomStep(ZoomSteps[step] * ViewScale(cfg)) + FlatMapHandoffBias,
+                         0, ZoomSteps.Length - 1);
 
     /// <summary>
     /// The ratio a camera *height* scales by: the larger of the two axis ratios.
@@ -537,6 +639,105 @@ public static class CompatibilityWriter
 
         Console.WriteLine($"  holy sites: {sites} re-declared, {rebound} rebound onto {targetCounties.Count} holy site counties");
     }
+
+    /// <summary>
+    /// <summary>
+    /// Pushes the end of the world out when the world's calendar would otherwise run into it.
+    ///
+    /// Vanilla's <c>END_DATE</c> is a hard 1453.1.1, and a world that calls the present year 1448
+    /// would get five years of game. The years are the world's own and are not going to be argued
+    /// with, so the wall moves instead — AGOT does the same thing for the same reason, taking it to
+    /// 9999.1.1 to fit a calendar that counts from Aegon's Conquest.
+    ///
+    /// Emitted only when it is actually needed. A default run starts in 900 and has five centuries
+    /// in hand; overriding the define there would be a silent change to how long every ordinary
+    /// generated world lasts, which is not this feature's business.
+    /// </summary>
+    private static string EndDate(Config.MapConfig cfg)
+    {
+        const int vanillaEnd = 1453;
+
+        // Enough room that the extension is worth making at all — a world that ends in a century is
+        // short, but it is recognisably a game, and the define is vanilla's own balance decision.
+        const int wanted = 400;
+
+        int end = cfg.StartYear + wanted;
+        if (end <= vanillaEnd) return "";
+
+        Console.WriteLine($"  defines: END_DATE {end}.1.1 (vanilla 1453.1.1, world starts {cfg.StartYear})");
+
+        return $$"""
+                 # A world whose calendar starts near or past vanilla's end date needs the wall moved.
+                 NGame = {
+                 	END_DATE = "{{end}}.1.1"
+                 }
+
+                 """;
+    }
+
+    /// <summary>
+    /// Moves the culture eras onto the world's own calendar.
+    ///
+    /// <c>common/culture/eras</c> is the only place in the game where advancement is gated on a
+    /// year: an innovation belongs to an era by key and carries no date of its own, so these four
+    /// <c>year</c> thresholds decide, alone, which era the game thinks a culture is in. On a world
+    /// whose calendar has been slid off vanilla's they have to slide with it, or
+    /// <see cref="CultureWriter"/> seeds a people with early-medieval innovations and the game —
+    /// still reading vanilla's <c>year = 900</c> against a bookmark in 433 — calls them tribal and
+    /// refuses the buildings those innovations unlock.
+    ///
+    /// AGOT does exactly this and is the reason to trust it: its bookmarks sit at 8082–8282 and it
+    /// ships this file with 900/1050/1200 moved to 4300/7898/8260, the vanilla values left beside
+    /// them as comments.
+    ///
+    /// Writes nothing at all when the offset is zero, which is every run that has not set
+    /// <see cref="MapConfig.EraAnchorYear"/> — vanilla's own file is then already correct, and
+    /// shadowing it with an identical copy would only be one more file to keep in step with a patch.
+    /// </summary>
+    public static void WriteCultureEras(string modDir, string gameDir, Config.MapConfig cfg)
+    {
+        if (cfg.EraOffset == 0) return;
+
+        string source = Path.Combine(gameDir, "common", "culture", "eras");
+        if (!Directory.Exists(source)) return;
+
+        string destination = Path.Combine(modDir, "common", "culture", "eras");
+        Directory.CreateDirectory(destination);
+
+        int moved = 0;
+
+        foreach (string path in Directory.GetFiles(source, "*.txt"))
+        {
+            var lines = File.ReadAllText(path).Split('\n');
+
+            for (int i = 0; i < lines.Length; i++)
+            {
+                // Depth one only. An era's `year` is its own top-level field; matching the bare
+                // word anywhere would also catch any nested trigger that happens to mention one.
+                var match = YearField().Match(lines[i]);
+                if (!match.Success) continue;
+
+                int vanilla = int.Parse(match.Groups[2].Value);
+
+                // Floored at zero rather than at one: `year = 0` is what the tribal era ships with
+                // and is how an era says "from the beginning", so it is a value to preserve rather
+                // than a date to make legal.
+                int shifted = Math.Max(0, vanilla + cfg.EraOffset);
+
+                lines[i] = $"{match.Groups[1].Value}year = {shifted}\t# was {vanilla}";
+                moved++;
+            }
+
+            ParadoxText.WriteBom(Path.Combine(destination, Path.GetFileName(path)),
+                string.Join('\n', lines));
+        }
+
+        Console.WriteLine($"  culture eras: {moved} thresholds moved by {cfg.EraOffset:+#;-#;0} years " +
+                          $"(world year {cfg.StartYear}, as advanced as {cfg.EraYear})");
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^([ \t]+)year\s*=\s*(-?\d+)\s*$")]
+    private static partial System.Text.RegularExpressions.Regex YearField();
 
     /// <summary>
     /// Re-declares every vanilla geographical region against generated titles.

@@ -22,6 +22,9 @@ public static class GameLocator
     /// <summary>The install folder's name under a Steam library, and under Documents/Paradox.</summary>
     private const string GameName = "Crusader Kings III";
 
+    /// <summary>CK3's Steam app id, which names its workshop folder.</summary>
+    private const string AppId = "1158310";
+
     /// <summary>What the search falls back to when it finds nothing. The old hardcoded path.</summary>
     public static string DefaultGameDir =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
@@ -29,6 +32,9 @@ public static class GameLocator
 
     private static string? _gameDir;
     private static bool _searched;
+
+    private static string? _workshopDir;
+    private static bool _searchedWorkshop;
 
     /// <summary>
     /// The game's <c>game</c> directory, or null if nothing plausible turned up.
@@ -46,11 +52,38 @@ public static class GameLocator
         return _gameDir;
     }
 
-    /// <summary>Drops the cached answer so the next call searches again.</summary>
+    /// <summary>
+    /// Where Steam downloads CK3 workshop subscriptions, or null when there is no such folder —
+    /// a GOG or Epic install, or a Steam one with nothing subscribed.
+    ///
+    /// Only ever a cross-check. The launcher registers every subscription as a <c>.mod</c> stub in
+    /// the mod folder, so <see cref="ModLibrary.InFolder"/> already sees the workshop without this;
+    /// what this finds is the gap between the two, which is a subscription downloaded since the
+    /// launcher was last opened.
+    ///
+    /// The workshop lives beside <c>common</c> in whichever library holds the game, so the search is
+    /// the game search with a different leaf — and independent of it, because a library can hold the
+    /// workshop content for a game that has since been uninstalled.
+    /// </summary>
+    public static string? FindWorkshopRoot()
+    {
+        if (_searchedWorkshop) return _workshopDir;
+
+        _searchedWorkshop = true;
+        _workshopDir = SteamLibraries()
+            .Select(library => Path.Combine(library, "steamapps", "workshop", "content", AppId))
+            .FirstOrDefault(Directory.Exists);
+
+        return _workshopDir;
+    }
+
+    /// <summary>Drops the cached answers so the next call searches again.</summary>
     public static void Forget()
     {
         _searched = false;
         _gameDir = null;
+        _searchedWorkshop = false;
+        _workshopDir = null;
     }
 
     /// <summary>

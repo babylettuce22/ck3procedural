@@ -9,9 +9,20 @@ using Ck3MapGen.Core;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
 
+/// <summary>
+/// The rendered parchment map, handed back so a later pass can cut a picture out of it.
+///
+/// Returned rather than re-read from disk. The file is uncompressed BGRA at province resolution —
+/// eight megabytes on a 2048x1024 map and four times that on a full-size one — and the only thing
+/// that wants it again is <see cref="StruggleArt"/>, which runs a few seconds later in the same
+/// process. Reading it back would cost a large allocation and a DDS parse to recover a buffer that
+/// was still in memory when it was written.
+/// </summary>
+public sealed record Flatmap(int Width, int Height, byte[] Bgra);
+
 public static class FlatmapWriter
 {
-    public static void WriteAll(
+    public static Flatmap WriteAll(
         string modDir, MapConfig cfg, ProvinceMap provinces,
         int[] order, int landCount, float[] elevation,
         TerrainClass[]? provinceTerrain = null)
@@ -137,6 +148,8 @@ public static class FlatmapWriter
         DdsWriter.WriteBgra(Path.Combine(flatMapDir, "flatmap_tgp.dds"), w, h, pixels);
 
         Console.WriteLine($"  flatmap: rendered illuminated flatmaps ({w}x{h})");
+
+        return new Flatmap(w, h, pixels);
     }
 
     private static float CalculateSoftHillshade(float[] elevation, int x, int y, int w, int h, float sunAz, float sunEl)

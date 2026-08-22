@@ -260,15 +260,18 @@ public static class CultureWriter
             File.Delete(file);
         }
 
-        int startYear = ParseStartYear(cfg.StartDate);
+        // The era year, not the calendar year. Everything in this method is asking how advanced the
+        // world is — which innovations exist yet, how far through its era it is — and that question
+        // is answered on vanilla's timeline whatever the world calls the year.
+        int startYear = cfg.EraYear;
         var (frequencies, _) = vocab.GetFrequenciesAtYear(startYear);
 
-        var eraMilestones = new (string EraKey, int StartYear, int EndYear, string DateStr)[]
+        var eraMilestones = new (string EraKey, int StartYear, int EndYear)[]
         {
-        ("culture_era_tribal", 0, 900, "1.1.1"),
-        ("culture_era_early_medieval", 900, 1050, "900.1.1"),
-        ("culture_era_high_medieval", 1050, 1200, "1050.1.1"),
-        ("culture_era_late_medieval", 1200, 1453, "1200.1.1")
+        ("culture_era_tribal", 0, 900),
+        ("culture_era_early_medieval", 900, 1050),
+        ("culture_era_high_medieval", 1050, 1200),
+        ("culture_era_late_medieval", 1200, 1453)
         };
 
         int currentEraIndex = startYear switch
@@ -355,12 +358,16 @@ public static class CultureWriter
 
             for (int i = 0; i <= currentEraIndex; i++)
             {
-                var (eraKey, eraStart, _, dateStr) = eraMilestones[i];
+                var (eraKey, eraStart, _) = eraMilestones[i];
                 var eraInns = chosenByEra[eraKey];
 
+                // The era boundaries above are vanilla's; the block dates have to be the world's,
+                // because this is history and history is read on the game clock. On a run that has
+                // not moved the two apart the offset is zero and these come out as the literal
+                // 1.1.1 / 900.1.1 / 1050.1.1 / 1200.1.1 they always were.
                 string blockDate = (i == currentEraIndex && startYear >= eraStart)
                     ? cfg.StartDate
-                    : dateStr;
+                    : $"{EraDate(eraStart, cfg)}.1.1";
 
                 sb.Append($"{blockDate} = {{\n");
 
@@ -441,11 +448,17 @@ public static class CultureWriter
             else break;
         }
     }
-    private static int ParseStartYear(string startDate)
-    {
-        var m = Regex.Match(startDate, @"^\s*(\d+)");
-        return m.Success && int.TryParse(m.Groups[1].Value, out int year) ? year : 867;
-    }
+    /// <summary>
+    /// A vanilla era boundary, moved onto the world's own calendar.
+    ///
+    /// Clamped at both ends and for different reasons. Below 1 there is no such thing as a date, and
+    /// a world whose calendar starts near zero would otherwise ask the game to apply history in year
+    /// -400. At the top, a block dated on or after the bookmark is a block the game never applies —
+    /// the innovations in it would silently not exist — so an era that the offset pushes past the
+    /// start date is pulled back to the year before it.
+    /// </summary>
+    private static int EraDate(int vanillaYear, MapConfig cfg)
+        => Math.Clamp(vanillaYear + cfg.EraOffset, 1, Math.Max(1, cfg.StartYear - 1));
 
     /// <summary>
     /// Every generated string the culture layer introduces.

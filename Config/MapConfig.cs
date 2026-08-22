@@ -154,9 +154,53 @@ public sealed class MapConfig : CustomTypeDescriptor
     // 02 World State
     // =========================================================================
 
+    /// <summary>
+    /// The year the world says it is: the bookmark date, and the calendar every generated date is
+    /// written on — births, deaths, wars, chronicle entries.
+    ///
+    /// Deliberately no longer the same question as "how advanced is this world". It used to be
+    /// both, which was fine while the only worlds this tool made were medieval-European-shaped, and
+    /// stops being fine the moment a world arrives with a calendar of its own: an export whose
+    /// present year is 433 wants a bookmark in 433 and does not want its cultures dropped into the
+    /// tribal era to get there. <see cref="EraAnchorYear"/> is the other half of that question.
+    /// </summary>
     [Category("02 World State")]
-    [Description("Bookmark date, determines ratio of feudal to tribal governments based on development and terrain and relative to the 867 vanilla start date")]
+    [Description("The year the game starts — the bookmark date, and the calendar births, deaths, wars and chronicle entries are written on. How advanced the world is, is a separate question: see Era Anchor Year.")]
     public int StartYear { get; set; } = 900;
+
+    /// <summary>
+    /// Which point on CK3's own timeline this world is judged against: how many innovations its
+    /// cultures already hold, the development baseline, and the feudal/tribal/nomad mix.
+    ///
+    /// Zero means "follow <see cref="StartYear"/>", which is what every run did before this existed
+    /// and is why the default costs nothing — with it unset the two years are the same number and
+    /// every heuristic reads exactly what it used to.
+    ///
+    /// Set, it decouples them. A world whose calendar says 433 can still be as developed as vanilla
+    /// in 900, and <see cref="EraOffset"/> is what carries that decision through to the culture eras
+    /// the game itself reads, so the two do not end up disagreeing about which era it is.
+    /// </summary>
+    [Category("02 World State")]
+    [Description("Which year on CK3's own timeline this world is as advanced as: innovations cultures already hold, the development baseline, and the feudal/tribal/nomad mix. 0 follows the start year, which is the old behaviour.")]
+    public int EraAnchorYear { get; set; }
+
+    /// <summary>The year every advancement heuristic reads. See <see cref="EraAnchorYear"/>.</summary>
+    [Browsable(false)]
+    public int EraYear => EraAnchorYear > 0 ? EraAnchorYear : Math.Max(1, StartYear);
+
+    /// <summary>
+    /// How far the world's calendar has been slid off vanilla's, and therefore how far every
+    /// date-keyed thing the *game* reads has to slide with it.
+    ///
+    /// Zero on any run that does not set <see cref="EraAnchorYear"/>. Non-zero, it shifts two
+    /// things that would otherwise contradict each other: the dates of the innovation history
+    /// blocks <see cref="Emit.CultureWriter"/> writes, and the <c>year</c> thresholds in
+    /// <c>common/culture/eras</c> that decide which era the game thinks a culture is in. Move one
+    /// without the other and a world seeded with early-medieval innovations is told by the game
+    /// that it is tribal.
+    /// </summary>
+    [Browsable(false)]
+    public int EraOffset => Math.Max(1, StartYear) - EraYear;
 
     [Browsable(false)]
     public string StartDate => $"{Math.Max(1, StartYear)}.1.1";
@@ -195,6 +239,30 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Category("02 World State")]
     [Description("Target number of active ongoing wars on Day 1.")]
     public int StartingWarsCount { get; set; } = 3;
+
+    /// <summary>
+    /// How many struggles the world may carry at most.
+    ///
+    /// A ceiling rather than a target: a struggle is only generated where the chronicle already
+    /// says one exists, so a world of tidy single-culture kingdoms gets none however high this is
+    /// set. Low on purpose — a struggle claims a whole kingdom and hands out region-wide modifiers,
+    /// and a map where every kingdom is struggling is one where none of them feels remarkable.
+    /// Zero turns the feature off.
+    /// </summary>
+    [Category("02 World State")]
+    [Description("Most struggles the world may carry. Each covers one kingdom whose peoples are already contesting it in the generated chronicle; a world with no such kingdom gets none. 0 disables struggles.")]
+    public int MaxStruggles { get; set; } = 2;
+
+    /// <summary>
+    /// How much accumulated chronicle tension a kingdom needs before it counts as struggling.
+    ///
+    /// Measured in <see cref="MapGen.ChronicleEvent.Tension"/>, which runs 0–3 per event, so this is
+    /// roughly "four bad frontiers' worth". It also sets the bar for starting in the worst phase:
+    /// twice this much and the struggle can open in outright bloodshed.
+    /// </summary>
+    [Category("02 World State")]
+    [Description("How much accumulated tension a kingdom's chronicle needs before it qualifies as a struggle. Lower finds more struggles and weaker ones.")]
+    public int StruggleMinTension { get; set; } = 8;
 
     /// <summary>
     /// Whether the mod ships the wilderness and colonisation system.
@@ -803,12 +871,12 @@ public sealed class MapConfig : CustomTypeDescriptor
 
     [Category("06 Map Objects")]
     [Description("Global multiplier for atmospheric environmental visual effects (dust plumes, forest mist, mountain snow clouds). 1.0 matches vanilla density scaled to this map's resolution.")]
-    public double EnvEffectDensity { get; set; } = 1.0;
+    public double EnvEffectDensity { get; set; } = 0.35;
 
     [AdvancedSetting]
     [Category("06 Map Objects")]
     [Description("Global scale multiplier for environmental VFX billboards. 1.0 is vanilla size, which they are drawn at on every map size.")]
-    public double EnvEffectScale { get; set; } = 1.0;
+    public double EnvEffectScale { get; set; } = 0.9;
 
 
     // =========================================================================

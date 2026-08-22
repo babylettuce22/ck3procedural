@@ -202,7 +202,7 @@ public static class Governments
                 // Temporal & Quality Gate:
                 // Must be in 800+ AD (or hold an ancient wonder) AND have high development (avgDev >= 11) or wonder
                 double avgDev = realmCounties.Average(c => (double)development.GetValueOrDefault(c));
-                if (cfg.StartYear < cfg.AdministrativeMinStartYear && !hasImperialWonder) continue;
+                if (cfg.EraYear < cfg.AdministrativeMinStartYear && !hasImperialWonder) continue;
                 if (avgDev < 11.0 && !hasImperialWonder) continue;
 
                 var capitalCulture = cultures?.For(topLiege);
@@ -252,7 +252,7 @@ public static class Governments
             // anything below "half of every qualifying realm" — the clamp, not the knob, was
             // setting the outcome. It is low enough now that the setting is honest across its
             // whole range.
-            double timeNomadFactor = Math.Clamp((1000 - cfg.StartYear) / 2000.0, -0.25, 0.25);
+            double timeNomadFactor = Math.Clamp((1000 - cfg.EraYear) / 2000.0, -0.25, 0.25);
             double effectiveNomadShare = Math.Clamp(cfg.NomadSteppeShare + timeNomadFactor, 0.0, 0.98);
 
             string realmGovernment;
@@ -288,12 +288,12 @@ public static class Governments
             // provinces by design and nothing assigns Floodplains at all, so at any start before 950
             // this clause — not the avgDev < 7 one below it — is what decides tribal-versus-feudal
             // for nearly every realm the nomad and clan clauses did not already take.
-            else if (cfg.StartYear < 950 && avgDev < 12.0
+            else if (cfg.EraYear < 950 && avgDev < 12.0
                      && capitalDomTerrain is not (TerrainClass.Farmlands or TerrainClass.Floodplains))
             {
                 realmGovernment = GovernmentMap.Tribal;
             }
-            else if (capitalDomTerrain is TerrainClass.Taiga or TerrainClass.Arctic or TerrainClass.Jungle or TerrainClass.Wetlands && cfg.StartYear < 1100)
+            else if (capitalDomTerrain is TerrainClass.Taiga or TerrainClass.Arctic or TerrainClass.Jungle or TerrainClass.Wetlands && cfg.EraYear < 1100)
             {
                 realmGovernment = GovernmentMap.Tribal;
             }

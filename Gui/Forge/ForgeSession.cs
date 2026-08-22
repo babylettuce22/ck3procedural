@@ -144,6 +144,7 @@ public sealed class ForgeSession : IDisposable
             Pipeline.ReplaceAll(
             [
                 new ContinentStage(),
+                new BaseReliefStage(),
                 new RidgeStage(),
                 new HillStage(),
                 new HeightPaintStage(),

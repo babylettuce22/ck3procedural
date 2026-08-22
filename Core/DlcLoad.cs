@@ -14,13 +14,20 @@ namespace Ck3MapGen.Core;
 /// its own database and rewrites this file from them, so opening it after a write can drop what we
 /// wrote.
 ///
-/// What we write is the whole list, not an addition to it. A generated map is a total conversion:
-/// <see cref="Emit.ModWriter"/> declares <c>replace_path</c> over landed_titles, province_terrain,
-/// the history folders and the map object data, and every province id, title key and culture in the
-/// game is one this tool invented. A second mod loaded beside it is either silently voided by those
-/// replace_paths or, worse, still live and addressing vanilla provinces that no longer exist —
-/// which is a load that hangs rather than a load that logs. Stacking is a thing to do deliberately
-/// in the launcher, on a playset, not a thing to inherit from whatever happened to be ticked last.
+/// What we write is the whole list, not an addition to it. The caller says what the list is — the
+/// offer after a write says "just the map", and the Mods dialog says whatever was ticked — but
+/// either way the file ends up holding exactly that and nothing inherited from what happened to be
+/// enabled last.
+///
+/// Order is load order, and later wins on a file both mods ship, so a caller that wants the
+/// generated map to override puts it last. What order cannot fix is a genuine collision: a
+/// generated map is a total conversion — <see cref="Emit.ModWriter"/> declares <c>replace_path</c>
+/// over landed_titles, province_terrain, the history folders and the map object data, and every
+/// province id, title key and culture in the game is one this tool invented. A second mod loaded
+/// beside it is either silently voided by those replace_paths or, worse, still live and addressing
+/// vanilla provinces that no longer exist, which is a load that hangs rather than a load that logs.
+/// Stacking is therefore something to do deliberately, one mod at a time, and not something this
+/// file has an opinion about beyond writing down the answer.
 ///
 /// Everything that is not the mod list survives untouched: disabled DLCs, and any key a later patch
 /// adds, are read and written straight back.
@@ -41,8 +48,17 @@ public static class DlcLoad
     /// referred to relatively, so there is nothing honest to add and we add nothing.
     /// </summary>
     public static string? FileFor(string modDir)
+        => FileForRoot(Path.GetDirectoryName(modDir.TrimEnd(Path.DirectorySeparatorChar)));
+
+    /// <summary>
+    /// The <c>dlc_load.json</c> that governs the mod folder <paramref name="modRoot"/>, or null when
+    /// that folder is not one the game reads.
+    ///
+    /// The same question as <see cref="FileFor"/> asked without a mod in hand, which is what the
+    /// mod list needs: it is about the folder as a whole, before anything in it has been picked.
+    /// </summary>
+    public static string? FileForRoot(string? modRoot)
     {
-        string? modRoot = Path.GetDirectoryName(modDir.TrimEnd(Path.DirectorySeparatorChar));
         if (modRoot is null) return null;
 
         if (!string.Equals(Path.GetFileName(modRoot), "mod", StringComparison.OrdinalIgnoreCase))
@@ -83,35 +99,39 @@ public static class DlcLoad
     }
 
     /// <summary>
-    /// Whether this mod is already the only one enabled — the state <see cref="EnableOnly"/>
-    /// produces, and the only state worth leaving alone. Listed beside three other mods is not
-    /// "already enabled", it is exactly the case the offer exists to fix.
+    /// Whether the game is already set to load exactly <paramref name="entries"/>, in that order —
+    /// the state <see cref="Enable"/> produces, and the only state worth leaving alone. The same
+    /// mods in a different order is not it: order is load order, so reordering changes which mod
+    /// wins a shared file.
     /// </summary>
-    public static bool IsOnly(string file, string entry)
+    public static bool IsExactly(string file, IReadOnlyList<string> entries)
     {
         var mods = Enabled(file);
-        return mods.Count == 1 && SameEntry(mods[0], entry);
+        return mods.Count == entries.Count
+               && mods.Zip(entries).All(pair => SameEntry(pair.First, pair.Second));
     }
 
     /// <summary>
-    /// Makes <paramref name="entry"/> the whole of <c>enabled_mods</c>, dropping whatever else was
-    /// ticked. Every other key in the file is preserved.
+    /// Makes <paramref name="entries"/> the whole of <c>enabled_mods</c>, in order, dropping
+    /// whatever else was ticked. Every other key in the file is preserved.
     ///
     /// Throws on an unreadable or unwritable file rather than swallowing it — by the time this
     /// runs the mod is written and the user has said yes, so silently doing nothing would leave
     /// them looking for their map in a game that never loaded it.
     /// </summary>
-    public static void EnableOnly(string file, string entry)
+    public static void Enable(string file, IReadOnlyList<string> entries)
     {
         var document = File.Exists(file) ? Read(file) : [];
 
         // Rebuilt rather than mutated so the untouched keys keep their original shape, whatever
         // the game has put in them, and their original order.
+        var list = entries.ToArray();
+
         var updated = new Dictionary<string, object?>();
         foreach (var (key, value) in document)
-            updated[key] = key == Key ? new[] { entry } : value;
+            updated[key] = key == Key ? list : value;
 
-        updated.TryAdd(Key, new[] { entry });
+        updated.TryAdd(Key, list);
         updated.TryAdd("disabled_dlcs", Array.Empty<string>());
 
         // The game writes this file minified and without a BOM, unlike every Paradox *script*

@@ -39,6 +39,7 @@ public sealed class MainForm : Form
     private readonly Button _cancel = Theme.MakeButton("Cancel", 72);
     private readonly Button _openMod = Theme.MakeButton("Open mod folder", 120);
 
+    private readonly Button _mods = Theme.MakeButton("Mods…", 68);
     private readonly Button _launchGame = Theme.MakeButton("Launch CK3", 100);
     private readonly TextBox _launchArgs = new()
     {
@@ -410,6 +411,7 @@ public sealed class MainForm : Form
 
         _closeOnLaunch.Checked = _state.CloseOnLaunch;
         _tips.SetToolTip(_closeOnLaunch, "Close the map generator when launching Crusader Kings III");
+        _tips.SetToolTip(_mods, "Choose which mods Crusader Kings III loads, including workshop ones");
 
         _browse.Click += (_, _) => PickHeightmap();
         _recent.Click += (_, _) => ShowRecentHeightmaps();
@@ -435,6 +437,7 @@ public sealed class MainForm : Form
         _tips.SetToolTip(_writeMod, "Generate and write the mod to disk (Ctrl+S)");
         _tips.SetToolTip(_cancel, "Stop the run in progress. It stops at the next step boundary, so a long step can take a few seconds to let go.");
         _openMod.Click += (_, _) => OpenModFolder();
+        _mods.Click += (_, _) => ShowModList();
         _launchGame.Click += (_, _) => LaunchGame();
         _gameFolder.Click += (_, _) => PickGameFolder();
         _savePreset.Click += (_, _) => SavePreset();
@@ -511,7 +514,7 @@ public sealed class MainForm : Form
         build.Controls.Add(_cancel);
 
         // Right to left, so the group hugs the window edge; visually it reads
-        // "Open mod folder · Launch CK3 [args] | Game folder…".
+        // "Open mod folder · Mods… · Launch CK3 [args] | Game folder…".
         var made = new FlowLayoutPanel
         {
             Dock = DockStyle.Right,
@@ -529,6 +532,7 @@ public sealed class MainForm : Form
         made.Controls.Add(_closeOnLaunch);
         made.Controls.Add(_launchArgs);
         made.Controls.Add(_launchGame);
+        made.Controls.Add(_mods);
         made.Controls.Add(_openMod);
 
         bar.Controls.Add(build);
@@ -732,7 +736,7 @@ public sealed class MainForm : Form
         var reset = Theme.MakeButton("Reset view", 82);
         reset.Click += (_, _) => _solid.ResetView();
 
-        _drape.Items.Add("Terrain shading");
+        _drape.Items.Add("Terrain preview");
         _drape.SelectedIndex = 0;
         _drape.SelectedIndexChanged += (_, _) => { if (!_drapeRefreshing) UpdateDrape(); };
         _tips.SetToolTip(_drape,
@@ -1757,7 +1761,7 @@ public sealed class MainForm : Form
 
         _drapeRefreshing = true;
         _drape.Items.Clear();
-        _drape.Items.Add("Terrain shading");
+        _drape.Items.Add("Terrain preview");
 
         if (_result is not null)
             foreach (var mode in MapModes.All)
@@ -1875,6 +1879,108 @@ public sealed class MainForm : Form
         if (ModFolderToOpen() is not { } dir) return;
 
         Process.Start(new ProcessStartInfo(dir) { UseShellExecute = true });
+    }
+
+    /// <summary>
+    /// The mod list, and what it decides written straight into <c>dlc_load.json</c>.
+    ///
+    /// Opened against the launcher's own mod folder rather than <see cref="_modRoot"/>, which the
+    /// user is free to point somewhere else: <c>dlc_load.json</c> names its entries relative to the
+    /// folder it sits beside, so that folder is the only one whose contents it can talk about.
+    ///
+    /// The file is the state, so it is also the source of the ticks — there is no remembered
+    /// selection to drift out of step with what the game will actually load, and a list changed in
+    /// the Paradox launcher shows up here on the next open.
+    /// </summary>
+    private void ShowModList()
+    {
+        string modRoot = Core.GameLocator.FindModRoot();
+        string? file = Core.DlcLoad.FileForRoot(modRoot);
+
+        if (file is null)
+        {
+            MessageBox.Show(this,
+                $"Could not find the launcher's mod folder, so there is no dlc_load.json to edit.\n\n"
+                + $"Looked in:\n{modRoot}\n\n"
+                + "Starting Crusader Kings III once through the Paradox launcher creates it.",
+                "No mod list", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var mods = Core.ModLibrary.InFolder(modRoot);
+        var unregistered = Core.ModLibrary.Unregistered(Core.GameLocator.FindWorkshopRoot(), mods);
+
+        if (mods.Count == 0 && unregistered.Count == 0)
+        {
+            MessageBox.Show(this,
+                $"No mods found in:\n\n{modRoot}\n\nWrite the map first, or subscribe to something.",
+                "No mods", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        // Matched on the folder the descriptor points at rather than on the .mod file's name, so a
+        // map written under one name and listed under another still finds itself — and so a map
+        // written outside this mod folder correctly finds nothing.
+        string? ours = _lastModDir is null
+            ? null
+            : mods.FirstOrDefault(m => SamePath(m.ContentPath, _lastModDir))?.Entry;
+
+        using var dialog = new ModListDialog(mods, unregistered, Core.DlcLoad.Enabled(file), ours);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        var chosen = dialog.Selected;
+        if (Core.DlcLoad.IsExactly(file, chosen))
+        {
+            Console.WriteLine("Mod list unchanged.");
+            return;
+        }
+
+        try
+        {
+            Core.DlcLoad.Enable(file, chosen);
+
+            Console.WriteLine();
+            if (chosen.Count == 0)
+            {
+                Console.WriteLine("Every mod turned off — Crusader Kings III will start on the "
+                                  + "vanilla map.");
+            }
+            else
+            {
+                Console.WriteLine($"Crusader Kings III will load {Count(chosen.Count, "mod")} on the "
+                                  + "next start, in this order:");
+                foreach (string entry in chosen) Console.WriteLine($"    {entry}");
+                Console.WriteLine("Opening the Paradox launcher afterwards can undo this — it "
+                                  + "rewrites dlc_load.json from its own playsets.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine();
+            Console.WriteLine(ex);
+
+            MessageBox.Show(this,
+                $"dlc_load.json could not be updated:\n\n{ex.Message}",
+                "Could not change the mod list", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    /// <summary>Two paths naming the same folder, or false for anything unresolvable.</summary>
+    private static bool SamePath(string? a, string? b)
+    {
+        if (a is null || b is null) return false;
+
+        try
+        {
+            return string.Equals(
+                Path.GetFullPath(a).TrimEnd(Path.DirectorySeparatorChar),
+                Path.GetFullPath(b).TrimEnd(Path.DirectorySeparatorChar),
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 
     private void LaunchGame()
@@ -2009,7 +2115,7 @@ public sealed class MainForm : Form
         }
 
         string entry = Core.DlcLoad.EntryFor(modDir);
-        if (Core.DlcLoad.IsOnly(file, entry))
+        if (Core.DlcLoad.IsExactly(file, [entry]))
         {
             Console.WriteLine($"Crusader Kings III is already set to load {entry}, and only it.");
             return;
@@ -2046,7 +2152,7 @@ public sealed class MainForm : Form
 
         try
         {
-            Core.DlcLoad.EnableOnly(file, entry);
+            Core.DlcLoad.Enable(file, [entry]);
             Console.WriteLine($"Enabled {entry} — Crusader Kings III will load it, and only it, "
                               + "on the next start.");
             foreach (string mod in dropped) Console.WriteLine($"  turned off: {mod}");
@@ -2419,6 +2525,7 @@ public sealed class MainForm : Form
         _savePreset.Enabled = enabled;
         _loadPreset.Enabled = enabled;
         _gameFolder.Enabled = enabled;
+        _mods.Enabled = enabled;
         _launchGame.Enabled = enabled;
         _closeOnLaunch.Enabled = enabled;
         _launchArgs.Enabled = enabled;

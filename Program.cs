@@ -127,6 +127,19 @@ public static class Program
                         System.Globalization.CultureInfo.InvariantCulture);
                     break;
 
+                // The two halves of the calendar. Separate flags because they answer separate
+                // questions — what year the world says it is, and how advanced it is — and the
+                // whole point of splitting them is that one can move without the other.
+                case "--start-year" when i + 1 < args.Length:
+                    cfg.StartYear = int.Parse(args[++i],
+                        System.Globalization.CultureInfo.InvariantCulture);
+                    break;
+
+                case "--era-anchor" when i + 1 < args.Length:
+                    cfg.EraAnchorYear = int.Parse(args[++i],
+                        System.Globalization.CultureInfo.InvariantCulture);
+                    break;
+
                 case "--no-history":
                     options.WriteHistory = false;
                     break;

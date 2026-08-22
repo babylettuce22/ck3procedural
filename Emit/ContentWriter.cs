@@ -216,6 +216,7 @@ public static class ContentWriter
         Core.Stage.Time("compatibility", () =>
         {
             CompatibilityWriter.WriteDefines(modDir, gameDir, cfg);
+            CompatibilityWriter.WriteCultureEras(modDir, gameDir, cfg);
             CompatibilityWriter.WriteGeographicalRegions(modDir, gameDir, empires);
             CompatibilityWriter.WriteHolySites(modDir, gameDir, empires, faiths);
         });
@@ -242,7 +243,10 @@ public static class ContentWriter
 
         Core.Stage.Time("map graphics", () => MapGraphicsWriter.WriteAll(modDir, gameDir, cfg, provinces, order, landCount));
 
-        Core.Stage.Time("flatmap", () => FlatmapWriter.WriteAll(
+        // Kept rather than dropped: StruggleArt cuts each struggle's window background out of this
+        // same buffer further down, and re-rendering or re-reading it there would be the same
+        // parchment twice.
+        var flatmap = Core.Stage.Time("flatmap", () => FlatmapWriter.WriteAll(
             modDir, cfg, provinces, order, landCount, provinceElevation, provinceTerrain));
 
         Core.Stage.Time("terrain masks", () => TerrainMaskWriter.WriteAll(modDir, gameDir, cfg));
@@ -320,6 +324,15 @@ public static class ContentWriter
                     artifacts, worldCenters, cfg, new Rng(cfg.Seed ^ 0x104E)));
 
                 ChronicleWriter.WriteAll(modDir, chronicle, empires);
+
+                // After the chronicle, which is the thing that decides where a struggle is. Reads
+                // the counties for its membership and the chronicle only for its tension, so it
+                // cannot invent a quarrel the lore panel does not also report.
+                var struggles = Core.Stage.Time("struggles", () => StruggleMap.Build(
+                    empires, chronicle, cultures, faiths, wilderness, cfg,
+                    new Rng(cfg.Seed ^ 0x57A6)));
+
+                StruggleWriter.WriteAll(modDir, gameDir, cfg, struggles, flatmap, provinces, order);
 
                 WarWriter.WriteAll(modDir, prehistory);
                 PortraitWriter.WriteAll(modDir, gameDir, bookmarkResult.PortraitRequests, ethnicities, cfg.Seed);
