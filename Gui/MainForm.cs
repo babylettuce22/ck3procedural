@@ -1947,17 +1947,22 @@ public sealed class MainForm : Form
     {
         if (_busy || _source is null) return;
 
+        // The edits are carried across the rebuild rather than lost to it: exported now, while the
+        // objects they were made to still exist, and laid back over the new world after the write.
+        EditOverlay? carried = null;
+
         if (_edits.EditedCount > 0)
         {
-            var discard = MessageBox.Show(this,
-                $"Writing the mod rebuilds the world from the current settings, so all "
-                + $"{Count(_edits.EditedCount, "edit")} go back to generated values.\n\n"
-                + "This includes edits already pushed with Overwrite: the files holding them are "
-                + "rewritten as part of the run.\n\n"
-                + "Write the mod anyway?",
-                "Edits will be regenerated", MessageBoxButtons.OKCancel, MessageBoxIcon.Warning);
+            var keep = MessageBox.Show(this,
+                $"Writing the mod rebuilds the world from the current settings. Your "
+                + $"{Count(_edits.EditedCount, "edit")} will be laid back over the new world wherever "
+                + "the same title, culture, faith or ruler is generated again, and written with it. "
+                + "Anything the new settings no longer produce is dropped — the log says how many.\n\n"
+                + "Write the mod?",
+                "Edits carry over", MessageBoxButtons.OKCancel, MessageBoxIcon.Information);
 
-            if (discard != DialogResult.OK) return;
+            if (keep != DialogResult.OK) return;
+            carried = _edits.Export(_source.Detail);
         }
 
         if (!EnsureGameFolder()) return;
@@ -1979,6 +1984,7 @@ public sealed class MainForm : Form
             _edits.Attach(_result, _written, modDir);
             Console.WriteLine();
             Console.WriteLine("The world can now be edited — click any title, culture or faith map.");
+            RestoreEdits(carried, modDir);
 
             OfferToEnableMod(modDir);
         }
@@ -2057,6 +2063,71 @@ public sealed class MainForm : Form
         }
     }
 
+    /// <summary>
+    /// Lays the previous world's edits over the one just written — the ones carried through the
+    /// rebuild, or failing that the overlay saved beside the mod the last time it was overwritten —
+    /// and pushes them straight into the files. "Edits survive a regenerate" has to mean the mod on
+    /// disk has them, not just the window; the overwrite is the same milliseconds the button costs.
+    /// </summary>
+    private void RestoreEdits(EditOverlay? carried, string modDir)
+    {
+        var overlay = carried ?? EditOverlay.Load(Path.Combine(modDir, EditOverlay.FileName));
+        if (overlay is null || overlay.Count == 0) return;
+
+        // A saved file from another heightmap is another world; its keys would land on strangers.
+        if (_source is not null && overlay.Heightmap is not null && overlay.Heightmap != _source.Detail)
+        {
+            Console.WriteLine($"  {Count(overlay.Count, "saved edit")} belong to another heightmap "
+                              + $"({overlay.Heightmap}) and were left alone");
+            return;
+        }
+
+        var (applied, missed) = _edits.Import(overlay);
+        string dropped = missed > 0 ? $"; {missed} had nothing to land on in this world" : "";
+
+        if (applied == 0)
+        {
+            Console.WriteLine($"  edits: none carried over{dropped}");
+            return;
+        }
+
+        if (_edits.Target is not { } target) return;
+
+        try
+        {
+            using (new WaitCursorFor(this))
+                Emit.WorldOverwrite.Apply(target.ModDir, target.Result, target.Written, _edits.Pending);
+
+            _edits.MarkWritten();
+            SaveEdits(modDir);
+            Console.WriteLine($"  edits: {applied} carried over and written into the mod{dropped}");
+        }
+        catch (Exception ex)
+        {
+            // Left pending: the bar offers Overwrite, and the edits are in the window either way.
+            Console.WriteLine();
+            Console.WriteLine(ex);
+            Console.WriteLine($"  edits: {applied} carried over but not written — use Overwrite{dropped}");
+        }
+    }
+
+    /// <summary>
+    /// Keeps the overlay beside the mod, current with what is on disk, so writing the same mod again
+    /// in a later session gets its edits back. Removed when nothing is edited any more.
+    /// </summary>
+    private void SaveEdits(string modDir)
+    {
+        string path = Path.Combine(modDir, EditOverlay.FileName);
+
+        if (_edits.EditedCount == 0)
+        {
+            if (File.Exists(path)) File.Delete(path);
+            return;
+        }
+
+        _edits.Export(_source?.Detail).Save(path);
+    }
+
     private void OverwriteTitles()
     {
         if (_busy || !_edits.HasPending || _edits.Target is not { } target) return;
@@ -2070,6 +2141,7 @@ public sealed class MainForm : Form
                 Emit.WorldOverwrite.Apply(target.ModDir, target.Result, target.Written, aspects);
 
             _edits.MarkWritten();
+            SaveEdits(target.ModDir);
             Emit.WorldOverwrite.Report(aspects, edited, target.ModDir);
             _status.Text = $"Edits written to {target.ModDir}";
         }
@@ -2840,6 +2912,7 @@ public sealed class MainForm : Form
             {
                 nameof(MapGen.Culture) => new CultureInspector(_edits),
                 nameof(MapGen.Faith) => new FaithInspector(_edits),
+                nameof(MapGen.Ruler) => new RulerInspector(_edits),
                 _ => new TitleInspector(_edits),
             };
 
@@ -2854,6 +2927,7 @@ public sealed class MainForm : Form
         // Refreshed on every visit rather than at creation: the graph is rebuilt with each write,
         // and the window outlives many of them.
         if (inspector is TitleInspector titles) titles.Realm = Realm;
+        if (inspector is RulerInspector rulers) rulers.Realm = Realm;
 
         inspector.Inspect(targets);
 
@@ -2884,7 +2958,7 @@ public sealed class MainForm : Form
         if (_edits.EditedCount == 0) return;
 
         var answer = MessageBox.Show(this,
-            "Put everything edited — titles, cultures and faiths — back to how it was generated?",
+            "Put everything edited — titles, cultures, faiths and rulers — back to how it was generated?",
             "Revert all", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
 
         if (answer == DialogResult.OK) _edits.RevertAll();

@@ -175,6 +175,7 @@ public static class Generator
 
         // --- PREVIEWS READY HERE ---
         onPreview?.Invoke("Provinces", PreviewRenderer.RenderProvinces(provinces, cfg));
+        onPreview?.Invoke("Impassable", PreviewRenderer.RenderImpassable(provinces, provinceElevation, cfg));
         onPreview?.Invoke("Rivers", PreviewRenderer.RenderRivers(
             Emit.MapDataWriter.RiverIndices(cfg, provinces, drainage), cfg));
 
@@ -301,6 +302,22 @@ public static class Generator
         Io.DebugRender.WriteField(Path.Combine(outDir, "debug_temperature.png"),
             classified.Field.MeanC, result.ProvinceLandMask,
             result.Config.ProvinceWidth, result.Config.ProvinceHeight);
+
+        // The impassable diagnostic, flat and draped over the relief — the same two views the GUI
+        // offers, so the selection can be dialled headlessly against the log's score lines.
+        var impassable = PreviewRenderer.RenderImpassable(result);
+        Io.PngWriter.WriteRgb8(Path.Combine(outDir, "debug_impassable.png"),
+            impassable.Width, impassable.Height, impassable.Rgb);
+        {
+            var cfg = result.Config;
+            var full = Emit.MapDataWriter.ShippedHeightmap(
+                cfg, result.Provinces, result.ProvinceOrder, result.LandCount, result.Terra);
+            var field = Gui.Heightfield.Downsample(full, cfg.Width, cfg.Height, Gui.Heightfield.PreviewCols);
+            var frame = Gui.HeightfieldRenderer.Render(
+                field, Gui.HeightfieldView.Default, 1600, 900, 1, impassable);
+            Io.PngWriter.WriteRgb8(Path.Combine(outDir, "debug_impassable_3d.png"),
+                frame.Width, frame.Height, frame.Rgb);
+        }
 
         Console.WriteLine($"Wrote debug images to {outDir}");
     }

@@ -15,6 +15,20 @@ public sealed class ProvinceSeed
     public bool IsMajorRiver;
 
     /// <summary>
+    /// Why this province is impassable, for the preview and hover readout. <c>Score</c> means it
+    /// ranked in on relief; <c>Trapped</c> means the connectivity pass filled it because it was
+    /// landlocked behind other impassables; <c>None</c> for every passable province.
+    /// </summary>
+    public ImpassableCause ImpassableCause;
+
+    /// <summary>
+    /// The relief score <see cref="Provinces"/> ranked this land province by when choosing
+    /// impassables, and its two ingredients — the share of pixels above the mountain line and
+    /// the share of steep pixels. Diagnostics only; NaN on water and on maps that skipped the pass.
+    /// </summary>
+    public float ImpassableScore = float.NaN, HighShare = float.NaN, SteepShare = float.NaN;
+
+    /// <summary>
     /// The region this province grows inside and may never leave. See <see cref="ProvinceDomain"/>.
     ///
     /// Strictly finer than <see cref="IsLand"/> — water is always domain 0 — so every test that used
@@ -22,6 +36,19 @@ public sealed class ProvinceSeed
     /// instead and get the old answer plus the border constraint.
     /// </summary>
     public int Domain;
+}
+
+public enum ImpassableCause : byte { None, Score, Trapped }
+
+/// <summary>
+/// What the impassable pass measured on this map, kept so the preview can show the same lines
+/// and the same floor the selection used instead of re-deriving them and drifting.
+/// </summary>
+public sealed record ImpassableDiagnostics(
+    float MountainLine, float SteepLine, double Median, double Mad, double Floor, double Cut,
+    int Target, int Marked, string LimitedBy)
+{
+    public bool Qualifies(float score) => !float.IsNaN(score) && score >= Floor;
 }
 
 /// <summary>Pixel-level province assignment at provinces-map resolution.</summary>
@@ -34,6 +61,9 @@ public sealed class ProvinceMap
     public required int[] Label;
 
     public required List<ProvinceSeed> Seeds;
+
+    /// <summary>Set by the impassable pass; null when it was skipped or found no mountains.</summary>
+    public ImpassableDiagnostics? Impassability;
 
     public int Count => Seeds.Count;
 
@@ -761,7 +791,8 @@ public static class Provinces
                               $"(min {cfg.MinProvincePixels} px)");
     }
 
-    private static float[] Slopes(float[] elevation, int width, int height)
+    /// <summary>Gradient magnitude per pixel, central differences, wrapping east-west.</summary>
+    internal static float[] Slopes(float[] elevation, int width, int height)
     {
         var slope = new float[elevation.Length];
 
@@ -837,8 +868,12 @@ public static class Provinces
 
             double highShare = (double)high[i] / total[i];
             double steepShare = (double)steep[i] / total[i];
-            ranked.Add((i, highShare * (1 - slopeWeight) + steepShare * slopeWeight,
-                highShare, steepShare));
+            double score = highShare * (1 - slopeWeight) + steepShare * slopeWeight;
+            ranked.Add((i, score, highShare, steepShare));
+
+            map.Seeds[i].ImpassableScore = (float)score;
+            map.Seeds[i].HighShare = (float)highShare;
+            map.Seeds[i].SteepShare = (float)steepShare;
         }
 
         if (ranked.Count == 0) return;
@@ -863,6 +898,7 @@ public static class Provinces
         {
             if (marked >= want || score < floor) break;
             map.Seeds[label].IsImpassable = true;
+            map.Seeds[label].ImpassableCause = ImpassableCause.Score;
             highSum += highShare;
             steepSum += steepShare;
             cut = score;
@@ -883,6 +919,9 @@ public static class Provinces
                           $"floor {floor:F3} (adaptive {adaptive:F3} vs backstop " +
                           $"{cfg.ImpassableMinMountainShare:F2}), cut at {cut:F3} — " +
                           $"limited by {bound}");
+
+        map.Impassability = new ImpassableDiagnostics(
+            mountainLine, steepLine, median, mad, floor, cut, want, marked, bound);
     }
 
     private static void MergeImpassableRanges(ProvinceMap map, MapConfig cfg)
@@ -1047,6 +1086,7 @@ public static class Provinces
             foreach (int p in components[c])
             {
                 map.Seeds[p].IsImpassable = true;
+                map.Seeds[p].ImpassableCause = ImpassableCause.Trapped;
                 convertedCount++;
             }
         }

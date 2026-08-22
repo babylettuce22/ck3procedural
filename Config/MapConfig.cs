@@ -650,7 +650,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     [AdvancedSetting]
     [Category("05 Rivers")]
     [Description("Half-width of a major river's carved channel at its source, in heightmap pixels measured from the centreline — the channel is twice this across. Below about 7 it stops surviving the downsample into the province map and the river ceases to be navigable.")]
-    public double RiverChannelRadiusMin { get; set; } = 7.0;
+    public double RiverChannelRadiusMin { get; set; } = 9.0;
 
     /// <summary>
     /// Half-width of a major river's carved channel at its mouth, in vanilla heightmap pixels.
@@ -659,7 +659,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     [AdvancedSetting]
     [Category("05 Rivers")]
     [Description("Half-width of a major river's carved channel at its mouth, in heightmap pixels from the centreline. The channel opens from the source radius to this along its length.")]
-    public double RiverChannelRadiusMax { get; set; } = 12.0;
+    public double RiverChannelRadiusMax { get; set; } = 14.0;
 
     /// <summary>
     /// How much a major river's channel breathes in and out along its length, as a fraction of the

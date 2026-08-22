@@ -55,6 +55,27 @@ internal static class ScatterGround
     }
 
     /// <summary>
+    /// The rendered elevation, in simulation units, under a fractional province-space position —
+    /// the same heightmap texel <see cref="IsDryLand"/> tests, so a caller walking a line of
+    /// samples sees the same ground the dry-land test does. NaN outside the map.
+    /// </summary>
+    public static float SampleHeight(float[] elevation, MapConfig cfg, double px, double py)
+    {
+        int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
+
+        int x = (int)Math.Floor(px), y = (int)Math.Floor(py);
+        if (x < 0 || x >= width || y < 0 || y >= height) return float.NaN;
+
+        int scaleX = cfg.Width / width, scaleY = cfg.Height / height;
+        var (y0, x0) = Raster.ProvinceBlock(x, y, scaleX, scaleY, cfg.Width, cfg.Height);
+
+        int sx = Math.Clamp((int)((px - x) * scaleX), 0, scaleX - 1);
+        int sy = Math.Clamp((int)((py - y) * scaleY), 0, scaleY - 1);
+
+        return elevation[(long)(y0 + sy) * cfg.Width + x0 + sx];
+    }
+
+    /// <summary>
     /// Whether the ground under a scatter position is level enough to stand its mesh on.
     ///
     /// The engine plants each instance's origin on the terrain and leaves the mesh upright, so on

@@ -96,6 +96,12 @@ public static class ContentWriter
                 ? null
                 : TitleTierWriter.FormsByCulture(azgaar, map, stateGovernments);
 
+            // Every culture's words for its realms, and every state's word for its own title,
+            // decided here and stored on the objects — before naming, which leaves a state's word
+            // out of its name because the tier will say it — and written out by TitleTierWriter
+            // further down.
+            TitleTierWriter.Assign(map, new Rng(cfg.Seed ^ 0x7117), tierForms, azgaar);
+
             // Worked out for the whole hierarchy at once rather than title by title, so each state
             // and burg goes to the title that actually contains most of it — see AzgaarNaming.
             var borrowed = azgaar is null
@@ -201,8 +207,7 @@ public static class ContentWriter
 
         Core.Stage.Time("wonders", () => WonderWriter.WriteAll(modDir, worldCenters));
 
-        Core.Stage.Time("title tiers", () => TitleTierWriter.WriteAll(
-            modDir, cultures, new Rng(cfg.Seed ^ 0x7117), tierForms, azgaar));
+        Core.Stage.Time("title tiers", () => TitleTierWriter.WriteAll(modDir, cultures, empires));
 
         Core.Stage.Time("culture files",
             () => CultureWriter.WriteAll(modDir, cfg, cultures, ethnicities, vocabulary,
@@ -264,17 +269,30 @@ public static class ContentWriter
         Core.Stage.Time("trees", () => TreeWriter.WriteAll(modDir, cfg, terrain, classified.Climate, renderedElevation, rng));
         Core.Stage.Time("animals", () => AnimalWriter.WriteAll(modDir, cfg, terrain, renderedElevation, rng));
         Core.Stage.Time("env effects", () => EnvEffectWriter.WriteAll(modDir, cfg, terrain, renderedElevation, rng));
+        Core.Stage.Time("bridges", () => BridgeWriter.WriteAll(modDir, cfg, terra.MajorRiversList, classified.Climate, renderedElevation, rng));
         Core.Stage.Time("map table", () => MapTableWriter.WriteAll(modDir, cfg));
         Core.Stage.Time("holding models", () => HoldingModelWriter.WriteAll(modDir, gameDir, cfg));
+
+        // Null with --no-history, like Realms: rulers only exist once the history phase decides them,
+        // and prehistory is kept beside them because re-emitting a ruler means re-emitting the
+        // family and relations written around him.
+        RulerMap? rulers = null;
+        PrehistoryMap? prehistory = null;
 
         // --- AFTER (clean and unified) ---
         if (writeHistory)
         {
             Core.Stage.Time("history and bookmarks", () =>
             {
-                var prehistory = Core.Stage.Time("prehistory", () => PrehistoryMap.Build(
+                prehistory = Core.Stage.Time("prehistory", () => PrehistoryMap.Build(
                     counties, provinces, order, landCount, realms, cultures, faiths,
                     governments, worldCenters, wilderness, cfg, new Rng(cfg.Seed ^ 0x4821)));
+
+                // After prehistory, which it reads the houses and fathers from, and before
+                // anything that names a ruler: the bookmarks and the character file both read
+                // from this rather than each drawing the man again.
+                rulers = Core.Stage.Time("rulers", () => RulerMap.Build(
+                    counties, cfg, realms, cultures, faiths, governments, wilderness, prehistory));
 
                 var artifacts = MapGen.ArtifactMap.Build(
                     counties, cultures, faiths, realms, wilderness, new Rng(cfg.Seed ^ 0x4A1F));
@@ -286,12 +304,12 @@ public static class ContentWriter
 
                 var bookmarkResult = BookmarkWriter.WriteAll(
                     modDir, gameDir, cfg, provinces, order, empires,
-                    realms, development, cultures, faiths, governments, wilderness, prehistory);
+                    realms, development, cultures, faiths, governments, wilderness, prehistory,
+                    rulers);
 
                 HistoryWriter.WriteAll(
                     modDir, cfg, empires, realms, development,
-                    cultures, ethnicities, faiths, governments, wilderness, prehistory,
-                    bookmarkResult.BookmarkDnaMap);
+                    cultures, ethnicities, faiths, governments, wilderness, prehistory, rulers);
 
                 // Last of the history block, because it reads everything the rest of it decided.
                 // Inside the block rather than beside it: with --no-history there are no houses, no
@@ -326,6 +344,9 @@ public static class ContentWriter
             Wilderness = wilderness,
             WorldCenters = worldCenters,
             Realms = realms,
+            Rulers = rulers,
+            Prehistory = prehistory,
+            Governments = governments,
             BaronyCount = baronyCount,
             LandCount = landCount,
             RiverCount = riverCount,

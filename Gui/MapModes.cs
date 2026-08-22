@@ -93,6 +93,19 @@ public static class MapModes
         },
         new("Rivers", "Physical", (r, _) => PreviewRenderer.RenderRivers(r)),
         new("Drainage", "Physical", (r, _) => PreviewRenderer.RenderDrainage(r)),
+        new("Impassable", "Physical", (r, _) => PreviewRenderer.RenderImpassable(r))
+        {
+            Legend =
+            [
+                (PreviewRenderer.ImpassableFill, "Impassable"),
+                (PreviewRenderer.TrappedFill, "Trapped fill"),
+                (PreviewRenderer.QualifiesFill, "Over floor, cut by share"),
+                (PreviewRenderer.SteepTint, "Steep ground"),
+                (PreviewRenderer.HighTint, "Above mountain line"),
+                (PreviewRenderer.PassableBase, "Passable"),
+            ],
+            Probe = (r, _, cell, _) => PreviewRenderer.ImpassableProbe(r, cell),
+        },
 
         // --- Climate --------------------------------------------------------------------------
         new("Climate", "Climate", (r, _) => PreviewRenderer.RenderClimate(r))

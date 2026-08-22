@@ -31,18 +31,22 @@ public static class BookmarkWriter
         ProvinceMap provinces, int[] order, List<Title> empires,
         RealmMap realms, Dictionary<Title, int> development,
         CultureMap cultures, FaithMap faiths, GovernmentMap governments,
-        WildernessMap wilderness, PrehistoryMap prehistory)
+        WildernessMap wilderness, PrehistoryMap prehistory, RulerMap rulers)
     {
+        // Only realm seats have a character: a liege's demesne counties and every vassal-held
+        // county under one man share his seat's ruler, and the character file writes nobody for
+        // them. A bookmark must point at a written character (history_id, dynasty), so the
+        // candidate set is the seats — which is exactly what RulerMap holds.
         var allCounties = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
-        var playableCounties = allCounties.Where(c => !wilderness.Contains(c)).ToList();
+        var seatCounties = allCounties.Where(c => !wilderness.Contains(c) && rulers.Contains(c)).ToList();
 
-        if (playableCounties.Count == 0)
+        if (seatCounties.Count == 0)
         {
             return new BookmarkResult([], new Dictionary<Title, string>());
         }
 
-        var countyPositions = CalculateCountyScreenPositions(playableCounties, provinces, order, cfg);
-        var bookmarks = SelectBookmarkArchetypes(playableCounties, realms, governments, development, wilderness, countyPositions);
+        var countyPositions = CalculateCountyScreenPositions(seatCounties, provinces, order, cfg);
+        var bookmarks = SelectBookmarkArchetypes(seatCounties, realms, governments, development, wilderness, countyPositions, rulers);
         var challengeSlot = bookmarks.LastOrDefault() ?? bookmarks[0];
 
         // Map county -> DNA key (e.g. "dna_bm_char_hegemon")
@@ -53,23 +57,22 @@ public static class BookmarkWriter
         }
         bookmarkDnaMap[challengeSlot.County] = $"dna_{ChallengeCharacter}";
 
-        WriteBookmarks(modDir, cfg, bookmarks, realms, cultures, faiths, governments, prehistory);
-        WriteChallengeCharacter(modDir, challengeSlot.County, realms, cfg, cultures, faiths, governments, prehistory);
-        WriteBookmarkLocalisation(modDir, bookmarks, challengeSlot, cultures);
+        // The portrait follows the character, not the bookmark: stamping the key on the ruler is
+        // what lets the character writer emit `dna =` without being handed this map.
+        foreach (var (county, dnaKey) in bookmarkDnaMap)
+            rulers.For(county).DnaKey = dnaKey;
+
+        WriteBookmarks(modDir, cfg, bookmarks, realms, cultures, faiths, governments, rulers);
+        WriteChallengeCharacter(modDir, challengeSlot.County, realms, cfg, cultures, faiths, governments, rulers);
+        WriteBookmarkLocalisation(modDir, bookmarks, challengeSlot, rulers);
         WriteBookmarkGraphics(modDir, gameDir);
         WriteRealmHighlights(modDir, cfg, provinces, order, bookmarks, realms, empires);
 
-        // Build age-synced portrait requests
         var requests = new List<PortraitWriter.CharacterPortraitRequest>();
         foreach (var b in bookmarks)
         {
-            int birthYear = HistoryWriter.GetRulerBirthYear(b.County.Index, cfg.StartYear);
-            int age = cfg.StartYear - birthYear;
             requests.Add(new PortraitWriter.CharacterPortraitRequest(b.Key, cultures.For(b.County)));
         }
-
-        int challengeBirthYear = HistoryWriter.GetRulerBirthYear(challengeSlot.County.Index, cfg.StartYear);
-        int challengeAge = cfg.StartYear - challengeBirthYear;
         requests.Add(new PortraitWriter.CharacterPortraitRequest(ChallengeCharacter, cultures.For(challengeSlot.County)));
 
         return new BookmarkResult(requests, bookmarkDnaMap);
@@ -130,15 +133,22 @@ public static class BookmarkWriter
         return result;
     }
 
+    /// <summary>
+    /// Every pool here is drawn from <paramref name="counties"/>, which the caller has already
+    /// narrowed to realm seats — the counties <paramref name="rulers"/> wrote a character for. A
+    /// non-seat county would give the bookmark a <c>history_id</c> nobody wrote.
+    /// </summary>
     private static List<BookmarkSlot> SelectBookmarkArchetypes(
         List<Title> counties, RealmMap realms, GovernmentMap governments,
         Dictionary<Title, int> development, WildernessMap wilderness,
-        Dictionary<Title, (int X, int Y)> positions)
+        Dictionary<Title, (int X, int Y)> positions, RulerMap rulers)
     {
         var chosen = new List<BookmarkSlot>();
         var usedCounties = new HashSet<Title>();
 
-        var playable = realms.Greatest.Where(c => IsPlayable(governments.For(c))).ToList();
+        // Greatest is keyed by holder county, so these are seats already; the Contains guard keeps
+        // it that way should the realm builder ever list a county the character writer skips.
+        var playable = realms.Greatest.Where(c => rulers.Contains(c) && IsPlayable(governments.For(c))).ToList();
         if (playable.Count == 0) playable = counties;
 
         // 1. The Hegemon
@@ -303,7 +313,7 @@ public static class BookmarkWriter
 
     private static void WriteBookmarks(string modDir, MapConfig cfg, List<BookmarkSlot> bookmarks,
         RealmMap realms, CultureMap cultures, FaithMap faiths, GovernmentMap governments,
-        PrehistoryMap prehistory)
+        RulerMap rulers)
     {
         string dir = Path.Combine(modDir, "common", "bookmarks", "bookmarks");
         Directory.CreateDirectory(dir);
@@ -329,9 +339,10 @@ public static class BookmarkWriter
             string government = governments.For(b.County);
             var title = HistoryWriter.Primary(b.County, realms);
 
-            string dynastyId = prehistory.CharacterDynastyMap.GetValueOrDefault(b.County, HistoryWriter.DynastyId(b.County));
-            int birthYear = HistoryWriter.GetRulerBirthYear(b.County.Index, cfg.StartYear);
-            string birthDate = $"{birthYear}.1.1";
+            var ruler = rulers.For(b.County);
+            string dynastyId = ruler.DynastyId;
+            string birthDate = $"{ruler.BirthYear}.1.1";
+            string sex = ruler.Female ? "female" : "male";
 
             string anim = b.Key switch
             {
@@ -348,7 +359,7 @@ public static class BookmarkWriter
                     name = "{{b.Key}}"
                     dynasty = {{dynastyId}}
                     dynasty_splendor_level = 1
-                    type = male
+                    type = {{sex}}
                     birth = {{birthDate}}
                     title = {{title.Key}}
                     government = {{government}}
@@ -368,7 +379,7 @@ public static class BookmarkWriter
     }
 
     private static void WriteBookmarkLocalisation(string modDir, List<BookmarkSlot> bookmarks,
-        BookmarkSlot challengeSlot, CultureMap cultures)
+        BookmarkSlot challengeSlot, RulerMap rulers)
     {
         string dir = Path.Combine(modDir, "localization", "english");
         Directory.CreateDirectory(dir);
@@ -380,13 +391,13 @@ public static class BookmarkWriter
 
         foreach (var b in bookmarks)
         {
-            var (name, _) = HistoryWriter.RulerNames(b.County, cultures.For(b.County));
+            string name = rulers.For(b.County).Name;
             sb.Append($" {b.Key}:0 \"{name}\"\n");
             sb.Append($" {b.Key}_subheading:0 \"{b.Subheading}\"\n");
             sb.Append($" {b.Key}_desc:0 \"{b.Description}\"\n\n");
         }
 
-        var (cName, _) = HistoryWriter.RulerNames(challengeSlot.County, cultures.For(challengeSlot.County));
+        string cName = rulers.For(challengeSlot.County).Name;
         sb.Append($" {ChallengeCharacter}:0 \"{cName}\"\n");
         sb.Append($" {ChallengeCharacter}_subheading:0 \"{challengeSlot.Subheading}\"\n");
         sb.Append($" {ChallengeCharacter}_desc:0 \"{challengeSlot.Description}\"\n");
@@ -449,7 +460,7 @@ public static class BookmarkWriter
     }
 
     private static void WriteChallengeCharacter(string modDir, Title county, RealmMap realms, MapConfig cfg,
-        CultureMap cultures, FaithMap faiths, GovernmentMap governments, PrehistoryMap prehistory)
+        CultureMap cultures, FaithMap faiths, GovernmentMap governments, RulerMap rulers)
     {
         string dir = Path.Combine(modDir, "common", "bookmarks", "challenge_characters");
         Directory.CreateDirectory(dir);
@@ -459,9 +470,10 @@ public static class BookmarkWriter
         string government = governments.For(county);
         var title = HistoryWriter.Primary(county, realms);
 
-        string dynastyId = prehistory.CharacterDynastyMap.GetValueOrDefault(county, HistoryWriter.DynastyId(county));
-        int birthYear = HistoryWriter.GetRulerBirthYear(county.Index, cfg.StartYear);
-        string birthDate = $"{birthYear}.1.1";
+        var ruler = rulers.For(county);
+        string dynastyId = ruler.DynastyId;
+        string birthDate = $"{ruler.BirthYear}.1.1";
+        string sex = ruler.Female ? "female" : "male";
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_challenge.txt"),
             $$"""
@@ -472,7 +484,7 @@ public static class BookmarkWriter
             name = "{{ChallengeCharacter}}"
             dynasty = {{dynastyId}}
             dynasty_splendor_level = 1
-            type = male
+            type = {{sex}}
             birth = {{birthDate}}
             title = {{title.Key}}
             government = {{government}}

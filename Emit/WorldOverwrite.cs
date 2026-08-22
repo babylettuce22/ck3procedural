@@ -26,6 +26,18 @@ public enum WorldAspect
 
     /// <summary>Faith and religion names, colours and tenets — common/religion.</summary>
     Faiths = 8,
+
+    /// <summary>
+    /// Rulers' names, sex, birth, profile and purse — history/characters, and the bookmarks that
+    /// describe the same characters.
+    /// </summary>
+    Rulers = 16,
+
+    /// <summary>
+    /// What realms and their holders are called — a culture's words per government, a title's own
+    /// word — common/flavorization and its localisation.
+    /// </summary>
+    TitleWords = 32,
 }
 
 /// <summary>
@@ -71,6 +83,15 @@ public static class WorldOverwrite
         // edit, so it is named once whichever got there first.
         if (aspects.HasFlag(WorldAspect.TitleNames) || aspects.HasFlag(WorldAspect.Faiths))
             yield return "gen_faiths_l_english.yml";
+
+        if (aspects.HasFlag(WorldAspect.Rulers))
+            yield return "00_generated_characters.txt";
+
+        if (aspects.HasFlag(WorldAspect.TitleWords))
+        {
+            yield return "zz_generated_flavorization.txt";
+            yield return "gen_title_tiers_l_english.yml";
+        }
     }
 
     /// <summary>
@@ -115,6 +136,22 @@ public static class WorldOverwrite
         if (aspects.HasFlag(WorldAspect.Faiths)) ReligionWriter.WriteAll(modDir, written.Faiths);
         else if (aspects.HasFlag(WorldAspect.TitleNames))
             ReligionWriter.WriteLocalisation(modDir, written.Faiths);
+
+        // The character file whole — ancestors, rulers, spouses and children — from the same
+        // function that wrote it, with the rulers' current values. Everything the block around a
+        // ruler references (father, spouse, allies, claims) is keyed by ids that no edit can touch,
+        // so the rewritten file still points where it did.
+        if (aspects.HasFlag(WorldAspect.Rulers)
+            && written.Rulers is { } rulers && written.Prehistory is { } prehistory)
+        {
+            HistoryWriter.WriteCharacters(modDir, result.Config, written.Cultures, written.Ethnicities,
+                prehistory, rulers);
+        }
+
+        // Both files whole, from the words now on the cultures and titles. The writer is pure —
+        // the draw happened in Assign at generation — so this cannot reshuffle anyone's vocabulary.
+        if (aspects.HasFlag(WorldAspect.TitleWords))
+            TitleTierWriter.WriteAll(modDir, written.Cultures, result.Titles);
     }
 
     /// <summary>What just happened, and the things about it that surprise people.</summary>
@@ -125,6 +162,14 @@ public static class WorldOverwrite
 
         if (aspects.HasFlag(WorldAspect.TitleNames))
             Console.WriteLine("  wonder and artifact descriptions keep the name they were generated with");
+
+        if (aspects.HasFlag(WorldAspect.Rulers))
+            Console.WriteLine("  artifact and chronicle prose keeps the ruler's generated name; "
+                              + "fathers, spouses and children keep their generated dates");
+
+        if (aspects.HasFlag(WorldAspect.TitleWords))
+            Console.WriteLine("  a culture's realm words apply to every realm whose top liege is of "
+                              + "that culture; a title's own word outranks them");
 
         Console.WriteLine("  CK3 caches these — restart the game, not just the mod, to see it");
     }

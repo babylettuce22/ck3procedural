@@ -18,6 +18,21 @@ public sealed class Title
     public Title? Parent;
 
     public (byte R, byte G, byte B) Color;
+
+    /// <summary>
+    /// This one title's own word for itself — "Sultanate", "United Provinces" — in place of
+    /// whatever its holder's people would call a realm of its rank, with the style of its holder
+    /// in each gender beside it. Null for a title that takes its culture's word, which is nearly
+    /// all of them; an import sets it for the titles its countries named. Empires, kingdoms and
+    /// duchies only. See <see cref="Emit.TitleTierWriter"/>.
+    /// </summary>
+    public string? Form;
+
+    /// <inheritdoc cref="Form"/>
+    public string? Holder;
+
+    /// <inheritdoc cref="Form"/>
+    public string? HolderFemale;
 }
 
 public static class Titles

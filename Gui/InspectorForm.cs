@@ -31,10 +31,15 @@ public abstract class InspectorForm : Form
         ToolbarVisible = false,
     };
 
+    // Auto-sized in height rather than fixed: the bar wraps when a window is narrower than its
+    // buttons, and a fixed 36px strip clipped every wrapped row out of sight — which is how the
+    // Title inspector's Ruler… button went missing the moment it was added.
     private readonly FlowLayoutPanel _actions = new()
     {
         Dock = DockStyle.Bottom,
-        Height = 36,
+        AutoSize = true,
+        AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        MinimumSize = new Size(0, 36),
         Padding = new Padding(4, 4, 4, 4),
         BackColor = Theme.Surface,
     };

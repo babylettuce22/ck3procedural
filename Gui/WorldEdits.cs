@@ -32,20 +32,48 @@ public sealed class WorldEdits
     {
         bool Differs();
         void Restore();
+
+        /// <summary>Records the fields that differ from the snapshot into the overlay, keyed for re-application.</summary>
+        void Capture(EditOverlay into);
     }
 
-    private sealed record TitleSnapshot(Title Target, string Name, (byte R, byte G, byte B) Color)
-        : ISnapshot
+    private sealed record TitleSnapshot(Title Target, string Name, (byte R, byte G, byte B) Color,
+        string? Form, string? Holder, string? HolderFemale) : ISnapshot
     {
         public bool Differs()
-            => !string.Equals(Target.Name, Name, StringComparison.Ordinal) || Target.Color != Color;
+            => !string.Equals(Target.Name, Name, StringComparison.Ordinal)
+            || Target.Color != Color
+            || Target.Form != Form
+            || Target.Holder != Holder
+            || Target.HolderFemale != HolderFemale;
 
-        public void Restore() { Target.Name = Name; Target.Color = Color; }
+        public void Restore()
+        {
+            Target.Name = Name;
+            Target.Color = Color;
+            Target.Form = Form;
+            Target.Holder = Holder;
+            Target.HolderFemale = HolderFemale;
+        }
+
+        public void Capture(EditOverlay into)
+        {
+            var t = Target;
+            into.Titles[t.Key] = new TitleEdit
+            {
+                Name = !string.Equals(t.Name, Name, StringComparison.Ordinal) ? t.Name : null,
+                Color = t.Color != Color ? [t.Color.R, t.Color.G, t.Color.B] : null,
+                Words = t.Form != Form || t.Holder != Holder || t.HolderFemale != HolderFemale
+                    ? new TitleWords(t.Form, t.Holder, t.HolderFemale)
+                    : null,
+            };
+        }
     }
 
     private sealed record CultureSnapshot(Culture Target, string Name, (byte R, byte G, byte B) Color,
             string Ethos, string MartialCustom, string HeadDetermination, List<string> Traditions,
-            string CoaGfx, string BuildingGfx, string ClothingGfx, string UnitGfx)
+            string CoaGfx, string BuildingGfx, string ClothingGfx, string UnitGfx,
+            Dictionary<string, TitleVocabulary> RealmWords)
             : ISnapshot
     {
         public bool Differs()
@@ -58,7 +86,8 @@ public sealed class WorldEdits
             || Target.CoaGfx != CoaGfx
             || Target.BuildingGfx != BuildingGfx
             || Target.ClothingGfx != ClothingGfx
-            || Target.UnitGfx != UnitGfx;
+            || Target.UnitGfx != UnitGfx
+            || !SameWords(Target.RealmWords, RealmWords);
 
         public void Restore()
         {
@@ -72,7 +101,33 @@ public sealed class WorldEdits
             Target.BuildingGfx = BuildingGfx;
             Target.ClothingGfx = ClothingGfx;
             Target.UnitGfx = UnitGfx;
+            Target.RealmWords = new(RealmWords);
         }
+
+        public void Capture(EditOverlay into)
+        {
+            var c = Target;
+            into.Cultures[c.Key] = new CultureEdit
+            {
+                Generated = Name,
+                Name = !string.Equals(c.Name, Name, StringComparison.Ordinal) ? c.Name : null,
+                Color = c.Color != Color ? [c.Color.R, c.Color.G, c.Color.B] : null,
+                Ethos = c.Ethos != Ethos ? c.Ethos : null,
+                MartialCustom = c.MartialCustom != MartialCustom ? c.MartialCustom : null,
+                HeadDetermination = c.HeadDetermination != HeadDetermination ? c.HeadDetermination : null,
+                Traditions = !c.Traditions.SequenceEqual(Traditions) ? [.. c.Traditions] : null,
+                CoaGfx = c.CoaGfx != CoaGfx ? c.CoaGfx : null,
+                BuildingGfx = c.BuildingGfx != BuildingGfx ? c.BuildingGfx : null,
+                ClothingGfx = c.ClothingGfx != ClothingGfx ? c.ClothingGfx : null,
+                UnitGfx = c.UnitGfx != UnitGfx ? c.UnitGfx : null,
+                RealmWords = !SameWords(c.RealmWords, RealmWords) ? new(c.RealmWords) : null,
+            };
+        }
+
+        /// <summary>Same governments carrying the same words; the vocabulary is a record, so equal by value.</summary>
+        private static bool SameWords(Dictionary<string, TitleVocabulary> a, Dictionary<string, TitleVocabulary> b)
+            => a.Count == b.Count
+            && a.All(kv => b.TryGetValue(kv.Key, out var words) && words == kv.Value);
     }
 
     private sealed record FaithSnapshot(Faith Target, string Name, (double R, double G, double B) Color,
@@ -91,12 +146,78 @@ public sealed class WorldEdits
             Target.Icon = Icon;
             Target.Tenets = [.. Tenets];
         }
+
+        public void Capture(EditOverlay into)
+        {
+            var f = Target;
+            into.Faiths[f.Key] = new FaithEdit
+            {
+                Generated = Name,
+                Name = !string.Equals(f.Name, Name, StringComparison.Ordinal) ? f.Name : null,
+                Color = f.Color != Color ? [f.Color.R, f.Color.G, f.Color.B] : null,
+                Icon = f.Icon != Icon ? f.Icon : null,
+                Tenets = !f.Tenets.SequenceEqual(Tenets) ? [.. f.Tenets] : null,
+            };
+        }
     }
 
     private sealed record ReligionSnapshot(Religion Target, string Name) : ISnapshot
     {
         public bool Differs() => !string.Equals(Target.Name, Name, StringComparison.Ordinal);
         public void Restore() => Target.Name = Name;
+
+        public void Capture(EditOverlay into)
+            => into.Religions[Target.Key] = new ReligionEdit { Generated = Name, Name = Target.Name };
+    }
+
+    /// <summary>
+    /// The profile is held whole rather than field by field: it is an immutable record, so every
+    /// edit to it is a <c>with</c> that leaves the generated one untouched, and restoring is handing
+    /// it back.
+    /// </summary>
+    private sealed record RulerSnapshot(Ruler Target, string Name, bool Female,
+        int BirthYear, int BirthMonth, int BirthDay, RulerProfile Profile,
+        int Gold, int Prestige, int Renown) : ISnapshot
+    {
+        public bool Differs()
+            => !string.Equals(Target.Name, Name, StringComparison.Ordinal)
+            || Target.Female != Female
+            || Target.BirthYear != BirthYear
+            || Target.BirthMonth != BirthMonth
+            || Target.BirthDay != BirthDay
+            || !ReferenceEquals(Target.Profile, Profile)
+            || Target.Gold != Gold
+            || Target.Prestige != Prestige
+            || Target.Renown != Renown;
+
+        public void Restore()
+        {
+            Target.Name = Name;
+            Target.Female = Female;
+            Target.BirthYear = BirthYear;
+            Target.BirthMonth = BirthMonth;
+            Target.BirthDay = BirthDay;
+            Target.Profile = Profile;
+            Target.Gold = Gold;
+            Target.Prestige = Prestige;
+            Target.Renown = Renown;
+        }
+
+        public void Capture(EditOverlay into)
+        {
+            var r = Target;
+            into.Rulers[r.Id] = new RulerEdit
+            {
+                Generated = Name,
+                Name = !string.Equals(r.Name, Name, StringComparison.Ordinal) ? r.Name : null,
+                Female = r.Female != Female ? r.Female : null,
+                BirthYear = r.BirthYear != BirthYear ? r.BirthYear : null,
+                Profile = !ReferenceEquals(r.Profile, Profile) ? r.Profile : null,
+                Gold = r.Gold != Gold ? r.Gold : null,
+                Prestige = r.Prestige != Prestige ? r.Prestige : null,
+                Renown = r.Renown != Renown ? r.Renown : null,
+            };
+        }
     }
 
     /// <summary>
@@ -210,18 +331,18 @@ public sealed class WorldEdits
     // generated value rather than to the previous edit.
 
     public void Edit(Title title, Action<Title> change)
-        => Apply(title, () => new TitleSnapshot(title, title.Name, title.Color), () => change(title),
+        => Apply(title, () => Snapshot(title), () => change(title),
             WorldAspect.TitleNames | WorldAspect.TitleColors);
 
     public void Rename(Title title, string name)
     {
         string checkedName = Checked(name);
-        Apply(title, () => new TitleSnapshot(title, title.Name, title.Color),
+        Apply(title, () => Snapshot(title),
             () => title.Name = checkedName, WorldAspect.TitleNames);
     }
 
     public void Recolor(Title title, (byte R, byte G, byte B) color)
-        => Apply(title, () => new TitleSnapshot(title, title.Name, title.Color),
+        => Apply(title, () => Snapshot(title),
             () => title.Color = color, WorldAspect.TitleColors);
 
     public void EditCulture(Culture culture, Action<Culture> change)
@@ -249,9 +370,80 @@ public sealed class WorldEdits
             () => religion.Name = checkedName, WorldAspect.Faiths);
     }
 
+    public void EditRuler(Ruler ruler, Action<Ruler> change)
+        => Apply(ruler, () => Snapshot(ruler), () => change(ruler), WorldAspect.Rulers);
+
+    public void RenameRuler(Ruler ruler, string name)
+    {
+        string checkedName = Checked(name);
+        Apply(ruler, () => Snapshot(ruler), () => ruler.Name = checkedName, WorldAspect.Rulers);
+    }
+
+    /// <summary>
+    /// Moves a ruler's birth year, held inside <see cref="RulerBirthYearBounds"/>. The month and
+    /// day are left alone — they were never anything but noise.
+    /// </summary>
+    public void SetRulerBirthYear(Ruler ruler, int year)
+    {
+        var (min, max) = RulerBirthYearBounds(ruler);
+        int clamped = Math.Clamp(year, min, max);
+        Apply(ruler, () => Snapshot(ruler), () => ruler.BirthYear = clamped, WorldAspect.Rulers);
+    }
+
+    /// <summary>
+    /// The years a ruler can have been born in without contradicting the family prehistory built
+    /// around the generated year: at least sixteen years after the father, at least sixteen before
+    /// the wedding and before every child, and an adult at the start date. The engine would load a
+    /// man younger than his son, but it would log it and the court would read as nonsense, so the
+    /// editor refuses it rather than leaving the error for the game to find.
+    /// </summary>
+    public (int Min, int Max) RulerBirthYearBounds(Ruler ruler)
+    {
+        int start = _result?.Config.StartYear ?? ruler.BirthYear + 16;
+        int min = start - 90;
+        int max = start - 16;
+
+        if (_written?.Prehistory is { } prehistory)
+        {
+            if (prehistory.DeceasedParents.TryGetValue(ruler.Seat, out var father))
+                min = Math.Max(min, YearOf(father.BirthDate) + 16);
+
+            if (prehistory.Spouses.TryGetValue(ruler.Seat, out var spouse) && spouse.MarriageDate is { } wedding)
+                max = Math.Min(max, YearOf(wedding) - 16);
+
+            if (prehistory.Children.TryGetValue(ruler.Seat, out var children))
+                foreach (var child in children) max = Math.Min(max, YearOf(child.BirthDate) - 16);
+        }
+
+        // The generated year always satisfies all of these, so the range cannot actually be empty;
+        // this only guards against a prehistory the rules above were not written for.
+        if (min > max) min = max;
+        return (min, max);
+
+        static int YearOf(string date) => int.Parse(date.Split('.')[0]);
+    }
+
+    private static RulerSnapshot Snapshot(Ruler r)
+        => new(r, r.Name, r.Female, r.BirthYear, r.BirthMonth, r.BirthDay, r.Profile,
+               r.Gold, r.Prestige, r.Renown);
+
+    /// <summary>
+    /// A title's own word for itself and its holder's style. Its own aspect: only the
+    /// flavorization files carry it, and a recolour should not drag them along.
+    /// </summary>
+    public void EditTitleWords(Title title, Action<Title> change)
+        => Apply(title, () => Snapshot(title), () => change(title), WorldAspect.TitleWords);
+
+    /// <summary>A culture's words for its realms, per government. See <see cref="EditTitleWords"/>.</summary>
+    public void EditCultureWords(Culture culture, Action<Culture> change)
+        => Apply(culture, () => Snapshot(culture), () => change(culture), WorldAspect.TitleWords);
+
+    private static TitleSnapshot Snapshot(Title t)
+        => new(t, t.Name, t.Color, t.Form, t.Holder, t.HolderFemale);
+
     private static CultureSnapshot Snapshot(Culture c)
         => new(c, c.Name, c.Color, c.Ethos, c.MartialCustom, c.HeadDetermination, [.. c.Traditions],
-               c.CoaGfx, c.BuildingGfx, c.ClothingGfx, c.UnitGfx);
+               c.CoaGfx, c.BuildingGfx, c.ClothingGfx, c.UnitGfx, new(c.RealmWords));
     private static FaithSnapshot Snapshot(Faith f) => new(f, f.Name, f.Color, f.Icon, [.. f.Tenets]);
 
     /// <summary>
@@ -266,7 +458,7 @@ public sealed class WorldEdits
         if (descendants.Count == 0) return;
 
         foreach (var child in descendants)
-            _originals.TryAdd(child, new TitleSnapshot(child, child.Name, child.Color));
+            _originals.TryAdd(child, Snapshot(child));
 
         // A fresh seed each time: the spread is random within its tolerances, so reusing one would
         // hand back the same shades and the button would look like it had done nothing.
@@ -284,6 +476,142 @@ public sealed class WorldEdits
 
         _pending |= aspects;
         Changed?.Invoke(aspects);
+    }
+
+    // --- Carrying edits across worlds --------------------------------------------------------
+
+    /// <summary>
+    /// Every edit that currently differs from its generated value, as an overlay keyed for
+    /// re-application — see <see cref="EditOverlay"/> for why only touched fields and why the
+    /// generated name rides along.
+    /// </summary>
+    public EditOverlay Export(string? heightmap)
+    {
+        var overlay = new EditOverlay { Heightmap = heightmap };
+        foreach (var snapshot in _originals.Values)
+            if (snapshot.Differs()) snapshot.Capture(overlay);
+        return overlay;
+    }
+
+    /// <summary>
+    /// Lays an overlay over the attached world. Every edit whose object is generated again under
+    /// the same key and name is made again through the ordinary edit methods, so it is snapshotted,
+    /// revertable and pending like one typed in — the caller decides whether to push it to disk.
+    /// Returns how many edits landed and how many had nothing to land on.
+    /// </summary>
+    public (int Applied, int Missed) Import(EditOverlay overlay)
+    {
+        if (!IsLoaded) return (0, overlay.Count);
+
+        int applied = 0, missed = 0;
+
+        var titles = Titles.Flatten(_result!.Titles).GroupBy(t => t.Key).ToDictionary(g => g.Key, g => g.First());
+        foreach (var (key, edit) in overlay.Titles)
+        {
+            if (!titles.TryGetValue(key, out var title)) { missed++; continue; }
+            if (!Try(() =>
+            {
+                if (edit.Name is { } name) Rename(title, name);
+                if (edit.Color is { Length: 3 } c) Recolor(title, ((byte)c[0], (byte)c[1], (byte)c[2]));
+                if (edit.Words is { } w)
+                    EditTitleWords(title, t => { t.Form = w.Form; t.Holder = w.Holder; t.HolderFemale = w.HolderFemale; });
+            })) { missed++; continue; }
+            applied++;
+        }
+
+        var cultures = _written!.Cultures.Cultures.ToDictionary(c => c.Key);
+        foreach (var (key, edit) in overlay.Cultures)
+        {
+            if (!cultures.TryGetValue(key, out var culture) || culture.Name != edit.Generated) { missed++; continue; }
+            if (!Try(() =>
+            {
+                if (edit.Name is { } name) RenameCulture(culture, name);
+
+                if (edit.Color is not null || edit.Ethos is not null || edit.MartialCustom is not null
+                    || edit.HeadDetermination is not null || edit.Traditions is not null
+                    || edit.CoaGfx is not null || edit.BuildingGfx is not null
+                    || edit.ClothingGfx is not null || edit.UnitGfx is not null)
+                {
+                    EditCulture(culture, c =>
+                    {
+                        if (edit.Color is { Length: 3 } col) c.Color = ((byte)col[0], (byte)col[1], (byte)col[2]);
+                        if (edit.Ethos is { } v1) c.Ethos = v1;
+                        if (edit.MartialCustom is { } v2) c.MartialCustom = v2;
+                        if (edit.HeadDetermination is { } v3) c.HeadDetermination = v3;
+                        if (edit.Traditions is { } v4) c.Traditions = [.. v4];
+                        if (edit.CoaGfx is { } v5) c.CoaGfx = v5;
+                        if (edit.BuildingGfx is { } v6) c.BuildingGfx = v6;
+                        if (edit.ClothingGfx is { } v7) c.ClothingGfx = v7;
+                        if (edit.UnitGfx is { } v8) c.UnitGfx = v8;
+                    });
+                }
+
+                if (edit.RealmWords is { } words) EditCultureWords(culture, c => c.RealmWords = new(words));
+            })) { missed++; continue; }
+            applied++;
+        }
+
+        var faiths = _written.Faiths.Faiths.ToDictionary(f => f.Key);
+        foreach (var (key, edit) in overlay.Faiths)
+        {
+            if (!faiths.TryGetValue(key, out var faith) || faith.Name != edit.Generated) { missed++; continue; }
+            if (!Try(() =>
+            {
+                if (edit.Name is { } name) RenameFaith(faith, name);
+                if (edit.Color is not null || edit.Icon is not null || edit.Tenets is not null)
+                {
+                    EditFaith(faith, f =>
+                    {
+                        if (edit.Color is { Length: 3 } col) f.Color = (col[0], col[1], col[2]);
+                        if (edit.Icon is { } icon) f.Icon = icon;
+                        if (edit.Tenets is { } tenets) f.Tenets = [.. tenets];
+                    });
+                }
+            })) { missed++; continue; }
+            applied++;
+        }
+
+        var religions = _written.Faiths.Religions.ToDictionary(r => r.Key);
+        foreach (var (key, edit) in overlay.Religions)
+        {
+            if (!religions.TryGetValue(key, out var religion) || religion.Name != edit.Generated) { missed++; continue; }
+            if (edit.Name is { } name && !Try(() => RenameReligion(religion, name))) { missed++; continue; }
+            applied++;
+        }
+
+        var rulers = (_written.Rulers?.All ?? []).ToDictionary(r => r.Id);
+        foreach (var (key, edit) in overlay.Rulers)
+        {
+            if (!rulers.TryGetValue(key, out var ruler) || ruler.Name != edit.Generated) { missed++; continue; }
+            if (!Try(() =>
+            {
+                if (edit.Name is { } name) RenameRuler(ruler, name);
+                if (edit.Female is not null || edit.Profile is not null || edit.Gold is not null
+                    || edit.Prestige is not null || edit.Renown is not null)
+                {
+                    EditRuler(ruler, r =>
+                    {
+                        if (edit.Female is { } female) r.Female = female;
+                        if (edit.Profile is { } profile) r.Profile = profile;
+                        if (edit.Gold is { } gold) r.Gold = gold;
+                        if (edit.Prestige is { } prestige) r.Prestige = prestige;
+                        if (edit.Renown is { } renown) r.Renown = renown;
+                    });
+                }
+                if (edit.BirthYear is { } year) SetRulerBirthYear(ruler, year);
+            })) { missed++; continue; }
+            applied++;
+        }
+
+        return (applied, missed);
+
+        // A name that fails validation is the only way an edit can refuse; it was valid when typed,
+        // so this guards against a hand-edited overlay file rather than anything the tool wrote.
+        static bool Try(Action apply)
+        {
+            try { apply(); return true; }
+            catch (ArgumentException) { return false; }
+        }
     }
 
     // --- Reverting ----------------------------------------------------------------------------
@@ -319,9 +647,10 @@ public sealed class WorldEdits
     /// <summary>Which files an object of this kind can dirty.</summary>
     private static WorldAspect AspectsOf(object target) => target switch
     {
-        Title => WorldAspect.TitleNames | WorldAspect.TitleColors,
-        Culture => WorldAspect.Cultures,
+        Title => WorldAspect.TitleNames | WorldAspect.TitleColors | WorldAspect.TitleWords,
+        Culture => WorldAspect.Cultures | WorldAspect.TitleWords,
         Faith or Religion => WorldAspect.Faiths,
+        Ruler => WorldAspect.Rulers,
         _ => WorldAspect.None,
     };
 }

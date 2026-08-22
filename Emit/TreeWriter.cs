@@ -294,6 +294,31 @@ public static class TreeWriter
             [(TerrainClass.Taiga, 2.5), (TerrainClass.Forest, 1.5)],
             0.40, 0.40, Flora.Conifer, Footprint: 5, MaxRelief: 2.0f),
 
+        // Rock. Vanilla ships eight rock meshes in gfx/models/mapitems/cliffs and places none of
+        // them — cliffs_rock.txt defines every one with count=0 — so these are unused assets, not
+        // something a player will recognise from the Vistula. Measured off the geometry (world
+        // units, 1 = one province pixel): cliff_rock_01 is a 1.6 x 2.1 standing stone 3.0 tall,
+        // 02 and 03 are low rounded boulders ~2–2.6 across. Every base sits 1.1 units *below* the
+        // origin, a sunk skirt that hides the seam on a slope the way a trunk does.
+        //
+        // The other five — cliff_big_01/02, cliff_small_01, cliff_end_01/02 — were tried as buttes
+        // at 2–3x and taken out again. They are cliff-edge pieces: a rock body open at the bottom
+        // with a plains-textured cap on top, authored so the cap blends into vanilla's grass at the
+        // lip of a drop. Stood on open drylands the olive cap reads as a slab lying on the ground,
+        // and on any slope the uphill side buries to the cap and it looks tipped over. cliff_big_02
+        // is a curved face with 3.6 of its 5.4 units below the origin, so it barely shows at all.
+        //
+        // The rock texture is the grey mountain_01_vertical, not sandstone, and it reads fine on
+        // dry ground. Sparse on purpose: these are a scale-0.7–1.4 prop the size of a single pine,
+        // and at the first density tried the ground looked quarried. Tight relief, because a
+        // boulder hung off a bank throws a long wrong-looking shadow onto the ground beneath it.
+        // Insensitive: rock follows terrain, not climate, and is not canopy. tree_high_layer
+        // rather than vanilla's temp_layer so it is gated and faded exactly as the trees are.
+        new("rock_boulder_generator.txt", "rock_boulder_generator", "tree_high_layer",
+            ["cliff_rock_01_mesh", "cliff_rock_02_mesh", "cliff_rock_03_mesh"],
+            [(TerrainClass.Drylands, 0.9), (TerrainClass.Desert, 0.45)],
+            0.70, 1.40, Flora.Insensitive, Footprint: 1, MaxRelief: 0.8f),
+
         // Sakura is region flavour with no generated equivalent, but the files still have to exist
         // so vanilla's copies — which are placed over Japan — are displaced rather than loaded.
         new("tree_sakura_01_generator.txt", "tree_sakura_01_generator", "tree_high_layer",
@@ -311,6 +336,15 @@ public static class TreeWriter
     {
         string dir = Path.Combine(modDir, "gfx", "map", "map_object_data", "generated");
         Directory.CreateDirectory(dir);
+
+        // The directory is ours outright — replace_path drops vanilla's copy — and the engine
+        // loads every file in it, so a generator removed from the table has to have its file
+        // removed too, or the last run's scatter stays on the map under the new one.
+        foreach (var stale in Directory.EnumerateFiles(dir, "*.txt"))
+        {
+            string name = Path.GetFileName(stale);
+            if (!Array.Exists(Generators, g => g.File == name)) File.Delete(stale);
+        }
 
         // One canopy field for the whole map, shared by every generator, so a stand of oak and the
         // birch scattered through it thin out together instead of each rolling its own noise and

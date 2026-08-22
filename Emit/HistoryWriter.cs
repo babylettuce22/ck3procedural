@@ -13,8 +13,7 @@ public static class HistoryWriter
         string modDir, MapConfig cfg, List<Title> empires,
         RealmMap realms, Dictionary<Title, int> development,
         CultureMap cultures, EthnicityMap ethnicities, FaithMap faiths, GovernmentMap governments,
-        WildernessMap wilderness, PrehistoryMap prehistory,
-        IReadOnlyDictionary<Title, string>? bookmarkDnaMap = null)
+        WildernessMap wilderness, PrehistoryMap prehistory, RulerMap rulers)
     {
         var all = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
         if (all.Count == 0) return;
@@ -22,20 +21,18 @@ public static class HistoryWriter
         // One character per RULER, not per county. The two used to be the same thing — every county
         // held itself — but a liege's personal demesne now covers several counties under one man,
         // and writing a count for each of them would put a landless stranger beside every lord.
-        var rulers = realms.HolderCounty.Values.ToHashSet();
+        // RulerMap.Build made the same cut, so every county kept here has a ruler to look up.
+        var seats = realms.HolderCounty.Values.ToHashSet();
 
-        var counties = all.Where(c => !wilderness.Contains(c) && rulers.Contains(c)).ToList();
+        var counties = all.Where(c => !wilderness.Contains(c) && seats.Contains(c)).ToList();
         var wild = all.Where(wilderness.Contains).ToList();
 
         if (counties.Count == 0) return;
 
-        var dnaMap = bookmarkDnaMap ?? new Dictionary<Title, string>();
-
         WriteDynasties(modDir, prehistory);
         WriteDynastyHouses(modDir, prehistory);
         CoatOfArmsWriter.WriteAll(modDir, prehistory);
-        WriteCharacters(modDir, cfg, counties, cultures, ethnicities, faiths, realms, governments,
-            prehistory, dnaMap);
+        WriteCharacters(modDir, cfg, cultures, ethnicities, prehistory, rulers);
         WriteHeadOfFaithCharacters(modDir, cfg, faiths, cultures, ethnicities, counties);
         WriteWildernessHolder(modDir, cfg, wild);
         WriteHouseRelationsOnAction(modDir, prehistory);
@@ -130,10 +127,11 @@ public static class HistoryWriter
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_houses.txt"), sb.ToString());
     }
 
-    private static void WriteCharacters(string modDir, MapConfig cfg, List<Title> counties,
-        CultureMap cultures, EthnicityMap ethnicities, FaithMap faiths, RealmMap realms,
-        GovernmentMap governments, PrehistoryMap prehistory,
-        IReadOnlyDictionary<Title, string> bookmarkDnaMap)
+    /// <summary>
+    /// Not private: a ruler edit after the write re-runs exactly this. See <see cref="WorldOverwrite"/>.
+    /// </summary>
+    internal static void WriteCharacters(string modDir, MapConfig cfg,
+        CultureMap cultures, EthnicityMap ethnicities, PrehistoryMap prehistory, RulerMap rulers)
     {
         string dir = Path.Combine(modDir, "history", "characters");
         Directory.CreateDirectory(dir);
@@ -179,78 +177,29 @@ public static class HistoryWriter
             sb.Append("}\n\n");
         }
 
-        // Which rulers actually have someone answering to them. Only they need the standing that
-        // holds a court together, and writing it for a lone count would just be free stats.
-        var liegeCounties = realms.Liege.Values
-            .Select(t => realms.HolderCounty.GetValueOrDefault(t))
-            .Where(c => c is not null)
-            .ToHashSet();
-
         // =========================================================================
         // 3. Living Rulers — Chronological timeline of wedding, alliances, and rivals
         // =========================================================================
-        foreach (var county in counties)
+        foreach (var ruler in rulers.All)
         {
-            var culture = cultures.For(county);
-            var (firstName, _) = RulerNames(county, culture);
-            var primaryTitle = Primary(county, realms);
-            var rng = new Rng(county.Index ^ 0x3E2D);
+            // Everything decided about the man — name, birth, house, purse, and the profile of
+            // schooling, skills and standing — was settled by RulerMap.Build. This block only
+            // writes it, beside the relations prehistory built between him and everyone else.
+            var county = ruler.Seat;
+            var culture = ruler.Culture;
+            var primaryTitle = ruler.PrimaryTitle;
+            var profile = ruler.Profile;
 
-            int birthYear = GetRulerBirthYear(county.Index, cfg.StartYear);
-            string birthDate = $"{birthYear}.{rng.Int(1, 12)}.{rng.Int(1, 28)}";
+            sb.Append($"{ruler.Id} = {{\n");
+            sb.Append($"\tname = \"{ruler.Name}\"\n");
+            if (ruler.Female) sb.Append("\tfemale = yes\n");
 
-            // Everything about the man rather than the land — schooling, skills, byname, the
-            // standing he starts with. See Emit/RulerProfile.cs for what each number is worth.
-            var profile = RulerProfile.Build(
-                county, primaryTitle.Tier, governments.For(county), culture.Ethos,
-                cfg.StartYear - birthYear, liegeCounties.Contains(county));
-
-            string dynId = prehistory.CharacterDynastyMap.GetValueOrDefault(county, DynastyId(county));
-            string houseKey = prehistory.CharacterHouseMap.GetValueOrDefault(county, $"house_gen_{county.Index}");
-            string? fatherId = prehistory.DeceasedParents.TryGetValue(county, out var f) ? f.Id : null;
-
-            int gold = primaryTitle.Tier switch
+            if (ruler.DnaKey is not null)
             {
-                "e" => rng.Int(850, 1200),
-                "k" => rng.Int(480, 700),
-                "d" => rng.Int(150, 210),
-                _ => rng.Int(60, 90)
-            };
-
-            // Prestige is graded against the thresholds, not to taste. Vanilla's defines put
-            // LEVELS_PRESTIGE at { 1000 2000 5000 10000 25000 }, and prestige LEVEL is an opinion
-            // modifier on everyone — PRESTIGIOUS = { -10 0 5 10 20 30 } — so a starting emperor on
-            // 500 prestige was not merely poor, he was standing at the level that pays nothing while
-            // his vassals judged him. Kings and emperors are now written above the second threshold
-            // under either reading of it, which is worth +5 opinion realm-wide and reads on the
-            // character sheet as a crowned ruler rather than a jumped-up count.
-            //
-            // Counts are left where they were on purpose: the ladder only means something if the
-            // bottom of it stays modest.
-            int prestige = primaryTitle.Tier switch
-            {
-                "e" => rng.Int(3400, 4600),
-                "k" => rng.Int(2000, 2700),
-                "d" => rng.Int(350, 600),
-                _ => rng.Int(35, 65)
-            };
-            int renown = primaryTitle.Tier switch
-            {
-                "e" => rng.Int(4000, 7000),
-                "k" => rng.Int(2000, 4000),
-                "d" => rng.Int(900, 1600),
-                _ => rng.Int(150, 450)
-            };
-
-            sb.Append($"{CharacterId(county)} = {{\n");
-            sb.Append($"\tname = \"{firstName}\"\n");
-
-            if (bookmarkDnaMap.TryGetValue(county, out string? dnaKey))
-            {
-                sb.Append($"\tdna = {dnaKey}\n");
+                sb.Append($"\tdna = {ruler.DnaKey}\n");
             }
 
-            sb.Append($"\tdynasty_house = {houseKey}\n");
+            sb.Append($"\tdynasty_house = {ruler.HouseKey}\n");
 
             // Base skills, in vanilla's own order. Written rather than left out because an omitted
             // skill is rolled by the engine from RANDOM_CHARACTER_*_MIN/MAX — a flat 0-10 that takes
@@ -262,7 +211,7 @@ public static class HistoryWriter
             sb.Append($"\tstewardship = {profile.Stewardship}\n");
             sb.Append($"\tlearning = {profile.Learning}\n");
 
-            sb.Append($"\treligion = {faiths.For(county).Key}\n");
+            sb.Append($"\treligion = {ruler.Faith.Key}\n");
             sb.Append($"\tculture = {culture.Key}\n");
 
             // The education trait. Left unwritten, the engine picks one at random for every ruler on
@@ -287,13 +236,13 @@ public static class HistoryWriter
             if (GetPhenotypeTrait(culture, ethnicities, cfg) is { } rulerTrait)
                 sb.Append($"\ttrait = {rulerTrait}\n");
 
-            if (fatherId is not null)
+            if (ruler.FatherId is not null)
             {
-                sb.Append($"\tfather = {fatherId}\n");
+                sb.Append($"\tfather = {ruler.FatherId}\n");
             }
 
             // --- Character Birth Date ---
-            sb.Append($"\t{birthDate} = {{ birth = yes }}\n");
+            sb.Append($"\t{ruler.BirthDate} = {{ birth = yes }}\n");
 
             // --- Simulated Wedding Date ---
             if (prehistory.Spouses.TryGetValue(county, out var spouse) && spouse.MarriageDate != null)
@@ -371,29 +320,17 @@ public static class HistoryWriter
             sb.Append($"\t{cfg.StartDate} = {{\n");
             sb.Append("\t\teffect = {\n");
 
-            switch (governments.For(county))
-            {
-                case GovernmentMap.Tribal:
-                    gold = (int)(gold * 0.45);
-                    prestige = (int)(prestige * 1.6);
-                    break;
-                case GovernmentMap.Republic:
-                    gold = (int)(gold * 1.8);
-                    prestige = (int)(prestige * 0.7);
-                    break;
-            }
-
-            sb.Append($"\t\t\tadd_gold = {gold}\n");
-            sb.Append($"\t\t\tadd_prestige = {prestige}\n");
+            sb.Append($"\t\t\tadd_gold = {ruler.Gold}\n");
+            sb.Append($"\t\t\tadd_prestige = {ruler.Prestige}\n");
 
             // Renown only for rulers who answer to nobody. A vassal's house does not gain standing
             // for holding what its liege granted it, and handing it out regardless made every
             // dynasty on the map start equally renowned.
-            bool independent = !realms.Liege.ContainsKey(primaryTitle);
+            bool independent = ruler.Independent;
 
-            if (renown > 0 && independent)
+            if (ruler.Renown > 0 && independent)
             {
-                sb.Append($"\t\t\tdynasty = {{ add_dynasty_prestige = {renown} }}\n");
+                sb.Append($"\t\t\tdynasty = {{ add_dynasty_prestige = {ruler.Renown} }}\n");
             }
 
             // Lifestyle perk points, in the tree his education belongs to. Vanilla already

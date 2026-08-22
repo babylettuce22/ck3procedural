@@ -49,6 +49,23 @@ public sealed record WrittenContent
     /// </summary>
     public RealmMap? Realms { get; init; }
 
+    /// <summary>
+    /// The living ruler of every seat — name, birth, house, profile, purse — as the character file
+    /// and bookmarks were written from them. Null for the same reason <see cref="Realms"/> is: built
+    /// inside the history phase, absent when it was skipped. What the ruler inspector holds.
+    /// </summary>
+    public RulerMap? Rulers { get; init; }
+
+    /// <summary>
+    /// The family and relations written around every ruler — ancestors, spouses, children,
+    /// alliances, claims — which the character file carries beside the rulers themselves and so
+    /// has to be re-emitted from. Null exactly when <see cref="Rulers"/> is.
+    /// </summary>
+    public PrehistoryMap? Prehistory { get; init; }
+
+    /// <summary>Needed to re-emit the bookmarks, which name each character's government.</summary>
+    public GovernmentMap? Governments { get; init; }
+
     /// <summary>The province id boundaries the title localisation file is written against.</summary>
     public required int BaronyCount { get; init; }
 

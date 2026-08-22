@@ -139,9 +139,10 @@ public static class AzgaarNaming
         var all = Titles.Flatten(empires).ToList();
         var byTier = all.GroupBy(t => t.Tier).ToDictionary(g => g.Key, g => g.ToList());
 
-        // The titles whose form word the tier will say for them. Same list the flavorization rules
-        // are written from, so a state cannot end up with the word in both places or in neither.
-        var formOwners = TitleTierWriter.StateForms(azgaar).Select(f => f.Title).ToHashSet();
+        // The titles whose form word the tier will say for them. TitleTierWriter.Assign has already
+        // stamped each state's word on its title, and the flavorization rules are written from that
+        // same field, so a state cannot end up with the word in both places or in neither.
+        var formOwners = all.Where(t => !string.IsNullOrEmpty(t.Form)).ToHashSet();
 
         // The title each state actually became takes that state's *full* name — "Moskor Theocracy",
         // "Thearchy of Mever", "Alorenil League" — rather than the bare "Moskor".

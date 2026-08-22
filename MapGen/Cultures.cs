@@ -61,6 +61,19 @@ public sealed class Culture
     public required string ClothingGfx { get; set; }
     public required string UnitGfx { get; set; }
 
+    /// <summary>
+    /// This people's words for its realms and their holders — Tsardom and Tsar rather than Kingdom
+    /// and King — keyed by government token (feudal, clan, tribal, republic, theocracy,
+    /// administrative, nomad). A government absent here uses vanilla's own words. Decided by
+    /// <see cref="Emit.TitleTierWriter.Assign"/>, editable, and written by
+    /// <see cref="Emit.TitleTierWriter.WriteAll"/>.
+    ///
+    /// Applies to every realm whose <em>top liege</em> is of this culture, whatever the vassal's
+    /// own people — see the writer for why — so it is a statement about a realm's style, not a
+    /// character's.
+    /// </summary>
+    public Dictionary<string, Emit.TitleVocabulary> RealmWords { get; set; } = [];
+
     public string NameListKey => $"name_list_{Key}";
 
     /// <summary>

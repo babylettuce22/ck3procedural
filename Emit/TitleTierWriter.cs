@@ -41,6 +41,14 @@ namespace Ck3MapGen.Emit;
 ///
 /// Written for every map, imported or not. Cultures that draw the ordinary vocabulary emit nothing
 /// and fall through to vanilla's own rules, which is what keeps a tribal count a Chieftain.
+///
+/// Two steps, deliberately apart. <see cref="Assign"/> makes every decision — the draw, the
+/// borrowing from the export — and stores it on the objects: <see cref="Culture.RealmWords"/> per
+/// government, and <see cref="Title.Form"/> on the title a country named itself. <see cref="WriteAll"/>
+/// only reads those back and emits. That split is what lets the inspectors show a culture's words
+/// and change them, and lets <see cref="WorldOverwrite"/> re-emit from the edited objects without
+/// a random stream anywhere near it. Before the split the draw lived inside the writer and the
+/// result existed nowhere, so the only way to change a culture's word was to change the seed.
 /// </summary>
 public static class TitleTierWriter
 {
@@ -59,7 +67,7 @@ public static class TitleTierWriter
     /// Only the suffix is dropped here; the entries themselves are written with the full
     /// <c>_government</c> name, which is what the <c>governments</c> condition matches on.
     /// </summary>
-    private static readonly string[] Governments =
+    public static readonly string[] Governments =
     [
         Token(GovernmentMap.Feudal), Token(GovernmentMap.Clan), Token(GovernmentMap.Tribal),
         Token(GovernmentMap.Republic), Token(GovernmentMap.Theocracy),
@@ -73,25 +81,17 @@ public static class TitleTierWriter
             : government;
 
     /// <summary>
-    /// One culture's whole vocabulary for a rank: what the realm is called and what its holder is
-    /// called, in both genders.
+    /// One of the shipped vocabularies, with the governments it is drawn for.
     ///
-    /// <see cref="Suits"/> is which governments the vocabulary is drawn for. A Thearchy ruled by a
+    /// <see cref="Suits"/> is a statement about the draw, not about the words: a Thearchy ruled by a
     /// Thearch is a fine word for a theocracy and a nonsense one for a horde, and since the keys are
-    /// written per government anyway there is no reason to hand a feudal king a priest's title.
-    /// Null suits anything.
+    /// written per government anyway there is no reason to hand a feudal king a priest's title. Null
+    /// suits anything. It is kept off <see cref="TitleVocabulary"/> itself so that two cultures
+    /// holding the same nine words compare equal however they came by them.
     /// </summary>
-    private sealed record Vocabulary(
-        string Empire, string Kingdom, string Duchy,
-        string Emperor, string Empress,
-        string King, string Queen,
-        string Duke, string Duchess,
-        string[]? Suits = null)
+    private sealed record Ladder(TitleVocabulary Words, string[]? Suits = null)
     {
         public bool Fits(string government) => Suits is null || Suits.Contains(government);
-
-        /// <summary>True for the vocabulary that needs no keys because it is already vanilla's.</summary>
-        public bool IsPlain => Kingdom == "Kingdom" && Duchy == "Duchy" && Empire == "Empire";
     }
 
     /// <summary>
@@ -102,68 +102,80 @@ public static class TitleTierWriter
     /// title nobody can parse. Every one of these is a real historical style for a realm of roughly
     /// the right size, with the ruler's own style beside it.
     /// </summary>
-    private static readonly Vocabulary[] Ladders =
+    private static readonly Ladder[] Ladders =
     [
-        new("Empire", "Kingdom", "Duchy",
-            "Emperor", "Empress", "King", "Queen", "Duke", "Duchess"),
+        new(TitleVocabulary.Plain),
 
-        new("Imperium", "Principality", "March",
-            "Imperator", "Imperatrix", "Prince", "Princess", "Margrave", "Margravine",
+        new(new("Imperium", "Principality", "March",
+                "Imperator", "Imperatrix", "Prince", "Princess", "Margrave", "Margravine"),
             [Feudal, Clan, Administrative]),
 
-        new("Dominion", "Realm", "Marches",
-            "Overlord", "Overlady", "High Lord", "High Lady", "Warden", "Wardeness"),
+        new(new("Dominion", "Realm", "Marches",
+                "Overlord", "Overlady", "High Lord", "High Lady", "Warden", "Wardeness")),
 
-        new("Suzerainty", "Protectorate", "Wardenry",
-            "Suzerain", "Suzeraine", "Protector", "Protectress", "Warden", "Wardeness"),
+        new(new("Suzerainty", "Protectorate", "Wardenry",
+                "Suzerain", "Suzeraine", "Protector", "Protectress", "Warden", "Wardeness")),
 
-        new("Autocracy", "Tsardom", "Voivodeship",
-            "Autocrat", "Autocratrix", "Tsar", "Tsaritsa", "Voivode", "Voivodess",
+        new(new("Autocracy", "Tsardom", "Voivodeship",
+                "Autocrat", "Autocratrix", "Tsar", "Tsaritsa", "Voivode", "Voivodess"),
             [Feudal, Clan, Administrative]),
 
-        new("Grand Realm", "Grand Duchy", "Duchy",
-            "Grand Prince", "Grand Princess", "Grand Duke", "Grand Duchess", "Duke", "Duchess",
+        new(new("Grand Realm", "Grand Duchy", "Duchy",
+                "Grand Prince", "Grand Princess", "Grand Duke", "Grand Duchess", "Duke", "Duchess"),
             [Feudal, Administrative]),
 
-        new("Great Khanate", "Khanate", "Horde",
-            "Great Khan", "Great Khatun", "Khan", "Khatun", "Beg", "Begum",
+        new(new("Great Khanate", "Khanate", "Horde",
+                "Great Khan", "Great Khatun", "Khan", "Khatun", "Beg", "Begum"),
             [Nomad, Clan, Tribal]),
 
-        new("Hegemony", "Thearchy", "Prelacy",
-            "Hegemon", "Hegemoness", "Thearch", "Thearchess", "Prelate", "Prelatess",
+        new(new("Hegemony", "Thearchy", "Prelacy",
+                "Hegemon", "Hegemoness", "Thearch", "Thearchess", "Prelate", "Prelatess"),
             [Theocracy]),
 
-        new("Confederation", "League", "Commune",
-            "Grand Doge", "Grand Dogaressa", "Doge", "Dogaressa", "Consul", "Consul",
+        new(new("Confederation", "League", "Commune",
+                "Grand Doge", "Grand Dogaressa", "Doge", "Dogaressa", "Consul", "Consul"),
             [Republic]),
 
-        new("Grand Council", "Council", "Assembly",
-            "Grand Speaker", "Grand Speaker", "Speaker", "Speaker", "Elder", "Elder",
+        new(new("Grand Council", "Council", "Assembly",
+                "Grand Speaker", "Grand Speaker", "Speaker", "Speaker", "Elder", "Elder"),
             [Republic, Tribal]),
     ];
 
+    /// <summary>Every shipped vocabulary, the plain one first — what an inspector offers.</summary>
+    public static IReadOnlyList<TitleVocabulary> Vocabularies { get; } =
+        [.. Ladders.Select(l => l.Words)];
+
     /// <summary>
-    /// Picks a vocabulary per culture and government, and per imported state, and writes both the
-    /// flavorization entries and the localisation they resolve to.
+    /// Whether a shipped vocabulary is one the generator would draw for this government. A
+    /// vocabulary that is not shipped — one borrowed from an export — suits whatever it was given
+    /// to; the generator already decided that.
+    /// </summary>
+    public static bool Suits(TitleVocabulary vocabulary, string government)
+        => Ladders.FirstOrDefault(l => l.Words == vocabulary)?.Fits(Token(government)) ?? true;
+
+    /// <summary>
+    /// Decides every culture's words for its realms, and every imported country's word for its own
+    /// title, and stores them on the objects for <see cref="WriteAll"/> to emit from.
     ///
     /// Imported maps take their words from the export where they can. Azgaar's <c>formName</c> is the
     /// country's own word for itself — Thearchy, League, Council, Principality, Grand Duchy — and it
     /// is a better answer than anything drawn from a pool, so a state keeps its own form on its own
     /// title and its people take the form their largest state uses for everything else.
+    ///
+    /// Runs before the titles are named: <see cref="AzgaarNaming"/> reads <see cref="Title.Form"/>
+    /// to leave the word out of a state's name, since the tier will say it.
     /// </summary>
-    public static void WriteAll(string modDir, CultureMap cultures, Rng rng,
+    public static void Assign(CultureMap cultures, Rng rng,
         Dictionary<(string Culture, string Government), string>? forms = null,
         AzgaarImport? azgaar = null)
     {
         var imported = forms ?? [];
 
-        var entries = new List<Flavor>();
-
         // Drawn without replacement, reshuffling only once every ladder has been spent. Picking
         // independently each time meant two neighbouring peoples calling their realms Protectorates
         // on a sixteen-culture map, which reads as a bug rather than as a coincidence; a map with
         // more cultures than ladders does repeat, but only after using all of them.
-        var undrawn = new List<Vocabulary>();
+        var undrawn = new List<Ladder>();
 
         int borrowed = 0, drawn = 0, plain = 0;
 
@@ -175,14 +187,11 @@ public static class TitleTierWriter
             var drawnLadder = rng.Chance(0.55) ? DrawLadder() : null;
             bool tookAnything = false, tookImported = false;
 
-            // Governments that ended up with the same words share one set of entries. The condition
-            // takes a list, so a culture whose feudal, clan and administrative realms are all
-            // Tsardoms needs three entries rather than nine.
-            var byVocabulary = new Dictionary<Vocabulary, List<string>>();
+            culture.RealmWords.Clear();
 
             foreach (string government in Governments)
             {
-                Vocabulary? vocabulary = null;
+                TitleVocabulary? vocabulary = null;
 
                 if (imported.TryGetValue((culture.Key, government), out var form))
                 {
@@ -191,22 +200,15 @@ public static class TitleTierWriter
                 }
                 else if (drawnLadder is not null && drawnLadder.Fits(government))
                 {
-                    vocabulary = drawnLadder;
+                    vocabulary = drawnLadder.Words;
                 }
 
+                // Plain is vanilla's own vocabulary; storing nothing is how a government says so.
                 if (vocabulary is null || vocabulary.IsPlain) continue;
                 tookAnything = true;
 
-                if (!byVocabulary.TryGetValue(vocabulary, out var list))
-                    byVocabulary[vocabulary] = list = [];
-                list.Add(government);
+                culture.RealmWords[government] = vocabulary;
             }
-
-            int variant = 0;
-            foreach (var (vocabulary, governments) in byVocabulary)
-                Emit(entries, $"gen_flav_{culture.Key}_{variant++}", vocabulary,
-                     nameList: culture.NameListKey, governments: governments,
-                     titles: null, priority: CulturePriority);
 
             if (tookImported) borrowed++;
             else if (tookAnything) drawn++;
@@ -224,28 +226,21 @@ public static class TitleTierWriter
         int state = 0;
         foreach (var (form, title) in StateForms(azgaar))
         {
-            string ruler = Ruler.From(form);
-            var vocabulary = Single(title.Tier, form, ruler, Ruler.Feminine(ruler));
-            if (vocabulary is null) continue;
-
-            Emit(entries, $"gen_flav_state_{state++}", vocabulary, nameList: null,
-                 governments: null, titles: [title.Key], priority: TitlePriority);
+            title.Form = form;
+            title.Holder = RulerWord.From(form);
+            title.HolderFemale = RulerWord.Feminine(title.Holder);
+            state++;
         }
-
-        if (entries.Count == 0) return;
-
-        WriteEntries(modDir, entries);
-        WriteLocalization(modDir, entries);
 
         Console.WriteLine($"  title tiers: {borrowed} cultures took the export's own words, " +
                           $"{drawn} drew one, {plain} kept Kingdom and Duchy; " +
                           $"{state} states named their own title");
 
-        Vocabulary DrawLadder()
+        Ladder DrawLadder()
         {
             if (undrawn.Count == 0)
             {
-                undrawn.AddRange(Ladders.Where(l => !l.IsPlain));
+                undrawn.AddRange(Ladders.Where(l => !l.Words.IsPlain));
                 rng.Shuffle(undrawn);
             }
 
@@ -253,6 +248,93 @@ public static class TitleTierWriter
             undrawn.RemoveAt(undrawn.Count - 1);
             return picked;
         }
+    }
+
+    /// <summary>
+    /// Writes the flavorization entries and the localisation they resolve to, from what
+    /// <see cref="Assign"/> — or an edit since — left on the cultures and titles.
+    ///
+    /// Pure: no draw happens here, which is what makes it safe for <see cref="WorldOverwrite"/> to
+    /// call again after an inspector has changed a word. With nothing to say the files are removed
+    /// rather than left over, so a culture put back to vanilla's words actually gets them.
+    /// </summary>
+    public static void WriteAll(string modDir, CultureMap cultures, List<Title> empires)
+    {
+        var entries = new List<Flavor>();
+
+        foreach (var culture in cultures.Cultures)
+        {
+            // Governments that ended up with the same words share one set of entries. The condition
+            // takes a list, so a culture whose feudal, clan and administrative realms are all
+            // Tsardoms needs three entries rather than nine. Walked in the fixed government order
+            // so the file does not move between two writes of the same words.
+            var byVocabulary = new Dictionary<TitleVocabulary, List<string>>();
+
+            foreach (string government in Governments)
+            {
+                if (!culture.RealmWords.TryGetValue(government, out var vocabulary)) continue;
+                if (vocabulary.IsPlain) continue;
+
+                if (!byVocabulary.TryGetValue(vocabulary, out var list))
+                    byVocabulary[vocabulary] = list = [];
+                list.Add(government);
+            }
+
+            int variant = 0;
+            foreach (var (vocabulary, governments) in byVocabulary)
+                Emit(entries, $"gen_flav_{culture.Key}_{variant++}", vocabulary,
+                     nameList: culture.NameListKey, governments: governments,
+                     titles: null, priority: CulturePriority);
+        }
+
+        foreach (var title in Titles.Flatten(empires))
+        {
+            if (string.IsNullOrWhiteSpace(title.Form)) continue;
+            if (Single(title.Tier, title.Form, title.Holder ?? "", title.HolderFemale ?? "")
+                is not { } vocabulary) continue;
+
+            Emit(entries, $"gen_flav_{title.Key}", vocabulary, nameList: null,
+                 governments: null, titles: [title.Key], priority: TitlePriority);
+        }
+
+        string entriesPath = Path.Combine(modDir, "common", "flavorization", "zz_generated_flavorization.txt");
+        string locPath = Path.Combine(modDir, "localization", "english", "gen_title_tiers_l_english.yml");
+
+        if (entries.Count == 0)
+        {
+            if (File.Exists(entriesPath)) File.Delete(entriesPath);
+            if (File.Exists(locPath)) File.Delete(locPath);
+            return;
+        }
+
+        WriteEntries(entriesPath, entries);
+        WriteLocalization(locPath, entries);
+    }
+
+    /// <summary>
+    /// What a title renders as for the character holding it, the way the engine will decide it:
+    /// the title's own word if it has one, else the top liege's culture's word for the holder's
+    /// government, else null for vanilla's own rules. The realm word and the holder's style, in
+    /// the holder's gender.
+    ///
+    /// The culture is the <em>top liege's</em> because the culture rules are written with
+    /// <c>top_liege = yes</c> — see <see cref="WriteEntries"/> for why — and the government is the
+    /// holder's own for the same reason.
+    /// </summary>
+    public static (string Realm, string Holder)? Resolve(Title title, Culture liegeCulture,
+        string government, bool female)
+    {
+        if (!string.IsNullOrWhiteSpace(title.Form))
+        {
+            string male = title.Holder ?? "", fem = title.HolderFemale ?? "";
+            return (title.Form.Trim(), female ? (fem.Length > 0 ? fem : male) : (male.Length > 0 ? male : fem));
+        }
+
+        if (liegeCulture.RealmWords.TryGetValue(Token(government), out var words)
+            && words.Realm(title.Tier) is { Length: > 0 } realm)
+            return (realm, words.Holder(title.Tier, female));
+
+        return null;
     }
 
     /// <summary>
@@ -276,12 +358,12 @@ public static class TitleTierWriter
     }
 
     /// <summary>A vocabulary carrying one word, at the one rung the title actually sits on.</summary>
-    private static Vocabulary? Single(string tier, string realm, string male, string female)
+    private static TitleVocabulary? Single(string tier, string realm, string male, string female)
         => tier switch
         {
-            "e" => new Vocabulary(realm, "", "", male, female, "", "", "", ""),
-            "k" => new Vocabulary("", realm, "", "", "", male, female, "", ""),
-            "d" => new Vocabulary("", "", realm, "", "", "", "", male, female),
+            "e" => new TitleVocabulary(realm, "", "", male, female, "", "", "", ""),
+            "k" => new TitleVocabulary("", realm, "", "", "", male, female, "", ""),
+            "d" => new TitleVocabulary("", "", realm, "", "", "", "", male, female),
             _ => null,
         };
 
@@ -318,7 +400,7 @@ public static class TitleTierWriter
     /// Empty words are skipped, which is what lets a per-title vocabulary carry only the one rung
     /// its title sits on.
     /// </summary>
-    private static void Emit(List<Flavor> into, string key, Vocabulary vocabulary,
+    private static void Emit(List<Flavor> into, string key, TitleVocabulary vocabulary,
         string? nameList, IReadOnlyList<string>? governments, IReadOnlyList<string>? titles,
         int priority)
     {
@@ -355,7 +437,7 @@ public static class TitleTierWriter
     /// the entry matches. Writing the localisation alone put a string in the game's dictionary that
     /// nothing ever looked up.
     /// </summary>
-    private static void WriteEntries(string modDir, List<Flavor> entries)
+    private static void WriteEntries(string path, List<Flavor> entries)
     {
         var sb = new StringBuilder();
         sb.Append("# Generated flavorization: each culture's word for its realms and their holders,\n");
@@ -414,12 +496,11 @@ public static class TitleTierWriter
             sb.Append("}\n\n");
         }
 
-        string dir = Path.Combine(modDir, "common", "flavorization");
-        Directory.CreateDirectory(dir);
-        ParadoxText.WriteBom(Path.Combine(dir, "zz_generated_flavorization.txt"), sb.ToString());
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        ParadoxText.WriteBom(path, sb.ToString());
     }
 
-    private static void WriteLocalization(string modDir, List<Flavor> entries)
+    private static void WriteLocalization(string path, List<Flavor> entries)
     {
         // No BOM in the string. ParadoxText.WriteBom encodes with one, and seeding the builder with
         // a second left U+FEFF in front of "l_english:" once the encoder's own was stripped — which
@@ -428,9 +509,8 @@ public static class TitleTierWriter
         var sb = new StringBuilder("l_english:\n");
         foreach (var entry in entries) sb.Append($" {entry.Key}:0 \"{entry.Text}\"\n");
 
-        string dir = Path.Combine(modDir, "localization", "english");
-        Directory.CreateDirectory(dir);
-        ParadoxText.WriteBom(Path.Combine(dir, "gen_title_tiers_l_english.yml"), sb.ToString());
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        ParadoxText.WriteBom(path, sb.ToString());
     }
 
     /// <summary>
@@ -484,12 +564,13 @@ public static class TitleTierWriter
     /// rung is decided by matching against the ladders below and falling back to the kingdom rung,
     /// which is where most states land.
     /// </summary>
-    private static Vocabulary Borrow(string form, string government, Rng rng)
+    private static TitleVocabulary Borrow(string form, string government, Rng rng)
     {
         foreach (var ladder in Ladders)
         {
-            if (Same(ladder.Empire, form) || Same(ladder.Kingdom, form) || Same(ladder.Duchy, form))
-                return ladder;
+            var words = ladder.Words;
+            if (Same(words.Empire, form) || Same(words.Kingdom, form) || Same(words.Duchy, form))
+                return words;
         }
 
         // An unfamiliar form still becomes this culture's word for a kingdom, and its holder is
@@ -497,13 +578,13 @@ public static class TitleTierWriter
         // drawn so the ladder stays complete, from a pool that suits the government so a Caliphate's
         // duchies are not Communes.
         var basis = Fitting(government, rng);
-        string ruler = Ruler.From(form);
+        string ruler = RulerWord.From(form);
 
         return basis with
         {
             Kingdom = form,
             King = ruler,
-            Queen = Ruler.Feminine(ruler),
+            Queen = RulerWord.Feminine(ruler),
         };
 
         static bool Same(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
@@ -517,11 +598,64 @@ public static class TitleTierWriter
     /// Duchies under a plain Duke is the one outcome that adds nothing — the borrowed word is
     /// evidence the people has its own vocabulary, so the rungs around it should have one too.
     /// </summary>
-    private static Vocabulary Fitting(string government, Rng rng)
+    private static TitleVocabulary Fitting(string government, Rng rng)
     {
-        var pool = Ladders.Where(l => !l.IsPlain && l.Fits(government)).ToList();
-        return pool.Count == 0 ? Ladders[0] : rng.Pick(pool);
+        var pool = Ladders.Where(l => !l.Words.IsPlain && l.Fits(government)).ToList();
+        return pool.Count == 0 ? Ladders[0].Words : rng.Pick(pool).Words;
     }
+}
+
+/// <summary>
+/// One people's whole vocabulary for its realms: what each rank is called and what its holder is
+/// called, in both genders.
+///
+/// Stored per government on <see cref="Culture.RealmWords"/>, and written as flavorization by
+/// <see cref="TitleTierWriter"/>. Empty words are allowed, which is how a per-title vocabulary
+/// carries only the one rung its title sits on. A record over nine strings and nothing else, so
+/// that two cultures holding the same words compare equal however they came by them — the writer
+/// groups governments by that equality.
+/// </summary>
+public sealed record TitleVocabulary(
+    string Empire, string Kingdom, string Duchy,
+    string Emperor, string Empress,
+    string King, string Queen,
+    string Duke, string Duchess)
+{
+    /// <summary>Vanilla's own words. Never written: a government with these stores nothing.</summary>
+    public static readonly TitleVocabulary Plain = new("Empire", "Kingdom", "Duchy",
+        "Emperor", "Empress", "King", "Queen", "Duke", "Duchess");
+
+    // The derived views are kept out of the JSON the edit overlay writes: only the nine words are
+    // the vocabulary, and the rest would be noise that a reader might think was data.
+
+    /// <summary>True for the vocabulary that needs no keys because it is already vanilla's.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsPlain => Kingdom == "Kingdom" && Duchy == "Duchy" && Empire == "Empire";
+
+    /// <summary>The three realm words, top down — how an inspector names a vocabulary.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string Label => $"{Empire} · {Kingdom} · {Duchy}";
+
+    /// <summary>The three holders' styles, top down, in the masculine.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string Holders => $"{Emperor} · {King} · {Duke}";
+
+    /// <summary>The realm word for one of our tier letters; empty below duchy.</summary>
+    public string Realm(string tier) => tier switch
+    {
+        "e" => Empire, "k" => Kingdom, "d" => Duchy, _ => "",
+    };
+
+    /// <summary>The holder's style for one of our tier letters; empty below duchy.</summary>
+    public string Holder(string tier, bool female) => tier switch
+    {
+        "e" => female ? Empress : Emperor,
+        "k" => female ? Queen : King,
+        "d" => female ? Duchess : Duke,
+        _ => "",
+    };
+
+    public override string ToString() => Label;
 }
 
 /// <summary>
@@ -533,7 +667,7 @@ public static class TitleTierWriter
 /// anything — so a table alone would leave holes, and a hole here is what puts a Patriarch back on
 /// the throne of a Khanate.
 /// </summary>
-internal static class Ruler
+internal static class RulerWord
 {
     /// <summary>Forms whose ruler is not the form word with a suffix filed off.</summary>
     private static readonly Dictionary<string, string> Irregular =

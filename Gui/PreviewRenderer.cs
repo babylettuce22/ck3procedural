@@ -932,6 +932,121 @@ public static class PreviewRenderer
     private static (byte R, byte G, byte B) Colour(TerrainClass terrain)
         => Io.DebugRender.TerrainColour(terrain);
 
+    // Impassable diagnostics palette. Shared with the legend in MapModes so the key matches the paint.
+    public static readonly (byte R, byte G, byte B)
+        ImpassableFill = (204, 44, 44),      // ranked in on relief
+        TrappedFill = (196, 64, 200),        // filled by the connectivity pass
+        QualifiesFill = (232, 200, 64),      // over the floor, cut by the target share
+        SteepTint = (236, 140, 36),          // pixel at or above the steep line
+        HighTint = (150, 140, 236),          // pixel at or above the mountain line
+        PassableBase = (150, 150, 150);
+
+    /// <summary>
+    /// Why the impassable pass chose what it chose. Grey hillshade for ground that counts for
+    /// nothing, orange where a pixel is steep enough to count, violet where it is high enough,
+    /// both where both; impassable provinces filled red (or magenta when the connectivity pass
+    /// filled them), and provinces that cleared the floor but lost to the target share in yellow,
+    /// so a quota-limited map shows what the next notch of <c>ImpassableShareOfLand</c> would take.
+    /// Province borders are drawn throughout so a near miss can be read against its neighbours.
+    /// </summary>
+    public static Image RenderImpassable(GenerationResult result)
+        => RenderImpassable(result.Provinces, result.ProvinceElevation, result.Config);
+
+    public static Image RenderImpassable(ProvinceMap map, float[] elevation, MapConfig cfg)
+    {
+        int width = map.Width, height = map.Height;
+        var diag = map.Impassability;
+        float sea = cfg.Limits.SeaLevelUpper;
+        float[]? slope = diag is null ? null : Provinces.Slopes(elevation, width, height);
+
+        bool Steep(int i) => slope is not null && slope[i] >= diag!.SteepLine;
+        bool High(int i) => diag is not null && elevation[i] >= diag.MountainLine;
+
+        bool Edge(int i)
+        {
+            int x = i % width, y = i / width, label = map.Label[i];
+            return (x + 1 < width && map.Label[i + 1] != label)
+                || (y + 1 < height && map.Label[i + width] != label);
+        }
+
+        static (byte, byte, byte) Mix((byte R, byte G, byte B) a, (byte R, byte G, byte B) b, double t)
+            => ((byte)(a.R + (b.R - a.R) * t), (byte)(a.G + (b.G - a.G) * t), (byte)(a.B + (b.B - a.B) * t));
+
+        return Downsample(width, height,
+            i =>
+            {
+                var seed = map.Seeds[map.Label[i]];
+                float e = elevation[i];
+                if (!seed.IsLand || e <= sea)
+                {
+                    float depth = Math.Clamp((sea - e) / Math.Max(1f, sea - cfg.SeaFloorElevation), 0, 1);
+                    return ((byte)(38 + 26 * (1 - depth)), (byte)(70 + 44 * (1 - depth)),
+                            (byte)(104 + 48 * (1 - depth)));
+                }
+
+                int x = i % width, y = i / width;
+                float left = elevation[y * width + Math.Max(0, x - 1)];
+                float up = elevation[Math.Max(0, y - 1) * width + x];
+                double shade = Math.Clamp(0.75 - ((e - left) + (e - up)) * 0.05, 0.25, 1.35);
+
+                bool steep = Steep(i), high = High(i);
+                var ground = steep && high ? Mix(SteepTint, HighTint, 0.5)
+                    : steep ? SteepTint
+                    : high ? HighTint
+                    : PassableBase;
+
+                var colour = seed.ImpassableCause switch
+                {
+                    ImpassableCause.Score => Mix(ground, ImpassableFill, 0.6),
+                    ImpassableCause.Trapped => Mix(ground, TrappedFill, 0.6),
+                    _ when seed.IsImpassable => Mix(ground, ImpassableFill, 0.6),
+                    _ when diag is not null && diag.Qualifies(seed.ImpassableScore)
+                        => Mix(ground, QualifiesFill, 0.45),
+                    _ => ground,
+                };
+
+                if (Edge(i)) shade *= seed.IsImpassable ? 0.3 : 0.55;
+
+                return ((byte)Math.Clamp(colour.Item1 * shade, 0, 255),
+                        (byte)Math.Clamp(colour.Item2 * shade, 0, 255),
+                        (byte)Math.Clamp(colour.Item3 * shade, 0, 255));
+            },
+            i =>
+            {
+                var seed = map.Seeds[map.Label[i]];
+                if (!seed.IsLand) return 0;
+                if (Edge(i)) return seed.IsImpassable ? 4 : 3;
+                if (seed.IsImpassable) return 2;
+                return Steep(i) || High(i) ? 1 : 0;
+            });
+    }
+
+    /// <summary>Hover line for the Impassable mode: the province's score against the floor.</summary>
+    public static string? ImpassableProbe(GenerationResult result, int cell)
+    {
+        var map = result.Provinces;
+        var seed = map.Seeds[map.Label[cell]];
+        if (!seed.IsLand) return null;
+
+        var diag = map.Impassability;
+        if (diag is null) return "no impassable pass ran";
+        if (float.IsNaN(seed.ImpassableScore))
+            return seed.IsImpassable ? "impassable, unscored" : "unscored";
+
+        string verdict = seed.ImpassableCause switch
+        {
+            ImpassableCause.Score => "impassable",
+            ImpassableCause.Trapped => "impassable — trapped (landlocked behind impassables)",
+            _ when seed.IsImpassable => "impassable",
+            _ when diag.Qualifies(seed.ImpassableScore) => "clears the floor, cut by target share",
+            _ => $"below floor by {diag.Floor - seed.ImpassableScore:F2}",
+        };
+
+        return $"score {seed.ImpassableScore:F2} vs floor {diag.Floor:F2} · " +
+               $"{seed.HighShare:P0} above {diag.MountainLine:F0} m · " +
+               $"{seed.SteepShare:P0} steep (≥{diag.SteepLine:F2}/px) · {verdict}";
+    }
+
     private static Image Downsample(int width, int height,
         Func<int, (byte R, byte G, byte B)> colour, Func<int, int>? rank = null)
     {
