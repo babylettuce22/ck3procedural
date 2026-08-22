@@ -719,10 +719,13 @@ public static partial class CompatibilityWriter
 
                 int vanilla = int.Parse(match.Groups[2].Value);
 
-                // Floored at zero rather than at one: `year = 0` is what the tribal era ships with
-                // and is how an era says "from the beginning", so it is a value to preserve rather
-                // than a date to make legal.
-                int shifted = Math.Max(0, vanilla + cfg.EraOffset);
+                // Zero is not a date, it is "from the beginning" — the tribal era's way of saying
+                // there is nothing before it. Sliding it forward with the rest opens a gap where
+                // the world has no era at all, which a positive offset makes visible immediately:
+                // shift by +548 and every culture is era-less until the year 548.
+                if (vanilla == 0) continue;
+
+                int shifted = Math.Max(1, vanilla + cfg.EraOffset);
 
                 lines[i] = $"{match.Groups[1].Value}year = {shifted}\t# was {vanilla}";
                 moved++;
