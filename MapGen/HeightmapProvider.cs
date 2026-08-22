@@ -38,10 +38,18 @@ public abstract class HeightmapProvider
 }
 
 /// <summary>A heightmap PNG on disk, decoded by <see cref="HeightmapSource.Read"/>.</summary>
-public sealed class FileHeightmapProvider(string path, (int Width, int Height)? fitTo = null)
+public sealed class FileHeightmapProvider(string path, (int Width, int Height)? fitTo = null,
+    bool allowUnverifiedSize = false)
     : HeightmapProvider
 {
     public string Path { get; } = path;
+
+    /// <summary>
+    /// Build at the file's own size even though <see cref="TileFit"/> does not know it to render.
+    /// The other answer to the same offer <see cref="FitTo"/> comes from, and kept here for the
+    /// same reason: it is a decision about this file, asked again for the next one.
+    /// </summary>
+    public bool AllowUnverifiedSize { get; } = allowUnverifiedSize;
 
     /// <summary>
     /// The size to resample the file to on the way in, or null to take it as it is.
@@ -59,7 +67,10 @@ public sealed class FileHeightmapProvider(string path, (int Width, int Height)? 
         => FitTo is { } fit
             ? $"{Path}\n\nResampled to {fit.Width}x{fit.Height} as it loads, because CK3 only "
               + "renders the whole of a map at certain sizes. The file itself is untouched."
-            : Path;
+            : AllowUnverifiedSize
+                ? $"{Path}\n\nBuilt at its own size, which CK3 is not known to render correctly, "
+                  + "to find out whether it does. Check the map's north and east edges in game."
+                : Path;
 
     public override string PhaseName => "heightmap decode";
 
@@ -69,7 +80,8 @@ public sealed class FileHeightmapProvider(string path, (int Width, int Height)? 
         {
             // The fit is part of the identity, not a detail of how the image was made: change it
             // and the cached image no longer describes what Produce would return.
-            string fit = FitTo is { } f ? $"|fit={f.Width}x{f.Height}" : "";
+            string fit = (FitTo is { } f ? $"|fit={f.Width}x{f.Height}" : "")
+                       + (AllowUnverifiedSize ? "|unverified" : "");
             var info = new FileInfo(Path);
 
             return info.Exists
@@ -79,7 +91,7 @@ public sealed class FileHeightmapProvider(string path, (int Width, int Height)? 
     }
 
     public override HeightmapImage Produce(MapConfig cfg, CancellationToken ct, IProgress<string>? status)
-        => HeightmapSource.Read(Path, cfg, FitTo);
+        => HeightmapSource.Read(Path, cfg, FitTo, AllowUnverifiedSize);
 }
 
 /// <summary>
@@ -88,9 +100,17 @@ public sealed class FileHeightmapProvider(string path, (int Width, int Height)? 
 /// the 16-bit heightmap the game reads and nothing is normalised afterwards
 /// (<see cref="HeightmapImage.Ck3Scale"/>).
 /// </summary>
-public sealed class ForgeHeightmapProvider(HeightPipeline pipeline, string name) : HeightmapProvider
+public sealed class ForgeHeightmapProvider(HeightPipeline pipeline, string name,
+    bool allowUnverifiedSize = false) : HeightmapProvider
 {
     public HeightPipeline Pipeline { get; } = pipeline;
+
+    /// <summary>
+    /// Build at the pipeline's output size even though <see cref="TileFit"/> does not know it to
+    /// render. Set by the Heightmap tab's Use for generation when the user chose to test the size
+    /// rather than change it.
+    /// </summary>
+    public bool AllowUnverifiedSize { get; } = allowUnverifiedSize;
 
     /// <summary>The project or preset name, for the label; not a path.</summary>
     public string Name { get; } = name;
@@ -126,6 +146,8 @@ public sealed class ForgeHeightmapProvider(HeightPipeline pipeline, string name)
             foreach (var stage in Pipeline.Stages)
                 if (stage.Enabled) sb.Append('|').Append(stage.Fingerprint());
 
+            if (AllowUnverifiedSize) sb.Append("|unverified");
+
             return sb.ToString();
         }
     }
@@ -151,7 +173,7 @@ public sealed class ForgeHeightmapProvider(HeightPipeline pipeline, string name)
         field = null!;
         result = null!;
 
-        return HeightmapSource.FromRaw(raw, width, height, Label, cfg);
+        return HeightmapSource.FromRaw(raw, width, height, Label, cfg, AllowUnverifiedSize);
     }
 }
 

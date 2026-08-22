@@ -253,7 +253,10 @@ public sealed class ForgeSession : IDisposable
     public void ResetStage(PipelineStage stage) => stage.Params.ResetToDefaults();
 
     /// <summary>The heightmap source the generator builds from: this pipeline, by reference, so later edits flow through.</summary>
-    public ForgeHeightmapProvider ProviderForGeneration() => new(Pipeline, Name);
+    /// <param name="allowUnverifiedSize">Build even at an export size CK3 is not known to render;
+    /// the panel asks before passing true. See <see cref="MapGen.TileFit.Known"/>.</param>
+    public ForgeHeightmapProvider ProviderForGeneration(bool allowUnverifiedSize = false)
+        => new(Pipeline, Name, allowUnverifiedSize);
 
     // ------------------------------------------------------------------ preview
 

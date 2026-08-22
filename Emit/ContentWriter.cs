@@ -293,6 +293,16 @@ public static class ContentWriter
                     cultures, ethnicities, faiths, governments, wilderness, prehistory,
                     bookmarkResult.BookmarkDnaMap);
 
+                // Last of the history block, because it reads everything the rest of it decided.
+                // Inside the block rather than beside it: with --no-history there are no houses, no
+                // wars and no artifacts, so a chronicle written there could only repeat the map back
+                // at the player, and the GUI already treats a missing key as "no button".
+                var chronicle = Core.Stage.Time("chronicle", () => ChronicleMap.Build(
+                    empires, realms, development, cultures, faiths, wilderness, prehistory,
+                    artifacts, worldCenters, cfg, new Rng(cfg.Seed ^ 0x104E)));
+
+                ChronicleWriter.WriteAll(modDir, chronicle, empires);
+
                 WarWriter.WriteAll(modDir, prehistory);
                 PortraitWriter.WriteAll(modDir, gameDir, bookmarkResult.PortraitRequests, ethnicities, cfg.Seed);
             });

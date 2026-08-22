@@ -125,17 +125,11 @@ public static class GuiWriter
     // would not work: Patch() reads vanilla and writes the mod once per Target, so a second entry
     // naming window_title.gui would overwrite the wilderness placeholder rather than join it.
     //
-    // Nothing here is generated yet. The button opens a panel that says so. What it is FOR is a
-    // per-title history blurb the generator writes as `gen_lore_<title key>` into its own
-    // localisation file, read back with `Localize( Concatenate( 'gen_lore_', Title.GetKey ) )` --
-    // that chain is valid, ck3-tiger accepts it, and it needs no scripted_gui, no variable and no
-    // on_action, which is why it is the shape the rest of this is built around. When the lore
-    // exists, the button gains
-    //
-    //     visible = "[Not( StringIsEmpty( Localize( Concatenate( 'gen_lore_', Title.GetKey ) ) ) )]"
-    //
-    // and the panel's text_multi swaps its placeholder key for the same expression. Until then the
-    // button shows on every title, which is the point of this step.
+    // The text comes from Emit/ChronicleWriter.cs, which writes one `gen_lore_<title key>` per
+    // title into its own localisation file. Nothing else is in the path: no scripted_gui, no
+    // variable, no on_action. The button asks whether that key resolves to anything and hides
+    // itself when it does not, which is what gives baronies and wilderness no button rather than
+    // an empty panel, and what lets the whole feature vanish cleanly under --no-history.
 
     /// <summary>
     /// The button, spliced in above vanilla's "view_claimants" as a third entry in the vertical
@@ -153,6 +147,7 @@ public static class GuiWriter
             name = "gen_title_lore_button"
             parentanchor = right
 
+            visible = "[Not( StringIsEmpty( Localize( Concatenate( 'gen_lore_', Title.GetKey ) ) ) )]"
             onclick = "[GetVariableSystem.Toggle( 'gen_title_lore' )]"
             tooltip = "GEN_TITLE_LORE_TOOLTIP"
 
@@ -188,22 +183,43 @@ public static class GuiWriter
             visible = "[And( GetVariableSystem.Exists( 'gen_title_lore' ), Not( {SHOW_RAW} ) )]"
 
             position = { 660 80 }
-            size = { 420 60% }
+            size = { 480 60% }
             allow_outside = yes
 
             using = Window_Background
             using = Window_Decoration
 
+            # The width budget, because getting it wrong clips every line and the failure is silent
+            # -- max_width larger than the space available does not wrap early, it overflows and the
+            # scrollbox crops it. Four things take a bite, in this order:
+            #
+            #     480  panel
+            #    - 36  this vbox's margin (Window_Margins would take 80, which is sized for a full
+            #          window and leaves a text panel this wide with barely 300 usable)
+            #    - 35  Scrollbox_Margins, inside the scrollbox: 15 left, 20 right
+            #    - 13  the vertical scrollbar
+            #    = 396 usable, against a max_width of 370 below
+            #
+            # Change any of those and the max_width has to move with it.
             vbox = {
-                using = Window_Margins
+                margin = { 18 16 }
                 spacing = 8
 
                 hbox = {
                     layoutpolicy_horizontal = expanding
 
+                    # Matches Scrollbox_Margins' own left inset, which the body text below picks up
+                    # from inside the scrollbox and this row does not. Without it the title hangs
+                    # 15px to the left of the paragraphs it heads.
+                    margin_left = 15
+
+                    # Capped for the same reason as the body, minus the close button's own width:
+                    # generated realm names run long and this one is a single line, so without it a
+                    # bad name pushes the close button off the panel entirely.
                     text_single = {
                         text = "[Title.GetNameNoTooltip]"
                         default_format = "#high"
+                        max_width = 370
                         using = Font_Size_Medium
                     }
 
@@ -224,7 +240,7 @@ public static class GuiWriter
                             layoutpolicy_horizontal = expanding
                             autoresize = yes
                             max_width = 370
-                            text = "GEN_TITLE_LORE_PLACEHOLDER"
+                            text = "[Localize( Concatenate( 'gen_lore_', Title.GetKey ) )]"
                         }
                     }
                 }

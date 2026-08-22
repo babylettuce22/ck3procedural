@@ -34,6 +34,10 @@ public static class AnimalWriter
 
     private static readonly Species[] SpeciesTable =
     [
+        // Scale ranges are vanilla's own, measured per entity over its animals.txt: every sheep
+        // and horse variant sits at 1.00 give or take a few hundredths, the elephant at 0.457.
+        // They are drawn at that size on every map, as the trees are.
+
         // Flocks, and the densest of the three — sheep are the animal of settled land.
         new("sheep",
             [new("map_mpo_sheep_female_01_entity", 149), new("map_mpo_sheep_female_02_entity", 147),
@@ -41,7 +45,7 @@ public static class AnimalWriter
             false,
             [(TerrainClass.Farmlands, 26), (TerrainClass.Hills, 15), (TerrainClass.Plains, 13),
              (TerrainClass.Steppe, 7), (TerrainClass.Drylands, 4)],
-            5, 9, 15.0, 0.44, 0.57),
+            5, 9, 15.0, 0.95, 1.05),
 
         // Deliberately lopsided toward steppe: wild horse herds.
         new("horse",
@@ -52,14 +56,14 @@ public static class AnimalWriter
             false,
             [(TerrainClass.Steppe, 30), (TerrainClass.Plains, 9), (TerrainClass.Farmlands, 6),
              (TerrainClass.Drylands, 4)],
-            2, 5, 10.0, 0.42, 0.57),
+            2, 5, 10.0, 0.95, 1.05),
 
         // Solitary jungle/floodplain elephants.
         new("elephant",
             [new("elephant_entity", 1)],
             true,
             [(TerrainClass.Jungle, 8), (TerrainClass.Floodplains, 3)],
-            1, 1, 0.0, 0.228709, 0.228709),
+            1, 1, 0.0, 0.457, 0.457),
     ];
 
     private static readonly TerrainClass[] OpenGround =
@@ -82,9 +86,10 @@ public static class AnimalWriter
 
         bool enabled = cfg.EnableAnimals && cfg.AnimalDensity > 0;
         double densityMultiplier = enabled ? cfg.AnimalDensity : 0.0;
-        // Scaled with the map for the same reason the trees are: the meshes are authored against
-        // vanilla's world size, and an unscaled herd on a larger map reads as vermin.
-        double scaleMultiplier = cfg.AnimalScale * cfg.MapScale;
+        // Vanilla size on every map, for the same reason the trees and holdings are: a province
+        // pixel is one world unit whatever the map size, so the meshes need no rescaling to fit
+        // it. AnimalScale is the player's own knob on top of that, 1.0 being vanilla.
+        double scaleMultiplier = cfg.AnimalScale;
 
         foreach (var species in SpeciesTable)
         {

@@ -65,6 +65,14 @@ namespace Ck3MapGen.Emit;
 /// </summary>
 public static class TreeWriter
 {
+    /// <param name="Footprint">Half the mesh footprint in province pixels, the radius
+    /// <see cref="ScatterGround.IsFlatEnough"/> scans. 0 means no flatness test.</param>
+    /// <param name="MaxRelief">Most relief, in world units (<c>WORLD_EXTENTS_Y</c> = 50), the
+    /// ground across that footprint may have before the site is refused. The numbers in the
+    /// table are where vanilla's own foliage stops: measured over each vanilla generator's
+    /// instances against vanilla's heightmap, they are the 95th percentile of relief at the
+    /// same footprint — ~1.1 for the common trees, 1.6 for cypress, 0.6 for steppe scrub, 0.7
+    /// for reeds, 2.0 for the impassable pine over its five-pixel radius.</param>
     private sealed record Generator(
         string File,
         string Prefix,
@@ -168,21 +176,26 @@ public static class TreeWriter
     /// size. Ranges below are centred on vanilla's measured mean, tightened at the extremes where
     /// vanilla has a few degenerate near-zero instances.
     ///
-    /// <b>Density</b> is instances per 1000 province pixels of that terrain class, tuned so the
-    /// total lands near vanilla's ~468,000 once scaled for how much less land we have.
+    /// <b>Density</b> is instances per 1000 province pixels of that terrain class, tuned so that
+    /// at <c>TreeDensity</c> 1.0 the map carries about what vanilla does per land pixel — vanilla's
+    /// 549,099 generated instances over its land come to 23 per 1000 pixels. Per pixel, not per
+    /// map: a province pixel is the same world unit on every map size, so the same density is the
+    /// same canopy, and a smaller map simply has fewer trees because it has less land.
     /// </summary>
     private static readonly Generator[] Generators =
     [
         // Ground cover. Reeds mean 1.00 across three mesh variants.
         new("reeds_01_generator_1.txt", "reeds_01_generator_1", "grass_layer",
             ["reeds_06_grass_mesh", "reeds_07_grass_mesh", "reeds_01_tall_grass_mesh"],
-            [(TerrainClass.Wetlands, 55), (TerrainClass.Floodplains, 36)], 0.55, 1.45),
+            [(TerrainClass.Wetlands, 55), (TerrainClass.Floodplains, 36)], 0.55, 1.45,
+            Footprint: 1, MaxRelief: 0.7f),
 
         // Steppe scrub, exactly as vanilla draws it: close-up ground cover on grass_layer, at
         // vanilla's own measured scale.
         new("steppe_bush_01_generator.txt", "steppe_bush_01_generator", "grass_layer",
             ["steppe_bush_01_mesh"],
-            [(TerrainClass.Steppe, 18), (TerrainClass.Drylands, 9)], 0.25, 0.75),
+            [(TerrainClass.Steppe, 18), (TerrainClass.Drylands, 9)], 0.25, 0.75,
+            Footprint: 2, MaxRelief: 1.1f),
 
         // There used to be a second pass here that put the same bush on tree_high_layer, to give
         // steppe something visible at play zoom — see the class remarks on why grass_layer alone
@@ -200,16 +213,16 @@ public static class TreeWriter
         // Mediterranean / subtropical uplands. Vanilla fixes cypress scale at exactly 1.00.
         new("tree_cypress_01_generator_1.txt", "tree_cypress_01_generator_1", "tree_high_layer",
             ["tree_cypress_01_a_mesh", "tree_cypress_01_b_mesh", "tree_cypress_01_c_mesh"],
-            [(TerrainClass.Drylands, 4), (TerrainClass.Hills, 3.5)], 1.0, 1.0, Flora.Warm, 2, 24f),
+            [(TerrainClass.Drylands, 4), (TerrainClass.Hills, 3.5)], 1.0, 1.0, Flora.Warm, 1, 1.6f),
 
         // Jungle. Vanilla runs the c and d variants at 1,227 against 38,113 — c is the occasional
         // accent, not a co-equal variant — so the densities keep that ~1:31 ratio.
         new("tree_jungle_01_c_generator_1.txt", "tree_jungle_01_c_generator_1", "tree_high_layer",
             ["tree_jungle_01_c_mesh"],
-            [(TerrainClass.Jungle, 1.4)], 0.70, 1.10, Flora.Warm, 2, 24f),
+            [(TerrainClass.Jungle, 1.4)], 0.70, 1.10, Flora.Warm, 1, 1.2f),
         new("tree_jungle_01_d_generator_1.txt", "tree_jungle_01_d_generator_1", "tree_high_layer",
             ["tree_jungle_01_d_mesh"],
-            [(TerrainClass.Jungle, 42)], 0.50, 1.00, Flora.Warm, 2, 24f),
+            [(TerrainClass.Jungle, 42)], 0.50, 1.00, Flora.Warm, 1, 1.2f),
 
         // Scattered broadleaf on open ground. The steppe entry is what replaces the bush patch
         // that used to stand in for a horizon: a lone tree is a real upright silhouette, and
@@ -217,7 +230,7 @@ public static class TreeWriter
         new("tree_leaf_01_single_generator_1.txt", "tree_leaf_01_single_generator_1",
             "tree_high_layer", ["tree_leaf_01_single_a_mesh"],
             [(TerrainClass.Plains, 2.4), (TerrainClass.Farmlands, 1.6), (TerrainClass.Steppe, 2.0),
-             (TerrainClass.Drylands, 1.2)], 0.50, 0.90, Flora.Broadleaf, 2, 24f),
+             (TerrainClass.Drylands, 1.2)], 0.50, 0.90, Flora.Broadleaf, 1, 1.2f),
 
         // Temperate broadleaf forest — vanilla's densest group by a wide margin, and the group that
         // used to cover the boreal north as well, because nothing here could tell the two apart.
@@ -225,16 +238,16 @@ public static class TreeWriter
         // to each other are vanilla's still, carrying the global increase.
         new("tree_leaf_2_high_generator_1.txt", "tree_leaf_2_high_generator_1", "tree_high_layer",
             ["tree_leaf_01_a_mesh", "tree_leaf_01_b_mesh"],
-            [(TerrainClass.Forest, 12), (TerrainClass.Hills, 3)], 0.40, 0.80, Flora.Broadleaf, 2, 24f),
+            [(TerrainClass.Forest, 12), (TerrainClass.Hills, 3)], 0.40, 0.80, Flora.Broadleaf, 1, 1.2f),
         new("tree_leaf_high_generator_1.txt", "tree_leaf_high_generator_1", "tree_high_layer",
             ["tree_leaf_01_a_mesh"],
-            [(TerrainClass.Forest, 36), (TerrainClass.Hills, 6)], 0.60, 1.00, Flora.Broadleaf, 2, 24f),
+            [(TerrainClass.Forest, 36), (TerrainClass.Hills, 6)], 0.60, 1.00, Flora.Broadleaf, 1, 1.2f),
         new("tree_leaf_high_generator_2.txt", "tree_leaf_high_generator_2", "tree_high_layer",
             ["tree_leaf_01_b_mesh"],
-            [(TerrainClass.Forest, 17), (TerrainClass.Farmlands, 2)], 0.21, 0.60, Flora.Broadleaf, 2, 24f),
+            [(TerrainClass.Forest, 17), (TerrainClass.Farmlands, 2)], 0.21, 0.60, Flora.Broadleaf, 1, 1.2f),
         new("tree_leaf_high_generator_3.txt", "tree_leaf_high_generator_3", "tree_high_layer",
             ["tree_leaf_01_c_mesh"],
-            [(TerrainClass.Forest, 22), (TerrainClass.Plains, 1.8)], 0.56, 1.04, Flora.Broadleaf, 2, 24f),
+            [(TerrainClass.Forest, 22), (TerrainClass.Plains, 1.8)], 0.56, 1.04, Flora.Broadleaf, 1, 1.2f),
 
         // Palms: tropical shore, a token scatter on open desert, and the oasis itself — which is
         // the one place they should actually stand thick, now that oases are a terrain class
@@ -243,7 +256,7 @@ public static class TreeWriter
         new("tree_palm_generator_1.txt", "tree_palm_generator_1", "tree_high_layer",
             ["tree_palm_01_a_mesh"],
             [(TerrainClass.Beach, 4), (TerrainClass.Desert, 0.3), (TerrainClass.Oasis, 26)],
-            0.50, 0.90, Flora.Warm, 2, 24f),
+            0.50, 0.90, Flora.Warm, 1, 1.2f),
 
         // Conifers, and the reason for the climate table above. These used to be effectively a
         // Taiga-only group, and Taiga is painted only inside the subarctic and only where the
@@ -256,11 +269,11 @@ public static class TreeWriter
         new("tree_pine_01_a_generator_1.txt", "tree_pine_01_a_generator_1", "tree_high_layer",
             ["tree_pine_single_01_a_mesh", "tree_pine_single_01_b_mesh", "tree_pine_single_01_c_mesh"],
             [(TerrainClass.Taiga, 14), (TerrainClass.Forest, 12), (TerrainClass.Hills, 2),
-             (TerrainClass.Plains, 1.2), (TerrainClass.Steppe, 2.5)], 1.0, 1.0, Flora.Conifer, 2, 24f),
+             (TerrainClass.Plains, 1.2), (TerrainClass.Steppe, 2.5)], 1.0, 1.0, Flora.Conifer, 1, 1.2f),
         new("tree_pine_01_b_generator_1.txt", "tree_pine_01_b_generator_1", "tree_high_layer",
             ["tree_pine_01_b_mesh"],
             [(TerrainClass.Taiga, 46), (TerrainClass.Forest, 30), (TerrainClass.Hills, 4),
-             (TerrainClass.Plains, 1.5)], 0.40, 0.40, Flora.Conifer, 2, 24f),
+             (TerrainClass.Plains, 1.5)], 0.40, 0.40, Flora.Conifer, 1, 1.2f),
         // The impassable mesh is not a tree. It is a piece of forest scenery — a standing pine
         // with a fallen log beside it, 23 x 21 units in plan, which is nine province pixels across
         // even at vanilla's fixed 0.40. Vanilla gets away with it because it packs them: measured
@@ -271,15 +284,15 @@ public static class TreeWriter
         // So it is kept, at a third of the density it had on the two terrains it keeps, and only
         // where the ground under the whole footprint is level — a log half-buried in a hillside or
         // cantilevered off a ridge is the other half of why these read as debris. Measured against
-        // a generated heightmap, a 14-unit tolerance over this footprint accepts a little over
-        // half of all land, so the two together leave roughly a sixth of what was there.
+        // a generated heightmap, two world units of relief over this footprint accepts about two
+        // thirds of all land, so the two together leave roughly a fifth of what was there.
         //
         // Mountains are dropped outright rather than left to the flatness test: there is no ground
         // that level up there, so it would only ever be paying for the scan to reject them.
         new("tree_pine_impassable_01_a_generator_1.txt", "tree_pine_impassable_01_a_generator_1",
             "tree_high_layer", ["tree_pine_impassable_01_a_mesh"],
             [(TerrainClass.Taiga, 2.5), (TerrainClass.Forest, 1.5)],
-            0.40, 0.40, Flora.Conifer, Footprint: 5, MaxRelief: 14f),
+            0.40, 0.40, Flora.Conifer, Footprint: 5, MaxRelief: 2.0f),
 
         // Sakura is region flavour with no generated equivalent, but the files still have to exist
         // so vanilla's copies — which are placed over Japan — are displaced rather than loaded.
@@ -363,10 +376,10 @@ public static class TreeWriter
                         // heightmap pixel that is genuinely under water. See ScatterGround.
                         if (!ScatterGround.IsDryLand(elevation, cfg, jx, jy)) { drowned++; continue; }
 
-                        // Wide scenery meshes need the ground level under all of themselves, not
-                        // just under their origin.
+                        // Every mesh needs the ground level under its base, and a wide one under
+                        // all of itself. Tested at the jittered position, where it will stand.
                         if (generator.Footprint > 0 && !ScatterGround.IsFlatEnough(
-                                elevation, cfg, x, y, generator.Footprint, generator.MaxRelief))
+                                elevation, cfg, jx, jy, generator.Footprint, generator.MaxRelief))
                         {
                             steep++;
                             continue;
@@ -377,10 +390,20 @@ public static class TreeWriter
                         var (wx, wz) = WorldSpace.FromImage(jx, jy, height);
                         float px = (float)wx, pz = (float)wz;
 
-                        // Scaled with the map: the meshes are authored against vanilla's world size,
-                        // and on a larger one an unscaled tree is a shrub next to its own province.
-                        float scale = (float)((generator.MinScale +
-                            rng.NextDouble() * (generator.MaxScale - generator.MinScale)) * cfg.MapScale);
+                        // Vanilla size, on every map. This used to be multiplied by MapScale, on the
+                        // argument that the meshes are authored against vanilla's world size and an
+                        // unscaled tree on a larger map is a shrub beside its own province. That is
+                        // the wrong frame: WORLD_EXTENTS_Y is 50 and a province pixel is one world
+                        // unit on every map (see CompatibilityWriter), so a smaller map is a smaller
+                        // region at the same scale, not the same world shrunk — a tree is the same
+                        // size on it, exactly as the holdings are, which LocatorWriter writes at
+                        // scale 1 and HoldingScale keeps at vanilla size on principle. Shrinking
+                        // trees to a fifth of vanilla's beside full-size castles was also what made
+                        // them read as floating: every placement error is the same absolute size,
+                        // and against a tiny mesh it is a large share of the tree. Density is where
+                        // the map size belongs, and TreeDensity is per province pixel already.
+                        float scale = (float)(generator.MinScale +
+                            rng.NextDouble() * (generator.MaxScale - generator.MinScale));
 
                         buckets[rng.Int(0, buckets.Length - 1)]
                             .Add((px, pz, (float)(rng.NextDouble() * Math.Tau), scale));

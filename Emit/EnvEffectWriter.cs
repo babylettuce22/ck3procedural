@@ -88,13 +88,14 @@ public static class EnvEffectWriter
         var sb = new StringBuilder(1 << 16);
         long total = 0;
 
-        // Resolution scaling factors relative to vanilla reference (18432x9216 heightmap / 9216x4608 provinces)
-        // cfg.MapScale is (ProvinceWidth / 9216.0).
-        double resolutionScale = cfg.MapScale;
+        // Vanilla size on every map, as the trees and animals are: a province pixel is one world
+        // unit whatever the map size (see CompatibilityWriter), so the billboards are not rescaled
+        // with the map. EnvEffectScale is the player's knob on top of that, 1.0 being vanilla.
         double densityMultiplier = cfg.EnvEffectDensity;
-        double scaleMultiplier = cfg.EnvEffectScale * resolutionScale;
+        double scaleMultiplier = cfg.EnvEffectScale;
 
-        // Clamp minimum visual scale so small maps don't shrink particle quads below engine visibility thresholds
+        // Floor on the visual scale, so a knob turned far down cannot shrink a particle quad below
+        // what the engine will draw.
         float minSafeScaleFloor = 0.12f;
 
         foreach (var spec in Specs)

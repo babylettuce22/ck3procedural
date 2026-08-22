@@ -34,54 +34,70 @@ public static class TileFit
     /// <summary>
     /// The heightmap sizes confirmed to render correctly, and the only ones a mod is built at.
     ///
-    /// A list rather than a rule, and that is the point. Successive divisibility rules were fitted
-    /// to the sizes known to work at the time, and each was falsified by the next map rendered:
+    /// A list rather than a rule, and that is the point. Every size here was rendered and its
+    /// north and east edges looked at; the ten results to date, all 2:1:
     ///
-    ///     rule                        killed by
-    ///     multiple of 64              11520x5696
-    ///     exactly 2:1                 11520x5760
-    ///     multiple of 128             11520x5760
-    ///     multiple of 512 (8 tiles)   10240x5120
+    ///     works    4096x2048  5120x2560  6144x3072  8192x4096  9216x4608  18432x9216
+    ///     clips    10240x5120  11520x5696  11520x5760  12288x6144
     ///
-    /// 10240x5120 is the one that should end any temptation to try again: a multiple of 512 on
-    /// both axes, an exact 160x80 tile grid, 2:1 — and it clips. Whatever the engine keys on is
-    /// not a property of the numbers that six data points can see.
+    /// Read the pairs: 5120 works and its exact double 10240 clips; 6144 works and 12288 clips.
+    /// Doubling preserves every arithmetic property a size has — odd part, divisibility, tile
+    /// count, aspect — so whatever the engine keys on is not the numbers' structure but their
+    /// magnitude. Five divisibility rules were fitted to earlier subsets of this table and each
+    /// was falsified by the next map rendered (multiple of 64, 128, 512; exactly 2:1; only powers
+    /// of two and three). Do not fit a sixth.
     ///
-    /// It is not the packed heightmap either. 11520x5760 packs into an exact 180x90 grid with
-    /// every tile addressed and every sample round-tripping, and it still clips once CK3's own
-    /// map editor has repacked it with its own packer — inside the editor's viewport, not only
-    /// in game.
+    /// What the table does support: everything at or below 9216 wide renders, everything between
+    /// 9216 and 18432 does not, and 18432 — vanilla's own size — does. That reads as something
+    /// engine-side sized for vanilla that smaller maps fit inside and the in-between ones spill
+    /// out of, but the mechanism is not known and is not guessed at here.
     ///
-    /// So: a whitelist of sizes someone has rendered and looked at, and anything else is resampled
-    /// to the nearest entry. Add to it only after rendering that size and checking the map's north
-    /// and east edges. Do not add one because it looks like it ought to work.
+    /// It is not the packed heightmap. 11520x5760 packs into an exact 180x90 grid with every
+    /// tile addressed and every sample round-tripping, and it still clips once CK3's own map
+    /// editor has repacked it with its own packer — inside the editor's viewport, not only in
+    /// game.
     ///
-    /// 4096x2048 is the one entry not verified that way. It is here because a run of maps was
-    /// built and played at it before any of this was understood, which is evidence but not the
-    /// same evidence: nobody went looking at the north and east edges for missing terrain, and
-    /// this whole investigation started because that is exactly the kind of damage that goes
-    /// unnoticed. Everything at that size is fast to regenerate, so if it turns out to clip,
-    /// deleting the line costs nothing.
+    /// So: a whitelist, and anything else is resampled to the nearest entry or, on request, built
+    /// anyway so the list can grow. Add a size only after rendering it and checking its edges —
+    /// the three in the middle of the safe band were added that way on 2026-08-21 — and never
+    /// because it looks like it ought to work. Still untested: any non-2:1 size, and anything
+    /// above 9216 other than vanilla itself.
     /// </summary>
     public static readonly (int Width, int Height)[] Known =
     [
         (18432, 9216), // vanilla
         (9216, 4608),  // half vanilla
-        (4096, 2048),  // added on the strength of maps already built at it; see the note below
+        (8192, 4096),  // the tool's own default MapConfig size
+        (6144, 3072),
+        (5120, 2560),
+        (4096, 2048),  // the size the tool's own fast-iteration maps are built at
     ];
 
-    /// <summary>The sizes, for a message: "9216x4608 or 18432x9216".</summary>
+    /// <summary>
+    /// The sizes, smallest first, for a message: "4096x2048, 5120x2560, … or 18432x9216". Commas
+    /// with one "or", because six entries joined by "or" read as a sentence that never ends.
+    /// </summary>
     public static string KnownList
-        => string.Join(" or ", Known.Select(k => $"{k.Width}x{k.Height}").Reverse());
+    {
+        get
+        {
+            var sizes = Known.Select(k => $"{k.Width}x{k.Height}").Reverse().ToArray();
+            return sizes.Length <= 1
+                ? string.Concat(sizes)
+                : string.Join(", ", sizes[..^1]) + " or " + sizes[^1];
+        }
+    }
 
     public static bool Fits(int width, int height)
         => Known.Any(k => k.Width == width && k.Height == height);
 
     /// <summary>
     /// The entry of <see cref="Known"/> closest to a size, compared as a scale factor rather than
-    /// as a pixel count: the two candidates are a factor of two apart, so a linear midpoint would
-    /// send everything under 13824 down to half vanilla, including sizes a few percent short of
-    /// full. The geometric midpoint, 13036, is where "closer to full" stops being true.
+    /// as a pixel count. The entries are 1024 apart up to 9216 and then a factor of two to 18432,
+    /// and it is that last gap the log distance is for: a linear midpoint would send everything
+    /// under 13824 down to 9216, including sizes a few percent short of vanilla. The geometric
+    /// midpoint, 13036, is where "closer to vanilla" stops being true. Inside the lower band the
+    /// two measures agree to within the spacing, so nothing there changes.
     ///
     /// The source's aspect does not enter into it. Every confirmed size is 2:1, so a source that
     /// is not gets stretched to it, per axis, by <see cref="Resample"/>.
@@ -132,6 +148,16 @@ public static class TileFit
              + "whatever the heightmap is packed with, CK3's own repack included. Nothing is "
              + $"logged when it happens. The nearest size that works is {nw}x{nh}.";
     }
+
+    /// <summary>
+    /// The log line for a size being built on request despite not being in <see cref="Known"/>.
+    /// Loud on purpose: the whole point of such a build is to look at the result, and this is the
+    /// reminder of what to look at and what to do with the answer.
+    /// </summary>
+    public static string UnverifiedNotice(string label, int width, int height)
+        => $"  UNVERIFIED SIZE: {label} is {width}x{height}, not one of {KnownList}. Building it "
+         + "anyway to test whether CK3 renders it. In game, check the map's north and east edges "
+         + "for missing terrain; if it is clean, add the size to TileFit.Known.";
 
     /// <summary>
     /// Resamples 16-bit samples onto a new grid, through the same Catmull-Rom filter the Forge
@@ -207,10 +233,13 @@ public static class HeightmapSource
     /// the generator) takes them by the same route a PNG takes. Width and height become the
     /// map size, so they are checked here the way a decoded image's are — including
     /// <see cref="TileFit"/>, which a file gets offered a fix for and a pipeline does not,
-    /// because a pipeline's output size is a setting the user can simply change.
+    /// because a pipeline's output size is a setting the user can simply change. Either can
+    /// waive the check with <paramref name="allowUnverifiedSize"/>, which is how an untested size
+    /// gets built and looked at; see <see cref="TileFit.Known"/>.
     /// </summary>
     /// <param name="label">What to call it in the log and the toolbar; it is not a path.</param>
-    public static HeightmapImage FromRaw(ushort[] raw, int width, int height, string label, MapConfig cfg)
+    public static HeightmapImage FromRaw(ushort[] raw, int width, int height, string label, MapConfig cfg,
+        bool allowUnverifiedSize = false)
     {
         if (width <= 0 || height <= 0 || (long)width * height != raw.LongLength)
             throw new ArgumentException($"{label}: {width}x{height} does not match {raw.LongLength:N0} samples.");
@@ -221,9 +250,16 @@ public static class HeightmapSource
                 "provinces.png and rivers.png are exactly half the heightmap's resolution.");
 
         if (!TileFit.Fits(width, height))
-            throw new InvalidOperationException(
-                TileFit.Explain(label, width, height)
-                + "\n\nPick a base resolution that works, or add an Upscale stage that lands on one.");
+        {
+            if (!allowUnverifiedSize)
+                throw new InvalidOperationException(
+                    TileFit.Explain(label, width, height)
+                    + "\n\nPick a base resolution that works, add an Upscale stage that lands on "
+                    + "one, or press Use for generation again and choose to build at this size "
+                    + "anyway, to test it.");
+
+            Console.WriteLine(TileFit.UnverifiedNotice(label, width, height));
+        }
 
         var loaded = new HeightmapImage
         {
@@ -247,7 +283,13 @@ public static class HeightmapSource
     /// carried from the point it was accepted (MainForm's offer, or <c>--fit-heightmap</c>) to the
     /// decode. Without it a file that does not fit is refused here rather than shipped broken.
     /// </param>
-    public static HeightmapImage Read(string path, MapConfig cfg, (int Width, int Height)? fitTo = null)
+    /// <param name="allowUnverifiedSize">
+    /// Build at the file's own size even though <see cref="TileFit"/> does not know it to render:
+    /// the "build anyway, to test it" answer to the same offer, or <c>--allow-unverified-size</c>.
+    /// A fit takes precedence when both are given, since a fitted size is a known one.
+    /// </param>
+    public static HeightmapImage Read(string path, MapConfig cfg, (int Width, int Height)? fitTo = null,
+        bool allowUnverifiedSize = false)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         using var image = SharpImage.Load<L16>(path);
@@ -293,11 +335,18 @@ public static class HeightmapSource
                 "provinces.png and rivers.png are exactly half the heightmap's resolution.");
 
         if (!TileFit.Fits(width, height))
-            throw new InvalidOperationException(
-                TileFit.Explain("Heightmap", width, height)
-                + "\n\nResize it and reload, or let the tool do it: the file dialog offers "
-                + "the fit when it loads a size like this, and the command line takes "
-                + "--fit-heightmap.");
+        {
+            if (!allowUnverifiedSize)
+                throw new InvalidOperationException(
+                    TileFit.Explain("Heightmap", width, height)
+                    + "\n\nResize it and reload, or let the tool do it: the file dialog offers "
+                    + "the fit when it loads a size like this, and the command line takes "
+                    + "--fit-heightmap. To build at this size regardless and find out whether "
+                    + "CK3 renders it, the dialog has that option too, and the command line "
+                    + "takes --allow-unverified-size.");
+
+            Console.WriteLine(TileFit.UnverifiedNotice("Heightmap", width, height));
+        }
 
         var info = new FileInfo(path);
         var loaded = new HeightmapImage

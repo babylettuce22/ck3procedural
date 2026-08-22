@@ -20,7 +20,11 @@ public sealed class ForgePanel : UserControl
     public ForgeSession Session { get; } = new();
 
     /// <summary>The user pressed "Use for generation": the host should install the session's provider.</summary>
-    public event Action? UseForGeneration;
+    /// <summary>
+    /// Raised by Use for generation. The argument is whether the user agreed to build at an export
+    /// size CK3 is not known to render — false on any size in <see cref="MapGen.TileFit.Known"/>.
+    /// </summary>
+    public event Action<bool>? UseForGeneration;
 
     /// <summary>Where the preset dialogs open. The host persists it.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
@@ -550,10 +554,11 @@ public sealed class ForgePanel : UserControl
         _export.Click += (_, _) => _ = ExportAsync();
         _tips.SetToolTip(_export, "Run the pipeline at full size and write a 16-bit heightmap PNG");
 
-        _use.Click += (_, _) => UseForGeneration?.Invoke();
+        _use.Click += (_, _) => RequestUseForGeneration();
         _tips.SetToolTip(_use,
             "Build the mod from this pipeline instead of a PNG. Preview and Write mod on the " +
-            "toolbar then run it at full size first, every time it has changed.");
+            "toolbar then run it at full size first, every time it has changed. At an export " +
+            "size CK3 is not known to render, this asks before building anyway.");
 
         strip.Controls.Add(Caption("View"));
         strip.Controls.Add(_view);
@@ -603,7 +608,8 @@ public sealed class ForgePanel : UserControl
     }
 
     /// <summary>
-    /// Whether the export size can be built into a mod. Deferred to <see cref="MapGen.TileFit"/>
+    /// Whether the export size is one CK3 is known to render, so it builds without a question.
+    /// Deferred to <see cref="MapGen.TileFit"/>
     /// rather than tested here, so a Forge export and a PNG loaded from disk are held to one rule.
     /// This checked the packer's 64 px tile directly and would have let through sizes the engine
     /// clips.
@@ -615,6 +621,38 @@ public sealed class ForgePanel : UserControl
             var (ow, oh) = Session.Pipeline.OutputSize();
             return MapGen.TileFit.Fits(ow, oh);
         }
+    }
+
+    /// <summary>
+    /// Hands the pipeline to the generator — after one question, if its export size is not one
+    /// CK3 is known to render. The button used to be disabled at such a size, which made
+    /// <see cref="MapGen.TileFit.Known"/> impossible to grow from this tab: the only way to learn
+    /// whether a size renders is to build it and look, and this is where sizes get chosen.
+    ///
+    /// Public because the main toolbar's heightmap menu offers the same hand-off, and it has to
+    /// ask the same question rather than slip past it.
+    /// </summary>
+    public void RequestUseForGeneration()
+    {
+        var (ow, oh) = Session.Pipeline.OutputSize();
+        bool unverified = !MapGen.TileFit.Fits(ow, oh);
+
+        if (unverified)
+        {
+            var answer = MessageBox.Show(this,
+                $"The export size is {ow} x {oh}, which is not one of the sizes CK3 is known to "
+                + $"render correctly ({MapGen.TileFit.KnownList}).\n\n"
+                + "At other sizes the engine has left terrain undrawn along the north and east "
+                + "edges, in the map editor as much as in game. Nothing is logged when it happens.\n\n"
+                + "Build at this size anyway, to test whether CK3 renders it? If it comes out clean, "
+                + "the size can be added to the known list.",
+                "This export size is not one CK3 is known to render",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+            if (answer != DialogResult.Yes) return;
+        }
+
+        UseForGeneration?.Invoke(unverified);
     }
 
     private void UpdateResInfo()
@@ -629,11 +667,11 @@ public sealed class ForgePanel : UserControl
         string text = $"Export {ow} × {oh}  ({(double)ow * oh / 1e6:0.0} MP){chain}\nPreview {pw} × {ph}" +
                       $"  ·  sea level {Ck3.WaterLevel255}/255 (CK3's plane, fixed)";
         if (!buildable)
-            text += $"\n⚠ must be a multiple of {MapGen.TileFit.KnownList} to build a mod";
+            text += $"\n⚠ not a size CK3 is known to render ({MapGen.TileFit.KnownList}); " +
+                    "Use for generation will ask before building it anyway";
 
         _resInfo.Text = text;
         _resInfo.ForeColor = buildable ? Theme.TextDim : Theme.Danger;
-        _use.Enabled = buildable;
     }
 
     private void OnPreviewReady(ForgePreview preview)

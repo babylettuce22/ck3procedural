@@ -13,9 +13,9 @@
  MOD_GITHUB_BUTTON_TOOLTIP: "View the latest releases, changelogs, and bugfixes on GitHub"
 
  # The realm-lore button on the title window, spliced in by Emit/GuiWriter.cs beside vanilla's
- # "Claimants" and "Title History". The panel has nothing to show yet; the placeholder says so
- # rather than opening empty, because an empty panel reads as a bug and this one is on purpose.
+ # "Claimants" and "Title History". Only the chrome lives here -- the panel's body is one
+ # gen_lore_<title key> per title, written per map by Emit/ChronicleWriter.cs, and the button hides
+ # itself on any title that has no such key.
  GEN_TITLE_LORE:0 "Realm Lore"
  GEN_TITLE_LORE_TOOLTIP:0 "What is remembered of this realm."
- GEN_TITLE_LORE_PLACEHOLDER:0 "#italic Nothing is yet recorded of this place.#!\n\nThe chroniclers have not finished their work."
 

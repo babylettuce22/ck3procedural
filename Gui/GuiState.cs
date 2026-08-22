@@ -37,6 +37,14 @@ public sealed class GuiState
     /// <inheritdoc cref="HeightmapFitWidth"/>
     public int? HeightmapFitHeight { get; set; }
 
+    /// <summary>
+    /// Whether <see cref="HeightmapPath"/> is to be built at its own size even though that size is
+    /// not one CK3 is known to render: the "build anyway, to test it" answer to the same offer the
+    /// fit comes from. Remembered for the same reason, and replaced by whatever is answered for
+    /// the next file chosen.
+    /// </summary>
+    public bool HeightmapAllowUnverifiedSize { get; set; }
+
     public string? View { get; set; }
 
     /// <summary>The last mode chosen in each strip category, so switching categories lands back

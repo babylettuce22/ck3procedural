@@ -22,6 +22,7 @@ public static class Program
         bool guiOnly = false;
         bool preview3d = false;
         bool fitHeightmap = false;
+        bool allowUnverifiedSize = false;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -143,6 +144,13 @@ public static class Program
                     fitHeightmap = true;
                     break;
 
+                // Build at the heightmap's own size even though it is not one CK3 is known to
+                // render, to find out whether it does. The GUI offers the same answer; see
+                // MapGen.TileFit for what "known" means and how the list grows.
+                case "--allow-unverified-size":
+                    allowUnverifiedSize = true;
+                    break;
+
                 // Rescale a heightmap drawn on somebody else's height scale onto CK3's. The value
                 // is where the source puts its own sea level on the 0-255 scale — 51 for an Azgaar
                 // export. It is advisory now that the land floor is detected rather than taken as a
@@ -207,6 +215,13 @@ public static class Program
             }
         }
 
+        if (fitHeightmap && allowUnverifiedSize)
+        {
+            Console.Error.WriteLine(
+                "--fit-heightmap and --allow-unverified-size are alternatives; give one of them.");
+            return 1;
+        }
+
         if (fitHeightmap)
         {
             if (options.Heightmap is not MapGen.FileHeightmapProvider file)
@@ -235,6 +250,20 @@ public static class Program
                 Console.WriteLine($"--fit-heightmap: {fileWidth}x{fileHeight} -> "
                                   + $"{target.Width}x{target.Height}");
             }
+        }
+
+        if (allowUnverifiedSize)
+        {
+            // The provider was built during parsing, before the flag could be known; rebuild it
+            // with the flag rather than threading a mutable setting through both providers.
+            options.Heightmap = options.Heightmap switch
+            {
+                MapGen.FileHeightmapProvider file
+                    => new MapGen.FileHeightmapProvider(file.Path, null, allowUnverifiedSize: true),
+                MapGen.ForgeHeightmapProvider forge
+                    => new MapGen.ForgeHeightmapProvider(forge.Pipeline, forge.Name, allowUnverifiedSize: true),
+                var other => other,
+            };
         }
 
         if (preview3d)
@@ -315,6 +344,8 @@ public static class Program
             Console.Error.WriteLine(
                 $"       [--fit-heightmap]  resamples the PNG to the nearest of {MapGen.TileFit.KnownList}");
             Console.Error.WriteLine(
+                "       [--allow-unverified-size]  builds at the heightmap's own size, to test whether CK3 renders it");
+            Console.Error.WriteLine(
                 "       [--land-top 0-255] [--land-top-percentile 0-100]");
             Console.Error.WriteLine(
                 "       [--azgaar <export.json>]  optional; borrows names from an Azgaar map");
@@ -327,10 +358,24 @@ public static class Program
         Console.WriteLine($"Game folder: {options.GameDir}");
 
         Core.Stage.Begin();
-        var result = Generator.Generate(options);
-        if (modDir is not null) Generator.WriteMod(result, options, modDir);
-        Core.Stage.Time("debug images", () => Generator.WriteDebugImages(result, outDir, scale));
-        Core.Stage.Report();
+        Core.RunLog.Begin();
+        try
+        {
+            var result = Generator.Generate(options);
+            if (modDir is not null) Generator.WriteMod(result, options, modDir);
+            Core.Stage.Time("debug images", () => Generator.WriteDebugImages(result, outDir, scale));
+            Core.Stage.Report();
+        }
+        catch (Exception ex) when (modDir is not null)
+        {
+            // The record goes into whatever was written before the failure, so a half-written
+            // folder says why. Printed once, to stdout, and the exit code carries the rest.
+            Console.WriteLine(ex);
+            Core.RunLog.Write(modDir, options, $"failed: {ex.Message}");
+            return 1;
+        }
+
+        if (modDir is not null) Core.RunLog.Write(modDir, options, "completed");
         return 0;
     }
 

@@ -55,52 +55,82 @@ internal static class ScatterGround
     }
 
     /// <summary>
-    /// Whether the ground around a province pixel is flat enough to stand a wide object on.
+    /// Whether the ground under a scatter position is level enough to stand its mesh on.
     ///
-    /// Most map objects are a metre or two across and can be dropped anywhere the engine will take
-    /// them, but a few of vanilla's meshes are scenery rather than props — several province pixels
-    /// wide, with their own internal composition — and those only look right where the ground under
-    /// the whole footprint is level. Set them down on a slope and the engine still plants the
-    /// origin on the terrain, leaving the far side of the mesh buried or hanging in the air.
+    /// The engine plants each instance's origin on the terrain and leaves the mesh upright, so on
+    /// a slope the downhill side of its base hangs in the air and the uphill side is buried. Every
+    /// generated mesh has the problem; what differs is how wide the base is and how much tilt the
+    /// mesh can hide — a pine's trunk forgives more than a fallen log does.
     ///
     /// Relief across the footprint, rather than a gradient at the centre: what matters is whether
     /// any part of the ground the mesh covers is far off the height it is planted at, and a ridge
-    /// crossing the footprint fails that while reading as flat at the middle.
+    /// crossing the footprint fails that while reading as flat at the middle. Every heightmap
+    /// texel inside the footprint is read — the engine drops the mesh onto that surface, not onto
+    /// a sample of it — and the footprint is centred on the texel the jittered position lands
+    /// on, through the same mapping <see cref="IsDryLand"/> uses, so the two tests look at the
+    /// same ground.
+    ///
+    /// The tolerance is in world units, which is the only frame in which one number means the
+    /// same thing on every map: <c>WORLD_EXTENTS_Y</c> is 50 whatever the map size or its
+    /// <c>PeakElevation</c> (see <see cref="CompatibilityWriter.WriteDefines"/>), so a world unit
+    /// of relief is the same drop under a tree everywhere. Elevation arrives in simulation units
+    /// and is restated through the exact mapping <see cref="MapDataWriter"/> ships it with.
     /// </summary>
-    /// <param name="radius">Half the mesh footprint, in province pixels — one province pixel is
-    /// one world unit, the same frame the mesh's own extents are measured in.</param>
-    /// <param name="maxRelief">Largest tolerable spread in raw heightmap units. For scale, sea
-    /// level is 36, hills begin at 205 and mountains at 255.</param>
-    public static bool IsFlatEnough(float[] elevation, MapConfig cfg, int x, int y,
+    /// <param name="px">Column in province space, fractional — the jittered position itself.</param>
+    /// <param name="py">Row in province space, fractional, in image order (top-down).</param>
+    /// <param name="radius">Half the footprint, in province pixels — one province pixel is one
+    /// world unit, the same frame the mesh's own extents are measured in.</param>
+    /// <param name="maxRelief">Largest tolerable spread, in world units. For scale: vanilla's
+    /// own foliage sits on at most ~1.1 units across a one-pixel radius at the 95th percentile,
+    /// its mountain line is around 20 units above the sea, and the tallest peak is 50.</param>
+    public static bool IsFlatEnough(float[] elevation, MapConfig cfg, double px, double py,
         int radius, float maxRelief)
     {
         int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
+        int x = (int)px, y = (int)py;
+        if (x < 0 || x >= width || y < 0 || y >= height) return false;
+
+        int scaleX = cfg.Width / width, scaleY = cfg.Height / height;
+        var (y0, x0) = Raster.ProvinceBlock(x, y, scaleX, scaleY, cfg.Width, cfg.Height);
+        int cx = x0 + Math.Clamp((int)((px - x) * scaleX), 0, scaleX - 1);
+        int cy = y0 + Math.Clamp((int)((py - y) * scaleY), 0, scaleY - 1);
+
+        int rx = radius * scaleX, ry = radius * scaleY;
+        if (cx - rx < 0 || cx + rx >= cfg.Width || cy - ry < 0 || cy + ry >= cfg.Height) return false;
+
         float low = float.MaxValue, high = float.MinValue;
-
-        // The tolerance is quoted against vanilla's height range, so it has to be restated in this
-        // map's. Elevation here is in simulation units, and a map with taller peaks spreads the same
-        // real-world slope over more of them — left unscaled, a generous tolerance on a dramatic map
-        // silently becomes a strict one and the wide meshes stop being placed at all.
-        float range = Math.Max(1f, cfg.PeakElevation - cfg.Limits.SeaLevelUpper);
-        float vanillaRange = Math.Max(1f, 236f);
-        float tolerance = maxRelief * (range / vanillaRange);
-
-        for (int dy = -radius; dy <= radius; dy += 2)
+        for (int sy = cy - ry; sy <= cy + ry; sy++)
         {
-            for (int dx = -radius; dx <= radius; dx += 2)
+            long row = (long)sy * cfg.Width;
+            for (int sx = cx - rx; sx <= cx + rx; sx++)
             {
-                int sx = x + dx, sy = y + dy;
-                if (sx < 0 || sx >= width || sy < 0 || sy >= height) return false;
-
-                float h = HeightAt(elevation, cfg, sx, sy);
+                float h = WorldHeight(elevation[row + sx], cfg);
                 low = Math.Min(low, h);
                 high = Math.Max(high, h);
-
-                if (high - low > tolerance) return false;
+                if (high - low > maxRelief) return false;
             }
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// A simulation-unit elevation as the height the engine renders it at, in world units. The
+    /// same piecewise map <see cref="MapDataWriter"/> uses to write heightmap.png, then the 16-bit
+    /// range onto <c>WORLD_EXTENTS_Y</c>.
+    /// </summary>
+    public static float WorldHeight(float elevation, MapConfig cfg)
+    {
+        float sea = cfg.Limits.SeaLevelUpper;
+        float floor = cfg.SeaFloorElevation;
+        float peak = cfg.PeakElevation;
+        const float water = MapDataWriter.WaterLevel16;
+
+        float v = elevation <= sea
+            ? (elevation - floor) / Math.Max(1e-3f, sea - floor) * water
+            : water + (elevation - sea - 1f) / Math.Max(1e-3f, peak - sea - 1f) * (65535f - water);
+
+        return Math.Clamp(v, 0f, 65535f) * (50f / 65535f);
     }
 
     /// <summary>

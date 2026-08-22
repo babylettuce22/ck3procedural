@@ -650,7 +650,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     [AdvancedSetting]
     [Category("05 Rivers")]
     [Description("Half-width of a major river's carved channel at its source, in heightmap pixels measured from the centreline — the channel is twice this across. Below about 7 it stops surviving the downsample into the province map and the river ceases to be navigable.")]
-    public double RiverChannelRadiusMin { get; set; } = 12.0;
+    public double RiverChannelRadiusMin { get; set; } = 7.0;
 
     /// <summary>
     /// Half-width of a major river's carved channel at its mouth, in vanilla heightmap pixels.
@@ -659,7 +659,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     [AdvancedSetting]
     [Category("05 Rivers")]
     [Description("Half-width of a major river's carved channel at its mouth, in heightmap pixels from the centreline. The channel opens from the source radius to this along its length.")]
-    public double RiverChannelRadiusMax { get; set; } = 18.0;
+    public double RiverChannelRadiusMax { get; set; } = 12.0;
 
     /// <summary>
     /// How much a major river's channel breathes in and out along its length, as a fraction of the
@@ -747,8 +747,8 @@ public sealed class MapConfig : CustomTypeDescriptor
 
     [AdvancedSetting]
     [Category("06 Map Objects")]
-    [Description("Scale multiplier for animal models on the 3D map.")]
-    public double AnimalScale { get; set; } = 1.3;
+    [Description("Scale multiplier for animal models on the 3D map. 1.0 is vanilla size, which the models are drawn at on every map size.")]
+    public double AnimalScale { get; set; } = 1.0;
 
     [AdvancedSetting]
     [Category("06 Map Objects")]
@@ -798,8 +798,8 @@ public sealed class MapConfig : CustomTypeDescriptor
     public bool MapTableProps { get; set; } = true;
 
     [Category("06 Map Objects")]
-    [Description("Density multiplier for trees and ground foliage (1.0 = the tuned default, 0.5 = sparser, 2.0 = denser). Costs load time and memory in the game at high values — every instance is written out individually.")]
-    public double TreeDensity { get; set; } = 4.0;
+    [Description("Density multiplier for trees and ground foliage. 1.0 is about vanilla's own density per land pixel (trees are drawn at vanilla size on every map, so this is also vanilla's canopy); 0.5 = sparser, 2.0 = denser. Costs load time and memory in the game at high values — every instance is written out individually.")]
+    public double TreeDensity { get; set; } = 1.65;
 
     [Category("06 Map Objects")]
     [Description("Global multiplier for atmospheric environmental visual effects (dust plumes, forest mist, mountain snow clouds). 1.0 matches vanilla density scaled to this map's resolution.")]
@@ -807,7 +807,7 @@ public sealed class MapConfig : CustomTypeDescriptor
 
     [AdvancedSetting]
     [Category("06 Map Objects")]
-    [Description("Global scale multiplier for environmental VFX billboards. Automatically scaled with map resolution.")]
+    [Description("Global scale multiplier for environmental VFX billboards. 1.0 is vanilla size, which they are drawn at on every map size.")]
     public double EnvEffectScale { get; set; } = 1.0;
 
 

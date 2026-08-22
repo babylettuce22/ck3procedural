@@ -324,10 +324,12 @@ public sealed class MainForm : Form
     {
         _options = options;
 
-        _source = options.Heightmap
-            ?? (File.Exists(_state.HeightmapPath)
-                ? new MapGen.FileHeightmapProvider(_state.HeightmapPath!, RestoredFit(_state))
-                : null);
+        _source = options.Heightmap;
+        if (_source is null && File.Exists(_state.HeightmapPath))
+        {
+            var (fit, unverified) = RestoredSizeChoice(_state);
+            _source = new MapGen.FileHeightmapProvider(_state.HeightmapPath!, fit, unverified);
+        }
         options.Heightmap = _source;
         _lastHeightmapFile = options.HeightmapPath ?? _state.HeightmapPath;
 
@@ -1321,7 +1323,8 @@ public sealed class MainForm : Form
     }
 
     /// <summary>
-    /// The fit to load the saved heightmap through: the one agreed against it, or a fresh one.
+    /// How to load the saved heightmap: resampled to the fit agreed against it or to a fresh one,
+    /// or built at its own size if that was the answer given.
     ///
     /// Re-measured rather than trusted, in both directions. A saved fit is only ever the right
     /// answer for the file it was chosen against and for the rule in force when it was chosen —
@@ -1334,10 +1337,14 @@ public sealed class MainForm : Form
     /// provider with no fit at all, so the size check inside
     /// <see cref="MapGen.HeightmapSource.Read"/> failed on the build thread and surfaced as an
     /// unhandled exception instead of as anything anyone could act on.
+    ///
+    /// "Build at its own size anyway" is the third answer, and it outranks a saved fit: it was
+    /// given knowingly, and a test build that silently came back resampled would be a test of the
+    /// wrong thing.
     /// </summary>
-    private static (int Width, int Height)? RestoredFit(GuiState state)
+    private static ((int Width, int Height)? Fit, bool AllowUnverified) RestoredSizeChoice(GuiState state)
     {
-        if (state.HeightmapPath is not { } path) return null;
+        if (state.HeightmapPath is not { } path) return (null, false);
 
         int fileWidth, fileHeight;
         try
@@ -1347,15 +1354,16 @@ public sealed class MainForm : Form
         catch
         {
             // A file that cannot even be identified is the decode's problem to report.
-            return null;
+            return (null, false);
         }
 
-        if (MapGen.TileFit.Fits(fileWidth, fileHeight)) return null;
+        if (MapGen.TileFit.Fits(fileWidth, fileHeight)) return (null, false);
+        if (state.HeightmapAllowUnverifiedSize) return (null, true);
 
         return state.HeightmapFitWidth is { } width && state.HeightmapFitHeight is { } height
             && MapGen.TileFit.Fits(width, height)
-                ? (width, height)
-                : MapGen.TileFit.Nearest(fileWidth, fileHeight);
+                ? ((width, height), false)
+                : (MapGen.TileFit.Nearest(fileWidth, fileHeight), false);
     }
 
     /// <summary>
@@ -1389,7 +1397,7 @@ public sealed class MainForm : Form
     {
         // Asked before the file is adopted, because declining leaves nothing usable: a size the
         // packer cannot tile fails the decode, so the 3D view and every build would error too.
-        var (load, fit) = OfferTileFit(path);
+        var (load, fit, unverified) = OfferTileFit(path);
         if (!load) return;
 
         _lastHeightmapFile = path;
@@ -1402,8 +1410,9 @@ public sealed class MainForm : Form
 
         _state.HeightmapFitWidth = fit?.Width;
         _state.HeightmapFitHeight = fit?.Height;
+        _state.HeightmapAllowUnverifiedSize = unverified;
 
-        SetSource(new MapGen.FileHeightmapProvider(path, fit));
+        SetSource(new MapGen.FileHeightmapProvider(path, fit, unverified));
     }
 
     /// <summary>
@@ -1414,13 +1423,17 @@ public sealed class MainForm : Form
     /// this one is not optional. <see cref="MapGen.TileFit"/> explains what a size it refuses does
     /// in game — a clipped map edge and province borders drifting off the terrain, neither logged
     /// — so declining means not loading the file at all rather than loading it and hoping.
+    ///
+    /// The third answer, building at the file's own size, is how <see cref="MapGen.TileFit.Known"/>
+    /// grows: whether a size renders can only be learned by building it and looking.
     /// </summary>
     /// <returns>
-    /// Whether to load the file at all, and the size to resample it to. Two values rather than a
-    /// nullable size, because "no fit needed" and "the offer was declined" are different answers
-    /// that a null size alone cannot tell apart.
+    /// Whether to load the file at all, the size to resample it to, and whether to build it at its
+    /// own size regardless. Three values rather than a nullable size, because "no fit needed", "the
+    /// offer was declined" and "build it anyway" are different answers that a null size alone
+    /// cannot tell apart.
     /// </returns>
-    private (bool Load, (int Width, int Height)? Fit) OfferTileFit(string path)
+    private (bool Load, (int Width, int Height)? Fit, bool AllowUnverified) OfferTileFit(string path)
     {
         int width, height;
         try
@@ -1431,34 +1444,58 @@ public sealed class MainForm : Form
         {
             // Not this method's problem: load it and let the decode report it properly.
             Console.WriteLine($"Could not read the size of {path}: {error.Message}");
-            return (true, null);
+            return (true, null, false);
         }
 
-        if (MapGen.TileFit.Fits(width, height)) return (true, null);
+        if (MapGen.TileFit.Fits(width, height)) return (true, null, false);
 
         var target = MapGen.TileFit.Nearest(width, height);
+        string name = Path.GetFileName(path);
 
-        var answer = MessageBox.Show(this,
-            $"{Path.GetFileName(path)} is {width} x {height}, which is not one of the sizes "
-            + $"CK3 is known to render correctly ({MapGen.TileFit.KnownList}).\n\n"
-            + "At other sizes the engine leaves terrain undrawn along the north and east "
-            + "edges, in the map editor as much as in game, and whatever the heightmap is "
-            + "packed with. Nothing is logged when it happens.\n\n"
-            + $"Resample it to {target.Width} x {target.Height} as it loads? The file on disk is "
-            + "not touched.",
-            "This heightmap is not a size CK3 renders", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+        // A TaskDialog rather than a MessageBox, because the third answer needs a button that says
+        // what it does. MessageBox can only offer Yes/No/Cancel, and "No means build it anyway" is
+        // the kind of mapping that gets the wrong button pressed.
+        var resample = new TaskDialogButton($"Resample to {target.Width} x {target.Height}");
+        var anyway = new TaskDialogButton("Build at this size anyway");
+        var cancel = TaskDialogButton.Cancel;
 
-        if (answer != DialogResult.Yes)
+        var page = new TaskDialogPage
         {
-            _status.Text = $"{Path.GetFileName(path)} not loaded: {width} x {height} is not "
-                         + $"one of {MapGen.TileFit.KnownList}. Resize it to "
-                         + $"{target.Width} x {target.Height} and choose it again.";
-            return (false, null);
+            Caption = "This heightmap is not a size CK3 renders",
+            Heading = $"{name} is {width} x {height}",
+            Text = "That is not one of the sizes CK3 is known to render correctly "
+                 + $"({MapGen.TileFit.KnownList}). At other sizes the engine leaves terrain undrawn "
+                 + "along the north and east edges, in the map editor as much as in game, and "
+                 + "whatever the heightmap is packed with. Nothing is logged when it happens.\n\n"
+                 + $"Resampling lands it on {target.Width} x {target.Height}; the file on disk is "
+                 + "not touched. Building anyway is how to find out whether a new size renders: "
+                 + "look at the north and east edges in game, and if it is clean the size can join "
+                 + "the known list.",
+            Icon = TaskDialogIcon.Warning,
+            Buttons = { resample, anyway, cancel },
+            DefaultButton = resample,
+        };
+
+        var answer = TaskDialog.ShowDialog(this, page);
+
+        if (answer == anyway)
+        {
+            _status.Text = $"{name}: building at {width} x {height}, a size CK3 is not known to "
+                         + "render, to test whether it does";
+            return (true, null, true);
         }
 
-        _status.Text = $"{Path.GetFileName(path)}: resampling {width} x {height} to "
+        if (answer != resample)
+        {
+            _status.Text = $"{name} not loaded: {width} x {height} is not "
+                         + $"one of {MapGen.TileFit.KnownList}. Resize it to "
+                         + $"{target.Width} x {target.Height} and choose it again.";
+            return (false, null, false);
+        }
+
+        _status.Text = $"{name}: resampling {width} x {height} to "
                      + $"{target.Width} x {target.Height}, a size CK3 renders correctly.";
-        return (true, target);
+        return (true, target, false);
     }
 
     /// <summary>
@@ -1481,12 +1518,15 @@ public sealed class MainForm : Form
     /// changes the provider's stamp, so the next Preview or Write runs the pipeline again at full
     /// size, and an unchanged one is served from the same decode cache a file is.
     /// </summary>
-    private void UseForgeForGeneration()
+    /// <param name="allowUnverifiedSize">The panel already asked; true means the user chose to
+    /// build at an export size CK3 is not known to render, to test it.</param>
+    private void UseForgeForGeneration(bool allowUnverifiedSize)
     {
         _forge.EnsureStarted();
-        SetSource(_forge.Session.ProviderForGeneration());
+        SetSource(_forge.Session.ProviderForGeneration(allowUnverifiedSize));
         _status.Text = $"Building from the Heightmap tab's pipeline ({_forge.Session.Name}) — " +
-                       "press Preview to generate from it";
+                       "press Preview to generate from it" +
+                       (allowUnverifiedSize ? " (at a size CK3 is not known to render, to test it)" : "");
     }
 
     private void ShowAzgaarMenu()
@@ -1654,7 +1694,10 @@ public sealed class MainForm : Form
         };
         forge.Click += (_, _) =>
         {
-            UseForgeForGeneration();
+            // Through the panel, so an export size CK3 is not known to render gets the same
+            // question here as from the panel's own button, rather than none.
+            _forge.EnsureStarted();
+            _forge.RequestUseForGeneration();
             _tabs.SelectedTab = _forgeTab;
         };
         menu.Items.Add(forge);
@@ -2127,7 +2170,8 @@ public sealed class MainForm : Form
                 if (modDir is not null) _written = Generator.WriteMod(r, _options, modDir);
                 return r;
             },
-            writing: modDir is not null);
+            writing: modDir is not null,
+            modDir: modDir);
 
         if (cancelled)
         {
@@ -2182,7 +2226,7 @@ public sealed class MainForm : Form
     }
 
     private async Task<(GenerationResult? Result, bool Cancelled)> RunAsync(
-        string message, Func<GenerationResult> work, bool writing)
+        string message, Func<GenerationResult> work, bool writing, string? modDir = null)
     {
         if (_busy) return (null, false);
 
@@ -2203,6 +2247,7 @@ public sealed class MainForm : Form
 
         _cancellation = new CancellationTokenSource();
         Stage.Begin();
+        RunLog.Begin();
         Stage.Cancellation = _cancellation.Token;
 
         var clock = Stopwatch.StartNew();
@@ -2218,12 +2263,14 @@ public sealed class MainForm : Form
             Stage.Report();
             Console.WriteLine();
             Console.WriteLine($"Finished in {clock.ElapsedMilliseconds / 1000.0:F1} s");
+            if (modDir is not null) RunLog.Write(modDir, _options, "completed");
             return (result, false);
         }
         catch (OperationCanceledException)
         {
             Console.WriteLine();
             Console.WriteLine($"Cancelled after {clock.ElapsedMilliseconds / 1000.0:F1} s");
+            if (modDir is not null) RunLog.Write(modDir, _options, "cancelled — the mod folder may be half written");
             return (null, true);
         }
         catch (Exception ex)
@@ -2231,6 +2278,7 @@ public sealed class MainForm : Form
             Console.WriteLine();
             Console.WriteLine(ex);
             _status.Text = "Failed — see log";
+            if (modDir is not null) RunLog.Write(modDir, _options, $"failed: {ex.Message}");
             return (null, false);
         }
         finally
