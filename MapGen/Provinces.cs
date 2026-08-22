@@ -816,16 +816,30 @@ public static class Provinces
         return slope;
     }
 
-    private static float LandLine(float[] field, byte[] mask, double fraction, float minValue = float.MinValue)
+    /// <summary>
+    /// The value at <paramref name="fraction"/> through this map's own land, whatever the field is.
+    ///
+    /// It used to take a <c>minValue</c> that excluded pixels from the population before taking the
+    /// percentile, and the one caller that passed it — the steep line — was the worse for it. Two
+    /// reasons it is gone. It contradicted the setting it implements: SteepLineShare is documented
+    /// as "share of *land* counted as steep ground", not a share of whatever already cleared a
+    /// separate threshold. And it made the result move with relief: scaling every slope down pushes
+    /// pixels under the cut, so the surviving population is the steep tail and its percentile sits
+    /// too high — measured at 0.33 of the uncompressed steep line where the compression was 0.222,
+    /// while the unfiltered mountain line tracked exactly.
+    ///
+    /// A floor belongs on the answer, not on the population. Apply it to the returned line.
+    /// </summary>
+    private static float LandLine(float[] field, byte[] mask, double fraction)
     {
         var land = new List<float>();
         for (int i = 0; i < field.Length; i += 7)
         {
-            if (mask[i] != 0 && field[i] > minValue)
+            if (mask[i] != 0)
                 land.Add(field[i]);
         }
 
-        // If fewer than e.g. 1% of land pixels have relief, the map has no true steep terrain
+        // Guards a map with essentially no land, which has no percentile worth taking.
         if (land.Count < (mask.Length / 7) * 0.01)
             return float.MaxValue;
 
@@ -843,9 +857,14 @@ public static class Provinces
 
         var slope = Slopes(elevation, map.Width, map.Height);
 
-        float minSlope = (float)Math.Max(0.01, cfg.MinPhysicalSlope);
+        // Guard the setting, then convert it to this map's scale — not the other way round, or the
+        // 0.01 degenerate-guard would become the binding floor on a small map. A gradient authored
+        // against vanilla-scale terrain has to travel with the relief; see MapConfig.ReliefScale.
+        float minSlope = (float)(Math.Max(0.01, cfg.MinPhysicalSlope) * cfg.ReliefScale);
+
+        // Floor on the line, never a filter on the population — see LandLine.
         float steepLine = MathF.Max(minSlope,
-            LandLine(slope, mask, 1.0 - Math.Clamp(cfg.SteepLineShare, 0, 1), minSlope));
+            LandLine(slope, mask, 1.0 - Math.Clamp(cfg.SteepLineShare, 0, 1)));
 
 
         var total = new int[map.Count];

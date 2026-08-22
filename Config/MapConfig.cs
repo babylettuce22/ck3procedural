@@ -563,7 +563,7 @@ public sealed class MapConfig : CustomTypeDescriptor
 
     [AdvancedSetting]
     [Category("03 Provinces")]
-    [Description("Absolute minimum gradient per pixel required for ground to count as steep. Prevents flat plains from being declared cliffs on low-relief maps.")]
+    [Description("Minimum gradient per pixel for ground to count as steep, so a flat map does not get its gentlest slopes declared cliffs just because they are its steepest. Authored against vanilla-scale terrain and scaled by the same factor as land relief, so it means the same thing at any map size. It is a floor on the steep line only — it never removes pixels from the percentile that sets that line.")]
     public double MinPhysicalSlope { get; set; } = 0.15;
 
     /// <summary>
@@ -1710,6 +1710,19 @@ public sealed class MapConfig : CustomTypeDescriptor
 
     /// <summary>Scales a length authored in vanilla province pixels onto this map.</summary>
     public double Scaled(double vanillaPixels) => vanillaPixels * MapScale;
+
+    /// <summary>
+    /// What land relief is multiplied by on this map — <see cref="MapScale"/> when
+    /// <see cref="ScaleReliefWithMapSize"/> is on, 1 when it is off.
+    ///
+    /// The single definition, and it has to stay that way. Anything authored as a *gradient*
+    /// travels with this, not with <see cref="MapScale"/>: compressing heights multiplies every
+    /// slope by the same factor, so a threshold in elevation-per-pixel means something different
+    /// on every map until it is scaled here too. <see cref="MinPhysicalSlope"/> is the one that
+    /// bites; <see cref="MapGen.HeightmapNormalizer.CompressRelief"/> is what applies it.
+    /// </summary>
+    [Browsable(false)]
+    public double ReliefScale => ScaleReliefWithMapSize ? MapScale : 1.0;
 
     /// <summary>Target area of one land province on *this* map, in province pixels.</summary>
     [Browsable(false)]

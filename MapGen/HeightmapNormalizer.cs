@@ -155,8 +155,8 @@ public static class HeightmapNormalizer
     /// </summary>
     public static ushort[] CompressRelief(ushort[] levels, MapConfig cfg)
     {
-        double scale = cfg.MapScale;
-        if (!cfg.ScaleReliefWithMapSize || Math.Abs(scale - 1.0) < 1e-9) return levels;
+        double scale = cfg.ReliefScale;
+        if (Math.Abs(scale - 1.0) < 1e-9) return levels;
 
         const int lowestLand = MapDataWriter.WaterLevel16 + MapDataWriter.Step255;
 
