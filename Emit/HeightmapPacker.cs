@@ -41,7 +41,7 @@ public static class HeightmapPacker
         byte[] Indirection, int TilesX, int TilesY,
         int[] LevelOffsets, int EmptyR, int EmptyG,
         int[] TilesPerLevel, int[] SlotsPerLevel,
-        double SagBudget, double WorstSag);
+        double SagBudget, double WorstError);
 
     public static Result Pack(ushort[] full, int width, int height, double sagBudget)
     {
@@ -127,17 +127,18 @@ public static class HeightmapPacker
         // That pass only ever refines a tile, so this can beat the budget but never miss it for a
         // reason the budget chose — which makes it a real check on the assignment rather than an
         // echo of it.
-        double worstSag = 0;
+        double worstError = 0;
         for (int ty = 0; ty < tilesY; ty++)
             for (int tx = 0; tx < tilesX; tx++)
-                worstSag = Math.Max(worstSag, TileSag(full, width, height, tx, ty, level[ty * tilesX + tx]));
+                worstError = Math.Max(worstError,
+                    TileError(full, width, height, tx, ty, level[ty * tilesX + tx]));
 
         return new Result(
             packed, atlasWidth, atlasHeight,
             indirection, tilesX, tilesY,
             offsets, emptySlot % emptyCols, emptySlot / emptyCols,
             tilesPerLevel, slotsPerLevel,
-            sagBudget, worstSag * WorldExtentY / 65535.0);
+            sagBudget, worstError * WorldExtentY / 65535.0);
     }
 
     /// <summary>
@@ -284,13 +285,14 @@ public static class HeightmapPacker
     /// Picks a decimation level for every tile — the one decision that governs how far the drawn
     /// terrain can sit below the heightmap props and borders are placed against.
     ///
-    /// With a budget set, each tile gets the *coarsest* level whose measured sag still fits, which
-    /// spends atlas exactly where relief demands it and nowhere else. That beats any flat cap on
-    /// both counts: on a 9216x4608 generated map, capping land at level 1 still left 29.8% of land
-    /// tiles over half a world unit, while a 0.5u budget left none and needed a smaller atlas.
+    /// With a budget set, each tile gets the *coarsest* level whose measured error still fits —
+    /// <see cref="TileError"/>, two-sided — which spends atlas exactly where relief demands it and
+    /// nowhere else. That beats any flat cap on both counts: on a 9216x4608 generated map, capping
+    /// land at level 1 still left 29.8% of land tiles over half a world unit, while a 0.5u budget
+    /// left none and needed a smaller atlas.
     ///
     /// What it takes is the longest *prefix* of levels that all fit, not the coarsest level that
-    /// happens to fit, and the difference is load-bearing. Sag does not rise monotonically with
+    /// happens to fit, and the difference is load-bearing. Error does not rise monotonically with
     /// level: a coarse grid can land a sample on a crest that a finer grid straddles, so a real
     /// tile measured 0.78 / 0.81 / 1.19 / 0.43 world units at levels 1 to 4. Taking the coarsest
     /// fit picks level 4 there — and then <see cref="EnforceNeighborLodBalance"/>, which refines
@@ -318,7 +320,7 @@ public static class HeightmapPacker
                 int chosen = 0;
                 for (int l = 1; l < Levels; l++)
                 {
-                    if (TileSag(full, width, height, tx, ty, l) > budget) break;
+                    if (TileError(full, width, height, tx, ty, l) > budget) break;
                     chosen = l;
                 }
 
@@ -361,7 +363,7 @@ public static class HeightmapPacker
     /// around it, on the grid <see cref="Extract"/> sampled.
     ///
     /// The single definition of "what the renderer draws here". <see cref="Reconstruct"/> uses it
-    /// to build the preview surface and <see cref="TileSag"/> to measure the error, and those two
+    /// to build the preview surface and <see cref="TileError"/> to measure the error, and those two
     /// answering differently is precisely the drift that would make the packer optimise for a
     /// surface nobody sees.
     /// </summary>
@@ -386,15 +388,28 @@ public static class HeightmapPacker
     }
 
     /// <summary>
-    /// The worst height a tile would lose at one decimation level, in 16-bit units: how far the
-    /// drawn mesh sinks below the heightmap the engine snaps props and borders to.
+    /// The worst a tile's drawn surface departs from the heightmap at one decimation level, in
+    /// 16-bit units — in *either* direction.
     ///
-    /// Only the shortfall counts, not the absolute difference. Decimation can push a sample *up*
-    /// as well — interpolating across a notch fills it in — and terrain drawn above the placement
-    /// height buries a tree rather than floating it, which is both far less visible and not what
-    /// the budget is for.
+    /// Two-sided on purpose, and it was one-sided at first, which was wrong. Decimation is linear
+    /// interpolation between the samples it keeps, so it loses height across a ridge and gains it
+    /// across a valley. The engine's own geomorph does exactly the same thing for the same reason:
+    /// <c>GetLerpedHeight</c> in pdxterrain's vertex shader is literally
+    /// <c>(GetHeight( P - LodDirection ) + GetHeight( P + LodDirection )) * 0.5</c>, an average of
+    /// two neighbours, which sits below a crest and above a trough.
+    ///
+    /// The first version budgeted only the shortfall, reasoning that terrain drawn *above* the
+    /// placement height buries a prop rather than floating it and is less visible. That holds for
+    /// a tree and fails for a province border: a border is a ribbon laid on the heightmap and
+    /// lifted by one engine constant (<c>position.y += _HeightOffset</c> in pdxborder), so terrain
+    /// coming up through it is exactly as visible as terrain falling away beneath it. Measured on
+    /// a shipped map, the unbudgeted side was the larger one — worst overshoot 4.11 world units
+    /// against a worst shortfall of 0.96 under a 0.50 budget.
+    ///
+    /// It is also the error that survives zooming in. <c>LodLerpFactor</c> goes to zero up close,
+    /// which takes the geomorph term with it and leaves this as the whole of the disagreement.
     /// </summary>
-    private static double TileSag(ushort[] full, int width, int height, int tx, int ty, int level)
+    private static double TileError(ushort[] full, int width, int height, int tx, int ty, int level)
     {
         if (level == 0) return 0;   // every pixel survives; the mesh is the heightmap
 
@@ -413,8 +428,8 @@ public static class HeightmapPacker
                 int gx = tx * TileStep + x;
                 if (gx >= width) break;
 
-                double sag = full[row + gx] - Reassemble(samples, s, step, x, y);
-                if (sag > worst) worst = sag;
+                double off = Math.Abs(full[row + gx] - Reassemble(samples, s, step, x, y));
+                if (off > worst) worst = off;
             }
         }
 

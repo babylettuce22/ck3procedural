@@ -521,13 +521,14 @@ public static class MapDataWriter
                           $"({(double)tiles / Math.Max(1, slots):F2}x reuse, vanilla 1.53x); " +
                           $"empty tile at {packing.EmptyR},{packing.EmptyG}");
 
-        // The number the floating-trees work is actually about: how far the drawn terrain sits
-        // below the heightmap the engine snaps props and borders to. Vanilla's own worst land tile
-        // is 19.32u, and 4.4% of its land tiles clear half a unit.
+        // The number the floating-props work is actually about: how far the terrain CK3 draws
+        // departs, either way, from the heightmap it snaps props and borders to. Below it and a
+        // tree floats; above it and terrain comes up through a province border. Vanilla's own land
+        // tiles run to 19.32u short and 4.78u over.
         Console.WriteLine(packing.SagBudget <= 0
-            ? $"  terrain sag: worst {packing.WorstSag:F2} world units, no budget set "
-              + "(vanilla level shares, HeightmapSagBudget = 0)"
-            : $"  terrain sag: worst {packing.WorstSag:F2} world units against a "
+            ? $"  terrain error: worst {packing.WorstError:F2} world units either way, no budget "
+              + "set (vanilla level shares, HeightmapSagBudget = 0)"
+            : $"  terrain error: worst {packing.WorstError:F2} world units either way, against a "
               + $"{packing.SagBudget:F2}u budget");
     }
 

@@ -233,12 +233,17 @@ public static partial class CompatibilityWriter
 
         // WORLD_EXTENTS_Y and WATERLEVEL stay at vanilla's values on every map size.
         //
-        // A heightmap value has to mean the same height everywhere: a smaller map is a smaller
-        // *region* at the same scale, not the same world shrunk, so one pixel is the same distance
-        // and one height step is the same height. These were briefly scaled by map size, which was
-        // an attempt to cancel out terrain that generated too steep on small maps — two errors
-        // pointing opposite ways rather than one fix. The terrain side is corrected in
-        // MapConfig.SlopeScaleFor; this side goes back to being constant.
+        // A heightmap value has to mean the same height everywhere, so the engine-side pair stays
+        // put and the map-size correction is applied to the terrain instead. These were briefly
+        // scaled by map size, which was an attempt to cancel out terrain that came out too steep
+        // on small maps — two errors pointing opposite ways rather than one fix.
+        //
+        // The terrain side is MapGen.HeightmapNormalizer.CompressRelief, reached through
+        // MapConfig.ScaleReliefWithMapSize. It used to be MapConfig.SlopeScaleFor, which 38b5fe8
+        // deleted along with terrain generation — so between then and 2026-08-22 this comment
+        // promised a correction that no longer existed, and nothing was scaling the terrain at
+        // all. That is worth knowing if the pair here is ever revisited: the argument for keeping
+        // them constant only holds while something else is doing the scaling.
         //
         // The ratio is load-bearing either way: vanilla's own comment pins it, `WATERLEVEL = 3 ###
         // 0.06 in 0-1, 19 in 0-255`, and 3/50 is exactly 0.06. Move one without the other and the

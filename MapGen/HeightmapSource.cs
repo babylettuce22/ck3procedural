@@ -202,8 +202,18 @@ public sealed class HeightmapImage
     /// </summary>
     public bool Ck3Scale { get; init; }
 
-    /// <summary>Samples as the game will be handed them: normalised, unless already on its scale.</summary>
-    public ushort[] Levels(MapConfig cfg) => Ck3Scale ? Raw : HeightmapNormalizer.Normalize(Raw, cfg);
+    /// <summary>
+    /// Samples as the game will be handed them: normalised, unless already on its scale, then
+    /// scaled to this map's size.
+    ///
+    /// The relief pass is outside the Ck3Scale short-circuit on purpose. "Already on CK3's height
+    /// scale" says the source's 0-255 range means what CK3 means by it; it says nothing about how
+    /// wide the world under it is, and that is the whole question — see
+    /// <see cref="HeightmapNormalizer.CompressRelief"/>.
+    /// </summary>
+    public ushort[] Levels(MapConfig cfg) =>
+        HeightmapNormalizer.CompressRelief(
+            Ck3Scale ? Raw : HeightmapNormalizer.Normalize(Raw, cfg), cfg);
 
     public bool StillStandsFor(string path)
     {

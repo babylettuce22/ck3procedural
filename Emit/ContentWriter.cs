@@ -198,7 +198,7 @@ public static class ContentWriter
 
         Core.Stage.Time("titles, history and localisation", () =>
         {
-            WriteLandedTitles(modDir, empires, faiths, wilderness, worldCenters);
+            WriteLandedTitles(modDir, empires, faiths, wilderness);
             WriteProvinceTerrain(modDir, provinceTerrain, landCount);
             WriteProvinceHistory(modDir, cfg, empires, provinceTerrain, development, cultures, faiths, governments, wilderness, worldCenters, cfg.Seed);
             WriteLocalisation(modDir, empires, waterNames, provinces, order, baronyCount,
@@ -386,7 +386,7 @@ public static class ContentWriter
     /// written re-runs exactly this. See <see cref="WorldOverwrite"/>.
     /// </summary>
     internal static void WriteLandedTitles(string modDir, List<Title> empires, FaithMap faiths,
-        WildernessMap wilderness, WorldCenterMap? worldCenters)
+        WildernessMap wilderness)
     {
         string dir = Path.Combine(modDir, "common", "landed_titles");
         Directory.CreateDirectory(dir);
@@ -435,12 +435,9 @@ public static class ContentWriter
 
             if (title.Tier == "b")
             {
+                // `province` is the only barony key here. Wonders are placed by province history
+                // (see WriteProvinceHistory) — landed_titles has no special_building key.
                 sb.Append($"{pad}    province = {title.ProvinceId}\n");
-                var center = worldCenters?.Centers.FirstOrDefault(wc => wc.CapitalBarony == title);
-                if (center is not null)
-                {
-                    sb.Append($"{pad}    special_building = {center.Wonder.Key}\n");
-                }
             }
             else
             {

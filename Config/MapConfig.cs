@@ -708,6 +708,26 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Description("How much a holding prefers the middle of its province over flat ground. 0 puts it on the flattest eligible pixel wherever that is; higher pulls it toward the centre even if the ground there is steeper.")]
     public double LocatorCentroidPull { get; set; } = 0.75;
 
+    /// <summary>
+    /// How far a special building stands from the holding it shares a province with, in world
+    /// units — which are province pixels, see <see cref="Emit.WorldSpace"/>.
+    ///
+    /// The default is vanilla's own median. Measured over the 11,297 provinces that carry both
+    /// locators, the gap between a holding and its special building runs p25 7.3, median 9.1,
+    /// p75 11.6 world units.
+    ///
+    /// Deliberately **not** scaled by <see cref="MapScale"/>. The thing this distance has to clear
+    /// is the holding mesh, and meshes are a fixed size in world units no matter how large the
+    /// province map is — a smaller map makes buildings occupy proportionally more of it, which is
+    /// an argument for keeping the absolute gap, not for shrinking it. What adapts to small
+    /// provinces instead is the fallback in <see cref="MapGen.ProvinceAnchor"/>, which pulls the
+    /// offset in when the full distance would leave the province or land in water.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("04 Titles")]
+    [Description("How far a special building (a generated wonder) stands from its holding, in world units. Vanilla's median is 9. Reduced automatically where the province is too small or too coastal to fit it.")]
+    public double SpecialBuildingOffset { get; set; } = 9.0;
+
 
     // =========================================================================
     // 05 Rivers
@@ -1004,6 +1024,45 @@ public sealed class MapConfig : CustomTypeDescriptor
     public double LandFloorDensity { get; set; } = 0.10;
 
     /// <summary>
+    /// Whether land relief shrinks with map size, so slopes come out the same in *world units* at
+    /// any resolution.
+    ///
+    /// CK3 takes the world's width from the province map — a 4608-wide map is 4607 world units —
+    /// but its height is `WORLD_EXTENTS_Y = 50` on every map, and that has to stay constant
+    /// (`WATERLEVEL = 3` is pinned to it at 3/50 = 0.06, which is what puts the waterline on
+    /// 19/255; see <see cref="Emit.CompatibilityWriter"/>). Because a smaller map resamples the
+    /// *same world* into fewer pixels — the model the whole config is built on, see
+    /// <see cref="Scaled"/> — leaving the height range alone steepens every slope by exactly
+    /// 1/<see cref="MapScale"/>. A half-width map has twice vanilla's gradient.
+    ///
+    /// That is the floating-props cause that survives a perfect heightmap bake. Measured on a
+    /// 4608-wide generated map against vanilla, at the coarse grids the engine's runtime terrain
+    /// LOD uses at distance, land sag ran 1.8x vanilla's at p90 — and compressing land by
+    /// MapScale brought it to 1.1x, right onto vanilla's own figure. See
+    /// <see cref="HeightmapSagBudget"/> for the other half, which is ours to fix; this half is
+    /// terrain the engine cannot follow.
+    ///
+    /// Compression is toward the waterline, not toward zero, so sea level and every water depth
+    /// are untouched and the set of pixels above water is bit-identical — coastline reconciliation
+    /// and terrain classification see exactly what they saw before. Percentile-based settings
+    /// (<see cref="SteepLineShare"/>, <see cref="CliffSlopeShare"/>) are rank-invariant under it;
+    /// absolute slope thresholds like <see cref="MinPhysicalSlope"/> become *more* correct, since
+    /// they are authored against vanilla's gradients.
+    ///
+    /// Identity at vanilla map size. Above it relief is amplified by the same rule, which can clip
+    /// at the top of the range — the clipped count is logged.
+    ///
+    /// This restores the terrain half of a two-part fix: commit 194178e stopped scaling
+    /// WORLD_EXTENTS_Y and deferred the correction to MapConfig.SlopeScaleFor, and 38b5fe8 deleted
+    /// that method along with terrain generation, leaving the world-height side reverted and
+    /// nothing doing the terrain side.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("7 Height scale")]
+    [Description("Shrinks land relief in proportion to map size so slopes match vanilla's in world units at any resolution. CK3 fixes world *height* at 50 units on every map but takes world *width* from the province map, and a smaller map resamples the same world into fewer pixels — so without this, a half-width map has exactly twice vanilla's gradient everywhere. Steep terrain is what makes trees and province borders float: the engine's distance LOD cannot follow slopes that steep, so the terrain it draws sits below the full-resolution heightmap props are snapped to. Land is compressed toward the waterline, so sea level, water depths and the land/water split are untouched. Identity at vanilla map size. Turn off to keep the source heightmap's relief exactly as authored, and expect proportionally more floating the smaller you generate.")]
+    public bool ScaleReliefWithMapSize { get; set; } = true;
+
+    /// <summary>
     /// What the highest land pixel becomes after normalisation, on the 0-255 scale.
     ///
     /// 191 is vanilla's own highest land pixel. Vanilla does not use the top of the byte range —
@@ -1018,9 +1077,18 @@ public sealed class MapConfig : CustomTypeDescriptor
     public double LandTop { get; set; } = 191;
 
     /// <summary>
-    /// How far the terrain CK3 draws may sink below the heightmap it snaps props and borders to,
-    /// in world units, before the packer spends more atlas on that tile. 0 restores the old
-    /// behaviour: copy vanilla's level histogram and accept whatever error follows.
+    /// How far the terrain CK3 draws may depart — in *either* direction — from the heightmap it
+    /// snaps props and borders to, in world units, before the packer spends more atlas on that
+    /// tile. 0 restores the old behaviour: copy vanilla's level histogram and accept whatever
+    /// error follows.
+    ///
+    /// Both directions, because decimation is linear interpolation between the samples it keeps,
+    /// so it loses height across a ridge and gains it across a valley. Terrain below the placement
+    /// surface floats a tree; terrain above it comes up through a province border, which is a
+    /// ribbon laid on the heightmap and lifted by one engine constant. Budgeting only the
+    /// shortfall left the other side free, and on a shipped map that side was the larger one:
+    /// worst overshoot 4.11 world units against a worst shortfall of 0.96 under the same 0.50
+    /// budget. Two-sided costs about 7% more atlas and 3% more terrain vertices.
     ///
     /// This is the floating-trees knob, and the floating is not a placement bug. Prop instances
     /// are written with <c>y=0</c> — vanilla's too — and the engine snaps them to the ground at
@@ -1048,7 +1116,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// </summary>
     [AdvancedSetting]
     [Category("7 Height scale")]
-    [Description("How far the drawn terrain may sink below the heightmap props and borders are snapped to, in world units. This is the floating-trees knob. Lower is sharper and costs atlas space; 0.5 beats vanilla's own fidelity for less than vanilla spends. 0 restores the old copy-vanilla's-histogram behaviour.")]
+    [Description("How far the drawn terrain may depart, in either direction, from the heightmap props and borders are snapped to, in world units. This is the floating-props knob: terrain below that surface floats a tree, terrain above it comes up through a province border. It is also the error that survives zooming in, since the engine's own terrain LOD blending fades out up close and leaves this behind. Lower is sharper and costs atlas space; 0.5 beats vanilla's own fidelity for less than vanilla spends. 0 restores the old copy-vanilla's-histogram behaviour.")]
     public double HeightmapSagBudget { get; set; } = 0.5;
 
     /// <summary>

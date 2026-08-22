@@ -134,6 +134,57 @@ public static class HeightmapNormalizer
         return result;
     }
 
+    /// <summary>
+    /// Scales land relief by <see cref="MapConfig.MapScale"/>, so a map narrower than vanilla's
+    /// gets proportionally shallower terrain and its slopes come out at vanilla's gradient in
+    /// world units. See <see cref="MapConfig.ScaleReliefWithMapSize"/> for why that is the
+    /// correct scaling and not merely a taste setting.
+    ///
+    /// A separate pass rather than a factor folded into <see cref="MapConfig.LandTop"/>, which was
+    /// the obvious-looking place and is the wrong one: LandTop is only read on the Stretch branch
+    /// below, so on the default Shift mode — a pure translation that preserves relief 1:1 — and on
+    /// Off it would have done nothing at all. This has to apply whatever the source is on, so it
+    /// sits at the one funnel every consumer goes through, <see cref="HeightmapImage.Levels"/>,
+    /// after normalisation and including the Ck3Scale short-circuit.
+    ///
+    /// Anchored on the first land value above the waterline, so every pixel at or below the
+    /// waterline is returned bit for bit. That is what keeps the pass invisible to everything that
+    /// asks whether a pixel is land — coastline reconciliation in
+    /// <see cref="Emit.MapDataWriter"/> most of all, whose whole job is comparing that answer
+    /// against provinces.png.
+    /// </summary>
+    public static ushort[] CompressRelief(ushort[] levels, MapConfig cfg)
+    {
+        double scale = cfg.MapScale;
+        if (!cfg.ScaleReliefWithMapSize || Math.Abs(scale - 1.0) < 1e-9) return levels;
+
+        const int lowestLand = MapDataWriter.WaterLevel16 + MapDataWriter.Step255;
+
+        var result = new ushort[levels.Length];
+        long clipped = 0;
+
+        Parallel.For(0, levels.Length,
+            () => 0L,
+            (i, _, local) =>
+            {
+                int v = levels[i];
+                if (v <= lowestLand) { result[i] = (ushort)v; return local; }
+
+                double scaled = lowestLand + (v - lowestLand) * scale;
+                if (scaled > 65535) { scaled = 65535; local++; }
+
+                result[i] = (ushort)Math.Round(scaled);
+                return local;
+            },
+            local => Interlocked.Add(ref clipped, local));
+
+        Console.WriteLine($"  relief scaled by {scale:F3} (map is {scale:P0} of vanilla's width): "
+                          + $"land above the waterline compressed toward it"
+                          + (clipped > 0 ? $", {clipped:N0} px clipped at the top of the range" : ""));
+
+        return result;
+    }
+
     private static int DetectLandFloor(int[] histogram, int landMin, double density)
     {
         if (density <= 0) return landMin;

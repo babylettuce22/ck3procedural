@@ -16,17 +16,36 @@ namespace Ck3MapGen.MapGen;
 /// in the running — which is what keeps a model off the shoreline whatever shape the province is.
 /// Among those, the flattest ground wins, with nearness to the centroid breaking ties, so the
 /// model stands on level ground near the middle rather than on the side of a mountain.
+///
+/// A province needs two anchors, not one: the holding stands at <see cref="Anchors.Holding"/> and
+/// anything sharing the province with it needs somewhere else to be. See
+/// <see cref="Anchors.Special"/>.
 /// </summary>
 public static class ProvinceAnchor
 {
+    /// <summary>
+    /// The anchor points for one map, per province label, in province-map pixels.
+    /// </summary>
+    /// <param name="Holding">Where the holding, armies and sieges stand.</param>
+    /// <param name="Special">
+    /// Where a special building stands. Offset from <paramref name="Holding"/> so the wonder is not
+    /// drawn on top of or inside the castle, and constrained to stay on land inside the same
+    /// province.
+    /// </param>
+    public readonly record struct Anchors(
+        (double X, double Y)[] Holding,
+        (double X, double Y)[] Special);
+
     /// <summary>4-neighbour offsets: a pixel is on the edge if it orthogonally touches another
     /// province, since diagonal-only contact is a corner rather than a border.</summary>
     private static readonly (int Dx, int Dy)[] Orthogonal = [(-1, 0), (1, 0), (0, -1), (0, 1)];
 
     /// <summary>
-    /// One anchor per province label, in province-map pixels.
+    /// One holding anchor and one special-building anchor per province label, in province-map
+    /// pixels. Both come out of the same pass because the distance-to-edge BFS and the slope field
+    /// are the expensive part and the second anchor needs exactly those two.
     /// </summary>
-    public static (double X, double Y)[] Compute(ProvinceMap map, float[] elevation, MapConfig cfg)
+    public static Anchors Compute(ProvinceMap map, float[] elevation, MapConfig cfg)
     {
         int width = map.Width, height = map.Height;
         var depth = DistanceFromEdge(map);

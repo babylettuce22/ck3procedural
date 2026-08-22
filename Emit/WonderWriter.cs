@@ -38,6 +38,18 @@ public static class WonderWriter
                 cleanIcon += ".dds";
 
             sb.Append($"{wonder.Key} = {{\n");
+
+            // The map model. CK3 draws this at the province's special_building locator, which is a
+            // separate anchor from the holding's own (see LocatorWriter). No filters on the block:
+            // graphical_regions/cultures/faiths only narrow *when* an asset is eligible, and a
+            // generated world has no guarantee that any particular one of them matches, so an
+            // unfiltered block is the one that always resolves. Meshes are chosen in WonderAssets
+            // and are all reachable without DLC.
+            sb.Append("\tasset = {\n");
+            sb.Append("\t\ttype = pdxmesh\n");
+            sb.Append($"\t\tname = \"{wonder.Mesh}\"\n");
+            sb.Append("\t}\n\n");
+
             sb.Append($"\ttype_icon = \"{cleanIcon}\"\n");
             sb.Append("\tconstruction_time = very_slow_construction_time\n");
             sb.Append("\ttype = special\n");

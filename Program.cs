@@ -150,6 +150,14 @@ public static class Program
                     options.WritePacked = false;
                     break;
 
+                // Ships the source heightmap's relief as authored instead of scaling it to the
+                // map's size. See MapConfig.ScaleReliefWithMapSize; here so the two can be
+                // compared headlessly on one binary, which is the only way to tell the pass apart
+                // from everything else that moves when a map is regenerated.
+                case "--no-relief-scale":
+                    cfg.ScaleReliefWithMapSize = false;
+                    break;
+
                 // Resample --heightmap onto a size the packer can tile, rather than refusing it.
                 // A mode rather than a size, because the size to fit to is not known until the
                 // file's own dimensions have been read, which happens below.

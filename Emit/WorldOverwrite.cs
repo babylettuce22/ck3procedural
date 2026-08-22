@@ -122,7 +122,7 @@ public static class WorldOverwrite
             // hierarchy itself, and there is no meaningful way to rewrite one colour inside it
             // without reproducing the writer.
             ContentWriter.WriteLandedTitles(modDir, result.Titles, written.Faiths,
-                written.Wilderness, written.WorldCenters);
+                written.Wilderness);
 
         if (aspects.HasFlag(WorldAspect.Cultures))
         {
