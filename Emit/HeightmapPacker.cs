@@ -10,7 +10,28 @@ public static class HeightmapPacker
     private const int MaxAddressable = 256;
     private const int MaxTextureSide = 16384;
 
+    /// <summary>
+    /// Vanilla's level histogram, decoded from the alpha channel of its own
+    /// indirection_heightmap.png: 2.56 / 11.93 / 14.71 / 11.67 / 59.13 percent of tiles.
+    ///
+    /// Kept only as the fallback when <see cref="Config.MapConfig.HeightmapSagBudget"/> is off.
+    /// It is an outcome, not a rule — see that setting for why copying it onto steeper terrain
+    /// reproduces vanilla's tile counts and not vanilla's tile quality.
+    /// </summary>
     private static readonly double[] VanillaShare = [0.0256, 0.1193, 0.1471, 0.1167, 0.5913];
+
+    /// <summary>
+    /// NJominiMap.WORLD_EXTENTS_Y — the world-unit height of the full 16-bit heightmap range, and
+    /// so the only thing that turns a sag budget in world units into height samples.
+    ///
+    /// Has to stay in step with the define CompatibilityWriter writes, which is what tells the
+    /// engine the same number. Both are constant on every map size, deliberately: a smaller map is
+    /// a smaller region at the same scale, so one height step is the same height everywhere.
+    /// </summary>
+    private const double WorldExtentY = 50.0;
+
+    /// <summary>A sag budget in world units, in the 16-bit units the heightmap is measured in.</summary>
+    private static double BudgetIn16Bit(double worldUnits) => worldUnits / WorldExtentY * 65535.0;
 
     public static int TileSize(int level) => TileStep / Decimation(level) + 1;
     public static int Decimation(int level) => 1 << level;
@@ -19,15 +40,16 @@ public static class HeightmapPacker
         ushort[] Packed, int PackedWidth, int PackedHeight,
         byte[] Indirection, int TilesX, int TilesY,
         int[] LevelOffsets, int EmptyR, int EmptyG,
-        int[] TilesPerLevel, int[] SlotsPerLevel);
+        int[] TilesPerLevel, int[] SlotsPerLevel,
+        double SagBudget, double WorstSag);
 
-    public static Result Pack(ushort[] full, int width, int height)
+    public static Result Pack(ushort[] full, int width, int height, double sagBudget)
     {
         int tilesX = width / TileStep, tilesY = height / TileStep;
         int tileCount = tilesX * tilesY;
 
-        // 1. Initial level assignment by gradient relief metric
-        var level = AssignLevels(Detail(full, width, height, tilesX, tilesY));
+        // 1. Initial level assignment, by sag budget or by vanilla's histogram
+        var level = AssignLevels(full, width, height, tilesX, tilesY, sagBudget);
 
         // 2. Enforce 2:1 LOD Neighbor Balance (Seam & T-junction protection)
         EnforceNeighborLodBalance(level, tilesX, tilesY);
@@ -101,11 +123,21 @@ public static class HeightmapPacker
         }
 
         int emptyCols = cols[Levels - 1];
+        // Measured against the levels that actually shipped, after the neighbour balance pass.
+        // That pass only ever refines a tile, so this can beat the budget but never miss it for a
+        // reason the budget chose — which makes it a real check on the assignment rather than an
+        // echo of it.
+        double worstSag = 0;
+        for (int ty = 0; ty < tilesY; ty++)
+            for (int tx = 0; tx < tilesX; tx++)
+                worstSag = Math.Max(worstSag, TileSag(full, width, height, tx, ty, level[ty * tilesX + tx]));
+
         return new Result(
             packed, atlasWidth, atlasHeight,
             indirection, tilesX, tilesY,
             offsets, emptySlot % emptyCols, emptySlot / emptyCols,
-            tilesPerLevel, slotsPerLevel);
+            tilesPerLevel, slotsPerLevel,
+            sagBudget, worstSag * WorldExtentY / 65535.0);
     }
 
     /// <summary>
@@ -124,12 +156,12 @@ public static class HeightmapPacker
     /// rather than reading the atlas back through the indirection texture. Going through the atlas
     /// would be a second implementation of the same decision, free to drift from the one that ships.
     /// </summary>
-    public static ushort[] Reconstruct(ushort[] full, int width, int height)
+    public static ushort[] Reconstruct(ushort[] full, int width, int height, double sagBudget)
     {
         int tilesX = width / TileStep, tilesY = height / TileStep;
         if (tilesX == 0 || tilesY == 0) return full;
 
-        var level = AssignLevels(Detail(full, width, height, tilesX, tilesY));
+        var level = AssignLevels(full, width, height, tilesX, tilesY, sagBudget);
         EnforceNeighborLodBalance(level, tilesX, tilesY);
 
         // Copied rather than allocated blank: a map whose height is not a whole number of tiles has
@@ -150,12 +182,6 @@ public static class HeightmapPacker
                     int gy = ty * TileStep + y;
                     if (gy >= height) break;
 
-                    // Extract starts its rows one pixel above the tile, so the sample grid is
-                    // offset by one; undo that here rather than resampling on a different origin.
-                    double v = (y + 1.0) / step;
-                    int v0 = Math.Clamp((int)v, 0, s - 2);
-                    double fv = v - v0;
-
                     long row = (long)gy * width;
 
                     for (int x = 0; x < TileStep; x++)
@@ -163,16 +189,8 @@ public static class HeightmapPacker
                         int gx = tx * TileStep + x;
                         if (gx >= width) break;
 
-                        double u = (double)x / step;
-                        int u0 = Math.Clamp((int)u, 0, s - 2);
-                        double fu = u - u0;
-
-                        int a = v0 * s + u0, b = a + s;
-                        double top = samples[a] + (samples[a + 1] - samples[a]) * fu;
-                        double bottom = samples[b] + (samples[b + 1] - samples[b]) * fu;
-
                         result[row + gx] = (ushort)Math.Clamp(
-                            Math.Round(top + (bottom - top) * fv), 0, 65535);
+                            Math.Round(Reassemble(samples, s, step, x, y)), 0, 65535);
                     }
                 }
             }
@@ -262,7 +280,56 @@ public static class HeightmapPacker
         return metric;
     }
 
-    private static int[] AssignLevels(float[] metric)
+    /// <summary>
+    /// Picks a decimation level for every tile — the one decision that governs how far the drawn
+    /// terrain can sit below the heightmap props and borders are placed against.
+    ///
+    /// With a budget set, each tile gets the *coarsest* level whose measured sag still fits, which
+    /// spends atlas exactly where relief demands it and nowhere else. That beats any flat cap on
+    /// both counts: on a 9216x4608 generated map, capping land at level 1 still left 29.8% of land
+    /// tiles over half a world unit, while a 0.5u budget left none and needed a smaller atlas.
+    ///
+    /// What it takes is the longest *prefix* of levels that all fit, not the coarsest level that
+    /// happens to fit, and the difference is load-bearing. Sag does not rise monotonically with
+    /// level: a coarse grid can land a sample on a crest that a finer grid straddles, so a real
+    /// tile measured 0.78 / 0.81 / 1.19 / 0.43 world units at levels 1 to 4. Taking the coarsest
+    /// fit picks level 4 there — and then <see cref="EnforceNeighborLodBalance"/>, which refines
+    /// tiles to stay within one level of their neighbours, drops it to level 1 and lands on 0.78
+    /// against a 0.50 budget. Refining a tile is not automatically safe.
+    ///
+    /// A prefix makes it safe: every level at or below the chosen one is inside the budget, so
+    /// wherever the balance pass moves a tile, it moves it somewhere that still fits. The cost is
+    /// giving up the occasional coarse-level windfall, which is the right trade for a bound that
+    /// actually holds.
+    /// </summary>
+    private static int[] AssignLevels(ushort[] full, int width, int height,
+                                      int tilesX, int tilesY, double sagBudget)
+    {
+        if (sagBudget <= 0)
+            return AssignByVanillaShare(Detail(full, width, height, tilesX, tilesY));
+
+        double budget = BudgetIn16Bit(sagBudget);
+        var level = new int[tilesX * tilesY];
+
+        Parallel.For(0, tilesY, ty =>
+        {
+            for (int tx = 0; tx < tilesX; tx++)
+            {
+                int chosen = 0;
+                for (int l = 1; l < Levels; l++)
+                {
+                    if (TileSag(full, width, height, tx, ty, l) > budget) break;
+                    chosen = l;
+                }
+
+                level[ty * tilesX + tx] = chosen;
+            }
+        });
+
+        return level;
+    }
+
+    private static int[] AssignByVanillaShare(float[] metric)
     {
         int count = metric.Length;
 
@@ -287,6 +354,71 @@ public static class HeightmapPacker
             if (metric[i] <= 0f) level[i] = Levels - 1;
 
         return level;
+    }
+
+    /// <summary>
+    /// One pixel of a tile as the GPU reassembles it: bilinear across the four surviving samples
+    /// around it, on the grid <see cref="Extract"/> sampled.
+    ///
+    /// The single definition of "what the renderer draws here". <see cref="Reconstruct"/> uses it
+    /// to build the preview surface and <see cref="TileSag"/> to measure the error, and those two
+    /// answering differently is precisely the drift that would make the packer optimise for a
+    /// surface nobody sees.
+    /// </summary>
+    /// <param name="x">Column within the tile, 0 to <see cref="TileStep"/>-1.</param>
+    /// <param name="y">Row within the tile, same range, still in image order.</param>
+    private static double Reassemble(ushort[] samples, int s, int step, int x, int y)
+    {
+        double u = (double)x / step;
+        int u0 = Math.Clamp((int)u, 0, s - 2);
+        double fu = u - u0;
+
+        // Extract starts its rows one pixel above the tile, so the sample grid is offset by one;
+        // undo that here rather than resampling on a different origin.
+        double v = (y + 1.0) / step;
+        int v0 = Math.Clamp((int)v, 0, s - 2);
+        double fv = v - v0;
+
+        int a = v0 * s + u0, b = a + s;
+        double top = samples[a] + (samples[a + 1] - samples[a]) * fu;
+        double bottom = samples[b] + (samples[b + 1] - samples[b]) * fu;
+        return top + (bottom - top) * fv;
+    }
+
+    /// <summary>
+    /// The worst height a tile would lose at one decimation level, in 16-bit units: how far the
+    /// drawn mesh sinks below the heightmap the engine snaps props and borders to.
+    ///
+    /// Only the shortfall counts, not the absolute difference. Decimation can push a sample *up*
+    /// as well — interpolating across a notch fills it in — and terrain drawn above the placement
+    /// height buries a tree rather than floating it, which is both far less visible and not what
+    /// the budget is for.
+    /// </summary>
+    private static double TileSag(ushort[] full, int width, int height, int tx, int ty, int level)
+    {
+        if (level == 0) return 0;   // every pixel survives; the mesh is the heightmap
+
+        int step = Decimation(level), s = TileSize(level);
+        var samples = Extract(full, width, height, tx, ty, level);
+
+        double worst = 0;
+        for (int y = 0; y < TileStep; y++)
+        {
+            int gy = ty * TileStep + y;
+            if (gy >= height) break;
+
+            long row = (long)gy * width;
+            for (int x = 0; x < TileStep; x++)
+            {
+                int gx = tx * TileStep + x;
+                if (gx >= width) break;
+
+                double sag = full[row + gx] - Reassemble(samples, s, step, x, y);
+                if (sag > worst) worst = sag;
+            }
+        }
+
+        return worst;
     }
 
     private static ushort[] Extract(ushort[] full, int width, int height, int tx, int ty, int level)

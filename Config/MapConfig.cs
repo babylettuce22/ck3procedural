@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.Globalization;
 using System.Windows.Forms.Design;
 
 namespace Ck3MapGen.Config;
@@ -76,6 +77,49 @@ public sealed class AzgaarJsonFileEditor : FileNameEditor
         openFileDialog.Title = "Choose an Azgaar 'Full' JSON export";
         openFileDialog.Filter = "Azgaar export (*.json)|*.json|All files (*.*)|*.*";
     }
+}
+
+/// <summary>
+/// Shows <see cref="MapConfig.EraAnchorYear"/>'s zero as what it means rather than as a number.
+///
+/// Zero is a sentinel — "however advanced the world's own year would make it" — and a grid row
+/// reading "0" says the opposite of that to anyone who has not read the description: it looks like
+/// a year, and a year of zero looks like the beginning of time. Spelling it out is the difference
+/// between a setting that explains itself and one that has to be explained.
+///
+/// Not exclusive, so the row stays a normal editable number: the dropdown offers the sentinel and
+/// typing a year still works. Every other value renders as itself.
+/// </summary>
+public sealed class FollowWorldYearConverter : Int32Converter
+{
+    public const string Follow = "Follow World Year";
+
+    public override object? ConvertTo(ITypeDescriptorContext? context, CultureInfo? culture,
+        object? value, Type destinationType)
+        => destinationType == typeof(string) && value is 0
+            ? Follow
+            : base.ConvertTo(context, culture, value, destinationType);
+
+    public override object? ConvertFrom(ITypeDescriptorContext? context, CultureInfo? culture,
+        object value)
+    {
+        // Matched loosely on purpose. The user did not type this string, they picked it, so the
+        // only way it arrives misspelled is if it came back through a saved preset or was edited by
+        // hand — and in both cases meaning it is likelier than meaning a parse error.
+        if (value is string text && text.Trim().StartsWith("Follow", StringComparison.OrdinalIgnoreCase))
+            return 0;
+
+        return base.ConvertFrom(context, culture, value);
+    }
+
+    public override bool GetStandardValuesSupported(ITypeDescriptorContext? context) => true;
+
+    /// <summary>False so the row keeps its text box — the list is a shortcut to the sentinel, not
+    /// the whole range of years.</summary>
+    public override bool GetStandardValuesExclusive(ITypeDescriptorContext? context) => false;
+
+    public override StandardValuesCollection GetStandardValues(ITypeDescriptorContext? context)
+        => new(new[] { 0 });
 }
 
 /// <summary>
@@ -165,7 +209,12 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// tribal era to get there. <see cref="EraAnchorYear"/> is the other half of that question.
     /// </summary>
     [Category("02 World State")]
-    [Description("The year the game starts — the bookmark date, and the calendar births, deaths, wars and chronicle entries are written on. How advanced the world is, is a separate question: see Era Anchor Year.")]
+    [DisplayName("World Year")]
+    [AzgaarIncompat("The export's own present year becomes the world year, so the game clock and the " +
+                    "world's history agree. Advancement does not follow it — that stays on Advancement " +
+                    "Year, which is pinned to this value when an export is loaded. Still read as set " +
+                    "if the export carries no year, which a 'Minimal' export may not.")]
+    [Description("What the world calls the year: the bookmark date, and the calendar every date the game renders is on — births, deaths, wars, chronicle entries. How advanced the world is, is a separate question: see Advancement Year.")]
     public int StartYear { get; set; } = 900;
 
     /// <summary>
@@ -181,7 +230,9 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// the game itself reads, so the two do not end up disagreeing about which era it is.
     /// </summary>
     [Category("02 World State")]
-    [Description("Which year on CK3's own timeline this world is as advanced as: innovations cultures already hold, the development baseline, and the feudal/tribal/nomad mix. 0 follows the start year, which is the old behaviour.")]
+    [DisplayName("Advancement Year")]
+    [TypeConverter(typeof(FollowWorldYearConverter))]
+    [Description("Which year on CK3's own timeline this world is as advanced as: innovations cultures already hold, the development baseline, and the feudal/tribal/nomad mix. Set it to follow the world year to keep the two together, which is how every map worked before this setting existed.")]
     public int EraAnchorYear { get; set; }
 
     /// <summary>The year every advancement heuristic reads. See <see cref="EraAnchorYear"/>.</summary>
@@ -965,6 +1016,40 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Category("7 Height scale")]
     [Description("What the highest land pixel becomes, on the 0-255 scale. 191 is vanilla's own highest; vanilla never uses the top of the range. Raise towards 255 for a more dramatic map — this is the knob that decides how flat the result reads.")]
     public double LandTop { get; set; } = 191;
+
+    /// <summary>
+    /// How far the terrain CK3 draws may sink below the heightmap it snaps props and borders to,
+    /// in world units, before the packer spends more atlas on that tile. 0 restores the old
+    /// behaviour: copy vanilla's level histogram and accept whatever error follows.
+    ///
+    /// This is the floating-trees knob, and the floating is not a placement bug. Prop instances
+    /// are written with <c>y=0</c> — vanilla's too — and the engine snaps them to the ground at
+    /// load, from the full-resolution heightmap.png. The terrain *mesh* comes from the decimated
+    /// packed_heightmap, where a level-4 tile keeps one sample in sixteen and
+    /// <see cref="Emit.HeightmapPacker"/>'s Extract point-samples rather than averages, so a ridge
+    /// crest between two samples is not lowered, it is absent. The prop stands at the height the
+    /// heightmap promised and the drawn ground sits below it.
+    ///
+    /// The old rank-against-vanilla assignment is what made that big. Vanilla's shipped level
+    /// histogram is the *outcome* of an error budget applied to gentle European terrain, not a rule
+    /// worth copying: reproducing the histogram on steeper ground reproduces vanilla's tile counts
+    /// and misses vanilla's tile quality by an order of magnitude. Measured on a 9216x4608
+    /// generated map against vanilla, land tiles only, the share sagging over half a world unit was
+    /// 59.9% here against vanilla's 4.4%.
+    ///
+    /// 0.5 buys better-than-vanilla fidelity for less than vanilla spends. On that same map it took
+    /// tiles over 0.5u from 59.9% to none, in an atlas smaller than vanilla's 3185x4061 and at
+    /// 9.5M terrain vertices against the 12.65M vanilla itself ships. Lower it for a sharper mesh
+    /// on deliberately alpine maps — 0.25 roughly doubles the atlas over 0.5 — and watch the packed
+    /// size in the log, since the hard ceiling is 16384 px a side.
+    ///
+    /// Only the baked half. The engine also morphs terrain LOD with camera distance, which no mod
+    /// can reach, so distant props still float a little and settle as you zoom in.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("7 Height scale")]
+    [Description("How far the drawn terrain may sink below the heightmap props and borders are snapped to, in world units. This is the floating-trees knob. Lower is sharper and costs atlas space; 0.5 beats vanilla's own fidelity for less than vanilla spends. 0 restores the old copy-vanilla's-histogram behaviour.")]
+    public double HeightmapSagBudget { get; set; } = 0.5;
 
     /// <summary>
     /// Which percentile of land the top anchor is taken at, rather than the maximum.

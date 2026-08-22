@@ -642,6 +642,54 @@ public static partial class CompatibilityWriter
 
     /// <summary>
     /// <summary>
+    /// Puts the world's own era on the game clock.
+    ///
+    /// The year itself needs no arithmetic — <see cref="MapGen.AzgaarImport"/> already moved the
+    /// bookmark onto the export's calendar, so the engine is counting the right number and only
+    /// calls it the wrong thing. All that is left is the suffix: vanilla renders " AD" and this
+    /// world wants " BE".
+    ///
+    /// AGOT needs a great deal more than this, and the difference is worth knowing. Its dates are
+    /// offset by a constant (bookmarks at 8082-8282 for years 82-282 After the Conquest) across five
+    /// stacked eras, so each of its date strings is a nest of <c>Select_int32</c> subtracting a
+    /// different base per era, repeated once per context because the year is reached through a
+    /// different datafunction in each. Adopting the year outright costs none of that.
+    ///
+    /// Written into <c>localization/replace/</c>, which loads after the ordinary pass — these three
+    /// are vanilla keys and have to win. The folder replaces *same-named* vanilla files, so a name
+    /// of our own shadows nothing; it only buys the later slot.
+    /// </summary>
+    public static void WriteCalendarLocalisation(string modDir, MapGen.AzgaarImport? azgaar)
+    {
+        if (azgaar is null) return;
+
+        string era = azgaar.EraShort.Trim();
+        if (era.Length == 0) era = azgaar.EraName.Trim();
+        if (era.Length == 0) return;
+
+        // Literal rather than through vanilla's $ERA$ token. That token resolves to
+        // GAME_DATE_STRING_ERA_CE or _BCE depending on sign, and only two of the three date strings
+        // reference it at all -- the plain one carries no era and the short one asks for the BCE
+        // form. Writing the suffix in directly makes all three agree without depending on which
+        // token the engine happens to supply where.
+        string text =
+            $$"""
+              l_english:
+               GAME_DATE_STRING:0 "$DAY$ $MONTH$, $YEAR$ {{Io.ParadoxText.Loc(era)}}"
+               GAME_DATE_STRING_SHORT:0 "$DAY$ $MONTH_SHORT$ $YEAR$ {{Io.ParadoxText.Loc(era)}}"
+               GAME_DATE_STRING_LONG:0 "$DAY|O$ of $MONTH$, $YEAR$ {{Io.ParadoxText.Loc(era)}}"
+
+              """;
+
+        string dir = Path.Combine(modDir, "localization", "replace", "english");
+        Directory.CreateDirectory(dir);
+        ParadoxText.WriteBom(Path.Combine(dir, "zz_gen_calendar_l_english.yml"), text);
+
+        Console.WriteLine($"  calendar: dates suffixed \"{era}\"" +
+                          (azgaar.EraName.Length > 0 ? $" ({azgaar.EraName})" : ""));
+    }
+
+    /// <summary>
     /// Pushes the end of the world out when the world's calendar would otherwise run into it.
     ///
     /// Vanilla's <c>END_DATE</c> is a hard 1453.1.1, and a world that calls the present year 1448

@@ -520,6 +520,15 @@ public static class MapDataWriter
         Console.WriteLine($"  {tiles:N0} tiles share {slots:N0} atlas slots " +
                           $"({(double)tiles / Math.Max(1, slots):F2}x reuse, vanilla 1.53x); " +
                           $"empty tile at {packing.EmptyR},{packing.EmptyG}");
+
+        // The number the floating-trees work is actually about: how far the drawn terrain sits
+        // below the heightmap the engine snaps props and borders to. Vanilla's own worst land tile
+        // is 19.32u, and 4.4% of its land tiles clear half a unit.
+        Console.WriteLine(packing.SagBudget <= 0
+            ? $"  terrain sag: worst {packing.WorstSag:F2} world units, no budget set "
+              + "(vanilla level shares, HeightmapSagBudget = 0)"
+            : $"  terrain sag: worst {packing.WorstSag:F2} world units against a "
+              + $"{packing.SagBudget:F2}u budget");
     }
 
     /// <summary>
@@ -564,7 +573,7 @@ public static class MapDataWriter
             return full;
         }
 
-        var packing = HeightmapPacker.Pack(full, cfg.Width, cfg.Height);
+        var packing = HeightmapPacker.Pack(full, cfg.Width, cfg.Height, cfg.HeightmapSagBudget);
 
 
         PngWriter.WriteGray16(Path.Combine(dir, "packed_heightmap.png"),

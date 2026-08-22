@@ -217,6 +217,7 @@ public static class ContentWriter
         {
             CompatibilityWriter.WriteDefines(modDir, gameDir, cfg);
             CompatibilityWriter.WriteCultureEras(modDir, gameDir, cfg);
+            CompatibilityWriter.WriteCalendarLocalisation(modDir, azgaar);
             CompatibilityWriter.WriteGeographicalRegions(modDir, gameDir, empires);
             CompatibilityWriter.WriteHolySites(modDir, gameDir, empires, faiths);
         });
@@ -265,7 +266,8 @@ public static class ContentWriter
         // scatter reads agree with the packed one tile for tile.
         var renderedElevation = Core.Stage.Time("rendered heightmap", () =>
             HeightmapSource.ToSimulationScale(
-                HeightmapPacker.Reconstruct(shippedHeightmap, cfg.Width, cfg.Height), cfg));
+                HeightmapPacker.Reconstruct(
+                    shippedHeightmap, cfg.Width, cfg.Height, cfg.HeightmapSagBudget), cfg));
 
         // renderedElevation for all three, not terra.Elevation: every one of them seeds from
         // province-resolution terrain and then jitters to a sub-pixel position, and has to ask the

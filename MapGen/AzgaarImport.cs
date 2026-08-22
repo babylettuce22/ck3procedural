@@ -130,6 +130,8 @@ public sealed class AzgaarImport
 
         var loaded = Core.Stage.Time("azgaar import", () => AzgaarJson.Load(path));
 
+        AdoptCalendar(loaded.World, cfg);
+
         var raster = Core.Stage.Time("azgaar raster",
             () => AzgaarRaster.Build(loaded.World, cfg));
 
@@ -141,6 +143,56 @@ public sealed class AzgaarImport
             Config = cfg,
         };
     }
+
+    /// <summary>
+    /// Moves the world's calendar onto the export's own.
+    ///
+    /// Done here rather than downstream because <see cref="MapConfig.StartYear"/> is read by very
+    /// nearly everything and this is the last moment before any of it runs —
+    /// <see cref="HeightmapSource"/> already sets the map dimensions on <c>cfg</c> the same way and
+    /// for the same reason. Adopting the year rather than merely displaying it is what keeps the
+    /// game clock and the generated history speaking about the same moment; the alternative leaves
+    /// a bookmark in 900 while the chronicle talks about 963, which reads as a bug.
+    ///
+    /// Nothing is clamped. A world that says it is the year 1448 is allowed to be, because
+    /// <see cref="Emit.CompatibilityWriter"/> moves <c>END_DATE</c> out of its way, and because a
+    /// tool that quietly relocated somebody's world by four centuries would be worse than one that
+    /// took it at its word. What advancement that world has is a separate question and stays with
+    /// <see cref="MapConfig.EraAnchorYear"/>.
+    /// </summary>
+    private static void AdoptCalendar(AzgaarWorld world, MapConfig cfg)
+    {
+        int year = world.Settings.Options.Year;
+        if (year <= 0) return;
+
+        // Pinned before the year moves. Left at zero the era would follow StartYear onto the
+        // export's calendar, which is exactly what this feature exists to prevent: a world dated
+        // 433 would drop its cultures into the tribal era on the way past. Whatever the user had
+        // set is their answer to "how advanced", and it stays their answer.
+        if (cfg.EraAnchorYear <= 0) cfg.EraAnchorYear = cfg.StartYear;
+
+        int was = cfg.StartYear;
+        cfg.StartYear = year;
+
+        string era = world.Settings.Options.Era;
+        Console.WriteLine($"  azgaar calendar: year {year}{(era.Length > 0 ? $" of the {era}" : "")} " +
+                          $"(was {was}; advancement still judged as vanilla {cfg.EraYear})");
+
+        // Every generated character is born StartYear-37 and the oldest generated history sits a
+        // thousand years back, both floored at year 1. Under about a century those floors start
+        // colliding and a whole generation shares one birth year.
+        if (year < 120)
+            Console.WriteLine(
+                $"  ! The export's year ({year}) leaves little room before it. Births, reigns and\n" +
+                "    remembered events will bunch up against year 1. Raising the export's\n" +
+                "    'Era' year in Azgaar's options spreads them out again.");
+    }
+
+    /// <summary>The export's era, long form — "Balistow Era". Empty when it carries none.</summary>
+    public string EraName => World.Settings.Options.Era;
+
+    /// <summary>The same, abbreviated — "BE". What a date is suffixed with.</summary>
+    public string EraShort => World.Settings.Options.EraShort;
 
     /// <summary>
     /// Compares the imported land against ours and says so. Called as soon as the heightmap's land

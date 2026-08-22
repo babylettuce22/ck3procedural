@@ -433,7 +433,8 @@ public static class Program
         }
 
         // The same angle again, through the packer, so the two can be flipped between.
-        var packed = Emit.HeightmapPacker.Reconstruct(normalized, loaded.Width, loaded.Height);
+        var packed = Emit.HeightmapPacker.Reconstruct(
+            normalized, loaded.Width, loaded.Height, cfg.HeightmapSagBudget);
 
         long changed = 0, sum = 0;
         int worst = 0;
