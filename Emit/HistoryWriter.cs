@@ -90,18 +90,22 @@ public static class HistoryWriter
         string dir = Path.Combine(modDir, "common", "dynasties");
         Directory.CreateDirectory(dir);
 
-        var sb = new StringBuilder();
-        sb.Append("# Generated Dynasties\n\n");
+        var b = new JominiBuilder();
+        b.Comment("Generated Dynasties");
+        b.Blank();
 
         foreach (var dyn in prehistory.Dynasties.Values)
         {
-            sb.Append($"{dyn.Id} = {{\n");
-            sb.Append($"\tname = \"{dyn.NameKey}\"\n");
-            sb.Append($"\tculture = \"{dyn.CultureKey}\"\n");
-            sb.Append("}\n\n");
+            using (b.Block(dyn.Id))
+            {
+                b.Quoted("name", dyn.NameKey);
+                b.Quoted("culture", dyn.CultureKey);
+            }
+
+            b.Blank();
         }
 
-        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_dynasties.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_dynasties.txt"), b.ToString());
     }
 
     private static void WriteDynastyHouses(string modDir, PrehistoryMap prehistory)
@@ -109,22 +113,23 @@ public static class HistoryWriter
         string dir = Path.Combine(modDir, "common", "dynasty_houses");
         Directory.CreateDirectory(dir);
 
-        var sb = new StringBuilder();
-        sb.Append("# Generated Dynasty Houses & Cadet Branches\n\n");
+        var b = new JominiBuilder();
+        b.Comment("Generated Dynasty Houses & Cadet Branches");
+        b.Blank();
 
         foreach (var house in prehistory.Houses.Values)
         {
-            sb.Append($"{house.Key} = {{\n");
-            if (house.Prefix is not null)
+            using (b.Block(house.Key))
             {
-                sb.Append($"\tprefix = \"{house.Prefix}\"\n");
+                if (house.Prefix is not null) b.Quoted("prefix", house.Prefix);
+                b.Quoted("name", house.NameKey);
+                b.Field("dynasty", house.DynastyId);
             }
-            sb.Append($"\tname = \"{house.NameKey}\"\n");
-            sb.Append($"\tdynasty = {house.DynastyId}\n");
-            sb.Append("}\n\n");
+
+            b.Blank();
         }
 
-        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_houses.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_houses.txt"), b.ToString());
     }
 
     /// <summary>
@@ -143,38 +148,49 @@ public static class HistoryWriter
             File.Delete(oldSpousesFile);
         }
 
-        var sb = new StringBuilder();
-        sb.Append("# Generated Living Rulers, Ancestors, Spouses & Heirs\n\n");
+        var b = new JominiBuilder();
+        b.Comment("Generated Living Rulers, Ancestors, Spouses & Heirs");
+        b.Blank();
+
+        // A dated block wrapping a single effect body, which is how every relation below is stamped
+        // onto its character.
+        void DatedEffect(string date, Action body)
+        {
+            using (b.Block(date))
+            using (b.Block("effect"))
+                body();
+        }
 
         // =========================================================================
         // 2. Deceased Ancestors (Fathers) — Stamped with historical birth and death
         // =========================================================================
         foreach (var ancestor in prehistory.AllExtraCharacters.Where(c => c.IsDeadAncestor))
         {
-            sb.Append($"{ancestor.Id} = {{\n");
-            sb.Append($"\tname = \"{ancestor.Name}\"\n");
-            if (ancestor.Female) sb.Append("\tfemale = yes\n");
-
-            // A house and a dynasty are different keys to CK3, and pointing dynasty_house at
-            // a dynasty id makes the character landless of no house at all rather than the
-            // founder of one.
-            if (ancestor.DynastyHouseKey is not null)
-                sb.Append($"\tdynasty_house = {ancestor.DynastyHouseKey}\n");
-            else
-                sb.Append($"\tdynasty = {ancestor.DynastyId}\n");
-            sb.Append($"\treligion = {ancestor.FaithKey}\n");
-            sb.Append($"\tculture = {ancestor.CultureKey}\n");
-
-            var ancestorCulture = cultures.Cultures.FirstOrDefault(c => c.Key == ancestor.CultureKey);
-            if (ancestorCulture is not null)
+            using (b.Block(ancestor.Id))
             {
-                string? ancestorTrait = GetPhenotypeTrait(ancestorCulture, ethnicities, cfg);
-                if (ancestorTrait is not null)
-                    sb.Append($"\ttrait = {ancestorTrait}\n");
+                b.Quoted("name", ancestor.Name);
+                if (ancestor.Female) b.Field("female", "yes");
+
+                // A house and a dynasty are different keys to CK3, and pointing dynasty_house at
+                // a dynasty id makes the character landless of no house at all rather than the
+                // founder of one.
+                if (ancestor.DynastyHouseKey is not null)
+                    b.Field("dynasty_house", ancestor.DynastyHouseKey);
+                else
+                    b.Field("dynasty", ancestor.DynastyId);
+
+                b.Field("religion", ancestor.FaithKey);
+                b.Field("culture", ancestor.CultureKey);
+
+                var ancestorCulture = cultures.Cultures.FirstOrDefault(c => c.Key == ancestor.CultureKey);
+                if (ancestorCulture is not null)
+                    b.Field("trait", GetPhenotypeTrait(ancestorCulture, ethnicities, cfg));
+
+                b.Inline(ancestor.BirthDate, "birth = yes");
+                b.Inline(ancestor.DeathDate, "death = yes");
             }
-            sb.Append($"\t{ancestor.BirthDate} = {{ birth = yes }}\n");
-            sb.Append($"\t{ancestor.DeathDate} = {{ death = yes }}\n");
-            sb.Append("}\n\n");
+
+            b.Blank();
         }
 
         // =========================================================================
@@ -190,239 +206,180 @@ public static class HistoryWriter
             var primaryTitle = ruler.PrimaryTitle;
             var profile = ruler.Profile;
 
-            sb.Append($"{ruler.Id} = {{\n");
-            sb.Append($"\tname = \"{ruler.Name}\"\n");
-            if (ruler.Female) sb.Append("\tfemale = yes\n");
-
-            if (ruler.DnaKey is not null)
+            using (b.Block(ruler.Id))
             {
-                sb.Append($"\tdna = {ruler.DnaKey}\n");
-            }
+                b.Quoted("name", ruler.Name);
+                if (ruler.Female) b.Field("female", "yes");
 
-            sb.Append($"\tdynasty_house = {ruler.HouseKey}\n");
+                b.Field("dna", ruler.DnaKey);
+                b.Field("dynasty_house", ruler.HouseKey);
 
-            // Base skills, in vanilla's own order. Written rather than left out because an omitted
-            // skill is rolled by the engine from RANDOM_CHARACTER_*_MIN/MAX — a flat 0-10 that takes
-            // no notice of whether the character is an emperor or a backwater count.
-            sb.Append($"\tmartial = {profile.Martial}\n");
-            sb.Append($"\tprowess = {profile.Prowess}\n");
-            sb.Append($"\tdiplomacy = {profile.Diplomacy}\n");
-            sb.Append($"\tintrigue = {profile.Intrigue}\n");
-            sb.Append($"\tstewardship = {profile.Stewardship}\n");
-            sb.Append($"\tlearning = {profile.Learning}\n");
+                // Base skills, in vanilla's own order. Written rather than left out because an omitted
+                // skill is rolled by the engine from RANDOM_CHARACTER_*_MIN/MAX — a flat 0-10 that takes
+                // no notice of whether the character is an emperor or a backwater count.
+                b.Field("martial", profile.Martial);
+                b.Field("prowess", profile.Prowess);
+                b.Field("diplomacy", profile.Diplomacy);
+                b.Field("intrigue", profile.Intrigue);
+                b.Field("stewardship", profile.Stewardship);
+                b.Field("learning", profile.Learning);
 
-            sb.Append($"\treligion = {ruler.Faith.Key}\n");
-            sb.Append($"\tculture = {culture.Key}\n");
+                b.Field("religion", ruler.Faith.Key);
+                b.Field("culture", culture.Key);
 
-            // The education trait. Left unwritten, the engine picks one at random for every ruler on
-            // the map, so a khan was as likely to have been raised a scholar as a soldier and no
-            // ruler's schooling had anything to do with the realm he was raised in. Written here it
-            // also becomes something the rest of this block can lean on: it names the lifestyle the
-            // perk points below are spendable in.
-            sb.Append($"\ttrait = {profile.EducationTrait}\n");
+                // The education trait. Left unwritten, the engine picks one at random for every ruler on
+                // the map, so a khan was as likely to have been raised a scholar as a soldier and no
+                // ruler's schooling had anything to do with the realm he was raised in. Written here it
+                // also becomes something the rest of this block can lean on: it names the lifestyle the
+                // perk points below are spendable in.
+                b.Field("trait", profile.EducationTrait);
 
-            // Exactly 3 non-conflicting Personality traits (brave, greedy, just, etc.)
-            foreach (string personalityTrait in profile.PersonalityTraits)
-            {
-                sb.Append($"\ttrait = {personalityTrait}\n");
-            }
+                // Exactly 3 non-conflicting Personality traits (brave, greedy, just, etc.)
+                foreach (string personalityTrait in profile.PersonalityTraits) b.Field("trait", personalityTrait);
 
-            // Other traits (congenitals, commander traits, hobbies, scars, coping mechanisms)
-            foreach (string otherTrait in profile.OtherTraits)
-            {
-                sb.Append($"\ttrait = {otherTrait}\n");
-            }
+                // Other traits (congenitals, commander traits, hobbies, scars, coping mechanisms)
+                foreach (string otherTrait in profile.OtherTraits) b.Field("trait", otherTrait);
 
-            if (GetPhenotypeTrait(culture, ethnicities, cfg) is { } rulerTrait)
-                sb.Append($"\ttrait = {rulerTrait}\n");
+                b.Field("trait", GetPhenotypeTrait(culture, ethnicities, cfg));
+                b.Field("father", ruler.FatherId);
 
-            if (ruler.FatherId is not null)
-            {
-                sb.Append($"\tfather = {ruler.FatherId}\n");
-            }
+                // --- Character Birth Date ---
+                b.Inline(ruler.BirthDate, "birth = yes");
 
-            // --- Character Birth Date ---
-            sb.Append($"\t{ruler.BirthDate} = {{ birth = yes }}\n");
+                // --- Simulated Wedding Date ---
+                if (prehistory.Spouses.TryGetValue(county, out var spouse) && spouse.MarriageDate != null)
+                    using (b.Block(spouse.MarriageDate))
+                        b.Field("add_spouse", spouse.Id);
 
-            // --- Simulated Wedding Date ---
-            if (prehistory.Spouses.TryGetValue(county, out var spouse) && spouse.MarriageDate != null)
-            {
-                sb.Append($"\t{spouse.MarriageDate} = {{\n");
-                sb.Append($"\t\tadd_spouse = {spouse.Id}\n");
-                sb.Append("\t}\n");
-            }
-
-            // --- Chronologically Dated Alliances (with explicit marriage scopes) ---
-            if (prehistory.Alliances.TryGetValue(county, out var allies))
-            {
-                foreach (var allyLink in allies)
+                // --- Chronologically Dated Alliances (with explicit marriage scopes) ---
+                if (prehistory.Alliances.TryGetValue(county, out var allies))
                 {
-                    // Every link is stored on both counties; create_alliance is symmetric, so
-                    // emitting from both sides created each alliance twice.
-                    if (county.Index > allyLink.PartnerCounty.Index) continue;
+                    foreach (var allyLink in allies)
+                    {
+                        // Every link is stored on both counties; create_alliance is symmetric, so
+                        // emitting from both sides created each alliance twice.
+                        if (county.Index > allyLink.PartnerCounty.Index) continue;
 
-                    string targetCharId = CharacterId(allyLink.PartnerCounty);
-                    string ownerThrough = allyLink.ThroughSpouseId ?? CharacterId(county);
-                    string targetThrough = allyLink.ThroughPartnerId ?? targetCharId;
+                        string targetCharId = CharacterId(allyLink.PartnerCounty);
+                        string ownerThrough = allyLink.ThroughSpouseId ?? CharacterId(county);
+                        string targetThrough = allyLink.ThroughPartnerId ?? targetCharId;
 
-                    sb.Append($"\t{allyLink.FormationDate} = {{\n");
-                    sb.Append("\t\teffect = {\n");
-                    sb.Append($"\t\t\tcreate_alliance = {{\n");
-                    sb.Append($"\t\t\t\ttarget = character:{targetCharId}\n");
-                    sb.Append($"\t\t\t\tallied_through_owner = character:{ownerThrough}\n");
-                    sb.Append($"\t\t\t\tallied_through_target = character:{targetThrough}\n");
-                    sb.Append("\t\t\t}\n");
-                    sb.Append("\t\t}\n");
-                    sb.Append("\t}\n");
+                        DatedEffect(allyLink.FormationDate, () =>
+                        {
+                            using (b.Block("create_alliance"))
+                            {
+                                b.Field("target", $"character:{targetCharId}");
+                                b.Field("allied_through_owner", $"character:{ownerThrough}");
+                                b.Field("allied_through_target", $"character:{targetThrough}");
+                            }
+                        });
+                    }
                 }
-            }
 
-            // --- Chronologically Dated Rivalries ---
-            if (prehistory.Rivals.TryGetValue(county, out var rivals))
-            {
-                foreach (var rival in rivals)
+                // --- Chronologically Dated Rivalries ---
+                if (prehistory.Rivals.TryGetValue(county, out var rivals))
+                    foreach (var rival in rivals)
+                        DatedEffect(rival.Date, () =>
+                            b.Field("set_relation_rival", $"character:{CharacterId(rival.TargetCounty)}"));
+
+                // --- Chronologically Dated Friendships ---
+                if (prehistory.Friends.TryGetValue(county, out var friends))
+                    foreach (var friend in friends)
+                        DatedEffect(friend.Date, () =>
+                            b.Field("set_relation_friend", $"character:{CharacterId(friend.TargetCounty)}"));
+
+                // --- Sworn Blood Brothers (nomad khans and their anda) ---
+                if (prehistory.BloodBrothers.TryGetValue(county, out var bloodBrothers))
+                    foreach (var brother in bloodBrothers)
+                        DatedEffect(brother.Date, () =>
+                            b.Field("set_relation_blood_brother", $"character:{CharacterId(brother.TargetCounty)}"));
+
+                // --- Game Start Date (Currencies, Truces, Claims & Modifiers) ---
+                using (b.Block(cfg.StartDate))
                 {
-                    sb.Append($"\t{rival.Date} = {{\n");
-                    sb.Append("\t\teffect = {\n");
-                    sb.Append($"\t\t\tset_relation_rival = character:{CharacterId(rival.TargetCounty)}\n");
-                    sb.Append("\t\t}\n");
-                    sb.Append("\t}\n");
+                    using (b.Block("effect"))
+                    {
+                        b.Field("add_gold", ruler.Gold);
+                        b.Field("add_prestige", ruler.Prestige);
+
+                        // Renown only for rulers who answer to nobody. A vassal's house does not gain standing
+                        // for holding what its liege granted it, and handing it out regardless made every
+                        // dynasty on the map start equally renowned.
+                        bool independent = ruler.Independent;
+
+                        if (ruler.Renown > 0 && independent)
+                            b.Inline("dynasty", $"add_dynasty_prestige = {ruler.Renown}");
+
+                        // Lifestyle perk points, in the tree his education belongs to. Vanilla already
+                        // auto-assigns baseline perks on game start for adult characters based on age and
+                        // education; these points provide the explicit bonus reflecting high rank, leisure,
+                        // and top-tier tutors.
+                        if (profile.PerkPoints > 0)
+                            b.Field($"add_{profile.Lifestyle}_lifestyle_perk_points", profile.PerkPoints);
+
+                        if (profile.SecondLifestyle is not null && profile.SecondPerkPoints > 0)
+                            b.Field($"add_{profile.SecondLifestyle}_lifestyle_perk_points", profile.SecondPerkPoints);
+
+                        // Claims
+                        if (prehistory.Claims.TryGetValue(county, out var claims))
+                            foreach (var (targetTitle, pressed) in claims)
+                                b.Field(pressed ? "add_pressed_claim" : "add_unpressed_claim", $"title:{targetTitle.Key}");
+
+                        // Truces
+                        if (prehistory.Truces.TryGetValue(county, out var truces))
+                        {
+                            foreach (var (truceTarget, days) in truces)
+                            {
+                                // Written from one side only. add_truce_both_ways already binds both, so
+                                // emitting it from each partner in turn set the same truce twice and the second
+                                // one silently restarted its clock.
+                                if (county.Index >= truceTarget.Index) continue;
+
+                                b.Inline("add_truce_both_ways",
+                                    $"character = character:{CharacterId(truceTarget)} days = {days}");
+                            }
+                        }
+
+
+                        // The standing of a man who has people to hold, written only for rulers who have any.
+                        //
+                        // obedience_value docks a subject 5 for an overlord whose dread is under 10 and 15 for
+                        // one whose legitimacy has not reached level 3, and pays back half the overlord's dread
+                        // and a flat 25 once both clear. Left unwritten — as they were — every khan on the map
+                        // started feared by nobody and legitimate to nobody, which is 40 points of a 100-point
+                        // obedience threshold given away before anything else is counted. The argument was never
+                        // specific to nomads: a generated king inherits a realm of strangers on the same terms,
+                        // so RulerProfile now grades both by tier and hands the khans the same numbers they had.
+                        //
+                        // Republics and theocracies are skipped for legitimacy — their government types do not
+                        // declare `legitimacy = yes`, so there is no currency there to add to.
+                        if (profile.Dread > 0) b.Field("add_dread", profile.Dread);
+                        if (profile.Legitimacy is not null) b.Field("add_legitimacy", $"{profile.Legitimacy}");
+
+                        bool isHigherTier = primaryTitle.Tier is "d" or "k" or "e";
+
+                        // The grace period, scaled by how much realm there is to settle. Three years is enough
+                        // for a duke's handful of vassals to get used to him; an emperor's crown vassals are
+                        // themselves kings with their own inheritances to digest, and a window that closes on
+                        // all of them at once, at the same moment as every other realm on the map, is what turns
+                        // year four of a generated world into a simultaneous continent-wide civil war.
+                        if (independent || isHigherTier)
+                            using (b.Block("add_character_modifier"))
+                            {
+                                b.Field("modifier", "gen_early_realm_stability");
+                                b.Field("years", profile.StabilityYears);
+                            }
+                    }
+
+                    // A byname, for the few who have earned one. Sits beside the effect block rather than
+                    // inside it because that is where vanilla's own history puts give_nickname.
+                    b.Field("give_nickname", profile.Nickname);
                 }
+
+                // Living characters do NOT have death = yes
             }
 
-            // --- Chronologically Dated Friendships ---
-            if (prehistory.Friends.TryGetValue(county, out var friends))
-            {
-                foreach (var friend in friends)
-                {
-                    sb.Append($"\t{friend.Date} = {{\n");
-                    sb.Append("\t\teffect = {\n");
-                    sb.Append($"\t\t\tset_relation_friend = character:{CharacterId(friend.TargetCounty)}\n");
-                    sb.Append("\t\t}\n");
-                    sb.Append("\t}\n");
-                }
-            }
-
-            // --- Sworn Blood Brothers (nomad khans and their anda) ---
-            if (prehistory.BloodBrothers.TryGetValue(county, out var bloodBrothers))
-            {
-                foreach (var brother in bloodBrothers)
-                {
-                    sb.Append($"\t{brother.Date} = {{\n");
-                    sb.Append("\t\teffect = {\n");
-                    sb.Append($"\t\t\tset_relation_blood_brother = character:{CharacterId(brother.TargetCounty)}\n");
-                    sb.Append("\t\t}\n");
-                    sb.Append("\t}\n");
-                }
-            }
-
-            // --- Game Start Date (Currencies, Truces, Claims & Modifiers) ---
-            sb.Append($"\t{cfg.StartDate} = {{\n");
-            sb.Append("\t\teffect = {\n");
-
-            sb.Append($"\t\t\tadd_gold = {ruler.Gold}\n");
-            sb.Append($"\t\t\tadd_prestige = {ruler.Prestige}\n");
-
-            // Renown only for rulers who answer to nobody. A vassal's house does not gain standing
-            // for holding what its liege granted it, and handing it out regardless made every
-            // dynasty on the map start equally renowned.
-            bool independent = ruler.Independent;
-
-            if (ruler.Renown > 0 && independent)
-            {
-                sb.Append($"\t\t\tdynasty = {{ add_dynasty_prestige = {ruler.Renown} }}\n");
-            }
-
-            // Lifestyle perk points, in the tree his education belongs to. Vanilla already
-            // auto-assigns baseline perks on game start for adult characters based on age and
-            // education; these points provide the explicit bonus reflecting high rank, leisure,
-            // and top-tier tutors.
-            if (profile.PerkPoints > 0)
-            {
-                sb.Append($"\t\t\tadd_{profile.Lifestyle}_lifestyle_perk_points = {profile.PerkPoints}\n");
-            }
-
-            if (profile.SecondLifestyle is not null && profile.SecondPerkPoints > 0)
-            {
-                sb.Append($"\t\t\tadd_{profile.SecondLifestyle}_lifestyle_perk_points = " +
-                          $"{profile.SecondPerkPoints}\n");
-            }
-
-            // Claims
-            if (prehistory.Claims.TryGetValue(county, out var claims))
-            {
-                foreach (var (targetTitle, pressed) in claims)
-                {
-                    string claimCmd = pressed ? "add_pressed_claim" : "add_unpressed_claim";
-                    sb.Append($"\t\t\t{claimCmd} = title:{targetTitle.Key}\n");
-                }
-            }
-
-            // Truces
-            if (prehistory.Truces.TryGetValue(county, out var truces))
-            {
-                foreach (var (truceTarget, days) in truces)
-                {
-                    // Written from one side only. add_truce_both_ways already binds both, so
-                    // emitting it from each partner in turn set the same truce twice and the second
-                    // one silently restarted its clock.
-                    if (county.Index >= truceTarget.Index) continue;
-
-                    sb.Append($"\t\t\tadd_truce_both_ways = {{ character = character:{CharacterId(truceTarget)} days = {days} }}\n");
-                }
-            }
-
-
-            // The standing of a man who has people to hold, written only for rulers who have any.
-            //
-            // obedience_value docks a subject 5 for an overlord whose dread is under 10 and 15 for
-            // one whose legitimacy has not reached level 3, and pays back half the overlord's dread
-            // and a flat 25 once both clear. Left unwritten — as they were — every khan on the map
-            // started feared by nobody and legitimate to nobody, which is 40 points of a 100-point
-            // obedience threshold given away before anything else is counted. The argument was never
-            // specific to nomads: a generated king inherits a realm of strangers on the same terms,
-            // so RulerProfile now grades both by tier and hands the khans the same numbers they had.
-            //
-            // Republics and theocracies are skipped for legitimacy — their government types do not
-            // declare `legitimacy = yes`, so there is no currency there to add to.
-            if (profile.Dread > 0)
-            {
-                sb.Append($"\t\t\tadd_dread = {profile.Dread}\n");
-            }
-
-            if (profile.Legitimacy is not null)
-            {
-                sb.Append($"\t\t\tadd_legitimacy = {profile.Legitimacy}\n");
-            }
-
-            bool isHigherTier = primaryTitle.Tier is "d" or "k" or "e";
-
-            // The grace period, scaled by how much realm there is to settle. Three years is enough
-            // for a duke's handful of vassals to get used to him; an emperor's crown vassals are
-            // themselves kings with their own inheritances to digest, and a window that closes on
-            // all of them at once, at the same moment as every other realm on the map, is what turns
-            // year four of a generated world into a simultaneous continent-wide civil war.
-            if (independent || isHigherTier)
-            {
-                sb.Append("\t\t\tadd_character_modifier = {\n");
-                sb.Append("\t\t\t\tmodifier = gen_early_realm_stability\n");
-                sb.Append($"\t\t\t\tyears = {profile.StabilityYears}\n");
-                sb.Append("\t\t\t}\n");
-            }
-
-            sb.Append("\t\t}\n");
-
-            // A byname, for the few who have earned one. Sits beside the effect block rather than
-            // inside it because that is where vanilla's own history puts give_nickname.
-            if (profile.Nickname is not null)
-            {
-                sb.Append($"\t\tgive_nickname = {profile.Nickname}\n");
-            }
-
-            sb.Append("\t}\n");
-
-            // Living characters do NOT have death = yes
-            sb.Append("}\n\n");
+            b.Blank();
         }
 
         // =========================================================================
@@ -430,35 +387,35 @@ public static class HistoryWriter
         // =========================================================================
         foreach (var character in prehistory.AllExtraCharacters.Where(c => !c.IsDeadAncestor))
         {
-            sb.Append($"{character.Id} = {{\n");
-            sb.Append($"\tname = \"{character.Name}\"\n");
-            if (character.Female) sb.Append("\tfemale = yes\n");
-
-            // Same distinction as the ancestors above: a dynasty id is not a house id, and putting
-            // one in dynasty_house leaves the character in no house at all.
-            if (character.DynastyHouseKey is not null)
-                sb.Append($"\tdynasty_house = {character.DynastyHouseKey}\n");
-            else
-                sb.Append($"\tdynasty = {character.DynastyId}\n");
-            sb.Append($"\treligion = {character.FaithKey}\n");
-            sb.Append($"\tculture = {character.CultureKey}\n");
-
-            var characterCulture = cultures.Cultures.FirstOrDefault(c => c.Key == character.CultureKey);
-            if (characterCulture is not null)
+            using (b.Block(character.Id))
             {
-                string? characterTrait = GetPhenotypeTrait(characterCulture, ethnicities, cfg);
-                if (characterTrait is not null)
-                    sb.Append($"\ttrait = {characterTrait}\n");
+                b.Quoted("name", character.Name);
+                if (character.Female) b.Field("female", "yes");
+
+                // Same distinction as the ancestors above: a dynasty id is not a house id, and putting
+                // one in dynasty_house leaves the character in no house at all.
+                if (character.DynastyHouseKey is not null)
+                    b.Field("dynasty_house", character.DynastyHouseKey);
+                else
+                    b.Field("dynasty", character.DynastyId);
+
+                b.Field("religion", character.FaithKey);
+                b.Field("culture", character.CultureKey);
+
+                var characterCulture = cultures.Cultures.FirstOrDefault(c => c.Key == character.CultureKey);
+                if (characterCulture is not null)
+                    b.Field("trait", GetPhenotypeTrait(characterCulture, ethnicities, cfg));
+
+                b.Field("father", character.FatherId);
+                b.Field("mother", character.MotherId);
+
+                b.Inline(character.BirthDate, "birth = yes");
             }
 
-            if (character.FatherId is not null) sb.Append($"\tfather = {character.FatherId}\n");
-            if (character.MotherId is not null) sb.Append($"\tmother = {character.MotherId}\n");
-
-            sb.Append($"\t{character.BirthDate} = {{ birth = yes }}\n");
-            sb.Append("}\n\n");
+            b.Blank();
         }
 
-        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_characters.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_characters.txt"), b.ToString());
     }
     private static void WriteHeadOfFaithCharacters(string modDir, MapConfig cfg,
         FaithMap faiths, CultureMap cultures, EthnicityMap ethnicities, List<Title> counties)
@@ -466,7 +423,7 @@ public static class HistoryWriter
         string dir = Path.Combine(modDir, "history", "characters");
         Directory.CreateDirectory(dir);
 
-        var sb = new StringBuilder();
+        var b = new JominiBuilder();
         int hofIndex = 0;
 
         foreach (var faith in faiths.Faiths)
@@ -483,31 +440,30 @@ public static class HistoryWriter
             var rng = new Rng(Rng.StableHash(faith.Key) ^ 0x48A1UL);
             int birthYear = cfg.StartYear - rng.Int(35, 60);
 
-            sb.Append($"gen_hof_{hofIndex++} = {{\n");
-            sb.Append($"\tname = \"{firstName}\"\n");
-
-            if (culture is not null)
+            using (b.Block($"gen_hof_{hofIndex++}"))
             {
-                string? hofTrait = GetPhenotypeTrait(culture, ethnicities, cfg);
-                if (hofTrait is not null)
-                    sb.Append($"\ttrait = {hofTrait}\n");
+                b.Quoted("name", firstName);
+
+                if (culture is not null) b.Field("trait", GetPhenotypeTrait(culture, ethnicities, cfg));
+
+                b.Field("religion", faith.Key);
+                b.Field("culture", culture.Key);
+                b.Inline($"{birthYear}.1.1", "birth = yes");
+
+                using (b.Block(cfg.StartDate))
+                using (b.Block("effect"))
+                {
+                    b.Field("add_gold", "150");
+                    b.Field("add_piety", "250");
+                }
             }
 
-            sb.Append($"\treligion = {faith.Key}\n");
-            sb.Append($"\tculture = {culture.Key}\n");
-            sb.Append($"\t{birthYear}.1.1 = {{ birth = yes }}\n");
-            sb.Append($"\t{cfg.StartDate} = {{\n");
-            sb.Append("\t\teffect = {\n");
-            sb.Append("\t\t\tadd_gold = 150\n");
-            sb.Append("\t\t\tadd_piety = 250\n");
-            sb.Append("\t\t}\n");
-            sb.Append("\t}\n");
-            sb.Append("}\n\n");
+            b.Blank();
         }
 
         if (hofIndex > 0)
         {
-            ParadoxText.WriteBom(Path.Combine(dir, "02_generated_head_of_faith.txt"), sb.ToString());
+            ParadoxText.WriteBom(Path.Combine(dir, "02_generated_head_of_faith.txt"), b.ToString());
         }
     }
 
@@ -518,23 +474,29 @@ public static class HistoryWriter
         string dir = Path.Combine(modDir, "history", "characters");
         Directory.CreateDirectory(dir);
 
-        var sb = new StringBuilder();
-        sb.Append("# The holder of every unsettled county. See MapGen/Wilderness.cs.\n\n");
-        sb.Append($"{WildernessMap.HolderId} = {{\n");
-        sb.Append("\tname = \"wilderness_holder_name\"\n");
-        sb.Append($"\treligion = {MapGen.Faiths.UnsettledFaithKey}\n");
-        sb.Append($"\tculture = {MapGen.Cultures.UnsettledKey}\n");
-        sb.Append("\tdisallow_random_traits = yes\n");
-        sb.Append("\tsexuality = asexual\n");
+        var b = new JominiBuilder();
+        b.Comment("The holder of every unsettled county. See MapGen/Wilderness.cs.");
+        b.Blank();
 
-        sb.Append($"\t{Math.Max(1, cfg.StartYear - 1000)}.1.1 = {{\n");
-        sb.Append("\t\tbirth = yes\n");
-        sb.Append("\t\ttrait = wilderness\n");
-        sb.Append("\t\ttrait = immortal\n");
-        sb.Append("\t}\n");
-        sb.Append("}\n\n");
+        using (b.Block(WildernessMap.HolderId))
+        {
+            b.Quoted("name", "wilderness_holder_name");
+            b.Field("religion", MapGen.Faiths.UnsettledFaithKey);
+            b.Field("culture", MapGen.Cultures.UnsettledKey);
+            b.Field("disallow_random_traits", "yes");
+            b.Field("sexuality", "asexual");
 
-        ParadoxText.WriteBom(Path.Combine(dir, "01_generated_wilderness.txt"), sb.ToString());
+            using (b.Block($"{Math.Max(1, cfg.StartYear - 1000)}.1.1"))
+            {
+                b.Field("birth", "yes");
+                b.Field("trait", "wilderness");
+                b.Field("trait", "immortal");
+            }
+        }
+
+        b.Blank();
+
+        ParadoxText.WriteBom(Path.Combine(dir, "01_generated_wilderness.txt"), b.ToString());
     }
 
     private static void WriteHouseRelationsOnAction(string modDir, PrehistoryMap prehistory)
@@ -544,37 +506,34 @@ public static class HistoryWriter
         string dir = Path.Combine(modDir, "common", "on_action");
         Directory.CreateDirectory(dir);
 
-        var sb = new StringBuilder();
-        sb.Append("# Active House Feuds and Dynastic Amities on Day 1\n\n");
+        var b = new JominiBuilder();
+        b.Comment("Active House Feuds and Dynastic Amities on Day 1");
+        b.Blank();
 
-        sb.Append("on_game_start_after_lobby = {\n");
-        sb.Append("\ton_actions = {\n");
-        sb.Append("\t\tgen_start_house_relations\n");
-        sb.Append("\t}\n");
-        sb.Append("}\n\n");
+        using (b.Block("on_game_start_after_lobby"))
+        using (b.Block("on_actions"))
+            b.Token("gen_start_house_relations");
 
-        sb.Append("gen_start_house_relations = {\n");
-        sb.Append("\teffect = {\n");
+        b.Blank();
 
-        for (int i = 0; i < prehistory.HouseRelations.Count; i++)
-        {
-            var rel = prehistory.HouseRelations[i];
-            string descKey = $"gen_house_relation_{i}_desc";
-            rel.DescriptionKey = descKey;
+        using (b.Block("gen_start_house_relations"))
+        using (b.Block("effect"))
+            for (int i = 0; i < prehistory.HouseRelations.Count; i++)
+            {
+                var rel = prehistory.HouseRelations[i];
+                string descKey = $"gen_house_relation_{i}_desc";
+                rel.DescriptionKey = descKey;
 
-            sb.Append($"\t\thouse:{rel.HouseA} = {{\n");
-            sb.Append("\t\t\tset_house_relation = {\n");
-            sb.Append($"\t\t\t\ttarget = house:{rel.HouseB}\n");
-            sb.Append($"\t\t\t\tlevel = {rel.Level}\n");
-            sb.Append($"\t\t\t\tdescription = {descKey}\n");
-            sb.Append("\t\t\t}\n");
-            sb.Append("\t\t}\n");
-        }
+                using (b.Block($"house:{rel.HouseA}"))
+                using (b.Block("set_house_relation"))
+                {
+                    b.Field("target", $"house:{rel.HouseB}");
+                    b.Field("level", rel.Level);
+                    b.Field("description", descKey);
+                }
+            }
 
-        sb.Append("\t}\n");
-        sb.Append("}\n");
-
-        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_house_relations.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_house_relations.txt"), b.ToString());
     }
     private static void WriteTitleHistory(string modDir, MapConfig cfg, List<Title> empires,
         Dictionary<Title, int> development, RealmMap realms, GovernmentMap governments,
@@ -583,7 +542,7 @@ public static class HistoryWriter
         string dir = Path.Combine(modDir, "history", "titles");
         Directory.CreateDirectory(dir);
 
-        var sb = new StringBuilder();
+        var b = new JominiBuilder();
 
         int reignStartYear = Math.Max(1, cfg.StartYear - 5);
         string titleGrantDate = $"{reignStartYear}.1.1";
@@ -598,48 +557,29 @@ public static class HistoryWriter
             realms.Liege.TryGetValue(title, out var liege);
             string government = governments.For(holder);
 
-            sb.Append($"{title.Key} = {{\n");
-            sb.Append($"\t{titleGrantDate} = {{\n");
-            sb.Append($"\t\tholder = {CharacterId(holder)}\n");
-
-            if (government != GovernmentMap.Feudal)
+            using (b.Block(title.Key))
+            using (b.Block(titleGrantDate))
             {
-                sb.Append($"\t\tgovernment = {government}\n");
-            }
+                b.Field("holder", CharacterId(holder));
 
-            if (liege is not null)
-            {
-                sb.Append($"\t\tliege = {liege.Key}\n");
-            }
+                // Feudal is the engine's default, so saying so would be noise on most of the map.
+                if (government != GovernmentMap.Feudal) b.Field("government", government);
 
-            if (level > 0)
-            {
-                sb.Append($"\t\tchange_development_level = {level}\n");
+                b.Field("liege", liege?.Key);
+                if (level > 0) b.Field("change_development_level", level);
             }
-
-            sb.Append("\t}\n");
-            sb.Append("}\n");
         }
 
-        if (wild.Count > 0)
-        {
-            sb.Append($"{WildernessMap.TitleKey} = {{\n");
-            sb.Append($"\t{cfg.StartDate} = {{\n");
-            sb.Append($"\t\tholder = {WildernessMap.HolderId}\n");
-            sb.Append("\t\tgovernment = wilderness_government\n");
-            sb.Append("\t}\n");
-            sb.Append("}\n");
-        }
+        // The wilderness realm and its counties, all held by the same immortal placeholder.
+        var unsettled = wild.Count > 0 ? [WildernessMap.TitleKey, .. wild.Select(c => c.Key)] : new List<string>();
 
-        foreach (var county in wild)
-        {
-            sb.Append($"{county.Key} = {{\n");
-            sb.Append($"\t{cfg.StartDate} = {{\n");
-            sb.Append($"\t\tholder = {WildernessMap.HolderId}\n");
-            sb.Append("\t\tgovernment = wilderness_government\n");
-            sb.Append("\t}\n");
-            sb.Append("}\n");
-        }
+        foreach (string key in unsettled)
+            using (b.Block(key))
+            using (b.Block(cfg.StartDate))
+            {
+                b.Field("holder", WildernessMap.HolderId);
+                b.Field("government", "wilderness_government");
+            }
 
         int hofIndex = 0;
         foreach (var faith in faiths.Faiths)
@@ -649,15 +589,15 @@ public static class HistoryWriter
                 continue;
             }
 
-            sb.Append($"{faith.Head.TitleKey} = {{\n");
-            sb.Append($"\t{titleGrantDate} = {{\n");
-            sb.Append($"\t\tholder = gen_hof_{hofIndex++}\n");
-            sb.Append("\t\tgovernment = theocracy_government\n");
-            sb.Append("\t}\n");
-            sb.Append("}\n");
+            using (b.Block(faith.Head.TitleKey))
+            using (b.Block(titleGrantDate))
+            {
+                b.Field("holder", $"gen_hof_{hofIndex++}");
+                b.Field("government", "theocracy_government");
+            }
         }
 
-        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_titles.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_titles.txt"), b.ToString());
     }
 
     /// <summary>
@@ -705,14 +645,14 @@ public static class HistoryWriter
         string dir = Path.Combine(modDir, "localization", "english");
         Directory.CreateDirectory(dir);
 
-        var sb = new StringBuilder();
-        sb.Append("l_english:\n");
+        var loc = new LocFile();
 
         // Generic fallback descriptions
-        sb.Append(" house_relation_reason_preexisting_marriage_desc:0 \"Royal marriage alliance established between dynasties\"\n");
-        sb.Append(" house_relation_reason_traditional_friendship_desc:0 \"Traditional dynastic friendship enduring across generations\"\n");
-        sb.Append(" house_relation_reason_ancient_rivalry_desc:0 \"Generational border rivalry and ancestral disputes\"\n");
-        sb.Append(" house_relation_reason_blood_feud_desc:0 \"Bitter generational blood feud and contested sovereignty\"\n\n");
+        loc.AddBuilt("house_relation_reason_preexisting_marriage_desc", "Royal marriage alliance established between dynasties");
+        loc.AddBuilt("house_relation_reason_traditional_friendship_desc", "Traditional dynastic friendship enduring across generations");
+        loc.AddBuilt("house_relation_reason_ancient_rivalry_desc", "Generational border rivalry and ancestral disputes");
+        loc.AddBuilt("house_relation_reason_blood_feud_desc", "Bitter generational blood feud and contested sovereignty");
+        loc.Blank();
 
         // Specific house relation descriptions embedding the real prehistory start date
         for (int i = 0; i < prehistory.HouseRelations.Count; i++)
@@ -734,24 +674,19 @@ public static class HistoryWriter
                 _ => $"Traditional dynastic relations (established in {yearStr})"
             };
 
-            sb.Append($" {key}:0 \"{desc}\"\n");
+            loc.AddBuilt(key, desc);
         }
-        sb.Append("\n");
+
+        loc.Blank();
 
         var writtenKeys = new HashSet<string>();
 
         foreach (var dyn in prehistory.Dynasties.Values)
-        {
-            if (writtenKeys.Add(dyn.NameKey))
-                sb.Append($" {dyn.NameKey}: \"{dyn.LocalizedName}\"\n");
-        }
+            if (writtenKeys.Add(dyn.NameKey)) loc.AddUnversioned(dyn.NameKey, dyn.LocalizedName);
 
         foreach (var house in prehistory.Houses.Values)
-        {
-            if (writtenKeys.Add(house.NameKey))
-                sb.Append($" {house.NameKey}: \"{house.LocalizedName}\"\n");
-        }
+            if (writtenKeys.Add(house.NameKey)) loc.AddUnversioned(house.NameKey, house.LocalizedName);
 
-        ParadoxText.WriteBom(Path.Combine(dir, "gen_dynasties_l_english.yml"), sb.ToString());
+        loc.Write(Path.Combine(dir, "gen_dynasties_l_english.yml"));
     }
 }

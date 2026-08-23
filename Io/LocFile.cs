@@ -36,6 +36,17 @@ public sealed class LocFile
     public void AddBuilt(string key, string value)
         => _sb.Append(' ').Append(key).Append(":0 \"").Append(value).Append("\"\n");
 
+    /// <summary>
+    /// An entry written without the <c>:0</c> version number.
+    ///
+    /// CK3 treats the version as optional and the dynasty and house name lines have always been
+    /// written this way, so the form is preserved rather than tidied — every one of those keys is
+    /// referenced by a generated <c>name = "dynn_…"</c>, and a silent reformat of a working file is
+    /// not something a refactor should smuggle in. Prefer <see cref="Add"/> for anything new.
+    /// </summary>
+    public void AddUnversioned(string key, string value)
+        => _sb.Append(' ').Append(key).Append(": \"").Append(value).Append("\"\n");
+
     /// <summary>A blank line, for the writers that group their entries.</summary>
     public void Blank() => _sb.Append('\n');
 
