@@ -1,5 +1,4 @@
 ﻿using System.Globalization;
-using System.Text;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
 
@@ -12,79 +11,75 @@ public static class EthnicityWriter
         string dir = Path.Combine(modDir, "common", "ethnicities");
         Directory.CreateDirectory(dir);
 
-        var sb = new StringBuilder();
-        sb.Append("# Generated Procedural & Fantasy Ethnicities (Bases & Variants)\n\n");
+        var b = new JominiBuilder();
+        b.Comment("Generated Procedural & Fantasy Ethnicities (Bases & Variants)");
+        b.Blank();
+
+        static string G(float v) => v.ToString("0.###", CultureInfo.InvariantCulture);
+
+        // The palette blocks are identical between a base ethnicity and its variants -- the variant
+        // simply overrides fewer of them -- so they are written once here.
+        void ColorGenes(Dictionary<string, List<ColorPaletteRange>> genes)
+        {
+            foreach (var (colorType, palettes) in genes)
+            {
+                using (b.Block(colorType))
+                    foreach (var pal in palettes)
+                        b.Inline($"{pal.Weight}", G(pal.X1), G(pal.Y1), G(pal.X2), G(pal.Y2));
+
+                b.Blank();
+            }
+        }
 
         foreach (var eth in ethnicityMap.Ethnicities.Values)
         {
             // -----------------------------------------------------------------
             // 1. Base Ethnicity (Morphs + Complexion/Skin + Fallback Hair/Eyes)
             // -----------------------------------------------------------------
-            sb.Append($"{eth.Key} = {{\n");
-            sb.Append($"\ttemplate = \"{eth.BaseTemplate}\"\n");
-            if (eth.Variants.Count > 0)
+            using (b.Block(eth.Key))
             {
-                sb.Append("\tvisible = no\n");
-            }
-            sb.Append('\n');
+                b.Quoted("template", eth.BaseTemplate);
 
-            // Color overrides (Skin, Base Hair, Eye palette vectors)
-            foreach (var (colorType, palettes) in eth.ColorGenes)
-            {
-                sb.Append($"\t{colorType} = {{\n");
-                foreach (var pal in palettes)
+                // A base with variants is never picked directly; the variants carry the look.
+                if (eth.Variants.Count > 0) b.Field("visible", "no");
+
+                b.Blank();
+
+                // Color overrides (Skin, Base Hair, Eye palette vectors)
+                ColorGenes(eth.ColorGenes);
+
+                // Morph overrides (Facial sculpting, height, body composition)
+                foreach (var (geneKey, entries) in eth.MorphGenes)
                 {
-                    string x1 = pal.X1.ToString("0.###", CultureInfo.InvariantCulture);
-                    string y1 = pal.Y1.ToString("0.###", CultureInfo.InvariantCulture);
-                    string x2 = pal.X2.ToString("0.###", CultureInfo.InvariantCulture);
-                    string y2 = pal.Y2.ToString("0.###", CultureInfo.InvariantCulture);
-                    sb.Append($"\t\t{pal.Weight} = {{ {x1} {y1} {x2} {y2} }}\n");
+                    using (b.Block(geneKey))
+                        foreach (var entry in entries)
+                            b.Inline($"{entry.Weight}",
+                                $"name = {entry.SubGeneName} range = {{ {G(entry.Min)} {G(entry.Max)} }}");
+
+                    b.Blank();
                 }
-                sb.Append("\t}\n\n");
             }
 
-            // Morph overrides (Facial sculpting, height, body composition)
-            foreach (var (geneKey, entries) in eth.MorphGenes)
-            {
-                sb.Append($"\t{geneKey} = {{\n");
-                foreach (var entry in entries)
-                {
-                    string min = entry.Min.ToString("0.###", CultureInfo.InvariantCulture);
-                    string max = entry.Max.ToString("0.###", CultureInfo.InvariantCulture);
-                    sb.Append($"\t\t{entry.Weight} = {{ name = {entry.SubGeneName} range = {{ {min} {max} }} }}\n");
-                }
-                sb.Append("\t}\n\n");
-            }
-
-            sb.Append("}\n\n");
+            b.Blank();
 
             // -----------------------------------------------------------------
             // 2. Child Palette Variants (Hair/Eye Color leans inheriting base)
             // -----------------------------------------------------------------
             foreach (var variant in eth.Variants)
             {
-                sb.Append($"{variant.Key} = {{\n");
-                sb.Append($"\ttemplate = \"{eth.Key}\"\n\n");
-
-                foreach (var (colorType, palettes) in variant.ColorGenes)
+                using (b.Block(variant.Key))
                 {
-                    sb.Append($"\t{colorType} = {{\n");
-                    foreach (var pal in palettes)
-                    {
-                        string x1 = pal.X1.ToString("0.###", CultureInfo.InvariantCulture);
-                        string y1 = pal.Y1.ToString("0.###", CultureInfo.InvariantCulture);
-                        string x2 = pal.X2.ToString("0.###", CultureInfo.InvariantCulture);
-                        string y2 = pal.Y2.ToString("0.###", CultureInfo.InvariantCulture);
-                        sb.Append($"\t\t{pal.Weight} = {{ {x1} {y1} {x2} {y2} }}\n");
-                    }
-                    sb.Append("\t}\n\n");
+                    b.Quoted("template", eth.Key);
+                    b.Blank();
+
+                    ColorGenes(variant.ColorGenes);
                 }
 
-                sb.Append("}\n\n");
+                b.Blank();
             }
         }
 
-        ParadoxText.WriteBom(Path.Combine(dir, "99_generated_ethnicities.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "99_generated_ethnicities.txt"), b.ToString());
         WriteLocalisation(modDir, ethnicityMap);
 
         int totalVariants = ethnicityMap.Ethnicities.Values.Sum(e => e.Variants.Count);
@@ -93,22 +88,14 @@ public static class EthnicityWriter
 
     private static void WriteLocalisation(string modDir, EthnicityMap ethnicityMap)
     {
-        string dir = Path.Combine(modDir, "localization", "english");
-        Directory.CreateDirectory(dir);
-
-        var sb = new StringBuilder();
-        sb.Append("l_english:\n");
+        var loc = new LocFile();
 
         foreach (var eth in ethnicityMap.Ethnicities.Values)
         {
-            sb.Append($" {eth.Key}:0 \"{ParadoxText.Loc(eth.LocalizedName)}\"\n");
-
-            foreach (var variant in eth.Variants)
-            {
-                sb.Append($" {variant.Key}:0 \"{ParadoxText.Loc(variant.LocalizedName)}\"\n");
-            }
+            loc.Add(eth.Key, eth.LocalizedName);
+            foreach (var variant in eth.Variants) loc.Add(variant.Key, variant.LocalizedName);
         }
 
-        ParadoxText.WriteBom(Path.Combine(dir, "gen_ethnicities_l_english.yml"), sb.ToString());
+        loc.Write(Path.Combine(modDir, "localization", "english", "gen_ethnicities_l_english.yml"));
     }
 }

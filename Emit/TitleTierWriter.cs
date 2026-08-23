@@ -1,5 +1,4 @@
-﻿using System.Text;
-using Ck3MapGen.Core;
+﻿using Ck3MapGen.Core;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
 
@@ -439,65 +438,70 @@ public static class TitleTierWriter
     /// </summary>
     private static void WriteEntries(string path, List<Flavor> entries)
     {
-        var sb = new StringBuilder();
-        sb.Append("# Generated flavorization: each culture's word for its realms and their holders,\n");
-        sb.Append("# and each imported country's word for itself.\n");
-        sb.Append("#\n");
-        sb.Append("# The entry key is the localisation key — see gen_title_tiers_l_english.yml. An\n");
-        sb.Append("# entry here with no matching line there renders as its own key on screen.\n\n");
+        var b = new JominiBuilder();
+        b.Comment("""
+                  Generated flavorization: each culture's word for its realms and their holders,
+                  and each imported country's word for itself.
+
+                  The entry key is the localisation key — see gen_title_tiers_l_english.yml. An
+                  entry here with no matching line there renders as its own key on screen.
+                  """);
+        b.Blank();
 
         foreach (var entry in entries)
         {
-            sb.Append($"{entry.Key} = {{\n");
-            sb.Append($"\ttype = {entry.Type}\n");
-            if (entry.Gender is not null) sb.Append($"\tgender = {entry.Gender}\n");
-            if (entry.Type == "character") sb.Append("\tspecial = holder\n");
-            sb.Append($"\ttier = {entry.Tier}\n");
-            sb.Append($"\tpriority = {entry.Priority}\n");
-
-            if (entry.Governments is { Count: > 0 })
-                sb.Append($"\tgovernments = {{ {string.Join(' ', entry.Governments
-                    .Select(g => $"{g}_government"))} }}\n");
-
-            if (entry.NameList is not null)
-                sb.Append($"\tname_lists = {{ {entry.NameList} }}\n");
-
-            if (entry.Titles is { Count: > 0 })
+            using (b.Block(entry.Key))
             {
-                sb.Append($"\ttitles = {{ {string.Join(' ', entry.Titles)} }}\n");
+                b.Field("type", entry.Type);
+                b.Field("gender", entry.Gender);
+                if (entry.Type == "character") b.Field("special", "holder");
+                b.Field("tier", entry.Tier);
+                b.Field("priority", entry.Priority);
 
-                // The title is the country, so the test has to be against whoever holds *it*, not
-                // against their suzerain. Left at the default, a state that ended up someone's
-                // vassal would be checked against the overlord's title and never match its own.
-                sb.Append("\tflavourization_rules = { top_liege = no }\n");
-            }
-            else if (entry.Governments is { Count: > 0 })
-            {
-                // Culture from the top liege, government from the character.
-                //
-                // Both halves are deliberate. Culture stays on the liege — that is the default, and
-                // it is what makes a realm read as one realm rather than as a patchwork, since our
-                // cultures are finer-grained than the countries they sit in and a minority-culture
-                // vassal taking his own people's word for a duchy would be the odd one out among his
-                // neighbours. Government does not: the export states one per country, so a feudal
-                // Grand Duchy that Azgaar made a horde's vassal is still a feudal Grand Duchy, and
-                // leaving the check on the liege styled its counties as part of the horde.
-                //
-                // Vanilla does exactly this, and for the same reason — see duchy_administrative in
-                // common/flavorization/00_flavorization.txt, where the comment is that only the
-                // governors should take the top liege's titles, "not also feudal vassals,
-                // republican vassals, etc."
-                sb.Append("\tflavourization_rules = {\n");
-                sb.Append("\t\ttop_liege = yes\n");
-                sb.Append("\t\tignore_top_liege_government = yes\n");
-                sb.Append("\t}\n");
+                if (entry.Governments is { Count: > 0 })
+                    b.Inline("governments", string.Join(' ', entry.Governments.Select(g => $"{g}_government")));
+
+                if (entry.NameList is not null)
+                    b.Inline("name_lists", entry.NameList);
+
+                if (entry.Titles is { Count: > 0 })
+                {
+                    b.Inline("titles", string.Join(' ', entry.Titles));
+
+                    // The title is the country, so the test has to be against whoever holds *it*, not
+                    // against their suzerain. Left at the default, a state that ended up someone's
+                    // vassal would be checked against the overlord's title and never match its own.
+                    b.Inline("flavourization_rules", "top_liege = no");
+                }
+                else if (entry.Governments is { Count: > 0 })
+                {
+                    // Culture from the top liege, government from the character.
+                    //
+                    // Both halves are deliberate. Culture stays on the liege — that is the default, and
+                    // it is what makes a realm read as one realm rather than as a patchwork, since our
+                    // cultures are finer-grained than the countries they sit in and a minority-culture
+                    // vassal taking his own people's word for a duchy would be the odd one out among his
+                    // neighbours. Government does not: the export states one per country, so a feudal
+                    // Grand Duchy that Azgaar made a horde's vassal is still a feudal Grand Duchy, and
+                    // leaving the check on the liege styled its counties as part of the horde.
+                    //
+                    // Vanilla does exactly this, and for the same reason — see duchy_administrative in
+                    // common/flavorization/00_flavorization.txt, where the comment is that only the
+                    // governors should take the top liege's titles, "not also feudal vassals,
+                    // republican vassals, etc."
+                    using (b.Block("flavourization_rules"))
+                    {
+                        b.Field("top_liege", "yes");
+                        b.Field("ignore_top_liege_government", "yes");
+                    }
+                }
             }
 
-            sb.Append("}\n\n");
+            b.Blank();
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        ParadoxText.WriteBom(path, sb.ToString());
+        ParadoxText.WriteBom(path, b.ToString());
     }
 
     private static void WriteLocalization(string path, List<Flavor> entries)
@@ -506,11 +510,10 @@ public static class TitleTierWriter
         // a second left U+FEFF in front of "l_english:" once the encoder's own was stripped — which
         // is not a header CK3 recognises, so the game skipped this whole file and every tier word in
         // it. No other loc writer here does it; this one did, silently, from the start.
-        var sb = new StringBuilder("l_english:\n");
-        foreach (var entry in entries) sb.Append($" {entry.Key}:0 \"{entry.Text}\"\n");
+        var loc = new LocFile();
+        foreach (var entry in entries) loc.AddBuilt(entry.Key, entry.Text);
 
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        ParadoxText.WriteBom(path, sb.ToString());
+        loc.Write(path);
     }
 
     /// <summary>
