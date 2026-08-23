@@ -35,8 +35,7 @@ public static class ChronicleWriter
 
     public static void WriteAll(string modDir, ChronicleMap chronicle, List<Title> empires)
     {
-        var sb = new StringBuilder();
-        sb.Append("l_english:\n");
+        var loc = new LocFile();
 
         int written = 0;
 
@@ -84,13 +83,13 @@ public static class ChronicleWriter
                 .Select(e => e.Text)
                 .ToList();
 
-            sb.Append($" gen_lore_{title.Key}:0 \"{string.Join("\\n\\n", lines)}\"\n");
+            // AddBuilt, not Add: the paragraph breaks between entries are deliberate \n escapes
+            // that Chronicle put there, and escaping them again would render them as backslashes.
+            loc.AddBuilt($"gen_lore_{title.Key}", string.Join("\\n\\n", lines));
             written++;
         }
 
-        string dir = Path.Combine(modDir, "localization", "english");
-        Directory.CreateDirectory(dir);
-        ParadoxText.WriteBom(Path.Combine(dir, "gen_title_lore_l_english.yml"), sb.ToString());
+        loc.Write(Path.Combine(modDir, "localization", "english", "gen_title_lore_l_english.yml"));
 
         Console.WriteLine($"  title lore: {written} titles given a chronicle");
     }

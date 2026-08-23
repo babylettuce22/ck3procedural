@@ -49,23 +49,28 @@ public static class GovernmentWriter
         block = block.Replace($"{CultureNamedRealms} = yes", $"{CultureNamedRealms} = no",
                               StringComparison.Ordinal);
 
-        var sb = new StringBuilder();
-        sb.Append("# Vanilla's nomad_government, read from the installed game, with one rule changed:\n");
-        sb.Append($"# {CultureNamedRealms} is off, so a horde is called what its title is called.\n");
-        sb.Append("#\n");
-        sb.Append("# That rule is engine-side, not localisation, and it overrides both the title's name\n");
-        sb.Append("# and its tier word — every borrowed or generated name on a nomadic realm was being\n");
-        sb.Append("# discarded by it. Everything else here is vanilla's, verbatim.\n");
-        sb.Append("#\n");
-        sb.Append("# The filename sorts after 00_government_types.txt on purpose. common/governments\n");
-        sb.Append("# merges by key and the last definition wins, so a file named for vanilla's would\n");
-        sb.Append("# replace the whole file rather than this one entry.\n\n");
-        sb.Append(block);
-        sb.Append('\n');
+        var b = new JominiBuilder();
+        b.Comment($"""
+                   Vanilla's nomad_government, read from the installed game, with one rule changed:
+                   {CultureNamedRealms} is off, so a horde is called what its title is called.
+
+                   That rule is engine-side, not localisation, and it overrides both the title's name
+                   and its tier word — every borrowed or generated name on a nomadic realm was being
+                   discarded by it. Everything else here is vanilla's, verbatim.
+
+                   The filename sorts after 00_government_types.txt on purpose. common/governments
+                   merges by key and the last definition wins, so a file named for vanilla's would
+                   replace the whole file rather than this one entry.
+                   """);
+        b.Blank();
+
+        // Vanilla's own text, one substitution in. Nothing here is ours to re-indent.
+        b.Raw(block);
+        b.Blank();
 
         string dir = Path.Combine(modDir, "common", "governments");
         Directory.CreateDirectory(dir);
-        ParadoxText.WriteBom(Path.Combine(dir, "zz_generated_nomad_government.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "zz_generated_nomad_government.txt"), b.ToString());
 
         Console.WriteLine("  governments: nomad realms keep their own names " +
                           $"({CultureNamedRealms} off)");

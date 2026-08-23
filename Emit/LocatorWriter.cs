@@ -114,59 +114,63 @@ public static class LocatorWriter
         // turns the same castle the same way.
         var rng = new Rng(Rng.StableHash(kind.Name) ^ (ulong)(uint)seed);
 
-        var sb = new StringBuilder();
-        sb.Append("game_object_locator={\n");
-        sb.Append($"\tname=\"{kind.Name}\"\n");
-        sb.Append("\trender_pass=Map\n");
-        sb.Append($"\tclamp_to_water_level={(kind.Clamp ? "yes" : "no")}\n");
-        sb.Append("\tgenerated_content=no\n");
-        sb.Append($"\tlayer=\"{kind.Layer}\"\n");
-        sb.Append("\tinstances={\n");
+        // Compact style: these files are written key=value with no spaces, which is how the
+        // engine's own map_object_data files are written and what a diff against them expects.
+        var b = new JominiBuilder(JominiStyle.Compact);
 
-        // Instance 0 is required even though province ids start at 1. Without it CK3 reports the
-        // locator "is incomplete", writes a corrected copy to Documents/.../generated/, and then
-        // fails with "Failed to get transform for locator type '...' instance id 0". Its own
-        // regenerated file starts with exactly this: id 0 parked at the origin, then 1..N.
-        sb.Append("\t\t{\n");
-        sb.Append("\t\t\tid=0\n");
-        sb.Append("\t\t\tposition={ 0.000000 0.000000 0.000000 }\n");
-        sb.Append("\t\t\trotation={ -0.000000 -0.000000 -0.000000 1.000000 }\n");
-        sb.Append("\t\t\tscale={ 1.000000 1.000000 1.000000 }\n");
-        sb.Append("\t\t}\n");
-
-        for (int id = 1; id <= provinces.Count; id++)
+        using (b.Block("game_object_locator"))
         {
-            int label = byId[id];
+            b.Quoted("name", kind.Name);
+            b.Field("render_pass", "Map");
+            b.Field("clamp_to_water_level", kind.Clamp ? "yes" : "no");
+            b.Field("generated_content", "no");
+            b.Quoted("layer", kind.Layer);
 
-            // Sea zones only carry the locators that can actually happen at sea. Skipping them
-            // elsewhere is what vanilla does and keeps the files a third smaller.
-            if (!provinces.Seeds[label].IsLand && !kind.Sea) continue;
+            using (b.Block("instances"))
+            {
+                // Instance 0 is required even though province ids start at 1. Without it CK3 reports the
+                // locator "is incomplete", writes a corrected copy to Documents/.../generated/, and then
+                // fails with "Failed to get transform for locator type '...' instance id 0". Its own
+                // regenerated file starts with exactly this: id 0 parked at the origin, then 1..N.
+                using (b.Block())
+                {
+                    b.Field("id", "0");
+                    b.Inline("position", "0.000000", "0.000000", "0.000000");
+                    b.Inline("rotation", "-0.000000", "-0.000000", "-0.000000", "1.000000");
+                    b.Inline("scale", "1.000000", "1.000000", "1.000000");
+                }
 
-            // Image rows run top-down, the map's Z axis runs bottom-up — see WorldSpace, which
-            // every scatter pass shares with this one.
-            var (x, z) = WorldSpace.FromImage(anchors[label].X, anchors[label].Y, provinces.Height);
+                for (int id = 1; id <= provinces.Count; id++)
+                {
+                    int label = byId[id];
 
-            // Rotation about the vertical axis only, so the quaternion has no X or Z part — the
-            // same (0, sin t/2, 0, cos t/2) form TreeWriter and BridgeWriter write, under which
-            // the mesh's local +Z lands on world (sin t, cos t).
-            double angle = (kind.Yaw + rng.Double(-kind.Jitter, kind.Jitter)) * Math.PI / 180.0;
-            double qy = Math.Sin(angle / 2.0);
-            double qw = Math.Cos(angle / 2.0);
+                    // Sea zones only carry the locators that can actually happen at sea. Skipping them
+                    // elsewhere is what vanilla does and keeps the files a third smaller.
+                    if (!provinces.Seeds[label].IsLand && !kind.Sea) continue;
 
-            sb.Append("\t\t{\n");
-            sb.Append($"\t\t\tid={id}\n");
-            sb.Append(string.Create(CultureInfo.InvariantCulture,
-                $"\t\t\tposition={{ {x:F6} 0.000000 {z:F6} }}\n"));
-            sb.Append(string.Create(CultureInfo.InvariantCulture,
-                $"\t\t\trotation={{ 0.000000 {qy:F6} 0.000000 {qw:F6} }}\n"));
-            sb.Append("\t\t\tscale={ 1.000000 1.000000 1.000000 }\n");
-            sb.Append("\t\t}\n");
+                    // Image rows run top-down, the map's Z axis runs bottom-up — see WorldSpace, which
+                    // every scatter pass shares with this one.
+                    var (x, z) = WorldSpace.FromImage(anchors[label].X, anchors[label].Y, provinces.Height);
+
+                    // Rotation about the vertical axis only, so the quaternion has no X or Z part — the
+                    // same (0, sin t/2, 0, cos t/2) form TreeWriter and BridgeWriter write, under which
+                    // the mesh's local +Z lands on world (sin t, cos t).
+                    double angle = (kind.Yaw + rng.Double(-kind.Jitter, kind.Jitter)) * Math.PI / 180.0;
+                    double qy = Math.Sin(angle / 2.0);
+                    double qw = Math.Cos(angle / 2.0);
+
+                    using (b.Block())
+                    {
+                        b.Field("id", id);
+                        b.Inline("position", F(x), "0.000000", F(z));
+                        b.Inline("rotation", "0.000000", F(qy), "0.000000", F(qw));
+                        b.Inline("scale", "1.000000", "1.000000", "1.000000");
+                    }
+                }
+            }
         }
 
-        sb.Append("\t}\n");
-        sb.Append("}\n");
-
-        ParadoxText.WriteBom(Path.Combine(dir, kind.File), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, kind.File), b.ToString());
     }
 
     private static void CopyLayerFiles(string dir, string gameDir)
@@ -178,4 +182,9 @@ public static class LocatorWriter
             if (File.Exists(from)) File.Copy(from, Path.Combine(dir, name), overwrite: true);
         }
     }
+
+    /// <summary>
+    /// Six decimal places, invariant culture — the precision the engine's own locator files use.
+    /// </summary>
+    private static string F(double v) => v.ToString("F6", CultureInfo.InvariantCulture);
 }
