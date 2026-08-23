@@ -392,61 +392,75 @@ public static class ContentWriter
         string dir = Path.Combine(modDir, "common", "landed_titles");
         Directory.CreateDirectory(dir);
 
-        var sb = new StringBuilder();
-        sb.Append("# Generated de jure hierarchy.\n\n");
-        foreach (var empire in empires) Write(empire, 0);
+        // Four spaces, not tabs. That is how this file has always been written and it is the one
+        // place in the mod that differs, which is why JominiStyle exists as a parameter at all.
+        var jb = new JominiBuilder(JominiStyle.Spaced);
 
-        sb.Append("# Head of faith landless titles.\n\n");
+        jb.Comment("Generated de jure hierarchy.");
+        jb.Blank();
+        foreach (var empire in empires) Write(empire);
+
+        jb.Comment("Head of faith landless titles.");
+        jb.Blank();
+
         foreach (var faith in faiths.Faiths)
         {
             if (faith.Head is null) continue;
-            var (r, g, b) = faith.Color;
-            string fr = r.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
-            string fg = g.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
-            string fb = b.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+            var (r, g, bl) = faith.Color;
 
-            sb.Append($"{faith.Head.TitleKey} = {{\n");
-            sb.Append($"    color = {{ {fr} {fg} {fb} }}\n");
-            sb.Append($"    capital = {faith.Head.Seat.Key}\n");
-            sb.Append("    landless = yes\n");
-            sb.Append("}\n\n");
+            using (jb.Block(faith.Head.TitleKey))
+            {
+                jb.Inline("color", F(r), F(g), F(bl));
+                jb.Field("capital", faith.Head.Seat.Key);
+                jb.Field("landless", "yes");
+            }
+
+            jb.Blank();
         }
 
         var wildCapital = wilderness.Counties.FirstOrDefault();
         if (wildCapital is not null)
         {
-            sb.Append("# The wilderness realm. Titular: it exists so unsettled land has a name.\n\n");
-            sb.Append($"{WildernessMap.TitleKey} = {{\n");
-            sb.Append("    color = { 108 104 96 }\n");
-            sb.Append($"    capital = {wildCapital.Key}\n");
-            sb.Append("    landless = yes\n");
-            sb.Append("    definite_form = yes\n");
-            sb.Append("    ruler_uses_title_name = no\n");
-            sb.Append("}\n\n");
+            jb.Comment("The wilderness realm. Titular: it exists so unsettled land has a name.");
+            jb.Blank();
+
+            using (jb.Block(WildernessMap.TitleKey))
+            {
+                jb.Inline("color", "108", "104", "96");
+                jb.Field("capital", wildCapital.Key);
+                jb.Field("landless", "yes");
+                jb.Field("definite_form", "yes");
+                jb.Field("ruler_uses_title_name", "no");
+            }
+
+            jb.Blank();
         }
 
-        ParadoxText.WriteBom(Path.Combine(dir, "00_landed_titles.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "00_landed_titles.txt"), jb.ToString());
         return;
 
-        void Write(Title title, int depth)
+        static string F(double v) => v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+        // The depth argument is gone: the builder tracks it, so the de jure tree is walked without
+        // the recursion also having to carry its own indentation.
+        void Write(Title title)
         {
-            string pad = new(' ', depth * 4);
-            sb.Append($"{pad}{title.Key} = {{\n");
-            sb.Append($"{pad}    color = {{ {title.Color.R} {title.Color.G} {title.Color.B} }}\n");
-
-            if (title.Tier == "b")
+            using (jb.Block(title.Key))
             {
-                // `province` is the only barony key here. Wonders are placed by province history
-                // (see WriteProvinceHistory) — landed_titles has no special_building key.
-                sb.Append($"{pad}    province = {title.ProvinceId}\n");
-            }
-            else
-            {
-                if (title.Tier == "c") sb.Append($"{pad}    definite_form = no\n");
-                foreach (var child in title.Children) Write(child, depth + 1);
-            }
+                jb.Inline("color", $"{title.Color.R}", $"{title.Color.G}", $"{title.Color.B}");
 
-            sb.Append($"{pad}}}\n");
+                if (title.Tier == "b")
+                {
+                    // `province` is the only barony key here. Wonders are placed by province history
+                    // (see WriteProvinceHistory) — landed_titles has no special_building key.
+                    jb.Field("province", title.ProvinceId);
+                }
+                else
+                {
+                    if (title.Tier == "c") jb.Field("definite_form", "no");
+                    foreach (var child in title.Children) Write(child);
+                }
+            }
         }
     }
 
@@ -512,15 +526,16 @@ public static class ContentWriter
         string dir = Path.Combine(modDir, "common", "province_terrain");
         Directory.CreateDirectory(dir);
 
-        var sb = new StringBuilder();
-        sb.Append("default_land=plains\n");
-        sb.Append("default_sea=sea\n");
-        sb.Append("default_coastal_sea=coastal_sea\n");
+        // Compact style: province_terrain is written id=terrain with no spaces, as vanilla's is.
+        var b = new JominiBuilder(JominiStyle.Compact);
+        b.Field("default_land", "plains");
+        b.Field("default_sea", "sea");
+        b.Field("default_coastal_sea", "coastal_sea");
 
         for (int id = 1; id <= landCount; id++)
-            sb.Append($"{id}={TerrainClassifier.Name(terrain[id])}\n");
+            b.Field($"{id}", TerrainClassifier.Name(terrain[id]));
 
-        ParadoxText.WriteBom(Path.Combine(dir, "00_province_terrain.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "00_province_terrain.txt"), b.ToString());
     }
 
     private static void ReportDevelopment(Dictionary<Title, int> development)
@@ -543,7 +558,8 @@ public static class ContentWriter
         var rng = new Rng(cfgSeed ^ 0x8A12);
         var counts = new Dictionary<string, int>();
 
-        var sb = new StringBuilder();
+        // Four spaces again, matching landed_titles above.
+        var b = new JominiBuilder(JominiStyle.Spaced);
 
         var wondersByBarony = worldCenters.Centers
             .ToDictionary(wc => wc.CapitalBarony, wc => wc.Wonder);
@@ -569,24 +585,22 @@ public static class ContentWriter
 
                 counts[holding] = counts.GetValueOrDefault(holding) + 1;
 
-                sb.Append($"{barony.ProvinceId} = {{\n");
-                sb.Append($"    culture = {cultureKey}\n");
-                sb.Append($"    religion = {faith}\n");
-                sb.Append($"    holding = {holding}\n");
-
-                if (wondersByBarony.TryGetValue(barony, out var wonder))
+                using (b.Block(barony.ProvinceId))
                 {
-                    sb.Append($"    special_building = {wonder.Key}\n");
-                }
+                    b.Field("culture", cultureKey);
+                    b.Field("religion", faith);
+                    b.Field("holding", holding);
 
-                sb.Append("}\n");
+                    if (wondersByBarony.TryGetValue(barony, out var wonder))
+                        b.Field("special_building", wonder.Key);
+                }
             }
         }
 
         Console.WriteLine("  holdings: " + string.Join(", ",
             counts.OrderByDescending(k => k.Value).Select(k => $"{k.Value} {k.Key}")));
 
-        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_provinces.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_provinces.txt"), b.ToString());
     }
 
     /// <summary>
@@ -614,8 +628,7 @@ public static class ContentWriter
         string dir = Path.Combine(modDir, "localization", "english");
         Directory.CreateDirectory(dir);
 
-        var sb = new StringBuilder();
-        sb.Append("l_english:\n");
+        var loc = new LocFile();
 
         // Every entry carries the :0 version marker. Paradox treats a missing one as version 0 in
         // most files and as a parse error in some, and the launcher's own validator flags it, so it
@@ -628,17 +641,17 @@ public static class ContentWriter
         foreach (var title in Titles.Flatten(empires))
         {
             string name = ParadoxText.Loc(title.Name);
-            sb.Append($" {title.Key}:0 \"{name}\"\n");
+            loc.AddBuilt(title.Key, name);
 
             if (title.Tier == "b" && title.ProvinceId > 0)
-                sb.Append($" prov_{title.ProvinceId}:0 \"{name}\"\n");
+                loc.AddBuilt($"prov_{title.ProvinceId}", name);
         }
 
         // From baronyCount + 1, not from 1. Starting at 1 covered every barony as well, so each one
         // got a second, later entry reading "Wasteland" — the impassable provinces are the ones
         // above the last barony, and they are the only ones without a title to be named after.
         for (int id = baronyCount + 1; id <= landCount; id++)
-            sb.Append($" prov_{id}:0 \"Wasteland\"\n");
+            loc.AddBuilt($"prov_{id}", "Wasteland");
 
         for (int id = landCount + 1; id <= provinces.Count; id++)
         {
@@ -647,11 +660,11 @@ public static class ContentWriter
 
             // One key or the other, never both: a province is a river or a sea, and writing both
             // left every river also declared as a sea of the same name.
-            if (id <= riverCount) sb.Append($" river_{id}:0 \"{name}\"\n");
-            else sb.Append($" sea_{id}:0 \"{name}\"\n");
+            if (id <= riverCount) loc.AddBuilt($"river_{id}", name);
+            else loc.AddBuilt($"sea_{id}", name);
         }
 
-        ParadoxText.WriteBom(Path.Combine(dir, "gen_titles_l_english.yml"), sb.ToString());
+        loc.Write(Path.Combine(dir, "gen_titles_l_english.yml"));
     }
 
     private static void BlankVanillaData(string modDir, string gameDir)
