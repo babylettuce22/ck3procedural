@@ -2,7 +2,6 @@
 namespace Ck3MapGen.Emit;
 
 using System.IO;
-using System.Text;
 using Ck3MapGen.Core;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
@@ -46,25 +45,26 @@ public static class CoatOfArmsWriter
         string dir = Path.Combine(modDir, "common", "coat_of_arms", "coat_of_arms");
         Directory.CreateDirectory(dir);
 
-        var sb = new StringBuilder();
-        sb.Append("# Generated Dynasty and House Coats of Arms for 3D Court Banners and Shields\n\n");
+        var b = new JominiBuilder();
+        b.Comment("Generated Dynasty and House Coats of Arms for 3D Court Banners and Shields");
+        b.Blank();
 
         foreach (var dyn in prehistory.Dynasties.Values)
         {
             var rng = new Rng(Rng.StableHash(dyn.Id) ^ 0x51A3UL);
-            AppendCoa(sb, dyn.Id, rng);
+            AppendCoa(b, dyn.Id, rng);
         }
 
         foreach (var house in prehistory.Houses.Values)
         {
             var rng = new Rng(Rng.StableHash(house.Key) ^ 0x27C1UL);
-            AppendCoa(sb, house.Key, rng);
+            AppendCoa(b, house.Key, rng);
         }
 
-        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_coas.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_coas.txt"), b.ToString());
     }
 
-    private static void AppendCoa(StringBuilder sb, string key, Rng rng)
+    private static void AppendCoa(JominiBuilder b, string key, Rng rng)
     {
         string pattern = VerifiedPatterns[rng.Int(0, VerifiedPatterns.Length - 1)];
         string c1 = VerifiedColors[rng.Int(0, VerifiedColors.Length - 1)];
@@ -75,15 +75,20 @@ public static class CoatOfArmsWriter
         string emblemColor = VerifiedColors[rng.Int(0, VerifiedColors.Length - 1)];
         while (emblemColor == c1) emblemColor = VerifiedColors[rng.Int(0, VerifiedColors.Length - 1)];
 
-        sb.Append($"{key} = {{\n");
-        sb.Append($"\tpattern = \"{pattern}\"\n");
-        sb.Append($"\tcolor1 = \"{c1}\"\n");
-        sb.Append($"\tcolor2 = \"{c2}\"\n");
-        sb.Append("\tcolored_emblem = {\n");
-        sb.Append($"\t\ttexture = \"{emblem}\"\n");
-        sb.Append($"\t\tcolor1 = \"{emblemColor}\"\n");
-        sb.Append("\t\tinstance = { position = { 0.5 0.5 } scale = { 0.75 0.75 } }\n");
-        sb.Append("\t}\n");
-        sb.Append("}\n\n");
+        using (b.Block(key))
+        {
+            b.Quoted("pattern", pattern);
+            b.Quoted("color1", c1);
+            b.Quoted("color2", c2);
+
+            using (b.Block("colored_emblem"))
+            {
+                b.Quoted("texture", emblem);
+                b.Quoted("color1", emblemColor);
+                b.Inline("instance", "position = { 0.5 0.5 } scale = { 0.75 0.75 }");
+            }
+        }
+
+        b.Blank();
     }
 }

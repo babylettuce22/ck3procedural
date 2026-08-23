@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using Ck3MapGen.Core;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;

@@ -1,4 +1,3 @@
-using System.Text;
 using Ck3MapGen.Config;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;

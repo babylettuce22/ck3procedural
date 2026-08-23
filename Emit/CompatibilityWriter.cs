@@ -261,17 +261,21 @@ public static partial class CompatibilityWriter
         if (entries.Count == 0) return "";
         entries.Add("wilderness_government");
 
-        var sb = new StringBuilder();
-        sb.Append("\n# Vanilla's list, read from the installed game, plus the wilderness government.\n");
-        sb.Append("# A government absent from here is never registered, whatever common/governments says.\n");
-        sb.Append("NGovernment = {\n\tGOVERNMENT_TYPES = {\n");
-        foreach (string entry in entries) sb.Append($"\t\t\"{entry}\"\n");
-        sb.Append("\t}\n}\n");
+        var b = new JominiBuilder();
+        b.Blank();
+        b.Comment("""
+                  Vanilla's list, read from the installed game, plus the wilderness government.
+                  A government absent from here is never registered, whatever common/governments says.
+                  """);
+
+        using (b.Block("NGovernment"))
+        using (b.Block("GOVERNMENT_TYPES"))
+            foreach (string entry in entries) b.Token($"\"{entry}\"");
 
         Console.WriteLine($"  defines: GOVERNMENT_TYPES {entries.Count} entries "
                           + $"({entries.Count - 1} vanilla + wilderness)");
 
-        return sb.ToString();
+        return b.ToString();
     }
 
     /// <summary>
@@ -530,42 +534,47 @@ public static partial class CompatibilityWriter
         // and in the coat of arms system. Concentrating them makes the shims visibly inert.
         string shimCapital = counties[0].Key;
 
-        var sb = new StringBuilder();
-        sb.Append("# Vanilla e_/k_/d_/h_ keys re-declared as landless titulars.\n");
-        sb.Append("# Base-game and DLC content hardcodes these; a missing key is a hard error,\n");
-        sb.Append("# and the coat of arms system dereferences the null it gets back.\n");
-        sb.Append("#\n");
-        sb.Append("# These exist to be *referenced*, never to be held. The creation gates below are\n");
-        sb.Append("# the first half of that; common/on_action/00_generated_titular_guard.txt is the\n");
-        sb.Append("# half that actually guarantees it.\n\n");
+        var jb = new JominiBuilder();
+        jb.Comment("""
+                   Vanilla e_/k_/d_/h_ keys re-declared as landless titulars.
+                   Base-game and DLC content hardcodes these; a missing key is a hard error,
+                   and the coat of arms system dereferences the null it gets back.
+
+                   These exist to be *referenced*, never to be held. The creation gates below are
+                   the first half of that; common/on_action/00_generated_titular_guard.txt is the
+                   half that actually guarantees it.
+                   """);
+        jb.Blank();
 
         for (int i = 0; i < keys.Count; i++)
         {
             var (r, g, b) = MapDataWriter.ProvinceColor(i + 1);
-            sb.Append($"{keys[i]} = {{\n");
-            sb.Append("\tlandless = yes\n");
-            sb.Append($"\tcapital = {shimCapital}\n");
-            sb.Append($"\tcolor = {{ {r} {g} {b} }}\n");
 
-            // A shim owns no de jure territory, which is exactly what makes it cheap to create:
-            // the engine's "do you hold enough of the de jure land" test runs against an empty set.
-            // These four close every route into a domain that does not go through a scripted
-            // effect — the creation UI, partition succession, inherited claims, and the AI's
-            // primary-title pick for the frame a shim might exist before the guard strips it.
-            sb.Append("\tcan_create = { always = no }\n");
-            sb.Append("\tcan_create_on_partition = { always = no }\n");
-            sb.Append("\tno_automatic_claims = yes\n");
-            sb.Append("\tai_primary_priority = { add = -1000 }\n");
+            using (jb.Block(keys[i]))
+            {
+                jb.Field("landless", "yes");
+                jb.Field("capital", shimCapital);
+                jb.Color("color", r, g, b);
 
-            // Deliberately absent: delete_on_destroy. It defaults to no and has to stay no — the
-            // guard destroys these titles, and deleting the object would take the key with it,
-            // undoing the ~12,900 references this whole file exists to resolve.
-            sb.Append("}\n");
+                // A shim owns no de jure territory, which is exactly what makes it cheap to create:
+                // the engine's "do you hold enough of the de jure land" test runs against an empty set.
+                // These four close every route into a domain that does not go through a scripted
+                // effect — the creation UI, partition succession, inherited claims, and the AI's
+                // primary-title pick for the frame a shim might exist before the guard strips it.
+                jb.Inline("can_create", "always = no");
+                jb.Inline("can_create_on_partition", "always = no");
+                jb.Field("no_automatic_claims", "yes");
+                jb.Inline("ai_primary_priority", "add = -1000");
+
+                // Deliberately absent: delete_on_destroy. It defaults to no and has to stay no — the
+                // guard destroys these titles, and deleting the object would take the key with it,
+                // undoing the ~12,900 references this whole file exists to resolve.
+            }
         }
 
         string dir = Path.Combine(modDir, "common", "landed_titles");
         Directory.CreateDirectory(dir);
-        ParadoxText.WriteBom(Path.Combine(dir, "zz_vanilla_titulars.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "zz_vanilla_titulars.txt"), jb.ToString());
 
         WriteTitularGuard(modDir, keys);
 
@@ -598,9 +607,12 @@ public static partial class CompatibilityWriter
         string dir = Path.Combine(modDir, "common", "on_action");
         Directory.CreateDirectory(dir);
 
-        var sb = new StringBuilder();
-        sb.Append("# Vanilla e_/k_/d_/h_ shims may be referenced. They may never be held.\n");
-        sb.Append("# See common/landed_titles/zz_vanilla_titulars.txt for what they are and why.\n\n");
+        var b = new JominiBuilder();
+        b.Comment("""
+                  Vanilla e_/k_/d_/h_ shims may be referenced. They may never be held.
+                  See common/landed_titles/zz_vanilla_titulars.txt for what they are and why.
+                  """);
+        b.Blank();
 
         // on_title_gain already covers inheritance and usurpation — vanilla's own copy branches on
         // flag:inheritance and flag:usurped inside it — but the two specialised on_actions are
@@ -608,46 +620,44 @@ public static partial class CompatibilityWriter
         // than a redundant one.
         foreach (string hook in new[] { "on_title_gain", "on_title_gain_inheritance", "on_title_gain_usurpation" })
         {
-            sb.Append($"{hook} = {{\n");
-            sb.Append("\ton_actions = {\n");
-            sb.Append("\t\tgen_strip_vanilla_titular\n");
-            sb.Append("\t}\n");
-            sb.Append("}\n\n");
+            using (b.Block(hook))
+            using (b.Block("on_actions"))
+                b.Token("gen_strip_vanilla_titular");
+
+            b.Blank();
         }
 
-        sb.Append("on_game_start = {\n");
-        sb.Append("\ton_actions = {\n");
-        sb.Append("\t\tgen_mark_vanilla_titulars\n");
-        sb.Append("\t}\n");
-        sb.Append("}\n\n");
+        using (b.Block("on_game_start"))
+        using (b.Block("on_actions"))
+            b.Token("gen_mark_vanilla_titulars");
 
-        sb.Append("# root = the new holder, scope:title = the title that changed hands.\n");
-        sb.Append("gen_strip_vanilla_titular = {\n");
-        sb.Append("\teffect = {\n");
-        sb.Append("\t\tif = {\n");
-        sb.Append("\t\t\tlimit = {\n");
-        sb.Append("\t\t\t\tscope:title = { has_variable = gen_vanilla_titular }\n");
-        sb.Append("\t\t\t}\n");
-        sb.Append("\t\t\tdestroy_title = scope:title\n");
-        sb.Append("\t\t}\n");
-        sb.Append("\t}\n");
-        sb.Append("}\n\n");
+        b.Blank();
+
+        b.Comment("root = the new holder, scope:title = the title that changed hands.");
+
+        using (b.Block("gen_strip_vanilla_titular"))
+        using (b.Block("effect"))
+        using (b.Block("if"))
+        {
+            using (b.Block("limit"))
+                b.Inline("scope:title", "has_variable = gen_vanilla_titular");
+
+            b.Field("destroy_title", "scope:title");
+        }
+
+        b.Blank();
 
         // The holder clause is not redundant with the strip hook. Ordering between on_game_start
         // on_actions from different files is not defined, so a shim could in principle be granted
         // before this runs and never be seen by a gain hook again. Checking each title's holder as
         // it is stamped closes that window without iterating a list while mutating it.
-        sb.Append("gen_mark_vanilla_titulars = {\n");
-        sb.Append("\teffect = {\n");
+        using (b.Block("gen_mark_vanilla_titulars"))
+        using (b.Block("effect"))
+            foreach (string key in keys)
+                b.Inline($"title:{key}", "set_variable = gen_vanilla_titular "
+                    + "if = { limit = { exists = holder } holder = { destroy_title = prev } }");
 
-        foreach (string key in keys)
-            sb.Append($"\t\ttitle:{key} = {{ set_variable = gen_vanilla_titular "
-                    + "if = { limit = { exists = holder } holder = { destroy_title = prev } } }\n");
-
-        sb.Append("\t}\n");
-        sb.Append("}\n");
-
-        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_titular_guard.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_titular_guard.txt"), b.ToString());
 
         Console.WriteLine($"  titular guard: {keys.Count} shims stamped, stripped on any title gain");
     }
@@ -919,43 +929,47 @@ public static partial class CompatibilityWriter
         int written = 0;
         foreach (var (fileName, regions) in files)
         {
-            var sb = new StringBuilder();
-            sb.Append("# Vanilla region keys re-declared against generated titles.\n");
-            sb.Append("# Keys are preserved because base-game and DLC script hardcodes them.\n\n");
+            var b = new JominiBuilder();
+            b.Comment("""
+                      Vanilla region keys re-declared against generated titles.
+                      Keys are preserved because base-game and DLC script hardcodes them.
+                      """);
+            b.Blank();
 
             int counter = 0;
             foreach (var region in regions)
             {
                 string key = region.Key;
-                sb.Append($"{key} = {{\n");
-                if (region.GenerateModifiers) sb.Append("\tgenerate_modifiers = yes\n");
 
-                // Without these two a graphical region is not a visual region, and every land
-                // province ends up unassigned.
-                if (region.Graphical) sb.Append("\tgraphical = yes\n");
-                if (region.Color is not null) sb.Append($"\tcolor = {{ {region.Color} }}\n");
-
-                if (graphicalProvinces.TryGetValue(key, out var provinces))
+                using (b.Block(key))
                 {
-                    sb.Append("\tprovinces = {");
-                    for (int i = 0; i < provinces.Count; i++)
+                    if (region.GenerateModifiers) b.Field("generate_modifiers", "yes");
+
+                    // Without these two a graphical region is not a visual region, and every land
+                    // province ends up unassigned.
+                    if (region.Graphical) b.Field("graphical", "yes");
+                    if (region.Color is not null) b.Inline("color", region.Color);
+
+                    if (graphicalProvinces.TryGetValue(key, out var provinces))
                     {
-                        if (i % 20 == 0) sb.Append("\n\t\t");
-                        sb.Append(provinces[i]).Append(' ');
+                        // Twenty ids to a line. These lists run to thousands of entries and one id
+                        // per line would make the file unreadable and enormous.
+                        using (b.Block("provinces"))
+                            for (int i = 0; i < provinces.Count; i += 20)
+                                b.Token(string.Concat(provinces.Skip(i).Take(20).Select(p => $"{p} ")));
                     }
-                    sb.Append("\n\t}\n");
-                }
-                else
-                {
-                    // One real member is the minimum for the region to register at all.
-                    sb.Append($"\tcounties = {{ {counties[counter++ % counties.Count].Key} }}\n");
+                    else
+                    {
+                        // One real member is the minimum for the region to register at all.
+                        b.Inline("counties", counties[counter++ % counties.Count].Key);
+                    }
                 }
 
-                sb.Append("}\n\n");
+                b.Blank();
                 written++;
             }
 
-            ParadoxText.WriteBom(Path.Combine(destination, fileName), sb.ToString());
+            ParadoxText.WriteBom(Path.Combine(destination, fileName), b.ToString());
         }
 
         Console.WriteLine($"  re-declared {written} geographical regions " +

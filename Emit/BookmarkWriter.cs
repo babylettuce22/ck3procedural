@@ -384,25 +384,24 @@ public static class BookmarkWriter
         string dir = Path.Combine(modDir, "localization", "english");
         Directory.CreateDirectory(dir);
 
-        var sb = new StringBuilder();
-        sb.Append("l_english:\n");
-        sb.Append(" bm_generated:0 \"Procedural Realm\"\n");
-        sb.Append(" bm_generated_desc:0 \"Explore a newly forged world with unique cultures, faiths, and empires.\"\n\n");
+        var loc = new LocFile();
+        loc.AddBuilt("bm_generated", "Procedural Realm");
+        loc.AddBuilt("bm_generated_desc", "Explore a newly forged world with unique cultures, faiths, and empires.");
+        loc.Blank();
 
-        foreach (var b in bookmarks)
+        foreach (var bookmark in bookmarks)
         {
-            string name = rulers.For(b.County).Name;
-            sb.Append($" {b.Key}:0 \"{name}\"\n");
-            sb.Append($" {b.Key}_subheading:0 \"{b.Subheading}\"\n");
-            sb.Append($" {b.Key}_desc:0 \"{b.Description}\"\n\n");
+            loc.AddBuilt(bookmark.Key, rulers.For(bookmark.County).Name);
+            loc.AddBuilt($"{bookmark.Key}_subheading", bookmark.Subheading);
+            loc.AddBuilt($"{bookmark.Key}_desc", bookmark.Description);
+            loc.Blank();
         }
 
-        string cName = rulers.For(challengeSlot.County).Name;
-        sb.Append($" {ChallengeCharacter}:0 \"{cName}\"\n");
-        sb.Append($" {ChallengeCharacter}_subheading:0 \"{challengeSlot.Subheading}\"\n");
-        sb.Append($" {ChallengeCharacter}_desc:0 \"{challengeSlot.Description}\"\n");
+        loc.AddBuilt(ChallengeCharacter, rulers.For(challengeSlot.County).Name);
+        loc.AddBuilt($"{ChallengeCharacter}_subheading", challengeSlot.Subheading);
+        loc.AddBuilt($"{ChallengeCharacter}_desc", challengeSlot.Description);
 
-        ParadoxText.WriteBom(Path.Combine(dir, "gen_history_l_english.yml"), sb.ToString());
+        loc.Write(Path.Combine(dir, "gen_history_l_english.yml"));
     }
 
     private static void WriteBookmarkGraphics(string modDir, string gameDir)

@@ -1,4 +1,3 @@
-using System.Text;
 using Ck3MapGen.Io;
 
 namespace Ck3MapGen.Emit;
