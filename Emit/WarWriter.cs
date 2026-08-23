@@ -1,5 +1,4 @@
-﻿using System.Text;
-using Ck3MapGen.Io;
+﻿using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
 
 namespace Ck3MapGen.Emit;
@@ -21,44 +20,43 @@ public static class WarWriter
         string dir = Path.Combine(modDir, "common", "on_action");
         Directory.CreateDirectory(dir);
 
-        var sb = new StringBuilder();
-        sb.Append("# Active Starting Wars initiated on Game Start\n\n");
+        var b = new JominiBuilder();
+        b.Comment("Active Starting Wars initiated on Game Start");
+        b.Blank();
 
-        sb.Append("on_game_start = {\n");
-        sb.Append("\ton_actions = {\n");
-        sb.Append("\t\tgen_start_active_wars\n");
-        sb.Append("\t}\n");
-        sb.Append("}\n\n");
+        using (b.Block("on_game_start"))
+        using (b.Block("on_actions"))
+            b.Token("gen_start_active_wars");
 
-        sb.Append("gen_start_active_wars = {\n");
-        sb.Append("\teffect = {\n");
+        b.Blank();
 
-        for (int i = 0; i < prehistory.ActiveWars.Count; i++)
+        using (b.Block("gen_start_active_wars"))
+        using (b.Block("effect"))
         {
-            var war = prehistory.ActiveWars[i];
-
-            string attackerChar = HistoryWriter.CharacterId(war.AttackerCounty);
-            string defenderChar = HistoryWriter.CharacterId(war.DefenderCounty);
-
-            sb.Append($"\t\t# {war.Description}\n");
-            sb.Append($"\t\tcharacter:{attackerChar} = {{\n");
-            sb.Append("\t\t\tstart_war = {\n");
-            sb.Append($"\t\t\t\tcb = {war.CasusBelli}\n");
-            sb.Append($"\t\t\t\ttarget = character:{defenderChar}\n");
-            sb.Append($"\t\t\t\ttarget_title = title:{war.TargetTitle.Key}\n");
-
-            if (war.ClaimantCounty is not null)
+            foreach (var war in prehistory.ActiveWars)
             {
-                sb.Append($"\t\t\t\tclaimant = character:{HistoryWriter.CharacterId(war.ClaimantCounty)}\n");
-            }
+                string attackerChar = HistoryWriter.CharacterId(war.AttackerCounty);
+                string defenderChar = HistoryWriter.CharacterId(war.DefenderCounty);
 
-            sb.Append("\t\t\t}\n");
-            sb.Append("\t\t}\n\n");
+                b.Comment(war.Description);
+
+                using (b.Block($"character:{attackerChar}"))
+                using (b.Block("start_war"))
+                {
+                    b.Field("cb", war.CasusBelli);
+                    b.Field("target", $"character:{defenderChar}");
+                    b.Field("target_title", $"title:{war.TargetTitle.Key}");
+
+                    // Emitted only for claim wars; Field skips a null value.
+                    b.Field("claimant", war.ClaimantCounty is null
+                        ? null
+                        : $"character:{HistoryWriter.CharacterId(war.ClaimantCounty)}");
+                }
+
+                b.Blank();
+            }
         }
 
-        sb.Append("\t}\n");
-        sb.Append("}\n");
-
-        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_starting_wars.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_starting_wars.txt"), b.ToString());
     }
 }
