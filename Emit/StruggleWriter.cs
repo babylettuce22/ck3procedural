@@ -79,22 +79,27 @@ public static class StruggleWriter
     /// </summary>
     private static void WriteRegions(string modDir, StruggleMap struggles)
     {
-        var sb = new StringBuilder();
-        sb.Append("# Regions for the generated struggles. Separate keys from the re-declared\n");
-        sb.Append("# vanilla ones, which carry placeholder members and describe nowhere.\n\n");
+        var b = new JominiBuilder();
+        b.Comment("""
+                  Regions for the generated struggles. Separate keys from the re-declared
+                  vanilla ones, which carry placeholder members and describe nowhere.
+                  """);
+        b.Blank();
 
         foreach (var s in struggles.Struggles)
         {
-            sb.Append($"# {s.Name}\n");
-            sb.Append($"{s.RegionKey} = {{\n");
-            sb.Append("\tduchies = {\n");
-            foreach (var duchy in s.Duchies) sb.Append($"\t\t{duchy.Key}\n");
-            sb.Append("\t}\n}\n\n");
+            b.Comment(s.Name);
+
+            using (b.Block(s.RegionKey))
+            using (b.Block("duchies"))
+                foreach (var duchy in s.Duchies) b.Token(duchy.Key);
+
+            b.Blank();
         }
 
         string dir = Path.Combine(modDir, "map_data", "geographical_regions");
         Directory.CreateDirectory(dir);
-        ParadoxText.WriteBom(Path.Combine(dir, "zz_gen_struggle_regions.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "zz_gen_struggle_regions.txt"), b.ToString());
     }
 
     /// <summary>
@@ -109,112 +114,110 @@ public static class StruggleWriter
     /// </summary>
     private static void WriteDefinition(string modDir, StruggleMap struggles)
     {
-        var sb = new StringBuilder();
-        sb.Append("# Generated struggles.\n");
-        sb.Append("# Catalysts and phase parameters are vanilla keys, chosen because base-game\n");
-        sb.Append("# script fires and reads them generically for any struggle. See MapGen/Struggles.cs.\n\n");
+        var b = new JominiBuilder();
+        b.Comment("""
+                  Generated struggles.
+                  Catalysts and phase parameters are vanilla keys, chosen because base-game
+                  script fires and reads them generically for any struggle. See MapGen/Struggles.cs.
+                  """);
+        b.Blank();
 
         foreach (var s in struggles.Struggles)
         {
-            sb.Append($"{s.Key} = {{\n");
-            sb.Append($"\tillustration = \"{s.Illustration}\"\n\n");
+            using (b.Block(s.Key))
+            {
+                b.Quoted("illustration", s.Illustration);
+                b.Blank();
 
-            sb.Append("\tcultures = {\n");
-            foreach (var c in s.Cultures) sb.Append($"\t\t{c.Key}\n");
-            sb.Append("\t}\n");
+                using (b.Block("cultures"))
+                    foreach (var c in s.Cultures) b.Token(c.Key);
 
-            sb.Append("\tfaiths = {\n");
-            foreach (var f in s.Faiths) sb.Append($"\t\t{f.Key}\n");
-            sb.Append("\t}\n");
+                using (b.Block("faiths"))
+                    foreach (var f in s.Faiths) b.Token(f.Key);
 
-            sb.Append($"\tregions = {{ {s.RegionKey} }}\n\n");
+                b.Inline("regions", s.RegionKey);
+                b.Blank();
 
-            // Vanilla's own figure. A culture is pulled in when this share of its counties lies
-            // inside the region, which for generated cultures is nearly always all of them --
-            // they are built regionally in the first place -- so the number mostly decides whether
-            // a culture that spills over the border counts as living here or visiting.
-            sb.Append("\tinvolvement_prerequisite_percentage = 0.8\n");
-            sb.Append("\ttransition_state_duration = { months = 3 }\n\n");
+                // Vanilla's own figure. A culture is pulled in when this share of its counties lies
+                // inside the region, which for generated cultures is nearly always all of them --
+                // they are built regionally in the first place -- so the number mostly decides whether
+                // a culture that spills over the border counts as living here or visiting.
+                b.Field("involvement_prerequisite_percentage", "0.8");
+                b.Inline("transition_state_duration", "months = 3");
+                b.Blank();
 
-            // The drift ticker. Vanilla starts its equivalent from the struggle's own on_start and
-            // the event re-queues itself yearly; ours does the same rather than calling vanilla's
-            // neutral_struggle.0001, which also runs Persian and Great Pact logic we have no part in.
-            sb.Append("\ton_start = {\n");
-            sb.Append($"\t\ttrigger_event = {DriftEvent}\n");
-            sb.Append("\t}\n\n");
+                // The drift ticker. Vanilla starts its equivalent from the struggle's own on_start and
+                // the event re-queues itself yearly; ours does the same rather than calling vanilla's
+                // neutral_struggle.0001, which also runs Persian and Great Pact logic we have no part in.
+                using (b.Block("on_start")) b.Field("trigger_event", DriftEvent);
+                b.Blank();
 
-            sb.Append($"\tstart_phase = {s.PhaseFor(s.StartMood).Key}\n\n");
-            sb.Append("\tphase_list = {\n");
+                b.Field("start_phase", s.PhaseFor(s.StartMood).Key);
+                b.Blank();
 
-            foreach (var phase in s.Phases) WritePhase(sb, s, phase);
+                using (b.Block("phase_list"))
+                    foreach (var phase in s.Phases) WritePhase(b, s, phase);
+            }
 
-            sb.Append("\t}\n");
-            sb.Append("}\n\n");
+            b.Blank();
         }
 
         string dir = Path.Combine(modDir, "common", "struggle", "struggles");
         Directory.CreateDirectory(dir);
-        ParadoxText.WriteBom(Path.Combine(dir, "01_gen_struggles.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "01_gen_struggles.txt"), b.ToString());
     }
 
-    private static void WritePhase(StringBuilder sb, GeneratedStruggle s, StrugglePhase phase)
+    private static void WritePhase(JominiBuilder b, GeneratedStruggle s, StrugglePhase phase)
     {
-        sb.Append($"\t\t{phase.Key} = {{\n");
-
-        sb.Append("\t\t\tfuture_phases = {\n");
-        foreach (var (mood, catalysts) in phase.Futures)
+        using (b.Block(phase.Key))
         {
-            sb.Append($"\t\t\t\t{s.PhaseFor(mood).Key} = {{\n");
-            sb.Append("\t\t\t\t\tcatalysts = {\n");
-            foreach (var (catalyst, weight) in catalysts)
-                sb.Append($"\t\t\t\t\t\t{catalyst} = {weight}\n");
-            sb.Append("\t\t\t\t\t}\n");
-            sb.Append("\t\t\t\t}\n");
-        }
-        sb.Append("\t\t\t}\n\n");
+            using (b.Block("future_phases"))
+                foreach (var (mood, catalysts) in phase.Futures)
+                using (b.Block(s.PhaseFor(mood).Key))
+                using (b.Block("catalysts"))
+                    foreach (var (catalyst, weight) in catalysts) b.Field(catalyst, weight);
 
-        // One block per group that has anything in it. An empty war_effects block parses but
-        // renders as a heading with nothing under it, which reads as a bug in the struggle window.
-        foreach (string group in Groups)
-        {
-            var parameters = phase.Parameters.Where(p => p.Group == group).ToList();
-            var modifiers = phase.Modifiers.Where(m => m.Group == group).ToList();
-            if (parameters.Count == 0 && modifiers.Count == 0) continue;
+            b.Blank();
 
-            sb.Append($"\t\t\t{BlockName(group)} = {{\n");
-            sb.Append($"\t\t\t\tname = {group}\n");
-
-            foreach (string audience in Audiences)
+            // One block per group that has anything in it. An empty war_effects block parses but
+            // renders as a heading with nothing under it, which reads as a bug in the struggle window.
+            foreach (string group in Groups)
             {
-                var mine = parameters.Where(p => p.Audience == audience).ToList();
-                if (mine.Count == 0) continue;
+                var parameters = phase.Parameters.Where(p => p.Group == group).ToList();
+                var modifiers = phase.Modifiers.Where(m => m.Group == group).ToList();
+                if (parameters.Count == 0 && modifiers.Count == 0) continue;
 
-                sb.Append($"\t\t\t\t{audience}_parameters = {{\n");
-                foreach (var (_, _, parameter) in mine)
-                    sb.Append($"\t\t\t\t\t{parameter} = yes\n");
-                sb.Append("\t\t\t\t}\n");
+                using (b.Block(BlockName(group)))
+                {
+                    b.Field("name", group);
+
+                    foreach (string audience in Audiences)
+                    {
+                        var mine = parameters.Where(p => p.Audience == audience).ToList();
+                        if (mine.Count == 0) continue;
+
+                        using (b.Block($"{audience}_parameters"))
+                            foreach (var (_, _, parameter) in mine) b.Field(parameter, "yes");
+                    }
+
+                    foreach (var block in modifiers.Select(m => m.Block).Distinct())
+                        using (b.Block(block))
+                            foreach (var (_, _, key, value) in modifiers.Where(m => m.Block == block))
+                                b.Field(key, value);
+                }
+
+                b.Blank();
             }
 
-            foreach (var block in modifiers.Select(m => m.Block).Distinct())
-            {
-                sb.Append($"\t\t\t\t{block} = {{\n");
-                foreach (var (_, _, key, value) in modifiers.Where(m => m.Block == block))
-                    sb.Append($"\t\t\t\t\t{key} = {value}\n");
-                sb.Append("\t\t\t\t}\n");
-            }
-
-            sb.Append("\t\t\t}\n\n");
+            // Every phase lists every ending, which is what vanilla does and is not redundant: the list
+            // is informational, and it is the only place a player can read what finishing this thing
+            // would take before any of it is within reach. A phase that listed only its own reachable
+            // ending would hide the other two exactly while the player is deciding which to aim for.
+            using (b.Block("ending_decisions"))
+                foreach (var ending in s.Endings) b.Token(ending.Key);
         }
 
-        // Every phase lists every ending, which is what vanilla does and is not redundant: the list
-        // is informational, and it is the only place a player can read what finishing this thing
-        // would take before any of it is within reach. A phase that listed only its own reachable
-        // ending would hide the other two exactly while the player is deciding which to aim for.
-        sb.Append("\t\t\tending_decisions = {\n");
-        foreach (var ending in s.Endings) sb.Append($"\t\t\t\t{ending.Key}\n");
-        sb.Append("\t\t\t}\n");
-
-        sb.Append("\t\t}\n\n");
+        b.Blank();
     }
 
     /// <summary>The four effect groups, in the order the struggle window lists them.</summary>
@@ -246,82 +249,114 @@ public static class StruggleWriter
     /// </summary>
     private static void WriteEndingDecisions(string modDir, StruggleMap struggles)
     {
-        var sb = new StringBuilder();
-        sb.Append("# Ending decisions for the generated struggles.\n");
-        sb.Append("# Invisible by design: the struggle window renders these from the current\n");
-        sb.Append("# phase's ending_decisions list, and they appear nowhere else.\n\n");
+        var b = new JominiBuilder();
+        b.Comment("""
+                  Ending decisions for the generated struggles.
+                  Invisible by design: the struggle window renders these from the current
+                  phase's ending_decisions list, and they appear nowhere else.
+                  """);
+        b.Blank();
 
         foreach (var s in struggles.Struggles)
         {
             foreach (var ending in s.Endings)
             {
-                sb.Append($"{ending.Key} = {{\n");
-                sb.Append("\tdecision_group_type = major\n");
-                sb.Append($"\ttitle = {ending.Key}\n");
-                sb.Append($"\tpicture = {{ reference = \"{Picture(ending.Kind)}\" }}\n");
-                sb.Append($"\textra_picture = \"{ExtraPicture(ending.Kind)}\"\n");
-                sb.Append($"\tdesc = {ending.Key}_desc\n");
-                sb.Append($"\tselection_tooltip = {ending.Key}_tooltip\n");
-                sb.Append("\tis_invisible = yes\n");
-                sb.Append("\tsort_order = 80\n");
-                sb.Append("\tcooldown = { days = 1 }\n\n");
-
-                // Landless adventurers are excluded the way vanilla excludes them: they hold no
-                // county in the region, so every territorial test below would be vacuous for them.
-                sb.Append("\tis_shown = {\n");
-                sb.Append("\t\tis_landless_adventurer = no\n");
-                sb.Append($"\t\texists = struggle:{s.Key}\n");
-                sb.Append("\t\tany_character_struggle = {\n");
-                sb.Append("\t\t\tinvolvement = involved\n");
-                sb.Append($"\t\t\tis_struggle_type = {s.Key}\n");
-                sb.Append("\t\t}\n");
-                sb.Append("\t}\n\n");
-
-                sb.Append("\tis_valid = {\n");
-                // Independent rulers only. A vassal ending the struggle their liege is fighting
-                // would settle a question that was never theirs to settle.
-                sb.Append("\t\ttop_liege = this\n");
-                sb.Append($"\t\texists = struggle:{s.Key}\n");
-                sb.Append($"\t\tprestige_level >= {PrestigeLevel(ending.Kind)}\n\n");
-
-                // Wrapped rather than bare so the window shows a sentence instead of the trigger.
-                // An unwrapped nest of any_involved_ruler blocks renders as a wall of scope names
-                // that tells the player nothing about what to actually do. The sentence itself is
-                // written by WriteLocalisation against the same condition name.
-                foreach (string condition in StruggleMap.Conditions(ending.Kind))
+                using (b.Block(ending.Key))
                 {
-                    sb.Append("\t\tcustom_tooltip = {\n");
-                    sb.Append($"\t\t\ttext = {ending.Key}_{condition}_tt\n");
-                    sb.Append(Condition(condition, ending.Kind, s));
-                    sb.Append("\t\t}\n\n");
+                    b.Field("decision_group_type", "major");
+                    b.Field("title", ending.Key);
+                    b.Inline("picture", $"reference = \"{Picture(ending.Kind)}\"");
+                    b.Quoted("extra_picture", ExtraPicture(ending.Kind));
+                    b.Field("desc", $"{ending.Key}_desc");
+                    b.Field("selection_tooltip", $"{ending.Key}_tooltip");
+                    b.Field("is_invisible", "yes");
+                    b.Field("sort_order", "80");
+                    b.Inline("cooldown", "days = 1");
+                    b.Blank();
+
+                    // Landless adventurers are excluded the way vanilla excludes them: they hold no
+                    // county in the region, so every territorial test below would be vacuous for them.
+                    using (b.Block("is_shown"))
+                    {
+                        b.Field("is_landless_adventurer", "no");
+                        b.Field("exists", $"struggle:{s.Key}");
+
+                        using (b.Block("any_character_struggle"))
+                        {
+                            b.Field("involvement", "involved");
+                            b.Field("is_struggle_type", s.Key);
+                        }
+                    }
+
+                    b.Blank();
+
+                    using (b.Block("is_valid"))
+                    {
+                        // Independent rulers only. A vassal ending the struggle their liege is fighting
+                        // would settle a question that was never theirs to settle.
+                        b.Field("top_liege", "this");
+                        b.Field("exists", $"struggle:{s.Key}");
+                        b.Token($"prestige_level >= {PrestigeLevel(ending.Kind)}");
+                        b.Blank();
+
+                        // Wrapped rather than bare so the window shows a sentence instead of the trigger.
+                        // An unwrapped nest of any_involved_ruler blocks renders as a wall of scope names
+                        // that tells the player nothing about what to actually do. The sentence itself is
+                        // written by WriteLocalisation against the same condition name.
+                        foreach (string condition in StruggleMap.Conditions(ending.Kind))
+                        {
+                            using (b.Block("custom_tooltip"))
+                            {
+                                b.Field("text", $"{ending.Key}_{condition}_tt");
+
+                                // Already indented to this depth by Condition; see its doc comment.
+                                b.Raw(Condition(condition, ending.Kind, s));
+                            }
+
+                            b.Blank();
+                        }
+                    }
+
+                    b.Blank();
+
+                    using (b.Block("effect"))
+                    {
+                        b.Raw(Reward(ending, s));
+                        b.Inline($"struggle:{s.Key}", $"end_struggle = {ending.Key}");
+                    }
+
+                    b.Blank();
+
+                    b.Field("cost", "{}");
+                    b.Blank();
+
+                    // Vanilla's cadence. Below kingdom the check never runs — a count who somehow
+                    // qualified would be ending a struggle they cannot police — and above it the AI
+                    // reconsiders twice a year rather than constantly, because the tests walk every
+                    // involved ruler and every county in the region.
+                    using (b.Block("ai_check_interval_by_tier"))
+                    {
+                        b.Field("barony", "0");
+                        b.Field("county", "0");
+                        b.Field("duchy", "0");
+                        b.Field("kingdom", "120");
+                        b.Field("empire", "120");
+                        b.Field("hegemony", "120");
+                    }
+
+                    b.Blank();
+
+                    b.Inline("ai_potential", "always = yes");
+                    b.Inline("ai_will_do", "base = 100");
                 }
 
-                sb.Append("\t}\n\n");
-
-                sb.Append("\teffect = {\n");
-                sb.Append(Reward(ending, s));
-                sb.Append($"\t\tstruggle:{s.Key} = {{ end_struggle = {ending.Key} }}\n");
-                sb.Append("\t}\n\n");
-
-                sb.Append("\tcost = {}\n\n");
-
-                // Vanilla's cadence. Below kingdom the check never runs — a count who somehow
-                // qualified would be ending a struggle they cannot police — and above it the AI
-                // reconsiders twice a year rather than constantly, because the tests walk every
-                // involved ruler and every county in the region.
-                sb.Append("\tai_check_interval_by_tier = {\n");
-                sb.Append("\t\tbarony = 0\n\t\tcounty = 0\n\t\tduchy = 0\n");
-                sb.Append("\t\tkingdom = 120\n\t\tempire = 120\n\t\thegemony = 120\n");
-                sb.Append("\t}\n\n");
-                sb.Append("\tai_potential = { always = yes }\n");
-                sb.Append("\tai_will_do = { base = 100 }\n");
-                sb.Append("}\n\n");
+                b.Blank();
             }
         }
 
         string dir = Path.Combine(modDir, "common", "decisions");
         Directory.CreateDirectory(dir);
-        ParadoxText.WriteBom(Path.Combine(dir, "01_gen_struggle_endings.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "01_gen_struggle_endings.txt"), b.ToString());
     }
 
     /// <summary>
@@ -451,36 +486,41 @@ public static class StruggleWriter
     /// </summary>
     private static string Reward(StruggleEndingDef ending, GeneratedStruggle s)
     {
-        var sb = new StringBuilder();
+        // Depth two: this is spliced into the decision's effect block, which sits one level inside
+        // the decision itself.
+        var b = new JominiBuilder(startDepth: 2);
 
-        sb.Append("\t\tadd_prestige_level = 1\n");
+        b.Field("add_prestige_level", "1");
 
         switch (ending.Kind)
         {
             case StruggleEnding.Dominance:
-                sb.Append("\t\tdynasty = { add_dynasty_prestige = 5000 }\n");
+                b.Inline("dynasty", "add_dynasty_prestige = 5000");
                 break;
             case StruggleEnding.StatusQuo:
-                sb.Append("\t\tdynasty = { add_dynasty_prestige = 3000 }\n");
+                b.Inline("dynasty", "add_dynasty_prestige = 3000");
                 break;
             default:
-                sb.Append("\t\tdynasty = { add_dynasty_prestige = 3000 }\n");
-                sb.Append("\t\tadd_piety_level = 1\n");
+                b.Inline("dynasty", "add_dynasty_prestige = 3000");
+                b.Field("add_piety_level", "1");
                 break;
         }
 
-        sb.Append($"\t\tadd_character_modifier = {{ modifier = {ending.Modifier} }}\n");
+        b.Inline("add_character_modifier", $"modifier = {ending.Modifier}");
 
-        sb.Append("\t\tevery_county_in_region = {\n");
-        sb.Append($"\t\t\tregion = {s.RegionKey}\n");
-        sb.Append("\t\t\tlimit = { holder.top_liege = root }\n");
-        sb.Append("\t\t\tadd_county_modifier = {\n");
-        sb.Append($"\t\t\t\tmodifier = {StruggleMap.PeaceDividend}\n");
-        sb.Append("\t\t\t\tyears = 20\n");
-        sb.Append("\t\t\t}\n");
-        sb.Append("\t\t}\n");
+        using (b.Block("every_county_in_region"))
+        {
+            b.Field("region", s.RegionKey);
+            b.Inline("limit", "holder.top_liege = root");
 
-        return sb.ToString();
+            using (b.Block("add_county_modifier"))
+            {
+                b.Field("modifier", StruggleMap.PeaceDividend);
+                b.Field("years", "20");
+            }
+        }
+
+        return b.ToString();
     }
 
     /// <summary>
@@ -587,25 +627,26 @@ public static class StruggleWriter
     /// </summary>
     private static void WriteHistory(string modDir, MapConfig cfg, StruggleMap struggles)
     {
-        var sb = new StringBuilder();
-        sb.Append("# Starts the generated struggles on the bookmark date.\n\n");
-        sb.Append($"{cfg.StartDate} = {{\n");
-        sb.Append("\teffect = {\n");
+        var b = new JominiBuilder();
+        b.Comment("Starts the generated struggles on the bookmark date.");
+        b.Blank();
 
-        foreach (var s in struggles.Struggles)
-        {
-            sb.Append($"\t\t# {s.Name}\n");
-            sb.Append("\t\tstart_struggle = {\n");
-            sb.Append($"\t\t\tstruggle_type = {s.Key}\n");
-            sb.Append($"\t\t\tstart_phase = {s.PhaseFor(s.StartMood).Key}\n");
-            sb.Append("\t\t}\n");
-        }
+        using (b.Block(cfg.StartDate))
+        using (b.Block("effect"))
+            foreach (var s in struggles.Struggles)
+            {
+                b.Comment(s.Name);
 
-        sb.Append("\t}\n}\n");
+                using (b.Block("start_struggle"))
+                {
+                    b.Field("struggle_type", s.Key);
+                    b.Field("start_phase", s.PhaseFor(s.StartMood).Key);
+                }
+            }
 
         string dir = Path.Combine(modDir, "history", "struggles");
         Directory.CreateDirectory(dir);
-        ParadoxText.WriteBom(Path.Combine(dir, "01_gen_struggles.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "01_gen_struggles.txt"), b.ToString());
     }
 
     /// <summary>
@@ -722,25 +763,24 @@ public static class StruggleWriter
     /// </summary>
     private static void WriteLocalisation(string modDir, StruggleMap struggles)
     {
-        var sb = new StringBuilder();
-        sb.Append("l_english:\n");
+        var loc = new LocFile();
 
         foreach (var s in struggles.Struggles)
         {
-            sb.Append($" {s.Key}:0 \"{ParadoxText.Loc(s.Name)}\"\n");
-            sb.Append($" {s.Key}_desc:0 \"{ParadoxText.Loc(s.Description)}\"\n");
+            loc.Add(s.Key, s.Name);
+            loc.Add($"{s.Key}_desc", s.Description);
 
             foreach (var phase in s.Phases)
             {
-                sb.Append($" {phase.Key}:0 \"{ParadoxText.Loc(phase.Name)}\"\n");
-                sb.Append($" {phase.Key}_desc:0 \"{ParadoxText.Loc(phase.Description)}\"\n");
+                loc.Add(phase.Key, phase.Name);
+                loc.Add($"{phase.Key}_desc", phase.Description);
             }
 
             foreach (var ending in s.Endings)
             {
-                sb.Append($" {ending.Key}:0 \"{ParadoxText.Loc(ending.Name)}\"\n");
-                sb.Append($" {ending.Key}_desc:0 \"{ParadoxText.Loc(ending.Description)}\"\n");
-                sb.Append($" {ending.Key}_tooltip:0 \"{ParadoxText.Loc(ending.Tooltip)}\"\n");
+                loc.Add(ending.Key, ending.Name);
+                loc.Add($"{ending.Key}_desc", ending.Description);
+                loc.Add($"{ending.Key}_tooltip", ending.Tooltip);
 
                 // The text on the button that actually takes the decision. Derived by convention
                 // from the decision key rather than declared, so its absence is a warning rather
@@ -751,7 +791,7 @@ public static class StruggleWriter
                     ? "the " + s.Name[4..]
                     : s.Name;
 
-                sb.Append($" {ending.Key}_confirm:0 \"{ParadoxText.Loc($"End {named}")}\"\n");
+                loc.Add($"{ending.Key}_confirm", $"End {named}");
 
                 // One line per custom_tooltip the decision wraps a condition in. Driven off the
                 // same list the decision iterates, so a condition can never be emitted without the
@@ -762,22 +802,20 @@ public static class StruggleWriter
                         ? text
                         : condition;
 
-                    sb.Append($" {ending.Key}_{condition}_tt:0 \"{ParadoxText.Loc(prose)}\"\n");
+                    loc.Add($"{ending.Key}_{condition}_tt", prose);
                 }
             }
 
-            sb.Append('\n');
+            loc.Blank();
         }
 
         // The reward modifiers, named once. They carry no struggle in their keys, so they are
         // written outside the per-struggle loop for the same reason their definitions are.
-        sb.Append($" {StruggleMap.Modifier(StruggleEnding.Dominance)}:0 \"Master of the Struggle\"\n");
-        sb.Append($" {StruggleMap.Modifier(StruggleEnding.StatusQuo)}:0 \"Keeper of the Peace\"\n");
-        sb.Append($" {StruggleMap.Modifier(StruggleEnding.Concord)}:0 \"Reconciler of Peoples\"\n");
-        sb.Append($" {StruggleMap.PeaceDividend}:0 \"The Struggle Is Over\"\n");
+        loc.Add(StruggleMap.Modifier(StruggleEnding.Dominance), "Master of the Struggle");
+        loc.Add(StruggleMap.Modifier(StruggleEnding.StatusQuo), "Keeper of the Peace");
+        loc.Add(StruggleMap.Modifier(StruggleEnding.Concord), "Reconciler of Peoples");
+        loc.Add(StruggleMap.PeaceDividend, "The Struggle Is Over");
 
-        string dir = Path.Combine(modDir, "localization", "english");
-        Directory.CreateDirectory(dir);
-        ParadoxText.WriteBom(Path.Combine(dir, "gen_struggles_l_english.yml"), sb.ToString());
+        loc.Write(Path.Combine(modDir, "localization", "english", "gen_struggles_l_english.yml"));
     }
 }

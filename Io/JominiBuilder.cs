@@ -28,7 +28,20 @@ public sealed class JominiBuilder
     private readonly JominiStyle _style;
     private int _depth;
 
-    public JominiBuilder(JominiStyle? style = null) => _style = style ?? JominiStyle.Script;
+    /// <summary>
+    /// A builder for a whole file, or — with <paramref name="startDepth"/> — for a fragment that
+    /// will be spliced into one at a known depth.
+    ///
+    /// The fragment case exists because some blocks are assembled by a helper that does not own the
+    /// file: a decision's reward, a trigger chosen by a switch. Those still want the brace and
+    /// indentation guarantees, and passing the depth in is cheaper than teaching every helper to
+    /// take the caller's builder.
+    /// </summary>
+    public JominiBuilder(JominiStyle? style = null, int startDepth = 0)
+    {
+        _style = style ?? JominiStyle.Script;
+        _depth = startDepth;
+    }
 
     /// <summary>How deep the next line will be written. Exposed for <see cref="Raw"/> callers.</summary>
     public int Depth => _depth;
