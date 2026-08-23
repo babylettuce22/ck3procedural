@@ -1,5 +1,4 @@
 ﻿using System.Globalization;
-using System.Text;
 using Ck3MapGen.Config;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
@@ -57,127 +56,165 @@ public static class RaceMorphWriter
 
         float f = Ethnicities.MorphIntensity(cfg.RaceMode);
         var (skinLo, skinHi) = RaceSkin.TierRange(cfg.RaceMode);
-        var sb = new StringBuilder();
-        sb.Append("# Generated: race-defining genes forced by phenotype trait. See Emit/RaceMorphWriter.cs.\n");
-        sb.Append("# The values mirror MapGen/Ethnicities.cs RaceMorphs — one table feeds both.\n\n");
+        var b = new JominiBuilder();
+        b.Comment("""
+                  Generated: race-defining genes forced by phenotype trait. See Emit/RaceMorphWriter.cs.
+                  The values mirror MapGen/Ethnicities.cs RaceMorphs — one table feeds both.
+                  """);
+        b.Blank();
 
         // ---- Group 1: shape --------------------------------------------------------------
-        sb.Append("gen_race_morphs = {\n\n\tusage = game\n\tselection_behavior = max\n\tpriority = 90\n\n");
+        using (b.Block("gen_race_morphs"))
+        {
+            b.Blank();
+            b.Field("usage", "game");
+            b.Field("selection_behavior", "max");
+            b.Field("priority", "90");
+            b.Blank();
 
-        foreach (var (archetype, trait) in Races)
-            AppendShapeEntry(sb, $"gen_race_morph_{archetype.ToString().ToLowerInvariant()}",
-                trait, RaceMorphs.Of(archetype), f);
+            foreach (var (archetype, trait) in Races)
+                ShapeEntry(b, $"gen_race_morph_{archetype.ToString().ToLowerInvariant()}",
+                    $"has_trait = {trait}", RaceMorphs.Of(archetype), f);
 
-        // Both elf archetypes share phenotype_gracile, so their entry is the merge of the two
-        // tables: genes where both agree on the template, ranges averaged. Genes where the
-        // templates differ (body_shape: rectangle vs triangle) are left to inherit — musculature
-        // blends harmlessly, and forcing either template onto the other elf would be wrong.
-        AppendShapeEntry(sb, "gen_race_morph_gracile", "phenotype_gracile",
-            MergeGracile(), f);
+            // Both elf archetypes share phenotype_gracile, so their entry is the merge of the two
+            // tables: genes where both agree on the template, ranges averaged. Genes where the
+            // templates differ (body_shape: rectangle vs triangle) are left to inherit — musculature
+            // blends harmlessly, and forcing either template onto the other elf would be wrong.
+            ShapeEntry(b, "gen_race_morph_gracile", "has_trait = phenotype_gracile", MergeGracile(), f);
+        }
 
-        sb.Append("}\n\n");
+        b.Blank();
 
         // ---- Group 2: skin ---------------------------------------------------------------
         // Separate group so it stacks with the shape entry (one entry per group applies).
-        sb.Append("gen_race_skins = {\n\n\tusage = game\n\tselection_behavior = max\n\tpriority = 91\n\n");
+        using (b.Block("gen_race_skins"))
+        {
+            b.Blank();
+            b.Field("usage", "game");
+            b.Field("selection_behavior", "max");
+            b.Field("priority", "91");
+            b.Blank();
 
-        foreach (var (archetype, trait) in Races)
-            AppendSkinEntry(sb, $"gen_race_skin_{archetype.ToString().ToLowerInvariant()}",
-                trait, RaceSkin.TemplateOf(archetype)!, skinLo, skinHi, weight: 100, cultureKeys: null);
+            foreach (var (archetype, trait) in Races)
+                SkinEntry(b, $"gen_race_skin_{archetype.ToString().ToLowerInvariant()}",
+                    $"has_trait = {trait}", RaceSkin.TemplateOf(archetype)!, skinLo, skinHi,
+                    weight: 100, cultureKeys: null);
 
-        // phenotype_gracile covers two skins. The culture decides which: wood-elf cultures get the
-        // olive shift at weight 100, everyone else carrying the trait falls to the high-elf entry
-        // at 90. `selection_behavior = max` picks the highest applicable. The culture keys are the
-        // generated ones — the second reason this file cannot be static.
-        var woodElfCultures = ethnicities.ByCulture
-            .Where(kv => kv.Value.Archetype == RaceArchetype.WoodElf)
-            .Select(kv => kv.Key.Key)
-            .Distinct()
-            .ToList();
+            // phenotype_gracile covers two skins. The culture decides which: wood-elf cultures get the
+            // olive shift at weight 100, everyone else carrying the trait falls to the high-elf entry
+            // at 90. `selection_behavior = max` picks the highest applicable. The culture keys are the
+            // generated ones — the second reason this file cannot be static.
+            var woodElfCultures = ethnicities.ByCulture
+                .Where(kv => kv.Value.Archetype == RaceArchetype.WoodElf)
+                .Select(kv => kv.Key.Key)
+                .Distinct()
+                .ToList();
 
-        if (woodElfCultures.Count > 0)
-            AppendSkinEntry(sb, "gen_race_skin_wood_elf", "phenotype_gracile",
-                RaceSkin.TemplateOf(RaceArchetype.WoodElf)!, skinLo, skinHi, weight: 100, cultureKeys: woodElfCultures);
+            if (woodElfCultures.Count > 0)
+                SkinEntry(b, "gen_race_skin_wood_elf", "has_trait = phenotype_gracile",
+                    RaceSkin.TemplateOf(RaceArchetype.WoodElf)!, skinLo, skinHi,
+                    weight: 100, cultureKeys: woodElfCultures);
 
-        AppendSkinEntry(sb, "gen_race_skin_high_elf", "phenotype_gracile",
-            RaceSkin.TemplateOf(RaceArchetype.HighElf)!, skinLo, skinHi, weight: 90, cultureKeys: null);
+            SkinEntry(b, "gen_race_skin_high_elf", "has_trait = phenotype_gracile",
+                RaceSkin.TemplateOf(RaceArchetype.HighElf)!, skinLo, skinHi,
+                weight: 90, cultureKeys: null);
 
-        // The human reset. gen_race_skin is INHERITABLE — that is what makes half-breeds work —
-        // so the human child of an elf carries the elven shift in its DNA, and without this entry
-        // nothing ever turns it off: the observed bug was literally a wood-elf-coloured human
-        // child. Range { 0 0 } because there is nothing to vary — off is off.
-        //
-        // Keyed on the gen_phenotype_human FLAG, deliberately NOT the phenotype_human TRAIT. The
-        // trait is broad racial identity and sits on every member of a human culture; the flag is
-        // set only for humans of a mixed line (see 00_phenotype_birth_effects.txt), which is
-        // exactly the population whose inherited shift needs snapping off.
-        //
-        // Minority-race members used to be the reason for the split — they held the human trait
-        // while their looks came from rolled ethnicity genes, so keying the reset on the trait
-        // erased them. They now hold their own race's trait instead (resolved from their genes by
-        // gen_reconcile_phenotype_with_genes_effect), so they are no longer the argument. The split
-        // still is the right one: a mixed-line human is precisely "human whose inherited shift must
-        // go", and no trait describes that.
-        sb.Append("\tgen_race_skin_human = {\n\t\tdna_modifiers = {\n");
-        sb.Append("\t\t\tmorph = { mode = replace  gene = gen_race_skin  template = gen_skin_human  range = { 0 0 } }\n");
-        sb.Append("\t\t}\n");
-        sb.Append("\t\tweight = {\n\t\t\tbase = 0\n\t\t\tmodifier = {\n\t\t\t\tadd = 100\n\t\t\t\texists = this\n\t\t\t\thas_character_flag = gen_phenotype_human\n\t\t\t}\n\t\t}\n\t}\n\n");
+            // The human reset. gen_race_skin is INHERITABLE — that is what makes half-breeds work —
+            // so the human child of an elf carries the elven shift in its DNA, and without this entry
+            // nothing ever turns it off: the observed bug was literally a wood-elf-coloured human
+            // child. Range { 0 0 } because there is nothing to vary — off is off.
+            //
+            // Keyed on the gen_phenotype_human FLAG, deliberately NOT the phenotype_human TRAIT. The
+            // trait is broad racial identity and sits on every member of a human culture; the flag is
+            // set only for humans of a mixed line (see 00_phenotype_birth_effects.txt), which is
+            // exactly the population whose inherited shift needs snapping off.
+            //
+            // Minority-race members used to be the reason for the split — they held the human trait
+            // while their looks came from rolled ethnicity genes, so keying the reset on the trait
+            // erased them. They now hold their own race's trait instead (resolved from their genes by
+            // gen_reconcile_phenotype_with_genes_effect), so they are no longer the argument. The split
+            // still is the right one: a mixed-line human is precisely "human whose inherited shift must
+            // go", and no trait describes that.
+            SkinEntry(b, "gen_race_skin_human", "has_character_flag = gen_phenotype_human",
+                "gen_skin_human", 0f, 0f, weight: 100, cultureKeys: null);
 
-        // The six fantasy traits and the mixed-line flag are the whole roster; a character with
-        // none of them (a traited-but-unmixed human, or a pre-pulse engine character) has no entry
-        // fire and keeps its inherited appearance — phenotype_human
-        // deliberately forces nothing, human looks belong to the ethnicity. Exotic maps to no
-        // trait — its shape is rolled per people rather than authored — so it has no entry either.
-        sb.Append("}\n");
+            // The six fantasy traits and the mixed-line flag are the whole roster; a character with
+            // none of them (a traited-but-unmixed human, or a pre-pulse engine character) has no entry
+            // fire and keeps its inherited appearance — phenotype_human
+            // deliberately forces nothing, human looks belong to the ethnicity. Exotic maps to no
+            // trait — its shape is rolled per people rather than authored — so it has no entry either.
+        }
 
-        ParadoxText.WriteBom(path, sb.ToString());
+        ParadoxText.WriteBom(path, b.ToString());
         Console.WriteLine($"  race morphs written: {Races.Length + 1} shape and {Races.Length + 2} skin enforcement entries to 99_gen_race_morphs.txt");
     }
 
-    private static void AppendShapeEntry(
-        StringBuilder sb, string name, string trait, IReadOnlyList<RaceMorph> morphs, float intensity)
+    /// <summary>
+    /// One shape entry: every gene the archetype forces, scaled by the world's morph intensity.
+    /// </summary>
+    private static void ShapeEntry(
+        JominiBuilder b, string name, string condition, IReadOnlyList<RaceMorph> morphs, float intensity)
     {
-        sb.Append($"\t{name} = {{\n\t\tdna_modifiers = {{\n");
-        foreach (var m in morphs)
+        using (b.Block(name))
         {
-            float scale = m.Tiered ? intensity : 1.0f;
-            float n = Ethnicities.NeutralOf(m.Gene);
-            float lo = Math.Clamp(n + (m.Min - n) * scale, 0f, 1f);
-            float hi = Math.Clamp(n + (m.Max - n) * scale, 0f, 1f);
-            sb.Append($"\t\t\tmorph = {{ mode = replace  gene = {m.Gene}  template = {m.Template}  range = {{ {F(lo)} {F(hi)} }} }}\n");
+            using (b.Block("dna_modifiers"))
+                foreach (var m in morphs)
+                {
+                    float scale = m.Tiered ? intensity : 1.0f;
+                    float n = Ethnicities.NeutralOf(m.Gene);
+                    float lo = Math.Clamp(n + (m.Min - n) * scale, 0f, 1f);
+                    float hi = Math.Clamp(n + (m.Max - n) * scale, 0f, 1f);
+                    Morph(b, m.Gene, m.Template, lo, hi);
+                }
+
+            Weight(b, condition, weight: 100, cultureKeys: null);
         }
-        sb.Append("\t\t}\n");
-        AppendWeight(sb, trait, weight: 100, cultureKeys: null);
-        sb.Append("\t}\n\n");
+
+        b.Blank();
     }
 
-    private static void AppendSkinEntry(
-        StringBuilder sb, string name, string trait, string template,
+    /// <summary>One skin entry: a single forced <c>gen_race_skin</c> shift.</summary>
+    private static void SkinEntry(
+        JominiBuilder b, string name, string condition, string template,
         float lo, float hi, int weight, List<string>? cultureKeys)
     {
-        sb.Append($"\t{name} = {{\n\t\tdna_modifiers = {{\n");
-        sb.Append($"\t\t\tmorph = {{ mode = replace  gene = gen_race_skin  template = {template}  range = {{ {F(lo)} {F(hi)} }} }}\n");
-        sb.Append("\t\t}\n");
-        AppendWeight(sb, trait, weight, cultureKeys);
-        sb.Append("\t}\n\n");
+        using (b.Block(name))
+        {
+            using (b.Block("dna_modifiers")) Morph(b, "gen_race_skin", template, lo, hi);
+            Weight(b, condition, weight, cultureKeys);
+        }
+
+        b.Blank();
     }
 
-    private static void AppendWeight(StringBuilder sb, string trait, int weight, List<string>? cultureKeys)
+    /// <summary>
+    /// The morph line. Two spaces between the segments rather than one, which is how vanilla's own
+    /// gene files are written and is worth matching so a diff against them stays readable.
+    /// </summary>
+    private static void Morph(JominiBuilder b, string gene, string template, float lo, float hi)
+        => b.Inline("morph",
+            $"mode = replace  gene = {gene}  template = {template}  range = {{ {F(lo)} {F(hi)} }}");
+
+    private static void Weight(JominiBuilder b, string condition, int weight, List<string>? cultureKeys)
     {
-        sb.Append("\t\tweight = {\n\t\t\tbase = 0\n\t\t\tmodifier = {\n");
-        sb.Append($"\t\t\t\tadd = {weight}\n");
-        // exists guards the trait check: weights are evaluated for portraits with no character
-        // behind them, and has_trait on nothing is an error rather than a no.
-        sb.Append("\t\t\t\texists = this\n");
-        sb.Append($"\t\t\t\thas_trait = {trait}\n");
-        if (cultureKeys is { Count: > 0 })
+        using (b.Block("weight"))
         {
-            sb.Append("\t\t\t\tOR = {\n");
-            foreach (var key in cultureKeys)
-                sb.Append($"\t\t\t\t\tculture = culture:{key}\n");
-            sb.Append("\t\t\t\t}\n");
+            b.Field("base", "0");
+
+            using (b.Block("modifier"))
+            {
+                b.Field("add", weight);
+
+                // exists guards the trait check: weights are evaluated for portraits with no character
+                // behind them, and has_trait on nothing is an error rather than a no.
+                b.Field("exists", "this");
+                b.Token(condition);
+
+                if (cultureKeys is { Count: > 0 })
+                    using (b.Block("OR"))
+                        foreach (var key in cultureKeys) b.Field("culture", $"culture:{key}");
+            }
         }
-        sb.Append("\t\t\t}\n\t\t}\n");
     }
 
     /// <summary>
