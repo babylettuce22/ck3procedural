@@ -1,5 +1,4 @@
 ﻿using System.Globalization;
-using System.Text;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
 
@@ -23,8 +22,9 @@ public static class ReligionWriter
         string dir = Path.Combine(modDir, "common", "religion", "holy_site_types");
         Directory.CreateDirectory(dir);
 
-        var sb = new StringBuilder();
-        sb.Append("# Generated holy sites, one per faith's richest counties.\n\n");
+        var b = new JominiBuilder();
+        b.Comment("Generated holy sites, one per faith's richest counties.");
+        b.Blank();
 
         // Deduplicate across shared holy sites
         var writtenSites = new HashSet<string>(StringComparer.Ordinal);
@@ -35,17 +35,23 @@ public static class ReligionWriter
             {
                 if (!writtenSites.Add(key)) continue;
 
-                sb.Append($"{key} = {{\n");
-                sb.Append($"\tcounty = {county.Key}\n\n");
-                sb.Append("\tcharacter_modifier = {\n");
-                sb.Append($"\t\tname = holy_site_{key}_effect_name\n");
-                sb.Append("\t\tmonthly_piety_gain_mult = 0.1\n");
-                sb.Append("\t}\n");
-                sb.Append("}\n\n");
+                using (b.Block(key))
+                {
+                    b.Field("county", county.Key);
+                    b.Blank();
+
+                    using (b.Block("character_modifier"))
+                    {
+                        b.Field("name", $"holy_site_{key}_effect_name");
+                        b.Field("monthly_piety_gain_mult", "0.1");
+                    }
+                }
+
+                b.Blank();
             }
         }
 
-        ParadoxText.WriteBom(Path.Combine(dir, "01_generated_holy_sites.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "01_generated_holy_sites.txt"), b.ToString());
     }
 
     private static void WriteReligions(string modDir, FaithMap faiths)
@@ -53,77 +59,85 @@ public static class ReligionWriter
         string dir = Path.Combine(modDir, "common", "religion", "religion_types");
         Directory.CreateDirectory(dir);
 
-        var sb = new StringBuilder();
-        sb.Append("# Generated religions and their faiths.\n\n");
+        var b = new JominiBuilder();
+        b.Comment("Generated religions and their faiths.");
+        b.Blank();
 
         foreach (var religion in faiths.Religions)
         {
-            sb.Append($"{religion.Key} = {{\n");
-            sb.Append($"\tfamily = {MapGen.Faiths.Family}\n");
-            sb.Append($"\tgraphical_faith = {religion.GraphicalFaith}\n");
-            sb.Append("\tpagan_roots = yes\n\n");
-
-            foreach (var (_, doctrine) in religion.Doctrines)
-                sb.Append($"\tdoctrine = {doctrine}\n");
-            sb.Append('\n');
-
-            sb.Append("\ttraits = {\n");
-            sb.Append($"\t\tvirtues = {{ {string.Join(' ', religion.Virtues)} }}\n");
-            sb.Append($"\t\tsins = {{ {string.Join(' ', religion.Sins)} }}\n");
-            sb.Append("\t}\n\n");
-
-            sb.Append("\tlocalization = {\n");
-            foreach (var (tag, value) in religion.Localization)
-                sb.Append($"\t\t{tag} = {value}\n");
-            sb.Append("\t}\n\n");
-
-            sb.Append("\tfaiths = {\n");
-            foreach (var faith in religion.Faiths)
+            using (b.Block(religion.Key))
             {
-                var (r, g, b) = faith.Color;
-                sb.Append($"\t\t{faith.Key} = {{\n");
-                sb.Append($"\t\t\tcolor = {{ {F(r)} {F(g)} {F(b)} }}\n");
-                sb.Append($"\t\t\ticon = {faith.Icon}\n");
+                b.Field("family", MapGen.Faiths.Family);
+                b.Field("graphical_faith", religion.GraphicalFaith);
+                b.Field("pagan_roots", "yes");
+                b.Blank();
 
-                // Unreformed faiths require reformed_icon, otherwise Reformation/Holy Site view causes CTD
-                if (!faith.IsOrganized)
-                {
-                    sb.Append("\t\t\tdoctrine = unreformed_faith_doctrine\n");
-                    sb.Append($"\t\t\treformed_icon = {faith.Icon}\n");
-                }
-                sb.Append('\n');
+                foreach (var (_, doctrine) in religion.Doctrines) b.Field("doctrine", doctrine);
+                b.Blank();
 
-                if (faith.Head is not null && faith.IsOrganized)
+                using (b.Block("traits"))
                 {
-                    sb.Append("\t\t\tdoctrine = doctrine_spiritual_head\n");
-                    sb.Append($"\t\t\treligious_head = {faith.Head.TitleKey}\n");
+                    b.Inline("virtues", string.Join(' ', religion.Virtues));
+                    b.Inline("sins", string.Join(' ', religion.Sins));
                 }
 
-                // Ensure every faith has at least one holy site
-                if (faith.HolySites.Count > 0)
-                {
-                    foreach (var (key, _) in faith.HolySites)
-                        sb.Append($"\t\t\tholy_site = {key}\n");
-                }
-                else if (faiths.Faiths.Any(f => f.HolySites.Count > 0))
-                {
-                    // Fallback to avoid fatal error on empty dummy faiths
-                    var fallbackSite = faiths.Faiths.First(f => f.HolySites.Count > 0).HolySites[0];
-                    sb.Append($"\t\t\tholy_site = {fallbackSite.Key}\n");
-                }
-                sb.Append('\n');
+                b.Blank();
 
-                foreach (string tenet in faith.Tenets)
-                    sb.Append($"\t\t\tdoctrine = {tenet}\n");
+                using (b.Block("localization"))
+                    foreach (var (tag, value) in religion.Localization) b.Field(tag, value);
 
-                sb.Append("\t\t}\n");
+                b.Blank();
+
+                using (b.Block("faiths"))
+                {
+                    foreach (var faith in religion.Faiths)
+                    {
+                        var (r, g, bl) = faith.Color;
+
+                        using (b.Block(faith.Key))
+                        {
+                            b.Inline("color", F(r), F(g), F(bl));
+                            b.Field("icon", faith.Icon);
+
+                            // Unreformed faiths require reformed_icon, otherwise Reformation/Holy Site view causes CTD
+                            if (!faith.IsOrganized)
+                            {
+                                b.Field("doctrine", "unreformed_faith_doctrine");
+                                b.Field("reformed_icon", faith.Icon);
+                            }
+
+                            b.Blank();
+
+                            if (faith.Head is not null && faith.IsOrganized)
+                            {
+                                b.Field("doctrine", "doctrine_spiritual_head");
+                                b.Field("religious_head", faith.Head.TitleKey);
+                            }
+
+                            // Ensure every faith has at least one holy site
+                            if (faith.HolySites.Count > 0)
+                            {
+                                foreach (var (key, _) in faith.HolySites) b.Field("holy_site", key);
+                            }
+                            else if (faiths.Faiths.Any(f => f.HolySites.Count > 0))
+                            {
+                                // Fallback to avoid fatal error on empty dummy faiths
+                                var fallbackSite = faiths.Faiths.First(f => f.HolySites.Count > 0).HolySites[0];
+                                b.Field("holy_site", fallbackSite.Key);
+                            }
+
+                            b.Blank();
+
+                            foreach (string tenet in faith.Tenets) b.Field("doctrine", tenet);
+                        }
+                    }
+                }
             }
-            sb.Append("\t}\n");
 
-            sb.Append("}\n\n");
+            b.Blank();
         }
 
-        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_religions.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_religions.txt"), b.ToString());
     }
 
     /// <summary>
@@ -177,11 +191,10 @@ public static class ReligionWriter
             }
         }
 
-        var sb = new StringBuilder();
-        sb.Append("l_english:\n");
-        foreach (var (key, value) in entries) sb.Append($" {key}:0 \"{ParadoxText.Loc(value)}\"\n");
+        var loc = new LocFile();
+        foreach (var (key, value) in entries) loc.Add(key, value);
 
-        ParadoxText.WriteBom(Path.Combine(dir, "gen_faiths_l_english.yml"), sb.ToString());
+        loc.Write(Path.Combine(dir, "gen_faiths_l_english.yml"));
     }
 
     private static string F(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);

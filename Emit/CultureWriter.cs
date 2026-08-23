@@ -44,42 +44,56 @@ public static class CultureWriter
         string dir = Path.Combine(modDir, "common", "culture", "pillars");
         Directory.CreateDirectory(dir);
 
-        var sb = new StringBuilder();
-        sb.Append("# Generated heritages and languages.\n\n");
+        var b = new JominiBuilder();
+        b.Comment("Generated heritages and languages.");
+        b.Blank();
 
         foreach (var heritage in cultures.Heritages)
         {
-            sb.Append($"{heritage.Key} = {{\n");
-            sb.Append("\ttype = heritage\n");
-            sb.Append("\t\taudio_parameter = european\n");
-            sb.Append("\tparameters = {\n");
-            sb.Append("\t}\n");
-            sb.Append("\tis_shown = {\n");
-            sb.Append($"\t\theritage_is_shown_trigger = {{ HERITAGE = {heritage.Key} }}\n");
-            sb.Append("\t}\n");
-            sb.Append("}\n\n");
+            using (b.Block(heritage.Key))
+            {
+                b.Field("type", "heritage");
+
+                // Indented one level too deep until the builder made that unrepresentable. CK3
+                // ignores whitespace, so this was never a functional bug -- only an invisible one.
+                b.Field("audio_parameter", "european");
+
+                using (b.Block("parameters")) { }
+
+                using (b.Block("is_shown"))
+                    b.Inline("heritage_is_shown_trigger", $"HERITAGE = {heritage.Key}");
+            }
+
+            b.Blank();
 
             var language = heritage.Language;
-            sb.Append($"{language.Key} = {{\n");
-            sb.Append("\ttype = language\n");
-            sb.Append("\tis_shown = {\n");
-            sb.Append($"\t\tlanguage_is_shown_trigger = {{ LANGUAGE = {language.Key} }}\n");
-            sb.Append("\t}\n");
-            sb.Append("\tai_will_do = {\n");
-            sb.Append("\t\tvalue = 10\n");
-            sb.Append("\t\tif = {\n");
-            sb.Append($"\t\t\tlimit = {{ has_cultural_pillar = {language.Key} }}\n");
-            sb.Append("\t\t\tmultiply = 10\n");
-            sb.Append("\t\t}\n");
-            sb.Append("\t}\n");
-            if (heritage.LanguageColor is { } color && color != "tungusic")
+
+            using (b.Block(language.Key))
             {
-                sb.Append($"\tcolor = {color}\n");
+                b.Field("type", "language");
+
+                using (b.Block("is_shown"))
+                    b.Inline("language_is_shown_trigger", $"LANGUAGE = {language.Key}");
+
+                using (b.Block("ai_will_do"))
+                {
+                    b.Field("value", "10");
+
+                    using (b.Block("if"))
+                    {
+                        b.Inline("limit", $"has_cultural_pillar = {language.Key}");
+                        b.Field("multiply", "10");
+                    }
+                }
+
+                if (heritage.LanguageColor is { } color && color != "tungusic")
+                    b.Field("color", color);
             }
-            sb.Append("}\n\n");
+
+            b.Blank();
         }
 
-        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_pillars.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_pillars.txt"), b.ToString());
     }
 
     /// <summary>
@@ -91,49 +105,52 @@ public static class CultureWriter
         string dir = Path.Combine(modDir, "common", "culture", "cultures");
         Directory.CreateDirectory(dir);
 
-        var sb = new StringBuilder();
-        sb.Append("# Generated cultures. Vanilla's are left declared but unheld.\n\n");
+        var b = new JominiBuilder();
+        b.Comment("Generated cultures. Vanilla's are left declared but unheld.");
+        b.Blank();
 
         foreach (var culture in cultures.Cultures)
         {
-            var look = culture.Heritage.Look;
-            var ethnicity = ethnicityMap.For(culture);
-
-            sb.Append($"{culture.Key} = {{\n");
-            sb.Append($"\tcolor = {{ {culture.Color.R} {culture.Color.G} {culture.Color.B} }}\n\n");
-            sb.Append($"\tethos = {culture.Ethos}\n");
-            sb.Append($"\theritage = {culture.Heritage.Key}\n");
-            sb.Append($"\tlanguage = {culture.Language.Key}\n");
-            sb.Append($"\tmartial_custom = {culture.MartialCustom}\n");
-            sb.Append($"\thead_determination = {culture.HeadDetermination}\n\n");
-
-            sb.Append("\ttraditions = {\n");
-            foreach (string tradition in culture.Traditions) sb.Append($"\t\t{tradition}\n");
-            sb.Append("\t}\n\n");
-
-            sb.Append($"\tname_list = {culture.NameListKey}\n\n");
-
-            // Borrowed whole off one vanilla culture so the four sets and the ethnicities agree.
-            // Culture visual graphics and holding models
-            sb.Append($"\tcoa_gfx = {culture.CoaGfx}\n");
-            sb.Append($"\tbuilding_gfx = {culture.BuildingGfx}\n");
-            sb.Append($"\tclothing_gfx = {culture.ClothingGfx}\n");
-            sb.Append($"\tunit_gfx = {culture.UnitGfx}\n\n");
-
-            // One generated ethnicity rather than the vanilla culture's whole weighted list. The
-            // borrowed list describes the people it was lifted from; a generated culture has its own
-            // look to declare, and pointing at a single definition is what lets it.
-            sb.Append("\tethnicities = {\n");
-            foreach (var (variantKey, weight) in ethnicityMap.VariantsFor(culture))
+            using (b.Block(culture.Key))
             {
-                sb.Append($"\t\t{weight} = {variantKey}\n");
-            }
-            sb.Append("\t}\n");
+                b.Color("color", culture.Color.R, culture.Color.G, culture.Color.B);
+                b.Blank();
 
-            sb.Append("}\n\n");
+                b.Field("ethos", culture.Ethos);
+                b.Field("heritage", culture.Heritage.Key);
+                b.Field("language", culture.Language.Key);
+                b.Field("martial_custom", culture.MartialCustom);
+                b.Field("head_determination", culture.HeadDetermination);
+                b.Blank();
+
+                using (b.Block("traditions"))
+                    foreach (string tradition in culture.Traditions) b.Token(tradition);
+
+                b.Blank();
+
+                b.Field("name_list", culture.NameListKey);
+                b.Blank();
+
+                // Borrowed whole off one vanilla culture so the four sets and the ethnicities agree.
+                // Culture visual graphics and holding models
+                b.Field("coa_gfx", culture.CoaGfx);
+                b.Field("building_gfx", culture.BuildingGfx);
+                b.Field("clothing_gfx", culture.ClothingGfx);
+                b.Field("unit_gfx", culture.UnitGfx);
+                b.Blank();
+
+                // One generated ethnicity rather than the vanilla culture's whole weighted list. The
+                // borrowed list describes the people it was lifted from; a generated culture has its own
+                // look to declare, and pointing at a single definition is what lets it.
+                using (b.Block("ethnicities"))
+                    foreach (var (variantKey, weight) in ethnicityMap.VariantsFor(culture))
+                        b.Field($"{weight}", variantKey);
+            }
+
+            b.Blank();
         }
 
-        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_cultures.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_cultures.txt"), b.ToString());
     }
 
     /// <summary>
@@ -149,60 +166,70 @@ public static class CultureWriter
         string dir = Path.Combine(modDir, "common", "culture", "name_lists");
         Directory.CreateDirectory(dir);
 
-        var sb = new StringBuilder();
-        sb.Append("# Generated name lists, one per culture.\n\n");
+        var b = new JominiBuilder();
+        b.Comment("Generated name lists, one per culture.");
+        b.Blank();
 
-        foreach (var culture in cultures.Cultures)
+        // Names go out eight to a line: they are bare tokens, and one per line would make a file
+        // thousands of lines long that nobody could scan.
+        void NameBlock(string field, List<string> names)
         {
-            sb.Append($"{culture.NameListKey} = {{\n");
-
-            sb.Append("\tcadet_dynasty_names = {\n");
-            foreach (string name in culture.DynastyNames.Take(12))
-                sb.Append($"\t\t\"dynn_{CleanKey(name)}\"\n"); // NEW: Apply CleanKey
-            sb.Append("\t}\n\n");
-
-            Append("male_names", culture.MaleNames);
-            Append("female_names", culture.FemaleNames);
-
-            sb.Append("\tdynasty_names = {\n");
-            foreach (string name in culture.DynastyNames)
-                sb.Append($"\t\t\"dynn_{CleanKey(name)}\"\n"); // NEW: Apply CleanKey
-            sb.Append("\t}\n\n");
-
-            sb.Append($"\tdynasty_of_location_prefix = \"dynnp_{culture.Key}\"\n\n");
-            sb.Append($"\tpatronym_suffix_male = \"dynnpat_suf_{culture.Key}_male\"\n");
-            sb.Append($"\tpatronym_suffix_female = \"dynnpat_suf_{culture.Key}_female\"\n");
-            if (culture.AlwaysUsePatronym) sb.Append("\talways_use_patronym = yes\n");
-            sb.Append('\n');
-
-            sb.Append("\tpat_grf_name_chance = 40\n");
-            sb.Append("\tmat_grf_name_chance = 10\n");
-            sb.Append("\tfather_name_chance = 5\n\n");
-            sb.Append("\tpat_grm_name_chance = 10\n");
-            sb.Append("\tmat_grm_name_chance = 40\n");
-            sb.Append("\tmother_name_chance = 5\n\n");
-
-            sb.Append("\tmercenary_names = {\n");
-            sb.Append($"\t\t{{ name = \"mercenary_company_{culture.Key}\" }}\n");
-            sb.Append("\t}\n");
-
-            sb.Append("}\n\n");
-            continue;
-
-            void Append(string field, List<string> names)
-            {
-                sb.Append($"\t{field} = {{\n");
+            using (b.Block(field))
                 for (int i = 0; i < names.Count; i += 8)
                 {
                     // Clean the keys and prefix with "cul_" to prevent Murmur3A hash collisions
                     var cleanNames = names.Skip(i).Take(8).Select(n => $"cul_{CleanKey(n)}");
-                    sb.Append("\t\t").Append(string.Join(' ', cleanNames)).Append('\n');
+                    b.Token(string.Join(' ', cleanNames));
                 }
-                sb.Append("\t}\n\n");
-            }
+
+            b.Blank();
         }
 
-        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_name_lists.txt"), sb.ToString());
+        void DynastyBlock(string field, IEnumerable<string> names)
+        {
+            using (b.Block(field))
+                foreach (string name in names) b.Token($"\"dynn_{CleanKey(name)}\"");
+
+            b.Blank();
+        }
+
+        foreach (var culture in cultures.Cultures)
+        {
+            using (b.Block(culture.NameListKey))
+            {
+                DynastyBlock("cadet_dynasty_names", culture.DynastyNames.Take(12));
+
+                NameBlock("male_names", culture.MaleNames);
+                NameBlock("female_names", culture.FemaleNames);
+
+                DynastyBlock("dynasty_names", culture.DynastyNames);
+
+                b.Quoted("dynasty_of_location_prefix", $"dynnp_{culture.Key}");
+                b.Blank();
+
+                b.Quoted("patronym_suffix_male", $"dynnpat_suf_{culture.Key}_male");
+                b.Quoted("patronym_suffix_female", $"dynnpat_suf_{culture.Key}_female");
+                if (culture.AlwaysUsePatronym) b.Field("always_use_patronym", "yes");
+                b.Blank();
+
+                b.Field("pat_grf_name_chance", "40");
+                b.Field("mat_grf_name_chance", "10");
+                b.Field("father_name_chance", "5");
+                b.Blank();
+
+                b.Field("pat_grm_name_chance", "10");
+                b.Field("mat_grm_name_chance", "40");
+                b.Field("mother_name_chance", "5");
+                b.Blank();
+
+                using (b.Block("mercenary_names"))
+                    b.Token($"{{ name = \"mercenary_company_{culture.Key}\" }}");
+            }
+
+            b.Blank();
+        }
+
+        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_name_lists.txt"), b.ToString());
     }
     private static string CleanKey(string input)
     {
@@ -353,8 +380,9 @@ public static class CultureWriter
             }
 
             // 3. Write History Output
-            var sb = new StringBuilder();
-            sb.Append($"# {culture.Name}, of the {culture.Heritage.Name} heritage (Mean Dev: {culture.MeanDevelopment:F1}).\n\n");
+            var b = new JominiBuilder();
+            b.Comment($"{culture.Name}, of the {culture.Heritage.Name} heritage (Mean Dev: {culture.MeanDevelopment:F1}).");
+            b.Blank();
 
             for (int i = 0; i <= currentEraIndex; i++)
             {
@@ -369,25 +397,20 @@ public static class CultureWriter
                     ? cfg.StartDate
                     : $"{EraDate(eraStart, cfg)}.1.1";
 
-                sb.Append($"{blockDate} = {{\n");
-
-                foreach (string inn in eraInns.OrderBy(k => k, StringComparer.Ordinal))
+                using (b.Block(blockDate))
                 {
-                    sb.Append($"\tdiscover_innovation = {inn}\n");
+                    foreach (string inn in eraInns.OrderBy(k => k, StringComparer.Ordinal))
+                        b.Field("discover_innovation", inn);
+
+                    // Promote to next era at the end of the completed era block
+                    if (i < currentEraIndex) b.Field("join_era", eraMilestones[i + 1].EraKey);
                 }
 
-                // Promote to next era at the end of the completed era block
-                if (i < currentEraIndex)
-                {
-                    string nextEra = eraMilestones[i + 1].EraKey;
-                    sb.Append($"\tjoin_era = {nextEra}\n");
-                }
-
-                sb.Append("}\n\n");
+                b.Blank();
                 totalAssigned += eraInns.Count;
             }
 
-            ParadoxText.WriteBom(Path.Combine(dir, $"{culture.Key}.txt"), sb.ToString());
+            ParadoxText.WriteBom(Path.Combine(dir, $"{culture.Key}.txt"), b.ToString());
         }
 
         Console.WriteLine($"  culture history: {(double)totalAssigned / cultures.Cultures.Count:F1} " +
@@ -500,11 +523,10 @@ public static class CultureWriter
             foreach (string name in culture.DynastyNames) entries[$"dynn_{CleanKey(name)}"] = name;
         }
 
-        var sb = new StringBuilder();
-        sb.Append("l_english:\n");
-        foreach (var (key, value) in entries) sb.Append($" {key}:0 \"{value}\"\n");
+        var loc = new LocFile();
+        foreach (var (key, value) in entries) loc.AddBuilt(key, value);
 
-        ParadoxText.WriteBom(Path.Combine(dir, "gen_cultures_l_english.yml"), sb.ToString());
+        loc.Write(Path.Combine(dir, "gen_cultures_l_english.yml"));
     }
 
     /// <summary>
