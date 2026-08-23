@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Ck3MapGen.Core;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
 
@@ -22,18 +23,50 @@ namespace Ck3MapGen.Emit;
 /// </summary>
 public static class LocatorWriter
 {
-    /// <summary>The eight locator files CK3 expects, with the exact header vanilla uses.</summary>
-    private static readonly (string File, string Name, string Layer, bool Clamp, bool Sea)[] Kinds =
+    /// <summary>
+    /// The eight locator files CK3 expects, with the exact header vanilla uses.
+    ///
+    /// <para><b>Yaw</b> and <b>Jitter</b> (degrees) describe the rotation each layer's instances
+    /// get: a base heading plus a uniform ±Jitter. Identity everywhere is wrong — it points every
+    /// holding and every wonder due north, and a map of identical compass-aligned castles reads as
+    /// stamped rather than built. Vanilla does not do that, and it does not do one thing either:
+    /// measured over its own 11k-instance files (circular mean, and the half-width of the uniform
+    /// arc with the same resultant length R), each layer has its own convention.</para>
+    ///
+    /// <code>
+    ///   buildings          R=0.011  uniform over the full circle
+    ///   special_building   R=0.279  mean  85 deg, arc ±137
+    ///   combat             R=0.354  mean 226 deg, arc ±127
+    ///   siege              R=0.231  mean 186 deg, arc ±144
+    ///   unit_stack         R=1.000  identity, every instance
+    ///   ..._player_owned   R=0.678  mean 339 deg, arc ±84
+    ///   ..._other_owner    R=0.887  mean  75 deg, arc ±48
+    ///   activities         R=0.530  mean  11 deg, arc ±105
+    /// </code>
+    ///
+    /// <para>So holdings are placed at any heading at all, while the unit and activity markers sit
+    /// near a per-layer default and only wander around it — those are army and marker models that
+    /// are meant to read the same way in every province. <c>unit_stack</c> keeps its identity
+    /// rotation because vanilla's file is uniformly identity: the two owner-specific stack layers
+    /// carry the authored headings and the plain one was never turned.</para>
+    ///
+    /// <para>Nothing here is derived from the province: vanilla's building yaw does not correlate
+    /// with its special-building yaw (median 90° apart), with the siege or combat yaw, or with the
+    /// direction between the two points. There is no geometry to recover, only a distribution to
+    /// match, so the angle is drawn from a per-layer <see cref="Rng"/>.</para>
+    /// </summary>
+    private static readonly (string File, string Name, string Layer, bool Clamp, bool Sea,
+        double Yaw, double Jitter)[] Kinds =
     [
-        // file                            name                       layer              clamp  sea
-        ("building_locators.txt",          "buildings",               "building_layer",   true,  false),
-        ("special_building_locators.txt",  "special_building",        "building_layer",   true,  false),
-        ("combat_locators.txt",            "combat",                  "unit_layer",       true,  true),
-        ("siege_locators.txt",             "siege",                   "unit_layer",       false, false),
-        ("stack_locators.txt",             "unit_stack",              "unit_layer",       true,  false),
-        ("player_stack_locators.txt",      "unit_stack_player_owned", "unit_layer",       true,  true),
-        ("other_stack_locators.txt",       "unit_stack_other_owner",  "unit_layer",       true,  true),
-        ("activities.txt",                 "activities",              "activities_layer", false, false),
+        // file                            name                       layer              clamp  sea    yaw  jitter
+        ("building_locators.txt",          "buildings",               "building_layer",   true,  false,   0,  180),
+        ("special_building_locators.txt",  "special_building",        "building_layer",   true,  false,  85,  137),
+        ("combat_locators.txt",            "combat",                  "unit_layer",       true,  true,  226,  127),
+        ("siege_locators.txt",             "siege",                   "unit_layer",       false, false, 186,  144),
+        ("stack_locators.txt",             "unit_stack",              "unit_layer",       true,  false,   0,    0),
+        ("player_stack_locators.txt",      "unit_stack_player_owned", "unit_layer",       true,  true,  339,   84),
+        ("other_stack_locators.txt",       "unit_stack_other_owner",  "unit_layer",       true,  true,   75,   48),
+        ("activities.txt",                 "activities",              "activities_layer", false, false,  11,  105),
     ];
 
     /// <summary>
@@ -65,7 +98,7 @@ public static class LocatorWriter
             // The special building is the one thing that shares a province with the holding rather
             // than replacing it, so it is the one thing that needs its own point to stand on.
             var points = kind.Name == "special_building" ? anchors.Special : anchors.Holding;
-            WriteLocators(dir, kind, provinces, byId, points);
+            WriteLocators(dir, kind, provinces, byId, points, cfg.Seed);
         }
 
         Console.WriteLine($"  locators: {Kinds.Length} files, {landCount} land " +
@@ -73,9 +106,14 @@ public static class LocatorWriter
     }
 
     private static void WriteLocators(string dir,
-        (string File, string Name, string Layer, bool Clamp, bool Sea) kind,
-        ProvinceMap provinces, int[] byId, (double X, double Y)[] anchors)
+        (string File, string Name, string Layer, bool Clamp, bool Sea, double Yaw, double Jitter) kind,
+        ProvinceMap provinces, int[] byId, (double X, double Y)[] anchors, int seed)
     {
+        // Seeded off the layer name rather than shared across the eight files, so which provinces
+        // a file skips cannot shift the angles in the next one, and the same world seed always
+        // turns the same castle the same way.
+        var rng = new Rng(Rng.StableHash(kind.Name) ^ (ulong)(uint)seed);
+
         var sb = new StringBuilder();
         sb.Append("game_object_locator={\n");
         sb.Append($"\tname=\"{kind.Name}\"\n");
@@ -108,11 +146,19 @@ public static class LocatorWriter
             // every scatter pass shares with this one.
             var (x, z) = WorldSpace.FromImage(anchors[label].X, anchors[label].Y, provinces.Height);
 
+            // Rotation about the vertical axis only, so the quaternion has no X or Z part — the
+            // same (0, sin t/2, 0, cos t/2) form TreeWriter and BridgeWriter write, under which
+            // the mesh's local +Z lands on world (sin t, cos t).
+            double angle = (kind.Yaw + rng.Double(-kind.Jitter, kind.Jitter)) * Math.PI / 180.0;
+            double qy = Math.Sin(angle / 2.0);
+            double qw = Math.Cos(angle / 2.0);
+
             sb.Append("\t\t{\n");
             sb.Append($"\t\t\tid={id}\n");
             sb.Append(string.Create(CultureInfo.InvariantCulture,
                 $"\t\t\tposition={{ {x:F6} 0.000000 {z:F6} }}\n"));
-            sb.Append("\t\t\trotation={ -0.000000 -0.000000 -0.000000 1.000000 }\n");
+            sb.Append(string.Create(CultureInfo.InvariantCulture,
+                $"\t\t\trotation={{ 0.000000 {qy:F6} 0.000000 {qw:F6} }}\n"));
             sb.Append("\t\t\tscale={ 1.000000 1.000000 1.000000 }\n");
             sb.Append("\t\t}\n");
         }

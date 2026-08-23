@@ -154,9 +154,9 @@ public sealed class ForgeHeightmapProvider(HeightPipeline pipeline, string name,
 
     public override HeightmapImage Produce(MapConfig cfg, CancellationToken ct, IProgress<string>? status)
     {
-        // The whole elevation scale downstream assumes the water plane sits at 4883/65535. A
-        // pipeline with its sea level moved would ship a coastline the game disagrees with, and
-        // nothing after this point could tell.
+        // The whole elevation scale downstream assumes land begins at 4883/65535 (the sea itself is
+        // drawn lower, at Emit.MapDataWriter.WaterPlane16). A pipeline with its sea level moved would
+        // ship a coastline the game disagrees with, and nothing after this point could tell.
         if (MathF.Abs(Pipeline.SeaLevel - Ck3.SeaLevelNormalised) > 1e-5f)
             throw new InvalidOperationException(
                 $"The Forge pipeline's sea level is {Pipeline.SeaLevel:F4}; it must be " +

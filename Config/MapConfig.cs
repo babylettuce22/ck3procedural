@@ -1178,8 +1178,9 @@ public sealed class MapConfig : CustomTypeDescriptor
     ///
     /// CK3 takes the world's width from the province map — a 4608-wide map is 4607 world units —
     /// but its height is `WORLD_EXTENTS_Y = 50` on every map, and that has to stay constant
-    /// (`WATERLEVEL = 3` is pinned to it at 3/50 = 0.06, which is what puts the waterline on
-    /// 19/255; see <see cref="Emit.CompatibilityWriter"/>). Because a smaller map resamples the
+    /// (`WATERLEVEL = 3` is pinned to it at 3/50 = 0.06, which is where the sea is *drawn* —
+    /// <see cref="Emit.MapDataWriter.WaterPlane16"/>, and not the 19/255 where land begins in the
+    /// file; see <see cref="Emit.CompatibilityWriter"/>). Because a smaller map resamples the
     /// *same world* into fewer pixels — the model the whole config is built on, see
     /// <see cref="Scaled"/> — leaving the height range alone steepens every slope by exactly
     /// 1/<see cref="MapScale"/>. A half-width map has twice vanilla's gradient.

@@ -15,6 +15,19 @@ public static class MapDataWriter
     public const int Step255 = 257;
     public const int WaterLevel16 = WaterLevel255 * Step255;
 
+    /// <summary>
+    /// Where CK3 actually draws the water surface: <c>_WaterHeight</c> = 3.0 world units, read out
+    /// of the water vertex shader's constant buffer under RenderDoc on vanilla 1.19 (2026-08-23)
+    /// and used verbatim as that shader's Y, against <c>WORLD_EXTENTS_Y = 50</c>. So 3/50 of full
+    /// scale, and equal to <c>NJominiMap.WATERLEVEL</c> — the define appears to feed it directly.
+    ///
+    /// This sits <b>below</b> <see cref="WaterLevel16"/>, and the two are not interchangeable:
+    /// 4883 is where land begins in the file, 3932 is where the sea is drawn, and the 951 units
+    /// between them are the beach. Vanilla's own comment on the define ("0.06 in 0-1, 19 in 0-255")
+    /// contradicts itself; the 0.06 half is the true one.
+    /// </summary>
+    public const int WaterPlane16 = 3932;
+
     private static readonly (byte R, byte G, byte B)[] RiverPaletteHead =
     [
         (0, 255, 0),     // 0  source
@@ -464,10 +477,11 @@ public static class MapDataWriter
     /// Simulation elevation back onto the 16-bit heightmap scale — the inverse of
     /// <see cref="MapGen.HeightmapSource.ToSimulationScale"/>.
     ///
-    /// Two straight lines meeting at the water plane rather than one across the whole range,
-    /// because the water plane is a fixed value in the file and not a fraction of it: 4883 of
-    /// 65535 is where CK3 puts sea level, and stretching one line across both halves would move
-    /// the coastline whenever the deepest trench or the highest peak changed.
+    /// Two straight lines meeting at the land threshold rather than one across the whole range,
+    /// because that threshold is a fixed value in the file and not a fraction of it: 4883 of 65535
+    /// is where land begins, and stretching one line across both halves would move the coastline
+    /// whenever the deepest trench or the highest peak changed. (It is not where the sea is drawn
+    /// — that is <see cref="WaterPlane16"/>, lower down — but it is what the coastline is cut on.)
     ///
     /// This is the only conversion in the tool, and it is private on purpose. There used to be a
     /// public second copy on HeightmapSource, and the two had already drifted — it rounded where

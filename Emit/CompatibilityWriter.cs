@@ -307,10 +307,17 @@ public static partial class CompatibilityWriter
         // all. That is worth knowing if the pair here is ever revisited: the argument for keeping
         // them constant only holds while something else is doing the scaling.
         //
-        // The ratio is load-bearing either way: vanilla's own comment pins it, `WATERLEVEL = 3 ###
-        // 0.06 in 0-1, 19 in 0-255`, and 3/50 is exactly 0.06. Move one without the other and the
-        // waterline stops landing on 19/255, which MapDataWriter.WaterLevel16 and both hypsometric
-        // curves are built around.
+        // The ratio is load-bearing either way, though not for the reason this comment gave until
+        // 2026-08-23. Vanilla's own note on the define reads `WATERLEVEL = 3 ### 0.06 in 0-1, 19 in
+        // 0-255`, and its two halves contradict each other: 3/50 is 0.06, which is 15.3/255, not 19.
+        // RenderDoc settled which half is true — the water vertex shader's `_WaterHeight` reads 3.0,
+        // so the sea is drawn at MapDataWriter.WaterPlane16 (3932), *below* MapDataWriter.WaterLevel16
+        // (4883). 19/255 is a separate convention, for where land begins in the file, and the gap
+        // between the two is what vanilla renders as beach.
+        //
+        // So what this pair fixes is where the sea is drawn against every height in the map. Move one
+        // without the other and the waterline slides against terrain both hypsometric curves have
+        // already placed.
         const string extentY = "50";
         const string waterLevel = "3";
 
