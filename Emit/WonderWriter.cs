@@ -1,4 +1,3 @@
-﻿using System.Text;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
 
@@ -23,8 +22,20 @@ public static class WonderWriter
         string dir = Path.Combine(modDir, "common", "buildings");
         Directory.CreateDirectory(dir);
 
-        var sb = new StringBuilder();
-        sb.Append("# Generated Wonders / Special Buildings for World Centers\n\n");
+        var b = new JominiBuilder();
+        b.Comment("Generated Wonders / Special Buildings for World Centers");
+        b.Blank();
+
+        // A modifier block, written only when the wonder actually carries that kind of modifier.
+        void ModifierBlock(string name, Dictionary<string, string> entries)
+        {
+            if (entries.Count == 0) return;
+
+            using (b.Block(name))
+                foreach (var (k, v) in entries) b.Field(k, v);
+
+            b.Blank();
+        }
 
         foreach (var center in worldCenters.Centers)
         {
@@ -37,66 +48,48 @@ public static class WonderWriter
             if (!cleanIcon.EndsWith(".dds", StringComparison.OrdinalIgnoreCase))
                 cleanIcon += ".dds";
 
-            sb.Append($"{wonder.Key} = {{\n");
-
-            // The map model. CK3 draws this at the province's special_building locator, which is a
-            // separate anchor from the holding's own (see LocatorWriter). No filters on the block:
-            // graphical_regions/cultures/faiths only narrow *when* an asset is eligible, and a
-            // generated world has no guarantee that any particular one of them matches, so an
-            // unfiltered block is the one that always resolves. Meshes are chosen in WonderAssets
-            // and are all reachable without DLC.
-            sb.Append("\tasset = {\n");
-            sb.Append("\t\ttype = pdxmesh\n");
-            sb.Append($"\t\tname = \"{wonder.Mesh}\"\n");
-            sb.Append("\t}\n\n");
-
-            sb.Append($"\ttype_icon = \"{cleanIcon}\"\n");
-            sb.Append("\tconstruction_time = very_slow_construction_time\n");
-            sb.Append("\ttype = special\n");
-            sb.Append("\tcost_gold = 1000\n\n");
-
-            // Correct Scope Block:
-            sb.Append("\tcan_construct_potential = {\n");
-            sb.Append("\t\tbarony = {\n");
-            sb.Append($"\t\t\tthis = title:{wonder.Barony.Key}\n");
-            sb.Append("\t\t}\n");
-            sb.Append("\t}\n\n");
-
-            sb.Append("\tis_enabled = {\n");
-            sb.Append("\t\talways = yes\n");
-            sb.Append("\t}\n\n");
-
-            if (wonder.CharacterModifiers.Count > 0)
+            using (b.Block(wonder.Key))
             {
-                sb.Append("\tcharacter_modifier = {\n");
-                foreach (var (k, v) in wonder.CharacterModifiers)
-                    sb.Append($"\t\t{k} = {v}\n");
-                sb.Append("\t}\n\n");
+                // The map model. CK3 draws this at the province's special_building locator, which is a
+                // separate anchor from the holding's own (see LocatorWriter). No filters on the block:
+                // graphical_regions/cultures/faiths only narrow *when* an asset is eligible, and a
+                // generated world has no guarantee that any particular one of them matches, so an
+                // unfiltered block is the one that always resolves. Meshes are chosen in WonderAssets
+                // and are all reachable without DLC.
+                using (b.Block("asset"))
+                {
+                    b.Field("type", "pdxmesh");
+                    b.Quoted("name", wonder.Mesh);
+                }
+
+                b.Blank();
+
+                b.Quoted("type_icon", cleanIcon);
+                b.Field("construction_time", "very_slow_construction_time");
+                b.Field("type", "special");
+                b.Field("cost_gold", "1000");
+                b.Blank();
+
+                using (b.Block("can_construct_potential"))
+                using (b.Block("barony"))
+                    b.Field("this", $"title:{wonder.Barony.Key}");
+
+                b.Blank();
+
+                using (b.Block("is_enabled")) b.Field("always", "yes");
+                b.Blank();
+
+                ModifierBlock("character_modifier", wonder.CharacterModifiers);
+                ModifierBlock("county_modifier", wonder.CountyModifiers);
+                ModifierBlock("province_modifier", wonder.ProvinceModifiers);
+
+                using (b.Block("ai_value")) b.Field("base", "150");
             }
 
-            if (wonder.CountyModifiers.Count > 0)
-            {
-                sb.Append("\tcounty_modifier = {\n");
-                foreach (var (k, v) in wonder.CountyModifiers)
-                    sb.Append($"\t\t{k} = {v}\n");
-                sb.Append("\t}\n\n");
-            }
-
-            if (wonder.ProvinceModifiers.Count > 0)
-            {
-                sb.Append("\tprovince_modifier = {\n");
-                foreach (var (k, v) in wonder.ProvinceModifiers)
-                    sb.Append($"\t\t{k} = {v}\n");
-                sb.Append("\t}\n\n");
-            }
-
-            sb.Append("\tai_value = {\n");
-            sb.Append("\t\tbase = 150\n");
-            sb.Append("\t}\n");
-            sb.Append("}\n\n");
+            b.Blank();
         }
 
-        ParadoxText.WriteBom(Path.Combine(dir, "01_generated_wonders.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "01_generated_wonders.txt"), b.ToString());
     }
 
     private static void WriteUniversityTriggers(string modDir, WorldCenterMap worldCenters)
@@ -110,44 +103,37 @@ public static class WonderWriter
         string dir = Path.Combine(modDir, "common", "scripted_triggers");
         Directory.CreateDirectory(dir);
 
-        var sb = new StringBuilder();
-        sb.Append("# Overrides has_university_building_trigger to include generated Great Libraries\n\n");
-        sb.Append("has_university_building_trigger = {\n");
-        sb.Append("\tOR = {\n");
-        sb.Append("\t\thas_building_or_higher = generic_university\n");
+        var b = new JominiBuilder();
+        b.Comment("Overrides has_university_building_trigger to include generated Great Libraries");
+        b.Blank();
 
-        foreach (var lib in libraries)
+        using (b.Block("has_university_building_trigger"))
+        using (b.Block("OR"))
         {
-            sb.Append($"\t\thas_building = {lib.Wonder.Key}\n");
+            b.Field("has_building_or_higher", "generic_university");
+            foreach (var lib in libraries) b.Field("has_building", lib.Wonder.Key);
         }
 
-        sb.Append("\t}\n");
-        sb.Append("}\n");
-
-        ParadoxText.WriteBom(Path.Combine(dir, "zz_generated_university_triggers.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "zz_generated_university_triggers.txt"), b.ToString());
     }
 
     private static void WriteLocalisation(string modDir, WorldCenterMap worldCenters)
     {
-        string dir = Path.Combine(modDir, "localization", "english");
-        Directory.CreateDirectory(dir);
-
-        var sb = new StringBuilder();
-        sb.Append("l_english:\n");
+        var loc = new LocFile();
 
         foreach (var center in worldCenters.Centers)
         {
             var wonder = center.Wonder;
 
             // Main building name & description
-            sb.Append($" building_{wonder.Key}:0 \"{wonder.Name}\"\n");
-            sb.Append($" building_{wonder.Key}_desc:0 \"{wonder.Description}\"\n");
+            loc.AddBuilt($"building_{wonder.Key}", wonder.Name);
+            loc.AddBuilt($"building_{wonder.Key}_desc", wonder.Description);
 
             // Building type/category subtitle & description
-            sb.Append($" building_type_{wonder.Key}:0 \"{wonder.Name}\"\n");
-            sb.Append($" building_type_{wonder.Key}_desc:0 \"{wonder.Description}\"\n");
+            loc.AddBuilt($"building_type_{wonder.Key}", wonder.Name);
+            loc.AddBuilt($"building_type_{wonder.Key}_desc", wonder.Description);
         }
 
-        ParadoxText.WriteBom(Path.Combine(dir, "gen_wonders_l_english.yml"), sb.ToString());
+        loc.Write(Path.Combine(modDir, "localization", "english", "gen_wonders_l_english.yml"));
     }
 }
