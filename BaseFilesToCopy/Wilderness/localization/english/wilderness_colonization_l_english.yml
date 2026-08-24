@@ -12,6 +12,11 @@
  # --- Trait and government -----------------------------------------------------------------
  trait_wilderness:0 "Wilderness"
  blank_title_male:0 ""
+ # A flavorization entry localises as its own key — these three are the colony government's
+ # county-tier styles, see common/flavorization/00_wilderness_flavorization.txt.
+ colonist_county_male:0 "Colonist"
+ colonist_county_female:0 "Colonist"
+ colonist_county_title:0 "Colony"
  # The generated dummy that holds every unsettled county writes `name = "wilderness_holder_name"`,
  # so this is what the county view shows where a lord's name would go. See Emit/HistoryWriter.cs.
  wilderness_holder_name:0 "The Wilds"
@@ -358,6 +363,18 @@ wilderness_colonization.0029.t:0 "The Starving Winter"
  colonist_sent_to_the_frontier_opinion:0 "Sent Me to the Frontier"
  lost_a_colony_opinion:0 "Let a Frontier Walk Away"
 
+ # --- Founder honors (promote_colony_effect, event 0022) -----------------------------------
+ trait_colony_founder:0 "Founder"
+ trait_colony_founder_desc:0 "This character raised a settled county out of wild ground — claimed it, cleared it, and held it until the day the charter was read."
+ nick_gen_founder:0 "the Founder"
+
+ wilderness_colonization.0022.t:0 "The Charter Read Aloud"
+ wilderness_colonization.0022.desc.founder:0 "The whole of [finished_colony.GetName] has turned out, because the whole of [finished_colony.GetName] fits in the square it built. The charter is read from the granary steps — the bounds, the rights, the county's name entered in the rolls like any other — and the words are ordinary, which is precisely the wonder of it. Ordinary words, for a place that was howling treeline when the first stake went in.\n\nThe old hands stand at the front. They were there for the first winter, and they are looking at [ROOT.Char.GetFirstName], because so were we."
+ wilderness_colonization.0022.desc.latecomer:0 "The charter is read from the granary steps and [finished_colony.GetName] enters the rolls a county like any other. It is a fine day, honestly earned — the last stretch of the work was ours, and it was real work.\n\nBut the first stake was not ours, and the crowd's older faces know under whose it went in. We finished this place. Somebody else founded it, and no reading of any charter changes which of those the fireside stories will keep."
+ wilderness_colonization.0022.a:0 "Let them call me Founder."
+ wilderness_colonization.0022.b:0 "No titles. The place is the monument."
+ wilderness_colonization.0022.c:0 "Finished is finished. Enter it in the rolls."
+
  TRUCE_COLONY_INDEPENDENCE:0 "settlement of the frontier"
 
  # --- Going there, and coming back -----------------------------------------------------------
@@ -673,7 +690,14 @@ OVERSEE_COLONY_ACTIVITY_STATUS:0 "You are dwelling among the settlers, directing
  colony_law_garrison_effects: "Armed patrols escort work crews and sentinels man the ditch day and night:\n$EFFECT_LIST_BULLET$Control Growth: #positive_value +0.35/month#!\n$EFFECT_LIST_BULLET$Garrison Size: #positive_value +40%#!\n$EFFECT_LIST_BULLET$Defender Advantage: #positive_value +6#!\n$EFFECT_LIST_BULLET$Development Growth: #negative_value -15%#!\n$EFFECT_LIST_BULLET$Building Costs: #negative_value +15%#!"
 
  colony_law_corvee: "Corvée Clearance Gangs"
- colony_law_corvee_effects: "Settlers and laborers are worked relentlessly to clear the wilderness at maximum speed:\n$EFFECT_LIST_BULLET$Construction Speed: #positive_value +30%#!\n$EFFECT_LIST_BULLET$Building & Clearance Cost: #positive_value -20%#!\n$EFFECT_LIST_BULLET$Popular Opinion: #negative_value -25#!\n$EFFECT_LIST_BULLET$Health Penalty: #negative_value -0.15#!\n$EFFECT_LIST_BULLET$Stress Gain: #negative_value +20%#!"
+ # The opinion line said -25 and the law applies -15. Corrected to the law rather than the other way
+ # round: -15 is what has been in play, and moving the script instead would retune the choice against
+ # colony_law_extraction's -10 on the strength of a loc string. If -25 was the intent,
+ # 00_colonial_laws.txt is the half to change — and then this line goes back.
+ #
+ # Every other number across all five laws' _effects keys was checked against the script and matches.
+ # The "+30%" here now does too: build_speed is construction TIME, so the law's -0.30 IS 30% faster.
+ colony_law_corvee_effects: "Settlers and laborers are worked relentlessly to clear the wilderness at maximum speed:\n$EFFECT_LIST_BULLET$Construction Speed: #positive_value +30%#!\n$EFFECT_LIST_BULLET$Building & Clearance Cost: #positive_value -20%#!\n$EFFECT_LIST_BULLET$Popular Opinion: #negative_value -15#!\n$EFFECT_LIST_BULLET$Health Penalty: #negative_value -0.15#!\n$EFFECT_LIST_BULLET$Stress Gain: #negative_value +20%#!"
 
  colony_law_homestead: "Pioneer Homesteading"
  colony_law_homestead_effects: "Settlers are granted private plots, warm cabins, and grain reserves:\n$EFFECT_LIST_BULLET$Development Growth: #positive_value +30%#!\n$EFFECT_LIST_BULLET$Popular Opinion: #positive_value +20#!\n$EFFECT_LIST_BULLET$Stress Loss: #positive_value +15%#!\n$EFFECT_LIST_BULLET$Holding Taxes: #negative_value -25%#!\n$EFFECT_LIST_BULLET$Garrison Size: #negative_value -20%#!"

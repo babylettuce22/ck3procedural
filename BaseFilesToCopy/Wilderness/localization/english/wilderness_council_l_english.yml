@@ -71,7 +71,7 @@
 
  councillor_colony_preacher:0 "Camp Preacher"
  councillor_colony_preacher_possessive:0 "Camp Preacher's"
- councillor_colony_preacher_desc:0 "No temple, no tithe and no bishop above him. He buries the ones the first winter takes and talks the rest into a second one, and in a place this small that is not a small thing."
+ councillor_colony_preacher_desc:0 "No temple, no tithe and no bishop above him. He buries the ones the first winter takes and talks the rest into a second one, and in a place this small that is not a small thing.\n\nThe colony's #P learning#! seat, and the answer to what the frontier charges you personally: living out here costs [health|E] and gains [stress|E], and tending the camp gives both back, with [piety|E] on top.\n\nA preacher of middling learning cancels the [health|E] penalty outright. A better one leaves you ahead of it."
  councillor_colony_preacher_modifier:0 "Camp Preacher"
 
 

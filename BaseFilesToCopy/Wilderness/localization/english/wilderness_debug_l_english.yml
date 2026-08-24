@@ -1,0 +1,16 @@
+﻿l_english:
+
+ # Strings for the debug tooling in wilderness_colonization.9999, reachable with
+ # `event wilderness_colonization.9999` from the console.
+ #
+ # They live in their own file rather than in wilderness_colonization_l_english.yml so that deleting
+ # the debug event some day is a two-file change with nothing left behind, and so a merge in the
+ # colonisation loc — which is large and edited often — never has to think about them.
+ #
+ # The three below are one decision tree, and their wording is deliberately literal about which
+ # branch was taken; a debug readout that reads like flavour is a debug readout you have to go and
+ # check the script to interpret.
+
+ colony_debug_domicile_none:0 "DEBUG — No domicile at all. The government's #V domicile_type#! did not produce one, so the camp needs a type of its own."
+ colony_debug_domicile_unplaced:0 "DEBUG — A domicile exists but stands nowhere. It is the placement that is failing, not the creation."
+ colony_debug_domicile_placed:0 "DEBUG — A domicile exists and is placed. It is the HUD that is not offering it, so the fix is a button of our own."

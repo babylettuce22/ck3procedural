@@ -9,3 +9,53 @@ blank_title_male = {
         wilderness_government  # Your custom government key
     }
 }
+
+# ---- A colonist is a Colonist, not a Count ----
+#
+# Modelled on vanilla's feudal_palatinate_county_* (common/flavorization/02_vassal_contracts.txt):
+# character + title entries at county tier, matched on the holder's own government. The
+# `top_liege = no` rule matters here in a way it did not for blank_title_male above — a wilderness
+# dummy is its own top liege, but a colonist is somebody's vassal, and left at the default the
+# government test would run against the liege's title and never match colony_government.
+#
+# Priority 1000 clears every vanilla culture rule (28–47) and the generated per-culture entries
+# (700/900), which only cover duchy and above anyway.
+
+colonist_county_male = {
+    type = character
+    tier = county
+    gender = male
+    priority = 1000
+
+    governments = { colony_government }
+
+    flavourization_rules = {
+        top_liege = no
+    }
+}
+
+colonist_county_female = {
+    type = character
+    tier = county
+    gender = female
+    priority = 1000
+
+    governments = { colony_government }
+
+    flavourization_rules = {
+        top_liege = no
+    }
+}
+
+# The realm word to match: "Colony of X" rather than "County of X".
+colonist_county_title = {
+    type = title
+    tier = county
+    priority = 1000
+
+    governments = { colony_government }
+
+    flavourization_rules = {
+        top_liege = no
+    }
+}

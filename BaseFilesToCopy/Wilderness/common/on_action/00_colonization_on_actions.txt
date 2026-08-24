@@ -70,6 +70,7 @@ yearly_playable_pulse = {
 		wilderness_yearly_ai_promotion
 		wilderness_yearly_presence_refresh
 		wilderness_yearly_colony_events
+		wilderness_yearly_colonist_flavor
 		wilderness_yearly_colonist_petition_check
 		wilderness_yearly_colonist_development_aid_check
 		wilderness_yearly_control_check
@@ -89,6 +90,30 @@ wilderness_yearly_colony_events = {
 		8 = wilderness_colonization.0040   # Rich seam
 		8 = wilderness_colonization.0041   # Palisade ague
 		64 = 0
+	}
+}
+
+# The colonist's own year — flavor for the man who LIVES on the frontier, as opposed to the
+# overseer events above, which are for a landed lord visiting one. Same cooldown shape as the
+# overseer pulse: each event sets colonist_event_cooldown for two years, so at most one of these
+# lands per colonist per two years however the weights fall.
+#
+# 0003 carries an extra gate in its own trigger (an obstacle must still stand), so a pick that
+# lands on it in a cleared colony simply fizzles — that is how random_events behaves and it is
+# fine: the 60 empty weight means most years are quiet anyway.
+wilderness_yearly_colonist_flavor = {
+	trigger = {
+		is_colonist_trigger = yes
+		NOT = { has_variable = colonist_event_cooldown }
+	}
+
+	random_events = {
+		10 = wilderness_colonist.0001  # The first harvest
+		10 = wilderness_colonist.0002  # Runaways at the gate
+		10 = wilderness_colonist.0003  # The old ground fights back
+		8 = wilderness_colonist.0004   # The liege's man
+		8 = wilderness_colonist.0005   # Founding day
+		60 = 0
 	}
 }
 
@@ -282,6 +307,35 @@ wilderness_on_title_gain = {
 			}
 		}
 
+		# --- The founder clock -------------------------------------------------------------------
+		#
+		# A colony county arriving in ANYONE's hands — grant, inheritance, war, revocation — starts
+		# a ten-year clock on the title. promote_colony_effect reads it: founder honors go only to a
+		# promoter with no clock running, which means either the original claimant (a fresh claim
+		# never trips this — on_title_gain fires while the capital is still wilderness_holding, so
+		# is_colony_county_trigger is no) or somebody who has since held the place for ten years.
+		#
+		# The clock is the anti-snipe rule: without it, taking a finished colony off its builder the
+		# week before promotion — by grant, by war, or by revoking it — collects the founding of a
+		# place somebody else founded. Ten years is not "most of the colony's life" on purpose; a
+		# grantee who runs the palisade for a decade has earned the word.
+		#
+		# Deliberately NOT limited to the grant/inheritance transfer types below: conquest and
+		# revocation are exactly the acquisitions the clock exists to catch.
+		if = {
+			limit = {
+				NOT = { has_trait = wilderness }
+				scope:title ?= { tier = tier_county }
+				scope:title ?= { is_colony_county_trigger = yes }
+			}
+			scope:title = {
+				set_variable = {
+					name = colony_recent_holder
+					years = 10
+				}
+			}
+		}
+
 		# --- A colony changing hands -----------------------------------------------------------
 		#
 		# This is where granting a colony away becomes a mechanic, and it is deliberately hung off
@@ -424,7 +478,9 @@ wilderness_yearly_colonist_petition_check = {
 		is_ai = yes
 		is_colonist_trigger = yes
 		gold < promote_colony_cost
-		exists = liege
+		# Not `exists = liege`, which is true even for an independent colonist (the liege scope is
+		# self), and would have him petitioning himself for promotion money every other year.
+		is_independent_ruler = no
 		any_held_title = {
 			tier = tier_county
 			can_promote_colony_trigger = yes
@@ -480,7 +536,8 @@ wilderness_yearly_colonist_development_aid_check = {
 		is_ai = yes
 		is_colonist_trigger = yes
 		gold < 100
-		exists = liege
+		# Same self-liege trap as the petition check above.
+		is_independent_ruler = no
 		NOT = { has_variable = development_aid_cooldown }
 
 		any_held_title = {

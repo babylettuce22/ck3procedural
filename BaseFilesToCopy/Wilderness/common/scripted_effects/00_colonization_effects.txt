@@ -443,15 +443,18 @@ promote_colony_effect = {
 		}
 	}
 
-	# Transition government for colonist vassals
+	# Transition government for colonists — vassal AND independent alike. This used to also ask
+	# `exists = liege`, which looked like a vassals-only gate and was not: the liege scope falls
+	# back to self for independent rulers, so the test always passed. That accident was load-
+	# bearing — an independent colonist (the pioneer path's normal product) must still convert out
+	# of colony_government here or he is a colonist forever — so the condition is simply gone
+	# rather than tightened. colony_completion_effect itself now splits on is_independent_ruler
+	# and keeps the secession theatre for actual vassals.
 	if = {
 		limit = {
 			exists = scope:colony_promoter
 			scope:finished_colony = { is_colony_county_trigger = no }
-			scope:colony_promoter = {
-				is_colonist_trigger = yes
-				exists = liege
-			}
+			scope:colony_promoter = { is_colonist_trigger = yes }
 		}
 		scope:colony_promoter = {
 			colony_completion_effect = yes
@@ -464,8 +467,14 @@ promote_colony_effect = {
 			scope:finished_colony = { has_variable = settlers_were_promised }
 		}
 
+		# is_independent_ruler, not `exists = liege` — the liege scope is self for an independent
+		# ruler, so the exists form sent every personal-domain promotion down the "liege" branch.
+		# Same recipient either way in that case, but only by luck; say what is meant.
 		if = {
-			limit = { exists = scope:colony_promoter.liege }
+			limit = {
+				exists = scope:colony_promoter
+				scope:colony_promoter = { is_independent_ruler = no }
+			}
 			scope:colony_promoter.liege = {
 				trigger_event = wilderness_colonization.0025
 			}
@@ -478,6 +487,36 @@ promote_colony_effect = {
 			}
 		}
 	}
+
+	# --- Founder honors ------------------------------------------------------------------------
+	#
+	# The trait goes to the DIRECT holder at the moment of promotion and to nobody else —
+	# scope:colony_promoter is saved from the county's own holder at the top of this effect, so
+	# there is no way to collect it from a liege's chair.
+	#
+	# The tenure gate is the colony_recent_holder clock, set by wilderness_on_title_gain whenever a
+	# colony county changes hands (see the note there for why any transfer type counts). No clock
+	# means the promoter either claimed the wilderness themselves or has held the colony for ten
+	# years since acquiring it; a clock still running means they took a place somebody else raised,
+	# and finishing another man's work is not founding.
+	#
+	# Applied here rather than in the ceremony event, for the reason 0020/0021 give at their top:
+	# the effect is the funnel every promotion goes through — player buttons and AI pulse alike —
+	# so an AI colonist earns the trait silently, and the trait shows in the promote interaction's
+	# own tooltip where a player can see what they are about to earn.
+	if = {
+		limit = {
+			exists = scope:colony_promoter
+			NOT = { scope:finished_colony = { has_variable = colony_recent_holder } }
+		}
+		scope:colony_promoter = { add_trait = colony_founder }
+	}
+
+	# The ceremony fires for founder and latecomer both — a promotion is news either way, and the
+	# desc split inside 0022 is what tells them apart. Player-only, gated in the event itself.
+	scope:colony_promoter ?= {
+		trigger_event = wilderness_colonization.0022
+	}
 }
 
 
@@ -487,7 +526,6 @@ promote_colony_effect = {
 
 colony_completion_effect = {
 	save_scope_as = colonist
-	liege = { save_scope_as = colony_liege }
 
 	if = {
 		limit = { colony_promotes_to_tribe_trigger = yes }
@@ -497,58 +535,72 @@ colony_completion_effect = {
 		change_government = feudal_government
 	}
 
-	# Roll or check for forced test variable
+	# ---- Everything below is about the LIEGE, so an independent colonist skips all of it ----
+	#
+	# And "independent" has to be asked with is_independent_ruler, not `exists = liege`: for an
+	# independent ruler the engine's liege scope falls back to THEMSELF, so the exists test passes
+	# and every liege-facing line here fires reflexively — a lord seceding from himself, taking a
+	# five-year truce with himself, and being handed 0020 to decide whether to revoke his own
+	# county. The pioneer path mints independent colonists as a matter of course, so this is not a
+	# corner: it is half the ways a colony gets finished.
 	if = {
-		limit = { has_variable = force_colony_secession }
-		remove_variable = force_colony_secession
-		set_variable = { name = colony_secedes }
-	}
-	else = {
-		random = {
-			chance = colony_secession_chance
+		limit = { is_independent_ruler = no }
+
+		liege = { save_scope_as = colony_liege }
+
+		# Roll or check for forced test variable
+		if = {
+			limit = { has_variable = force_colony_secession }
+			remove_variable = force_colony_secession
 			set_variable = { name = colony_secedes }
 		}
-	}
-
-	if = {
-		limit = { has_variable = colony_secedes }
-		remove_variable = colony_secedes
-
-		# --- Clean Engine Independence Execution ---
-		create_title_and_vassal_change = {
-			type = independency
-			save_scope_as = change
-		}
-		becomes_independent = {
-			change = scope:change
-		}
-		resolve_title_and_vassal_change = scope:change
-
-		add_truce_both_ways = {
-			character = scope:colony_liege
-			years = 5
-			name = TRUCE_COLONY_INDEPENDENCE
+		else = {
+			random = {
+				chance = colony_secession_chance
+				set_variable = { name = colony_secedes }
+			}
 		}
 
-		add_prestige = major_prestige_gain
-		scope:colony_liege = {
-			add_prestige = major_prestige_loss
+		if = {
+			limit = { has_variable = colony_secedes }
+			remove_variable = colony_secedes
 
-			every_vassal = {
-				limit = { NOT = { this = scope:colonist } }
-				add_opinion = {
-					target = scope:colony_liege
-					modifier = lost_a_colony_opinion
-					opinion = -10
-				}
+			# --- Clean Engine Independence Execution ---
+			create_title_and_vassal_change = {
+				type = independency
+				save_scope_as = change
+			}
+			becomes_independent = {
+				change = scope:change
+			}
+			resolve_title_and_vassal_change = scope:change
+
+			add_truce_both_ways = {
+				character = scope:colony_liege
+				years = 5
+				name = TRUCE_COLONY_INDEPENDENCE
 			}
 
-			trigger_event = wilderness_colonization.0021
+			add_prestige = major_prestige_gain
+			scope:colony_liege = {
+				add_prestige = major_prestige_loss
+
+				every_vassal = {
+					limit = { NOT = { this = scope:colonist } }
+					add_opinion = {
+						target = scope:colony_liege
+						modifier = lost_a_colony_opinion
+						opinion = -10
+					}
+				}
+
+				trigger_event = wilderness_colonization.0021
+			}
 		}
-	}
-	else = {
-		scope:colony_liege = {
-			trigger_event = wilderness_colonization.0020
+		else = {
+			scope:colony_liege = {
+				trigger_event = wilderness_colonization.0020
+			}
 		}
 	}
 }
@@ -571,6 +623,87 @@ colonization_make_colonist_effect = {
 		}
 
 		change_government = colony_government
+
+		# ---- Pitch the camp ----
+		#
+		# colony_government declares `domicile_type = camp`, and the line above is the whole of what
+		# brings a camp into being: the engine reads the field and the domicile exists. There is no
+		# create_domicile effect in CK3 to call instead — vanilla's own nomad conversion in
+		# 00_religious_war.txt goes straight from `change_government = nomad_government` to
+		# `domicile = { set_domicile_culture = ... }` with nothing between them, and does not even
+		# bother with the `?=` guard.
+		#
+		# Everything below has to run AFTER that line, because none of it has anything to write into
+		# until the government that declares the domicile is the one the character has.
+		#
+		# ---- Why the move is not optional ----
+		#
+		# A domicile created this way has no location, and a camp standing nowhere is a camp that
+		# does not appear: no map pin, and the HUD's own `ShouldShowDomicileInHUD` has nothing to
+		# show. This was the bug — the field alone was shipped, and colonists got no camp.
+		#
+		# Vanilla never leaves this to chance either. Every path that hands a character a domicile
+		# places it in the same breath: game_start.txt moves them to `capital_province`, the Japan
+		# house-fief decision does it for the AI after changing government, title_on_actions moves an
+		# estate when its owner's realm changes under it. The yurt gets away with `move_with_realm_
+		# capital = yes` in its type; the camp does not carry that flag, so a colonist's camp is
+		# placed once, here, and thereafter by the player through the move-domicile planner —
+		# `can_move_manually = yes` is part of why reusing vanilla's camp type was the right call.
+		#
+		# The ground is the COLONY, not simply `capital_province`, and the difference is real on the
+		# pioneer path: pioneer_success_effect does not call set_realm_capital until after this
+		# effect has returned, so a newly-landed pioneer's capital is whatever the engine picked
+		# while he was being unmade as an adventurer. Asking for a colony he holds gets the stake
+		# either way.
+		save_scope_as = new_colonist
+
+		if = {
+			limit = { capital_county ?= { is_colony_county_trigger = yes } }
+			capital_province ?= { save_scope_as = colony_camp_ground }
+		}
+		else_if = {
+			limit = {
+				any_held_title = {
+					tier = tier_county
+					is_colony_county_trigger = yes
+				}
+			}
+			ordered_held_title = {
+				limit = {
+					tier = tier_county
+					is_colony_county_trigger = yes
+				}
+				order_by = development_level
+				position = 0
+
+				title_province ?= { save_scope_as = colony_camp_ground }
+			}
+		}
+
+		domicile ?= {
+			if = {
+				limit = { exists = scope:colony_camp_ground }
+				move_domicile = scope:colony_camp_ground
+			}
+
+			# ---- The main tent ----
+			#
+			# An empty domicile window is worse than none: it reads as a broken feature rather than
+			# as a camp waiting to be built. camp_main_01 is the right thing to hand over rather than
+			# a courtesy — vanilla calls it "always built" in 00_camp_buildings.txt, gives it
+			# construction_time 1 and an ai_value of 10000, gates it behind no can_construct at all,
+			# and hangs the camp's external building slots off its character_modifier, so a camp
+			# without it has nowhere to put anything else.
+			#
+			# Guarded on absence for the pioneer path in particular. A pioneer already had a camp and
+			# vanilla's destroy_laamp_effect struck it on the way through — but that effect is
+			# vanilla's and its teardown list is not ours to predict, so this asks rather than
+			# assumes. A colonist made by a feudal realm's expedition never had a camp at all.
+			if = {
+				limit = { NOT = { has_domicile_building = camp_main_01 } }
+				add_domicile_building = camp_main_01
+			}
+		}
 	}
 }
 

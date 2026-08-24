@@ -1,0 +1,62 @@
+﻿l_english:
+
+ # Flavor events for colony government holders — wilderness_colonist_events.txt.
+
+ # --- Opinion modifiers (common/opinion_modifiers/00_colonization_opinions.txt) --------------
+ colony_good_stewardship_opinion:0 "Keeps the Frontier Well"
+ colony_defied_liege_opinion:0 "Insolent Colonist"
+
+ # --- 0001: The First Harvest ----------------------------------------------------------------
+ wilderness_colonist.0001.t:0 "The First Harvest"
+ wilderness_colonist.0001.desc:0 "The stubble fields inside the ditch of [colony.GetName] have given up their first true crop. Wagons stand heaped by the granary while [colony_quartermaster.GetTitledFirstName] works down the tally sticks, and for the first time since the founding there is more in the stores than the winter strictly needs.\n\nEveryone in the colony knows the surplus to the sack. Everyone has an opinion on where it should go."
+ wilderness_colonist.0001.a:0 "Sell it. A colony runs on coin."
+ wilderness_colonist.0001.b:0 "Roast it. They earned a full table."
+ wilderness_colonist.0001.c:0 "The first fruits go to [ROOT.Char.GetLiege.GetTitledFirstName]."
+
+ # --- 0002: Runaways at the Gate ---------------------------------------------------------------
+ wilderness_colonist.0002.t:0 "Runaways at the Gate"
+ wilderness_colonist.0002.desc:0 "They came out of the treeline at first light and stopped a respectful bowshot from the palisade: a dozen families, thin, footsore, carrying everything they own. Bondsmen, plainly, fled from some settled lord's fields for the one place his writ runs thin.\n\n[runaway_leader.GetFirstName] speaks for them, cap in hand. #EMP 'We heard a body can start over out here. We can dig, clear, carry — we ask only ground and a gate that opens.'#!\n\nHands are the one thing the frontier is always short of. So is grain, and so is the goodwill of whoever's fields they fled."
+ wilderness_colonist.0002.a:0 "There is land enough. Open the gate."
+ wilderness_colonist.0002.b:0 "The stumps come out first. Trust comes later."
+ wilderness_colonist.0002.c:0 "We cannot feed our own. Turn them out."
+
+ # --- 0003: The Old Ground Fights Back ---------------------------------------------------------
+ wilderness_colonist.0003.t:0 "The Old Ground Fights Back"
+ wilderness_colonist.0003.desc.intro:0 "The frontier was never given, only lent. This season [colony.GetName] is being asked for it back."
+ wilderness_colonist.0003.desc.beasts:0 "\n\nThe dens in the deep wood have filled again, and the beasts have relearned the distance to the pens. Two herdsmen this month, and now the woodcutters will not work the far side of the stream without spears standing by."
+ wilderness_colonist.0003.desc.bandits:0 "\n\nThe outlaw camps we never finished burning have found their nerve. They took a grain cart on the track and left the driver tied to a post — alive, as a message about who the road belongs to."
+ wilderness_colonist.0003.desc.growth:0 "\n\nThe growth is coming back faster than the axes can hold it. Saplings stand in last year's clearings, roots have shouldered through the bean rows, and the forest edge is measurably nearer the ditch than it was in spring."
+ wilderness_colonist.0003.desc.floods:0 "\n\nThe waters have risen over ground we drained at a cost of two summers' labor. The lower fields are marsh again, the causeway is gone at both ends, and the frogs sing where the barley stood."
+ wilderness_colonist.0003.desc.scree:0 "\n\nThe slopes are moving again. A slide took the upper path and half a season's quarried stone with it, and the shepherds say the whole face above the terraces creaks at night like a ship."
+ wilderness_colonist.0003.desc.cold:0 "\n\nThe cold has come early and come hard, the kind this country is infamous for. The ground the crews broke last month has frozen back to iron, and the work line's fires burn all day just to keep the tools from sticking to hands."
+ wilderness_colonist.0003.desc.fallback:0 "\n\nEvery report this month is the same report: ground we cleared, closing over. Fences down, paths grown shut, the wild pressing on the boundary stones like a patient creditor."
+ wilderness_colonist.0003.desc.outro:0 "\n\n[colony_warden.GetTitledFirstName] puts it plainly. #EMP 'We hold what we took, we buy help to hold it, or we let some of it go. But we choose — the wild has already chosen.'#!"
+ wilderness_colonist.0003.a:0 "Not one pace back. I will lead the work line myself."
+ wilderness_colonist.0003.b:0 "Hire hands from the settled counties."
+ wilderness_colonist.0003.c:0 "Pull the boundary stones in. Let it keep the far fields."
+
+ colonist_ground_duel_success_desc:0 "The line holds, and the wild gives way"
+ colonist_ground_duel_fail_desc:0 "The ground takes its price in blood"
+
+ # --- 0006 / 0007: outcomes of the work line -----------------------------------------------------
+ wilderness_colonist.0006.t:0 "The Line Held"
+ wilderness_colonist.0006.desc:0 "Days of it — mud, rope, smoke, and the lord of [colony.GetName] in the thick of the work where every settler could see. The wild pressed, and found the boundary manned.\n\nBy week's end the fences stand where they stood in spring, the paths are open, and the work crews walk taller for having been led from the front. It will all need doing again someday. Today it is done."
+ wilderness_colonist.0006.a:0 "This ground is ours, and it knows it."
+ wilderness_colonist.0007.t:0 "The Ground's Price"
+ wilderness_colonist.0007.desc:0 "The frontier does not fight fair, and it does not fight tired. Somewhere between the third day and the fourth the line broke — a rush, a fall, a wound taken where no wound could be afforded — and the crews carried their lord back inside the ditch with the work unfinished behind them.\n\nThe far fences stand open. The settlers of [colony.GetName] saw exactly how the attempt ended, and the wild keeps what it retook."
+ wilderness_colonist.0007.a:0 "Bind it. We go out again when I can stand."
+
+ # --- 0004: The Liege's Man ----------------------------------------------------------------------
+ wilderness_colonist.0004.t:0 "The Liege's Man"
+ wilderness_colonist.0004.desc:0 "[liege_inspector.GetTitledFirstName] arrives with a small escort and a large ledger, sent by [ROOT.Char.GetLiege.GetTitledFirstName] to see what has become of the land — and the coin — entrusted to us out here.\n\nThe questions are polite and pointed in equal measure: how many hearths, how much cleared, what the stores hold, and when, precisely, [colony.GetName] expects to be worth what it costs. Whatever answer rides home in that ledger will sit on [ROOT.Char.GetLiege.GetFirstName]'s table long after the mud of the journey is brushed off."
+ wilderness_colonist.0004.desc.letter:0 "A rider brings a letter under [ROOT.Char.GetLiege.GetTitledFirstName]'s own seal, and the courtesies run out by the second line. How many hearths. How much cleared. What the stores hold. And when, precisely, [colony.GetName] expects to be worth what it costs.\n\nThe rider has been told to wait for an answer, and makes a point of saying so."
+ wilderness_colonist.0004.a:0 "Show him everything. The books are honest."
+ wilderness_colonist.0004.b:0 "Feast him until the ledger stays shut."
+ wilderness_colonist.0004.c:0 "He can count the stumps on his way home."
+
+ # --- 0005: Founding Day ---------------------------------------------------------------------------
+ wilderness_colonist.0005.t:0 "Founding Day"
+ wilderness_colonist.0005.desc:0 "It comes around again: the day the first stake went into the ground at [colony.GetName]. The old hands mark it without being told — someone has hung a garland on the gatepost, and the children have been underfoot since dawn asking whether there will be honey bread.\n\nA place this new has no customs yet. Whatever happens today is on its way to becoming one."
+ wilderness_colonist.0005.a:0 "Broach the casks. Today, nobody works."
+ wilderness_colonist.0005.b:0 "Let [colony_preacher.GetTitledFirstName] bless the fields."
+ wilderness_colonist.0005.c:0 "The frontier does not keep feast days."

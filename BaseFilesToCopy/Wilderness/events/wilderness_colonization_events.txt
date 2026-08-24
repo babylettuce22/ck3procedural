@@ -1611,6 +1611,124 @@ wilderness_colonization.0021 = {
 }
 
 # =====================================================================================
+#  The charter read aloud
+# =====================================================================================
+#
+# The payoff moment of the whole mechanic, fired by promote_colony_effect to the DIRECT holder —
+# scope:colony_promoter, saved from the county's own holder, so this can only ever land on the
+# lord whose county it is. Until this existed, promotion was a silent government swap: twenty
+# years of palisade work resolved as a holding icon quietly changing shape.
+#
+# Pure narration, per the rule 0020/0021 state above: the world has already changed by the time
+# this opens. The holding is swapped, the government is converted, and the colony_founder trait —
+# if the tenure gate in promote_colony_effect passed — is already on root. What the event owns is
+# the one choice that is safely its own: whether to take the name.
+#
+# ---- The two descs are the founder gate made legible ----
+#
+# The split reads the same colony_recent_holder clock the effect read. No clock: root either
+# claimed this ground out of the wilderness or has held it ten years, and the desc is about what
+# they built. Clock still running: they took over a place somebody else raised, the trait was not
+# granted, and the desc says so without apology — finishing is worth a window, but the founding
+# already happened, and the nickname option is not on the table.
+wilderness_colonization.0022 = {
+	type = character_event
+	title = wilderness_colonization.0022.t
+	theme = realm
+	override_background = { reference = farmland }
+
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					scope:finished_colony ?= {
+						NOT = { has_variable = colony_recent_holder }
+					}
+				}
+				desc = wilderness_colonization.0022.desc.founder
+			}
+			desc = wilderness_colonization.0022.desc.latecomer
+		}
+	}
+
+	left_portrait = {
+		character = root
+		animation = personality_honorable
+		triggered_animation = {
+			trigger = { has_trait = ambitious }
+			animation = personality_bold
+		}
+	}
+
+	right_portrait = {
+		trigger = { exists = scope:charter_reader }
+		character = scope:charter_reader
+		animation = personality_zealous
+	}
+
+	trigger = {
+		is_ai = no
+		exists = scope:finished_colony
+	}
+
+	immediate = {
+		# Somebody to hold the charter. The colony council is already dissolved by the government
+		# change, so this is whoever of the old court is standing nearest.
+		random_courtier_or_guest = {
+			limit = { is_available_ai_adult = yes }
+			save_scope_as = charter_reader
+		}
+	}
+
+	# --- Take the name ---------------------------------------------------------------------------
+	option = {
+		name = wilderness_colonization.0022.a
+		trigger = {
+			scope:finished_colony ?= {
+				NOT = { has_variable = colony_recent_holder }
+			}
+		}
+
+		give_nickname = nick_gen_founder
+		add_prestige = medium_prestige_gain
+
+		stress_impact = {
+			ambitious = minor_stress_impact_loss
+			humble = minor_stress_impact_gain
+		}
+	}
+
+	# --- The place is the monument ------------------------------------------------------------------
+	option = {
+		name = wilderness_colonization.0022.b
+		trigger = {
+			scope:finished_colony ?= {
+				NOT = { has_variable = colony_recent_holder }
+			}
+		}
+
+		add_prestige = medium_prestige_gain
+
+		stress_impact = {
+			humble = minor_stress_impact_loss
+			content = minor_stress_impact_loss
+			ambitious = minor_stress_impact_gain
+		}
+	}
+
+	# --- Finished is finished (latecomer's only option) ----------------------------------------------
+	option = {
+		name = wilderness_colonization.0022.c
+		trigger = {
+			scope:finished_colony ?= { has_variable = colony_recent_holder }
+		}
+
+		add_prestige = minor_prestige_gain
+	}
+}
+
+
+# =====================================================================================
 #  The Pioneer's Charter: The Debt of the Road (Promised Land Payoff)
 # =====================================================================================
 wilderness_colonization.0025 = {
@@ -3034,6 +3152,103 @@ wilderness_colonization.9999 = {
 					# Trigger promotion
 					promote_colony_effect = { COUNTY = this }
 				}
+			}
+		}
+	}
+
+	# --- Option E: Why is there no camp? ---
+	#
+	# colony_government declares `domicile_type = camp`, which should hand every colonist a camp, and
+	# it is not appearing. Three things could be true and they need completely different fixes, so
+	# this asks the game rather than guessing again:
+	#
+	#   no domicile          the engine is refusing to create one. The government field is not enough
+	#                        for a landed character with a provisions-based domicile, and the answer
+	#                        is a colony_camp type of our own — which then needs its own buildings,
+	#                        because vanilla's all carry `allowed_domicile_types = { camp }`.
+	#   unplaced             it exists with no location, so nothing draws it. The placement in
+	#                        colonization_make_colonist_effect is running too early or not at all;
+	#                        Option F below re-runs it on the spot to confirm.
+	#   placed               it exists, it is somewhere, and the HUD is simply not offering it. That
+	#                        is `ShouldShowDomicileInHUD`, an engine-side check we cannot read — and
+	#                        the fix is a button of our own, since `ToggleGameViewData( 'domicile',
+	#                        ... )` is all vanilla's own camp button does.
+	option = {
+		name = "DEBUG: Report my domicile state"
+
+		if = {
+			limit = { has_domicile = no }
+
+			debug_log = "COLONY DOMICILE: none — the government field did not create one"
+			send_interface_toast = {
+				type = event_toast_effect_bad
+				title = colony_debug_domicile_none
+				left_icon = root
+			}
+		}
+		else_if = {
+			limit = { NOT = { exists = domicile.domicile_location } }
+
+			debug_log = "COLONY DOMICILE: exists but has no location"
+			send_interface_toast = {
+				type = event_toast_effect_bad
+				title = colony_debug_domicile_unplaced
+				left_icon = root
+			}
+		}
+		else = {
+			debug_log = "COLONY DOMICILE: exists and is placed — the HUD is hiding it"
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = colony_debug_domicile_placed
+				left_icon = root
+				right_icon = domicile.domicile_location.county
+			}
+		}
+	}
+
+	# --- Option F: Re-run the camp setup on the spot ---
+	#
+	# The same placement and main-tent grant colonization_make_colonist_effect does, minus the
+	# government change. If the camp appears after pressing this but not after colonising, the
+	# problem is WHEN that effect runs rather than what it does — which would point at the domicile
+	# not existing yet at the moment the government changes, and the fix being a delayed pass.
+	option = {
+		name = "DEBUG: Re-run colony camp setup"
+
+		save_scope_as = new_colonist
+
+		if = {
+			limit = { capital_county ?= { is_colony_county_trigger = yes } }
+			capital_province ?= { save_scope_as = colony_camp_ground }
+		}
+		else_if = {
+			limit = {
+				any_held_title = {
+					tier = tier_county
+					is_colony_county_trigger = yes
+				}
+			}
+			ordered_held_title = {
+				limit = {
+					tier = tier_county
+					is_colony_county_trigger = yes
+				}
+				order_by = development_level
+				position = 0
+
+				title_province ?= { save_scope_as = colony_camp_ground }
+			}
+		}
+
+		domicile ?= {
+			if = {
+				limit = { exists = scope:colony_camp_ground }
+				move_domicile = scope:colony_camp_ground
+			}
+			if = {
+				limit = { NOT = { has_domicile_building = camp_main_01 } }
+				add_domicile_building = camp_main_01
 			}
 		}
 	}

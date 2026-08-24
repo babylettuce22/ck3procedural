@@ -1,0 +1,947 @@
+﻿namespace = wilderness_colonist
+
+# Life at the palisade.
+#
+# ---- Who these fire for, and why that is a separate file ----
+#
+# wilderness_colonization_events.txt is the SPONSOR's chain — a lord somewhere safe sending people
+# out and hearing back. wilderness_overseeing_events.txt is a landed lord VISITING a colony he
+# holds, gated on overseeing_the_settlement. This file is the third man: the colonist proper, a
+# ruler under colony_government whose only land IS the colony. He is not overseeing the frontier;
+# he lives on it. Everything here is gated on is_colonist_trigger and nothing here checks the
+# overseeing modifier, because a colonist does not need a modifier to be present — presence is his
+# government.
+#
+# ---- The shape ----
+#
+# Every event is a leaf: it moves the county, the purse or the liege, and ends. Nothing here
+# schedules anything — the yearly pulse in 00_colonization_on_actions.txt picks at most one event a
+# year, and the two-year colonist_event_cooldown variable keeps even that from feeling scheduled.
+# That is the same no-chains rule the pioneer file states at its top, and for the same reason: two
+# events that can each book a follow-up eventually book two.
+#
+# ---- AI ----
+#
+# Colonists are mostly AI — every colony the AI grants out is held by one. So unlike the sponsor
+# chain there is no is_ai = no gate anywhere in this file: every event resolves for the AI on
+# ai_chance, and the weights lean the AI toward the options that keep its colony growing, because
+# an AI that reliably picks the self-harming option turns a flavor file into a stealth nerf of
+# every AI-held colony on the map.
+#
+#   0001  The first harvest. Sell it, feast it, or send it up the hill.
+#   0002  Runaways at the gate. People are the scarcest thing a frontier has.
+#   0003  The old ground fights back. Only fires while an obstacle still stands.
+#   0006  ...and the line held. Outcome of 0003's duel.
+#   0007  ...and it took its price. The other outcome.
+#   0004  The liege's man. A colonist has a lord, and the lord has questions.
+#   0005  Founding day. What the anniversary is spent on.
+#
+# 0006 and 0007 are the one exception to "every event is a leaf", and a narrow one: a duel is the
+# one place in this file where the player commits before knowing the result, so the result has to
+# arrive as its own piece of news — the same 0030→0032/0033 shape the overseer file uses. They are
+# outcome events, not new decisions: one option each, and the chain is exactly two links long.
+
+
+# =====================================================================================
+#  The First Harvest
+# =====================================================================================
+#
+# The three answers spend the same wagonload on three different scarcities: coin, the settlers'
+# patience, and the liege's regard. A colonist is short of all three at once, which is what makes
+# a full granary a decision rather than a windfall.
+wilderness_colonist.0001 = {
+	type = character_event
+	title = wilderness_colonist.0001.t
+	desc = wilderness_colonist.0001.desc
+	theme = stewardship
+	override_background = { reference = farmland }
+
+	cooldown = { years = 5 }
+
+	left_portrait = {
+		character = root
+		animation = happiness
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	right_portrait = {
+		trigger = { exists = scope:colony_quartermaster }
+		character = scope:colony_quartermaster
+		animation = steward
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	trigger = {
+		is_colonist_trigger = yes
+		any_held_title = {
+			tier = tier_county
+			is_colony_county_trigger = yes
+		}
+	}
+
+	immediate = {
+		set_variable = {
+			name = colonist_event_cooldown
+			years = 2
+		}
+
+		random_held_title = {
+			limit = {
+				tier = tier_county
+				is_colony_county_trigger = yes
+			}
+			save_scope_as = colony
+		}
+
+		# The office if it is filled, the best steward in the court if it is not — a colonist's
+		# council is optional and the harvest is not.
+		if = {
+			limit = {
+				any_councillor = { has_council_position = councillor_colony_quartermaster }
+			}
+			random_councillor = {
+				limit = { has_council_position = councillor_colony_quartermaster }
+				save_scope_as = colony_quartermaster
+			}
+		}
+		else = {
+			ordered_courtier_or_guest = {
+				limit = { is_available_ai_adult = yes }
+				order_by = stewardship
+				position = 0
+				save_scope_as = colony_quartermaster
+			}
+		}
+	}
+
+	# --- Sell the surplus ------------------------------------------------------------------------
+	option = {
+		name = wilderness_colonist.0001.a
+		skill = stewardship
+
+		add_short_term_gold = 35
+
+		# The settlers watched their own harvest roll out of the gate. Not unrest, exactly.
+		scope:colony = { change_county_control = -5 }
+
+		stress_impact = {
+			greedy = minor_stress_impact_loss
+			generous = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 40
+			modifier = { add = 30  gold < 50 }
+			modifier = { add = 20  has_trait = greedy }
+			modifier = { add = -20 has_trait = generous }
+		}
+	}
+
+	# --- Feast the colony ------------------------------------------------------------------------
+	option = {
+		name = wilderness_colonist.0001.b
+		skill = diplomacy
+
+		scope:colony = {
+			change_county_control = 10
+			add_county_modifier = {
+				modifier = settlement_well_provisioned
+				years = 3
+			}
+		}
+
+		stress_impact = {
+			gregarious = minor_stress_impact_loss
+			generous = minor_stress_impact_loss
+			greedy = medium_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 40
+			modifier = { add = 25  has_trait = generous }
+			modifier = { add = 20  has_trait = gregarious }
+			modifier = { add = -25 gold < 30 }
+		}
+	}
+
+	# --- Send the first fruits up the hill ---------------------------------------------------------
+	option = {
+		name = wilderness_colonist.0001.c
+		# is_independent_ruler, not `exists = liege`: for an independent ruler the liege scope is
+		# THEMSELF, so the exists form offered a pioneer-made colonist the option of sending tribute
+		# to himself and gaining his own opinion. Same trap as 0004's trigger — see the note there.
+		trigger = {
+			is_independent_ruler = no
+			liege = { NOT = { has_trait = wilderness } }
+		}
+
+		liege = {
+			add_opinion = {
+				target = root
+				modifier = colony_good_stewardship_opinion
+				opinion = 15
+			}
+		}
+
+		add_prestige = minor_prestige_gain
+
+		stress_impact = {
+			ambitious = minor_stress_impact_loss
+			arrogant = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 30
+			modifier = { add = 25  has_trait = ambitious }
+			modifier = { add = 20  opinion = { target = liege  value < 0 } }
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Runaways at the Gate
+# =====================================================================================
+#
+# People are the one input the colonisation system never lets you buy — development progress is
+# bought with gold everywhere else, so the thing that makes this event a real offer is that these
+# hands are free and the cost is denominated in something else: order, or your name for charity.
+wilderness_colonist.0002 = {
+	type = character_event
+	title = wilderness_colonist.0002.t
+	desc = wilderness_colonist.0002.desc
+	theme = realm
+	override_background = { reference = wilderness }
+
+	cooldown = { years = 5 }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	right_portrait = {
+		trigger = { exists = scope:runaway_leader }
+		character = scope:runaway_leader
+		animation = beg
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	trigger = {
+		is_colonist_trigger = yes
+		any_held_title = {
+			tier = tier_county
+			is_colony_county_trigger = yes
+		}
+	}
+
+	immediate = {
+		set_variable = {
+			name = colonist_event_cooldown
+			years = 2
+		}
+
+		random_held_title = {
+			limit = {
+				tier = tier_county
+				is_colony_county_trigger = yes
+			}
+			save_scope_as = colony
+		}
+
+		# A face for the column. Created rather than borrowed from the court, because the court is
+		# a dozen people who all have jobs and none of them is a stranger at the gate. Cleaned up in
+		# `after` unless an option keeps them.
+		create_character = {
+			location = root.location
+			age = { 25 45 }
+			gender_female_chance = 40
+			culture = root.culture
+			faith = root.faith
+			save_scope_as = runaway_leader
+		}
+	}
+
+	# --- Open the gate -----------------------------------------------------------------------------
+	option = {
+		name = wilderness_colonist.0002.a
+
+		scope:colony = {
+			change_development_progress = 15
+			change_county_control = -5
+		}
+
+		# Their spokesman turns out to be worth keeping.
+		add_courtier = scope:runaway_leader
+
+		stress_impact = {
+			compassionate = minor_stress_impact_loss
+			generous = minor_stress_impact_loss
+			paranoid = medium_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 50
+			modifier = { add = 25  has_trait = compassionate }
+			modifier = { add = -25 has_trait = paranoid }
+		}
+	}
+
+	# --- Earn it first -----------------------------------------------------------------------------
+	option = {
+		name = wilderness_colonist.0002.b
+		trait = callous
+		add_internal_flag = dangerous
+
+		scope:colony = {
+			change_development_progress = 5
+			change_county_control = 5
+		}
+
+		add_dread = minor_dread_gain
+
+		stress_impact = {
+			callous = minor_stress_impact_loss
+			sadistic = minor_stress_impact_loss
+			compassionate = medium_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 20
+			modifier = { add = 30  has_trait = callous }
+			modifier = { add = 20  ai_compassion < 25 }
+		}
+	}
+
+	# --- Turn them out ------------------------------------------------------------------------------
+	option = {
+		name = wilderness_colonist.0002.c
+
+		stress_impact = {
+			paranoid = minor_stress_impact_loss
+			compassionate = medium_stress_impact_gain
+			generous = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 20
+			modifier = { add = 30  has_trait = paranoid }
+			modifier = { add = -15 has_trait = compassionate }
+		}
+	}
+
+	# The prop character vanishes unless the first option employed them. Done here rather than in
+	# each option so a fourth option added later cannot forget it and leave a wanderer in the pool.
+	after = {
+		if = {
+			limit = {
+				exists = scope:runaway_leader
+				scope:runaway_leader = { NOT = { is_courtier_of = root } }
+			}
+			hidden_effect = {
+				scope:runaway_leader = {
+					death = { death_reason = death_vanished }
+				}
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  The Old Ground Fights Back
+# =====================================================================================
+#
+# Only fires while an obstacle blocker still stands in the colony's capital, and the desc names
+# whichever one it is — same first_valid shape as wilderness_colonization.0030, extended to all
+# six blockers. Deliberately does NOT clear the building: clearing is a purchase the construction
+# system owns, and an event that hands one out for free undercuts the one gold sink a colony has.
+# What is at stake here is the ground already taken — control and progress — not the ground still wild.
+wilderness_colonist.0003 = {
+	type = character_event
+	title = wilderness_colonist.0003.t
+	theme = physical_health
+	override_background = { reference = wilderness }
+
+	cooldown = { years = 5 }
+
+	left_portrait = {
+		character = root
+		animation = worry
+		triggered_animation = {
+			trigger = { has_trait = brave }
+			animation = personality_bold
+		}
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	right_portrait = {
+		trigger = { exists = scope:colony_warden }
+		character = scope:colony_warden
+		animation = marshal_shield
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { armor } }
+	}
+
+	desc = {
+		desc = wilderness_colonist.0003.desc.intro
+
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:colony.title_province ?= { has_building = beast_dens } }
+				desc = wilderness_colonist.0003.desc.beasts
+			}
+			triggered_desc = {
+				trigger = { scope:colony.title_province ?= { has_building = bandit_camps } }
+				desc = wilderness_colonist.0003.desc.bandits
+			}
+			triggered_desc = {
+				trigger = { scope:colony.title_province ?= { has_building = dense_growth } }
+				desc = wilderness_colonist.0003.desc.growth
+			}
+			triggered_desc = {
+				trigger = { scope:colony.title_province ?= { has_building = flooded_lands } }
+				desc = wilderness_colonist.0003.desc.floods
+			}
+			triggered_desc = {
+				trigger = { scope:colony.title_province ?= { has_building = scree_slopes } }
+				desc = wilderness_colonist.0003.desc.scree
+			}
+			triggered_desc = {
+				trigger = { scope:colony.title_province ?= { has_building = killing_cold } }
+				desc = wilderness_colonist.0003.desc.cold
+			}
+			desc = wilderness_colonist.0003.desc.fallback
+		}
+
+		desc = wilderness_colonist.0003.desc.outro
+	}
+
+	trigger = {
+		is_colonist_trigger = yes
+		any_held_title = {
+			tier = tier_county
+			is_colony_county_trigger = yes
+			has_wilderness_obstacle_trigger = yes
+		}
+	}
+
+	immediate = {
+		set_variable = {
+			name = colonist_event_cooldown
+			years = 2
+		}
+
+		random_held_title = {
+			limit = {
+				tier = tier_county
+				is_colony_county_trigger = yes
+				has_wilderness_obstacle_trigger = yes
+			}
+			save_scope_as = colony
+		}
+
+		if = {
+			limit = {
+				any_councillor = { has_council_position = councillor_colony_warden }
+			}
+			random_councillor = {
+				limit = { has_council_position = councillor_colony_warden }
+				save_scope_as = colony_warden
+			}
+		}
+		else = {
+			ordered_courtier_or_guest = {
+				limit = { is_available_ai_adult = yes }
+				order_by = martial
+				position = 0
+				save_scope_as = colony_warden
+			}
+		}
+	}
+
+	# --- Not one pace back ---------------------------------------------------------------------------
+	#
+	# The effects live in 0006/0007, not here, and that is the point of having them: a roll whose
+	# consequences land inside a closed tooltip is a roll the player never sees resolve. Same shape
+	# as the sortie in wilderness_colonization.0030 — the duel picks the outcome event and the
+	# outcome event does the work, so the news and the numbers arrive together.
+	option = {
+		name = wilderness_colonist.0003.a
+		skill = martial
+		add_internal_flag = dangerous
+
+		duel = {
+			skill = prowess
+			value = 12
+
+			50 = {
+				desc = colonist_ground_duel_success_desc
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.5
+				}
+
+				trigger_event = wilderness_colonist.0006
+			}
+			50 = {
+				desc = colonist_ground_duel_fail_desc
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.5
+				}
+
+				trigger_event = wilderness_colonist.0007
+			}
+		}
+
+		stress_impact = {
+			brave = medium_stress_impact_loss
+			craven = major_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 40
+			modifier = { add = 30  has_trait = brave }
+			modifier = { add = 25  prowess >= 12 }
+			modifier = { factor = 0 has_trait = craven }
+		}
+	}
+
+	# --- Hire hands from the settled counties ---------------------------------------------------------
+	option = {
+		name = wilderness_colonist.0003.b
+		skill = stewardship
+		add_internal_flag = special
+
+		trigger = { gold >= 30 }
+		remove_short_term_gold = 30
+
+		scope:colony = {
+			change_development_progress = 10
+			change_county_control = 5
+		}
+
+		stress_impact = {
+			generous = minor_stress_impact_loss
+			greedy = medium_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 40
+			modifier = { add = 25  gold > 100 }
+			modifier = { add = -30 gold < 60 }
+		}
+	}
+
+	# --- Let it keep the far fields --------------------------------------------------------------------
+	option = {
+		name = wilderness_colonist.0003.c
+
+		scope:colony = { change_development_progress = -10 }
+
+		stress_impact = {
+			content = minor_stress_impact_loss
+			craven = minor_stress_impact_loss
+			ambitious = medium_stress_impact_gain
+			diligent = medium_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 10
+			modifier = { add = 25  has_trait = content }
+			modifier = { add = 20  gold < 30 }
+		}
+	}
+}
+
+
+# =====================================================================================
+#  The Old Ground: outcome events
+# =====================================================================================
+#
+# Both re-find the colony in `immediate` rather than trusting scope:colony to have survived the
+# trip — the same belt-and-braces 0032/0033 wear. The scope does normally carry through
+# trigger_event, but "normally" is not a word to build a control-change on: an event whose
+# immediate reads a missing scope silently does nothing, which for 0007 would mean a duel the
+# player watched fail costing them nothing.
+
+# The line held.
+wilderness_colonist.0006 = {
+	type = character_event
+	title = wilderness_colonist.0006.t
+	desc = wilderness_colonist.0006.desc
+	theme = war
+	override_background = { reference = wilderness }
+
+	left_portrait = {
+		character = root
+		animation = personality_bold
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	right_portrait = {
+		trigger = { exists = scope:colony_warden }
+		character = scope:colony_warden
+		animation = personality_honorable
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { armor } }
+	}
+
+	immediate = {
+		if = {
+			limit = { NOT = { exists = scope:colony } }
+			random_held_title = {
+				limit = {
+					tier = tier_county
+					is_colony_county_trigger = yes
+				}
+				save_scope_as = colony
+			}
+		}
+
+		scope:colony ?= { change_county_control = 10 }
+		add_prestige = minor_prestige_gain
+	}
+
+	option = {
+		name = wilderness_colonist.0006.a
+	}
+}
+
+# It took its price.
+wilderness_colonist.0007 = {
+	type = character_event
+	title = wilderness_colonist.0007.t
+	desc = wilderness_colonist.0007.desc
+	theme = physical_health
+	override_background = { reference = wilderness }
+
+	left_portrait = {
+		character = root
+		animation = pain
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	right_portrait = {
+		trigger = { exists = scope:colony_warden }
+		character = scope:colony_warden
+		animation = grief
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { armor } }
+	}
+
+	immediate = {
+		if = {
+			limit = { NOT = { exists = scope:colony } }
+			random_held_title = {
+				limit = {
+					tier = tier_county
+					is_colony_county_trigger = yes
+				}
+				save_scope_as = colony
+			}
+		}
+
+		increase_wounds_effect = { REASON = fight }
+		scope:colony ?= { change_county_control = -10 }
+	}
+
+	option = {
+		name = wilderness_colonist.0007.a
+	}
+}
+
+
+# =====================================================================================
+#  The Liege's Man
+# =====================================================================================
+#
+# The one relationship a colonist has that no other count does in the same way: he was made by his
+# liege, colony_government scales his opinion off the liege's prestige, and the liege can revoke a
+# finished colony the day it stops being one (wilderness_colonization.0020). So an inspection is
+# not paperwork, it is the whole question of the arrangement — and the third option exists because
+# a frontier is the one place in the realm where telling the lord's man to go home is survivable.
+#
+# The desc splits on whether an inspector could be found: a liege with an empty court writes a
+# letter instead, and the options read correctly against either.
+wilderness_colonist.0004 = {
+	type = character_event
+	title = wilderness_colonist.0004.t
+	theme = realm
+	override_background = { reference = ep3_camp }
+
+	cooldown = { years = 5 }
+
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:liege_inspector }
+				desc = wilderness_colonist.0004.desc
+			}
+			desc = wilderness_colonist.0004.desc.letter
+		}
+	}
+
+	left_portrait = {
+		character = root
+		animation = thinking
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	right_portrait = {
+		trigger = { exists = scope:liege_inspector }
+		character = scope:liege_inspector
+		animation = scheme
+	}
+
+	# is_independent_ruler = no, and NOT `exists = liege` — the engine's liege scope falls back to
+	# self for an independent ruler, so the exists form let this fire on a pioneer-made independent
+	# colonist as an inspection sent by himself, opinion-of-you tooltip and all. Every event or
+	# option in this file that talks to a liege must gate on is_independent_ruler for this reason.
+	trigger = {
+		is_colonist_trigger = yes
+		is_independent_ruler = no
+		liege = { NOT = { has_trait = wilderness } }
+		any_held_title = {
+			tier = tier_county
+			is_colony_county_trigger = yes
+		}
+	}
+
+	immediate = {
+		set_variable = {
+			name = colonist_event_cooldown
+			years = 2
+		}
+
+		random_held_title = {
+			limit = {
+				tier = tier_county
+				is_colony_county_trigger = yes
+			}
+			save_scope_as = colony
+		}
+
+		# Borrowed from the liege's court, never created: a prop inspector would need the same
+		# cleanup dance as 0002's runaway, and the letter branch of the desc costs nothing.
+		liege = {
+			random_courtier_or_guest = {
+				limit = { is_available_ai_adult = yes }
+				save_scope_as = liege_inspector
+			}
+		}
+	}
+
+	# --- Show him everything -----------------------------------------------------------------------
+	option = {
+		name = wilderness_colonist.0004.a
+		skill = stewardship
+
+		liege = {
+			add_opinion = {
+				target = root
+				modifier = colony_good_stewardship_opinion
+				opinion = 10
+			}
+		}
+
+		stress_impact = {
+			honest = minor_stress_impact_loss
+			deceitful = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 50
+			modifier = { add = 25  has_trait = honest }
+			modifier = { add = 20  ai_honor > 50 }
+		}
+	}
+
+	# --- Feast him until the ledger stays shut --------------------------------------------------------
+	option = {
+		name = wilderness_colonist.0004.b
+		skill = diplomacy
+
+		trigger = { gold >= 20 }
+		remove_short_term_gold = 20
+
+		liege = {
+			add_opinion = {
+				target = root
+				modifier = colony_good_stewardship_opinion
+				opinion = 20
+			}
+		}
+
+		# The settlers hauled that wine up a frontier track and watched it drunk by a stranger.
+		scope:colony = { change_county_control = -5 }
+
+		stress_impact = {
+			gregarious = minor_stress_impact_loss
+			honest = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 30
+			modifier = { add = 25  gold > 100 }
+			modifier = { add = 20  opinion = { target = liege  value < 0 } }
+			modifier = { add = -20 ai_honor > 60 }
+		}
+	}
+
+	# --- He can count the stumps on his way home -------------------------------------------------------
+	option = {
+		name = wilderness_colonist.0004.c
+		add_internal_flag = dangerous
+
+		liege = {
+			add_opinion = {
+				target = root
+				modifier = colony_defied_liege_opinion
+				opinion = -15
+			}
+		}
+
+		scope:colony = { change_county_control = 5 }
+		add_prestige = minor_prestige_gain
+
+		stress_impact = {
+			arrogant = minor_stress_impact_loss
+			ambitious = minor_stress_impact_loss
+			craven = medium_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 10
+			modifier = { add = 25  ai_boldness > 50 }
+			modifier = { add = 20  has_trait = arrogant }
+			modifier = { add = -10 opinion = { target = liege  value > 25 } }
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Founding Day
+# =====================================================================================
+#
+# The smallest event in the file on purpose. A colony's calendar is work, and the anniversary is
+# the one square on it that belongs to the colonist to define: a feast, a rite, or nothing. Each
+# answer is cheap — this is the event that tells the player what kind of place they are making,
+# not the one that moves the needle.
+wilderness_colonist.0005 = {
+	type = character_event
+	title = wilderness_colonist.0005.t
+	desc = wilderness_colonist.0005.desc
+	theme = realm
+	override_background = { reference = farmland }
+
+	cooldown = { years = 5 }
+
+	left_portrait = {
+		character = root
+		animation = personality_content
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	right_portrait = {
+		trigger = { exists = scope:colony_preacher }
+		character = scope:colony_preacher
+		animation = personality_zealous
+	}
+
+	trigger = {
+		is_colonist_trigger = yes
+		any_held_title = {
+			tier = tier_county
+			is_colony_county_trigger = yes
+		}
+	}
+
+	immediate = {
+		set_variable = {
+			name = colonist_event_cooldown
+			years = 2
+		}
+
+		random_held_title = {
+			limit = {
+				tier = tier_county
+				is_colony_county_trigger = yes
+			}
+			save_scope_as = colony
+		}
+
+		if = {
+			limit = {
+				any_councillor = { has_council_position = councillor_colony_preacher }
+			}
+			random_councillor = {
+				limit = { has_council_position = councillor_colony_preacher }
+				save_scope_as = colony_preacher
+			}
+		}
+	}
+
+	# --- Broach the casks -----------------------------------------------------------------------------
+	option = {
+		name = wilderness_colonist.0005.a
+		skill = diplomacy
+
+		trigger = { gold >= 20 }
+		remove_short_term_gold = 20
+
+		scope:colony = { change_county_control = 10 }
+		add_prestige = minor_prestige_gain
+
+		stress_impact = {
+			gregarious = minor_stress_impact_loss
+			generous = minor_stress_impact_loss
+			greedy = medium_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 40
+			modifier = { add = 25  has_trait = gregarious }
+			modifier = { add = -30 gold < 40 }
+		}
+	}
+
+	# --- Bless the fields ------------------------------------------------------------------------------
+	option = {
+		name = wilderness_colonist.0005.b
+		trigger = { exists = scope:colony_preacher }
+		highlight_portrait = scope:colony_preacher
+
+		add_piety = minor_piety_gain
+		scope:colony = { change_county_control = 5 }
+
+		stress_impact = {
+			zealous = minor_stress_impact_loss
+			cynical = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 30
+			modifier = { add = 40  has_trait = zealous }
+			modifier = { factor = 0 has_trait = cynical }
+		}
+	}
+
+	# --- The frontier does not keep feast days -----------------------------------------------------------
+	option = {
+		name = wilderness_colonist.0005.c
+
+		scope:colony = { change_development_progress = 5 }
+
+		stress_impact = {
+			diligent = minor_stress_impact_loss
+			gregarious = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 30
+			modifier = { add = 25  has_trait = diligent }
+			modifier = { add = 20  has_trait = greedy }
+		}
+	}
+}

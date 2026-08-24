@@ -28,6 +28,45 @@ colony_government = {
 
 	court_generate_commanders = no
 
+	# ---- The camp survives the settling ----
+	#
+	# A colonist keeps the camp domicile: the tents he arrived in ARE the colony until something is
+	# built to replace them, and the domicile window is where that reads.
+	#
+	# `domicile_type` is a TOP-LEVEL field, not a government_rules entry — same trap as
+	# court_generate_commanders above and royal_court in 00_wilderness_government.txt. Inside the
+	# rules block it is silently ignored and the colonist simply has no domicile, with nothing logged.
+	#
+	# ---- Why vanilla's `camp` rather than a colony_camp of our own ----
+	#
+	# Because domicile buildings are bound to a type BY KEY: every entry in
+	# common/domiciles/buildings/00_camp_buildings.txt carries `allowed_domicile_types = { camp }`.
+	# A type of our own would be a domicile with no buildings available in it — an empty window —
+	# unless we either overrode all twenty-odd vanilla camp buildings to name our type as well, or
+	# authored a parallel set of our own. Reusing the key is what makes the main tent, the officer
+	# tents and the supply tents work for a colonist without touching one vanilla file.
+	#
+	# Nothing in the camp type objects to a landed owner. It carries no `allowed_for_character` at
+	# all — only `estate` and `east_asian_estate` do, and theirs wants a noble family title — and
+	# `camp_main_01` has no can_construct. A landed government owning a travelling domicile is
+	# vanilla's own arrangement besides: nomad_government holds counties and owns a `yurt`.
+	#
+	# ---- The two things to watch ----
+	#
+	# The camp sets `provisions = yes`, so `domicile_uses_provisions` is true for a colonist and the
+	# low-provisions alerts in vanilla's travel_on_actions become reachable. Riding out to oversee a
+	# colony is travel, so this is not hypothetical; nomads do NOT prove it safe, because a yurt uses
+	# `herd` rather than provisions. If it turns out a colonist can drain provisions with no way to
+	# restock, the fix is a colony_camp type after all, which then owes the buildings problem above.
+	#
+	# The camp also sets `rename_window = primary_title`, which for a landless adventurer means the
+	# camp title and for a colonist means his county. Renaming the camp renames the colony. That is
+	# arguably correct — the camp is the place — but it is a surprise if it is not intended.
+	#
+	# Promotion needs no cleanup: promote_colony_effect moves the ruler off colony_government, the
+	# new government declares no domicile_type, and the camp stops existing on its own.
+	domicile_type = camp
+
 	primary_holding = settlement_holding
 	valid_holdings = { settlement_holding }
 

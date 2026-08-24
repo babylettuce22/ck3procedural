@@ -100,7 +100,17 @@
 		}
 
 		modifier = {
-			build_speed = 0.30
+			# NEGATIVE is faster. `build_speed` is construction TIME, not rate — vanilla's beneficial
+			# traits carry `church_holding_build_speed = -0.2`, and every other build_speed in this
+			# file set follows that: settlement_01/02 are negative because they help, the six
+			# obstacles are positive because they hinder.
+			#
+			# This one was `0.30`, which made the corvée law 30% SLOWER to build under while
+			# advertising itself as the fast-and-cheap option. It also inverted the whole choice
+			# against colony_law_homestead: forced labour cost you opinion, health and stress and
+			# then handed back nothing but the gold discount, so there was no reading of the game in
+			# which passing it was correct.
+			build_speed = -0.30
 			build_gold_cost = -0.20
 			county_opinion_add = -15
 			health = -0.15

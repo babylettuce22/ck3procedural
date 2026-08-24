@@ -1,0 +1,3 @@
+﻿# Earned on the promotion ceremony (wilderness_colonization.0022), founder branch only —
+# taking the name is the player's choice, where the trait in 00_wilderness_traits.txt is not.
+nick_gen_founder = {}

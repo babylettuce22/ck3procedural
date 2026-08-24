@@ -142,7 +142,7 @@ public sealed class WorldCenterMap
             var centerRng = new Rng(county.Index ^ 0x5C07 ^ (i * 7919));
 
             var (coastal, mountainous) = Relief(county, provinceTerrain);
-            var archetype = PickArchetype(coastal, mountainous, centerRng);
+            var archetype = PickArchetype(coastal, mountainous, cfg, centerRng);
             var wonder = GenerateWonder(county, barony, archetype, mountainous,
                 culture.Language, centerRng, usedMeshes);
 
@@ -220,12 +220,22 @@ public sealed class WorldCenterMap
         return (coastal, mountainous);
     }
 
-    private static WonderArchetype PickArchetype(bool coastal, bool mountainous, Rng rng)
+    private static WonderArchetype PickArchetype(bool coastal, bool mountainous, MapConfig cfg, Rng rng)
     {
         int roll = rng.Int(0, 100);
 
         if (coastal && roll < 45) return WonderArchetype.GreatHarbor;
         if (mountainous && roll < 45) return WonderArchetype.Citadel;
+
+        // GreatLibrary and ImperialPalace imply a literate, centralized administration the world
+        // has not developed yet while it is still in the tribal era. Ancient worlds keep the
+        // monumental archetypes such societies actually raised: temples, fortresses, harbors.
+        if (Innovations.EraIndexAt(cfg.EraYear) == 0)
+        {
+            if (roll < 60) return WonderArchetype.Sanctuary;
+            return coastal ? WonderArchetype.GreatHarbor : WonderArchetype.Citadel;
+        }
+
         if (roll < 30) return WonderArchetype.Sanctuary;
         if (roll < 65) return WonderArchetype.ImperialPalace;
         return WonderArchetype.GreatLibrary;

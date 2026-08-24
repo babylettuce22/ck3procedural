@@ -48,3 +48,27 @@ wilderness = {
 	ai_zeal = -1000
 	ai_greed = 1000
 }
+
+
+# The mark of having raised a settled county out of wild ground.
+#
+# Granted by promote_colony_effect, and only there — to the direct holder at the moment of
+# promotion, and only if the colony_recent_holder clock is not running (see the founder-honors
+# note in 00_colonization_effects.txt for the tenure rule). It survives the government change
+# that follows promotion, which is the point: a colonist becomes an ordinary feudal count the
+# same day, and this is what he keeps of the twenty years before.
+#
+# Deliberately modest. The colony itself is the reward; the trait is the record. Fame category,
+# so it sits with the earned distinctions rather than looking like a personality.
+colony_founder = {
+	# Vanilla's adventurer icon: a traveller's mark, not a crown. No new art needed.
+	icon = adventurer.dds
+	category = fame
+	shown_in_ruler_designer = no
+
+	stewardship = 1
+	monthly_prestige = 0.2
+
+	# The people who came out with him, and their children, remember whose palisade it was.
+	same_culture_opinion = 5
+}
