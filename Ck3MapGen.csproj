@@ -20,6 +20,25 @@
   </PropertyGroup>
 
   <PropertyGroup>
+    <!-- Stamped into the PE version resource. Signing aside, an unsigned binary with a blank
+         version block is itself a heuristic signal to antivirus, and SignPath checks that the
+         artifact's metadata matches what the signing policy declares. Version is overridden by
+         the release workflow from the git tag; the value here is what local builds report. -->
+    <Product>CK3 Procedural Map Generator</Product>
+    <!-- Shown as the file description in Explorer and in the SmartScreen prompt; without it the
+         PE reports the bare assembly name. -->
+    <AssemblyTitle>CK3 Procedural Map Generator</AssemblyTitle>
+    <Company>babylettuce22</Company>
+    <Authors>babylettuce22</Authors>
+    <Copyright>Copyright (c) 2026 babylettuce22</Copyright>
+    <Description>Generates a complete, playable Crusader Kings III map mod from an Azgaar Fantasy Map Generator export.</Description>
+    <PackageProjectUrl>https://github.com/babylettuce22/ck3procedural</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/babylettuce22/ck3procedural</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Version Condition="'$(Version)' == ''">0.7.0</Version>
+  </PropertyGroup>
+
+  <PropertyGroup>
     <!-- The heightmap pipeline (CK3 Heightmap Forge) lives in its own repo beside this one and is
          referenced as source, so the Heightmap tab and the Forge app share one implementation.
          Override NoiseToolDir on the command line or in Directory.Build.props if it lives elsewhere. -->

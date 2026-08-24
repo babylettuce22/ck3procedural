@@ -1,0 +1,121 @@
+name: Release
+
+# SignPath Foundation only signs artifacts that come from a public, traceable CI build,
+# so the released binaries must be produced here rather than uploaded from a workstation.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g. 0.7.0)'
+        required: true
+
+permissions:
+  contents: write        # needed to create the GitHub Release
+  id-token: write        # SignPath verifies the build via the OIDC token
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      # Ck3MapGen.csproj references ..\noisetool\ as a sibling directory. Checking both repos
+      # out side by side under the workspace makes the default NoiseToolDir resolve without
+      # overriding it, so CI and a local clone build the same way.
+      - name: Check out ck3procedural
+        uses: actions/checkout@v4
+        with:
+          path: ck3procedural
+          fetch-depth: 0
+
+      - name: Check out noisetool
+        uses: actions/checkout@v4
+        with:
+          repository: babylettuce22/ck3-heightmap-forge
+          path: noisetool
+          fetch-depth: 0
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            v="${{ github.event.inputs.version }}"
+          else
+            v="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "Building version $v"
+
+      - name: Restore
+        working-directory: ck3procedural
+        run: dotnet restore Ck3MapGen.csproj -r win-x64
+
+      # PublishSingleFile is deliberately OFF. A single-file self-contained bundle appends the
+      # whole runtime as a blob and self-extracts native DLLs to %TEMP% on first run, which is
+      # the shape generic antivirus heuristics flag. A plain folder publish avoids that entirely.
+      - name: Publish
+        working-directory: ck3procedural
+        run: >
+          dotnet publish Ck3MapGen.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          --no-restore
+          -p:PublishSingleFile=false
+          -p:PublishReadyToRun=false
+          -p:DebugType=none
+          -p:DebugSymbols=false
+          -p:Version=${{ steps.version.outputs.version }}
+          -o publish
+
+      - name: Package
+        working-directory: ck3procedural
+        shell: pwsh
+        run: |
+          Get-ChildItem publish -Recurse -Include *.pdb | Remove-Item -Force
+          Copy-Item LICENSE publish/ -Force
+          Copy-Item README.md publish/ -Force
+          Compress-Archive -Path publish/* -DestinationPath "Ck3MapGen-${{ steps.version.outputs.version }}-win-x64.zip" -Force
+
+      # SignPath reads the artifact straight out of the workflow run, so it must be uploaded
+      # before the signing request is submitted.
+      - name: Upload unsigned artifact
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ck3MapGen-unsigned
+          path: ck3procedural/Ck3MapGen-${{ steps.version.outputs.version }}-win-x64.zip
+
+      # Flip the SIGNPATH_ENABLED repository variable to 'true' once SignPath approves the
+      # project and the signing policy exists. Until then the workflow still builds and
+      # releases, just unsigned.
+      - name: Submit signing request
+        id: sign
+        if: vars.SIGNPATH_ENABLED == 'true'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ck3procedural
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: zip-with-binaries
+          github-artifact-id: ${{ steps.upload.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: ck3procedural/signed
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            ck3procedural/signed/*.zip
+            ck3procedural/Ck3MapGen-${{ steps.version.outputs.version }}-win-x64.zip
+          fail_on_unmatched_files: false
+          generate_release_notes: true
