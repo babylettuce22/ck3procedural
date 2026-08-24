@@ -27,6 +27,17 @@ public sealed record MapMode(
     /// </summary>
     public bool AfterWrite { get; init; }
 
+    /// <summary>
+    /// Renders written content when there is one and a recomputation of it when there is not — so,
+    /// unlike <see cref="AfterWrite"/>, it stays usable before a write, but what it shows until
+    /// then is an estimate and the strip says so.
+    ///
+    /// The distinction is the point. These modes used to recompute unconditionally, ignoring the
+    /// written world even once it existed, which made a guess indistinguishable from the answer in
+    /// exactly the way <see cref="AfterWrite"/> was introduced to prevent.
+    /// </summary>
+    public bool Estimate { get; init; }
+
     /// <summary>Click-to-edit: what a click picks, and at which title tier it lands.</summary>
     public (MapPick Kind, string Tier)? Pick { get; init; }
 
@@ -181,9 +192,26 @@ public static class MapModes
                 : w.Cultures.ByCounty.TryGetValue(county, out var c)
                     ? w.Ethnicities.For(c).LocalizedName : null,
         },
-        new("Government", "World",
-            (r, w) => PreviewRenderer.RenderGovernment(r, w?.Cultures, w?.WorldCenters))
+        new("Development", "World", PreviewRenderer.RenderDevelopment)
         {
+            AfterWrite = true,
+            Legend = RampLegend(PreviewRenderer.DevelopmentColour,
+                [(0, "0"), (8, "8"), (15, "15"), (22, "22"), (30, "30"), (40, "40+")]),
+            Probe = (_, w, _, county) => county is null || w is null ? null
+                : $"development {w.Development.GetValueOrDefault(county)}"
+                  + (w.WorldCenters.IsCenter(county) ? " · world center" : ""),
+        },
+        new("Wealth", "World", PreviewRenderer.RenderWealth)
+        {
+            AfterWrite = true,
+            Legend = RampLegend(PreviewRenderer.WealthColour,
+                [(0.0, "0"), (0.25, "0.25"), (0.55, "0.55"), (0.9, "0.9"), (1.3, "1.3"),
+                 (1.85, "1.85+ gold/mth")]),
+            Probe = (_, w, _, county) => county is null || w is null ? null : WealthProbe(w, county),
+        },
+        new("Government", "World", PreviewRenderer.RenderGovernment)
+        {
+            Estimate = true,
             Legend =
             [
                 (PreviewRenderer.GovernmentColour(GovernmentMap.Administrative), "Administrative"),
@@ -195,7 +223,15 @@ public static class MapModes
                 (PreviewRenderer.GovernmentColour("feudal"), "Feudal"),
             ],
         },
-        new("Wilderness", "World", (r, _) => PreviewRenderer.RenderWilderness(r))
+        // Reads the written wilderness when there is one, and before then reproduces it exactly —
+        // no Estimate flag, because there is nothing estimated about it. Wilderness is decided from
+        // the terrain vote, the first development pass and the import, all of which exist as soon
+        // as the world is generated; nothing it depends on is built inside the write. Measured, not
+        // assumed: the recomputation and the written map agree on all 111 counties of seed 4242 and
+        // on all 184 of the Fleunland import — where the version that dropped the import argument
+        // disagreed on 47 — and render byte-identically in both. If that ever stops being true,
+        // this mode wants the flag.
+        new("Wilderness", "World", PreviewRenderer.RenderWilderness)
         {
             Legend =
             [
@@ -205,6 +241,26 @@ public static class MapModes
             ],
         },
     ];
+
+    /// <summary>
+    /// The Wealth readout: the gold, then the holdings it came from, because "0.86 gold/month"
+    /// on its own never answers the question the map raises, which is why this county and not
+    /// that one.
+    /// </summary>
+    private static string WealthProbe(Emit.WrittenContent written, Title county)
+    {
+        double gold = Economy.CountyIncome(county, written.Holdings,
+            written.Development.GetValueOrDefault(county));
+
+        var holdings = Economy.CountyHoldings(county, written.Holdings)
+            .Select(h => h.Replace("_holding", "").Replace('_', ' '))
+            .ToList();
+
+        string from = holdings.Count == 0 ? "no holdings" : string.Join(" + ", holdings);
+        string centre = written.WorldCenters.IsCenter(county) ? " · world center" : "";
+
+        return $"{gold:F2} gold/month · {from}{centre}";
+    }
 
     private static ((byte, byte, byte), string)[] TerrainLegend()
         => [.. Enum.GetValues<TerrainClass>()

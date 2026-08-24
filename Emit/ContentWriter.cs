@@ -168,7 +168,7 @@ public static class ContentWriter
         if (wilderness.Count > 0)
         {
             var unsettledCulture = MapGen.Cultures.CreateUnsettled(
-                cultures.Heritages[0], vocabulary, new Rng(cfg.Seed ^ 0x0C55));
+                cultures.Heritages[0], vocabulary, cfg, new Rng(cfg.Seed ^ 0x0C55));
 
             cultures.Cultures.Add(unsettledCulture);
             foreach (var county in wilderness.Counties) cultures.ByCounty[county] = unsettledCulture;
@@ -196,11 +196,15 @@ public static class ContentWriter
             provinces, order, landCount, riverCount, cultures, empires, cfg,
             new Rng(cfg.Seed ^ 0x5EAE), terra.MajorRiversList, azgaar));
 
+        // Assigned inside the stage below and kept for WrittenContent — the holdings come off one
+        // Rng walked across the whole world, so this is the only chance to see them.
+        Dictionary<int, string> holdings = [];
+
         Core.Stage.Time("titles, history and localisation", () =>
         {
             WriteLandedTitles(modDir, empires, faiths, wilderness);
             WriteProvinceTerrain(modDir, provinceTerrain, landCount);
-            WriteProvinceHistory(modDir, cfg, empires, provinceTerrain, development, cultures, faiths, governments, wilderness, worldCenters, cfg.Seed);
+            holdings = WriteProvinceHistory(modDir, cfg, empires, provinceTerrain, development, cultures, faiths, governments, wilderness, worldCenters, cfg.Seed);
             WriteLocalisation(modDir, empires, waterNames, provinces, order, baronyCount,
                 landCount, riverCount);
         });
@@ -209,9 +213,26 @@ public static class ContentWriter
 
         Core.Stage.Time("title tiers", () => TitleTierWriter.WriteAll(modDir, cultures, empires));
 
+        // The world's way of war. Runs here because it is the last social layer and reads all of
+        // the others — the ground a people holds *after* cultivation has moved the farmland, the
+        // government most of them live under, the temperament their ethos gave them — and because
+        // the culture files below have to carry the innovations it invents. Nothing downstream of
+        // it changes a culture, so this is the earliest point at which its inputs are all final.
+        var retinues = cfg.EnableGeneratedRetinues
+            ? Core.Stage.Time("retinues", () => MapGen.Retinues.Build(cultures, governments,
+                provinceTerrain, vocabulary, cfg, new Rng(cfg.Seed ^ 0x3AA7)))
+            : null;
+
         Core.Stage.Time("culture files",
             () => CultureWriter.WriteAll(modDir, cfg, cultures, ethnicities, vocabulary,
-                new Rng(cfg.Seed ^ 0x0C1A)));
+                new Rng(cfg.Seed ^ 0x0C1A), retinues?.Innovations));
+
+        if (retinues is not null)
+        {
+            Core.Stage.Time("men-at-arms", () => RetinueWriter.WriteAll(modDir, retinues));
+            Core.Stage.Time("generated innovations",
+                () => InnovationWriter.WriteAll(modDir, retinues.Innovations));
+        }
 
         Core.Stage.Time("compatibility", () =>
         {
@@ -220,6 +241,7 @@ public static class ContentWriter
             CompatibilityWriter.WriteCalendarLocalisation(modDir, azgaar);
             CompatibilityWriter.WriteGeographicalRegions(modDir, gameDir, empires);
             CompatibilityWriter.WriteHolySites(modDir, gameDir, empires, faiths);
+            CompatibilityWriter.WriteDecisionBlocks(modDir, gameDir);
         });
 
         Core.Stage.Time("religion files", () => ReligionWriter.WriteAll(modDir, faiths));
@@ -285,6 +307,7 @@ public static class ContentWriter
         // family and relations written around him.
         RulerMap? rulers = null;
         PrehistoryMap? prehistory = null;
+        BookmarkCast? bookmarks = null;
 
         // --- AFTER (clean and unified) ---
         if (writeHistory)
@@ -301,6 +324,12 @@ public static class ContentWriter
                 rulers = Core.Stage.Time("rulers", () => RulerMap.Build(
                     counties, cfg, realms, cultures, faiths, governments, wilderness, prehistory));
 
+                // Beside the artifacts rather than beside the roster: both are things the rulers
+                // already own on the start date, and both need the rulers to exist first.
+                if (retinues is not null)
+                    Core.Stage.Time("starting retinues",
+                        () => RetinueWriter.WriteStartingRegiments(modDir, cfg, retinues, rulers));
+
                 var artifacts = MapGen.ArtifactMap.Build(
                     counties, cultures, faiths, realms, wilderness, new Rng(cfg.Seed ^ 0x4A1F));
 
@@ -312,7 +341,11 @@ public static class ContentWriter
                 var bookmarkResult = BookmarkWriter.WriteAll(
                     modDir, gameDir, cfg, provinces, order, empires,
                     realms, development, cultures, faiths, governments, wilderness, prehistory,
-                    rulers);
+                    rulers, azgaar);
+
+                // Kept for the editor: re-emitting a ruler means re-emitting the bookmark that
+                // describes him, and the cast is the record of who that is.
+                bookmarks = bookmarkResult.Cast;
 
                 HistoryWriter.WriteAll(
                     modDir, cfg, empires, realms, development,
@@ -326,14 +359,17 @@ public static class ContentWriter
                     empires, realms, development, cultures, faiths, wilderness, prehistory,
                     artifacts, worldCenters, cfg, new Rng(cfg.Seed ^ 0x104E)));
 
-                ChronicleWriter.WriteAll(modDir, chronicle, empires);
-
                 // After the chronicle, which is the thing that decides where a struggle is. Reads
                 // the counties for its membership and the chronicle only for its tension, so it
                 // cannot invent a quarrel the lore panel does not also report.
                 var struggles = Core.Stage.Time("struggles", () => StruggleMap.Build(
                     empires, chronicle, cultures, faiths, wilderness, cfg,
                     new Rng(cfg.Seed ^ 0x57A6)));
+
+                // Written after the struggles it reads, not after the chronicle it is made of: the
+                // lore panel closes with the name of the struggle a title is caught up in, and that
+                // name does not exist until the line above has run.
+                ChronicleWriter.WriteAll(modDir, chronicle, struggles, empires);
 
                 StruggleWriter.WriteAll(modDir, gameDir, cfg, struggles, flatmap, provinces, order);
 
@@ -347,6 +383,7 @@ public static class ContentWriter
         if (cfg.EnableWilderness) sets.Add(StaticFileWriter.Wilderness);
         if (cfg.EnableFantasyEthnicities && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly)
             sets.Add(StaticFileWriter.Fantasy);
+        if (cfg.EnableMagic) sets.Add(StaticFileWriter.Magic);
         Core.Stage.Time("static files", () => StaticFileWriter.WriteAll(modDir, sets, runStarted));
 
         // After the write rather than during it: cultures and faiths both gain their unsettled
@@ -358,11 +395,14 @@ public static class ContentWriter
             Faiths = faiths,
             WaterNames = waterNames,
             Wilderness = wilderness,
+            Development = development,
+            Holdings = holdings,
             WorldCenters = worldCenters,
             Realms = realms,
             Rulers = rulers,
             Prehistory = prehistory,
             Governments = governments,
+            Bookmarks = bookmarks,
             BaronyCount = baronyCount,
             LandCount = landCount,
             RiverCount = riverCount,
@@ -547,7 +587,10 @@ public static class ContentWriter
                           $"(vanilla 867: median 8, mass 0-16)");
     }
 
-    private static void WriteProvinceHistory(string modDir, MapConfig cfg, List<Title> empires,
+    /// <returns>The holding written for every barony, by province id — see
+    /// <see cref="WrittenContent.Holdings"/> for why it is kept rather than replayed.</returns>
+    private static Dictionary<int, string> WriteProvinceHistory(string modDir, MapConfig cfg,
+        List<Title> empires,
         TerrainClass[] provinceTerrain, Dictionary<Title, int> development, CultureMap cultures,
         FaithMap faiths, GovernmentMap governments, WildernessMap wilderness,
         WorldCenterMap worldCenters, int cfgSeed)
@@ -557,6 +600,7 @@ public static class ContentWriter
 
         var rng = new Rng(cfgSeed ^ 0x8A12);
         var counts = new Dictionary<string, int>();
+        var holdings = new Dictionary<int, string>();
 
         // Four spaces again, matching landed_titles above.
         var b = new JominiBuilder(JominiStyle.Spaced);
@@ -584,6 +628,7 @@ public static class ContentWriter
                     : MapGen.Development.Holding(i, terrain, level, government, rng);
 
                 counts[holding] = counts.GetValueOrDefault(holding) + 1;
+                holdings[barony.ProvinceId] = holding;
 
                 using (b.Block(barony.ProvinceId))
                 {
@@ -601,6 +646,7 @@ public static class ContentWriter
             counts.OrderByDescending(k => k.Value).Select(k => $"{k.Value} {k.Key}")));
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_provinces.txt"), b.ToString());
+        return holdings;
     }
 
     /// <summary>

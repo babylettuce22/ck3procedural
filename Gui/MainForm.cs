@@ -2657,15 +2657,23 @@ public sealed class MainForm : Form
 
         // Only on an actual switch: this also runs to repaint after an edit, and the hint would
         // otherwise stamp over the "Culture Suebi — Lugia" confirmation the edit just wrote.
-        if (switched && !_busy && _result is not null && mode.Pick is { } pick)
+        if (switched && !_busy && _result is not null)
         {
-            _status.Text = pick.Kind switch
+            if (mode.Pick is { } pick)
             {
-                MapPick.Culture => "Click a county to inspect and edit its culture",
-                MapPick.Faith => "Click a county to inspect and edit its faith",
-                MapPick.Realm => "Click a realm to focus it · Ctrl+click jumps to a county · Esc steps back",
-                _ => $"Click a {TierWord(pick.Tier)} to inspect and edit it",
-            };
+                _status.Text = pick.Kind switch
+                {
+                    MapPick.Culture => "Click a county to inspect and edit its culture",
+                    MapPick.Faith => "Click a county to inspect and edit its faith",
+                    MapPick.Realm => "Click a realm to focus it · Ctrl+click jumps to a county · Esc steps back",
+                    _ => $"Click a {TierWord(pick.Tier)} to inspect and edit it",
+                };
+            }
+            else if (mode.Estimate && _written is null)
+            {
+                _status.Text = $"{mode.Name} — estimated from the current world. " +
+                               "Write the mod to see what it ships.";
+            }
         }
 
         // Disposed at the end, after the viewer holds its replacement — never before SetImage,
@@ -2745,14 +2753,16 @@ public sealed class MainForm : Form
             button.ForeColor = on ? Theme.AccentText : available ? Theme.Text : Theme.TextDim;
             button.FlatAppearance.MouseOverBackColor = on ? Theme.Accent : Theme.Border;
 
-            _tips.SetToolTip(button, available
-                ? mode.Pick?.Kind switch
-                {
-                    MapPick.Realm => "Click a realm to focus and drill into it — Ctrl+click for the county",
-                    not null => "Click the map in this mode to inspect and edit",
-                    null => null,
-                }
-                : "Shows written content — available after Write mod");
+            _tips.SetToolTip(button, !available
+                ? "Shows written content — available after Write mod"
+                : mode.Estimate && _written is null
+                    ? "Estimated from the current world — write the mod to see what it actually ships"
+                    : mode.Pick?.Kind switch
+                    {
+                        MapPick.Realm => "Click a realm to focus and drill into it — Ctrl+click for the county",
+                        not null => "Click the map in this mode to inspect and edit",
+                        null => null,
+                    });
 
             _modeStrip.Controls.Add(button);
         }
@@ -2790,6 +2800,22 @@ public sealed class MainForm : Form
             }
         }
 
+        // An estimate mode before a write paints a recomputation of what a write would decide, so
+        // it says so beside its own key. In the amber rather than the dim grey the legend labels
+        // use: the point of the line is that it is not one of them.
+        bool estimate = mode.Estimate && _written is null;
+        if (estimate)
+        {
+            _legendBar.Controls.Add(new Label
+            {
+                Text = "   estimate — recomputed, not read from a written mod",
+                AutoSize = true,
+                Font = Theme.Ui,
+                ForeColor = Theme.NoticeText,
+                Margin = new Padding(12, 3, 0, 0),
+            });
+        }
+
         // The Realms drill-down borrows this bar for its breadcrumb — the mode has no legend, and
         // a second bar that exists for one mode would spend height on every other one.
         bool breadcrumb = mode.Name == "Realms" && _realmFocus.Count > 0 && Realm is { } graph;
@@ -2822,7 +2848,7 @@ public sealed class MainForm : Form
             });
         }
 
-        _legendBar.Visible = mode.Legend is not null || breadcrumb;
+        _legendBar.Visible = mode.Legend is not null || breadcrumb || estimate;
         _legendBar.ResumeLayout();
 
         void AddCrumb(string text, int keep)

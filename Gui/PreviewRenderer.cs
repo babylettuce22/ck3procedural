@@ -468,20 +468,102 @@ public static class PreviewRenderer
     public static Image RenderFaiths(GenerationResult result, MapGen.FaithMap? faiths, MapGen.WildernessMap? wilderness)
         => faiths is null ? RenderTitles(result, "c") : RenderByCounty(result, wilderness, county => faiths.ByCounty.TryGetValue(county, out var f) ? ((byte)Math.Clamp(f.Color.R * 255, 0, 255), (byte)Math.Clamp(f.Color.G * 255, 0, 255), (byte)Math.Clamp(f.Color.B * 255, 0, 255)) : null);
 
-    public static Image RenderGovernment(GenerationResult result, MapGen.CultureMap? cultures = null, MapGen.WorldCenterMap? worldCenters = null)
+    /// <summary>
+    /// The wilderness and the governments a write would produce, worked out for a world that has
+    /// not been written yet.
+    ///
+    /// Every mode that can read <see cref="Emit.WrittenContent"/> does, and both of these do too
+    /// once a write exists. This runs only for the estimate the strip offers before then, which is
+    /// what <see cref="MapMode.Estimate"/> labels it as.
+    ///
+    /// It mirrors <see cref="Emit.ContentWriter"/>'s order and seeds rather than approximating
+    /// them, arguments included. That is the whole point: an earlier version of this dropped four
+    /// of those arguments, and each one changed the answer. Without <c>provinces/order/baronyCount</c>
+    /// <see cref="MapGen.Realms.Build"/> has no county adjacency and drops its contiguity
+    /// constraint; without <c>azgaar</c> an imported world's wilderness comes from terrain scoring
+    /// instead of from the ground the export left unclaimed, and its governments from our own
+    /// reasoning instead of from the forms the export drew — not approximations of the written
+    /// answers but different answers.
+    ///
+    /// The wilderness half comes out exact either way: everything it reads — the terrain vote, the
+    /// first development pass, the import — exists as soon as the world is generated.
+    ///
+    /// On an imported world the governments half is exact too, because the export's forms decide
+    /// them and <c>StateTitles</c> is populated by the hierarchy build, well before any write.
+    ///
+    /// On a generated one it cannot be. Cultures and world centers are built inside
+    /// <see cref="Emit.ContentWriter.WriteAll"/>, so before one has run the development here is
+    /// missing <see cref="MapConfig.WorldCenterDevBoost"/> and the governments are missing their
+    /// heritage and wonder inputs. What that costs is almost entirely administrative realms:
+    /// without the boost a realm's average development stays under the <c>avgDev &gt;= 11</c> gate
+    /// in <see cref="MapGen.Governments.Build"/>, and with no world centers there is no imperial
+    /// wonder to waive it, so the counties that would have been administrative fall through to
+    /// clan and feudal.
+    ///
+    /// Measured against the written mod, counties disagreeing, four-argument version → this one:
+    /// Fleunland import, 184 counties — wilderness 47 → 0, government 121 → 0, both renders
+    /// byte-identical to the written-backed ones. Generated, seed 4242 (111 counties) government
+    /// 81 → 45 and seed 991 (106 counties) 86 → 40, with every written administrative county
+    /// inside the residue both times. Hence still an estimate on a generated world, and hence the
+    /// label the strip puts on it.
+    /// </summary>
+    private static (List<Title> Counties, TerrainClass[] ProvinceTerrain,
+                    Dictionary<Title, int> Development, WildernessMap Wilderness)
+        EstimateWilderness(GenerationResult result)
+    {
+        var cfg = result.Config;
+        var counties = Titles.Flatten(result.Titles).Where(t => t.Tier == "c").ToList();
+
+        var provinceTerrain = Emit.ContentWriter.ProvinceTerrain(
+            cfg, result.Provinces, result.ProvinceOrder, result.Terrain.Terrain, result.LandCount);
+
+        var development = MapGen.Development.ForCounties(
+            counties, provinceTerrain, cfg, new Rng(cfg.Seed ^ 0x0DE7));
+
+        var wilderness = MapGen.Wilderness.Build(counties, result.Provinces, result.ProvinceOrder,
+            result.LandCount, provinceTerrain, development, cfg, new Rng(cfg.Seed ^ 0x1D17),
+            result.Azgaar);
+
+        return (counties, provinceTerrain, development, wilderness);
+    }
+
+    /// <inheritdoc cref="EstimateWilderness"/>
+    private static GovernmentMap EstimateGovernments(GenerationResult result,
+        MapGen.CultureMap? cultures, MapGen.WorldCenterMap? worldCenters)
+    {
+        var cfg = result.Config;
+        var azgaar = result.Azgaar;
+        var empires = result.Titles;
+        var (counties, provinceTerrain, development, wilderness) = EstimateWilderness(result);
+
+        // A second development pass, as ContentWriter runs one: wilderness above is decided before
+        // the world centers exist, and only realms and governments see their boost. Folding the
+        // boost into the first pass instead would change which counties come out wild.
+        development = MapGen.Development.ForCounties(
+            counties, provinceTerrain, cfg, new Rng(cfg.Seed ^ 0x0DE7), worldCenters);
+
+        var realms = MapGen.Realms.Build(empires, development, wilderness, cfg,
+            new Rng(cfg.Seed ^ 0x2E17), result.Provinces, result.ProvinceOrder,
+            result.BaronyCount, azgaar);
+
+        var stateGovernments = azgaar is null ? null : MapGen.AzgaarGovernments.ByState(azgaar, cfg);
+
+        return MapGen.Governments.Build(empires, counties, realms, provinceTerrain,
+            development, cultures, worldCenters, cfg, new Rng(cfg.Seed ^ 0x6017),
+            azgaar, stateGovernments);
+    }
+
+    public static Image RenderGovernment(GenerationResult result, Emit.WrittenContent? written)
+        => RenderGovernment(result, written?.Governments
+            ?? EstimateGovernments(result, written?.Cultures, written?.WorldCenters));
+
+    private static Image RenderGovernment(GenerationResult result, GovernmentMap governments)
     {
         var map = result.Provinces;
         var order = result.ProvinceOrder;
         int width = map.Width, height = map.Height;
         int baronyCount = result.BaronyCount, landCount = result.LandCount;
-        var cfg = result.Config;
-        var empires = result.Titles;
         var counties = Titles.Flatten(result.Titles).Where(t => t.Tier == "c").ToList();
-        var provinceTerrain = Emit.ContentWriter.ProvinceTerrain(cfg, map, order, result.Terrain.Terrain, landCount);
-        var development = MapGen.Development.ForCounties(counties, provinceTerrain, cfg, new Rng(cfg.Seed ^ 0x0DE7));
-        var wilderness = MapGen.Wilderness.Build(counties, map, order, landCount, provinceTerrain, development, cfg, new Rng(cfg.Seed ^ 0x1D17));
-        var realms = MapGen.Realms.Build(empires, development, wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17));
-        var governments = MapGen.Governments.Build(empires, counties, realms, provinceTerrain, development, cultures, worldCenters, cfg, new Rng(cfg.Seed ^ 0x6017));
 
         var government = new string[counties.Count];
         for (int c = 0; c < counties.Count; c++) government[c] = governments.For(counties[c]);
@@ -523,17 +605,16 @@ public static class PreviewRenderer
             });
     }
 
-    public static Image RenderWilderness(GenerationResult result)
+    public static Image RenderWilderness(GenerationResult result, Emit.WrittenContent? written)
+        => RenderWilderness(result, written?.Wilderness ?? EstimateWilderness(result).Wilderness);
+
+    private static Image RenderWilderness(GenerationResult result, WildernessMap wilderness)
     {
         var map = result.Provinces;
         var order = result.ProvinceOrder;
         int width = map.Width, height = map.Height;
         int baronyCount = result.BaronyCount, landCount = result.LandCount;
-        var cfg = result.Config;
         var counties = Titles.Flatten(result.Titles).Where(t => t.Tier == "c").ToList();
-        var provinceTerrain = Emit.ContentWriter.ProvinceTerrain(cfg, map, order, result.Terrain.Terrain, landCount);
-        var development = MapGen.Development.ForCounties(counties, provinceTerrain, cfg, new Rng(cfg.Seed ^ 0x0DE7));
-        var wilderness = MapGen.Wilderness.Build(counties, map, order, landCount, provinceTerrain, development, cfg, new Rng(cfg.Seed ^ 0x1D17));
 
         var isWild = new bool[counties.Count];
         for (int c = 0; c < counties.Count; c++) isWild[c] = wilderness.Contains(counties[c]);
@@ -597,6 +678,125 @@ public static class PreviewRenderer
     }
 
     /// <summary>Shared with the legend, so the key can never drift from the paint.</summary>
+    /// <summary>
+    /// Counties by the development level the mod ships them at, with a badge on every world center.
+    ///
+    /// Reads <see cref="Emit.WrittenContent.Development"/> rather than recomputing it. The level a
+    /// county actually gets comes from the development pass that sees the world centers, and those
+    /// do not exist until the write has built the cultures they are placed from — which is also why
+    /// the badges belong here rather than on a mode that can be drawn earlier.
+    /// </summary>
+    public static Image RenderDevelopment(GenerationResult result, Emit.WrittenContent? written)
+    {
+        if (written is null) return RenderTitles(result, "c");
+
+        var image = RenderByCounty(result, written.Wilderness,
+            county => DevelopmentColour(written.Development.GetValueOrDefault(county)));
+
+        DrawWorldCenters(image, result, written.WorldCenters);
+        return image;
+    }
+
+    /// <summary>
+    /// Counties by what they earn their holder each month, with a badge on every world center.
+    ///
+    /// CK3 has no wealth map mode to copy; its nearest is <c>economy_buildings</c>, which colours
+    /// by a holding's income in gold per month. So this is that number, computed by
+    /// <see cref="Economy"/> from the holdings the province history actually wrote and the
+    /// development it actually assigned — not a score invented to look like money.
+    ///
+    /// Nomadic and unsettled counties come out at zero, which is correct rather than missing: a
+    /// horde's purse comes from its herds and its camp declares no <c>monthly_income</c> at all.
+    /// </summary>
+    public static Image RenderWealth(GenerationResult result, Emit.WrittenContent? written)
+    {
+        if (written is null) return RenderTitles(result, "c");
+
+        var image = RenderByCounty(result, written.Wilderness, county => WealthColour(
+            (float)Economy.CountyIncome(county, written.Holdings,
+                written.Development.GetValueOrDefault(county))));
+
+        DrawWorldCenters(image, result, written.WorldCenters);
+        return image;
+    }
+
+    /// <summary>Barony province id to the seed point it grew from, for placing a badge on a county.</summary>
+    private static int[] SeedOfProvince(GenerationResult result)
+    {
+        var order = result.ProvinceOrder;
+        var seedOfProvince = new int[result.LandCount + 1];
+
+        for (int label = 0; label < order.Length; label++)
+        {
+            int id = order[label];
+            if (id >= 1 && id <= result.LandCount) seedOfProvince[id] = label;
+        }
+
+        return seedOfProvince;
+    }
+
+    /// <summary>
+    /// A wonder badge on each world center, seated on its capital barony — the province that
+    /// carries the <c>special_building</c> line, so the badge sits where the wonder is.
+    /// </summary>
+    private static void DrawWorldCenters(Image image, GenerationResult result, WorldCenterMap centers)
+    {
+        int step = StepFor(result.Provinces.Width);
+        var seedOf = SeedOfProvince(result);
+        var map = result.Provinces;
+
+        foreach (var centre in centers.Centers)
+        {
+            int provinceId = centre.CapitalBarony.ProvinceId;
+            if (provinceId < 1 || provinceId >= seedOf.Length) continue;
+
+            int seedIndex = seedOf[provinceId];
+            if (seedIndex < 0 || seedIndex >= map.Seeds.Count) continue;
+
+            var seed = map.Seeds[seedIndex];
+            DrawWonderBadge(image, seed.X / step, seed.Y / step, centre.Wonder.Archetype);
+        }
+    }
+
+    /// <summary>
+    /// County development, unlit ground through to a bright capital.
+    ///
+    /// The stops are placed against what the generator actually produces rather than against CK3's
+    /// 0..100 ceiling: <see cref="MapConfig.DevelopmentBase"/> and its spread put a generated world
+    /// in the low tens, so a ramp stretched to 100 would paint the whole map the same dark colour.
+    /// </summary>
+    public static (byte R, byte G, byte B) DevelopmentColour(float level)
+        => Ramp(level,
+        [
+            (0, (46, 42, 58)),
+            (8, (82, 68, 92)),
+            (15, (132, 100, 92)),
+            (22, (190, 152, 80)),
+            (30, (240, 214, 128)),
+            (40, (255, 248, 214)),
+        ]);
+
+    /// <summary>
+    /// A county's monthly gold, dark through to bright.
+    ///
+    /// The stops are placed against the range the generator can actually reach, not against a round
+    /// number. <see cref="MapGen.Development.Holding"/> gives a county at most two holdings, so the
+    /// richest possible is a city beside a church — 0.80 + 0.75 — lifted by development, and the
+    /// top stop sits just above that. Measured across three seeds the median county earns about
+    /// 0.42 and the best about 1.5, which is where the middle of this ramp is aimed; an earlier
+    /// version topped out at 2.2 and left the whole upper third of the ramp unused.
+    /// </summary>
+    public static (byte R, byte G, byte B) WealthColour(float goldPerMonth)
+        => Ramp(goldPerMonth,
+        [
+            (0.00, (48, 46, 44)),
+            (0.25, (92, 72, 50)),
+            (0.55, (146, 108, 54)),
+            (0.90, (202, 158, 66)),
+            (1.30, (238, 202, 104)),
+            (1.85, (255, 242, 198)),
+        ]);
+
     public static (byte R, byte G, byte B) GovernmentColour(string government) => government switch
     {
         GovernmentMap.Administrative => (155, 60, 160),
@@ -822,13 +1022,21 @@ public static class PreviewRenderer
         return centroids;
     }
 
-    private static void DrawIconBadge(Image dest, int cx, int cy, DdsReader.DecodedImage icon, int targetSize = 28)
+    /// <summary>
+    /// The dark disc every badge sits on. Split out of <see cref="DrawIconBadge"/> so the wonder
+    /// glyphs below get the same seat without a second copy of it — a badge that reads differently
+    /// between two map modes would look like it meant something different.
+    /// </summary>
+    private static void DrawBadgeCircle(Image dest, int cx, int cy, int targetSize)
     {
-        // targetSize: icon display width/height in preview pixels; minorities draw at 20.
         int radius = targetSize / 2 + 3;
         int rSq = radius * radius;
 
-        // 1. Draw semi-transparent dark circle badge behind icon
+        // A pale rim around the dark disc. Without it the badge is (20,22,26) against a county that
+        // can be (46,42,58) at the bottom of the development ramp, and it disappears into exactly
+        // the ground it is supposed to be marking.
+        int rimSq = (radius - 2) * (radius - 2);
+
         for (int dy = -radius; dy <= radius; dy++)
         {
             int py = cy + dy;
@@ -840,16 +1048,24 @@ public static class PreviewRenderer
                 if (px < 0 || px >= dest.Width) continue;
 
                 int distSq = dx * dx + dy * dy;
-                if (distSq <= rSq)
-                {
-                    int o = (py * dest.Width + px) * 3;
-                    float alpha = distSq >= rSq - radius ? 0.9f : 0.75f;
-                    dest.Rgb[o + 0] = (byte)(dest.Rgb[o + 0] * (1 - alpha) + 20 * alpha);
-                    dest.Rgb[o + 1] = (byte)(dest.Rgb[o + 1] * (1 - alpha) + 22 * alpha);
-                    dest.Rgb[o + 2] = (byte)(dest.Rgb[o + 2] * (1 - alpha) + 26 * alpha);
-                }
+                if (distSq > rSq) continue;
+
+                int o = (py * dest.Width + px) * 3;
+                bool rim = distSq > rimSq;
+                float alpha = rim ? 0.85f : 0.78f;
+                var (r, g, b) = rim ? (206, 200, 186) : (20, 22, 26);
+
+                dest.Rgb[o + 0] = (byte)(dest.Rgb[o + 0] * (1 - alpha) + r * alpha);
+                dest.Rgb[o + 1] = (byte)(dest.Rgb[o + 1] * (1 - alpha) + g * alpha);
+                dest.Rgb[o + 2] = (byte)(dest.Rgb[o + 2] * (1 - alpha) + b * alpha);
             }
         }
+    }
+
+    private static void DrawIconBadge(Image dest, int cx, int cy, DdsReader.DecodedImage icon, int targetSize = 28)
+    {
+        // targetSize: icon display width/height in preview pixels; minorities draw at 20.
+        DrawBadgeCircle(dest, cx, cy, targetSize);
 
         // 2. Alpha-blend the icon on top
         int half = targetSize / 2;
@@ -883,6 +1099,109 @@ public static class PreviewRenderer
             }
         }
     }
+
+    /// <summary>
+    /// A world center's badge: the same dark disc the race icons sit on, with a glyph for its
+    /// wonder drawn straight into the buffer.
+    ///
+    /// Drawn rather than loaded on purpose. The race badges read a trait .dds out of the game's
+    /// interface icons, which works because a phenotype trait happens to have an icon vanilla
+    /// shipped; a generated wonder has no such file, and inventing an asset to preview an asset the
+    /// map does not have would be worse than five shapes in code. The shapes are analytic — each
+    /// archetype is a predicate over normalised coordinates — so they scale to any badge size and
+    /// need no rasteriser.
+    /// </summary>
+    private static void DrawWonderBadge(Image dest, int cx, int cy, WonderArchetype archetype,
+        int targetSize = 24)
+    {
+        DrawBadgeCircle(dest, cx, cy, targetSize);
+
+        int half = targetSize / 2;
+        for (int y = 0; y < targetSize; y++)
+        {
+            int py = cy - half + y;
+            if (py < 0 || py >= dest.Height) continue;
+
+            // Sampled at pixel centres, so an odd size stays symmetric about the badge's middle.
+            double v = (y + 0.5) / half - 1.0;
+
+            for (int x = 0; x < targetSize; x++)
+            {
+                int px = cx - half + x;
+                if (px < 0 || px >= dest.Width) continue;
+
+                double u = (x + 0.5) / half - 1.0;
+                if (!InWonderGlyph(archetype, u, v)) continue;
+
+                int o = (py * dest.Width + px) * 3;
+                dest.Rgb[o + 0] = 240;
+                dest.Rgb[o + 1] = 236;
+                dest.Rgb[o + 2] = 222;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether a point is inside an archetype's glyph, in coordinates running −1..1 across the
+    /// badge with <paramref name="v"/> pointing down.
+    ///
+    /// Kept to shapes that survive being 20-odd pixels wide: no feature is thinner than about a
+    /// tenth of the badge, because below that the glyphs stop being distinguishable from each other
+    /// and a map full of identical smudges is worse than no badges at all.
+    /// </summary>
+    private static bool InWonderGlyph(WonderArchetype archetype, double u, double v) => archetype switch
+    {
+        // A domed hall: finial, dome, then a plinth wider than the dome so the two read as
+        // separate parts of a building rather than as one bell-shaped blob.
+        WonderArchetype.Sanctuary =>
+            (u * u + (v + 0.70) * (v + 0.70) < 0.12 * 0.12)
+            || (u * u + (v + 0.08) * (v + 0.08) < 0.34 * 0.34 && v < -0.08)
+            || (v >= -0.08 && v <= 0.26 && Math.Abs(u) < 0.40)
+            || (v > 0.30 && v <= 0.56 && Math.Abs(u) < 0.66),
+
+        // An anchor: ring, shank, stock, and the arc of the flukes.
+        WonderArchetype.GreatHarbor =>
+            (Math.Abs(u) < 0.10 && v > -0.55 && v < 0.62)
+            || (v > -0.38 && v < -0.24 && Math.Abs(u) < 0.44)
+            || Ring(u, v + 0.62, 0.19, 0.09)
+            || (v > 0.30 && Ring(u, v - 0.10, 0.52, 0.10)),
+
+        // An open book: two pages splaying up and out from the spine, with a clear gap between
+        // them. The slant is what makes it a book — squared off it is just two bricks.
+        WonderArchetype.GreatLibrary =>
+            Math.Abs(u) > 0.09 && Math.Abs(u) < 0.68
+            && v > -0.08 - 0.46 * (Math.Abs(u) - 0.09) / 0.59
+            && v < 0.40 - 0.14 * (Math.Abs(u) - 0.09) / 0.59,
+
+        // A gatehouse: three merlons over a wall with an arch cut out of it. The gaps between the
+        // merlons are deliberately wider than the merlons look like they want to be — at a badge
+        // this size anything narrower closes up and the whole glyph reads as a plain brick.
+        // The arch is a hole rather than a shape: the predicate simply says no, and the dark disc
+        // underneath shows through.
+        WonderArchetype.Citadel =>
+            (Math.Abs(u) < 0.48 && v > -0.30 && v < 0.62 && !(Math.Abs(u) < 0.17 && v > 0.22))
+            || (v >= -0.72 && v <= -0.30
+                && (Math.Abs(u) < 0.11 || (Math.Abs(u) > 0.31 && Math.Abs(u) < 0.48))),
+
+        // A crown: a banded base under three tapering points.
+        WonderArchetype.ImperialPalace =>
+            (v > 0.24 && v < 0.56 && Math.Abs(u) < 0.60)
+            || (v >= -0.62 && v <= 0.24
+                && (Spike(u, v, -0.42) || Spike(u, v, 0.0) || Spike(u, v, 0.42))),
+
+        _ => false,
+    };
+
+    /// <summary>An annulus of half-thickness <paramref name="t"/> at radius <paramref name="r"/>.</summary>
+    private static bool Ring(double u, double v, double r, double t)
+    {
+        double d = Math.Sqrt(u * u + v * v);
+        return d > r - t && d < r + t;
+    }
+
+    /// <summary>One point of the crown, widest at its base and closing to nothing at the tip.</summary>
+    private static bool Spike(double u, double v, double centre)
+        => Math.Abs(u - centre) < 0.20 * (v + 0.62) / 0.86;
 
     private static string? GetPhenotypeIconFilename(RaceArchetype archetype) => archetype switch
     {

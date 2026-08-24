@@ -261,6 +261,8 @@ public static class Cultures
             return importedMap;
         }
 
+        var allowedTraditions = AllowedTraditions(vocab, cfg);
+
         int cultureTarget = Math.Max(1, (int)Math.Round(counties.Count / cfg.CountiesPerCulture));
         int heritageTarget = Math.Max(1, (int)Math.Round(cultureTarget / cfg.CulturesPerHeritage));
 
@@ -352,7 +354,7 @@ public static class Cultures
                 if (owned.Count == 0) continue;
 
                 var culture = Create(heritage, owned, provinceTerrain, development, vocab,
-                    usedNames, cultures.Count, rng);
+                    allowedTraditions, usedNames, cultures.Count, rng);
 
                 heritage.Cultures.Add(culture);
                 cultures.Add(culture);
@@ -368,12 +370,16 @@ public static class Cultures
     /// <summary>
     /// The export's own peoples, as heritages and cultures, or null when it has none to give.
     ///
-    /// One CK3 culture per live Azgaar culture, over the counties that culture actually holds. The
-    /// grouping above them is Azgaar's <c>origins</c> ancestry rather than geometry: a culture whose
-    /// origin is another live culture joins that one's heritage, and a culture descended from
-    /// Wildlands founds its own. On the Lumbaris export that turns twelve cultures into seven
-    /// families — Ignisari with Dhezi and Krighi under it, Dratkonian with Luminari and Dhalgvolan —
-    /// which is the same relationship CK3 means by heritage, already stated by the export.
+    /// One CK3 culture per live Azgaar culture, over the counties that culture actually holds.
+    ///
+    /// The grouping above them is <see cref="AzgaarFamilies"/>'s: Azgaar's <c>origins</c> ancestry
+    /// where the export drew one — a culture whose origin is another live culture joins that one's
+    /// heritage — and, where every culture descends from Wildlands and the ancestry therefore says
+    /// nothing, shared name corpus and then geography. On the Lumbaris export the ancestry alone
+    /// turns twelve cultures into seven families; on Fleunland, whose origins are the generator's
+    /// degenerate default, the corpus puts both Elven cultures and both Dwarven ones together and
+    /// geography joins the two human peoples. Either way it is the relationship CK3 means by
+    /// heritage.
     ///
     /// Deliberately ignores <see cref="MapConfig.CountiesPerCulture"/> and
     /// <see cref="MapConfig.CulturesPerHeritage"/>. Those exist to give an invented world a plausible
@@ -387,6 +393,8 @@ public static class Cultures
     {
         var live = azgaar.World.RealCultures.ToDictionary(c => c.I);
         if (live.Count == 0) return null;
+
+        var allowedTraditions = AllowedTraditions(vocab, cfg);
 
         // --- Which people holds each county -------------------------------------------------------
         var held = new Dictionary<int, List<Title>>();
@@ -409,9 +417,17 @@ public static class Cultures
 
         Spread(counties, graph, held, homeless);
 
-        // --- Families, from the export's own ancestry ---------------------------------------------
-        var family = new Dictionary<int, int>();
-        foreach (int id in held.Keys) family[id] = Ancestor(id, live);
+        var index = new Dictionary<Title, int>();
+        for (int i = 0; i < counties.Count; i++) index[counties[i]] = i;
+
+        // --- Families -----------------------------------------------------------------------------
+        //
+        // Ancestry where the export drew one, shared name corpus and then geography where it did not.
+        // See AzgaarFamilies for why the second and third exist at all: Azgaar's generator writes
+        // every culture as descended from Wildlands, so the ancestry it ships is a statement that no
+        // culture is related to any other, which is not what its author meant and is not a world CK3
+        // can do anything with.
+        var (family, basis) = AzgaarFamilies.Group(live, held, graph, index, cfg.CulturesPerHeritage);
 
         var heritages = new List<Heritage>();
         var cultures = new List<Culture>();
@@ -428,9 +444,6 @@ public static class Cultures
 
         var eligibleLooks = FilterLooks(vocab.Looks, cfg.CultureAestheticsTheme);
         var lookPool = eligibleLooks.Count > 0 ? eligibleLooks : vocab.Looks;
-
-        var index = new Dictionary<Title, int>();
-        for (int i = 0; i < counties.Count; i++) index[counties[i]] = i;
 
         foreach (var (root, members) in family.GroupBy(kv => kv.Value, kv => kv.Key)
                                               .ToDictionary(g => g.Key, g => g.OrderBy(i => i).ToList())
@@ -482,7 +495,7 @@ public static class Cultures
 
                 var source = live[id];
                 var culture = Create(heritage, owned, provinceTerrain, development, vocab,
-                                     usedCultureNames, cultures.Count, rng);
+                                     allowedTraditions, usedCultureNames, cultures.Count, rng);
 
                 // The export's word for this people, and its own colour, over the generated ones.
                 // Written after Create rather than threaded through it so the character the ground
@@ -508,7 +521,7 @@ public static class Cultures
         if (heritages.Count == 0) return null;
 
         Console.WriteLine($"    cultures follow the export: {cultures.Count} of its peoples in " +
-                          $"{heritages.Count} families from its own ancestry" +
+                          $"{heritages.Count} families from {basis}" +
                           (homeless.Count > 0 ? $", {homeless.Count} wildlands counties joined a neighbour" : ""));
 
         return new CultureMap { Heritages = heritages, Cultures = cultures, ByCounty = byCounty };
@@ -568,28 +581,6 @@ public static class Cultures
 
         int biggest = held.OrderByDescending(kv => kv.Value.Count).ThenBy(kv => kv.Key).First().Key;
         foreach (int at in pending.OrderBy(i => i)) held[biggest].Add(counties[at]);
-    }
-
-    /// <summary>
-    /// The culture at the head of <paramref name="id"/>'s line of descent — the first ancestor that
-    /// is itself descended from Wildlands, or <paramref name="id"/> when it already is.
-    ///
-    /// Azgaar writes <c>origins</c> as a list because a culture can be a blend; the first entry is
-    /// the one its own generator treats as the parent, so that is the one followed. Guarded against a
-    /// cycle, which the map editor makes it perfectly possible to draw by hand.
-    /// </summary>
-    private static int Ancestor(int id, Dictionary<int, AzgaarCulture> live)
-    {
-        var seen = new HashSet<int>();
-
-        while (seen.Add(id) && live.TryGetValue(id, out var culture))
-        {
-            int? parent = culture.Origins.FirstOrDefault(o => o is > 0 && o != id);
-            if (parent is not { } up || !live.ContainsKey(up)) break;
-            id = up;
-        }
-
-        return id;
     }
 
     /// <summary>
@@ -677,7 +668,8 @@ public static class Cultures
 
     private static Culture Create(Heritage heritage, List<Title> counties,
         TerrainClass[] provinceTerrain, Dictionary<Title, int> development,
-        VanillaVocabulary vocab, HashSet<string> usedNames, int index, Rng rng)
+        VanillaVocabulary vocab, List<string> allowedTraditions, HashSet<string> usedNames,
+        int index, Rng rng)
     {
         var language = heritage.Language;
 
@@ -715,7 +707,7 @@ public static class Cultures
             Ethos = PickEthos(dominant, meanDevelopment, vocab, rng),
             MartialCustom = PickMartialCustom(vocab, rng),
             HeadDetermination = PickHeadDetermination(dominant, vocab, rng),
-            Traditions = PickTraditions(terrainCounts, meanDevelopment, vocab, rng),
+            Traditions = PickTraditions(terrainCounts, meanDevelopment, allowedTraditions, rng),
             CoaGfx = heritage.Look.CoaGfx,
             BuildingGfx = heritage.Look.BuildingGfx,
             ClothingGfx = heritage.Look.ClothingGfx,
@@ -751,7 +743,8 @@ public static class Cultures
     /// traditions it picks are what a player sees if they open the culture screen, and the harsh
     /// end of the table is the honest answer for ground that defeated everyone who tried.
     /// </summary>
-    public static Culture CreateUnsettled(Heritage heritage, VanillaVocabulary vocab, Rng rng)
+    public static Culture CreateUnsettled(Heritage heritage, VanillaVocabulary vocab,
+        MapConfig cfg, Rng rng)
     {
         var language = heritage.Language;
         var terrain = new Dictionary<TerrainClass, int> { [TerrainClass.Arctic] = 1 };
@@ -766,7 +759,7 @@ public static class Cultures
             Ethos = PickEthos(TerrainClass.Arctic, 0, vocab, rng),
             MartialCustom = PickMartialCustom(vocab, rng),
             HeadDetermination = PickHeadDetermination(TerrainClass.Arctic, vocab, rng),
-            Traditions = PickTraditions(terrain, 0, vocab, rng),
+            Traditions = PickTraditions(terrain, 0, AllowedTraditions(vocab, cfg), rng),
             CoaGfx = heritage.Look.CoaGfx,
             BuildingGfx = heritage.Look.BuildingGfx,
             ClothingGfx = heritage.Look.ClothingGfx,
@@ -831,13 +824,36 @@ public static class Cultures
     }
 
     /// <summary>
+    /// The traditions a generated culture may be given, which is not quite every tradition the
+    /// install declares.
+    ///
+    /// Traditions that hand out a *vanilla cultural regiment* are removed when the world is
+    /// writing its own men-at-arms. They are the one place vanilla's vocabulary shows through as a
+    /// borrowing: a tradition gives a culture an ethos and a modifier, which are abstract enough
+    /// to belong to anyone, and it also gives them Danish Huscarls, which are not. The terrain
+    /// tables above reach for several by name — hussars for steppe, bush hunting for jungle,
+    /// upland skirmishing for hills — so the leak was frequent rather than incidental.
+    ///
+    /// Only safe because the generated roster replaces what it removes: every heritage gets a
+    /// regiment of its own and martial cultures earn a second. With the roster switched off the
+    /// filter is switched off with it, or generated cultures would simply be poorer. See
+    /// <see cref="Retinues.ReplacesVanillaRosters"/>, which is also the condition
+    /// <see cref="Emit.CultureWriter"/> closes the *innovation* route on — the two have to move
+    /// together or a culture simply reaches vanilla's regiments by the other road.
+    /// </summary>
+    private static List<string> AllowedTraditions(VanillaVocabulary vocab, MapConfig cfg)
+        => Retinues.ReplacesVanillaRosters(vocab, cfg)
+            ? [.. vocab.Traditions.Where(t => !vocab.TraditionsUnlockingMaa.Contains(t))]
+            : vocab.Traditions;
+
+    /// <summary>
     /// Three to five traditions, drawn from what the culture's ground suggests and topped up from
-    /// the full list so no two cultures on the same terrain are identical.
+    /// <paramref name="allowed"/> so no two cultures on the same terrain are identical.
     /// </summary>
     private static List<string> PickTraditions(Dictionary<TerrainClass, int> terrainCounts,
-        double development, VanillaVocabulary vocab, Rng rng)
+        double development, List<string> allowed, Rng rng)
     {
-        var available = vocab.Traditions.ToHashSet(StringComparer.Ordinal);
+        var available = allowed.ToHashSet(StringComparer.Ordinal);
         var candidates = new List<string>();
 
         // Weighted by how much of the culture actually sits on each terrain, so a mostly-coastal
@@ -860,7 +876,7 @@ public static class Cultures
         {
             string pick = candidates.Count > 0 && rng.Chance(0.75)
                 ? rng.Pick(candidates)
-                : rng.Pick(vocab.Traditions);
+                : rng.Pick(allowed);
 
             if (available.Contains(pick) && !chosen.Contains(pick)) chosen.Add(pick);
         }

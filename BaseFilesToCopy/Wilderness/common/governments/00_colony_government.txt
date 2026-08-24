@@ -6,10 +6,24 @@ colony_government = {
 		create_cadet_branches = no
 		rulers_should_have_dynasty = yes
 		dynasty_named_realms = no
-		council = no
 		legitimacy = no
 		allow_accolades = no
 		court_generate_spouses = no
+
+		# ---- Why this is `yes` when everything around it is `no` ----
+		#
+		# It was `no`, and `no` did not mean what it looks like it means. It does not hide the
+		# council; it leaves the ruler with no positions and no tasks while window_council.gui goes
+		# on drawing its six hardcoded frames — so a colonist got a Council button that opened onto
+		# six blank panels, each reading "Click to appoint a" with no office named after it and
+		# nothing behind the portrait to click.
+		#
+		# A frontier post does have a handful of people the colonist actually listens to, so the
+		# answer was to give them offices rather than to keep pretending the screen is not there.
+		# See common/council_positions/00_colony_council_positions.txt for the five, and
+		# Emit/GuiWriter.cs for the window slots they appear in — vanilla's own five are hidden for
+		# a colonist in the same patch. Vanilla's spouse seat is deliberately left standing.
+		council = yes
 	}
 
 	court_generate_commanders = no

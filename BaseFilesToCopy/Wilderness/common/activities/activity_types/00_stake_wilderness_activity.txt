@@ -1,0 +1,306 @@
+﻿# The adventurer goes and lives on ground nobody holds, for four winters, and finds out.
+#
+# =====================================================================================
+#  Why this is an activity, and why that was not obvious
+# =====================================================================================
+#
+# It was a decision and a self-scheduling event chain first, and it worked, but it was reimplementing
+# three things the engine already does.
+#
+# TRAVEL. The first version's rule was "you must be standing on it", checked yearly against
+# `location`, with a hold penalty when you were not. That rule needed the player to be able to GET
+# there, and the only route was the camp-relocation planner -- whose destination rules live in the
+# GUI rather than in script, so there was no way to establish from the files whether a camp could
+# even enter a county held by the wilderness dummy. An activity settles it: the engine builds the
+# travel plan, holds the host at the location for the duration, and sends him home at the end.
+#
+# TIME. Four winters were four `trigger_event = { years = 1 }` calls, each booking the next. A chain
+# where several events can each book the next is a chain that eventually books two, and a doubled
+# winter would have been invisible except as a meter falling twice as fast as its tooltip claimed.
+# Phases are the engine's own answer and cannot double.
+#
+# ENDING EARLY. An emptied meter had to be noticed by the dispatcher and narrated by an event that
+# then cleaned up after itself. Here it is one line in `is_valid`: the engine invalidates the
+# activity and runs on_invalidated. See the note there.
+#
+# What is left of the old design is the part that was actually content -- the trials, the meter, the
+# arithmetic in 00_pioneer_values.txt -- which is the half worth keeping.
+#
+# =====================================================================================
+#  What replaced the absence rule
+# =====================================================================================
+#
+# Nothing, and that is the point. `pioneer_at_the_stake_trigger` and its -25 existed to enforce
+# presence by hand; the engine enforces it by holding the host at the activity location. Being
+# dragged away -- imprisoned, incapacitated, dead -- now fails `is_valid` and ends the run through
+# on_invalidated instead of quietly draining a number.
+#
+# It also buys the real cost of the four years for free, exactly as
+# 00_oversee_colony_activity.txt argues: a character at an activity is genuinely absent from
+# everything else, and every vanilla consequence of absence applies without a line of script.
+
+activity_stake_wilderness = {
+	# Landless only. A landed lord has settle_the_wilderness_decision, which sends somebody else --
+	# and a man with a hall to go back to is not making this bet.
+	is_shown = {
+		pioneer_can_stake_at_all_trigger = yes
+	}
+
+	# Cannot even be planned unless the requirements hold. The cost of a greyed Start button is that
+	# the reasons have to be legible, which is what can_start_showing_failures_only below is for.
+	can_always_plan = no
+
+	can_start_showing_failures_only = {
+		is_available = yes
+
+		pioneer_has_a_company_trigger = yes
+		pioneer_no_stake_underway_trigger = yes
+
+		custom_tooltip = {
+			text = colonize_not_while_at_war_tt
+			is_at_war = no
+		}
+	}
+
+	# ---- The one line that ends a failed run ----
+	#
+	# `trigger_if` rather than a bare check, and the guard is load-bearing: is_valid is evaluated
+	# against a live activity, but the variable is not created until on_start, and an activity that
+	# invalidated itself in the tick before its own setup ran would be unstartable with nothing on
+	# screen to say why. No variable means valid; an emptied meter means finished.
+	#
+	# The other three conditions are the ways a man stops being able to do this at all. All four
+	# routes land in on_invalidated, which is correct -- a stake that ends because its holder is in
+	# somebody's dungeon has ended, and the fiction does not need a second word for it.
+	is_valid = {
+		scope:host = {
+			is_alive = yes
+			is_imprisoned = no
+			is_incapable = no
+
+			trigger_if = {
+				limit = { has_variable = pioneer_hold }
+				var:pioneer_hold > 0
+			}
+		}
+	}
+
+	# ---- Where it may be done, and the only place that rule lives ----
+	#
+	# The planner's map picker is filtered by `province_filter` and then by this, so a location that
+	# is not claimable wilderness is simply not offered -- there is no second copy of the rule and no
+	# route around it, including one nobody has thought of yet.
+	#
+	# `county_can_be_claimed_trigger` is the same trigger the landed decision, the AI pulse and the
+	# claim interaction all ask, which is what keeps the two entry points from disagreeing about
+	# what unclaimed means. It also already excludes counties wearing
+	# settling_expedition_underway, so two pioneers cannot pick the same hillside.
+	is_location_valid = {
+		custom_tooltip = {
+			text = pioneer_must_be_wilderness_tt
+			county ?= { county_can_be_claimed_trigger = yes }
+		}
+	}
+
+	# `all`, because a landless adventurer has no domain, no realm and no capital for any narrower
+	# filter to be relative to. The list is cut down to something sane by is_location_valid above --
+	# on any map most counties are held by somebody.
+	province_filter = all
+	ai_province_filter = all
+
+	# One place, declared. Leaving this out is what produced the planner refusing to start with
+	# "No location selected for one of the Activity Phases" three times over and "All Activity Phases
+	# must take place at the same location" -- the engine wanted a location per phase and only the
+	# first had one. See the note on the phase block below for the rest of that story.
+	is_single_location = yes
+
+	# ---- Setup: the ground is reserved the moment the plan is confirmed ----
+	#
+	# on_start rather than on arrival, deliberately. The journey out can take months, and a county
+	# that stayed claimable for all of them could be settled out from under a pioneer already on the
+	# road by the landed AI's yearly pulse. Committing marks it.
+	on_start = {
+		scope:host = {
+			pioneer_begin_stake_effect = { COUNTY = scope:activity.activity_location.county }
+		}
+	}
+
+	# ---- Arrival ----
+	#
+	# The founding choice belongs here and not in on_start: it asks what gets done first with the
+	# ground in front of you, and on_start happens while the carts are still being loaded somewhere
+	# else entirely.
+	on_enter_active_state = {
+		scope:host = {
+			trigger_event = wilderness_pioneer.0001
+
+			# The first winter. Every later one is booked by 0010 itself -- see the note on the phase
+			# block for why the winters are a self-scheduled chain again rather than phases.
+			trigger_event = {
+				id = wilderness_pioneer.0010
+				years = 1
+			}
+		}
+	}
+
+	# Four winters stood through. The last phase's timer runs out, the activity completes, and this
+	# is the only path to the good ending.
+	on_complete = {
+		scope:host = { trigger_event = wilderness_pioneer.0020 }
+	}
+
+	# Every other way it can end. The vanilla invalidation effects first, so the player gets the
+	# engine's own explanation of WHY the activity stopped, then ours for what it cost.
+	on_invalidated = {
+		invalidation_imprisoned_effect = yes
+		invalidation_incapable_effect = yes
+
+		scope:host = { trigger_event = wilderness_pioneer.0030 }
+	}
+
+	max_province_icons = 3
+	allow_zero_guest_invites = yes
+	open_invite = no
+
+	province_description = {
+		desc = activity_stake_wilderness_province_desc
+	}
+
+	# ---- No cost here, and that is a change from the decision ----
+	#
+	# The gold and prestige the old decision charged are gone rather than moved. What this asks for
+	# is four years of a company standing still, which is the most expensive thing an adventurer
+	# owns, and pricing the same commitment twice was only ever an artefact of a decision needing
+	# something in its cost block. The company requirement in can_start_showing_failures_only is the
+	# bar; the winters are the price.
+
+	###################
+	# PHASES
+	###################
+
+	# ---- One phase, and why the four-winter version had to be abandoned ----
+	#
+	# The first build declared four predefined one-year phases -- first through fourth winter -- so
+	# that the activity window would draw a strip of them and show how far along a run was. The
+	# planner refused to start it, with three copies of "No location selected for one of the Activity
+	# Phases" and one "All Activity Phases must take place at the same location".
+	#
+	# The cause: `location_source = first_picked_phase` does not mean "the location the activity is
+	# at". It means "whichever location a player picked first", and it is written for tournament's
+	# ceremony phase, which inherits from CONTEST phases that are `is_predefined = no` -- phases the
+	# player adds from a list and assigns a place to. A predefined phase marked `pickable` is not a
+	# phase the player picked in that sense, so the three inheriting phases resolved to no location at
+	# all, and the single-location validation then failed on top of it.
+	#
+	# One phase is the shape every single-location activity in vanilla uses -- hunt, feast, funeral,
+	# pilgrimage all have exactly one -- and it is what 00_oversee_colony_activity.txt uses here. The
+	# strip is gone; the winters are not. They come from wilderness_pioneer.0010 rescheduling itself
+	# yearly, started on arrival, which is what the mechanic did before phases were tried.
+	#
+	# ---- Why 50 months rather than 4 years ----
+	#
+	# The winters land at months 12, 24, 36 and 48. Completing at exactly 48 would make the fourth
+	# winter and the activity's end fall in the same tick, and which resolved first would decide
+	# whether the player got their last trial before or after being told they had won. Two months of
+	# daylight between them costs nothing and removes the question.
+	#
+	# `MAX_PHASE_YEARS_ACTIVE` defaults to 1 and would silently invalidate a phase this long; it is
+	# raised to 60 in common/defines/zz_wilderness_activity_defines.txt for the overseeing activity,
+	# which is what makes this legal here too.
+	phases = {
+		phase_breaking_ground = {
+			is_predefined = yes
+			location_source = pickable
+
+			on_phase_active = {
+				if = {
+					limit = { this = scope:host }
+					scope:activity = { progress_activity_phase_after = { months = 50 } }
+				}
+			}
+		}
+	}
+
+	###################
+	# INTENTS
+	###################
+
+	# Required, not decorative -- see the note at the top of
+	# common/activities/intents/00_pioneer_intents.txt for what an activity with no intents block
+	# does, which is refuse to start while reporting nothing.
+	host_intents = {
+		default = stake_wilderness_intent
+		intents = { stake_wilderness_intent }
+	}
+
+	guest_intents = {
+		default = stake_wilderness_intent
+		intents = { stake_wilderness_intent }
+	}
+
+	###################
+	# GUESTS
+	###################
+
+	# Nobody is invited. The company comes because it is his company, not because it was asked, and
+	# a guest list would turn four winters of ditch-digging into a house party.
+	max_guests = 0
+
+	###################
+	# AI
+	###################
+
+	# The AI never starts this, and the zero replaces the ai_check_interval = 120 the old decision
+	# carried. That interval was a hedge -- an occasional frontier holdout founded by a wandering
+	# band, as colour -- and it is not worth the risk now that the commitment is real: an AI that
+	# parks its company for four years has handed away everything it was going to do with them, and
+	# no weighting can see that far. It is the same argument 00_oversee_colony_activity.txt makes for
+	# its own zero, and the same reason.
+	ai_will_do = { value = 0 }
+	ai_check_interval = 0
+
+	###################
+	# GRAPHICS
+	###################
+
+	# One unconditional background, no `environment` or `ambience` line -- both are asset keys that
+	# have to exist, and inventing one is the quiet failure this file set is written to avoid. The
+	# texture is vanilla's own, for the same reason the overseeing activity uses vanilla's: a
+	# mechanic should not wait on art.
+	background = {
+		trigger = { always = yes }
+		texture = "gfx/interface/illustrations/event_scenes/forest.dds"
+	}
+
+	window_characters = {
+		host = {
+			camera = camera_body
+
+			effect = {
+				if = {
+					limit = { scope:host.location = scope:activity.activity_location }
+					scope:host = { add_to_list = characters }
+				}
+			}
+
+			scripted_animation = {
+				animation = personality_bold
+			}
+		}
+
+		travel_host = {
+			camera = camera_event_horse_left
+
+			effect = {
+				if = {
+					limit = { scope:host.location != scope:activity.activity_location }
+					scope:host = { add_to_list = characters }
+				}
+			}
+
+			scripted_animation = {
+				animation = personality_bold
+			}
+		}
+	}
+}

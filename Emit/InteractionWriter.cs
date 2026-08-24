@@ -1,5 +1,4 @@
-﻿using System.Text.RegularExpressions;
-using Ck3MapGen.Io;
+﻿using Ck3MapGen.Io;
 
 namespace Ck3MapGen.Emit;
 
@@ -20,43 +19,28 @@ public static class InteractionWriter
 		}
 """;
 
+    /// <summary>
+    /// Adds the cross-race reluctance modifier to the <c>ai_accept</c> of both marriage
+    /// interactions.
+    ///
+    /// Both, or neither: patching one leaves the AI happy to marry across races in whichever
+    /// direction the other interaction covers, which reads as the feature being broken rather than
+    /// off. The old code warned only when *zero* of the two landed and shipped the file on one.
+    /// </summary>
     public static void PatchMarriageInteractions(string modDir, string gameDir)
     {
-        string sourcePath = Path.Combine(gameDir, "common", "character_interactions", "00_marriage_interactions.txt");
-        if (!File.Exists(sourcePath))
-        {
-            Console.WriteLine("  interactions: SKIPPED (00_marriage_interactions.txt not found in game folder)");
-            return;
-        }
+        var patch = VanillaPatch.Open(gameDir, "interactions",
+            "common", "character_interactions", "00_marriage_interactions.txt");
 
-        string text = File.ReadAllText(sourcePath);
+        if (patch is null) return;
 
-        // Targets the ai_accept = { block inside both arrange_marriage_interaction and marry_off_interaction
         string[] interactions = ["arrange_marriage_interaction", "marry_off_interaction"];
-        int patchedCount = 0;
 
         foreach (var interaction in interactions)
-        {
-            // Find the interaction definition block
-            var match = Regex.Match(text, $@"\b{interaction}\s*=\s*\{{[\s\S]*?ai_accept\s*=\s*\{{");
-            if (match.Success)
-            {
-                int insertPos = match.Index + match.Length;
-                text = text.Insert(insertPos, "\n" + RaceMarriageAcceptanceModifier + "\n");
-                patchedCount++;
-            }
-        }
+            patch.InsertAfter($"{interaction} ai_accept",
+                "\n" + RaceMarriageAcceptanceModifier + "\n",
+                $"{interaction} = {{", "ai_accept = {");
 
-        if (patchedCount == 0)
-        {
-            Console.WriteLine("  interactions: WARNING - Could not find ai_accept blocks in 00_marriage_interactions.txt");
-            return;
-        }
-
-        string destPath = Path.Combine(modDir, "common", "character_interactions", "00_marriage_interactions.txt");
-        Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
-        ParadoxText.WriteBom(destPath, text);
-
-        Console.WriteLine($"  interactions: 00_marriage_interactions.txt — patched {patchedCount} marriage interactions with race reluctance");
+        patch.Ship(modDir);
     }
 }

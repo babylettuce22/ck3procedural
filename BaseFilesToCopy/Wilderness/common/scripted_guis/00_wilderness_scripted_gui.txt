@@ -310,3 +310,27 @@ wilderness_return_home_activitywindow = {
 		}
 	}
 }
+
+
+# Character scope: the owner of the council being LOOKED AT, not the player.
+#
+# The one question window_council.gui has to ask, in both directions. Emit/GuiWriter.cs uses it twice
+# over: the five colony slots it adds are `visible` on this, and the three vanilla rows it finds are
+# rewritten to be `visible` on the negation of it. So a colonist sees his frontier offices and nobody
+# else does, and everybody else sees the privy council and a colonist does not.
+#
+# `CouncilWindow.GetCharacter` is what that writer passes as the scope, and it is the council OWNER
+# rather than `GetPlayer` on purpose: the same window shows your liege's council on another tab. Keyed
+# to the player, a colonist inspecting his feudal liege would be shown five empty frontier posts, and
+# a feudal lord inspecting his colonist vassal would be shown a Chancellor the man cannot appoint.
+#
+# No is_valid and no effect: this is a question, not a button. A scripted_gui with only an is_shown is
+# the established way for a .gui `visible` to run a trigger — see wilderness_county at the top of this
+# file for why that indirection has to exist at all.
+colony_council = {
+	scope = character
+
+	is_shown = {
+		is_colonist_trigger = yes
+	}
+}

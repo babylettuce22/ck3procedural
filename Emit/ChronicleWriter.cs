@@ -16,11 +16,16 @@ namespace Ck3MapGen.Emit;
 /// That gate is also what keeps this file honest about titles it has nothing to say for. Baronies
 /// get no entry (nothing in the chronicle is recorded below county level) and neither does
 /// wilderness, so both correctly show no button at all rather than an empty panel.
+///
+/// One line in the panel is not chronicle at all: a title inside a struggle region closes with the
+/// struggle's name. That is why this runs after <see cref="MapGen.StruggleMap"/> is built even
+/// though the chronicle it reads was built before it — see <see cref="MapGen.StruggleMap.Note"/>.
 /// </summary>
 public static class ChronicleWriter
 {
     /// <summary>
-    /// How many lines a title's panel gets.
+    /// How many remembered lines a title's panel gets. The struggle cross-reference below is not
+    /// one of them and is appended past this.
     ///
     /// The panel scrolls, so this is a judgement about reading rather than about space: past about
     /// this many the entries stop being a history and start being a list, and the specific ones get
@@ -33,11 +38,13 @@ public static class ChronicleWriter
     /// comment in <see cref="WriteAll"/> for why a cap is needed at all.</summary>
     private const int MaxPerKind = 2;
 
-    public static void WriteAll(string modDir, ChronicleMap chronicle, List<Title> empires)
+    public static void WriteAll(
+        string modDir, ChronicleMap chronicle, StruggleMap struggles, List<Title> empires)
     {
         var loc = new LocFile();
 
         int written = 0;
+        int noted = 0;
 
         // Tree order here, not index order: this file is read by people as often as by the game
         // when something looks wrong, and an empire followed by its kingdoms is far easier to scan
@@ -83,6 +90,22 @@ public static class ChronicleWriter
                 .Select(e => e.Text)
                 .ToList();
 
+            // Over the line budget rather than inside it, and last whatever else the panel holds.
+            // It is a cross-reference and not a memory: it dates from now, it is the same sentence
+            // every time the panel is reopened, and it is the only line that points at something
+            // the player can go and look at in another window. Spending one of the nine remembered
+            // things on it would trade a piece of the history for a signpost to a mechanic.
+            //
+            // Reached only for titles that already had events, which is what keeps wilderness out:
+            // a struggle's counties include whatever wilderness its duchies contain, the chronicle
+            // records nothing below the settled world, and a wilderness county whose whole panel
+            // was one struggle footnote would put a lore button on empty ground.
+            if (struggles.Note(title) is { } note)
+            {
+                lines.Add(note);
+                noted++;
+            }
+
             // AddBuilt, not Add: the paragraph breaks between entries are deliberate \n escapes
             // that Chronicle put there, and escaping them again would render them as backslashes.
             loc.AddBuilt($"gen_lore_{title.Key}", string.Join("\\n\\n", lines));
@@ -91,6 +114,7 @@ public static class ChronicleWriter
 
         loc.Write(Path.Combine(modDir, "localization", "english", "gen_title_lore_l_english.yml"));
 
-        Console.WriteLine($"  title lore: {written} titles given a chronicle");
+        Console.WriteLine($"  title lore: {written} titles given a chronicle"
+                        + (noted > 0 ? $", {noted} of them inside a struggle" : ""));
     }
 }

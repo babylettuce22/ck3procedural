@@ -71,6 +71,68 @@ public static class GuiWriter
             ("button_sidepanel_right = {", "lore button", TitleLoreButton),
         ]),
 
+        // The colony's council.
+        //
+        // The one target here that ADDS a mechanic rather than emptying a window for the wilderness
+        // dummy, and it is in this file because CK3 leaves no alternative: window_council.gui names
+        // every seat it draws, one `CouncilWindow.GetCouncillor('councillor_marshal')` at a time,
+        // with no datamodel over positions anywhere in it. A council position declared in script and
+        // not named here is invisible — the AI will still fill it, and nothing will report anything.
+        // AGOT ships the same shape for its Castellan and Admiral: new position files plus one
+        // window_council.gui override.
+        //
+        // ---- The three Extends, and why they are rows rather than seats ----
+        //
+        // Vanilla's five council seats are hidden for a colonist by three edits, not five, because
+        // the layout already groups them: Chancellor and Steward share an hbox, Marshal and Spymaster
+        // share another, and both hboxes carry the `visible` that Extend rewrites. Only the Court
+        // Chaplain sits loose in the top row and needs naming on its own.
+        //
+        // Its anchor, `name = "tutorial_court_chaplain"`, appears twice in the file — the second is
+        // the celestial-ministry layout further down. Extend takes the first, which is the one in the
+        // ordinary council, and the ministry layout is gated behind HasAccessToMinistry anyway, which
+        // no colonist has.
+        //
+        // Vanilla's SPOUSE seat is deliberately left alone. A colonist's wife advising him is not a
+        // court office, it is the same person he was already talking to, and it is the one vanilla
+        // seat whose premise survives on a frontier post.
+        //
+        // ---- Why the two Adds land where they do ----
+        //
+        // Add splices its block in *before* the anchor line at the anchor's own indentation, so the
+        // anchor picks the parent as much as the position. `widget_councillor_item = { # Spymaster
+        // (If Nomadic...)` is a seat inside the top row, so the two seats added there become
+        // siblings of the spouse — giving a colonist a top row of Spouse, Warden, Quartermaster once
+        // the nomad and chaplain seats beside them go invisible. Invisible children take no space in
+        // a PdxGui box, which is the same mechanism vanilla's own vizier/spouse swap relies on.
+        //
+        // `hbox = { # Chancellor + Steward` is a row inside the council vbox, so the block added
+        // there is a whole new row of three. Two rows of three, which is vanilla's own shape.
+        //
+        // ---- What happens with --no-wilderness ----
+        //
+        // Nothing, and that is checked rather than hoped for. Without the Wilderness file set there
+        // is no `colony_council` scripted_gui, a .gui naming a scripted_gui that does not exist
+        // evaluates false, and false is the right answer in both directions here: the colony seats
+        // hide themselves and `Not(false)` leaves every vanilla row exactly as it was.
+        new Target(
+        File: "window_council.gui",
+        ScriptedGui: "colony_council",
+        Scope: "CouncilWindow.GetCharacter",
+        Extend:
+        [
+            ("hbox = { # Chancellor + Steward", "chancellor/steward row", null),
+            ("hbox = { # Marshal + Spymaster", "marshal/spymaster row", null),
+            ("name = \"tutorial_court_chaplain\"", "court chaplain seat", null),
+        ],
+        Insert: [],
+        Add:
+        [
+            ("widget_councillor_item = { # Spymaster (If Nomadic it's moved up here)",
+                "warden and quartermaster", ColonyCouncilTopRowSeats),
+            ("hbox = { # Chancellor + Steward", "speaker/pathfinder/preacher row", ColonyCouncilRow),
+        ]),
+
     // No target for gui/shared/portraits.gui, deliberately.
     //
     // Inserting a `visible` after `pop_out = no` — the first line of `template portrait_base`, which
@@ -340,9 +402,225 @@ public static class GuiWriter
         }
         """;
 
+    // --- The colony council seats ---------------------------------------------------------------
+    //
+    // Every position key below is a contract with
+    // BaseFilesToCopy/Wilderness/common/council_positions/00_colony_council_positions.txt, and the
+    // asymmetry of getting it wrong is worth knowing before editing either side: a position with no
+    // seat here is silently invisible, while a seat naming a position that does not exist draws an
+    // empty, nameless panel. The second is what a colonist's council looked like before any of this
+    // existed, when colony_government still said `council = no`.
+
+    /// <summary>
+    /// One council seat, in the shape vanilla gives its own — four datacontexts walking from the
+    /// position to the councillor, then the illustration and the vignette over it.
+    ///
+    /// The datacontext chain is not decoration and the order is not free: the seat's label comes
+    /// from <c>ActiveCouncilTask.GetPositionName</c>, so the widget has to reach the active TASK
+    /// before it can name the OFFICE. That is also why every colony position carries a default task
+    /// — a seat whose owner has no valid task for it renders as blank as a seat with no position.
+    ///
+    /// Backgrounds are vanilla's council illustrations, matched by skill rather than by fiction:
+    /// there is no frontier art to point at, and a stone chancellery behind the Speaker is a better
+    /// wrong answer than an empty frame. The alpha is vanilla's own 0.6.
+    /// </summary>
+    private static string ColonyCouncilSeat(string position, string illustration) => $$"""
+        widget_councillor_item = { # {{position}}
+            layoutpolicy_horizontal = expanding
+            layoutpolicy_vertical = expanding
+            datacontext = "[CouncilWindow.GetCouncillor('{{position}}')]"
+            datacontext = "[GuiCouncilPosition.GetActiveCouncilTask]"
+            datacontext = "[ActiveCouncilTask.GetPositionType]"
+            datacontext = "[ActiveCouncilTask.GetCouncillor]"
+
+            visible = "{SHOW}"
+
+            background =  {
+                texture = "gfx/interface/skinned/illustrations/council/{{illustration}}"
+                fittype = centercrop
+                alpha = 0.6
+                using = Mask_Rough_Edges
+            }
+
+            background = {
+                texture = "gfx/interface/component_masks/mask_vignette.dds"
+                color = { 0.15 0.15 0.15 1 }
+                alpha = 0.3
+            }
+        }
+        """;
+
+    /// <summary>
+    /// Warden and Quartermaster, spliced into vanilla's top row as siblings of the spouse seat.
+    ///
+    /// Two loose widgets rather than a row of their own, because the anchor they are added at is
+    /// itself a seat in that row. The spouse stays, the nomad spymaster and the chaplain beside them
+    /// go invisible for a colonist, and a box container gives invisible children no width — so the
+    /// row a colonist reads is Spouse, Warden, Quartermaster.
+    /// </summary>
+    private static string ColonyCouncilTopRowSeats
+        => ColonyCouncilSeat("councillor_colony_warden", "bg_council_marshal.dds")
+           + "\n\n"
+           + ColonyCouncilSeat("councillor_colony_quartermaster", "bg_council_steward.dds");
+
+    /// <summary>
+    /// Speaker, Pathfinder and Camp Preacher, as a row of their own above vanilla's hidden ones.
+    ///
+    /// The <c>visible</c> sits on the hbox rather than on each of the three, so the row is one
+    /// question asked once. Its margins are copied from the Marshal/Spymaster row it stands in place
+    /// of, so a colony council occupies the same space on screen as a privy council does.
+    /// </summary>
+    private static string ColonyCouncilRow
+    {
+        get
+        {
+            string seats = string.Join("\n\n",
+                ColonyCouncilSeat("councillor_colony_speaker", "bg_council_chancellor.dds"),
+                ColonyCouncilSeat("councillor_colony_pathfinder", "bg_council_spymaster.dds"),
+                ColonyCouncilSeat("councillor_colony_preacher", "bg_council_chaplain.dds"));
+
+            string indented = string.Join('\n', seats
+                .Split('\n')
+                .Select(line => line.Length == 0 ? line : "    " + line));
+
+            return $$"""
+                hbox = { # Colony council — Speaker, Pathfinder, Camp Preacher
+                    layoutpolicy_horizontal = expanding
+                    layoutpolicy_vertical = expanding
+                    margin = { 10 0 }
+                    margin_bottom = 5
+                    spacing = 5
+
+                    visible = "{SHOW}"
+
+                {{indented}}
+                }
+                """;
+        }
+    }
+
+    /// <summary>
+    /// The second line under the year on the bookmark tab — see
+    /// <see cref="BookmarkWriter.GroupSubtitleKey"/> for what fills it.
+    ///
+    /// A sibling of vanilla's "year" text rather than a replacement for it, and spliced in below
+    /// rather than written out here, so vanilla keeps authoring the year itself: the line this
+    /// writer owns is only ever the one it adds.
+    ///
+    /// The <c>visible</c> is what makes the splice safe to ship unconditionally. A run that wrote
+    /// no bookmark wrote no subtitle key either, and a `text` pointing at a key with nothing behind
+    /// it renders the key — so the widget asks first, exactly as the title-lore button does.
+    /// </summary>
+    private static string BookmarkTabSubtitle => $$"""
+        text_single = {
+            name = "gen_bookmark_group_subtitle"
+            text = "{{BookmarkWriter.GroupSubtitleKey}}"
+            default_format = "#weak;glow_color:{0,0,0,1}"
+            using = Font_Size_Small
+            using = Font_Type_Flavor
+            max_width = 190
+            visible = "[Not( StringIsEmpty( Localize( '{{BookmarkWriter.GroupSubtitleKey}}' ) ) )]"
+        }
+        """;
+
     public static void WriteAll(string modDir, string gameDir, Config.MapConfig cfg)
     {
         foreach (var target in Targets) Patch(modDir, gameDir, target);
+        PatchBookmarkTab(modDir, gameDir);
+    }
+
+    /// <summary>
+    /// Adds a line to the frontend's date tab, which vanilla builds as a bare year and nothing else.
+    ///
+    /// Nothing about vanilla's own widget is retyped: the year block is lifted out of the file as
+    /// written and put back with the new line after it, so a CK3 patch that restyles the year
+    /// carries straight through. If either anchor is gone the file is not written at all — a mod
+    /// with no <c>gui/frontend_bookmarks.gui</c> falls back on vanilla's, and the tab is a bare year
+    /// again, which is the state this whole method is an improvement on rather than a dependency of.
+    /// </summary>
+    private static void PatchBookmarkTab(string modDir, string gameDir)
+    {
+        const string file = "frontend_bookmarks.gui";
+        string source = Path.Combine(gameDir, "gui", file);
+
+        if (!File.Exists(source))
+        {
+            Console.WriteLine($"  gui: SKIPPED ({file} not found in game folder)");
+            return;
+        }
+
+        string text = File.ReadAllText(source);
+
+        // Anchored on what the widget *says*, not on its name. `name = "year"` looks like the
+        // obvious anchor and is the wrong one: the file has two, and the first belongs to the
+        // bookmark row in the sidebar, which is a different widget showing the bookmark's own year.
+        // `[BookmarkGroup.GetName]` is only ever the tab. Counted rather than assumed, so a vanilla
+        // change that introduces a second one skips the file instead of patching the wrong widget.
+        const string anchor = "text = \"[BookmarkGroup.GetName]\"";
+
+        int at = text.IndexOf(anchor, StringComparison.Ordinal);
+        int open = at < 0 ? -1 : text.LastIndexOf("text_single = {", at, StringComparison.Ordinal);
+        int end = open < 0 ? -1 : MatchBrace(text, text.IndexOf('{', open));
+
+        if (end < 0 || text.IndexOf(anchor, at + 1, StringComparison.Ordinal) >= 0)
+        {
+            Console.WriteLine($"  gui: SKIPPED {file} — the date tab's year text is not where "
+                + "vanilla used to keep it. Not shipping a partial override.");
+            return;
+        }
+
+        int lineStart = text.LastIndexOf('\n', open) + 1;
+        string indent = text[lineStart..open];
+
+        string block = string.Join('\n', BookmarkTabSubtitle
+            .Split('\n')
+            .Select(line => line.Length == 0 ? line : indent + line));
+
+        text = text[..(end + 1)] + "\n\n" + block + text[(end + 1)..];
+
+        text = ShowSelectedBookmarkName(text, file);
+
+        string dest = Path.Combine(modDir, "gui", file);
+        Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+        ParadoxText.WriteNoBom(dest, text);
+
+        Console.WriteLine($"  gui: {file} — patched date tab subtitle");
+    }
+
+    /// <summary>
+    /// Stops the bookmark's own tab going blank the moment it is selected.
+    ///
+    /// Vanilla fades the name off the selected row — with three or six bookmarks in a group that
+    /// reads as the selected one stepping aside for the panel that now names it. This mod ships
+    /// exactly one bookmark, so it is selected from the moment the screen opens and its name is
+    /// never once drawn: the tab is the bare ornament and nothing else, which is what it looked
+    /// like in game.
+    ///
+    /// The state is left in place and its alpha flipped, rather than the state being cut. It is
+    /// paired with a `bookmark_tab_reset` state that fades the name back in, and a widget that can
+    /// be animated to 1 but never to 0 is a widget whose two animations disagree.
+    /// </summary>
+    private static string ShowSelectedBookmarkName(string text, string file)
+    {
+        // Walked in one direction from a unique landmark, because none of these strings is unique
+        // on its own: the shadowed widget wrapping the row's name, then the name itself, then the
+        // selected-state trigger, then the one alpha that trigger sets.
+        int at = text.IndexOf("gfx/interface/bookmarks/bm_shadow.dds", StringComparison.Ordinal);
+        if (at >= 0) at = text.IndexOf("text = \"[Bookmark.GetName]\"", at, StringComparison.Ordinal);
+        if (at >= 0) at = text.IndexOf("[GameSetup.IsBookmarkSelected( Bookmark.Self )]", at, StringComparison.Ordinal);
+
+        int alpha = at < 0 ? -1 : text.IndexOf("alpha = 0", at, StringComparison.Ordinal);
+
+        // The whole sequence lives inside one state block. A hit further off than that is some
+        // other widget's alpha, and dimming the wrong thing is worse than leaving the name hidden.
+        if (alpha < 0 || alpha - at > 400)
+        {
+            Console.WriteLine($"  gui: {file} — left the selected bookmark's name hidden; vanilla "
+                + "no longer fades it where it used to");
+            return text;
+        }
+
+        return text.Remove(alpha, "alpha = 0".Length).Insert(alpha, "alpha = 1");
     }
 
     private static void Patch(string modDir, string gameDir, Target target)

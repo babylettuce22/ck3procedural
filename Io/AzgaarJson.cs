@@ -96,7 +96,7 @@ public static class AzgaarJson
                 {
                     Cells = ReadArray<AzgaarCell>(pack, "cells"),
                     Features = ReadArray<AzgaarFeature>(pack, "features"),
-                    Biomes = Read<AzgaarBiomes>(pack, "biomes"),
+                    Biomes = ReadBiomes(pack),
                     Cultures = ReadArray<AzgaarCulture>(pack, "cultures"),
                     Burgs = ReadArray<AzgaarBurg>(pack, "burgs"),
                     States = ReadArray<AzgaarState>(pack, "states"),
@@ -203,6 +203,27 @@ public static class AzgaarJson
     }
 
     // --- Tolerant readers --------------------------------------------------------------------
+
+    /// <summary>
+    /// The biome table, whichever of its two shapes this export uses.
+    ///
+    /// Azgaar changed <c>pack.biomes</c> from a columnar object — parallel <c>i</c>/<c>name</c>/
+    /// <c>color</c>/<c>habitability</c> arrays — to an array of one object per biome. Read only as
+    /// an object it comes back null on every recent export, silently, and the biome names are simply
+    /// missing; the ids still work, so nothing fails loudly and the loss shows up as a renamed biome
+    /// quietly classifying as its stock meaning. Both shapes are accepted here and folded into one.
+    /// </summary>
+    private static AzgaarBiomes? ReadBiomes(JsonElement pack)
+    {
+        if (!pack.TryGetProperty("biomes", out var element)) return null;
+
+        return element.ValueKind switch
+        {
+            JsonValueKind.Object => Read<AzgaarBiomes>(pack, "biomes"),
+            JsonValueKind.Array => AzgaarBiomes.From(ReadArray<AzgaarBiomeEntry>(pack, "biomes")),
+            _ => null,
+        };
+    }
 
     private static T? Read<T>(JsonElement parent, string name) where T : class
     {

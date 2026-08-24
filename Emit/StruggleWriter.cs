@@ -5,7 +5,7 @@ using Ck3MapGen.MapGen;
 namespace Ck3MapGen.Emit;
 
 /// <summary>
-/// Writes the five files a generated struggle needs, and nothing else.
+/// Writes the files a generated struggle needs, and nothing else.
 ///
 /// The reason a struggle is worth generating at all is that CK3 already contains the machinery to
 /// run one and does not care whose struggle it is. Vanilla's base-game on_actions fire catalysts
@@ -15,14 +15,15 @@ namespace Ck3MapGen.Emit;
 /// payload arrives for free, and what has to be written is only the declaration: who is in it,
 /// where it is, and what each mood does.
 ///
-/// None of the five files is gated on a DLC. Vanilla's own struggles are — the Iberian one checks
+/// None of those files is gated on a DLC. Vanilla's own struggles are — the Iberian one checks
 /// <c>has_dlc_feature = the_fate_of_iberia</c> before starting and its ending decisions check
 /// <c>has_fp2_dlc_trigger</c> — but the framework underneath is base game: <c>common/struggle</c>,
 /// its schema docs and all seven struggle/situation .gui files ship in the base install with no
 /// gating on them. A generated struggle simply omits the checks.
 ///
-/// Pass one deliberately writes no ending decisions, so a generated struggle turns forever. See
-/// <see cref="WriteDefinition"/>.
+/// Four ending decisions are written per struggle: three settlements between its members, listed
+/// in every phase's <c>ending_decisions</c>, and the outsider's foothold, which is not. See
+/// <see cref="WriteEndingDecisions"/>.
 /// </summary>
 public static class StruggleWriter
 {
@@ -103,13 +104,6 @@ public static class StruggleWriter
 
     /// <summary>
     /// The struggles themselves.
-    ///
-    /// No <c>ending_decisions</c>. The schema notes that at least one phase should carry one, and a
-    /// struggle without them can only ever turn — which is the honest state of pass one rather than
-    /// an oversight: an ending decision has to name a win condition, and deciding what "winning"
-    /// means on a generated map is a design question this pass does not answer. The cost is that
-    /// the struggle window's "how do I end this" list is empty, and the game may log a complaint
-    /// about it. Both are visible, neither breaks the phase machinery.
     /// </summary>
     private static void WriteDefinition(string modDir, StruggleMap struggles)
     {
@@ -208,12 +202,20 @@ public static class StruggleWriter
                 b.Blank();
             }
 
-            // Every phase lists every ending, which is what vanilla does and is not redundant: the list
-            // is informational, and it is the only place a player can read what finishing this thing
-            // would take before any of it is within reach. A phase that listed only its own reachable
-            // ending would hide the other two exactly while the player is deciding which to aim for.
+            // Every phase lists every settlement, which is what vanilla does and is not redundant: the
+            // list is informational, and it is the only place a player can read what finishing this
+            // thing would take before any of it is within reach. A phase that listed only its own
+            // reachable ending would hide the other two exactly while the player is deciding which to
+            // aim for.
+            //
+            // The foothold is not in the list, again following vanilla, which leaves its own outsider
+            // ending out of all four Iberian phases. This panel belongs to the struggle's members, and
+            // every reader of it is either involved or hoping to be; the one ending they are all
+            // categorically barred from taking would be a goal listed for the wrong audience. The
+            // outsider meets it as an ordinary decision instead, in a decision group named for the
+            // struggle.
             using (b.Block("ending_decisions"))
-                foreach (var ending in s.Endings) b.Token(ending.Key);
+                foreach (var ending in s.MemberEndings) b.Token(ending.Key);
         }
 
         b.Blank();
@@ -236,10 +238,17 @@ public static class StruggleWriter
     /// <summary>
     /// The decisions that finish a struggle.
     ///
-    /// <c>is_invisible = yes</c> is not a mistake: an ending decision is never listed in the
-    /// decisions panel. The struggle window reads the <c>ending_decisions</c> list off the current
-    /// phase and renders its own buttons, which is the only place these are ever seen or taken —
+    /// <c>is_invisible = yes</c> is not a mistake: a *settlement* is never listed in the decisions
+    /// panel. The struggle window reads the <c>ending_decisions</c> list off the current phase and
+    /// renders its own buttons, which is the only place those three are ever seen or taken —
     /// vanilla's three work exactly this way.
+    ///
+    /// The foothold is the exception in every one of those respects, and has to be, because it is
+    /// the ending for somebody the struggle window is not addressing. It is visible, it is filed
+    /// under the base game's <c>struggle</c> decision group so it sorts with the big realm
+    /// decisions, and its <c>is_shown</c> is the negation of the other three's: never a member,
+    /// only somebody who already holds ground in the region. Vanilla's
+    /// <c>secure_iberian_foothold_decision</c> is built the same way and for the same reason.
     ///
     /// The struggle is ended in the decision's own effect rather than through a coda event. Vanilla
     /// routes through a fullscreen event so it can offer the ender a choice of reward, and that
@@ -260,15 +269,21 @@ public static class StruggleWriter
         {
             foreach (var ending in s.Endings)
             {
+                bool outsider = ending.Kind == StruggleEnding.Foothold;
+
                 using (b.Block(ending.Key))
                 {
-                    b.Field("decision_group_type", "major");
+                    b.Field("decision_group_type", outsider ? "struggle" : "major");
                     b.Field("title", ending.Key);
                     b.Inline("picture", $"reference = \"{Picture(ending.Kind)}\"");
-                    b.Quoted("extra_picture", ExtraPicture(ending.Kind));
+
+                    // The struggle-window button art, and so nothing at all for the one ending that
+                    // is never drawn in the struggle window.
+                    if (ExtraPicture(ending.Kind) is { } extra) b.Quoted("extra_picture", extra);
+
                     b.Field("desc", $"{ending.Key}_desc");
                     b.Field("selection_tooltip", $"{ending.Key}_tooltip");
-                    b.Field("is_invisible", "yes");
+                    if (!outsider) b.Field("is_invisible", "yes");
                     b.Field("sort_order", "80");
                     b.Inline("cooldown", "days = 1");
                     b.Blank();
@@ -280,10 +295,36 @@ public static class StruggleWriter
                         b.Field("is_landless_adventurer", "no");
                         b.Field("exists", $"struggle:{s.Key}");
 
-                        using (b.Block("any_character_struggle"))
+                        if (outsider)
                         {
-                            b.Field("involvement", "involved");
-                            b.Field("is_struggle_type", s.Key);
+                            // Uninvolved or interloper, which is the same thing said the only way
+                            // the script has of saying it: involvement is a property of belonging
+                            // to the struggle, so "not a member" is a NOT around the membership
+                            // test rather than an involvement value of its own.
+                            using (b.Block("NOT"))
+                            using (b.Block("any_character_struggle"))
+                            {
+                                b.Field("involvement", "involved");
+                                b.Field("is_struggle_type", s.Key);
+                            }
+
+                            // Cheap first, then this: unlike the settlements, this decision is
+                            // visible, so its is_shown is evaluated for every ruler in the world
+                            // rather than only for the struggle's members. One county in the region
+                            // is the least that can make it any of your business.
+                            using (b.Block("any_county_in_region"))
+                            {
+                                b.Field("region", s.RegionKey);
+                                b.Field("holder.top_liege", "root");
+                            }
+                        }
+                        else
+                        {
+                            using (b.Block("any_character_struggle"))
+                            {
+                                b.Field("involvement", "involved");
+                                b.Field("is_struggle_type", s.Key);
+                            }
                         }
                     }
 
@@ -381,10 +422,25 @@ public static class StruggleWriter
             ("phase", StruggleEnding.StatusQuo) =>
                 $"\t\t\tstruggle:{s.Key} = {{ is_struggle_phase = {s.PhaseFor(StruggleMood.Accommodation).Key} }}\n",
 
-            ("phase", _) =>
+            ("phase", StruggleEnding.Concord) =>
                 $"\t\t\tstruggle:{s.Key} = {{ is_struggle_phase = {s.PhaseFor(StruggleMood.Concord).Key} }}\n",
 
+            // Either of the two hostile moods, which is where vanilla puts the parameter that
+            // unlocks its own foothold. An outsider is welcome to take the region while its peoples
+            // are busy with each other; walking in on a region that has settled down is not a
+            // conquest the mechanic has any interest in blessing.
+            ("phase", _) =>
+                "\t\t\tOR = {\n"
+                + $"\t\t\t\tstruggle:{s.Key} = {{ is_struggle_phase = {s.PhaseFor(StruggleMood.Bloodshed).Key} }}\n"
+                + $"\t\t\t\tstruggle:{s.Key} = {{ is_struggle_phase = {s.PhaseFor(StruggleMood.Ambition).Key} }}\n"
+                + "\t\t\t}\n",
+
             ("hold", StruggleEnding.Dominance) => Held(s, ">=", "0.5"),
+
+            // Vanilla's outsider bar, and deliberately the lowest of the four: an outsider who had
+            // to take half the region would be in a position to take the other half and end it as
+            // dominance instead, which is a different ending for a different kind of ruler.
+            ("hold", StruggleEnding.Foothold) => Held(s, ">=", StruggleMap.FootholdShare),
 
             // The two settlements require the opposite of dominance: you have to *not* have won.
             ("hold", _) => Held(s, "<", "0.5"),
@@ -392,6 +448,10 @@ public static class StruggleWriter
             ("rivals", _) => NoRivalHolds(s, kind == StruggleEnding.Dominance ? "0.25" : "0.5"),
 
             ("peace", _) => NoInvolvedWar(s),
+
+            ("outsider", _) => SeatedElsewhere(s),
+
+            ("seat", _) => LongHeldDuchy(s),
 
             _ => AllAllied(s),
         };
@@ -427,6 +487,43 @@ public static class StruggleWriter
         + "\t\t\t\t\t\t}\n"
         + "\t\t\t\t\t}\n"
         + "\t\t\t\t}\n"
+        + "\t\t\t}\n";
+
+    /// <summary>
+    /// Your capital is not in the region.
+    ///
+    /// The line between an outsider and a local, and the reason it is drawn at the capital rather
+    /// than at involvement: involvement can lapse — a ruler who loses their last county in the
+    /// region stops being involved — while where a dynasty actually sits does not. Without it, a
+    /// local who had been squeezed out of the struggle could come back and finish it as a foreigner.
+    /// </summary>
+    private static string SeatedElsewhere(GeneratedStruggle s) =>
+        "\t\t\tNOT = {\n"
+        + "\t\t\t\tcapital_province = {\n"
+        + $"\t\t\t\t\tgeographical_region = {s.RegionKey}\n"
+        + "\t\t\t\t}\n"
+        + "\t\t\t}\n";
+
+    /// <summary>
+    /// A whole duchy of the region, held long enough to have kept it.
+    ///
+    /// Vanilla asks for a de jure kingdom of Iberia, completely controlled and held fifteen years;
+    /// one tier down is the same test here, because our region *is* a kingdom and its duchies are
+    /// what it is divided into. The point of the clause either way is that a third of the region
+    /// taken as scattered counties is a raid with a long tail, while a duchy nobody has been able
+    /// to take back for fifteen years is a government.
+    ///
+    /// <c>de_jure_liege</c> rather than a region test on the duchy: the region is built from the
+    /// seed kingdom's settled duchies, so a duchy whose de jure liege is that kingdom and which is
+    /// not in the region is one with no settled county in it at all — nothing anybody can hold, let
+    /// alone completely control.
+    /// </summary>
+    private static string LongHeldDuchy(GeneratedStruggle s) =>
+        "\t\t\tany_held_title = {\n"
+        + "\t\t\t\ttier = tier_duchy\n"
+        + $"\t\t\t\tde_jure_liege = title:{s.Seed.Key}\n"
+        + "\t\t\t\troot = { completely_controls = prev }\n"
+        + $"\t\t\t\ttitle_held_years >= {StruggleMap.FootholdYears}\n"
         + "\t\t\t}\n";
 
     private static string NoInvolvedWar(GeneratedStruggle s) =>
@@ -499,9 +596,16 @@ public static class StruggleWriter
             case StruggleEnding.StatusQuo:
                 b.Inline("dynasty", "add_dynasty_prestige = 3000");
                 break;
-            default:
+            case StruggleEnding.Concord:
                 b.Inline("dynasty", "add_dynasty_prestige = 3000");
                 b.Field("add_piety_level", "1");
+                break;
+
+            // Paid as dominance is paid, because it is dominance done from outside — and in renown
+            // rather than piety, since nothing about walking into somebody else's quarrel and
+            // ending it by force recommends itself to anybody's god.
+            default:
+                b.Inline("dynasty", "add_dynasty_prestige = 5000");
                 break;
         }
 
@@ -562,6 +666,18 @@ public static class StruggleWriter
               	diplomacy = 2
               }
 
+              # The outsider's. Everything it grants is about holding ground that is not yours by
+              # any right the locals recognise, which is the position ending a struggle from
+              # outside leaves you in.
+              {{StruggleMap.Modifier(StruggleEnding.Foothold)}} = {
+              	icon = martial_positive
+
+              	monthly_county_control_growth_add = 0.5
+              	different_culture_opinion = -10
+              	garrison_size = 0.15
+              	monthly_prestige_gain_mult = 0.15
+              }
+
               # Left on the ender's own counties inside the region for twenty years.
               {{StruggleMap.PeaceDividend}} = {
               	icon = county_modifier_development_positive
@@ -584,18 +700,26 @@ public static class StruggleWriter
     /// tree rather than inside a DLC folder, so it ships with every install — the same argument
     /// that made the Iberian phase icons safe to copy, now confirmed in-game.
     /// </summary>
-    private static string ExtraPicture(StruggleEnding kind) => kind switch
+    private static string? ExtraPicture(StruggleEnding kind) => kind switch
     {
         StruggleEnding.Dominance => "gfx/interface/illustrations/struggle_decision_buttons/fp2_decision_hostility.dds",
         StruggleEnding.StatusQuo => "gfx/interface/illustrations/struggle_decision_buttons/fp2_decision_compromise.dds",
-        _ => "gfx/interface/illustrations/struggle_decision_buttons/fp2_decision_conciliation.dds",
+        StruggleEnding.Concord => "gfx/interface/illustrations/struggle_decision_buttons/fp2_decision_conciliation.dds",
+
+        // The set exists to fill the buttons the struggle window draws, and the foothold is not one
+        // of them. Vanilla's outsider ending declares no extra_picture either.
+        _ => null,
     };
 
     private static string Picture(StruggleEnding kind) => kind switch
     {
         StruggleEnding.Dominance => "gfx/interface/illustrations/decisions/decision_found_kingdom.dds",
         StruggleEnding.StatusQuo => "gfx/interface/illustrations/decisions/decision_legitimacy.dds",
-        _ => "gfx/interface/illustrations/decisions/decision_golden_age.dds",
+        StruggleEnding.Concord => "gfx/interface/illustrations/decisions/decision_golden_age.dds",
+
+        // Vanilla's own choice for secure_iberian_foothold, and apt beyond that: it is the only
+        // one of the four that is a goal rather than a reconciliation.
+        _ => "gfx/interface/illustrations/decisions/decision_destiny_goal.dds",
     };
 
     /// <summary>
@@ -606,10 +730,16 @@ public static class StruggleWriter
     /// which is vanilla's figure and is doing the work its territorial tests deliberately do not:
     /// they are the endings for a ruler who did *not* conquer the region, so something other than
     /// conquest has to have made them the one who gets to close it.
+    ///
+    /// The foothold asks what dominance asks, on the same reasoning: it is the other conquest, and
+    /// its territorial clauses — a third of the region plus a duchy held fifteen years — are
+    /// already a long campaign. Vanilla asks for no prestige at all there and demands an empire
+    /// instead, which does not survive the move to a generated map: empires are rare on a small one
+    /// and the ending would be reachable by at most a single ruler in the world, or nobody.
     /// </summary>
     private static string PrestigeLevel(StruggleEnding kind) => kind switch
     {
-        StruggleEnding.Dominance => "high_prestige_level",
+        StruggleEnding.Dominance or StruggleEnding.Foothold => "high_prestige_level",
         _ => "very_high_prestige_level",
     };
 
@@ -784,13 +914,7 @@ public static class StruggleWriter
                 // The text on the button that actually takes the decision. Derived by convention
                 // from the decision key rather than declared, so its absence is a warning rather
                 // than an error and the button would simply render its own key.
-                // Names generated by MapGen.StruggleMap.Name all open with a capitalised "The",
-                // which is right on a title bar and wrong in the middle of a sentence.
-                string named = s.Name.StartsWith("The ", StringComparison.Ordinal)
-                    ? "the " + s.Name[4..]
-                    : s.Name;
-
-                loc.Add($"{ending.Key}_confirm", $"End {named}");
+                loc.Add($"{ending.Key}_confirm", $"End {s.InSentence}");
 
                 // One line per custom_tooltip the decision wraps a condition in. Driven off the
                 // same list the decision iterates, so a condition can never be emitted without the
@@ -813,6 +937,7 @@ public static class StruggleWriter
         loc.Add(StruggleMap.Modifier(StruggleEnding.Dominance), "Master of the Struggle");
         loc.Add(StruggleMap.Modifier(StruggleEnding.StatusQuo), "Keeper of the Peace");
         loc.Add(StruggleMap.Modifier(StruggleEnding.Concord), "Reconciler of Peoples");
+        loc.Add(StruggleMap.Modifier(StruggleEnding.Foothold), "Conqueror from Without");
         loc.Add(StruggleMap.PeaceDividend, "The Struggle Is Over");
 
         loc.Write(Path.Combine(modDir, "localization", "english", "gen_struggles_l_english.yml"));

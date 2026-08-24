@@ -53,7 +53,11 @@ public static class ModWriter
         "common/landed_titles",
         "common/province_terrain",
         "common/bookmarks/bookmarks",
-        // NOT common/bookmarks/groups — our bookmark attaches to vanilla's bm_group_867.
+
+        // The date tabs in the frontend are the bookmark *groups*, one tab per group defined,
+        // regardless of whether any bookmark points at it. Leave vanilla's in and this world's
+        // single start date shows up under three tabs, two of which lead nowhere.
+        "common/bookmarks/groups",
         "common/bookmarks/challenge_characters",
         "common/bookmark_portraits",
         "history/characters",
@@ -63,6 +67,67 @@ public static class ModWriter
         "history/struggles",
         "history/situations",
     ];
+
+    /// <summary>
+    /// Files inside the mod folder that survive <see cref="ClearModDir"/>. The edit overlay is the
+    /// user's, not ours — see <see cref="Gui.EditOverlay"/>, which exists precisely so a mod
+    /// written again under the same name keeps its hand edits.
+    /// </summary>
+    private static readonly string[] Keep = [Gui.EditOverlay.FileName];
+
+    /// <summary>
+    /// Empties the mod folder before a write, so what ships is exactly what this run emitted.
+    ///
+    /// Writing over a folder in place leaves every file the previous run produced that this one
+    /// does not: a different seed, a different start year, a setting turned off since. They are
+    /// not inert. CK3 merges most of common/ by directory, so a stale
+    /// common/scripted_triggers/00_phenotype_triggers.txt keeps being parsed and keeps throwing,
+    /// and a stale history/ file references characters and titles that no longer exist. Nothing
+    /// reports the mismatch — the files are individually valid, they just describe another world.
+    ///
+    /// Refuses on a folder that does not look like ours rather than deleting someone else's work.
+    /// </summary>
+    public static void ClearModDir(string modDir)
+    {
+        if (!Directory.Exists(modDir)) return;
+
+        var entries = Directory.EnumerateFileSystemEntries(modDir).ToList();
+        if (entries.Count == 0) return;
+
+        // Every mod this tool writes has a descriptor.mod, and every completed run leaves a
+        // proctool.txt. A non-empty folder with neither is either a hand-built mod or a mistyped
+        // output path, and emptying it would be far worse than refusing to.
+        bool ours = File.Exists(Path.Combine(modDir, "descriptor.mod"))
+                    || File.Exists(Path.Combine(modDir, Core.RunLog.FileName));
+
+        if (!ours)
+            throw new IOException(
+                $"'{modDir}' is not empty but holds no descriptor.mod or {Core.RunLog.FileName}, "
+                + "so it does not look like a folder this tool wrote. Point the output elsewhere, "
+                + "or empty it yourself first.");
+
+        int files = 0, dirs = 0;
+        foreach (string entry in entries)
+        {
+            if (Keep.Contains(Path.GetFileName(entry), StringComparer.OrdinalIgnoreCase)) continue;
+
+            try
+            {
+                if (Directory.Exists(entry)) { Directory.Delete(entry, recursive: true); dirs++; }
+                else { File.Delete(entry); files++; }
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // Overwhelmingly this is CK3 holding the mod open. Say so, because the raw
+                // "being used by another process" gives no hint which process or why.
+                throw new IOException(
+                    $"Could not clear '{entry}'. Close Crusader Kings III (and its launcher) "
+                    + "and generate again.", e);
+            }
+        }
+
+        Console.WriteLine($"  cleared {dirs} folders and {files} files from {modDir}");
+    }
 
     public static void WriteDescriptors(string modDir, string name = "Procedural Map")
     {

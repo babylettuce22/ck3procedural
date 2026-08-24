@@ -139,6 +139,19 @@ colony_settling_chance = {
 		}
 	}
 
+	# Ground a Pathfinder has already walked. Worth more than clearing the scree and less than
+	# clearing the cold, which is the band it belongs in: a survey does not change the country, it
+	# means the party arrives knowing where the water is and which slope holds snow.
+	#
+	# Read off the COUNTY rather than off the sender, and that is why the Pathfinder's task leaves a
+	# county modifier instead of a character one. This value runs on the expedition LEADER — see the
+	# call in wilderness_colonization.0011 — so a modifier on the colonist who sent him is out of
+	# reach here, while `scope:colony` is already open two blocks up.
+	if = {
+		limit = { scope:colony ?= { has_county_modifier = colony_surveyed_ground } }
+		add = colony_surveyed_settling_bonus
+	}
+
 	# What happened on the road.
 	if = {
 		limit = { scope:colony ?= { has_variable = expedition_fortune } }

@@ -1,0 +1,300 @@
+﻿# Everything the pioneer path does, defined once.
+#
+# The landed path's effects are about a realm doing something to a county at a distance. These are
+# about one man and the people who follow him being in a place. Where the two do the same thing --
+# taking the ground, clearing a blocker, marking a county as spoken for -- this file calls into
+# 00_colonization_effects.txt rather than restating it, so there remains exactly one description of
+# what colonising means and both entry points are provably telling the same story.
+
+
+# =====================================================================================
+#  Breaking ground
+# =====================================================================================
+
+# Starts a stake. Character scope, called from the activity's on_start.
+#
+#   $COUNTY$  the wilderness county being settled
+#
+# There is no target-picking effect above this any more, and its absence is the best thing the
+# activity bought. The old version scored the counties within reach of where the character happened
+# to be standing and handed him the easiest one, because a decision cannot be aimed. An activity's
+# planner puts the choice on the map where it belongs: the player picks the county, is_location_valid
+# in 00_stake_wilderness_activity.txt says which are allowed, and forty lines of scoring for a
+# decision the player should have been making themselves are simply gone.
+#
+# The county gets settling_expedition_underway rather than a marker of its own -- see the note at
+# the top of 00_pioneer_modifiers.txt for why that reuse is the important part of this effect.
+#
+# Nothing here schedules an event. The winters are the activity's four phases, each firing 0010 from
+# its on_phase_active, and the founding event fires on arrival rather than on commitment. A chain
+# where several events could each book the next was the thing phases replaced.
+pioneer_begin_stake_effect = {
+	$COUNTY$ = { save_scope_as = stake }
+
+	scope:stake = {
+		add_county_modifier = settling_expedition_underway
+	}
+
+	set_variable = {
+		name = pioneer_stake
+		value = scope:stake
+	}
+	set_variable = { name = pioneer_hold    value = 45 }
+	set_variable = { name = pioneer_winters value = 0 }
+
+	add_character_modifier = pioneer_breaking_ground
+}
+
+
+# =====================================================================================
+#  The meter
+# =====================================================================================
+
+# Moves `pioneer_hold`. Character scope.
+#
+#   $VALUE$  how much to add; negative takes it away
+#
+# Clamps the top and not the bottom, and the asymmetry is the mechanic: 100 is a ceiling because a
+# stake cannot be banked beyond certainty, while zero is not a floor but the losing condition, read
+# by the dispatcher on the next winter. Nothing here ends a run -- an effect that could would put
+# the ending in whichever option happened to spend last, instead of in the one place that narrates.
+# Guarded on the meter existing, which is not paranoia about the callers -- it is the one edge the
+# event queue can produce. A trial fires, the player leaves it sitting unanswered for a year, the
+# next winter empties the meter and 0030 ends the run; the old trial is still clickable, and its
+# option would otherwise call this on a character who no longer has a stake. `change_variable`
+# CREATES a variable it cannot find, so without this the answer to a dead trial leaves a stray
+# pioneer_hold behind with no pioneer_stake beside it.
+pioneer_change_hold_effect = {
+	if = {
+		limit = { has_variable = pioneer_hold }
+
+		change_variable = {
+			name = pioneer_hold
+			add = $VALUE$
+		}
+
+		if = {
+			limit = { var:pioneer_hold > 100 }
+			set_variable = { name = pioneer_hold  value = 100 }
+		}
+	}
+}
+
+
+# Applies a trial's outcome and says so. Character scope.
+#
+#   $VALUE$  hold change; negative takes it away
+#   $TITLE$  loc key naming what happened
+#   $TYPE$   event_toast_effect_good / _bad / _neutral
+#
+# ---- Why every outcome needs this ----
+#
+# The trials resolve inside `hidden_effect`, which is correct -- an option's tooltip has to show the
+# ODDS, and an unhidden roll would print the answer in the tooltip before the player chose. But
+# hidden meant hidden: you picked "send the strongest out", the event closed, and nothing on screen
+# ever said whether they came back. The meter is a variable, so it renders as nothing at all; the
+# only place its value appeared was the next trial's description, a year later, with no way to tell
+# how much of the difference was your choice and how much was the winter.
+#
+# A toast is the right size for it. It is the same device the rest of this file set uses to report
+# something the player did not ask to see (see wilderness_obstacle_cleared_effect), it survives
+# inside hidden_effect because a toast is runtime UI rather than tooltip generation, and its
+# good/bad colouring answers the only question the player actually has before they read a word.
+#
+# ---- Order matters ----
+#
+# The hold change goes FIRST so that pioneer_hold_now_desc, which is evaluated when the toast is
+# drawn, prints where the run stands AFTER the outcome rather than before it. Reversing these two
+# lines would produce a toast that is always one outcome out of date, which is worse than no toast:
+# it would look like a working number and be a wrong one.
+pioneer_outcome_toast_effect = {
+	pioneer_change_hold_effect = { VALUE = $VALUE$ }
+
+	send_interface_toast = {
+		type = $TYPE$
+		title = $TITLE$
+		desc = pioneer_hold_now_desc
+		left_icon = root
+	}
+}
+
+
+# Kills one of the company. Character scope.
+#
+#   $REASON$  the death reason to use
+#
+# A landless adventurer's followers are his courtiers, so this is where "it cost us men" actually
+# lands -- and it draws from exactly the pool the decision's bar counted, which is the whole point of
+# pioneer_is_a_follower_trigger existing. Spending out of a different pool than the one measured was
+# the bug that made the bar meaningless in the first version.
+#
+# Guarded against picking the pioneer himself: random_courtier makes no promise about that, and a
+# trial that could kill the man answering it would end the run through a door with no sign on it.
+# The temporary scope is what keeps the comparison one step deep from inside the iterator.
+pioneer_lose_follower_effect = {
+	save_temporary_scope_as = pioneer_company_head
+
+	random_courtier = {
+		limit = {
+			pioneer_is_a_follower_trigger = yes
+			this != scope:pioneer_company_head
+		}
+		death = { death_reason = $REASON$ }
+	}
+}
+
+
+# Takes one blocker off the stake's capital, hardest first. Character scope, scope:stake set.
+#
+# Factored out because three different places earn it -- the founding choice that puts every hand on
+# the treeline, the trial that is answered with a sword, and nothing else should ever grow its own
+# copy of this ladder.
+#
+# The ladder itself now lives in 00_colonization_effects.txt as
+# wilderness_clear_hardest_obstacle_effect, because a fourth caller turned up that has no stake: the
+# Warden of the Palisade's task_clear_the_wilds, which is handed a province and nothing else. This
+# stays as the pioneer path's name for it -- the three callers above read better asking for one
+# blocker off *the stake* than for one off some province they would have to derive -- and it is now
+# the only thing here that knows a stake has a capital.
+pioneer_clear_one_obstacle_effect = {
+	scope:stake = {
+		title_province ?= { wilderness_clear_hardest_obstacle_effect = yes }
+	}
+}
+
+
+# Takes every mark of a stake off the character and the ground. Character scope.
+#
+# Safe to call twice and safe to call on a character who never had one, which is what lets both
+# endings and the on_death sweep in 00_pioneer_on_actions.txt share it without any of them needing
+# to know what the others already did.
+pioneer_clear_stake_effect = {
+	if = {
+		limit = { has_variable = pioneer_stake }
+
+		var:pioneer_stake = {
+			if = {
+				limit = { has_county_modifier = settling_expedition_underway }
+				remove_county_modifier = settling_expedition_underway
+			}
+		}
+
+		remove_variable = pioneer_stake
+	}
+
+	if = { limit = { has_variable = pioneer_hold }    remove_variable = pioneer_hold }
+	if = { limit = { has_variable = pioneer_winters } remove_variable = pioneer_winters }
+	if = { limit = { has_variable = road_roll_took }  remove_variable = road_roll_took }
+
+	if = {
+		limit = { has_character_modifier = pioneer_breaking_ground }
+		remove_character_modifier = pioneer_breaking_ground
+	}
+}
+
+
+# =====================================================================================
+#  The two endings
+# =====================================================================================
+
+# The stake held. Character scope, scope:stake set.
+#
+# ---- Why these three calls, in this order ----
+#
+# The county has to move FIRST, because colonize_county_effect is the one description of what
+# becoming a colony means -- holder, faith, culture, the capital's holding type, the coat of arms,
+# the baseline control -- and the pioneer path has no business owning a second copy of it.
+#
+# Then destroy_laamp_effect, which is vanilla's own teardown for a man who has stopped adventuring:
+# it liquidates the camp, turns the company into ordinary courtiers, settles up with his contacts
+# and destroys the landless title. Reaching for it rather than unpicking the camp by hand is the
+# whole reason this path can exist at all. It is called AFTER the county moves, not before, because
+# it ends by resetting the government to whatever suits the character -- and a landless man with no
+# land to reason about is a worse input to that than a man who has just become a count.
+#
+# Then colonization_make_colonist_effect, which overrides that reset with colony_government. This
+# is not a correction of vanilla; it is the point. What a pioneer wins is not a county like any
+# other, it is a foothold -- one settlement, no vassals, the frontier modifiers, and the whole of
+# the existing promotion game still ahead of him. Act two is the mechanic that was already there.
+pioneer_success_effect = {
+	colonize_county_effect = {
+		COUNTY = scope:stake
+		COLONIZER = root
+	}
+
+	# Guarded, because a stake can outlive the condition that started it: a pioneer who won land
+	# some other way while his company was digging is no longer an adventurer, and calling this on
+	# him would hand a seated count the `adventurer` trait and turn his court into followers.
+	# colonization_make_colonist_effect declines for the same man on its own terms -- he holds a
+	# settled county -- so that case ends with an ordinary lord who has gained a colony, which is
+	# the right answer and needs no branch of its own.
+	if = {
+		limit = { is_landless_adventurer = yes }
+		destroy_laamp_effect = { ADVENTURER = root }
+	}
+
+	colonization_make_colonist_effect = yes
+
+	# ---- Home is here now, and saying so is not optional ----
+	#
+	# An activity's host is sent home when it ends, and "home" is computed by the engine from where he
+	# belongs -- see the note at the top of 00_oversee_colony_activity.txt. For a lord riding back to
+	# his hall that is exactly right and nothing needs doing. For a man who has just stopped being
+	# landless it is the opposite: his home was a camp that destroy_laamp_effect has this moment
+	# liquidated, and left alone the engine walks him back to the patch of ground he set out from.
+	#
+	# Three lines, each a vanilla idiom, in this order:
+	#
+	#   set_realm_capital     the colony IS the realm now, so it is the capital
+	#   cancel_travel_plan    drop the ride home if one was already booked against the old one
+	#   set_location_to_default  put him where he now belongs, which is here
+	#
+	# The cancel is guarded on `can_cancel` because a plan mid-leg may refuse, and
+	# set_location_to_default is what makes that refusal harmless -- it resolves the location from
+	# the capital regardless of what the plan thinks. Vanilla pairs these two the same way when it
+	# releases a hostage, whose home has also just changed underneath them.
+	#
+	# `set_realm_capital` and NOT `set_capital_county`, which reads like the obvious one and is not:
+	# it takes TITLE scope, for setting a title's capital county, and ck3-tiger catches the mix-up
+	# as a scope warning rather than an error. set_realm_capital is the character-scope one, used
+	# exactly this way in vanilla's own 00_decisions_effects.txt.
+	set_realm_capital = scope:stake
+
+	if = {
+		limit = { exists = current_travel_plan }
+
+		current_travel_plan = {
+			if = {
+				limit = { can_cancel = yes }
+				cancel_travel_plan = yes
+			}
+		}
+	}
+
+	set_location_to_default = yes
+
+	pioneer_clear_stake_effect = yes
+
+	add_prestige = major_prestige_gain
+	add_character_flag = founded_a_colony
+}
+
+
+# The stake collapsed. Character scope.
+#
+# Two dead followers rather than a gold penalty, because gold was already spent and the thing that
+# actually failed was a company. The lasting modifier is in 00_pioneer_modifiers.txt with the
+# argument for its length; nothing here bars a second attempt.
+pioneer_failure_effect = {
+	pioneer_lose_follower_effect = { REASON = death_starved }
+	pioneer_lose_follower_effect = { REASON = death_vanished }
+
+	add_stress = major_stress_gain
+
+	add_character_modifier = {
+		modifier = pioneer_broken
+		years = 10
+	}
+
+	pioneer_clear_stake_effect = yes
+}

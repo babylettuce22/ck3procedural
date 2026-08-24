@@ -1,7 +1,17 @@
 # Procedural Magic — a design skeleton
 
-Status: draft for review. Nothing here is implemented. The goal is to agree on the *shape*
-before any C# is written.
+Status: layers 1–3 and the derive half of 5 are implemented in `Magic/`, standalone and not wired
+to the pipeline. Layer 4 (placement on the map and in history) and every emitter are still design
+only. Run it with:
+
+```
+Ck3MapGen.exe --magic 7                 one world, in full
+Ck3MapGen.exe --magic-sweep 400         many worlds, and what varies between them
+```
+
+`--magic-sweep` is the one that matters for judging the design: the failure that kills a
+procedural system is invisible in any single sample, because every world reads fine and they are
+all the same world. See `Magic/MagicCli.cs` for the flags.
 
 ---
 

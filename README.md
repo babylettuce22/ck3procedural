@@ -28,6 +28,7 @@ A mod folder, plus the sibling `.mod` file the launcher needs to see it. Inside:
 | `common/culture/`, `common/religion/` | Generated cultures, heritages, name lists and languages; generated religions, faiths and holy sites |
 | `common/province_terrain/`, `history/provinces/` | Per-province terrain, holdings and development |
 | `history/titles/`, `history/characters/`, `common/dynasties/` | Who holds what on the start date, the dynasties they belong to, and generations of ancestors behind them |
+| `common/men_at_arms_types/`, `common/culture/innovations/` | A men-at-arms roster the world invented: one regiment per heritage, an elite for the cultures that earned one, and the innovations that unlock them |
 | `common/struggle/`, `common/decisions/` | A generated regional struggle where the map is genuinely contested, with its four phases, catalysts and three endings |
 | `common/artifacts/`, `common/coat_of_arms/` | Regalia carried by the rulers who inherited it, and arms for every house and title |
 | `common/buildings/` | Wonders — special buildings raised at the world's landmarks, with the meshes and locators to stand them on |
@@ -73,9 +74,16 @@ GUI re-derives constantly while a setting is being tuned, and writing is by far 
 
 Development, then cultures, then ethnicities, then realms, then governments, then faiths — an order
 that is forced rather than chosen, since a title is named in the language of whoever lives there, and
-whether a faith starts unreformed depends on how tribal its counties are. Then the rasters, the
-textures, the locators, the scattered map objects, and last the history: ancestors, rulers, wars,
-artifacts, the chronicle that ties them together, and any struggle the map has earned.
+whether a faith starts unreformed depends on how tribal its counties are. Then the world's way of
+war — a men-at-arms roster grown from the ground each people holds, its temperament and its
+government — and then the rasters, the textures, the locators, the scattered map objects, and last
+the history: ancestors, rulers, wars, artifacts, the chronicle that ties them together, and any
+struggle the map has earned.
+
+Nothing in that roster is a number this program invented. Every stat, price and counter is read out
+of the installed game's own regiments of the same archetype and rearranged inside their budget, so a
+generated unit is a variant of a vanilla one rather than a guess at one — and a balance patch to CK3
+moves the generated roster with it.
 
 ## Importing an Azgaar map
 
@@ -96,6 +104,14 @@ stops inventing the things Azgaar already decided:
   heresies and cults become faiths inside the nearest ancestor, following the export's `origins`.
 - **Climate** — a *reanchoring* rather than a substitution: the export says where it is hot and where
   it rains, and our model keeps the seasonal swing and the sub-grid relief detail it has none of.
+- **Vegetation** — the export's biome map paints what grows on the ground, broken up by the same
+  mosaic noise a generated map uses so its cell polygons do not show. Relief stays ours throughout:
+  beach, hills, mountains and the snow line are altitude facts our heightmap resolves far finer than
+  Azgaar's cells do.
+- **Peoples** — one CK3 culture per culture the export drew, over the ground it drew them on. The
+  heritages above them come from the export's ancestry where it drew one; where every culture
+  descends from Wildlands — which is what Azgaar's own generator writes — from shared name bases, and
+  then from geography, never merging two peoples the export tagged as different races.
 
 Azgaar generates no characters or dynasties, so prehistory still builds those on top.
 
@@ -201,10 +217,6 @@ vocabulary.
 - **Azgaar's history is parsed and unused.** Every export carries dated, named, located events —
   campaigns with start and end years, zones for invasions and crusades and plagues, battlefield
   markers whose legends name the war and the day. All of it is loaded and nothing reads it yet.
-- **Azgaar's biomes.** The import overrides the climate model but not yet the vegetation class, so
-  terrain is still classified from our own model where the export has an opinion.
-- **Culture geography is still ours.** Only the labels come from an import; where a culture *is* is
-  our decision, and grouping cultures into heritages from the export has no good signal to use.
 - **Locators face due north.** Every holding and wonder is written with identity rotation; vanilla
   varies yaw per instance.
 - **Editing a ruler does not re-emit the bookmark.** Rename a ruler in the inspector and the

@@ -391,6 +391,7 @@ public static class HistoryWriter
             {
                 b.Quoted("name", character.Name);
                 if (character.Female) b.Field("female", "yes");
+                b.Field("dna", character.DnaKey);
 
                 // Same distinction as the ancestors above: a dynasty id is not a house id, and putting
                 // one in dynasty_house leaves the character in no house at all.

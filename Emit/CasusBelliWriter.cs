@@ -41,42 +41,31 @@ public static class CasusBelliWriter
     /// screen, while <c>is_valid_showing_failures_only</c> is what stops it being reached another
     /// way and gives the player a reason rather than a dead button — hence the custom tooltips,
     /// which is the only place a wilderness refusal can explain itself.
+    ///
+    /// Both anchors are scoped to <c>declare_war_interaction</c> by name. They used to be the first
+    /// <c>is_shown</c> and the first <c>is_valid_showing_failures_only</c> in the file, which is the
+    /// same position only because declare_war happens to be the first block in it — so an
+    /// interaction added above would have moved the guard into the wrong one and shipped anyway.
     /// </summary>
     private static void WriteCharacterInteraction(string modDir, string gameDir)
     {
-        string sourceFile = Path.Combine(gameDir, "common", "character_interactions", "00_war.txt");
-        if (!File.Exists(sourceFile))
-        {
-            Console.WriteLine("  war rules: SKIPPED (00_war.txt not found in game folder)");
-            return;
-        }
+        var patch = VanillaPatch.Open(gameDir, "war rules",
+            "common", "character_interactions", "00_war.txt");
 
-        string targetDir = Path.Combine(modDir, "common", "character_interactions");
-        Directory.CreateDirectory(targetDir);
-
-        string patched = File.ReadAllText(sourceFile);
+        if (patch is null) return;
 
         // Both ends: the wilderness must be neither a target nor an aggressor.
         string shown = "\n\t\tscope:recipient = {\n\t\t\tNOT = { government_has_flag = government_is_wilderness }\n\t\t\tNOT = { has_trait = wilderness }\n\t\t}\n\t\tscope:actor = {\n\t\t\tNOT = { government_has_flag = government_is_wilderness }\n\t\t\tNOT = { has_trait = wilderness }\n\t\t}";
 
-        int isShownIndex = patched.IndexOf("is_shown = {", StringComparison.Ordinal);
-        if (isShownIndex != -1)
-        {
-            int insertPos = isShownIndex + "is_shown = {".Length;
-            patched = patched.Insert(insertPos, shown);
-        }
-
         string valid = "\n\t\tscope:recipient = {\n\t\t\tcustom_tooltip = {\n\t\t\t\ttext = is_a_wilderness_recipient_tt\n\t\t\t\tNOT = { government_has_flag = government_is_wilderness }\n\t\t\t\tNOT = { has_trait = wilderness }\n\t\t\t}\n\t\t}\n\t\tscope:actor = {\n\t\t\tcustom_tooltip = {\n\t\t\t\ttext = is_a_wilderness_actor_tt\n\t\t\t\tNOT = { government_has_flag = government_is_wilderness }\n\t\t\t\tNOT = { has_trait = wilderness }\n\t\t\t}\n\t\t}";
 
-        int isValidIndex = patched.IndexOf("is_valid_showing_failures_only = {", StringComparison.Ordinal);
-        if (isValidIndex != -1)
-        {
-            int insertPos = isValidIndex + "is_valid_showing_failures_only = {".Length;
-            patched = patched.Insert(insertPos, valid);
-        }
+        patch.InsertAfter("declare_war is_shown", shown,
+            "declare_war_interaction = {", "is_shown = {");
 
-        ParadoxText.WriteBom(Path.Combine(targetDir, "00_war.txt"), patched);
-        Console.WriteLine("  war rules: wilderness protected in declare_war_interaction");
+        patch.InsertAfter("declare_war is_valid_showing_failures_only", valid,
+            "declare_war_interaction = {", "is_valid_showing_failures_only = {");
+
+        patch.Ship(modDir);
     }
 
     /// <summary>

@@ -1,0 +1,111 @@
+﻿# Overrides vanilla's ep1_notifications.0001 (events/notification_events/
+# ep1_notification_events.txt) to add the one line it is missing.
+#
+# The engine fires on_court_grandeur_level_changed on a DAILY tick while a court's grandeur value
+# is in motion, not only when the level actually changes. Vanilla's event handles that with
+#
+#     if = { limit = { scope:new_value > scope:old_value } ...increase... }
+#     else = { ...COURT_GRANDEUR_TOAST_GRANDEUR_DECREASED_TITLE... }
+#
+# and there is no branch for new == old, so every one of those daily no-op fires renders as
+# "Court Grandeur Decreased" with the level-down sound. Measured on a generated world: 110
+# consecutive fires, every single one level 4 -> level 4, arriving ~30x per in-game month while
+# court_grandeur_current drifted 0.22/month toward its amenity baseline. Turning the amenities up
+# does not help, and muting the message does not silence the sound, because play_sound_effect
+# lives in the event rather than in the message settings.
+#
+# Generated worlds hit this far harder than vanilla ones: game_start sets every ruler's grandeur
+# to court_grandeur_minimum_expected, which for a large realm sits well above what its starting
+# amenities support, so the value has years of travelling to do and toasts every day of it.
+#
+# This is vanilla's event verbatim apart from the added trigger line, so re-syncing it after a
+# patch is a diff of one file. Everything downstream of a genuine level change is unchanged.
+
+namespace = ep1_notifications
+
+ep1_notifications.0001 = {
+	type = character_event
+	hidden = yes
+
+	trigger = {
+		is_ai = no
+
+		# The missing branch. A fire where the level did not move is not news.
+		NOT = { scope:new_value = scope:old_value }
+	}
+
+	immediate = {
+		save_scope_as = court_character
+		if = { # Grandeur increased
+			limit = {
+				scope:new_value > scope:old_value
+			}
+			if = { # Ranked up to rank 4
+				limit = {
+					scope:old_value < court_grandeur_rank_4_min_level
+					scope:new_value >= court_grandeur_rank_4_min_level
+				}
+				send_interface_toast = {
+					type = msg_court_grandeur_good
+					title = COURT_GRANDEUR_TOAST_GRANDEUR_RANK_INCREASED_TITLE
+					custom_tooltip = COURT_GRANDEUR_TOAST_GRANDEUR_INCREASED_DESCRIPTION
+					left_icon = root
+				}
+				play_sound_effect = "event:/DLC/EP1/SFX/UI/Notifications/court_grandeur_lvl_up_tier_3"
+				play_sound_effect = "event:/DLC/EP1/SFX/UI/Notifications/court_grandeur_num_change"
+			}
+			else_if = { # Ranked up to rank 3
+				limit = {
+					scope:old_value < court_grandeur_rank_3_min_level
+					scope:new_value >= court_grandeur_rank_3_min_level
+				}
+				send_interface_toast = {
+					type = msg_court_grandeur_good
+					title = COURT_GRANDEUR_TOAST_GRANDEUR_RANK_INCREASED_TITLE
+					custom_tooltip = COURT_GRANDEUR_TOAST_GRANDEUR_INCREASED_DESCRIPTION
+					left_icon = root
+				}
+				play_sound_effect = "event:/DLC/EP1/SFX/UI/Notifications/court_grandeur_lvl_up_tier_2"
+				play_sound_effect = "event:/DLC/EP1/SFX/UI/Notifications/court_grandeur_num_change"
+			}
+			else_if = { # Ranked up to rank 2
+				limit = {
+					scope:old_value < court_grandeur_rank_2_min_level
+					scope:new_value >= court_grandeur_rank_2_min_level
+				}
+				send_interface_toast = {
+					type = msg_court_grandeur_good
+					title = COURT_GRANDEUR_TOAST_GRANDEUR_RANK_INCREASED_TITLE
+					custom_tooltip = COURT_GRANDEUR_TOAST_GRANDEUR_INCREASED_DESCRIPTION
+					left_icon = root
+				}
+				play_sound_effect = "event:/DLC/EP1/SFX/UI/Notifications/court_grandeur_lvl_up_tier_1"
+				play_sound_effect = "event:/DLC/EP1/SFX/UI/Notifications/court_grandeur_num_change"
+			}
+			else = { # Level up, but no rank up
+				send_interface_toast = {
+					type = msg_court_grandeur_good
+					title = COURT_GRANDEUR_TOAST_GRANDEUR_INCREASED_TITLE
+					custom_tooltip = COURT_GRANDEUR_TOAST_GRANDEUR_INCREASED_DESCRIPTION
+					left_icon = root
+				}
+			}
+
+			# Play level up sound			
+			play_sound_effect = "event:/DLC/EP1/SFX/UI/Notifications/court_grandeur_toast_lvl_up"
+			play_sound_effect = "event:/DLC/EP1/SFX/UI/Notifications/court_grandeur_num_change"
+		}
+		else = { # Grandeur decreased
+			send_interface_toast = {
+				type = msg_court_grandeur_bad
+				title = COURT_GRANDEUR_TOAST_GRANDEUR_DECREASED_TITLE
+				custom_tooltip = COURT_GRANDEUR_TOAST_GRANDEUR_DECREASED_DESCRIPTION
+				left_icon = root
+			}
+			
+			# Play level down sound
+			play_sound_effect = "event:/DLC/EP1/SFX/UI/Notifications/court_grandeur_toast_lvl_down"
+			play_sound_effect = "event:/DLC/EP1/SFX/UI/Notifications/court_grandeur_num_change"
+		}
+	}
+}

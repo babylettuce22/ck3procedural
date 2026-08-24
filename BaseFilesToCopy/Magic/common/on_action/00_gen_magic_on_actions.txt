@@ -1,0 +1,101 @@
+﻿# When the plumbing runs.
+#
+# **Every entry appends, none overrides.** Each vanilla on_action below is re-declared with nothing
+# but an `on_actions` list. That is the sanctioned pattern, spelled out in
+# common/on_action/_on_actions.info: data for an on-action may be declared in multiple files, and
+# only a second `trigger` or `effect` block would conflict. Writing a `trigger` or `effect` into one
+# of these blocks instead would replace vanilla's own and silently delete whatever it did — the
+# single commonest compatibility bug in CK3 modding, and the same discipline the Fantasy set's
+# on_action files follow for the same reason.
+#
+# Cost, before anything else: with no generated content present, every on_action here evaluates one
+# `exists = global_var:gen_magic_active` and stops. That is the whole price of shipping this folder
+# into a world that has no magic in it.
+
+
+# --- The practitioner's year ---------------------------------------------------------------------
+
+# THE PULSE. Fuel comes back, and the generated half gets its yearly hook.
+#
+# `random_yearly_playable_pulse` rather than `random_yearly_everyone_pulse`: count-and-above only.
+# That is a deliberate performance decision and it has a cost worth naming — a practitioner who is
+# somebody's courtier rather than a ruler never refreshes on this pulse. The alternative is a yearly
+# pass over every living character in the world for a system most of them are not in, which is the
+# one shape of on_action that can make a generated world unplayably slow. Where the generated half
+# needs a landless practitioner topped up, it calls gen_magic_refresh_effect directly at the moment
+# that character matters.
+#
+# The trigger is a variable check behind a global check, so for the overwhelming majority of rulers
+# in any world this costs two lookups and stops.
+random_yearly_playable_pulse = {
+	on_actions = { gen_magic_practitioner_pulse_on_action }
+}
+
+gen_magic_practitioner_pulse_on_action = {
+	trigger = {
+		gen_magic_practitioner_trigger = yes
+	}
+
+	effect = {
+		gen_magic_refresh_effect = yes
+
+		# The seam. Whatever the world's price rule turns out to be — corruption advancing, a debt
+		# collector calling, an entity taking an interest — it hangs off here, already gated on the
+		# character being a practitioner so that no generated file has to re-ask.
+		trigger_event = { on_action = gen_magic_practitioner_year_on_action }
+	}
+}
+
+
+# --- The world's year ------------------------------------------------------------------------------
+
+# The ledger drains.
+#
+# `yearly_global_pulse` is documented in _on_actions.info as having NO root scope — "there doesn't
+# exist a root" — so everything reachable from here must be scope-free. Both the trigger and the
+# effect below touch only global variables, which is why the decay lives here and the threshold
+# check does not: reacting to a threshold means firing an on_action, and an on_action needs a root
+# to hand to whatever the generated half declares.
+#
+# Thresholds are checked in gen_magic_cast_effect instead, where a caster is in scope. That is also
+# the more correct moment: pressure only ever RISES on a cast, so a threshold cannot be crossed by
+# the drain that happens here.
+yearly_global_pulse = {
+	on_actions = { gen_magic_year_on_action }
+}
+
+gen_magic_year_on_action = {
+	trigger = {
+		gen_magic_active_trigger = yes
+	}
+
+	effect = {
+		gen_magic_ledger_decay_effect = yes
+	}
+}
+
+
+# --- Endings -----------------------------------------------------------------------------------
+
+# A practitioner dies.
+#
+# The static half deliberately does nothing here beyond firing the seam. What ought to happen is
+# entirely a matter of what the world rolled: an inherited taint passes to the children, a bargain
+# comes due, a pool of ambient fuel returns to the land, a secret dies with its keeper. None of
+# that is knowable from here, and all of it wants the same gate — so the gate is here and the
+# consequence is not.
+#
+# Root is the dead character, as vanilla declares it.
+on_death = {
+	on_actions = { gen_magic_death_on_action }
+}
+
+gen_magic_death_on_action = {
+	trigger = {
+		gen_magic_practitioner_trigger = yes
+	}
+
+	effect = {
+		trigger_event = { on_action = gen_magic_practitioner_death_on_action }
+	}
+}

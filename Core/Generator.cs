@@ -184,7 +184,7 @@ public static class Generator
         // 6. Terrain
         var terrain = Stage.Time("terrain classification",
             () => MapGen.TerrainClassifier.Classify(cfg, provinceElevation, provinceLandMask,
-                climate, new Rng(cfg.Seed ^ 0x7E44)));
+                climate, new Rng(cfg.Seed ^ 0x7E44), azgaar));
         onPreview?.Invoke("Terrain", PreviewRenderer.RenderTerrain(terrain.Terrain, cfg));
 
         var order = MapDataWriter.BuildProvinceOrder(provinces, out int baronies, out int landCount, out int riverCount);
@@ -249,6 +249,10 @@ public static class Generator
 
         Console.WriteLine($"Writing mod to {modDir}");
         var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        // Before anything is written, not after: a run that fails halfway should leave a folder
+        // holding only this run's output, never this run's mixed with the last one's.
+        Emit.ModWriter.ClearModDir(modDir);
         Directory.CreateDirectory(modDir);
 
         Emit.ModWriter.WriteDescriptors(modDir, options.ModName);

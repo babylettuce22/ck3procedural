@@ -1,0 +1,131 @@
+﻿l_english:
+
+ # Everything the colony council says out loud.
+ #
+ # Three sets of keys with three different contracts, and only the first is obvious:
+ #
+ #   <position key>            the office's name. CK3 falls back to the raw key when this is missing,
+ #                             so a typo here shows "councillor_colony_warden" under the portrait.
+ #   <position key>_possessive the same name in the possessive, for `GetCouncilTitlePossessive`.
+ #                             Not optional and not derivable — the engine looks up this exact key
+ #                             rather than appending an apostrophe, which is what lets a translation
+ #                             put the possessive wherever its grammar keeps it. Vanilla defines one
+ #                             per position for the same reason.
+ #   <position key>_desc       what `tooltip = ` on the position points at.
+ #   <task key>                the task's name. Not configurable — the engine uses the key, which is
+ #                             why the task keys in 00_colony_council_tasks.txt read like English.
+ #   <task key>_effect_desc    the task tooltip. See the note below — the engine does NOT list a
+ #                             task's modifiers on its own.
+ #   <task key>_modifier       the SOURCE line on each modifier the task applies. Missing, the
+ #                             character sheet lists a bonus from nothing at all.
+ #
+ # The SCALED_COUNCILLOR_* and $EFFECT_LIST_BULLET$ keys the tasks reference are vanilla's own and
+ # are deliberately not redefined here.
+ #
+ #
+ # ---- Why every effect_desc ends in a data function ----
+ #
+ # `effect_desc` is the WHOLE tooltip, not a preamble to a generated one. A task whose description is
+ # prose shows prose and nothing else: these all shipped that way first, and every one of them read
+ # as a nice sentence attached to no numbers, with no way for a player to tell the Quartermaster from
+ # the Speaker except by guessing.
+ #
+ # `[councillor.GetModifierDescForTask('<task>')]` is what closes that. It renders the task's own
+ # modifier blocks with their values already scaled — so the Warden's garrison line says what THIS
+ # Warden's martial is actually worth, and it keeps saying it after the numbers in
+ # 00_colony_council_values.txt are retuned. It covers council_owner_modifier, councillor_modifier
+ # and county_modifier alike; vanilla's task_develop_county leans on it for three county modifiers
+ # and nothing else.
+ #
+ # It renders nothing when the seat is empty, because there is no `councillor` to ask. That is
+ # vanilla's behaviour too, and it is the reason the prose line comes first rather than last: an
+ # unfilled seat still has something to say for itself.
+ #
+ # The two tasks that DO something — Clear the Wilds and Survey the Wilds — carry that something in
+ # $EFFECT_LIST_BULLET$ lines, since an effect is not a modifier and the engine cannot infer it. Any
+ # figure in those lines is printed through `SCOPE.ScriptValue` off the same script value the
+ # mechanic reads, never typed in twice.
+
+
+ # --- The five offices --------------------------------------------------------------------------
+
+ councillor_colony_warden:0 "Warden of the Palisade"
+ councillor_colony_warden_possessive:0 "Warden of the Palisade's"
+ councillor_colony_warden_desc:0 "The man who decides who stands watch and where the ditch goes. On a frontier post that is the whole of soldiering: there is no levy to raise, no field to meet anyone on, and one wall between the settlers and the country.\n\nThe colony's #P martial#! seat. He can hold the palisade — [garrison|E], [advantage|E] when defending, attrition on anyone besieging you — or take his men out to clear the obstacles off a colony of yours one at a time.\n\nHis own skill scales everything he does, so a poor Warden is close to no Warden."
+ councillor_colony_warden_modifier:0 "Warden of the Palisade"
+
+ councillor_colony_quartermaster:0 "Quartermaster"
+ councillor_colony_quartermaster_possessive:0 "Quartermaster's"
+ councillor_colony_quartermaster_desc:0 "Keeper of the stores, and of the arithmetic nobody else wants to do. He knows to the day how long the grain lasts, which is why he is listened to and why he is disliked.\n\nThe colony's #P stewardship#! seat. [buildings|E] go up cheaper and faster while he is husbanding the stores, and the camp's [supply_limit|E] rises — which matters most when somebody is sitting outside it.\n\nThe seat to fill first if you intend to grow the settlement rather than merely hold it."
+ councillor_colony_quartermaster_modifier:0 "Quartermaster"
+
+ councillor_colony_speaker:0 "Speaker for the Settlers"
+ councillor_colony_speaker_possessive:0 "Speaker for the Settlers'"
+ councillor_colony_speaker_desc:0 "Not appointed by the settlers, but the only man in the camp they would think to send for. He carries their complaints up and the lord's answers back down, and he is the reason more wagons come next spring.\n\nThe colony's #P diplomacy#! seat. Calling for settlers raises [development|E] growth and [county_opinion|E] together — the two things a colony needs to stop being one, since promotion wants [development|E] 4 and unhappy settlers do not build.\n\nHe is an alternative to the Homestead law rather than an addition to it; running both is not twice the effect."
+ councillor_colony_speaker_modifier:0 "Speaker for the Settlers"
+
+ councillor_colony_pathfinder:0 "Pathfinder"
+ councillor_colony_pathfinder_possessive:0 "Pathfinder's"
+ councillor_colony_pathfinder_desc:0 "He is away more than he is here. What he brings back is not treasure or intelligence but knowledge of ground — which valley floods, which ridge holds snow into summer, where the water is.\n\nThe colony's #P intrigue#! seat, and the only one that works outside your borders. He can survey unclaimed wilderness bordering your realm, which makes settlers sent there markedly likelier to live through their first winters — or stay closer to home and keep your own roads quick and safe.\n\nSurvey the ground before you send anyone to it, not after."
+ councillor_colony_pathfinder_modifier:0 "Pathfinder"
+
+ councillor_colony_preacher:0 "Camp Preacher"
+ councillor_colony_preacher_possessive:0 "Camp Preacher's"
+ councillor_colony_preacher_desc:0 "No temple, no tithe and no bishop above him. He buries the ones the first winter takes and talks the rest into a second one, and in a place this small that is not a small thing."
+ councillor_colony_preacher_modifier:0 "Camp Preacher"
+
+
+ # --- Warden of the Palisade ---------------------------------------------------------------------
+
+ task_hold_the_palisade:0 "Hold the Palisade"
+ task_hold_the_palisade_effect_desc:0 "Men on the wall and men on the trails. Every settler who can hold a spear knows where to be when the horn goes.\n[councillor.GetModifierDescForTask('task_hold_the_palisade')]"
+ task_hold_the_palisade_modifier:0 "Holding the Palisade"
+
+ task_clear_the_wilds:0 "Clear the Wilds"
+ task_clear_the_wilds_effect_desc:0 "The Warden's men on the worst of the country instead of on the wall — the axe route to a clear county, paid for in his time rather than the colony's gold.\n\n$EFFECT_LIST_BULLET$#P On completion, removes the county's most serious obstacle, worst first, taking its [development|E], [supply_limit|E], [garrison|E] and [travel_danger|E] penalties off with it#!\n$EFFECT_LIST_BULLET$#P Then begins again on the next obstacle, until the county is clear#!\n$EFFECT_LIST_BULLET$#N Cannot complete in a month when anything is under construction in the colony#!\n[councillor.GetModifierDescForTask('task_clear_the_wilds')]"
+ task_clear_the_wilds_modifier:0 "Clearing the Wilds"
+ colony_clearing_blocked_toast:0 "Every hand in [county.GetNameNoTier] is on the scaffolding, so the wilds around it are still standing"
+
+ # Progress-breakdown lines. The engine prints these beside their numbers, so they name a source and
+ # do not form a sentence.
+ COLONY_CLEARING_BASE:0 "Hands on the work"
+ COLONY_CLEARING_LORD_PRESENT:0 "The lord is in the camp"
+
+
+ # --- Quartermaster ------------------------------------------------------------------------------
+
+ task_husband_the_stores:0 "Husband the Stores"
+ task_husband_the_stores_effect_desc:0 "Nothing wasted, nothing spoiled, and every timber counted twice before it is cut.\n[councillor.GetModifierDescForTask('task_husband_the_stores')]"
+ task_husband_the_stores_modifier:0 "Husbanding the Stores"
+
+
+ # --- Speaker for the Settlers -------------------------------------------------------------------
+
+ task_call_for_settlers:0 "Call for Settlers"
+ task_call_for_settlers_effect_desc:0 "Word sent back down the road that there is land here and a lord who keeps his promises. The camp grows, and the people already in it stay.\n[councillor.GetModifierDescForTask('task_call_for_settlers')]"
+ task_call_for_settlers_modifier:0 "Calling for Settlers"
+
+
+ # --- Pathfinder ---------------------------------------------------------------------------------
+
+ task_read_the_country:0 "Read the Country"
+ task_read_the_country_effect_desc:0 "The Pathfinder keeps the routes in his head and walks them until they are paths. Everything you ride out to — a colony to oversee, an expedition to see off — you reach sooner and in one piece.\n[councillor.GetModifierDescForTask('task_read_the_country')]"
+ task_read_the_country_modifier:0 "Reading the Country"
+
+ task_survey_the_wilds:0 "Survey the Wilds"
+ # No GetModifierDescForTask call: this task applies no modifiers at all. Its whole output is the
+ # county marker, so the bullets below are the tooltip rather than a preamble to one.
+ task_survey_the_wilds_effect_desc:0 "Send the Pathfinder into unclaimed country to learn it before anyone is asked to live in it.\n\n$EFFECT_LIST_BULLET$#P On completion, the county is marked Surveyed Ground for 25 years#!\n$EFFECT_LIST_BULLET$#P Settlers sent to surveyed ground are +[SCOPE.ScriptValue('colony_surveyed_settling_bonus')|0]% more likely to survive their first winters#!\n$EFFECT_LIST_BULLET$#N Only unclaimed wilderness bordering your realm can be surveyed#!"
+
+ COLONY_SURVEY_BASE:0 "Walking the ground"
+
+ colony_surveyed_ground:0 "Surveyed Ground"
+ colony_surveyed_ground_desc:0 "Somebody has walked this country and come back with it in his head. Whoever settles here will arrive knowing where the water is."
+ colony_surveyed_toast:0 "[councillor.GetCouncilTitle] [councillor.GetShortUIName] has finished surveying [county.GetNameNoTier]"
+
+
+ # --- Camp Preacher ------------------------------------------------------------------------------
+
+ task_tend_the_camp:0 "Tend the Camp"
+ task_tend_the_camp_effect_desc:0 "Sermons, burials, and sitting up with the sick. The frontier still kills people; it stops being the only thing anyone thinks about.\n[councillor.GetModifierDescForTask('task_tend_the_camp')]"
+ task_tend_the_camp_modifier:0 "Tending the Camp"

@@ -1,0 +1,121 @@
+﻿# Gives every royal court a set of amenities that justifies the grandeur the game hands it at
+# game start, so the two halves of the system agree from day one.
+#
+# THE PROBLEM
+#
+# Vanilla's common/on_action/game_start.txt does this and nothing else:
+#
+#     every_character_with_royal_court = { set_current_court_grandeur = court_grandeur_minimum_expected }
+#
+# It never touches amenities, and every amenity category starts on its `default` setting, which
+# contributes court_grandeur_baseline_add = 0. So a court is handed a grandeur value its furnishings
+# do not support, and the engine then walks the value back down to the baseline at
+# COURT_GRANDEUR_MONTHLY_CHANGE = 0.2/month. For an emperor that is a fall of thirty-odd points —
+# roughly twelve in-game years during which grandeur, and everything keyed off it (legitimacy,
+# vassal opinion, court type perks), is simply wrong.
+#
+# It is worse here than in vanilla for two reasons that compound. court_grandeur_minimum_expected is
+# `sub_realm_size / 4` plus 20 for an empire (50 for a hegemony, 10 for anything smaller), so the
+# gap scales with realm size — and a world imported from Azgaar inherits that export's states, which
+# are far fewer and far larger than the realms procedural generation draws. Only kings and emperors
+# have a royal court at all, so a big imported empire is close to the worst case the formula allows.
+#
+# Measured before this file existed: 110 consecutive daily fires of on_court_grandeur_level_changed,
+# every one of them level 4 -> level 4, while court_grandeur_current drifted 32.50 -> 31.62 against a
+# court whose amenity baseline was zero.
+#
+# WHAT THIS DOES
+#
+# Sets all four amenity categories to one tier, chosen so the resulting baseline lands on the
+# grandeur the realm expects, then parks grandeur exactly there. Each category contributes 4 points
+# per tier above default, so four categories on the same tier give 0 / 16 / 32 / 48 / 64.
+#
+#     set_amenity_level value:   1      2      3      4      5
+#     baseline_add per category: 0      4      8      12     16
+#     four categories:           0      16     32     48     64
+#
+# Tiers are picked off court_grandeur_minimum_expected_level rather than the raw value because the
+# level is usable as a trigger; vanilla compares it the same way in common/script_values/
+# 00_ep1_script_values.txt. Its thresholds are COURT_GRANDEUR_LEVELS = { 10 15 20 30 40 50 60 70 80 90 }.
+#
+# Amenities cost gold once, on switching, and carry no upkeep — there is no recurring court expense
+# in the defines — so a court furnished here is not a permanent drain on the ruler who inherits it.
+# Setting the level by effect bypasses the one-off cost, which is the intent: this is describing a
+# court that already exists, not buying one.
+#
+# TRIBAL COURTS ARE LEFT ALONE
+#
+# Vanilla's can_pick on every amenity tier above the first is `NOT = { government_has_flag =
+# government_is_tribal }`, and ai_will_do scores all forty of them at -1000 for tribals. Furnishing
+# a tribal court would be fighting the design and the AI would pull against it. They do not need it
+# either: court_grandeur_minimum_expected_value ends with `multiply = 0 / add = court_grandeur_current`
+# for anything carrying government_is_tribal, so a tribal's expected value is defined as its current
+# value. Parking both at zero is stationary and costs them no below-expectations penalty at all.
+#
+# Nomads are deliberately not covered by that branch: nomad_government carries government_is_nomadic,
+# not government_is_tribal, and vanilla's amenity file does not gate them anywhere.
+#
+# Runs on on_game_start_after_lobby so it lands after game_start.txt has assigned the values above.
+
+on_game_start_after_lobby = {
+	on_actions = {
+		gen_settle_court_grandeur
+	}
+}
+
+gen_settle_court_grandeur = {
+	effect = {
+		every_character_with_royal_court = {
+			if = {
+				limit = { government_has_flag = government_is_tribal }
+				set_current_court_grandeur = 0
+			}
+
+			# >= 60 expected
+			else_if = {
+				limit = { court_grandeur_minimum_expected_level >= 7 }
+				set_amenity_level = { type = court_fashion value = 5 }
+				set_amenity_level = { type = court_food_quality value = 5 }
+				set_amenity_level = { type = court_lodging_standards value = 5 }
+				set_amenity_level = { type = court_servants value = 5 }
+				set_current_court_grandeur = 64
+			}
+
+			# 40 - 59
+			else_if = {
+				limit = { court_grandeur_minimum_expected_level >= 5 }
+				set_amenity_level = { type = court_fashion value = 4 }
+				set_amenity_level = { type = court_food_quality value = 4 }
+				set_amenity_level = { type = court_lodging_standards value = 4 }
+				set_amenity_level = { type = court_servants value = 4 }
+				set_current_court_grandeur = 48
+			}
+
+			# 20 - 39
+			else_if = {
+				limit = { court_grandeur_minimum_expected_level >= 3 }
+				set_amenity_level = { type = court_fashion value = 3 }
+				set_amenity_level = { type = court_food_quality value = 3 }
+				set_amenity_level = { type = court_lodging_standards value = 3 }
+				set_amenity_level = { type = court_servants value = 3 }
+				set_current_court_grandeur = 32
+			}
+
+			# 10 - 19
+			else_if = {
+				limit = { court_grandeur_minimum_expected_level >= 1 }
+				set_amenity_level = { type = court_fashion value = 2 }
+				set_amenity_level = { type = court_food_quality value = 2 }
+				set_amenity_level = { type = court_lodging_standards value = 2 }
+				set_amenity_level = { type = court_servants value = 2 }
+				set_current_court_grandeur = 16
+			}
+
+			# Under 10 expected. Default amenities are already a zero baseline, so only the
+			# value needs correcting.
+			else = {
+				set_current_court_grandeur = 0
+			}
+		}
+	}
+}

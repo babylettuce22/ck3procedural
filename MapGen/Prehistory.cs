@@ -46,9 +46,20 @@ public sealed class HistoricalCharacter
     public string? FatherId { get; set; }
     public string? MotherId { get; set; }
     public Title? AssociatedCounty { get; init; }
-    public bool IsHeir { get; init; }
+    /// <summary>Set after the children are drawn, once the faith's succession is known.</summary>
+    public bool IsHeir { get; set; }
+
     public bool IsDeadAncestor { get; init; }
     public string? MarriageDate { get; set; }
+
+    /// <summary>
+    /// The <c>dna</c> key of a bookmark portrait, stamped on by the bookmark writer when this
+    /// character is drawn beside one of its rulers; null for everyone else, who is rolled from
+    /// their ethnicity as usual. Same arrangement as <see cref="Ruler.DnaKey"/>, and for the same
+    /// reason: without it the wife on the bookmark screen and the wife in the campaign are two
+    /// different faces.
+    /// </summary>
+    public string? DnaKey { get; set; }
 }
 
 public sealed class AllianceLink
@@ -736,27 +747,15 @@ public sealed class PrehistoryMap
                 map.AllExtraCharacters.Add(child);
             }
 
-            // Assign Primary Heir based on faith gender doctrines (male-preference default)
+            // Assign Primary Heir based on faith gender doctrines (male-preference default).
+            //
+            // Marked in place rather than replaced with a copy carrying the flag. The copy went into
+            // Children while AllExtraCharacters kept the original, so one child in the world existed
+            // as two objects that agreed about everything except this flag — and anything stamped
+            // onto the one in Children (a portrait key, say) never reached the one the character
+            // file writes.
             var designatedHeir = childrenList.FirstOrDefault(c => !c.Female) ?? childrenList.FirstOrDefault();
-            if (designatedHeir != null)
-            {
-                int heirIndex = childrenList.IndexOf(designatedHeir);
-                childrenList[heirIndex] = new HistoricalCharacter
-                {
-                    Id = designatedHeir.Id,
-                    Name = designatedHeir.Name,
-                    Female = designatedHeir.Female,
-                    DynastyId = designatedHeir.DynastyId,
-                    DynastyHouseKey = designatedHeir.DynastyHouseKey,
-                    CultureKey = designatedHeir.CultureKey,
-                    FaithKey = designatedHeir.FaithKey,
-                    BirthDate = designatedHeir.BirthDate,
-                    FatherId = designatedHeir.FatherId,
-                    MotherId = designatedHeir.MotherId,
-                    AssociatedCounty = designatedHeir.AssociatedCounty,
-                    IsHeir = true
-                };
-            }
+            if (designatedHeir != null) designatedHeir.IsHeir = true;
 
             map.Children[ruler] = childrenList;
         }

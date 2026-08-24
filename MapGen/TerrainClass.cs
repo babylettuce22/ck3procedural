@@ -115,11 +115,22 @@ public static class TerrainClassifier
     /// runs first. Building it in both places would be the "derived twice in two places" mistake
     /// the rest of this pipeline is careful to avoid.
     /// </summary>
+    /// <param name="azgaar">
+    /// An export whose biome map decides the vegetation, or null to classify it from the climate as
+    /// before. Only the vegetation: beach, hills, mountains and the snow line are relief, and stay
+    /// ours either way. See <see cref="AzgaarBiome"/>.
+    /// </param>
     public static Result Classify(MapConfig cfg, float[] elevation, byte[] landMask,
-        ClimateField climate, Rng rng)
+        ClimateField climate, Rng rng, AzgaarImport? azgaar = null)
     {
         int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
         int sea = cfg.Limits.SeaLevelUpper;
+
+        // The export's biome table, or null for a generated world. Resolved once here rather than
+        // per pixel: it is a dozen entries and the per-pixel cost is one array index.
+        var biomeTable = azgaar is null ? null : AzgaarBiome.Table(azgaar.World);
+        var biomeRaster = azgaar?.Raster;
+        var imported = new int[height];
 
         // Thresholds derived from this map's own distributions.
         float hills = LandPercentile(elevation, landMask, 1.0 - HillShareOfLand);
@@ -182,6 +193,26 @@ public static class TerrainClassifier
                     climate.AnnualMm[i], climate.SummerMm[i], climate.WinterMm[i]);
                 zones[i] = zone;
 
+                // The climate map is left alone deliberately, imported or not: it is what
+                // debug_climate.png is checked against, and the export's biome is a statement about
+                // the vegetation rather than a second opinion on the Koppen class behind it.
+                var biome = AzgaarBiome.Kind.Unknown;
+                if (biomeTable is not null)
+                {
+                    int id = biomeRaster!.BiomeAt(i);
+                    if (id >= 0 && id < biomeTable.Length) biome = biomeTable[id];
+                }
+
+                bool stated = AzgaarBiome.HasOpinion(biome);
+                if (stated) imported[y]++;
+
+                // Aridity is regional and the export states it better than we infer it, so where it
+                // has spoken it decides outright. Polar is the other way round — it is an altitude
+                // fact, and our elevation resolves peaks inside a cell that Azgaar cannot — so the
+                // two are ORed and a summit keeps its snow whatever biome the cell around it carries.
+                bool arid = stated ? AzgaarBiome.IsArid(biome) : Koppen.IsArid(zone);
+                bool polar = Koppen.IsPolar(zone) || AzgaarBiome.IsPolar(biome);
+
                 float e = elevation[i];
 
                 double nWet = Patch(wetNoise, x, y, coarse);
@@ -219,16 +250,14 @@ public static class TerrainClassifier
 
                 if (e >= mountains + wobble)
                 {
-                    result[i] = Koppen.IsArid(zone)
-                        ? TerrainClass.DesertMountains
-                        : TerrainClass.Mountains;
+                    result[i] = arid ? TerrainClass.DesertMountains : TerrainClass.Mountains;
                     continue;
                 }
 
                 // Permanent snow, on high ground that is already polar at its own altitude. The
                 // snow line therefore falls as latitude rises without anything having to say so —
                 // the lapse rate in ClimateModel has already put it there.
-                if (Koppen.IsPolar(zone) && e >= hills + wobble - (mountains - hills) * 0.35)
+                if (polar && e >= hills + wobble - (mountains - hills) * 0.35)
                 {
                     result[i] = TerrainClass.Arctic;
                     continue;
@@ -242,17 +271,38 @@ public static class TerrainClassifier
 
                 // Marsh: the wettest tenth of the map, on flat low ground, where it is warm enough
                 // for the water to be liquid and the vegetation rank.
+                //
+                // Only where the export has not already drawn the marshes. Azgaar has a wetland
+                // biome of its own and places it from its own moisture and depression model, so
+                // running both would put our marshes beside its marshes and double the map's
+                // wetland — and the rainfall percentile behind ours is a statement about this map's
+                // own distribution, which an imported rainfall field has already changed the shape of.
                 double lowness = (e - sea) / Math.Max(1.0, hills - sea);
-                if (climate.AnnualMm[i] >= marsh && lowness < 0.25 && nWet > 0.72 &&
-                    !Koppen.IsPolar(zone) && !Koppen.IsArid(zone))
+                if (!stated && climate.AnnualMm[i] >= marsh && lowness < 0.25 && nWet > 0.72 &&
+                    !polar && !arid)
                 {
                     result[i] = TerrainClass.Wetlands;
                     continue;
                 }
 
-                result[i] = Koppen.Terrain(zone, nForest);
+                result[i] = stated
+                    ? AzgaarBiome.Terrain(biome, nForest)
+                    : Koppen.Terrain(zone, nForest);
             }
         });
+
+        if (biomeTable is not null)
+        {
+            long stated = 0, land = 0;
+            foreach (int n in imported) stated += n;
+            foreach (byte m in landMask) if (m != 0) land++;
+
+            // The shortfall is the coastline the two maps draw differently, plus whatever the export
+            // left on a biome nobody could read. A few per cent is normal; a large number means the
+            // heightmap and the JSON are not the same view, which CheckAlignment has already said.
+            Console.WriteLine($"    vegetation follows the export on {stated} of {land} land pixels " +
+                              $"({(land == 0 ? 0 : 100.0 * stated / land):F1}%)");
+        }
 
         return new Result { Terrain = result, Climate = zones, Field = climate };
     }

@@ -63,13 +63,18 @@ public sealed class StrugglePhase
 }
 
 /// <summary>
-/// The three ways a struggle can be finished for good.
+/// The four ways a struggle can be finished for good.
 ///
-/// One per outcome rather than one per mood, because an ending is a *settlement* and there are only
-/// three shapes a settlement can take: somebody won, nobody won, or the question stopped mattering.
-/// Vanilla's Iberian struggle draws the same three, which is worth following — its conditions are a
-/// shipped answer to "what should be hard about each of these", and the shape of that answer
-/// survives the move to a generated map even though every one of its geographic tests does not.
+/// The first three are one per outcome rather than one per mood, because an ending is a
+/// *settlement* and there are only three shapes a settlement can take: somebody won, nobody won, or
+/// the question stopped mattering. Vanilla's Iberian struggle draws the same three, which is worth
+/// following — its conditions are a shipped answer to "what should be hard about each of these",
+/// and the shape of that answer survives the move to a generated map even though every one of its
+/// geographic tests does not.
+///
+/// <see cref="Foothold"/> is the odd one out and is deliberately shaped differently: it is not a
+/// settlement between the people in the quarrel, it is somebody from outside taking the ground out
+/// from under all of them.
 /// </summary>
 public enum StruggleEnding
 {
@@ -81,6 +86,12 @@ public enum StruggleEnding
 
     /// <summary>The peoples of the region stopped counting each other as separate.</summary>
     Concord,
+
+    /// <summary>
+    /// An outsider — uninvolved or interloper, never involved — has taken enough of the region that
+    /// the quarrel is no longer the locals' to have. Vanilla's <c>secure_iberian_foothold</c>.
+    /// </summary>
+    Foothold,
 }
 
 /// <summary>
@@ -161,9 +172,26 @@ public sealed class GeneratedStruggle
 
     public required List<StrugglePhase> Phases { get; init; }
 
-    /// <summary>The three ways this struggle can be finished. Always all three — which of them is
+    /// <summary>The four ways this struggle can be finished. Always all four — which of them is
     /// currently *reachable* is a question for the triggers, not for generation.</summary>
     public required List<StruggleEndingDef> Endings { get; init; }
+
+    /// <summary>Everything except <see cref="StruggleEnding.Foothold"/>, which is the outsider's
+    /// ending and is not part of what the struggle window offers its members — it is a visible
+    /// decision in its own right instead. This is what a phase's <c>ending_decisions</c> lists.</summary>
+    public IEnumerable<StruggleEndingDef> MemberEndings
+        => Endings.Where(e => e.Kind != StruggleEnding.Foothold);
+
+    /// <summary>
+    /// The name as it reads in the middle of a sentence.
+    ///
+    /// Every pattern in <see cref="StruggleMap"/>'s name bank opens with a capitalised "The", which
+    /// is right on a title bar and wrong after a comma. Lowering it here rather than at each use
+    /// keeps "end the Contest for Wessex" and "inside the Contest for Wessex" spelled the same way.
+    /// </summary>
+    public string InSentence => Name.StartsWith("The ", StringComparison.Ordinal)
+        ? "the " + Name[4..]
+        : Name;
 
     public required StruggleMood StartMood { get; init; }
 
@@ -456,7 +484,8 @@ public sealed class StruggleMap
     {
         StruggleEnding.Dominance => ["phase", "hold", "rivals"],
         StruggleEnding.StatusQuo => ["phase", "hold", "rivals", "peace"],
-        _ => ["phase", "hold", "allies"],
+        StruggleEnding.Concord => ["phase", "hold", "allies"],
+        _ => ["phase", "outsider", "hold", "seat"],
     };
 
     /// <summary>
@@ -470,7 +499,8 @@ public sealed class StruggleMap
     {
         StruggleEnding.Dominance => "dominance",
         StruggleEnding.StatusQuo => "status_quo",
-        _ => "concord",
+        StruggleEnding.Concord => "concord",
+        _ => "foothold",
     };
 
     /// <summary>The permanent character modifier each ending leaves its taker.</summary>
@@ -479,6 +509,19 @@ public sealed class StruggleMap
     /// <summary>The county modifier every ending leaves on the ender's own ground in the region —
     /// the peace dividend, and the only lasting mark a finished struggle makes on the map.</summary>
     public const string PeaceDividend = "gen_struggle_peace_dividend";
+
+    /// <summary>
+    /// How much of the region an outsider has to hold to close it from outside. Vanilla's figure
+    /// for the same ending, and low next to the three settlements on purpose: an outsider who had
+    /// to take half the region would simply take the other half and use Dominance instead.
+    ///
+    /// The prose in <see cref="ConditionProse"/> says "a third" for this; change both together.
+    /// </summary>
+    public const string FootholdShare = "0.33";
+
+    /// <summary>How long the outsider's duchy has to have been theirs, again vanilla's figure. It
+    /// is what separates a conquest that stuck from a border raid that happens to be current.</summary>
+    public const int FootholdYears = 15;
 
     private static List<StruggleEndingDef> BuildEndings(
         string key, Title kingdom, List<Culture> cultures, Rng rng)
@@ -514,6 +557,8 @@ public sealed class StruggleMap
             ["The Peace of {0}", "The Settled Border", "Let {0} Rest", "The Standing Truce"],
         [StruggleEnding.Concord] =
             ["The Concord of {0}", "The Long Peace of {0}", "One People of {0}", "The Reconciling"],
+        [StruggleEnding.Foothold] =
+            ["A Foothold in {0}", "The Taking of {0}", "{0} Under Foreign Rule", "The Outsider's Peace"],
     };
 
     private static readonly Dictionary<StruggleEnding, string> EndingTooltips = new()
@@ -521,6 +566,8 @@ public sealed class StruggleMap
         [StruggleEnding.Dominance] = "End the struggle by holding the region against all comers.",
         [StruggleEnding.StatusQuo] = "End the struggle by outlasting it. Nobody wins; the borders stand.",
         [StruggleEnding.Concord] = "End the struggle by making its peoples one another's kin.",
+        [StruggleEnding.Foothold] = "End the struggle from outside it, by taking enough of the region "
+                                  + "that the quarrel is no longer the locals' to have.",
     };
 
     private static string EndingDescription(StruggleEnding kind, string where, string who, int peoples)
@@ -538,11 +585,18 @@ public sealed class StruggleMap
                 + "drew them. What changed is the arithmetic: taking one more valley now costs more "
                 + "than the valley is worth, and everybody has quietly worked that out at once.",
 
-            _ =>
+            StruggleEnding.Concord =>
                 $"A traveller through {where} would need telling that there had ever been a "
                 + $"quarrel. {who} marry each other, bury each other, and argue about taxes rather "
                 + "than about ancestry. The old grievance has not been forgiven so much as "
                 + "forgotten, which lasts considerably longer.",
+
+            _ =>
+                $"None of it was ever your quarrel. {who} had been at it for generations before "
+                + "your banners came over the border, and the argument does not end because "
+                + "anybody was persuaded — it ends because the ground it was about is yours, and "
+                + "the men who would carry it on now answer to your sheriffs. They will remember "
+                + "this differently than you will.",
         };
 
     private static Dictionary<string, string> ConditionProse(StruggleEnding kind, string where)
@@ -563,11 +617,20 @@ public sealed class StruggleMap
                 ["peace"] = "No two involved independent rulers are at war with each other",
             },
 
-            _ => new()
+            StruggleEnding.Concord => new()
             {
                 ["phase"] = "The struggle is in concord",
                 ["hold"] = $"You hold less than half the counties of {where}",
                 ["allies"] = "Every other involved independent ruler is your ally or thinks well of you",
+            },
+
+            _ => new()
+            {
+                ["phase"] = "The struggle is in open enmity or in restless ambition",
+                ["outsider"] = $"You take no part in the struggle, and your seat lies outside {where}",
+                ["hold"] = $"You hold at least a third of the counties of {where}",
+                ["seat"] = $"You completely control a duchy of {where}, and have held it for "
+                         + $"{FootholdYears} years",
             },
         };
 
@@ -790,6 +853,109 @@ public sealed class StruggleMap
     /// <summary>"both" for a pair, "all" for a crowd. Two peoples who "all" count somewhere home is
     /// the single most generated-sounding sentence this file could produce.</summary>
     private static string Every(int count) => count == 2 ? "both" : "all";
+
+    // =====================================================================================
+    // The chronicle cross-reference
+    // =====================================================================================
+
+    /// <summary>
+    /// The closing line the title lore panel puts on a title caught up in a struggle, already
+    /// escaped for a .yml value — or null for a title that is not in one.
+    ///
+    /// This is the only place the two generated histories are joined up, and it is worth the join:
+    /// the chronicle explains why a region is at odds with itself and then stops, while the
+    /// struggle window states that it is and never says why. A player reading a county's lore has
+    /// no way to tell that the frontier they just read about is the mechanic they can see in the
+    /// interface, because the two use different words for the same quarrel. One sentence naming it
+    /// fixes that, and naming it is all this does — the line is not a chronicle *event*, carries no
+    /// year and no tension, and cannot be rolled up into a parent title, which is why it is built
+    /// here at write time rather than added to <see cref="ChronicleMap"/>.
+    ///
+    /// Prose lives with the struggle rather than with the chronicle because the struggle is the
+    /// thing being named. It is also the half that was generated second: struggle selection reads
+    /// the chronicle, so nothing in the chronicle can be written against a struggle that does not
+    /// exist yet.
+    /// </summary>
+    public string? Note(Title title)
+    {
+        if (Struggles.Count == 0) return null;
+
+        switch (title.Tier)
+        {
+            case "c":
+                return ByCounty.TryGetValue(title, out var county) ? Fill(CountyNotes, title, county) : null;
+
+            case "d":
+            {
+                var s = Struggles.FirstOrDefault(x => x.Duchies.Contains(title));
+                return s is null ? null : Fill(DuchyNotes, title, s);
+            }
+
+            case "k":
+            {
+                var s = Struggles.FirstOrDefault(x => x.Seed == title);
+                return s is null ? null : Fill(KingdomNotes, title, s);
+            }
+
+            // An empire is the one tier that can hold more than one struggle, because the region is
+            // a kingdom and an empire has several. Naming them together rather than picking the
+            // loudest is the honest report: an emperor with two quarrels inside their borders has a
+            // different problem from one with a single quarrel, and that is the fact worth stating.
+            case "e":
+            {
+                var inside = Struggles.Where(x => x.Seed.Parent == title).ToList();
+
+                return inside.Count switch
+                {
+                    0 => null,
+                    1 => Io.ParadoxText.Loc(
+                        $"The empire's quiet is not everyone's: {inside[0].InSentence} is being "
+                        + $"fought out in {inside[0].Seed.Name}."),
+                    _ => Io.ParadoxText.Loc(
+                        "More than one of its kingdoms cannot agree who it belongs to: "
+                        + $"{List(inside.Select(s => s.InSentence).ToList())}."),
+                };
+            }
+
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>
+    /// Picks a template by title index rather than at random.
+    ///
+    /// A struggle region is a kingdom's worth of counties, so a single sentence would be read a
+    /// dozen times over by anybody touring the region — the same reason the chronicle keeps several
+    /// templates per event. The index is stable across runs and adjacent counties hold adjacent
+    /// indices, so neighbours reliably get different wording rather than merely usually.
+    /// </summary>
+    private static string Fill(string[] bank, Title title, GeneratedStruggle s)
+        => Io.ParadoxText.Loc(bank[title.Index % bank.Length]
+            .Replace("{PLACE}", title.Name)
+            .Replace("{WHAT}", s.InSentence));
+
+    private static readonly string[] CountyNotes =
+    [
+        "All of this has a name now: {PLACE} lies inside {WHAT}, and nothing here is read any other way.",
+        "{PLACE} is ground {WHAT} is fought over, whatever else it may be.",
+        "The quarrel outgrew {PLACE} generations ago. It is a corner of {WHAT} now.",
+        "Nothing that happens in {PLACE} is local any more, {WHAT} having swallowed the whole district.",
+    ];
+
+    private static readonly string[] DuchyNotes =
+    [
+        "Every county named above lies within {WHAT}.",
+        "{PLACE} sits inside {WHAT} entire, and its lords answer for that whether they take part or not.",
+        "None of this is {PLACE}'s own business alone: the whole duchy is inside {WHAT}.",
+    ];
+
+    private static readonly string[] KingdomNotes =
+    [
+        "Taken together, this is {WHAT}, and it covers every duchy named above.",
+        "{PLACE} end to end is the ground of {WHAT}.",
+        "There is a name for a kingdom that cannot settle who it belongs to. Here it is {WHAT}.",
+    ];
 
     /// <summary>"A", "A and B", "A, B and C" — the human way, so the prose reads as written rather
     /// than as generated.</summary>

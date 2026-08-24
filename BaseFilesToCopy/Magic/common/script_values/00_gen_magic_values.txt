@@ -1,0 +1,155 @@
+﻿# Every number the magic plumbing reads, in one place.
+#
+# All of them are written so that an absent variable reads as zero rather than as an error. That is
+# not defensive padding: a practitioner is created mid-game by whatever the world's access rule is,
+# and between the moment the rank goes on and the moment the rest is initialised there is a frame
+# where half these variables do not exist yet. Reading an unset variable directly is an error line
+# per character per year, which is exactly the kind of noise that hides a real fault.
+
+
+# --- Where a character stands ------------------------------------------------------------------
+
+# 0 for everyone who is not a practitioner, which is what makes it safe to ask about anybody.
+gen_magic_rank_value = {
+	value = 0
+
+	if = {
+		limit = { has_variable = gen_magic_rank }
+		add = var:gen_magic_rank
+	}
+}
+
+# Fuel in hand.
+gen_magic_charge_value = {
+	value = 0
+
+	if = {
+		limit = { has_variable = gen_magic_charge }
+		add = var:gen_magic_charge
+	}
+}
+
+# Fuel spent that was never in hand. Only ever non-zero in a world whose fuel is Debt, or after a
+# generated effect deliberately let someone overdraw.
+gen_magic_debt_value = {
+	value = 0
+
+	if = {
+		limit = { has_variable = gen_magic_debt }
+		add = var:gen_magic_debt
+	}
+}
+
+# How publicly known this character's practice is. Zero is unsuspected.
+gen_magic_exposure_value = {
+	value = 0
+
+	if = {
+		limit = { has_variable = gen_magic_exposure }
+		add = var:gen_magic_exposure
+	}
+}
+
+# How much fuel this character can hold.
+#
+# Geometric in rank rather than linear, to match the power curve the spell grammar builds: rank 4
+# costs roughly eight times rank 1, so a linear pool would leave the top of the ladder unable to
+# afford the only things worth being at the top of the ladder for.
+#
+# The base is overridable by the generated half, because a world where casting is cheap and
+# constant and one where it is rare and enormous want different pools even at the same rank.
+gen_magic_capacity_value = {
+	if = {
+		limit = { exists = global_var:gen_magic_capacity_base }
+		value = global_var:gen_magic_capacity_base
+	}
+	else = {
+		value = 10
+	}
+
+	# 2^(rank-1), written out as a ladder because script values have no exponent operator — the
+	# whole set is add, subtract, multiply, divide, modulo, min, max, round, ceiling and floor.
+	# Descending comparisons rather than equality so that a generated world which decides to run a
+	# sixth rank gets the top of the curve instead of falling through to the bottom of it.
+	if = {
+		limit = { gen_magic_rank_value >= 5 }
+		multiply = 16
+	}
+	else_if = {
+		limit = { gen_magic_rank_value >= 4 }
+		multiply = 8
+	}
+	else_if = {
+		limit = { gen_magic_rank_value >= 3 }
+		multiply = 4
+	}
+	else_if = {
+		limit = { gen_magic_rank_value >= 2 }
+		multiply = 2
+	}
+
+	min = 0
+}
+
+# How much fuel comes back in a year.
+#
+# A quarter of capacity by default, so a full pool takes four years to rebuild from empty and the
+# player has to choose which year to spend it in. The generated half overrides it per fuel: a
+# Devotional world refills from piety income and a Sacrificial one does not refill at all.
+gen_magic_refresh_rate_value = {
+	if = {
+		limit = { exists = global_var:gen_magic_refresh_rate }
+		value = global_var:gen_magic_refresh_rate
+	}
+	else = {
+		value = gen_magic_capacity_value
+		divide = 4
+	}
+
+	min = 0
+}
+
+# What a cast could not cover, as a positive number.
+#
+# Read AFTER charge has been decremented, when charge may be negative; the subtraction turns that
+# negative into the size of the hole. Clamped at zero so a cast that was affordable reads as no
+# shortfall rather than as a refund.
+gen_magic_shortfall_value = {
+	value = 0
+	subtract = gen_magic_charge_value
+	min = 0
+}
+
+
+# --- Where the world stands --------------------------------------------------------------------
+
+# The ledger: how much magic has been worked in this world and not yet forgotten.
+#
+# The single most important number in the passive layer. Every cast adds to it, the AI's casts
+# included, and the generated half hangs its world-level consequences off thresholds in it. Without
+# it a generated magic system is a toybox the player opens and the world never answers.
+gen_magic_pressure_value = {
+	value = 0
+
+	if = {
+		limit = { exists = global_var:gen_magic_pressure }
+		add = global_var:gen_magic_pressure
+	}
+}
+
+# How much of the ledger drains per year.
+#
+# The default is deliberately slow. A pressure that decays quickly turns the ledger into a rate
+# limiter — cast twice a year and nothing ever happens — where the point of it is accumulation
+# across reigns, so that a world can be spoiled by a grandfather.
+gen_magic_pressure_decay_value = {
+	if = {
+		limit = { exists = global_var:gen_magic_pressure_decay }
+		value = global_var:gen_magic_pressure_decay
+	}
+	else = {
+		value = 2
+	}
+
+	min = 0
+}

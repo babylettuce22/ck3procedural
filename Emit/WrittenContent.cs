@@ -37,6 +37,30 @@ public sealed record WrittenContent
     /// <summary>Needed to re-emit landed_titles, which carries every title's colour.</summary>
     public required WildernessMap Wilderness { get; init; }
 
+    /// <summary>
+    /// Every county's development level, as the province history was written from it.
+    ///
+    /// Kept rather than recomputed because it cannot be recomputed on its own: the level a county
+    /// ships with comes from the second <see cref="MapGen.Development.ForCounties"/> pass, the one
+    /// that sees <see cref="WorldCenters"/>, and world centers do not exist until the write has
+    /// built the cultures they are placed from.
+    /// </summary>
+    public required Dictionary<Title, int> Development { get; init; }
+
+    /// <summary>
+    /// The holding each barony was given, by province id — the <c>holding =</c> line in
+    /// <c>history/provinces</c>, verbatim.
+    ///
+    /// Baronies written <c>none</c> are in here as <c>none</c> rather than absent, so a reader can
+    /// tell an empty slot from a barony this map never covered.
+    ///
+    /// Captured rather than replayed for the same reason as <see cref="Development"/>, and a
+    /// sharper one: the holdings come off a single <see cref="Rng"/> walked across every barony in
+    /// the world in one pass, so reproducing them means reproducing every draw before them in
+    /// order. Any county whose government differed would desync the rest of the stream.
+    /// </summary>
+    public required Dictionary<int, string> Holdings { get; init; }
+
     /// <inheritdoc cref="Wilderness"/>
     public required WorldCenterMap WorldCenters { get; init; }
 
@@ -65,6 +89,16 @@ public sealed record WrittenContent
 
     /// <summary>Needed to re-emit the bookmarks, which name each character's government.</summary>
     public GovernmentMap? Governments { get; init; }
+
+    /// <summary>
+    /// Who stands on the bookmark screen and what it says about them.
+    ///
+    /// Kept whole rather than reselected: the realm highlights and the portrait DNA were written
+    /// against these six characters, so a re-emit that picked afresh would leave a bookmark
+    /// pointing at a face and a map outline belonging to somebody else. Null exactly when
+    /// <see cref="Rulers"/> is, and also on a world too small to have produced a cast at all.
+    /// </summary>
+    public BookmarkCast? Bookmarks { get; init; }
 
     /// <summary>The province id boundaries the title localisation file is written against.</summary>
     public required int BaronyCount { get; init; }

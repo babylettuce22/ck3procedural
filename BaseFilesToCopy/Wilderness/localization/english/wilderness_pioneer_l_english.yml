@@ -1,0 +1,169 @@
+﻿l_english:
+
+ # Every string the landless road into the wilderness needs.
+ #
+ # Split from wilderness_colonization_l_english.yml rather than appended to it because the two
+ # chains are read by different people in different situations, and a translator working on one has
+ # no business scrolling through the other. Nothing here is referenced by the colonisation files and
+ # nothing there is referenced by these; the only shared keys are the ones both paths genuinely
+ # share -- settlers_promised_land and the settlement holding names -- and those stay over there,
+ # where they were first written.
+ #
+ # Voice: the same as the other file. Nobody out here is having an adventure. Things are counted,
+ # weather is weather, and people who die are not eulogised.
+
+ # --- The activity ---------------------------------------------------------------------------
+ #
+ # CK3 derives about ten keys per activity from its name and names none of them anywhere. The set
+ # below is the one the overseeing activity needed, which is the only reliable inventory of them --
+ # a missing one shows the raw key in the planner and reports nothing. If a future patch adds an
+ # eleventh, ck3-tiger will say so.
+ activity_stake_wilderness:0 "Break Ground"
+ activity_stake_wilderness_name:0 "Break Ground"
+ activity_stake_wilderness_owner:0 "Broken by [ROOT.Char.GetTitledFirstName]"
+ activity_stake_wilderness_selection_tooltip:0 "Stop moving. Put the company on unclaimed ground and hold it through four winters."
+ activity_stake_wilderness_host_desc:0 "We will be living in it, not passing through it."
+ activity_stake_wilderness_guest_desc:0 "Nobody is invited. The company comes because it is ours."
+ activity_stake_wilderness_guest_help_text:0 "There is no guest list for a ditch."
+ activity_stake_wilderness_destination_selection:0 "Which ground are we stopping on?"
+ activity_stake_wilderness_predicted_cost:0 "Nothing in coin up front. The price is four winters and whoever does not come out of them."
+ activity_stake_wilderness_conclusion_desc:0 "Either there is something here now, or there is not."
+ TRAVEL_NAME_FOR_activity_stake_wilderness:0 "The Road Out"
+ activity_stake_wilderness_desc:0 "There is no lord in this country and no road to it. That is the whole of its appeal.\n\nA company can be fed on the move indefinitely and owns nothing at the end of it. Stopping is the only thing that changes that — and stopping is the one thing this company has never done. Four winters, near enough, before there is anything here worth the name of a holding: the men will have to be held together, the ground will have to be cleared of whatever is on it, and nobody is coming if it goes wrong.\n\nAfter that it is land, and it is [ROOT.Char.GetSheHe]rs."
+ activity_stake_wilderness_province_desc:0 "Unclaimed country. No lord holds it, no road reaches it, and whatever is already living here was not consulted."
+
+ stake_wilderness_intent:0 "Hold the Ground"
+ stake_wilderness_intent_desc:0 "We are not here to be seen doing it. We are here until the place can keep its own people alive through a winter without us standing over it."
+
+ phase_breaking_ground:0 "Breaking Ground"
+ phase_breaking_ground_desc:0 "Four winters, near enough. The first one is the one that kills stakes; by the fourth there are roofs, a ditch, and people who have stopped talking about leaving."
+
+ # --- Why the button is grey -------------------------------------------------------------------
+ pioneer_needs_a_company_tt:0 "At least #V [SCOPE.ScriptValue('pioneer_company_required')|0]#! of your followers are grown and able to work — you have #V [SCOPE.ScriptValue('pioneer_company_size')|0]#!"
+ pioneer_already_staking_tt:0 "You are not already breaking ground somewhere"
+ pioneer_must_be_wilderness_tt:0 "This is unclaimed wilderness, and nobody else has a party on it"
+
+ # --- Modifiers ----------------------------------------------------------------------------------
+ pioneer_breaking_ground:0 "Breaking Ground"
+ pioneer_breaking_ground_desc:0 "Camped on unclaimed country, going nowhere, spending the season on ditches and roofs. Nobody hires a company that has stopped moving, and nobody sings about one either."
+ pioneer_broken:0 "Broke on the Frontier"
+ pioneer_broken_desc:0 "Took a company into empty country and brought back fewer of them than went. Word of it travels further than the story does."
+
+ # --- Outcome toasts ------------------------------------------------------------------------------
+ #
+ # One title per outcome, plus the shared body line. Every trial resolves inside a hidden_effect so
+ # that its tooltip can show the odds instead of the answer, which meant nothing on screen ever
+ # reported the result -- the meter is a variable, and a variable renders as nothing. These are that
+ # report. See pioneer_outcome_toast_effect for why the body prints the post-outcome figure.
+ #
+ # Titles are the RESULT, not the action: the player already knows what they picked, and a toast
+ # that repeats the option name back at them tells them nothing they did not have a second ago.
+ pioneer_hold_now_desc:0 "Hold on the ground is now #V [ROOT.Char.MakeScope.ScriptValue('pioneer_hold_display')|0]#! — #V [ROOT.Char.MakeScope.ScriptValue('pioneer_winters_left')|0]#! winters left"
+
+ pioneer_winter_toast:0 "The Winter Takes Its Share"
+
+ pioneer_toast_dug_in:0 "Ditches Before Dark"
+ pioneer_toast_the_line:0 "The Treeline Comes Down"
+ pioneer_toast_sent_back:0 "The Carts Come Back Loaded"
+
+ pioneer_toast_supply_took:0 "The Trappers Dealt Fair"
+ pioneer_toast_supply_short:0 "Short Weight and Watered Ale"
+ pioneer_toast_forage_took:0 "They Brought Something Back"
+ pioneer_toast_forage_failed:0 "Not All of Them Came Back"
+ pioneer_toast_endure_took:0 "The Stores Stretched"
+ pioneer_toast_endure_failed:0 "Hunger, and Then the Arguments"
+
+ pioneer_toast_stand_won:0 "The Ground Is Clear"
+ pioneer_toast_stand_lost:0 "You Came Back Carried"
+ pioneer_toast_paid_off:0 "Bought Off, For Now"
+ pioneer_toast_wall_held:0 "The Ditch Held"
+ pioneer_toast_wall_broken:0 "They Came Over the Ditch"
+
+ pioneer_toast_promised:0 "Every Man a Field of His Own"
+ pioneer_toast_wages_paid:0 "Paid, and Staying"
+ pioneer_toast_example_made:0 "Nobody Says It Twice"
+ pioneer_toast_example_backfired:0 "It Went the Other Way"
+
+ # =====================================================================================
+ #  0001 — Breaking ground
+ # =====================================================================================
+ wilderness_pioneer.0001:0 "Breaking Ground"
+ wilderness_pioneer.0001.t:0 "The First Stake"
+ wilderness_pioneer.0001.desc:0 "The carts are stopped, which they have not been in a long while, and the silence of that is doing something to everyone.\n\n[stake.GetName] is what the maps call this, though the maps are guessing. There is no road out and no road on. What there is: the treeline, the weather coming off it, and about four months before the ground goes hard.\n\nWhatever gets done first is the thing that decides how the winter goes. There is not time to do two of them."
+ wilderness_pioneer.0001.a:0 "Dig in. The winter is the enemy."
+ wilderness_pioneer.0001.b:0 "Every hand on the treeline. Clear it now or never."
+ wilderness_pioneer.0001.c:0 "Send riders back down the road for what we lack."
+
+ pioneer_found_dig_in_tt:0 "#bold Dig In First#!:\n• Ditches, roofs and a store before anything else\n• #P +12#! Hold\n• Costs nothing but the season"
+ pioneer_found_the_line_tt:0 "#bold Every Hand on the Treeline#!:\n• #P Clears the worst obstacle on the county outright#! — and it stays cleared for every winter after this one\n• #N -8#! Hold: nothing else got done\n• #N One of your followers does not come back from it#!"
+ pioneer_found_send_back_tt:0 "#bold Send Back Down the Road#! (#N -250 Gold#!):\n• Grain, iron and two more carts, bought at frontier prices\n• #P +25#! Hold"
+
+ # =====================================================================================
+ #  0011 — The season
+ # =====================================================================================
+ wilderness_pioneer.0011:0 "The Cold Coming"
+ wilderness_pioneer.0011.t:0 "The Cold Coming"
+ wilderness_pioneer.0011.desc:0 "It comes earlier here than it has any right to, and it comes from the direction nobody built against.\n\nThe stores were counted twice this week, which is how you know they will not do. There are #V [ROOT.Char.MakeScope.ScriptValue('pioneer_winters_left')|0]#! winters still to get through after this one, and this is the one being got through now.\n\nHold on the ground: #V [ROOT.Char.MakeScope.ScriptValue('pioneer_hold_display')|0]#!."
+ wilderness_pioneer.0011.a:0 "Buy it. There are trappers who will sell."
+ wilderness_pioneer.0011.b:0 "Send the strongest out. There is game in there somewhere."
+ wilderness_pioneer.0011.c:0 "Half rations, and everyone endures it."
+
+ pioneer_supply_breakdown_tt:0 "#bold Buy From the Trappers#! (#N -150 Gold#!):\n• #V [SCOPE.ScriptValue('pioneer_supply_chance')|0]%#! Chance They Deal Honestly (Stewardship)\n• #P Success#!: Grain, salt and hides at a robber's price (#P +20#! Hold)\n• #N Failure#!: Short weight and watered ale (#P +5#! Hold; the gold goes either way)"
+ pioneer_forage_breakdown_tt:0 "#bold Send the Strongest Out#!:\n• #V [SCOPE.ScriptValue('pioneer_forage_chance')|0]%#! Chance They Bring Something Back (Martial, Prowess)\n• #P Success#!: Meat enough to change the arithmetic (#P +16#! Hold)\n• #N Failure#!: They find nothing, and one of them finds something (#N -10#! Hold, #N a follower dies#!)"
+ pioneer_endure_breakdown_tt:0 "#bold Half Rations#!:\n• #V [SCOPE.ScriptValue('pioneer_endure_chance')|0]%#! Chance the Stores Stretch (Stewardship, temperament)\n• #P Success#!: Discipline gets them to the thaw (#P +9#! Hold)\n• #N Failure#!: Hunger, and then the arguments (#N -12#! Hold, Stress)"
+
+ # =====================================================================================
+ #  0012 — What was already here
+ # =====================================================================================
+ wilderness_pioneer.0012:0 "What Was Already Here"
+ wilderness_pioneer.0012.t:0 "What Was Already Here"
+ wilderness_pioneer.0012.desc:0 "The country was not empty. It was only unclaimed, which is a different word, and the difference has been coming closer to the ditch every night for a week.\n\nTwo of the outer shelters have been given up. Nobody goes past the treeline alone any more, and the men have started sleeping in their boots.\n\nHold on the ground: #V [ROOT.Char.MakeScope.ScriptValue('pioneer_hold_display')|0]#!."
+ wilderness_pioneer.0012.a:0 "Take the men out and finish it."
+ wilderness_pioneer.0012.b:0 "Buy the problem away. Everything out here has a price."
+ wilderness_pioneer.0012.c:0 "Wall up. They can have the outskirts."
+
+ pioneer_stand_breakdown_tt:0 "#bold Go Out and Finish It#!:\n• #V [SCOPE.ScriptValue('pioneer_stand_chance')|0]%#! Chance You Settle It (Prowess, Martial)\n• #P Success#!: #P The obstacle is cleared for good#! (#P +18#! Hold, Prestige)\n• #N Failure#!: You come back carried (#N -14#! Hold, #N you are wounded#!, a follower dies, Stress)"
+ pioneer_pay_them_off_tt:0 "#bold Buy the Problem Away#! (#N -150 Gold#!):\n• Silver for the ones who can be paid, fire and noise for the ones who cannot\n• #P +10#! Hold\n• #N The ground itself is unchanged#! — whatever is out there is still out there next year"
+ pioneer_wall_up_breakdown_tt:0 "#bold Wall Up#!:\n• #V [SCOPE.ScriptValue('pioneer_endure_chance')|0]%#! Chance the Ditch Holds (Stewardship, temperament)\n• #P Success#!: A hard month, and then quiet (#P +7#! Hold)\n• #N Failure#!: They come over it (#N -9#! Hold, a follower dies)"
+
+ # =====================================================================================
+ #  0013 — The company
+ # =====================================================================================
+ wilderness_pioneer.0013:0 "The Company"
+ wilderness_pioneer.0013.t:0 "What They Signed On For"
+ wilderness_pioneer.0013.desc:0 "[pioneer_malcontent.GetShortUIName] says it out loud, in front of enough of them that it cannot be unsaid: they signed on for a company, and a company moves.\n\nThey are not wrong. There is no plunder in a ditch, no contract at the end of it, and nothing here anybody would have ridden a week to see. Half of them could be gone by spring and the other half would understand why.\n\nHold on the ground: #V [ROOT.Char.MakeScope.ScriptValue('pioneer_hold_display')|0]#!."
+ wilderness_pioneer.0013.a:0 "Promise them land. Every man who stays gets a share of it."
+ wilderness_pioneer.0013.b:0 "Pay them. Silver is a language they still speak."
+ wilderness_pioneer.0013.c:0 "Make an example of the loudest."
+
+ pioneer_promise_land_tt:0 "#bold Promise Them Land#!:\n• #P +22#! Hold, and no roll — a man will winter anywhere for a field of his own\n• #N The promise is real#!: when this place is finally a holding, they will come to collect, and what they are owed will have to come out of it"
+ pioneer_pay_wages_tt:0 "#bold Pay Them#! (#N -[SCOPE.ScriptValue('pioneer_wages_cost')|0] Gold#!):\n• A season's wages for a season's ditch-digging\n• #P +14#! Hold\n• Buys this year and only this year"
+ pioneer_make_example_breakdown_tt:0 "#bold Make an Example#!:\n• #V [SCOPE.ScriptValue('pioneer_hold_company_chance')|0]%#! Chance It Silences the Rest (Martial, Intrigue, Dread)\n• #P Success#!: Nobody else says it (#P +18#! Hold, #P Dread#!)\n• #N Failure#!: It goes the other way (#N -16#! Hold, a follower disappears, Stress)"
+
+ # =====================================================================================
+ #  0020 — It held
+ # =====================================================================================
+ wilderness_pioneer.0020:0 "The Stake Holds"
+ wilderness_pioneer.0020.t:0 "The Stake Holds"
+ wilderness_pioneer.0020.desc:0 "There is a roof on the hall, such as it is, and a road going down to it that a cart can use in the wet.\n\nWhat there is not, any more, is a company. There is a village with a palisade round it, and people in it who came here to be somewhere rather than to be paid, and two children who were born inside the ditch and have never seen a road with an inn on it.\n\n[stake.GetName] is a holding. It is a poor one, and the men who cleared it are owed more than it is worth, and it is yours in a way nothing has been before."
+ wilderness_pioneer.0020.a:0 "Then we stop here."
+
+ pioneer_success_tt:0 "#P [stake.GetName] becomes your colony#!, and you become its lord\n• #N The company is dissolved#! — your followers become your court\n• Your camp is broken up for what it is worth\n• A colony is not yet a county: clear what is left in the way, raise it, and have it promoted"
+
+ # =====================================================================================
+ #  0030 — It did not
+ # =====================================================================================
+ wilderness_pioneer.0030:0 "The Stake Fails"
+ wilderness_pioneer.0030.t:0 "Nothing Held"
+ wilderness_pioneer.0030.desc:0 "It is not one thing. It never is.\n\nThe stores went early, and after that everything cost more than it should have — the weather, the ground, the ones who left in the night and took a cart with them. By the thaw there were not enough hands to work what had been cleared, and clearing it again was a year nobody had.\n\nThe posts are still standing at [stake.GetName]. Somebody else will find them one day and wonder who put them there."
+ wilderness_pioneer.0030.a:0 "Then we move on. We are good at that."
+
+ pioneer_failure_tt:0 "#N The stake is abandoned#! and [stake.GetName] goes back to the wild\n• #N Two of your followers do not leave with you#!\n• #N You are marked by it for ten years#!\n• The gold is gone; nothing bars you from trying again elsewhere"
+
+ # =====================================================================================
+ #  0031 — Somebody else's flag
+ # =====================================================================================
+ wilderness_pioneer.0031:0 "Ground Already Taken"
+ wilderness_pioneer.0031.t:0 "Ground Already Taken"
+ wilderness_pioneer.0031.desc:0 "Riders, and then a surveyor, and then the explanation.\n\n[stake.GetName] is held. Not by us, and not since yesterday — long enough that the arguing would be about something already written down somewhere far from here.\n\nThere is nothing on this hillside to stay for now."
+ wilderness_pioneer.0031.a:0 "Pack the carts."

@@ -1,0 +1,880 @@
+﻿namespace = wilderness_pioneer
+
+# The landless road into the wilderness.
+#
+# ---- What this is, and why it is not the other chain ----
+#
+# wilderness_colonization_events.txt is about a lord who sends people somewhere. Its whole middle --
+# the letters from the road, the leader chosen at the start, the two-year silence -- exists because
+# the person deciding is not the person going, and the drama is in learning what happened.
+#
+# Here they are the same man. Nothing is reported to him because he is standing in it, so there is
+# no news to wait for and nothing to find out; what there is instead is a winter, and then another
+# one. That is why this is a run of trials against a live meter rather than one hidden roll cashed
+# at the end, and why every event below is something happening TO the player rather than a dispatch
+# arriving about somebody else.
+#
+# ---- The shape ----
+#
+#   0001  Breaking ground. The one moment before the ground starts taking things.
+#   0010  The winter (hidden). Takes its bite, checks the endings, picks a trial, books next year.
+#   0011  The season itself.
+#   0012  Whatever was living here first.
+#   0013  The company, and whether it stays.
+#   0020  It held.
+#   0030  It did not.
+#   0031  It stopped being wilderness while you were standing on it. A safety valve, not a story.
+#
+# 0010 is the only event that schedules anything. Every other event in the file is a leaf: it moves
+# the meter and ends. That is deliberate -- a chain where several events can each book the next one
+# is a chain that eventually books two, and the resulting double winter would be invisible except as
+# a meter that fell twice as fast as its tooltip said.
+#
+# ---- AI ----
+#
+# 0001 is player-only, for the same reason wilderness_colonization.0010 is: an AI must never be
+# stopped by a window. The AI's starting hold is the default set in pioneer_launch_stake_effect and
+# it simply keeps it. Every OTHER event here fires for the AI too, resolving on ai_chance, so an AI
+# pioneer gets the same middle as a player's and its odds move for the same reasons.
+
+
+# =====================================================================================
+#  Breaking ground
+# =====================================================================================
+#
+# The three answers are not three strengths of the same commitment; each spends a different thing
+# and each is the right answer to a different county.
+#
+#   Dig in    -- costs nothing, gives the smallest number. The answer when the ground is survivable
+#                and the problem is simply time.
+#   The line  -- clears a blocker NOW, which on a county carrying killing cold is worth more than
+#                every other option in this file put together, and pays for it with a man and a
+#                worse opening position. The answer when the county is nearly impossible.
+#   Send back -- straightforwardly buys the best opening. The answer when there is gold, which for
+#                a company that has just paid pioneer_stake_cost usually means there is not.
+
+wilderness_pioneer.0001 = {
+	type = character_event
+	title = wilderness_pioneer.0001.t
+	desc = wilderness_pioneer.0001.desc
+	theme = realm
+	override_background = { reference = ep3_camp }
+
+	left_portrait = {
+		character = root
+		animation = personality_bold
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	right_portrait = {
+		trigger = { exists = scope:pioneer_second }
+		character = scope:pioneer_second
+		animation = worry
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	# Players only. The guard lives here rather than at the call site so that every route into this
+	# event is covered by it, including any added later.
+	trigger = {
+		is_ai = no
+		pioneer_stake_still_live_trigger = yes
+	}
+
+	immediate = {
+		var:pioneer_stake = { save_scope_as = stake }
+
+		random_courtier = {
+			limit = { is_available_ai_adult = yes }
+			save_scope_as = pioneer_second
+		}
+	}
+
+	# --- Dig in before anything else ------------------------------------------------------------
+	option = {
+		name = wilderness_pioneer.0001.a
+		skill = stewardship
+
+		# Hidden even though nothing is rolled, because the breakdown tooltip beside it already says
+		# what this does and a toast line in the tooltip as well would say it twice. The toast is for
+		# after the click, which is the only moment the meter has ever been visible.
+		hidden_effect = {
+			pioneer_outcome_toast_effect = {
+				VALUE = 12
+				TITLE = pioneer_toast_dug_in
+				TYPE = event_toast_effect_good
+			}
+		}
+
+		custom_tooltip = pioneer_found_dig_in_tt
+
+		stress_impact = {
+			patient = minor_stress_impact_loss
+			impatient = minor_stress_impact_gain
+		}
+	}
+
+	# --- Every hand on the treeline ---------------------------------------------------------------
+	option = {
+		name = wilderness_pioneer.0001.b
+		skill = martial
+
+		# Phrased as "not none" rather than "at least one", because count = 0 is the only form of
+		# this test the rest of the system uses and the only one proven against the engine here.
+		trigger = {
+			scope:stake = {
+				title_province ?= {
+					NOT = { has_building_with_flag = { flag = obstacle count = 0 } }
+				}
+			}
+		}
+
+		pioneer_clear_one_obstacle_effect = yes
+
+		hidden_effect = {
+			pioneer_lose_follower_effect = { REASON = death_accident }
+
+			pioneer_outcome_toast_effect = {
+				VALUE = -8
+				TITLE = pioneer_toast_the_line
+				TYPE = event_toast_effect_neutral
+			}
+		}
+
+		custom_tooltip = pioneer_found_the_line_tt
+
+		stress_impact = {
+			diligent = minor_stress_impact_loss
+			compassionate = medium_stress_impact_gain
+			lazy = medium_stress_impact_gain
+		}
+	}
+
+	# --- Send back down the road for what is missing ----------------------------------------------
+	option = {
+		name = wilderness_pioneer.0001.c
+		skill = stewardship
+
+		trigger = { gold >= 250 }
+		remove_short_term_gold = 250
+
+		hidden_effect = {
+			pioneer_outcome_toast_effect = {
+				VALUE = 25
+				TITLE = pioneer_toast_sent_back
+				TYPE = event_toast_effect_good
+			}
+		}
+
+		custom_tooltip = pioneer_found_send_back_tt
+
+		stress_impact = {
+			generous = minor_stress_impact_loss
+			greedy = medium_stress_impact_gain
+		}
+	}
+}
+
+
+# =====================================================================================
+#  The winter
+# =====================================================================================
+#
+# Hidden. Fires a year after the pioneer arrives and once a year after that, booking the next itself.
+#
+# ---- What the activity took over, and what it did not ----
+#
+#   the absence rule       GONE. The activity holds the host at the location; being dragged away
+#                          fails its is_valid and ends the run through on_invalidated
+#   the hold <= 0 ending   GONE. The activity's is_valid; the engine invalidates and 0030 narrates
+#   the winters >= N end   GONE. The phase timer running out completes the activity and fires 0020
+#   the rescheduling       KEPT, and it had to be. Four one-year phases were tried and the planner
+#                          refused to start them -- see the phase block in
+#                          00_stake_wilderness_activity.txt for why. So the winters are a chain
+#                          again, and this is the only event in the file that books anything.
+#
+# `pioneer_winters` is not a clock. pioneer_winter_severity reads it to work out how much of the
+# place is already standing, which is the mechanic that makes a fourth winter survivable when a first
+# one nearly was not. It is also what bounds the rescheduling below.
+#
+# Order inside `immediate` is load-bearing: the season takes its bite before a trial is picked, so a
+# trial always arrives into the position the winter actually left.
+
+wilderness_pioneer.0010 = {
+	hidden = yes
+	scope = character
+
+	trigger = {
+		pioneer_stake_still_live_trigger = yes
+	}
+
+	immediate = {
+		var:pioneer_stake = { save_scope_as = stake }
+
+		change_variable = { name = pioneer_winters  add = 1 }
+
+		# --- The season ----------------------------------------------------------------------
+		#
+		# Toasted like everything else, and this is the one that most needed it: the seasonal bite is
+		# the largest single movement in the run and it was the only one with no window attached to
+		# it at all. A trial at least arrives as an event you clicked; the winter simply happened.
+		pioneer_outcome_toast_effect = {
+			VALUE = pioneer_winter_severity
+			TITLE = pioneer_winter_toast
+			TYPE = event_toast_effect_bad
+		}
+
+		# --- Where that leaves it --------------------------------------------------------------
+		if = {
+			# Somebody or something took the ground out from under the run. Should not happen --
+			# settling_expedition_underway keeps every other claimant off it -- so this is a valve
+			# rather than an outcome, and it is checked first so it cannot be misreported as
+			# anything else.
+			#
+			# Reading the variable rather than asking pioneer_stake_ground_still_wild_trigger,
+			# because that trigger wanted scope:stake and this branch reads better without the
+			# indirection now there is only one caller left.
+			limit = {
+				NOT = { var:pioneer_stake = { is_wilderness_county_trigger = yes } }
+			}
+			trigger_event = wilderness_pioneer.0031
+		}
+		else_if = {
+			# Still standing. There is no `else` after this and there must not be: an emptied meter
+			# is the activity's business, not this event's. It fails is_valid on the next evaluation
+			# and on_invalidated narrates it, which is the only place the failure is described.
+			limit = { var:pioneer_hold > 0 }
+
+			# Next winter, booked before the trial fires so nothing an option does can lose the
+			# appointment -- and bounded, so the chain cannot outlive the run it belongs to. Without
+			# the bound a fifth winter would fire two months after the activity completed, against a
+			# character who had already won, for as long as the variables happened to survive.
+			if = {
+				limit = { var:pioneer_winters < pioneer_winters_required }
+
+				trigger_event = {
+					id = wilderness_pioneer.0010
+					years = 1
+				}
+			}
+
+			# Which trial. Weighted by what is actually on the ground, so a county's blockers decide
+			# what its winters are ABOUT rather than only how much they cost -- flooded lands means
+			# seasons of water, bandit camps means seasons of other people.
+			random_list = {
+				40 = {
+					modifier = {
+						add = 30
+						scope:stake = { title_province ?= { has_building = killing_cold } }
+					}
+					modifier = {
+						add = 20
+						scope:stake = { title_province ?= { has_building = flooded_lands } }
+					}
+					trigger_event = wilderness_pioneer.0011
+				}
+
+				# Nothing is out there unless something is out there.
+				0 = {
+					modifier = {
+						add = 45
+						scope:stake = { title_province ?= { has_building = bandit_camps } }
+					}
+					modifier = {
+						add = 40
+						scope:stake = { title_province ?= { has_building = beast_dens } }
+					}
+					modifier = {
+						add = 15
+						scope:stake = { title_province ?= { has_building = dense_growth } }
+					}
+					trigger_event = wilderness_pioneer.0012
+				}
+
+				# Likelier the worse it is going, and likelier the longer they have been promised
+				# that next year is the one.
+				25 = {
+					modifier = {
+						add = 30
+						var:pioneer_hold < 40
+					}
+					modifier = {
+						add = 15
+						var:pioneer_winters >= 2
+					}
+					trigger_event = wilderness_pioneer.0013
+				}
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Trial: the season itself
+# =====================================================================================
+
+wilderness_pioneer.0011 = {
+	type = character_event
+	title = wilderness_pioneer.0011.t
+	desc = wilderness_pioneer.0011.desc
+	theme = realm
+	override_background = { reference = ep3_camp_night }
+
+	left_portrait = {
+		character = root
+		animation = worry
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	trigger = {
+		pioneer_stake_still_live_trigger = yes
+	}
+
+	immediate = {
+		var:pioneer_stake = { save_scope_as = stake }
+	}
+
+	# --- Buy it from whoever will sell -------------------------------------------------------
+	option = {
+		name = wilderness_pioneer.0011.a
+		skill = stewardship
+		add_internal_flag = special
+
+		trigger = { gold >= 150 }
+		remove_short_term_gold = 150
+
+		custom_tooltip = pioneer_supply_breakdown_tt
+
+		hidden_effect = {
+			colony_road_roll_effect = { CHANCE = pioneer_supply_chance }
+
+			if = {
+				limit = { has_variable = road_roll_took }
+				pioneer_outcome_toast_effect = {
+					VALUE = 20
+					TITLE = pioneer_toast_supply_took
+					TYPE = event_toast_effect_good
+				}
+			}
+			else = {
+				pioneer_outcome_toast_effect = {
+					VALUE = 5
+					TITLE = pioneer_toast_supply_short
+					TYPE = event_toast_effect_bad
+				}
+			}
+		}
+
+		ai_chance = {
+			base = 60
+			modifier = { factor = 0  gold < 400 }
+		}
+
+		stress_impact = {
+			greedy = minor_stress_impact_gain
+		}
+	}
+
+	# --- Send the strongest out into it -------------------------------------------------------
+	option = {
+		name = wilderness_pioneer.0011.b
+		skill = martial
+
+		custom_tooltip = pioneer_forage_breakdown_tt
+
+		hidden_effect = {
+			colony_road_roll_effect = { CHANCE = pioneer_forage_chance }
+
+			if = {
+				limit = { has_variable = road_roll_took }
+				pioneer_outcome_toast_effect = {
+					VALUE = 16
+					TITLE = pioneer_toast_forage_took
+					TYPE = event_toast_effect_good
+				}
+			}
+			else = {
+				pioneer_lose_follower_effect = { REASON = death_wild_animal }
+
+				pioneer_outcome_toast_effect = {
+					VALUE = -10
+					TITLE = pioneer_toast_forage_failed
+					TYPE = event_toast_effect_bad
+				}
+			}
+		}
+
+		ai_chance = {
+			base = 40
+			modifier = { add = 30  martial >= 12 }
+		}
+
+		stress_impact = {
+			brave = minor_stress_impact_loss
+			craven = minor_stress_impact_gain
+		}
+	}
+
+	# --- Half rations, and everyone endures ----------------------------------------------------
+	option = {
+		name = wilderness_pioneer.0011.c
+		skill = stewardship
+
+		custom_tooltip = pioneer_endure_breakdown_tt
+
+		hidden_effect = {
+			colony_road_roll_effect = { CHANCE = pioneer_endure_chance }
+
+			if = {
+				limit = { has_variable = road_roll_took }
+				pioneer_outcome_toast_effect = {
+					VALUE = 9
+					TITLE = pioneer_toast_endure_took
+					TYPE = event_toast_effect_good
+				}
+			}
+			else = {
+				add_stress = minor_stress_gain
+
+				pioneer_outcome_toast_effect = {
+					VALUE = -12
+					TITLE = pioneer_toast_endure_failed
+					TYPE = event_toast_effect_bad
+				}
+			}
+		}
+
+		ai_chance = {
+			base = 30
+			modifier = { add = 40  gold < 150 }
+		}
+
+		stress_impact = {
+			temperate = minor_stress_impact_loss
+			gluttonous = medium_stress_impact_gain
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Trial: whatever was living here first
+# =====================================================================================
+#
+# The one trial with a blocker on the other side of it, which is why option A is worth so much more
+# than anything else in the file: it does not just pay the meter, it makes every remaining winter
+# cheaper. It is also the only option here that can put the pioneer himself in the ground.
+
+wilderness_pioneer.0012 = {
+	type = character_event
+	title = wilderness_pioneer.0012.t
+	desc = wilderness_pioneer.0012.desc
+	theme = realm
+	override_background = { reference = ep3_campfire }
+
+	left_portrait = {
+		character = root
+		animation = anger
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { military_outfit } }
+	}
+
+	trigger = {
+		pioneer_stake_still_live_trigger = yes
+	}
+
+	immediate = {
+		var:pioneer_stake = { save_scope_as = stake }
+	}
+
+	# --- Go out and finish it ------------------------------------------------------------------
+	option = {
+		name = wilderness_pioneer.0012.a
+		skill = prowess
+		add_internal_flag = special
+
+		custom_tooltip = pioneer_stand_breakdown_tt
+
+		hidden_effect = {
+			colony_road_roll_effect = { CHANCE = pioneer_stand_chance }
+
+			if = {
+				limit = { has_variable = road_roll_took }
+				pioneer_clear_one_obstacle_effect = yes
+				add_prestige = medium_prestige_gain
+
+				pioneer_outcome_toast_effect = {
+					VALUE = 18
+					TITLE = pioneer_toast_stand_won
+					TYPE = event_toast_effect_good
+				}
+			}
+			else = {
+				increase_wounds_effect = { REASON = wounds }
+				add_stress = minor_stress_gain
+				pioneer_lose_follower_effect = { REASON = death_fight }
+
+				pioneer_outcome_toast_effect = {
+					VALUE = -14
+					TITLE = pioneer_toast_stand_lost
+					TYPE = event_toast_effect_bad
+				}
+			}
+		}
+
+		ai_chance = {
+			base = 35
+			modifier = { add = 40  prowess >= 12 }
+			modifier = { factor = 0  has_trait = craven }
+		}
+
+		stress_impact = {
+			brave = medium_stress_impact_loss
+			craven = major_stress_impact_gain
+		}
+	}
+
+	# --- Buy the problem away -------------------------------------------------------------------
+	option = {
+		name = wilderness_pioneer.0012.b
+		skill = diplomacy
+
+		trigger = { gold >= 150 }
+		remove_short_term_gold = 150
+
+		hidden_effect = {
+			pioneer_outcome_toast_effect = {
+				VALUE = 10
+				TITLE = pioneer_toast_paid_off
+				TYPE = event_toast_effect_neutral
+			}
+		}
+
+		custom_tooltip = pioneer_pay_them_off_tt
+
+		ai_chance = {
+			base = 40
+			modifier = { factor = 0  gold < 400 }
+		}
+	}
+
+	# --- Wall up and let them have the outskirts ------------------------------------------------
+	option = {
+		name = wilderness_pioneer.0012.c
+		skill = stewardship
+
+		custom_tooltip = pioneer_wall_up_breakdown_tt
+
+		hidden_effect = {
+			colony_road_roll_effect = { CHANCE = pioneer_endure_chance }
+
+			if = {
+				limit = { has_variable = road_roll_took }
+				pioneer_outcome_toast_effect = {
+					VALUE = 7
+					TITLE = pioneer_toast_wall_held
+					TYPE = event_toast_effect_good
+				}
+			}
+			else = {
+				pioneer_lose_follower_effect = { REASON = death_wild_animal }
+
+				pioneer_outcome_toast_effect = {
+					VALUE = -9
+					TITLE = pioneer_toast_wall_broken
+					TYPE = event_toast_effect_bad
+				}
+			}
+		}
+
+		ai_chance = {
+			base = 30
+			modifier = { add = 30  has_trait = craven }
+		}
+
+		stress_impact = {
+			craven = minor_stress_impact_loss
+			brave = minor_stress_impact_gain
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Trial: the company
+# =====================================================================================
+#
+# Option A is the interesting one and it is not a roll: promising the company land always works,
+# and the bill arrives years later at promotion through settlers_were_promised -- the same debt the
+# landed path's third road event lets a lord take on, collected by the same event, and worth taking
+# for exactly the same reason. Buying success with something you only owe if you succeed is a real
+# decision; buying it with gold already spent is a price.
+
+wilderness_pioneer.0013 = {
+	type = character_event
+	title = wilderness_pioneer.0013.t
+	desc = wilderness_pioneer.0013.desc
+	theme = realm
+	override_background = { reference = ep3_campfire }
+
+	left_portrait = {
+		character = root
+		animation = stress
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	right_portrait = {
+		trigger = { exists = scope:pioneer_malcontent }
+		character = scope:pioneer_malcontent
+		animation = disapproval
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	trigger = {
+		pioneer_stake_still_live_trigger = yes
+	}
+
+	immediate = {
+		var:pioneer_stake = { save_scope_as = stake }
+
+		random_courtier = {
+			limit = { is_available_ai_adult = yes }
+			save_scope_as = pioneer_malcontent
+		}
+	}
+
+	# --- Promise them land when it stands --------------------------------------------------------
+	option = {
+		name = wilderness_pioneer.0013.a
+		skill = diplomacy
+		add_internal_flag = special
+
+		# Only once. A second promise to the same men buys nothing, and the debt does not stack.
+		trigger = {
+			scope:stake = { NOT = { has_variable = settlers_were_promised } }
+		}
+
+		scope:stake = { set_variable = { name = settlers_were_promised } }
+
+		hidden_effect = {
+			pioneer_outcome_toast_effect = {
+				VALUE = 22
+				TITLE = pioneer_toast_promised
+				TYPE = event_toast_effect_good
+			}
+		}
+
+		custom_tooltip = pioneer_promise_land_tt
+
+		ai_chance = {
+			base = 70
+		}
+
+		stress_impact = {
+			honest = minor_stress_impact_gain
+			deceitful = minor_stress_impact_loss
+		}
+	}
+
+	# --- Pay them -------------------------------------------------------------------------------
+	option = {
+		name = wilderness_pioneer.0013.b
+		skill = stewardship
+
+		trigger = { gold >= pioneer_wages_cost }
+		remove_short_term_gold = pioneer_wages_cost
+
+		hidden_effect = {
+			pioneer_outcome_toast_effect = {
+				VALUE = 14
+				TITLE = pioneer_toast_wages_paid
+				TYPE = event_toast_effect_good
+			}
+		}
+
+		custom_tooltip = pioneer_pay_wages_tt
+
+		ai_chance = {
+			base = 50
+			modifier = { factor = 0  gold < 500 }
+		}
+
+		stress_impact = {
+			greedy = medium_stress_impact_gain
+		}
+	}
+
+	# --- Make an example of the loudest ----------------------------------------------------------
+	option = {
+		name = wilderness_pioneer.0013.c
+		skill = martial
+
+		custom_tooltip = pioneer_make_example_breakdown_tt
+
+		hidden_effect = {
+			colony_road_roll_effect = { CHANCE = pioneer_hold_company_chance }
+
+			if = {
+				limit = { has_variable = road_roll_took }
+				add_dread = medium_dread_gain
+
+				pioneer_outcome_toast_effect = {
+					VALUE = 18
+					TITLE = pioneer_toast_example_made
+					TYPE = event_toast_effect_good
+				}
+			}
+			else = {
+				add_stress = medium_stress_gain
+				pioneer_lose_follower_effect = { REASON = death_vanished }
+
+				pioneer_outcome_toast_effect = {
+					VALUE = -16
+					TITLE = pioneer_toast_example_backfired
+					TYPE = event_toast_effect_bad
+				}
+			}
+		}
+
+		ai_chance = {
+			base = 25
+			modifier = { add = 35  has_trait = callous }
+			modifier = { add = 35  has_trait = sadistic }
+			modifier = { factor = 0  has_trait = compassionate }
+		}
+
+		stress_impact = {
+			sadistic = medium_stress_impact_loss
+			compassionate = major_stress_impact_gain
+			just = medium_stress_impact_gain
+		}
+	}
+}
+
+
+# =====================================================================================
+#  It held
+# =====================================================================================
+
+wilderness_pioneer.0020 = {
+	type = character_event
+	title = wilderness_pioneer.0020.t
+	desc = wilderness_pioneer.0020.desc
+	theme = realm
+	override_background = { reference = ep3_fullscreen_adventurer_positive }
+
+	left_portrait = {
+		character = root
+		animation = personality_honorable
+	}
+
+	trigger = {
+		pioneer_stake_still_live_trigger = yes
+	}
+
+	# ---- The work happens HERE, not in the option ----
+	#
+	# It was in the option, and that was wrong twice over.
+	#
+	# The visible fault: the engine books the ride home the instant the activity ends, computed
+	# against the home the character had when it started -- the old camp. Applying the land transfer
+	# when the player got round to clicking the event meant the plan was already made against a home
+	# that was about to stop existing, so a man who had just won a county was walked back to the spot
+	# he set out from. pioneer_success_effect now moves his home before the engine looks at it.
+	#
+	# The quieter fault: an unclicked notification meant an unpaid reward. Four winters, and whether
+	# you ever got the county depended on clearing your event queue.
+	#
+	# The option below is acknowledgement only, which is what a single-option event with no choice in
+	# it always was.
+	immediate = {
+		var:pioneer_stake = { save_scope_as = stake }
+
+		pioneer_success_effect = yes
+	}
+
+	option = {
+		name = wilderness_pioneer.0020.a
+
+		custom_tooltip = pioneer_success_tt
+	}
+}
+
+
+# =====================================================================================
+#  It did not
+# =====================================================================================
+
+wilderness_pioneer.0030 = {
+	type = character_event
+	title = wilderness_pioneer.0030.t
+	desc = wilderness_pioneer.0030.desc
+	theme = realm
+	override_background = { reference = ep3_fullscreen_adventurer_negative }
+
+	left_portrait = {
+		character = root
+		animation = grief
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	trigger = {
+		pioneer_stake_still_live_trigger = yes
+	}
+
+	# In the immediate for the same reason 0020's is, minus the travel problem: a failed stake that
+	# only released its county when the player clicked the news would leave that ground unclaimable
+	# by anyone for as long as the event sat unread.
+	#
+	# The event's own trigger is what keeps this safe on the death path. on_invalidated fires for a
+	# host who has died, and pioneer_stake_still_live_trigger asks `is_alive` -- so the effect is
+	# never reached for a corpse, and the on_death sweep in 00_pioneer_on_actions.txt has already
+	# released the county by then.
+	immediate = {
+		var:pioneer_stake = { save_scope_as = stake }
+
+		pioneer_failure_effect = yes
+	}
+
+	option = {
+		name = wilderness_pioneer.0030.a
+
+		custom_tooltip = pioneer_failure_tt
+	}
+}
+
+
+# =====================================================================================
+#  The ground stopped being wilderness
+# =====================================================================================
+#
+# Not an ending anyone earned, and deliberately not dressed as one: no dead followers, no lasting
+# modifier, nothing that reads as the player's fault. It exists because a stake that quietly stopped
+# with no window would be indistinguishable from a bug, and because the county has to be released.
+
+wilderness_pioneer.0031 = {
+	type = character_event
+	title = wilderness_pioneer.0031.t
+	desc = wilderness_pioneer.0031.desc
+	theme = realm
+	override_background = { reference = ep3_camp }
+
+	left_portrait = {
+		character = root
+		animation = disbelief
+		triggered_outfit = { trigger = { always = yes } outfit_tags = { travel_outfit } }
+	}
+
+	trigger = {
+		pioneer_stake_still_live_trigger = yes
+	}
+
+	immediate = {
+		var:pioneer_stake = { save_scope_as = stake }
+	}
+
+	option = {
+		name = wilderness_pioneer.0031.a
+
+		pioneer_clear_stake_effect = yes
+	}
+}

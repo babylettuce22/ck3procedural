@@ -85,7 +85,12 @@ public static class WorldOverwrite
             yield return "gen_faiths_l_english.yml";
 
         if (aspects.HasFlag(WorldAspect.Rulers))
+        {
             yield return "00_generated_characters.txt";
+            yield return "00_bookmarks.txt";
+            yield return "00_generated_challenge.txt";
+            yield return "gen_history_l_english.yml";
+        }
 
         if (aspects.HasFlag(WorldAspect.TitleWords))
         {
@@ -146,6 +151,18 @@ public static class WorldOverwrite
         {
             HistoryWriter.WriteCharacters(modDir, result.Config, written.Cultures, written.Ethnicities,
                 prehistory, rulers);
+
+            // The bookmark screen describes the same men, down to the age beside the name and the
+            // byname after it, so it is stale the moment the character file is not. The cast is
+            // replayed rather than reselected — see WrittenContent.Bookmarks for why.
+            if (written.Bookmarks is { } cast
+                && written.Realms is { } realms
+                && written.Governments is { } governments)
+            {
+                BookmarkWriter.ReWrite(modDir, result.Config, cast, result.Titles, realms,
+                    written.Cultures, written.Faiths, governments, written.Wilderness, rulers,
+                    result.Azgaar);
+            }
         }
 
         // Both files whole, from the words now on the cultures and titles. The writer is pure —
@@ -164,8 +181,12 @@ public static class WorldOverwrite
             Console.WriteLine("  wonder and artifact descriptions keep the name they were generated with");
 
         if (aspects.HasFlag(WorldAspect.Rulers))
+        {
             Console.WriteLine("  artifact and chronicle prose keeps the ruler's generated name; "
                               + "fathers, spouses and children keep their generated dates");
+            Console.WriteLine("  the bookmark screen follows the edit, but who is on it does not "
+                              + "change — the realm outlines and portraits were drawn for them");
+        }
 
         if (aspects.HasFlag(WorldAspect.TitleWords))
             Console.WriteLine("  a culture's realm words apply to every realm whose top liege is of "

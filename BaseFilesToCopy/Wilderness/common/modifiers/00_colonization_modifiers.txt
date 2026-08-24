@@ -192,6 +192,21 @@ settlers_commuted_settlement = {
 	county_opinion_add = 5
 }
 
+# County scope: wilderness a Pathfinder has walked. Applied by task_survey_the_wilds for 25 years.
+#
+# Carries no effects, and that is the same correctness argument settling_expedition_underway makes
+# above: nothing has happened to the ground. What it is *for* is being readable — colony_settling_
+# chance asks for it when the first winters are rolled, and it is the one thing a council task can
+# leave behind that the settling roll already has in scope. Giving it a modifier as well would pay
+# the colonist twice for the same work and would pay whoever else settles there instead.
+#
+# The icon is the only thing it does on its own, and that is worth something: surveyed country reads
+# as surveyed on the map, so a player can see what his Pathfinder has been doing.
+colony_surveyed_ground = {
+	icon = county_modifier_development_mixed
+}
+
+
 # The lord broke his sacred word
 settlers_betrayed_unrest = {
 	icon = county_modifier_corruption

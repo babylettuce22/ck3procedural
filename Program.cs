@@ -11,6 +11,11 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        // The magic designer is not part of the pipeline: it builds no world and writes no mod, so
+        // it takes the process before any of the generation machinery is constructed. Two lines
+        // here and one folder is the whole of its footprint until it is wired up.
+        if (args.Length > 0 && Magic.MagicCli.Handles(args[0])) return Magic.MagicCli.Run(args);
+
         var options = new GenerationOptions();
         var cfg = options.Config;
 
@@ -359,6 +364,10 @@ public static class Program
             if (cfg.EnableFantasyEthnicities && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly)
             {
                 sets.Add(Ck3MapGen.Emit.StaticFileWriter.Fantasy);
+            }
+            if (cfg.EnableMagic)
+            {
+                sets.Add(Ck3MapGen.Emit.StaticFileWriter.Magic);
             }
 
             // Using UtcNow as runStarted ensures all previously existing files in the target

@@ -195,6 +195,13 @@ public sealed class AzgaarImport
     public string EraShort => World.Settings.Options.EraShort;
 
     /// <summary>
+    /// What the export calls the world — "Fleunland". Empty when it carries no name, which an
+    /// export saved before Azgaar's naming step can be. The bookmark takes it as its own title,
+    /// for the same reason it takes <see cref="EraName"/>: the world already has a name.
+    /// </summary>
+    public string MapName => World.Info.MapName;
+
+    /// <summary>
     /// Compares the imported land against ours and says so. Called as soon as the heightmap's land
     /// mask exists, which is before anything has been built on either; see
     /// <see cref="AzgaarRaster.CheckAlignment"/> for why this matters.

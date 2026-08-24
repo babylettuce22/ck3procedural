@@ -2,28 +2,37 @@
 using Ck3MapGen.Core;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
-using System.Text;
 
 namespace Ck3MapGen.Emit;
 
 public static class BookmarkWriter
 {
     public const string ChallengeCharacter = "challenge_character_generated";
-    private const double MinPortraitDistance = 260.0; // Minimum pixel separation on 1920x1080 screen
 
-    public record BookmarkSlot(
-        string Key,
-        string Subheading,
-        string Description,
-        string Difficulty,
-        Title County,
-        int ScreenX,
-        int ScreenY
-    );
+    /// <summary>
+    /// The one bookmark group this mod declares, and therefore the one date tab the frontend draws.
+    ///
+    /// The tabs above the bookmark list are the *groups*, not the bookmarks: the frontend's
+    /// datamodel is <c>GameSetup.AccessBookmarkGroups</c>, so every group that survives loading gets
+    /// a tab whether or not a single bookmark points at it. Attaching our bookmark to vanilla's
+    /// <c>bm_group_867</c> therefore left 1066 and 1178 on screen as tabs onto nothing — this world
+    /// has one start date and vanilla's three are not among them.
+    /// </summary>
+    public const string GroupKey = "bm_group_generated";
+
+    /// <summary>
+    /// The tab's second line, under the year. Its own key rather than part of
+    /// <see cref="GroupKey"/>'s because the tab's year is a <c>text_single</c> capped at 155px —
+    /// anything appended to the year is a wider string in a box that does not grow.
+    /// <see cref="GuiWriter"/> splices the line in that reads this, and hides it when nothing
+    /// resolves, which is what a run with no bookmarks at all leaves behind.
+    /// </summary>
+    public const string GroupSubtitleKey = GroupKey + "_sub";
 
     public record BookmarkResult(
         List<PortraitWriter.CharacterPortraitRequest> PortraitRequests,
-        Dictionary<Title, string> BookmarkDnaMap
+        Dictionary<Title, string> BookmarkDnaMap,
+        BookmarkCast? Cast
     );
 
     public static BookmarkResult WriteAll(
@@ -31,7 +40,8 @@ public static class BookmarkWriter
         ProvinceMap provinces, int[] order, List<Title> empires,
         RealmMap realms, Dictionary<Title, int> development,
         CultureMap cultures, FaithMap faiths, GovernmentMap governments,
-        WildernessMap wilderness, PrehistoryMap prehistory, RulerMap rulers)
+        WildernessMap wilderness, PrehistoryMap prehistory, RulerMap rulers,
+        AzgaarImport? azgaar = null)
     {
         // Only realm seats have a character: a liege's demesne counties and every vassal-held
         // county under one man share his seat's ruler, and the character file writes nobody for
@@ -40,43 +50,123 @@ public static class BookmarkWriter
         var allCounties = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
         var seatCounties = allCounties.Where(c => !wilderness.Contains(c) && rulers.Contains(c)).ToList();
 
+        // Ahead of the guard below: the descriptor replaces vanilla's groups whether or not this
+        // run finds a county to bookmark, and a frontend with no groups at all has no tabs to
+        // click. One tab pointing at nothing still beats none.
+        WriteBookmarkGroup(modDir, cfg);
+
         if (seatCounties.Count == 0)
         {
-            return new BookmarkResult([], new Dictionary<Title, string>());
+            return new BookmarkResult([], new Dictionary<Title, string>(), null);
         }
 
         var countyPositions = CalculateCountyScreenPositions(seatCounties, provinces, order, cfg);
-        var bookmarks = SelectBookmarkArchetypes(seatCounties, realms, governments, development, wilderness, countyPositions, rulers);
-        var challengeSlot = bookmarks.LastOrDefault() ?? bookmarks[0];
+        var cast = BookmarkCast.Build(seatCounties, realms, governments, development, wilderness,
+                                      prehistory, rulers, cultures, cfg.StartYear, countyPositions);
 
-        // Map county -> DNA key (e.g. "dna_bm_char_hegemon")
-        var bookmarkDnaMap = new Dictionary<Title, string>();
-        foreach (var b in bookmarks)
+        if (cast is null)
         {
-            bookmarkDnaMap[b.County] = $"dna_{b.Key}";
+            return new BookmarkResult([], new Dictionary<Title, string>(), null);
         }
-        bookmarkDnaMap[challengeSlot.County] = $"dna_{ChallengeCharacter}";
+
+        // Map county -> DNA key (e.g. "dna_bm_char_hegemon"). The challenge character is a sixth
+        // ruler, so this no longer overwrites a bookmark's entry with its own — which is what left
+        // `dna_bm_char_warlord` written and pointed at nobody.
+        var bookmarkDnaMap = new Dictionary<Title, string>();
+        foreach (var slot in cast.All) bookmarkDnaMap[slot.County] = $"dna_{slot.Key}";
 
         // The portrait follows the character, not the bookmark: stamping the key on the ruler is
         // what lets the character writer emit `dna =` without being handed this map.
         foreach (var (county, dnaKey) in bookmarkDnaMap)
             rulers.For(county).DnaKey = dnaKey;
 
-        WriteBookmarks(modDir, cfg, bookmarks, realms, cultures, faiths, governments, rulers);
-        WriteChallengeCharacter(modDir, challengeSlot.County, realms, cfg, cultures, faiths, governments, rulers);
-        WriteBookmarkLocalisation(modDir, bookmarks, challengeSlot, rulers);
+        WriteBookmarks(modDir, cfg, cast, realms, cultures, faiths, governments);
+        WriteChallengeCharacter(modDir, cfg, cast.Challenge, realms, cultures, faiths, governments);
+        WriteBookmarkLocalisation(modDir, cfg, cast, azgaar,
+            TabSubtitle(cfg, seatCounties, governments),
+            BookmarkTitle(cast.Slots, realms, azgaar));
         WriteBookmarkGraphics(modDir, gameDir);
-        WriteRealmHighlights(modDir, cfg, provinces, order, bookmarks, realms, empires);
+        WriteRealmHighlights(modDir, cfg, provinces, order, cast.Slots, realms, empires);
 
+        Report(cast);
+
+        // A portrait for every name either file mentions, companions included. CK3 1.13 crashes on a
+        // bookmark character with no record in common/bookmark_portraits — ck3-tiger grades it
+        // fatal — so the nested blocks are not free to be lookups alone.
         var requests = new List<PortraitWriter.CharacterPortraitRequest>();
-        foreach (var b in bookmarks)
+        foreach (var slot in cast.All)
         {
-            requests.Add(new PortraitWriter.CharacterPortraitRequest(b.Key, cultures.For(b.County)));
+            requests.Add(new PortraitWriter.CharacterPortraitRequest(
+                slot.Key, cultures.For(slot.County), slot.Ruler.Female, Tier: slot.Ruler.Tier,
+                Traits: slot.Ruler.Profile.OtherTraits));
         }
-        requests.Add(new PortraitWriter.CharacterPortraitRequest(ChallengeCharacter, cultures.For(challengeSlot.County)));
 
-        return new BookmarkResult(requests, bookmarkDnaMap);
+        // Companions after all six, because a companion who is himself one of the six borrows that
+        // slot's face rather than drawing a second one — a liege standing small beside his vassal
+        // and large in his own slot is one man, and the alias is what keeps him looking like it.
+        var bookmarked = cast.All.ToDictionary(s => s.Ruler.Id, s => s.Key);
+        foreach (var slot in cast.All)
+        {
+            foreach (var mate in slot.Companions)
+            {
+                requests.Add(new PortraitWriter.CharacterPortraitRequest(
+                    mate.Key, mate.Culture, mate.Female, mate.Child,
+                    AliasOf: bookmarked.GetValueOrDefault(mate.HistoryId),
+
+                    // A wife and an heir dress to the household they live in, so the rank that picks
+                    // their wardrobe is his. A liege or a rival has a tier of his own.
+                    Tier: mate.Ruler?.Tier ?? slot.Ruler.Tier,
+
+                    // Only rulers carry a rolled profile; a wife or an heir has no congenital trait
+                    // written for her, so there is nothing for the screen to be wrong about.
+                    Traits: mate.Ruler?.Profile.OtherTraits));
+            }
+        }
+
+        return new BookmarkResult(requests, bookmarkDnaMap, cast);
     }
+
+    /// <summary>
+    /// Re-emits the three files that describe the cast, from the cast already chosen.
+    ///
+    /// Selection is deliberately not re-run: an edit to a ruler's name or birthday must not move
+    /// who is on the bookmark screen, or the realm highlights and portraits written at generation
+    /// would be pointing at people no longer on it. Everything read here is read off the
+    /// <see cref="Ruler"/> objects the slots hold, which are the same objects the editor edits.
+    /// </summary>
+    internal static void ReWrite(string modDir, MapConfig cfg, BookmarkCast cast,
+        List<Title> empires, RealmMap realms, CultureMap cultures, FaithMap faiths,
+        GovernmentMap governments, WildernessMap wilderness, RulerMap rulers, AzgaarImport? azgaar)
+    {
+        var seats = Titles.Flatten(empires)
+            .Where(t => t.Tier == "c" && !wilderness.Contains(t) && rulers.Contains(t))
+            .ToList();
+
+        WriteBookmarks(modDir, cfg, cast, realms, cultures, faiths, governments);
+        WriteChallengeCharacter(modDir, cfg, cast.Challenge, realms, cultures, faiths, governments);
+        WriteBookmarkLocalisation(modDir, cfg, cast, azgaar,
+            TabSubtitle(cfg, seats, governments),
+            BookmarkTitle(cast.Slots, realms, azgaar));
+    }
+
+    private static void Report(BookmarkCast cast)
+    {
+        foreach (var slot in cast.All)
+        {
+            string tail = slot.Companions.Count == 0
+                ? ""
+                : $" (+{slot.Companions.Count} beside him)";
+            Console.WriteLine($"  bookmark {slot.Key}: {slot.Ruler.Name} of "
+                              + $"{slot.Ruler.PrimaryTitle.Name} — {Grade(slot.Difficulty)}{tail}");
+        }
+    }
+
+    private static string Grade(string difficulty) => difficulty switch
+    {
+        "BOOKMARK_CHARACTER_DIFFICULTY_EASY" => "easy",
+        "BOOKMARK_CHARACTER_DIFFICULTY_MEDIUM" => "medium",
+        _ => "hard",
+    };
 
     private static Dictionary<Title, (int X, int Y)> CalculateCountyScreenPositions(
         List<Title> counties, ProvinceMap provinces, int[] order, MapConfig cfg)
@@ -134,272 +224,262 @@ public static class BookmarkWriter
     }
 
     /// <summary>
-    /// Every pool here is drawn from <paramref name="counties"/>, which the caller has already
-    /// narrowed to realm seats — the counties <paramref name="rulers"/> wrote a character for. A
-    /// non-seat county would give the bookmark a <c>history_id</c> nobody wrote.
+    /// The splendour shield the bookmark screen draws under a portrait.
+    ///
+    /// Display only, and unusually so: <c>dynasty_splendor_level</c> appears nowhere in the game
+    /// files except bookmarks, so there is no define to read the real thresholds back from. The
+    /// ladder is graded instead against the renown <see cref="RulerMap"/> actually grants — 150-450
+    /// for a count, 4000-7000 for an emperor — which is what the dynasty holds at game start.
+    /// Vanilla's own bookmarks run 1 to 6 and lean low, so a crowned head lands at 3 or 4 rather
+    /// than at the top of the scale.
     /// </summary>
-    private static List<BookmarkSlot> SelectBookmarkArchetypes(
-        List<Title> counties, RealmMap realms, GovernmentMap governments,
-        Dictionary<Title, int> development, WildernessMap wilderness,
-        Dictionary<Title, (int X, int Y)> positions, RulerMap rulers)
+    private static int SplendorLevel(int renown) => renown switch
     {
-        var chosen = new List<BookmarkSlot>();
-        var usedCounties = new HashSet<Title>();
-
-        // Greatest is keyed by holder county, so these are seats already; the Contains guard keeps
-        // it that way should the realm builder ever list a county the character writer skips.
-        var playable = realms.Greatest.Where(c => rulers.Contains(c) && IsPlayable(governments.For(c))).ToList();
-        if (playable.Count == 0) playable = counties;
-
-        // 1. The Hegemon
-        var hegemon = PickSpacedCandidate(playable, usedCounties, chosen, positions, MinPortraitDistance) ?? playable[0];
-        AddSlot(chosen, usedCounties, positions, hegemon,
-            "bm_char_hegemon",
-            "Master of the Realm",
-            "Controls the greatest dominion on the continent, balancing ambitious vassals and external rivals.",
-            "BOOKMARK_CHARACTER_DIFFICULTY_EASY");
-
-        // 2. The Frontier Warden
-        var frontierPool = playable.Where(c => wilderness.Counties.Any(w => AreAdjacent(c, w)))
-                                   .Concat(playable)
-                                   .ToList();
-        var frontier = PickSpacedCandidate(frontierPool, usedCounties, chosen, positions, MinPortraitDistance);
-        if (frontier != null)
-        {
-            AddSlot(chosen, usedCounties, positions, frontier,
-                "bm_char_frontier",
-                "Guardian of the Frontier",
-                "Guards the boundary between civilization and the untamed wilds, primed for colonization and holy conquest.",
-                "BOOKMARK_CHARACTER_DIFFICULTY_MEDIUM");
-        }
-
-        // 3. The Ambitious Vassal
-        var vassalPool = counties.Where(c => IsPlayable(governments.For(c)) && realms.Liege.ContainsKey(HistoryWriter.Primary(c, realms)))
-                                 .Concat(playable)
-                                 .ToList();
-        var vassal = PickSpacedCandidate(vassalPool, usedCounties, chosen, positions, MinPortraitDistance);
-        if (vassal != null)
-        {
-            AddSlot(chosen, usedCounties, positions, vassal,
-                "bm_char_vassal",
-                "Power Behind the Throne",
-                "A cunning noble serving beneath an overlord, ready to scheme, usurp, or break free.",
-                "BOOKMARK_CHARACTER_DIFFICULTY_MEDIUM");
-        }
-
-        // 4. The Wealthy Magnate
-        var magnatePool = counties.Where(c => IsPlayable(governments.For(c)))
-                                  .OrderByDescending(c => development.GetValueOrDefault(c, 0))
-                                  .ToList();
-        var magnate = PickSpacedCandidate(magnatePool, usedCounties, chosen, positions, MinPortraitDistance);
-        if (magnate != null)
-        {
-            AddSlot(chosen, usedCounties, positions, magnate,
-                "bm_char_magnate",
-                "Keeper of the Trade Routes",
-                "Governs an exceedingly wealthy urban center, commanding vast treasuries and mercenary armies.",
-                "BOOKMARK_CHARACTER_DIFFICULTY_EASY");
-        }
-
-        // 5. The Untamed Warlord
-        var warlordPool = counties.Where(c => governments.For(c) == GovernmentMap.Tribal)
-                                  .Concat(counties)
-                                  .ToList();
-        var warlord = PickSpacedCandidate(warlordPool, usedCounties, chosen, positions, MinPortraitDistance);
-        if (warlord != null)
-        {
-            AddSlot(chosen, usedCounties, positions, warlord,
-                "bm_char_warlord",
-                "A Trial of Blood and Iron",
-                "Leads a martial clan surrounded by fierce competition, where only strength commands loyalty.",
-                "BOOKMARK_CHARACTER_DIFFICULTY_HARD");
-        }
-
-        // Apply final physics repulsion pass to ensure zero overlaps
-        RelaxScreenPositions(chosen);
-
-        return chosen;
-    }
-
-    private static Title? PickSpacedCandidate(
-        IEnumerable<Title> pool,
-        HashSet<Title> used,
-        List<BookmarkSlot> chosen,
-        Dictionary<Title, (int X, int Y)> positions,
-        double minDistance)
-    {
-        double minDistanceSq = minDistance * minDistance;
-
-        // 1. First choice: pick an unused candidate that is at least minDistance away from all existing selections
-        var idealCandidates = pool.Where(c => !used.Contains(c) && chosen.All(s => DistanceSq(positions.GetValueOrDefault(c, (960, 540)), (s.ScreenX, s.ScreenY)) >= minDistanceSq))
-                                  .ToList();
-
-        if (idealCandidates.Count > 0) return idealCandidates[0];
-
-        // 2. Fallback: pick the candidate that maximizes distance to the nearest existing bookmark
-        return pool.Where(c => !used.Contains(c))
-                   .OrderByDescending(c => chosen.Count == 0 ? 0 : chosen.Min(s => DistanceSq(positions.GetValueOrDefault(c, (960, 540)), (s.ScreenX, s.ScreenY))))
-                   .FirstOrDefault();
-    }
-
-    private static void AddSlot(
-        List<BookmarkSlot> chosen,
-        HashSet<Title> used,
-        Dictionary<Title, (int X, int Y)> positions,
-        Title county,
-        string key,
-        string subheading,
-        string description,
-        string difficulty)
-    {
-        used.Add(county);
-        var (x, y) = positions.GetValueOrDefault(county, (960, 540));
-        chosen.Add(new BookmarkSlot(key, subheading, description, difficulty, county, x, y));
-    }
+        < 500 => 1,
+        < 1500 => 2,
+        < 3500 => 3,
+        _ => 4,
+    };
 
     /// <summary>
-    /// Repels overlapping bookmark character coordinates so models and shields never collide.
+    /// Declares the single date tab. The file name is vanilla's own so that it shadows the three
+    /// vanilla groups even before <c>replace_path</c> is considered, and the directory is replaced
+    /// as well so no DLC can add a fourth.
     /// </summary>
-    private static void RelaxScreenPositions(List<BookmarkSlot> slots)
+    private static void WriteBookmarkGroup(string modDir, MapConfig cfg)
     {
-        const double separation = MinPortraitDistance;
-        const int minX = 240, maxX = 1550;
-        const int minY = 180, maxY = 840;
+        string dir = Path.Combine(modDir, "common", "bookmarks", "groups");
+        Directory.CreateDirectory(dir);
 
-        for (int pass = 0; pass < 24; pass++)
-        {
-            bool moved = false;
-            for (int i = 0; i < slots.Count; i++)
-            {
-                for (int j = i + 1; j < slots.Count; j++)
-                {
-                    double dx = slots[j].ScreenX - slots[i].ScreenX;
-                    double dy = slots[j].ScreenY - slots[i].ScreenY;
-                    double dist = Math.Sqrt(dx * dx + dy * dy);
+        ParadoxText.WriteBom(Path.Combine(dir, "00_bookmark_groups.txt"),
+            $$"""
+              {{GroupKey}} = {
+              	default_start_date = {{cfg.StartDate}}
+              }
 
-                    if (dist < separation)
-                    {
-                        if (dist < 1.0) { dx = 1.0; dy = 0.0; dist = 1.0; }
-                        double overlap = 0.5 * (separation - dist);
-                        double nx = (dx / dist) * overlap;
-                        double ny = (dy / dist) * overlap;
-
-                        int newXi = Math.Clamp((int)Math.Round(slots[i].ScreenX - nx), minX, maxX);
-                        int newYi = Math.Clamp((int)Math.Round(slots[i].ScreenY - ny), minY, maxY);
-                        int newXj = Math.Clamp((int)Math.Round(slots[j].ScreenX + nx), minX, maxX);
-                        int newYj = Math.Clamp((int)Math.Round(slots[j].ScreenY + ny), minY, maxY);
-
-                        slots[i] = slots[i] with { ScreenX = newXi, ScreenY = newYi };
-                        slots[j] = slots[j] with { ScreenX = newXj, ScreenY = newYj };
-                        moved = true;
-                    }
-                }
-            }
-            if (!moved) break;
-        }
+              """);
     }
 
-    private static double DistanceSq((int X, int Y) a, (int X, int Y) b)
-    {
-        double dx = a.X - b.X;
-        double dy = a.Y - b.Y;
-        return dx * dx + dy * dy;
-    }
-
-    private static bool AreAdjacent(Title a, Title b) => a.Parent != null && a.Parent == b.Parent;
-
-    private static bool IsPlayable(string government) => government
-        is GovernmentMap.Feudal or GovernmentMap.Clan or GovernmentMap.Tribal;
-
-    private static void WriteBookmarks(string modDir, MapConfig cfg, List<BookmarkSlot> bookmarks,
-        RealmMap realms, CultureMap cultures, FaithMap faiths, GovernmentMap governments,
-        RulerMap rulers)
+    private static void WriteBookmarks(string modDir, MapConfig cfg, BookmarkCast cast,
+        RealmMap realms, CultureMap cultures, FaithMap faiths, GovernmentMap governments)
     {
         string dir = Path.Combine(modDir, "common", "bookmarks", "bookmarks");
         Directory.CreateDirectory(dir);
 
-        var sb = new StringBuilder();
-        sb.Append($$"""
-      bm_generated = {
-      	start_date = {{cfg.StartDate}}
-      	is_playable = yes
-      	group = bm_group_867
-
-      	weight = {
-      		value = 100
-      	}
-
-
-      """);
-
-        foreach (var b in bookmarks)
+        var b = new JominiBuilder();
+        using (b.Block("bm_generated"))
         {
-            string culture = cultures.For(b.County).Key;
-            string faith = faiths.For(b.County).Key;
-            string government = governments.For(b.County);
-            var title = HistoryWriter.Primary(b.County, realms);
+            b.Field("start_date", cfg.StartDate);
+            b.Field("is_playable", "yes");
+            b.Field("group", GroupKey);
+            b.Blank();
 
-            var ruler = rulers.For(b.County);
-            string dynastyId = ruler.DynastyId;
-            string birthDate = $"{ruler.BirthYear}.1.1";
-            string sex = ruler.Female ? "female" : "male";
+            using (b.Block("weight")) b.Field("value", 100);
+            b.Blank();
 
-            string anim = b.Key switch
-            {
-                "bm_char_hegemon" => "war_over_win",
-                "bm_char_frontier" => "marshal",
-                "bm_char_vassal" => "scheme",
-                "bm_char_magnate" => "personality_greedy",
-                "bm_char_warlord" => "personality_bold",
-                _ => "personality_rational"
-            };
-
-            sb.Append($$"""
-                character = {
-                    name = "{{b.Key}}"
-                    dynasty = {{dynastyId}}
-                    dynasty_splendor_level = 1
-                    type = {{sex}}
-                    birth = {{birthDate}}
-                    title = {{title.Key}}
-                    government = {{government}}
-                    culture = {{culture}}
-                    religion = {{faith}}
-                    difficulty = "{{b.Difficulty}}"
-                    history_id = {{HistoryWriter.CharacterId(b.County)}}
-                    position = { {{b.ScreenX}} {{b.ScreenY}} }
-                    animation = {{anim}}
-                }
-
-            """);
+            foreach (var slot in cast.Slots)
+                AppendCharacter(b, slot, realms, cultures, faiths, governments, withPosition: true,
+                    trailingBlank: slot != cast.Slots[^1]);
         }
 
-        sb.Append("}\n");
-        ParadoxText.WriteBom(Path.Combine(dir, "00_bookmarks.txt"), sb.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, "00_bookmarks.txt"), b.ToString());
     }
 
-    private static void WriteBookmarkLocalisation(string modDir, List<BookmarkSlot> bookmarks,
-        BookmarkSlot challengeSlot, RulerMap rulers)
+    /// <summary>
+    /// One character on the screen: the ruler himself, then the two or three people the panel draws
+    /// beside him. The challenge tab uses the identical block — its own <c>.info</c> file says so in
+    /// as many words — which is why both writers come through here rather than each keeping a copy
+    /// of the field list to drift out of step with.
+    ///
+    /// Every value is read off the <see cref="Ruler"/> the character file was written from, so the
+    /// two cannot disagree. <c>dynasty_house</c> rather than <c>dynasty</c> for the same reason:
+    /// that is the key history puts on him, and it is what makes the screen's house tooltip resolve.
+    /// </summary>
+    private static void AppendCharacter(
+        JominiBuilder b, BookmarkSlot slot, RealmMap realms, CultureMap cultures,
+        FaithMap faiths, GovernmentMap governments, bool withPosition, bool trailingBlank = true)
+    {
+        var ruler = slot.Ruler;
+
+        using (b.Block("character"))
+        {
+            b.Quoted("name", slot.Key);
+            b.Field("dynasty_house", ruler.HouseKey);
+            b.Field("dynasty_splendor_level", SplendorLevel(ruler.Renown));
+            b.Field("type", ruler.Female ? "female" : "male");
+
+            // The whole date, not the year. The screen prints `[BookmarkCharacter.GetAge]` beside
+            // the name and works it out from this field alone, so a January stand-in showed every
+            // ruler born later in the year as a year older than the character the game then loads.
+            b.Field("birth", ruler.BirthDate);
+            b.Field("title", HistoryWriter.Primary(slot.County, realms).Key);
+            b.Field("government", governments.For(slot.County));
+            b.Field("culture", cultures.For(slot.County).Key);
+            b.Field("religion", faiths.For(slot.County).Key);
+            b.Quoted("difficulty", slot.Difficulty);
+            b.Field("history_id", ruler.Id);
+
+            if (withPosition) b.Inline("position", $"{slot.ScreenX}", $"{slot.ScreenY}");
+            b.Field("animation", slot.Animation);
+
+            foreach (var mate in slot.Companions)
+            {
+                b.Blank();
+                using (b.Block("character"))
+                {
+                    b.Quoted("name", mate.Key);
+                    b.Quoted("relation", mate.Relation);
+
+                    // A house is not a dynasty to CK3, and a spouse married in from outside may be
+                    // in neither — the character writer makes the same choice character by
+                    // character, and this follows it.
+                    if (mate.DynastyHouseKey is not null) b.Field("dynasty_house", mate.DynastyHouseKey);
+                    else b.Field("dynasty", mate.DynastyId);
+
+                    b.Field("type", mate.Female ? "female" : "male");
+                    b.Field("birth", mate.BirthDate);
+                    b.Field("culture", mate.Culture.Key);
+                    b.Field("religion", mate.FaithKey);
+                    b.Field("history_id", mate.HistoryId);
+                    b.Field("animation", mate.Animation);
+                }
+            }
+        }
+
+        if (trailingBlank) b.Blank();
+    }
+
+    /// <summary>
+    /// What this world's one date tab calls its age.
+    ///
+    /// Read off what the run actually produced rather than off the calendar alone, because those
+    /// two are no longer the same question: <see cref="MapConfig.EraAnchorYear"/> lets a world call
+    /// itself 8300 and still be as advanced as vanilla in 900, and it is the advancement the player
+    /// is about to play. The government mix speaks first for the same reason — a world the
+    /// generator filled with tribes is a tribal age whatever year it thinks it is.
+    /// </summary>
+    private static string TabSubtitle(MapConfig cfg, List<Title> seats, GovernmentMap governments)
+    {
+        int total = Math.Max(1, seats.Count);
+
+        // The governments the seats actually hold, commonest first. Ties break on the key so two
+        // runs of the same seed cannot disagree about which age it is.
+        var ranked = seats
+            .GroupBy(governments.For)
+            .Select(g => (Key: g.Key, Count: g.Count()))
+            .OrderByDescending(g => g.Count)
+            .ThenBy(g => g.Key, StringComparer.Ordinal)
+            .ToList();
+
+        // Two tests, and the second is the one that matters. These worlds are mixed by
+        // construction: at every year tried, the top two governments came in within a few seats of
+        // each other, so a bare plurality names the age after a coin flip — at year 1250 feudal and
+        // administrative tied outright, and only the tiebreak decided it. Requiring a clear margin
+        // over the runner-up means the government phrase fires when the generator really did build
+        // a world of one kind, and an ordinary mixed run falls through to the era below.
+        //
+        // Feudal is the deliberate hole in the list even so: it is the default shape of a CK3 world
+        // and says less about this one than its era does.
+        if (ranked.Count > 0)
+        {
+            var (key, count) = ranked[0];
+            int runnerUp = ranked.Count > 1 ? ranked[1].Count : 0;
+
+            if (count >= 0.4 * total && count >= runnerUp * 1.25)
+            {
+                switch (key)
+                {
+                    case GovernmentMap.Tribal: return "An Age of Chieftains";
+                    case GovernmentMap.Clan: return "An Age of Clans";
+                    case GovernmentMap.Nomad: return "An Age of Riders";
+                    case GovernmentMap.Administrative: return "An Age of Magistrates";
+                    case GovernmentMap.Republic: return "An Age of Merchant Princes";
+                    case GovernmentMap.Theocracy: return "An Age of Priests";
+                }
+            }
+        }
+
+        // Vanilla's own era thresholds, the ones CultureWriter writes the culture eras against.
+        // Sharing the numbers is the point: the tab should not call it a high medieval age while
+        // the cultures underneath it are still tribal.
+        return cfg.EraYear switch
+        {
+            < 900 => "The First Kingdoms",
+            < 1050 => "An Age of Petty Kings",
+            < 1200 => "An Age of Great Houses",
+            _ => "The Twilight of Kings"
+        };
+    }
+
+    /// <summary>
+    /// What the bookmark itself is called — the line on the tab in the left-hand list, which
+    /// vanilla fills with scenario names like "Wrath of The Northmen".
+    ///
+    /// An imported world hands its own name over; there is no sense inventing one for a map that
+    /// arrived already called something. Failing that it is named for the strongest realm on it,
+    /// which is the hegemon's — the first slot, and the one the greatest-realm pool picked.
+    /// </summary>
+    private static string BookmarkTitle(List<BookmarkSlot> bookmarks, RealmMap realms,
+        AzgaarImport? azgaar)
+    {
+        string world = azgaar?.MapName.Trim() ?? "";
+        if (world.Length > 0) return world;
+
+        var hegemon = bookmarks.FirstOrDefault();
+        string realm = hegemon is null ? "" : HistoryWriter.Primary(hegemon.County, realms).Name.Trim();
+
+        return realm.Length > 0 ? $"The Rise of {realm}" : "Procedural Realm";
+    }
+
+    private static void WriteBookmarkLocalisation(string modDir, MapConfig cfg, BookmarkCast cast,
+        AzgaarImport? azgaar, string subtitle, string title)
     {
         string dir = Path.Combine(modDir, "localization", "english");
         Directory.CreateDirectory(dir);
 
         var loc = new LocFile();
-        loc.AddBuilt("bm_generated", "Procedural Realm");
+
+        // The group key is its own loc key, and vanilla's tabs read "867" / "1066" / "1178" — a
+        // bare year. The *short* era rides along when the world has one, because a world counting
+        // from its own conquest wants the tab to say which calendar that number is on. Only the
+        // short one: this line is the 155px-wide `text_single`, so "900 AC" fits where "900 After
+        // the Conquest" does not — the full name goes on the subtitle below it instead.
+        string era = azgaar?.EraShort.Trim() ?? "";
+        int year = Math.Max(1, cfg.StartYear);
+        string dated = era.Length > 0 ? $"{year} {era}" : year.ToString();
+        loc.AddBuilt(GroupKey, dated);
+
+        // An imported world has already named its own age; nothing this generator infers from the
+        // government mix beats the export saying so outright.
+        string named = CompatibilityWriter.EraFullName(azgaar);
+        string age = named.Length > 0 ? named : subtitle;
+        loc.AddBuilt(GroupSubtitleKey, age);
+        loc.Blank();
+
+        Console.WriteLine($"  bookmark tab: {title} — {dated}, {age}"
+                          + (named.Length > 0 ? " (era named by the export)" : ""));
+
+        loc.AddBuilt("bm_generated", title);
         loc.AddBuilt("bm_generated_desc", "Explore a newly forged world with unique cultures, faiths, and empires.");
         loc.Blank();
 
-        foreach (var bookmark in bookmarks)
+        // AddBuilt throughout, and escaped upstream instead: every one of these carries something
+        // that must survive verbatim — a `$nick_the_bold$` byname in the display name, a
+        // `[BookmarkCharacter…]` promotion in the subheading, `\n` paragraph breaks and `#bold`
+        // markup in the description. The generated names inside them went through ParadoxText.Loc
+        // when the cast was composed.
+        foreach (var slot in cast.All)
         {
-            loc.AddBuilt(bookmark.Key, rulers.For(bookmark.County).Name);
-            loc.AddBuilt($"{bookmark.Key}_subheading", bookmark.Subheading);
-            loc.AddBuilt($"{bookmark.Key}_desc", bookmark.Description);
+            loc.AddBuilt(slot.Key, slot.DisplayName);
+            loc.AddBuilt($"{slot.Key}_subheading", slot.Subheading);
+            loc.AddBuilt($"{slot.Key}_desc", slot.Description);
+
+            // Each companion's own name key. The relation words beside them are vanilla's
+            // (BOOKMARK_RELATION_LIEGE and friends), so there is nothing to write for those.
+            foreach (var mate in slot.Companions) loc.AddBuilt(mate.Key, mate.Name);
+
             loc.Blank();
         }
-
-        loc.AddBuilt(ChallengeCharacter, rulers.For(challengeSlot.County).Name);
-        loc.AddBuilt($"{ChallengeCharacter}_subheading", challengeSlot.Subheading);
-        loc.AddBuilt($"{ChallengeCharacter}_desc", challengeSlot.Description);
 
         loc.Write(Path.Combine(dir, "gen_history_l_english.yml"));
     }
@@ -458,44 +538,28 @@ public static class BookmarkWriter
         }
     }
 
-    private static void WriteChallengeCharacter(string modDir, Title county, RealmMap realms, MapConfig cfg,
-        CultureMap cultures, FaithMap faiths, GovernmentMap governments, RulerMap rulers)
+    /// <summary>
+    /// The challenge tab. Its character is a sixth ruler, chosen for how steep his start actually
+    /// is — see <see cref="BookmarkCast"/>. It used to be whichever bookmark happened to be last in
+    /// the list, which put one man on two tabs under two loc keys and left the two of them fighting
+    /// over one portrait.
+    /// </summary>
+    private static void WriteChallengeCharacter(string modDir, MapConfig cfg, BookmarkSlot challenge,
+        RealmMap realms, CultureMap cultures, FaithMap faiths, GovernmentMap governments)
     {
         string dir = Path.Combine(modDir, "common", "bookmarks", "challenge_characters");
         Directory.CreateDirectory(dir);
 
-        string culture = cultures.For(county).Key;
-        string faith = faiths.For(county).Key;
-        string government = governments.For(county);
-        var title = HistoryWriter.Primary(county, realms);
-
-        var ruler = rulers.For(county);
-        string dynastyId = ruler.DynastyId;
-        string birthDate = $"{ruler.BirthYear}.1.1";
-        string sex = ruler.Female ? "female" : "male";
-
-        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_challenge.txt"),
-            $$"""
-      {{ChallengeCharacter}} = {
-        start_date = {{cfg.StartDate}}
-
-        character = {
-            name = "{{ChallengeCharacter}}"
-            dynasty = {{dynastyId}}
-            dynasty_splendor_level = 1
-            type = {{sex}}
-            birth = {{birthDate}}
-            title = {{title.Key}}
-            government = {{government}}
-            culture = {{culture}}
-            religion = {{faith}}
-            difficulty = "BOOKMARK_CHARACTER_DIFFICULTY_HARD"
-            history_id = {{HistoryWriter.CharacterId(county)}}
-            animation = personality_bold
+        var b = new JominiBuilder();
+        using (b.Block(ChallengeCharacter))
+        {
+            b.Field("start_date", cfg.StartDate);
+            b.Blank();
+            AppendCharacter(b, challenge, realms, cultures, faiths, governments,
+                withPosition: false, trailingBlank: false);
         }
-      }
 
-      """);
+        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_challenge.txt"), b.ToString());
     }
 
     private static void WriteRealmHighlights(string modDir, MapConfig cfg, ProvinceMap provinces,

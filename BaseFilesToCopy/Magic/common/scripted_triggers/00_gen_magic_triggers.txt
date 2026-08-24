@@ -1,0 +1,140 @@
+﻿# The gate, and everything that reads off it.
+#
+# This file is the answer to one requirement: a character who is not a practitioner must see no
+# sign that the system exists. Not a greyed-out decision, not an empty panel, not a tooltip. Every
+# decision, interaction, event and widget the generated half emits asks gen_magic_practitioner_trigger
+# before it shows anything, and the .gui side asks the scripted_gui in common/scripted_guis that
+# wraps the same condition.
+#
+# Two switches, not one — see README.txt. EnableMagic ships these files; global_var:gen_magic_active
+# says this particular world has magic. Nothing here sets the second one, so with no generated
+# content present every trigger below is false and the whole system is dormant.
+
+
+# --- The world ---------------------------------------------------------------------------------
+
+# Does this world have magic at all?
+#
+# Set by the generated half through gen_magic_activate_effect. A world that rolled no magic never
+# calls it, and so never trips a single gate below — which is also the state the mod is in when
+# these files ship ahead of the generated half, as they do today.
+#
+# Needs no scope: it reads a global. That matters, because it is also the trigger on an on_action
+# hanging off yearly_global_pulse, which vanilla documents as having no root.
+gen_magic_active_trigger = {
+	exists = global_var:gen_magic_active
+}
+
+# Does this world hide its practitioners?
+#
+# True under the institutions that make practice a thing to conceal — outlawed, cultic, or a crown
+# monopoly everyone else is breaking. The generated half sets the global; absent means openly
+# practised, which is the commoner case and the safer default.
+gen_magic_concealed_world_trigger = {
+	gen_magic_active_trigger = yes
+	exists = global_var:gen_magic_concealed
+}
+
+
+# --- The character -----------------------------------------------------------------------------
+
+# THE GATE. Is this character in the system?
+#
+# Rank is the single source of truth for membership, in every world, whatever the world's access
+# rule happens to be — born to it, taught it, bargained for it. That is deliberate: it means one
+# check answers "should this person see any of this", and no emitter has to know how the world
+# hands magic out in order to hide itself from someone who has not got it.
+gen_magic_practitioner_trigger = {
+	gen_magic_active_trigger = yes
+	has_variable = gen_magic_rank
+	var:gen_magic_rank >= 1
+}
+
+# Could be, but is not yet.
+#
+# The waiting room: someone the world has marked as able to enter — a bloodline, a survivor, a
+# named heir — who has not taken the step. Distinct from a practitioner because the two see
+# different things: a latent character may be offered the way in, and nothing else.
+gen_magic_latent_trigger = {
+	gen_magic_active_trigger = yes
+	NOT = { gen_magic_practitioner_trigger = yes }
+	has_variable = gen_magic_latent
+}
+
+# Is this character at least $RANK$ on the ladder?
+#
+# Every generated spell above the first rank gates on this rather than on the raw variable, so that
+# what a rank *means* can change without every spell in the world being rewritten.
+gen_magic_rank_atleast_trigger = {
+	gen_magic_practitioner_trigger = yes
+	var:gen_magic_rank >= $RANK$
+}
+
+# Is this character's practice known to others?
+#
+# Only meaningful in a concealed world; everywhere else practice is public and this is trivially
+# true. Kept separate from the practitioner check because the two answer different questions —
+# "does this person have magic" is not "may this person be seen to have it", and a widget drawn on
+# somebody else's character sheet must ask the second.
+gen_magic_exposed_trigger = {
+	gen_magic_practitioner_trigger = yes
+	OR = {
+		NOT = { gen_magic_concealed_world_trigger = yes }
+		AND = {
+			has_variable = gen_magic_exposure
+			var:gen_magic_exposure >= 1
+		}
+	}
+}
+
+# May THIS character's practice be shown to whoever is looking?
+#
+# The gate for anything drawn on a character other than the one being played: portrait chips, court
+# lists, relation panels. A concealed practitioner shows nothing to anyone who has not found out.
+gen_magic_visible_practitioner_trigger = {
+	gen_magic_practitioner_trigger = yes
+	gen_magic_exposed_trigger = yes
+}
+
+
+# --- Paying for it -----------------------------------------------------------------------------
+
+# Can this character afford a cast costing $COST$?
+#
+# The debt branch is not a special case bolted on: a world whose fuel is Debt is precisely one in
+# which the answer is always yes and the bill arrives later, so the affordability question has a
+# different shape there rather than a different number. Guarded on `exists` because a trigger that
+# reads an unset global errors rather than returning false.
+gen_magic_can_pay_trigger = {
+	gen_magic_practitioner_trigger = yes
+	OR = {
+		AND = {
+			exists = global_var:gen_magic_fuel
+			global_var:gen_magic_fuel = flag:debt
+		}
+		gen_magic_charge_value >= $COST$
+	}
+}
+
+# Is the world's casting window open?
+#
+# Only a Temporal-fuel world closes it, and only that world's generated half maintains the global.
+# Everywhere else the window is always open, which is what the absent-global branch says.
+gen_magic_window_open_trigger = {
+	OR = {
+		NOT = { exists = global_var:gen_magic_fuel }
+		NOT = { global_var:gen_magic_fuel = flag:temporal }
+		exists = global_var:gen_magic_window
+	}
+}
+
+# Everything a cast needs to be legal, in one call.
+#
+# Generated spells add their own rank and target conditions on top; this is the floor underneath
+# all of them, so that a spell cannot accidentally be castable by a non-practitioner because its
+# author forgot a line.
+gen_magic_can_cast_trigger = {
+	gen_magic_practitioner_trigger = yes
+	gen_magic_window_open_trigger = yes
+	gen_magic_can_pay_trigger = { COST = $COST$ }
+}

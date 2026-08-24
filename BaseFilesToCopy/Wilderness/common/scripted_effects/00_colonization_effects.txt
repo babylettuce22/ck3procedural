@@ -716,6 +716,32 @@ abandon_county_effect = {
 #  Upkeep & AI Housekeeping
 # =====================================================================================
 
+# Province scope. Takes the hardest blocker standing on this province off it, and does nothing at
+# all on a province that has none.
+#
+# The ladder itself, in one place. It lived in pioneer_clear_one_obstacle_effect, whose own comment
+# says "nothing else should ever grow its own copy of this ladder" — and then the Warden's
+# task_clear_the_wilds arrived needing exactly it, from a scope that has a province rather than a
+# scope:stake. So the ladder moved down here into the shared file and the pioneer effect became the
+# one line that reaches it. Two callers now, no second copy.
+#
+# Hardest first, which is the rule that makes a single clearance worth a fixed amount: the killing
+# cold is the difference between a winnable county and an unwinnable one, and the scree is a rounding
+# error. Priced the same way in colony_settling_chance, and the two orders must not drift apart.
+#
+# No toast and no bookkeeping — deliberately. Both callers report in their own voice (the pioneer
+# through pioneer_outcome_toast_effect, the council task through wilderness_obstacle_cleared_effect),
+# and an effect that announced itself could not be used by either without doubling up.
+wilderness_clear_hardest_obstacle_effect = {
+	if = { limit = { has_building = killing_cold }        remove_building = killing_cold }
+	else_if = { limit = { has_building = flooded_lands }  remove_building = flooded_lands }
+	else_if = { limit = { has_building = bandit_camps }   remove_building = bandit_camps }
+	else_if = { limit = { has_building = beast_dens }     remove_building = beast_dens }
+	else_if = { limit = { has_building = dense_growth }   remove_building = dense_growth }
+	else_if = { limit = { has_building = scree_slopes }   remove_building = scree_slopes }
+}
+
+
 wilderness_obstacle_cleared_effect = {
 	save_scope_as = cleared_province
 

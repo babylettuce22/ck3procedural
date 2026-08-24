@@ -19,13 +19,17 @@ namespace Ck3MapGen.Emit;
 /// </summary>
 public static class CultureWriter
 {
+    /// <param name="generated">Innovations this run invented, so a culture's history can record
+    /// the ones it already holds. Null when nothing generated any — the histories then contain
+    /// only vanilla's, exactly as before <see cref="InnovationMap"/> existed.</param>
     public static void WriteAll(string modDir, MapConfig cfg, CultureMap cultures,
-        EthnicityMap ethnicityMap, VanillaVocabulary vocab, Rng rng)
+        EthnicityMap ethnicityMap, VanillaVocabulary vocab, Rng rng,
+        InnovationMap? generated = null)
     {
         WritePillars(modDir, cultures);
         WriteCultures(modDir, cultures, ethnicityMap);
         WriteNameLists(modDir, cultures);
-        WriteHistory(modDir, cfg, cultures, vocab, rng);
+        WriteHistory(modDir, cfg, cultures, vocab, rng, generated);
         WriteLocalisation(modDir, cultures);
 
         Console.WriteLine($"  cultures written: {cultures.Cultures.Count} cultures, " +
@@ -86,8 +90,13 @@ public static class CultureWriter
                     }
                 }
 
-                if (heritage.LanguageColor is { } color && color != "tungusic")
-                    b.Field("color", color);
+                // No exclusion list here any more. `tungusic` used to be named and skipped, which
+                // was the right instinct against the wrong scope — it is one of two vanilla
+                // colours that are referenced but never declared, and `khitan` one line below it
+                // in vanilla's file went on leaking through. Both are now filtered at the harvest
+                // against what common/named_colors actually declares. See
+                // VanillaVocabulary.NamedColors.
+                if (heritage.LanguageColor is { } color) b.Field("color", color);
             }
 
             b.Blank();
@@ -275,7 +284,8 @@ public static class CultureWriter
 
     // In CultureWriter.cs
 
-    private static void WriteHistory(string modDir, MapConfig cfg, CultureMap cultures, VanillaVocabulary vocab, Rng rng)
+    private static void WriteHistory(string modDir, MapConfig cfg, CultureMap cultures,
+        VanillaVocabulary vocab, Rng rng, InnovationMap? generated = null)
     {
         if (vocab.InnovationDefs.Count == 0) return;
 
@@ -311,6 +321,26 @@ public static class CultureWriter
 
         int totalAssigned = 0;
 
+        // Vanilla's own men-at-arms unlocks, kept out of the sampled pool when this world is
+        // writing a roster of its own.
+        //
+        // The tradition filter in Cultures closed the narrower of the two routes to a vanilla
+        // named regiment; this is the wider one. Sixteen vanilla innovations land in each
+        // culture's history, so before this a generated people with no camel tradition anywhere
+        // still opened the game able to recruit Camel Riders — `innovation_war_camels` grants them
+        // and `camel_rider` has no can_recruit of its own to fail — and a jungle people drew
+        // `innovation_elephantry` and vanilla's war elephants beside the elephants this generator
+        // had just invented for them. See VanillaVocabulary.GrantsVanillaRegiment for why those
+        // two are caught by different tests and why the generic roster is caught by neither.
+        bool blockVanillaMaa = MapGen.Retinues.ReplacesVanillaRosters(vocab, cfg);
+
+        List<VanillaVocabulary.InnovationDef> EraPool(string era)
+            => [.. vocab.InnovationDefs.Values.Where(def => def.Era == era)];
+
+        List<string> Sampleable(List<VanillaVocabulary.InnovationDef> pool)
+            => [.. pool.Where(def => !blockVanillaMaa || !vocab.GrantsVanillaRegiment(def))
+                       .Select(def => def.Key)];
+
         foreach (var culture in cultures.Cultures)
         {
             var chosenByEra = new Dictionary<string, List<string>>(StringComparer.Ordinal);
@@ -326,15 +356,15 @@ public static class CultureWriter
             for (int e = 0; e < currentEraIndex; e++)
             {
                 string pastEra = eraMilestones[e].EraKey;
-                var pastEraPool = vocab.InnovationDefs.Values
-                    .Where(def => def.Era == pastEra)
-                    .Select(def => def.Key)
-                    .ToList();
+                var wholeEra = EraPool(pastEra);
+                var pastEraPool = Sampleable(wholeEra);
 
                 if (pastEraPool.Count == 0) continue;
 
-                // CK3 requires at least 8 innovations (or 50%) of the era to qualify for the next era
-                int minRequired = Math.Min(pastEraPool.Count, Math.Max(8, (int)Math.Ceiling(pastEraPool.Count * 0.5)));
+                // CK3 requires at least 8 innovations (or 50%) of the era to qualify for the next
+                // era — of the era as the engine counts it, which is why the threshold is measured
+                // against the whole era and only the *sampling* is done from the filtered pool.
+                int minRequired = Math.Min(pastEraPool.Count, Math.Max(8, (int)Math.Ceiling(wholeEra.Count * 0.5)));
 
                 // Completion share: ~55%-65% for poor ground, up to ~85%-95% for wealthy ground
                 double completionRate = 0.55 + 0.35 * devNormalized + (rng.NextDouble() * 0.1 - 0.05);
@@ -346,10 +376,7 @@ public static class CultureWriter
 
             // 2. Process Current Active Era
             var currentMilestone = eraMilestones[currentEraIndex];
-            var currentEraPool = vocab.InnovationDefs.Values
-                .Where(def => def.Era == currentMilestone.EraKey)
-                .Select(def => def.Key)
-                .ToList();
+            var currentEraPool = Sampleable(EraPool(currentMilestone.EraKey));
 
             if (currentEraPool.Count > 0)
             {
@@ -397,9 +424,20 @@ public static class CultureWriter
                     ? cfg.StartDate
                     : $"{EraDate(eraStart, cfg)}.1.1";
 
+                // Innovations this run invented that this culture already holds, slotted into the
+                // block for their own era. Anything dated past the world's current era would be
+                // discovered before the culture had reached it, so those are dropped rather than
+                // clamped — an elite regiment nobody starts with is the intended outcome, and it
+                // is still there in the tree to be worked towards.
+                List<string> invented = generated is null
+                    ? []
+                    : [.. generated.StartingFor(culture)
+                                   .Where(inv => Innovations.IndexOf(inv.Era) == i)
+                                   .Select(inv => inv.Key)];
+
                 using (b.Block(blockDate))
                 {
-                    foreach (string inn in eraInns.OrderBy(k => k, StringComparer.Ordinal))
+                    foreach (string inn in eraInns.Concat(invented).OrderBy(k => k, StringComparer.Ordinal))
                         b.Field("discover_innovation", inn);
 
                     // Promote to next era at the end of the completed era block

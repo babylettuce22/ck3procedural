@@ -1,0 +1,123 @@
+﻿# Every condition the pioneer path tests, defined once.
+#
+# The pioneer path is the landless half of colonisation. A landed lord SENDS an expedition and hears
+# how it went two years later; an adventurer IS the expedition and has to live through it. That one
+# difference is why this needs its own triggers rather than a widened set of the colonisation ones:
+# almost every gate over there is a fact about a realm, and a man with a camp has no realm.
+#
+# The conventions of 00_colonization_triggers.txt hold here too — a trigger about a COUNTY runs in
+# title scope, a trigger about a RULER runs in character scope — and the county-side questions are
+# not restated: `county_can_be_claimed_trigger` is the same question for both paths and is asked
+# from there. If a seventh reason a county cannot be settled is ever added, it is added once.
+
+
+# --- Who may try -------------------------------------------------------------------------------
+
+# Character scope. A character who is allowed to drive a stake at all, as opposed to one who is in
+# a position to do it today. Everything here is a permanent fact, which is what makes it safe in an
+# `is_shown`: a character who fails it will never pass it.
+#
+# `has_ep3_dlc_trigger` gates the whole feature on Roads to Power. Not a nicety — without that DLC
+# there is no landless adventurer government, no camp, and no `destroy_laamp_effect` worth calling,
+# so the decision would be an unreachable entry in every player's list.
+pioneer_can_stake_at_all_trigger = {
+	has_ep3_dlc_trigger = yes
+	is_landless_adventurer = yes
+	is_adult = yes
+	is_alive = yes
+	is_incapable = no
+}
+
+# ---- There is no targeting trigger here any more ----
+#
+# There used to be `pioneer_has_a_stake_target_trigger`, asking whether there was claimable
+# wilderness in or beside the county the character was standing in. It existed because a decision
+# cannot be aimed, so the character's own position had to stand in for a choice the player was never
+# offered.
+#
+# The activity's planner asks the question properly: the player picks the county off the map, and
+# `is_location_valid` in 00_stake_wilderness_activity.txt decides which are allowed, using the same
+# `county_can_be_claimed_trigger` every other entry point in the system asks. So the rule is still
+# written once, and it is now written where the player can see it work.
+
+# Character scope, asked of a COURTIER. Is this one of the people who will be wintering out there?
+#
+# THE definition of a follower, and it is written here rather than inlined because three separate
+# things have to agree about it: the bar on the decision counts them, the trials kill them, and on
+# success they are the people the settlement's court is made of. Those were three different pools
+# before -- the bar counted `max_military_strength` while the trials spent courtiers -- which meant
+# a company could satisfy the requirement in one currency and be emptied in another.
+#
+# Adults who can stand up. A camp's children and its infirm are real and are genuinely there, but
+# they are not what makes a winter survivable, and counting them would let a man qualify on the
+# strength of a household he cannot put to work.
+pioneer_is_a_follower_trigger = {
+	is_alive = yes
+	is_adult = yes
+	is_incapable = no
+	is_imprisoned = no
+}
+
+# Character scope. Does this company amount to enough to be worth feeding through a winter?
+#
+# A bar rather than a cost, and the difference matters: gold is spent and people are not -- not by
+# the decision, at least. What this refuses is the man with a horse and two servants who would
+# otherwise buy the whole mechanic out of one lucky contract payout.
+#
+# Counts actual characters rather than military strength, which is the same reasoning as
+# pioneer_is_a_follower_trigger above: these are the people who will be in the ground or in the
+# court by the end of it, and an abstract strength figure is neither. It is also the number a player
+# can check for themselves by opening their own court, which an abstract one is not.
+#
+# The tooltip prints the requirement AND the character's own count, because a bar without both is
+# not a requirement anybody can act on -- it is a button that is off for reasons of its own.
+pioneer_has_a_company_trigger = {
+	custom_tooltip = {
+		text = pioneer_needs_a_company_tt
+		pioneer_company_size >= pioneer_company_required
+	}
+}
+
+# Character scope. Free to start one?
+#
+# Phrased as a variable check rather than a cooldown for the reason no_expedition_underway_trigger
+# gives: one stake at a time is a fact about what the character is doing, and it clears when the
+# thing it describes is over rather than on a schedule.
+pioneer_no_stake_underway_trigger = {
+	custom_tooltip = {
+		text = pioneer_already_staking_tt
+		NOT = { has_variable = pioneer_stake }
+	}
+}
+
+
+# --- Whether a stake in progress is still a going concern ----------------------------------------
+
+# Character scope. The chain guard, opening every event in the run.
+#
+# Written once and for the same reason expedition_still_out_trigger is: an event whose trigger
+# silently fails does not report, it simply never happens — and here that would leave a county
+# wearing an expedition marker that nothing will ever take off, permanently unclaimable by anyone.
+#
+# Deliberately does NOT ask whether the character is still a landless adventurer, and does not ask
+# whether they are still standing on the ground. Both of those are real ways for a stake to end, but
+# they are ends with consequences that somebody has to narrate, so they are handled inside
+# wilderness_pioneer.0010 where there is somewhere to put the news. A guard that swallowed them
+# would turn a story beat into a chain that stops for no visible reason.
+pioneer_stake_still_live_trigger = {
+	is_alive = yes
+	has_variable = pioneer_stake
+	has_variable = pioneer_hold
+}
+
+# ---- And no presence trigger either ----
+#
+# `pioneer_at_the_stake_trigger` checked every winter whether the character was still standing on or
+# beside his own stake, and 0010 charged him 25 hold when he was not. Both are gone, and neither was
+# replaced: the engine holds an activity's host at the activity location for the duration, and the
+# ways he can stop being there -- imprisoned, incapacitated, dead -- fail the activity's `is_valid`
+# and end the run properly instead of draining an invisible number.
+#
+# `pioneer_stake_ground_still_wild_trigger` is gone too. It had one caller, which now asks the
+# question inline against var:pioneer_stake; a one-line trigger with one caller was indirection
+# without a reader.

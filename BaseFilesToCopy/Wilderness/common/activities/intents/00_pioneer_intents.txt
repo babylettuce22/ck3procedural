@@ -1,0 +1,32 @@
+﻿# What the adventurer is out there to do.
+#
+# ---- Why this file has to exist at all ----
+#
+# `host_intents` is not optional. An activity type with no intents block offers the planner nothing
+# to select and the planner refuses to start with "invalid intent" -- the Start button greys and the
+# Intent panel shows a bare `_desc`, which is the game looking up `<no intent>_desc`. Nothing in the
+# log says so; the activity simply cannot be begun. This was learned once already on the overseeing
+# activity and is not worth learning twice, which is the whole reason this note is repeated here
+# rather than cross-referenced.
+#
+# ---- Why there is exactly one ----
+#
+# Because there is exactly one reason to go, and it is the only reason anyone would. Vanilla
+# activities carry three or four intents because a feast is a room full of people you might want
+# something from. This is a hillside.
+#
+# `auto_complete = yes` because the intent is fulfilled by staying -- the four winters in
+# 00_stake_wilderness_activity.txt are what resolves, and an intent with its own success state would
+# be a second verdict competing with the meter.
+#
+# The icon is vanilla's own `overseer_intent`, the same one the overseeing activity borrows, for the
+# same reason: it is the closest thing in the set to "a person supervising work", and reusing it
+# means this ships no art it would then be waiting on.
+
+stake_wilderness_intent = {
+	icon = overseer_intent
+
+	auto_complete = yes
+
+	scripted_animation = { animation = personality_bold }
+}

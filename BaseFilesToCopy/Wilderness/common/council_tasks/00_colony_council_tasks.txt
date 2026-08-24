@@ -1,0 +1,494 @@
+﻿# What the five frontier offices actually do.
+#
+# One `default_task = yes` per position, because a position with no valid task renders as a blank
+# nameless panel — the slot's label is `ActiveCouncilTask.GetPositionName`, read through the task
+# rather than off the position. See the header of 00_colony_council_positions.txt.
+#
+# Two of the five get a second, county-targeted task on top of their default, and those two are the
+# ones that reach into the colonisation loop itself rather than handing out modifiers: the Warden
+# clears blockers, the Pathfinder surveys ground an expedition has not been sent to yet. Everything
+# else here is a modifier, and that asymmetry is deliberate — a council that could do five active
+# things would be doing the work the decisions, the expedition chain and the buildings already do.
+#
+#
+# ---- On `is_shown`, and why there is none ----
+#
+# None of these needs a government gate. A task is bound to a position, the five positions exist
+# only for a colonist (`valid_position`), and a task whose position the ruler does not have is never
+# offered. So the gate is stated once, in the positions file, rather than seven times here — and the
+# reverse is true too: a colonist no longer has vanilla's positions, so vanilla's seventeen tasks
+# vanish from his council without a single one of them being overridden.
+#
+#
+# ---- On the scaling ----
+#
+# Every `scale` below is one script value reading one skill, defined in
+# common/script_values/00_colony_council_values.txt. Inside a task's modifier, root is the
+# COUNCILLOR, which is why those values name a bare attribute and nothing scopes into them.
+#
+# One modifier per block, one scale per block. It reads as needless repetition and is not: `scale`
+# multiplies every line in the block it sits in, so grouping `garrison_size` (wants 0.2) with
+# `defender_holding_advantage` (wants 3) under one scale gives one of them a number three orders of
+# magnitude out. The info file allows five blocks per modifier for exactly this reason.
+
+
+# =====================================================================================
+#  Warden of the Palisade
+# =====================================================================================
+
+# The standing job: men on the wall and men on the trails.
+task_hold_the_palisade = {
+	default_task = yes
+	position = councillor_colony_warden
+
+	task_type = task_type_general
+	task_progress = task_progress_infinite
+
+	asset = {
+		icon = "gfx/interface/icons/council_task_types/task_manage_guards.dds"
+		background = "gfx/interface/buttons/button_round_bg.dds"
+		frame = "gfx/interface/buttons/button_round_frame.dds"
+		glow = "gfx/particles/halo.dds"
+	}
+
+	effect_desc = {
+		desc = task_hold_the_palisade_effect_desc
+	}
+
+	council_owner_modifier = {
+		name = task_hold_the_palisade_modifier
+		garrison_size = 1
+		scale = colony_warden_garrison
+	}
+
+	council_owner_modifier = {
+		name = task_hold_the_palisade_modifier
+		defender_holding_advantage = 1
+		scale = colony_warden_advantage
+	}
+
+	council_owner_modifier = {
+		name = task_hold_the_palisade_modifier
+		hostile_county_attrition = 1
+		scale = colony_warden_attrition
+	}
+
+	# The Warden's fallback, and his job outright once there is a war on. Weighted below clearing
+	# deliberately: a blocker standing is a permanent tax on the colony and a siege is not.
+	ai_will_do = {
+		value = 1
+
+		if = {
+			limit = { scope:councillor_liege = { is_at_war = yes } }
+			add = 100
+		}
+	}
+}
+
+
+# The axe work. A colony's blockers are ordinary buildings the player pays to clear
+# (00_wilderness_buildings.txt); this is the other way to be rid of one — the Warden's time instead
+# of the colonist's gold.
+#
+# ---- Where the construction check lives, and where it must not ----
+#
+# The two routes must not resolve at the same moment. Clearing is scripted as an upgrade —
+# `beast_dens` becomes `beast_dens_cleared`, which removes itself on completion — so a task that
+# finishes mid-upgrade would `remove_building` the base out from under a construction the colonist
+# has already paid for.
+#
+# The obvious place for the guard is `potential_county`, and that is the wrong place. A colony is
+# nearly always building something: the settlement_01 → 02 → 03 chain is its whole progression, and
+# growing it is what promotion requires. A task that stops the moment anything goes up in the
+# capital is a task that never once runs to completion, and the feature would read as broken rather
+# than as gated.
+#
+# So the check sits on the removal instead, with `restart_on_finish` behind it. The worst case is
+# one wasted cycle, announced — not a construction destroyed, and not a permanently unavailable
+# task.
+task_clear_the_wilds = {
+	position = councillor_colony_warden
+
+	task_type = task_type_county
+	# `domain` both times: a colonist can hold several colonies and choosing which one to clear is a
+	# real decision, but nobody clears ground they do not hold.
+	county_target = domain
+	ai_county_target = domain
+	task_progress = task_progress_percentage
+	restart_on_finish = yes # Straight on to the next blocker; potential_county stops it when clear.
+	highlight_own_realm = yes
+
+	asset = {
+		icon = "gfx/interface/icons/council_task_types/task_increase_control.dds"
+		background = "gfx/interface/buttons/button_round_bg.dds"
+		frame = "gfx/interface/buttons/button_round_frame.dds"
+		glow = "gfx/particles/halo.dds"
+	}
+
+	effect_desc = {
+		desc = task_clear_the_wilds_effect_desc
+	}
+
+	# Men working the treeline are men on the roads. The blockers themselves carry travel_danger of
+	# 50 apiece, so this is a dent in it rather than a fix.
+	county_modifier = {
+		name = task_clear_the_wilds_modifier
+		travel_danger = -10
+	}
+
+	potential_county = {
+		scope:county = {
+			is_colony_county_trigger = yes
+			has_wilderness_obstacle_trigger = yes
+		}
+	}
+
+	# Whichever colony has most to lose. Deliberately NOT scored by which blocker is worst, even
+	# though that is the better play: the ladder's priority order already lives in two places that
+	# must agree (wilderness_clear_hardest_obstacle_effect and colony_settling_chance), and a third
+	# copy here to be kept in step with them is not worth a few points of AI judgement.
+	ai_target_score = {
+		value = 10
+		add = scope:county.development_level
+	}
+
+	ai_will_do = {
+		value = 25
+	}
+
+	progress = {
+		value = 0
+
+		add = {
+			value = colony_clearing_base
+			desc = COLONY_CLEARING_BASE
+		}
+
+		add = {
+			value = scope:councillor.colony_clearing_monthly_increase
+			desc = SCALED_COUNCILLOR_MARTIAL_VALUE
+		}
+
+		# The lord standing in the camp himself, not merely holding it. Compared against the province
+		# rather than through character_is_at_own_colony_trigger, which asks whether he is at ANY
+		# colony of his — true of a man overseeing a different one on the far side of the map.
+		if = {
+			limit = { scope:councillor_liege ?= { location = scope:province } }
+			add = {
+				value = colony_clearing_lord_present
+				desc = COLONY_CLEARING_LORD_PRESENT
+			}
+		}
+	}
+
+	on_finish_task_county = {
+		scope:province = {
+			if = {
+				limit = { has_ongoing_construction = no }
+
+				wilderness_clear_hardest_obstacle_effect = yes
+				wilderness_obstacle_cleared_effect = yes
+			}
+
+			# The else branch exists so the wasted cycle is not silent. A council task that finishes
+			# and does nothing, with nothing on screen, is indistinguishable from a task that is
+			# broken — and the player has no way to find out that the granary going up in the
+			# capital is the reason. `restart_on_finish` has already put the Warden back on it.
+			else = {
+				county ?= {
+					holder ?= {
+						send_interface_toast = {
+							type = event_toast_effect_neutral
+							title = colony_clearing_blocked_toast
+							left_icon = this
+							right_icon = scope:county
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Quartermaster
+# =====================================================================================
+
+# Thrift, and what the stores will stretch to.
+#
+# Both lines are NEGATIVE and both are improvements. `build_gold_cost` is a cost and `build_speed` is
+# a construction *time* — vanilla's own good traits carry `church_holding_build_speed = -0.2` — so a
+# positive number there is a slower colony. That sign is easy to get backwards and worth stating: it
+# is already backwards in colony_law_corvee, which advertises faster clearance and applies
+# `build_speed = 0.30`. Sharing one block is safe here precisely because both want the same 20% at
+# stewardship 10.
+task_husband_the_stores = {
+	default_task = yes
+	position = councillor_colony_quartermaster
+
+	task_type = task_type_general
+	task_progress = task_progress_infinite
+
+	asset = {
+		icon = "gfx/interface/icons/council_task_types/task_collect_taxes.dds"
+		background = "gfx/interface/buttons/button_round_bg.dds"
+		frame = "gfx/interface/buttons/button_round_frame.dds"
+		glow = "gfx/particles/halo.dds"
+	}
+
+	effect_desc = {
+		desc = task_husband_the_stores_effect_desc
+	}
+
+	council_owner_modifier = {
+		name = task_husband_the_stores_modifier
+		build_gold_cost = -1
+		build_speed = -1
+		scale = colony_quartermaster_thrift
+	}
+
+	council_owner_modifier = {
+		name = task_husband_the_stores_modifier
+		supply_limit_mult = 1
+		scale = colony_quartermaster_stores
+	}
+
+	# The only thing the Quartermaster does, so the weight is not a preference — it is there because
+	# a task with no ai_will_do is a task the AI does not consider at all, and an AI colony that
+	# never staffs its stores grows at a visibly different rate from the player's for no reason
+	# the player can see.
+	ai_will_do = {
+		value = 1
+	}
+}
+
+
+# =====================================================================================
+#  Speaker for the Settlers
+# =====================================================================================
+
+# The settlers are the colony. This is the only office whose work the colony government's own
+# penalties do not touch and whose absence the player feels first: a frontier post with nobody
+# speaking for it stops growing long before it stops standing.
+task_call_for_settlers = {
+	default_task = yes
+	position = councillor_colony_speaker
+
+	task_type = task_type_general
+	task_progress = task_progress_infinite
+
+	asset = {
+		icon = "gfx/interface/icons/council_task_types/task_domestic_affairs.dds"
+		background = "gfx/interface/buttons/button_round_bg.dds"
+		frame = "gfx/interface/buttons/button_round_frame.dds"
+		glow = "gfx/particles/halo.dds"
+	}
+
+	effect_desc = {
+		desc = task_call_for_settlers_effect_desc
+	}
+
+	council_owner_modifier = {
+		name = task_call_for_settlers_modifier
+		development_growth_factor = 1
+		scale = colony_speaker_growth
+	}
+
+	council_owner_modifier = {
+		name = task_call_for_settlers_modifier
+		county_opinion_add = 1
+		scale = colony_speaker_opinion
+	}
+
+	ai_will_do = {
+		value = 1
+	}
+}
+
+
+# =====================================================================================
+#  Pathfinder
+# =====================================================================================
+
+# Travel, not intrigue, and that is the whole point of the office. A colonist's own movement is a
+# mechanic in this system rather than flavour — he rides out to oversee a colony
+# (activity_oversee_colony), and expeditions leave from where he is — so the man who knows the
+# country is worth something on the road and nowhere else.
+task_read_the_country = {
+	default_task = yes
+	position = councillor_colony_pathfinder
+
+	task_type = task_type_general
+	task_progress = task_progress_infinite
+
+	asset = {
+		icon = "gfx/interface/icons/council_task_types/task_find_secrets.dds"
+		background = "gfx/interface/buttons/button_round_bg.dds"
+		frame = "gfx/interface/buttons/button_round_frame.dds"
+		glow = "gfx/particles/halo.dds"
+	}
+
+	effect_desc = {
+		desc = task_read_the_country_effect_desc
+	}
+
+	council_owner_modifier = {
+		name = task_read_the_country_modifier
+		character_travel_safety = 1
+		scale = colony_pathfinder_safety
+	}
+
+	council_owner_modifier = {
+		name = task_read_the_country_modifier
+		character_travel_speed = 1
+		scale = colony_pathfinder_speed
+	}
+
+	# What the Pathfinder falls back to once there is nowhere left to survey — see the ai_will_do on
+	# task_survey_the_wilds, which reads the same headroom from the other side.
+	ai_will_do = {
+		value = 1
+	}
+}
+
+
+# Ground seen before it is settled.
+#
+# The payoff is not a modifier on anybody: it is `colony_surveyed_ground` on the county, which
+# colony_settling_chance reads when the expedition's first winters are rolled two years later. That
+# is the one place a council task can reach the colonisation loop without guessing at scope — the
+# settling roll already opens `scope:colony = { ... }` to price the blockers on the ground, so a
+# county modifier is in scope there and a character modifier on the sender is not.
+#
+# `neighbor_land` matches the adjacency rule the rest of the system enforces: you may only claim
+# ground you can already reach from somewhere you hold, so there is no point surveying anything
+# further out.
+task_survey_the_wilds = {
+	position = councillor_colony_pathfinder
+
+	task_type = task_type_county
+	county_target = neighbor_land
+	ai_county_target = neighbor_land
+	task_progress = task_progress_percentage
+	highlight_own_realm = yes
+
+	asset = {
+		icon = "gfx/interface/icons/council_task_types/task_kurultai_exploit_area.dds"
+		background = "gfx/interface/buttons/button_round_bg.dds"
+		frame = "gfx/interface/buttons/button_round_frame.dds"
+		glow = "gfx/particles/halo.dds"
+	}
+
+	effect_desc = {
+		desc = task_survey_the_wilds_effect_desc
+	}
+
+	potential_county = {
+		scope:county = {
+			is_wilderness_county_trigger = yes
+			NOT = { has_county_modifier = colony_surveyed_ground }
+		}
+	}
+
+	ai_target_score = {
+		value = 10
+	}
+
+	# Only worth an AI's Pathfinder while there is still room under the settlement cap. Surveying
+	# ground the AI is not allowed to settle is the one clearly wasted council task in this file, and
+	# wilderness_settlement_headroom is the same reading of the cap that can_hold_another_colony_
+	# trigger uses — see the note on it in 00_colonization_values.txt for why there is exactly one.
+	ai_will_do = {
+		value = 0
+
+		if = {
+			limit = { scope:councillor_liege = { wilderness_settlement_headroom > 0 } }
+			add = 30
+		}
+	}
+
+	progress = {
+		value = 0
+
+		add = {
+			value = colony_survey_base
+			desc = COLONY_SURVEY_BASE
+		}
+
+		add = {
+			value = scope:councillor.colony_survey_monthly_increase
+			desc = SCALED_COUNCILLOR_INTRIGUE_VALUE
+		}
+	}
+
+	on_finish_task_county = {
+		scope:county = {
+			# Dated rather than permanent: a survey is a season's knowledge of a season's country,
+			# and ground nobody has settled in twenty-five years is ground nobody remembers. It also
+			# means no cleanup is owed anywhere if the colony never happens.
+			add_county_modifier = {
+				modifier = colony_surveyed_ground
+				years = 25
+			}
+		}
+
+		scope:councillor_liege = {
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = colony_surveyed_toast
+				left_icon = scope:councillor
+				right_icon = scope:county
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Camp Preacher
+# =====================================================================================
+
+# Aimed squarely at what colony_government charges a colonist for living out there: `health = -0.1`
+# and `stress_gain_mult = 0.15`. At learning 10 this cancels the health penalty exactly, which is the
+# intended shape — the office does not make the frontier healthy, it makes it survivable.
+task_tend_the_camp = {
+	default_task = yes
+	position = councillor_colony_preacher
+
+	task_type = task_type_general
+	task_progress = task_progress_infinite
+
+	asset = {
+		icon = "gfx/interface/icons/council_task_types/task_religious_relations.dds"
+		background = "gfx/interface/buttons/button_round_bg.dds"
+		frame = "gfx/interface/buttons/button_round_frame.dds"
+		glow = "gfx/particles/halo.dds"
+	}
+
+	effect_desc = {
+		desc = task_tend_the_camp_effect_desc
+	}
+
+	council_owner_modifier = {
+		name = task_tend_the_camp_modifier
+		health = 1
+		scale = colony_preacher_health
+	}
+
+	council_owner_modifier = {
+		name = task_tend_the_camp_modifier
+		stress_loss_mult = 1
+		scale = colony_preacher_solace
+	}
+
+	council_owner_modifier = {
+		name = task_tend_the_camp_modifier
+		monthly_piety = 1
+		scale = colony_preacher_piety
+	}
+
+	ai_will_do = {
+		value = 1
+	}
+}

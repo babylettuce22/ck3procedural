@@ -515,7 +515,19 @@ public sealed class ChronicleMap
         var peoples = held.Select(cultures.For).Select(c => c.Heritage).Distinct().Count();
         var religions = held.Select(faiths.For).Select(f => f.Religion).Distinct().Count();
 
-        string[] bank = peoples > 1 || religions > 1 ? RealmDivided : RealmWhole;
+        // A title down to its last settled county is not described by counting it: "1 counties"
+        // is wrong, and "one county" is barely better, because the interesting fact about such a
+        // title is which county it is rather than how many there are. So the singular bank names
+        // it instead, and {OTHER} carries the name rather than the tally.
+        //
+        // One bank rather than a pair. The two below split on whether more than one people or
+        // faith lives in the title, and a single county cannot manage either, so a divided variant
+        // would be unreachable.
+        bool remnant = held.Count == 1;
+
+        string[] bank = remnant ? RealmRemnant
+            : peoples > 1 || religions > 1 ? RealmDivided
+            : RealmWhole;
 
         map.Add(new ChronicleEvent
         {
@@ -525,7 +537,7 @@ public sealed class ChronicleMap
             Culture = cultures.For(title),
             Faith = faiths.For(title),
             Text = Fill(rng.Pick(bank), title, cultures.For(title).Name, cfg.StartYear,
-                held.Count.ToString()),
+                remnant ? held[0].Name : held.Count.ToString()),
         });
     }
 
@@ -655,5 +667,17 @@ public sealed class ChronicleMap
         "{PLACE} gathers {OTHER} counties that have never agreed on much, the {WHO} loudest among them.",
         "{OTHER} counties answer to {PLACE}, and they do not answer to the same god or in the same tongue.",
         "{PLACE} holds {OTHER} counties together on paper. The {WHO} are the largest party to the argument, not the only one.",
+    ];
+
+    /// <summary>
+    /// A title with one settled county in it, where <c>{OTHER}</c> is that county's name rather
+    /// than a count. Reachable at any tier: the wilderness eats counties, not titles, so a duchy
+    /// drawn with six of them can arrive here with one, and so, more rarely, can a kingdom.
+    /// </summary>
+    private static readonly string[] RealmRemnant =
+    [
+        "Only {OTHER} answers to {PLACE}. The rest of it is ground nobody has got round to settling.",
+        "{PLACE} comes to {OTHER} and a great deal of country nobody lives in, which makes the {WHO} there easy to govern and hard to tax.",
+        "Whatever {PLACE} was drawn to be, in practice it is {OTHER}, the {WHO} who live there, and wilderness for the rest.",
     ];
 }

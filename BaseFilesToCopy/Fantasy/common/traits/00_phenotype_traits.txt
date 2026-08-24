@@ -106,6 +106,7 @@ phenotype_stocky = {
     health = 0.5
     defender_advantage = 3
     same_opinion = 15
+	life_expectancy = 20
 	
     culture_modifier = {
         parameter = mountain_trait_bonuses
@@ -160,7 +161,8 @@ phenotype_towering = {
     }
     icon = "towering.dds"
 
-    prowess = 4
+	learning = -4
+    prowess = 8
     knight_effectiveness_mult = 0.15
     advantage = 2
     dread_gain_mult = 0.10

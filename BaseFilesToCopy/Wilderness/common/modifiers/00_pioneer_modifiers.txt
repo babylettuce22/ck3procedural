@@ -1,0 +1,53 @@
+﻿# The two modifiers the pioneer path needs, and the one it deliberately does not add.
+#
+# There is no county modifier here. A stake in progress wears settling_expedition_underway, the same
+# marker a lord's expedition puts on a county, and that reuse is load-bearing rather than lazy:
+# county_can_be_claimed_trigger already tests for it, so the moment a pioneer breaks ground the
+# county drops out of every target picker in the system -- the landed decision's, the AI's yearly
+# pulse, the claim interaction and this path's own. A second marker meaning the same thing would
+# have had to be added to all of them, which is exactly the edit that gets made in four places out
+# of five.
+
+
+# Character scope, on a pioneer for as long as the stake is being driven.
+#
+# This is the price of standing still, and it has to be a real one. An adventurer's whole position
+# is mobility -- contracts, raids, moving on before anyone can come for you -- and a company parked
+# on a hillside for four years is earning none of it. If breaking ground were free of anything but
+# gold, it would be strictly better than the campaign it interrupts.
+pioneer_breaking_ground = {
+	# Modifier icons resolve as gfx/interface/icons/modifiers/<name>.dds and every one in that
+	# folder ends _positive, _negative or _mixed. A name without the suffix is not an error the game
+	# reports -- it draws nothing and says nothing -- so check the folder rather than the pattern.
+	icon = camp_negative
+
+	# Nobody sings about a man digging a ditch. This is the largest single line here on purpose:
+	# prestige is the adventurer's actual currency, and spending it is what the choice costs.
+	monthly_prestige = -1.0
+
+	# Four winters of it, in a tent, watching a meter.
+	stress_gain_mult = 0.20
+	health = -0.15
+}
+
+
+# Character scope, on a pioneer whose stake collapsed.
+#
+# Failure has to leave a mark or the run is free to repeat: the gold is gone either way, but gold
+# comes back, and a mechanic you can simply retry every five years until the dice cooperate is not
+# a hard mechanic, it is a slow one. Ten years is long enough to be a chapter of a life and short
+# enough that a young character can come back from it.
+#
+# What it is NOT is a bar on trying again. Nothing here blocks the decision -- a man who failed may
+# break ground somewhere else tomorrow if he can still pay for it, and the story of the second
+# attempt is better for the first one being remembered.
+pioneer_broken = {
+	icon = county_modifier_opinion_negative
+
+	monthly_prestige = -1.0
+
+	# Word gets around. A company that walked out of the wild with nothing to show is a company
+	# nobody is in a hurry to hire.
+	general_opinion = -15
+	stress_gain_mult = 0.10
+}

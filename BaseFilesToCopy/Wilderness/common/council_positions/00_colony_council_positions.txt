@@ -1,0 +1,227 @@
+﻿# The five offices of a frontier post.
+#
+# A colonist is a count with one settlement, no vassals and a court of whoever came out with him.
+# Vanilla's privy council — a Chancellor for the vassals he does not have, a Court Chaplain for the
+# cathedral he does not have — is the wrong five jobs, so the colony gets its own.
+#
+#
+# ---- Why these are new keys rather than renamed vanilla ones ----
+#
+# A position's name lives inside the position definition, so re-labelling `councillor_marshal` for a
+# colonist means overriding vanilla's 3,200-line 00_council_positions.txt and keeping up with it
+# forever. Declaring our own keys costs a window_council.gui patch instead — Emit/GuiWriter.cs adds a
+# slot per position below and hides vanilla's rows for a colonist — and that is the cheaper thing to
+# own: the .gui patch is anchored and refuses to ship if vanilla moves, while the positions
+# themselves are ordinary script that no CK3 patch can quietly change underneath us. AGOT reaches
+# the same conclusion for its Castellan and its Admiral, and ships the same shape: new position
+# files plus one gui/window_council.gui override.
+#
+#
+# ---- The contract with the GUI ----
+#
+# Every key below must appear in GuiWriter's colony council table, and every key in that table must
+# appear below. The two failure modes are not symmetric:
+#
+#   * a position with no slot is simply invisible — no error, no warning, and the AI still fills it;
+#   * a slot naming a position that does not exist draws an EMPTY, NAMELESS panel.
+#
+# That second one is the bug this file was written to fix. `colony_government` shipped with
+# `council = no`, so the engine offered a colonist no positions and no tasks at all — and the window
+# still drew its six hardcoded frames, each reading "Click to appoint a" with nothing after it.
+#
+#
+# ---- Why every position here has a default task ----
+#
+# The label under a slot is `ActiveCouncilTask.GetPositionName`: the name is read THROUGH the active
+# task, not off the position. A position whose owner has no valid task for it renders nameless — the
+# same blank frame as a position that does not exist. So each of the five below has exactly one
+# `default_task = yes` task in 00_colony_council_tasks.txt, which is also why vanilla gives every one
+# of its own positions exactly one.
+#
+#
+# ---- What the position modifiers are for, and what they are not ----
+#
+# Each office pays its holder and nothing else. Everything the COLONY gets is on the task, because a
+# task can be swapped and an office cannot: putting the garrison bonus on the Warden's position means
+# a colonist collects it for appointing anybody at all, and then the task he picks is decoration.
+# See 00_colony_council_tasks.txt for the owner-side numbers.
+
+
+# =====================================================================================
+#  Warden of the Palisade — the watch, and the axe work
+# =====================================================================================
+
+councillor_colony_warden = {
+	skill = martial
+
+	name = councillor_colony_warden
+	tooltip = councillor_colony_warden_desc
+
+	# An AI colonist staffs his own council, a player is asked. Without this an AI colony collects
+	# none of the task bonuses below and the whole system is player-only content, which is the
+	# quiet way a mechanic ends up feeling like it does not exist: the AI colonies next door grow
+	# at a visibly different rate for no reason the player can see.
+	auto_fill = { is_ai = yes }
+
+	valid_position = {
+		# Asks the flag rather than `has_government = colony_government`, for the reason
+		# 00_colonization_triggers.txt gives at is_colonist_trigger: a second frontier government
+		# should not need an edit here.
+		government_has_flag = government_is_colony
+	}
+
+	valid_character = {
+		colony_can_be_councillor_trigger = { COURT_OWNER = root.liege_or_court_owner }
+	}
+
+	modifier = {
+		name = councillor_colony_warden_modifier
+		monthly_martial_lifestyle_xp_gain_mult = 0.10
+		monthly_prestige = 0.5
+	}
+
+	on_get_position = { got_council_position_effect = yes }
+	on_fired_from_position = { fired_from_council_position_effect = yes }
+
+	portrait_animation = marshal
+}
+
+
+# =====================================================================================
+#  Quartermaster — the stores, and what they will stretch to
+# =====================================================================================
+
+councillor_colony_quartermaster = {
+	skill = stewardship
+
+	name = councillor_colony_quartermaster
+	tooltip = councillor_colony_quartermaster_desc
+
+	auto_fill = { is_ai = yes }
+
+	valid_position = {
+		government_has_flag = government_is_colony
+	}
+
+	valid_character = {
+		colony_can_be_councillor_trigger = { COURT_OWNER = root.liege_or_court_owner }
+	}
+
+	modifier = {
+		name = councillor_colony_quartermaster_modifier
+		monthly_stewardship_lifestyle_xp_gain_mult = 0.10
+		monthly_prestige = 0.5
+	}
+
+	on_get_position = { got_council_position_effect = yes }
+	on_fired_from_position = { fired_from_council_position_effect = yes }
+
+	portrait_animation = steward
+}
+
+
+# =====================================================================================
+#  Speaker for the Settlers — the only office the settlers themselves would recognise
+# =====================================================================================
+
+councillor_colony_speaker = {
+	skill = diplomacy
+
+	name = councillor_colony_speaker
+	tooltip = councillor_colony_speaker_desc
+
+	auto_fill = { is_ai = yes }
+
+	valid_position = {
+		government_has_flag = government_is_colony
+	}
+
+	valid_character = {
+		colony_can_be_councillor_trigger = { COURT_OWNER = root.liege_or_court_owner }
+	}
+
+	modifier = {
+		name = councillor_colony_speaker_modifier
+		monthly_diplomacy_lifestyle_xp_gain_mult = 0.10
+		monthly_prestige = 0.5
+	}
+
+	on_get_position = { got_council_position_effect = yes }
+	on_fired_from_position = { fired_from_council_position_effect = yes }
+
+	portrait_animation = chancellor
+}
+
+
+# =====================================================================================
+#  Pathfinder — the man who has already seen the ground the rest will be sent to
+# =====================================================================================
+
+councillor_colony_pathfinder = {
+	skill = intrigue
+
+	name = councillor_colony_pathfinder
+	tooltip = councillor_colony_pathfinder_desc
+
+	auto_fill = { is_ai = yes }
+
+	valid_position = {
+		government_has_flag = government_is_colony
+	}
+
+	valid_character = {
+		colony_can_be_councillor_trigger = { COURT_OWNER = root.liege_or_court_owner }
+	}
+
+	modifier = {
+		name = councillor_colony_pathfinder_modifier
+		monthly_intrigue_lifestyle_xp_gain_mult = 0.10
+		monthly_prestige = 0.5
+	}
+
+	on_get_position = { got_council_position_effect = yes }
+	on_fired_from_position = { fired_from_council_position_effect = yes }
+
+	# Vanilla's own name for the "looking out at something" council animation, used by one of the
+	# kurultai seats. The closest thing in the game to a man reading country.
+	portrait_animation = survey
+}
+
+
+# =====================================================================================
+#  Camp Preacher — the frontier's answer to a cathedral chapter
+# =====================================================================================
+
+councillor_colony_preacher = {
+	skill = learning
+
+	name = councillor_colony_preacher
+	tooltip = councillor_colony_preacher_desc
+
+	auto_fill = { is_ai = yes }
+
+	# NOT `is_clergy_position = yes`, deliberately. That flag makes the holder count as realm clergy,
+	# and vanilla's clerical doctrines then decide who may be appointed and who owns the appointment
+	# — `clerical_appointment_ruler`, `clerical_appointment_fixed` and the rest. A colony has no
+	# temple, pays no tithe and appears in no faith's hierarchy; a preacher who came out with the
+	# wagons is not the realm's clergy, and claiming he is hands a generated faith a lever over an
+	# office it has never heard of.
+	valid_position = {
+		government_has_flag = government_is_colony
+	}
+
+	valid_character = {
+		colony_can_be_councillor_trigger = { COURT_OWNER = root.liege_or_court_owner }
+	}
+
+	modifier = {
+		name = councillor_colony_preacher_modifier
+		monthly_learning_lifestyle_xp_gain_mult = 0.10
+		monthly_piety = 0.5
+	}
+
+	on_get_position = { got_council_position_effect = yes }
+	on_fired_from_position = { fired_from_council_position_effect = yes }
+
+	portrait_animation = chaplain
+}

@@ -1,0 +1,279 @@
+﻿# The numbers behind the pioneer path.
+#
+# ---- What the meter is ----
+#
+# A stake is one variable, pioneer_hold, running 0 to 100 and living on the character. Every winter
+# takes a bite out of it and every winter offers a way to put something back; reach the required
+# number of winters with anything left and the ground is yours, hit zero at any point and it is not.
+#
+# That is deliberately a different shape from the landed path's expedition_fortune, which is a
+# modifier collected along a road and cashed once at the end. Here there is no end to save it for --
+# each winter is separately survivable or not -- so the meter has to be a live quantity the player
+# watches rather than a hidden accumulator.
+#
+# ---- Why it is meant to hurt ----
+#
+# The landed path asks a lord for gold he already has and a courtier he can spare. This asks a man
+# with no realm to stop moving, which is the one thing his whole game is built on, and to keep a
+# company fed on ground chosen for being unfit to feed anyone. If the numbers below were kind it
+# would simply be the better way to get land, and the adventurer's actual campaign -- contracts,
+# claims, war -- would be the long way round to the same place.
+#
+# So: the first winter is the worst one, the bad ground is genuinely bad, and the trials cannot all
+# be answered by spending. See pioneer_winter_severity for where the difficulty actually lives.
+
+
+# --- The bar to start --------------------------------------------------------------------------
+
+# How many followers it takes to be worth wintering on open ground.
+#
+# A bar, not a cost -- nobody is spent by the decision. What it refuses is the man with a horse and
+# two servants buying the whole mechanic out of one lucky contract payout.
+#
+# Both this and the character's own count are printed in pioneer_needs_a_company_tt, which is the
+# only reason a player can tell how far off they are. Keep it that way if the number moves: a bar
+# nobody can see their position against is indistinguishable from a broken button.
+#
+# Five is a deliberately low guess and is still the most likely number in this file to be wrong. A
+# landless adventurer's court does not grow on its own -- their government sets
+# court_generate_spouses = no and court_generate_commanders = no, so every follower arrived by
+# contract, recruitment or birth -- and what a company actually looks like after ten years on the
+# road is a question for a running game. Erring low keeps the feature reachable while it is unknown;
+# the displayed count is what makes raising it cheap once it is not.
+pioneer_company_required = {
+	value = 5
+}
+
+# How many followers this character actually has.
+#
+# Counting characters rather than reading max_military_strength, because these are the specific
+# people the mechanic consumes and produces: pioneer_lose_follower_effect kills out of this pool,
+# and on success vanilla's destroy_laamp_effect turns whoever is left in it into the settlement's
+# court. A strength figure is an abstraction over men-at-arms, most of whom are not characters at
+# all and none of whom will be standing in the hall at the end.
+#
+# `every_courtier` excludes the ruler themselves, which the wilderness dummy's yearly cleanup in
+# 00_colonization_on_actions.txt has been relying on since it was written -- it kills
+# every_courtier_or_guest on a character who has to survive it.
+pioneer_company_size = {
+	value = 0
+
+	every_courtier = {
+		limit = { pioneer_is_a_follower_trigger = yes }
+		add = 1
+	}
+}
+
+# What breaking ground costs up front.
+#
+# Read in the decision's cost block, which is evaluated before a target has been picked -- so
+# nothing here may look at scope:stake. The ground's own difficulty is priced in winters instead,
+# which is the right currency for it anyway.
+pioneer_stake_cost = {
+	value = 400
+
+	# A man who can count knows what to buy, and buys less of it.
+	subtract = { value = stewardship  multiply = 5 }
+
+	# Somebody has done this before.
+	if = { limit = { has_trait = lifestyle_traveler } subtract = 40 }
+
+	min = 250
+}
+
+pioneer_stake_prestige_cost = {
+	value = 200
+
+	# Reputation is the other thing being spent: a company that stops moving stops being feared.
+	if = { limit = { has_trait = ambitious } subtract = 40 }
+
+	min = 100
+}
+
+# How many winters have to be got through.
+#
+# Four, and the number is doing more work than it looks. It is long enough that no single lucky roll
+# carries the run, short enough that a player can see the end from the start, and it is the span
+# over which pioneer_winter_severity's per-winter relief turns a losing position into a winnable one
+# -- so the shape of the whole mechanic is "the first two are murder, then it eases".
+# ---- This number is now a COPY, and has to be kept one ----
+#
+# The winters are the four predefined phases of activity_stake_wilderness, and the engine counts them
+# rather than this. What is left for this value to do is tell the player how many are left, through
+# pioneer_winters_left, which is read by the trial descriptions and the outcome toasts.
+#
+# So a fifth phase added to 00_stake_wilderness_activity.txt without touching this would not break
+# anything -- it would just make every toast in the run quietly lie about how far along it is. If the
+# length changes, change it in both places.
+pioneer_winters_required = {
+	value = 4
+}
+
+
+# --- What each winter takes ----------------------------------------------------------------------
+
+# The seasonal bite, as a negative number added straight to the meter.
+#
+# THE difficulty knob. Everything else in this file is a way of putting hold back; this is the only
+# thing that takes it, and it is where the ground being genuinely hostile has to show. A county
+# carrying killing cold and flooded lands loses about thirty a winter against trials that pay back
+# fifteen to twenty -- which is the honest answer to "can I settle anywhere I like": no.
+#
+# The relief for winters already survived is the other half of the design. Without it the run is a
+# flat tax and the fourth winter is exactly as dangerous as the first, which is both harder to
+# balance and wrong about what is happening -- by the third year there are roofs, stores and a
+# cleared field, and the place has begun to keep its own people alive.
+pioneer_winter_severity = {
+	value = -14
+
+	# The ground. The same six blockers colony_settling_chance prices on the landed path, weighted
+	# the same way relative to each other, because they are the same six problems.
+	scope:stake = {
+		title_province ?= {
+			if = { limit = { has_building = killing_cold }  add = -10 }
+			if = { limit = { has_building = flooded_lands } add = -7 }
+			if = { limit = { has_building = bandit_camps }  add = -6 }
+			if = { limit = { has_building = beast_dens }    add = -5 }
+			if = { limit = { has_building = dense_growth }  add = -4 }
+			if = { limit = { has_building = scree_slopes }  add = -3 }
+		}
+	}
+
+	# Every year already stood through is a year of stores, roofs and cleared ground.
+	add = { value = var:pioneer_winters  multiply = 3 }
+
+	# The man in charge of the stores.
+	add = { value = stewardship  multiply = 0.4 }
+
+	if = { limit = { has_trait = diligent }  add = 2 }
+	if = { limit = { has_trait = lazy }      add = -3 }
+
+	# A camp with hands to spare keeps more people alive than one down to its last few. Note this
+	# reads the live count, so a winter that killed followers makes the NEXT winter worse -- which is
+	# the one place the meter and the company talk to each other.
+	if = { limit = { pioneer_company_size >= 10 }  add = 2 }
+
+	# However well it goes a winter out there is never free, and however badly it goes it is never
+	# the end on its own: the meter is what ends a run, and that should take more than one season.
+	max = -4
+	min = -34
+}
+
+
+# --- The trials ------------------------------------------------------------------------------------
+#
+# Each is a percentage, printed in its option's tooltip the way the road events print theirs, and
+# each reads a different part of the character -- so which trial is survivable depends on who is out
+# there rather than on the meter alone. All are clamped well away from 0 and 100: an option nobody
+# would ever take and an option with no risk are both dead content.
+
+# Buying your way through it. Stewardship, and having anything to buy with.
+pioneer_supply_chance = {
+	value = 45
+	add = { value = stewardship  multiply = 2.5 }
+	if = { limit = { has_education_stewardship_trigger = yes } add = 6 }
+	if = { limit = { has_trait = greedy }    add = 4 }
+	if = { limit = { has_trait = generous }  add = -4 }
+	min = 15
+	max = 90
+}
+
+# Sending people out into it. Martial, and whether they come back.
+pioneer_forage_chance = {
+	value = 40
+	add = { value = martial  multiply = 2 }
+	add = { value = prowess  multiply = 1 }
+	if = { limit = { has_trait = lifestyle_hunter }   add = 10 }
+	if = { limit = { has_trait = lifestyle_traveler } add = 6 }
+	if = { limit = { has_trait = brave }              add = 4 }
+	if = { limit = { has_trait = craven }             add = -6 }
+
+	# Ground that hides game also hides everything that eats it.
+	scope:stake = {
+		title_province ?= {
+			if = { limit = { has_building = dense_growth } add = 5 }
+			if = { limit = { has_building = beast_dens }   add = -8 }
+			if = { limit = { has_building = killing_cold } add = -10 }
+		}
+	}
+
+	min = 10
+	max = 90
+}
+
+# Enduring it. Stewardship and temperament and nothing else -- this is the option for a company that
+# has run out of both gold and nerve, so it must never be the best one.
+pioneer_endure_chance = {
+	value = 42
+	add = { value = stewardship  multiply = 1.5 }
+	if = { limit = { has_trait = temperate }  add = 8 }
+	if = { limit = { has_trait = gluttonous } add = -8 }
+	if = { limit = { has_trait = patient }    add = 6 }
+	if = { limit = { has_trait = impatient }  add = -6 }
+	if = { limit = { has_trait = stubborn }   add = 5 }
+	min = 10
+	max = 85
+}
+
+# Going out to meet what is already living there. The one trial answered with a sword.
+pioneer_stand_chance = {
+	value = 40
+	add = { value = prowess  multiply = 3 }
+	add = { value = martial  multiply = 1.5 }
+	if = { limit = { has_education_martial_trigger = yes } add = 6 }
+	if = { limit = { has_trait = brave }   add = 8 }
+	if = { limit = { has_trait = craven }  add = -10 }
+	if = { limit = { has_trait = strong }  add = 5 }
+	if = { limit = { has_trait = weak }    add = -8 }
+	if = { limit = { age >= 60 }           add = -10 }
+
+	# A bigger company is more spears, and more mouths that have to be right about the odds. Modest
+	# per head on purpose: this is the trial that is meant to turn on who the pioneer is, and a
+	# steep company term would let a large band win it regardless of the man leading them.
+	add = { value = pioneer_company_size  multiply = 0.6 }
+
+	min = 10
+	max = 90
+}
+
+# Holding a company together when it wants to leave. Dread and command, not charm -- nobody is being
+# persuaded that this was a good idea.
+pioneer_hold_company_chance = {
+	value = 45
+	add = { value = martial   multiply = 1.5 }
+	add = { value = intrigue  multiply = 1 }
+	add = { value = dread     multiply = 0.25 }
+	if = { limit = { has_trait = just }          add = 5 }
+	if = { limit = { has_trait = arbitrary }     add = -5 }
+	if = { limit = { has_trait = sadistic }      add = 5 }
+	if = { limit = { has_trait = compassionate } add = -5 }
+	min = 10
+	max = 90
+}
+
+# What paying off a restless company costs. Scales with the company, because the thing being bought
+# is every man in it staying another year.
+pioneer_wages_cost = {
+	value = 100
+	add = { value = pioneer_company_size  multiply = 20 }
+	min = 100
+	max = 400
+}
+
+
+# --- For the text to read ---------------------------------------------------------------------
+#
+# Two values that exist only so the event descriptions can print the state of a run. A variable
+# cannot be read from localisation directly; a script value that returns one can. Neither of these
+# touches scope:stake, deliberately -- they are evaluated through MakeScope in a desc, where no
+# scope but the character is set, and a value that reached for the county there would print zero.
+
+pioneer_hold_display = {
+	value = var:pioneer_hold
+}
+
+pioneer_winters_left = {
+	value = pioneer_winters_required
+	subtract = var:pioneer_winters
+	min = 0
+}

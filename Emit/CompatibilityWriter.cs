@@ -259,12 +259,18 @@ public static partial class CompatibilityWriter
             .ToList();
 
         if (entries.Count == 0) return "";
+
+        // Both of ours, and both from BaseFilesToCopy/Wilderness/common/governments — which is why
+        // they are gated on EnableWilderness above. colony_government was missing here while its
+        // file shipped, so setup.log carried twelve "Could not find the preregistered modifier
+        // type 'colony_government_opinion'" errors and the government half-existed.
         entries.Add("wilderness_government");
+        entries.Add("colony_government");
 
         var b = new JominiBuilder();
         b.Blank();
         b.Comment("""
-                  Vanilla's list, read from the installed game, plus the wilderness government.
+                  Vanilla's list, read from the installed game, plus the governments we add.
                   A government absent from here is never registered, whatever common/governments says.
                   """);
 
@@ -273,7 +279,7 @@ public static partial class CompatibilityWriter
             foreach (string entry in entries) b.Token($"\"{entry}\"");
 
         Console.WriteLine($"  defines: GOVERNMENT_TYPES {entries.Count} entries "
-                          + $"({entries.Count - 1} vanilla + wilderness)");
+                          + $"({entries.Count - 2} vanilla + wilderness + colony)");
 
         return b.ToString();
     }
@@ -663,6 +669,300 @@ public static partial class CompatibilityWriter
     }
 
     /// <summary>
+    /// The gates a player can see a decision through, in the order they are reported.
+    ///
+    /// <c>ai_potential</c> is deliberately not one of them: it decides whether the AI bothers
+    /// evaluating a decision, and an AI that evaluates one it can never pass costs nothing the
+    /// player can see.
+    /// </summary>
+    private static readonly string[] DecisionGates =
+        ["is_shown", "is_valid", "is_valid_showing_failures_only"];
+
+    /// <summary>
+    /// The illustration every stub declares.
+    ///
+    /// ck3-tiger treats <c>picture</c> as required even though nine vanilla decisions ship without
+    /// one, and a stub that shows to nobody never draws it, so the generic vanilla illustration is
+    /// as good as the right one and costs no artwork.
+    /// </summary>
+    private const string StubPicture = "gfx/interface/illustrations/decisions/decision_misc.dds";
+
+    /// <summary>A vanilla decision hidden by <see cref="WriteDecisionBlocks"/>, and why.</summary>
+    private readonly record struct BlockedDecision(
+        string Key, string Origin, string Gate,
+        string? Title, string? Desc, string? SelectionTooltip, string? ConfirmText);
+
+    /// <summary>
+    /// Hides the vanilla decisions whose gate is <c>completely_controls</c>.
+    ///
+    /// <see cref="WriteVanillaTitulars"/> re-declares every vanilla e_/k_/d_/h_ key as a landless
+    /// shim, which is what keeps ~12,900 hardcoded references from being hard errors. The cost is
+    /// that a shim owns no de jure territory, and <c>completely_controls = title:d_sardinia</c>
+    /// against an empty set of counties is *vacuously true*. So is every sibling in
+    /// secure_mediterranean_decision's is_shown, so the decision offers itself to every landed
+    /// character on a map that has no Mediterranean.
+    ///
+    /// <see cref="WriteTitularGuard"/> does not help here and never could: it guarantees a shim is
+    /// never *held*, and completely_controls does not ask who holds the title.
+    /// <see cref="WriteGeographicalRegions"/> leaves the same hole one size smaller — a
+    /// non-graphical region is re-declared with exactly one county because it needs at least one
+    /// member to register at all, so completely_controls_region is true for whoever holds that one.
+    ///
+    /// The hand-kept blanks in BaseFilesToCopy/Core/common/decisions cover ten files, all of them
+    /// top level. A CK3 full-file override only fires at the matching relative path, so they can
+    /// never reach common/decisions/dlc_decisions/, where FP1, FP2, FP3, EP3 and TGP keep theirs.
+    /// Blanking is too blunt for the mixed files anyway: 80_major_decisions.txt is six
+    /// geography-locked decisions and seventeen the generated map wants — found_kingdom,
+    /// found_empire, found_duchy, the government conversions.
+    ///
+    /// So this is a single-object override instead: one file re-declaring just the offending keys
+    /// as stubs that show to nobody, leaving every other decision in the same vanilla file alone.
+    /// Generated from the installed game folder rather than hand-kept, so a patch that adds,
+    /// renames or moves one is picked up on the next run.
+    ///
+    /// **Where that file goes is the whole trick, and "last asciibetical file wins" is not the
+    /// rule.** CK3 walks a database folder level by level: every file in a directory in
+    /// asciibetical order, *then* every subdirectory in asciibetical order, recursively. Depth
+    /// beats filename, so a top-level `zzz_` file loads before `dlc_decisions/03_fp2_decisions.txt`
+    /// and vanilla wins. Measured, not assumed — the first cut of this shipped at the top level and
+    /// database_conflicts.log reported vanilla overriding *us* for all fourteen decisions under
+    /// dlc_decisions/, secure_mediterranean_decision among them, while the four it beat were the
+    /// four whose vanilla file sits at the top level.
+    ///
+    /// Hence <c>dlc_decisions/zzz_generated/</c>: vanilla's only subdirectory here is
+    /// dlc_decisions, its own subdirectories end at `tgp`, and it never nests deeper than two, so
+    /// a `zzz_`-named folder at that depth is the last thing the walker reaches. If a future patch
+    /// ever adds one that sorts later, database_conflicts.log is what says so — it names the winner
+    /// for every contested key, and it is written on every launch.
+    ///
+    /// Deliberately narrow: completely_controls only. A vanilla <c>title:</c> reference anywhere
+    /// in is_shown looks like the same signal and is not — found_university_decision names
+    /// twenty-four baronies so that founding at a famous one reads differently, and
+    /// recruit_terrain_specialist_decision names two TGP office titles. Both are decisions a
+    /// generated map wants. Vacuity is the bug; mentioning a vanilla key is not.
+    /// </summary>
+    public static void WriteDecisionBlocks(string modDir, string gameDir)
+    {
+        string source = Path.Combine(gameDir, "common", "decisions");
+        if (!Directory.Exists(source)) return;
+
+        var blocked = new List<BlockedDecision>();
+        int scanned = 0;
+
+        foreach (string path in Directory.GetFiles(source, "*.txt", SearchOption.AllDirectories))
+        {
+            string origin = Path.GetRelativePath(source, path).Replace('\\', '/');
+
+            foreach (var (key, body) in ScanDecisions(File.ReadAllText(path)))
+            {
+                scanned++;
+
+                string? gate = DecisionGates.FirstOrDefault(
+                    g => SubBlock(body, g).Contains("completely_controls", StringComparison.Ordinal));
+
+                if (gate is null) continue;
+
+                // Vanilla's own loc keys, carried so the stub keeps them. Without them the
+                // defaults apply — <key>, <key>_desc, <key>_tooltip, <key>_confirm — and for the
+                // decisions that named their own, those defaults are keys nothing ever wrote.
+                blocked.Add(new BlockedDecision(key, origin, gate,
+                    LocField(body, "title"),
+                    LocField(body, "desc"),
+                    LocField(body, "selection_tooltip"),
+                    LocField(body, "confirm_text")));
+            }
+        }
+
+        if (blocked.Count == 0) return;
+
+        var jb = new JominiBuilder();
+        jb.Comment($"{blocked.Count} of {scanned} vanilla decisions, re-declared as stubs that show to nobody.");
+        jb.Comment("""
+
+                   Each one gates on completely_controls against a title with no de jure counties
+                   (common/landed_titles/zz_vanilla_titulars.txt) or a region re-declared with one
+                   (map_data/geographical_regions). Both make the check vacuously true, so the
+                   decision offers itself on a map that has none of the places it names.
+
+                   This file's PATH is load-bearing, not just its name. CK3 loads every file in a
+                   directory asciibetically, then recurses into its subdirectories the same way, so
+                   depth beats filename: a top-level zzz_ file loses to dlc_decisions/*. Sitting in
+                   the last-sorting folder of the deepest level vanilla uses is what makes this the
+                   last definition loaded. database_conflicts.log names the winner for every key.
+                   """);
+        jb.Blank();
+
+        foreach (var d in blocked)
+        {
+            jb.Comment($"{d.Origin}: {d.Gate}");
+
+            using (jb.Block(d.Key))
+            {
+                using (jb.Block("picture"))
+                    jb.Quoted("reference", StubPicture);
+
+                jb.Field("title", d.Title);
+                jb.Field("desc", d.Desc);
+                jb.Field("selection_tooltip", d.SelectionTooltip);
+                jb.Field("confirm_text", d.ConfirmText);
+
+                jb.Inline("is_shown", "always = no");
+            }
+
+            jb.Blank();
+        }
+
+        // The path is the fix, not the filename. See the remarks above before moving this.
+        string dir = Path.Combine(modDir, "common", "decisions", "dlc_decisions", "zzz_generated");
+        Directory.CreateDirectory(dir);
+        ParadoxText.WriteBom(Path.Combine(dir, "zzz_generated_decision_blocks.txt"), jb.ToString());
+
+        Console.WriteLine($"  decision blocks: {blocked.Count} of {scanned} vanilla decisions hidden " +
+                          "(completely_controls against a landless shim)");
+    }
+
+    /// <summary>
+    /// Every top-level <c>key = {</c> block in a decisions file, with its body, comments stripped.
+    ///
+    /// All 431 vanilla decisions open at column 0 with the brace on the same line, and the only
+    /// other thing at column 0 is an <c>@constant</c> definition, so the column test is the whole
+    /// parser. The key is not filtered on a <c>_decision</c> suffix: thirty-six vanilla decisions
+    /// do not have one — convert_to_confucianism, change_state_faith, legendary_holy_war — and in
+    /// a decisions file every top-level object is a decision anyway.
+    /// </summary>
+    private static IEnumerable<(string Key, string Body)> ScanDecisions(string text)
+    {
+        var lines = text.Split('\n');
+
+        for (int i = 0; i < lines.Length; i++)
+        {
+            string line = lines[i];
+            if (line.Length == 0 || char.IsWhiteSpace(line[0]) || line[0] is '#' or '@') continue;
+
+            int equals = line.IndexOf('=');
+            if (equals <= 0 || !line.Contains('{')) continue;
+
+            string key = line[..equals].Trim();
+            if (key.Length == 0 || !key.All(c => char.IsLetterOrDigit(c) || c is '_' or '-')) continue;
+
+            var body = new StringBuilder();
+            int depth = 0;
+
+            for (int j = i; j < lines.Length; j++)
+            {
+                string code = lines[j];
+                int hash = code.IndexOf('#');
+                if (hash >= 0) code = code[..hash];
+
+                body.Append(code).Append('\n');
+
+                depth += code.Count(c => c == '{') - code.Count(c => c == '}');
+                if (depth <= 0) { i = j; break; }
+            }
+
+            yield return (key, body.ToString());
+        }
+    }
+
+    /// <summary>
+    /// Index of the first character of <paramref name="name"/>'s value, or -1 when the block has
+    /// no such field.
+    ///
+    /// Matched at brace depth 1 only, so a <c>widget</c>'s per-item <c>is_shown</c> can never be
+    /// taken for the decision's own, and on a token boundary, so <c>is_valid</c> does not match
+    /// the front of <c>is_valid_showing_failures_only</c>.
+    ///
+    /// Written as a scan rather than an anchored regex because the obvious regex is wrong in a way
+    /// that reads as correct: in <c>^\s*is_shown\s*=\s*\{</c> the leading <c>\s*</c> will start the
+    /// match on the blank line above, a brace walk from there closes on that empty first line, and
+    /// the caller gets an empty block instead of the real one. That is not hypothetical — it is
+    /// what made the first pass of this audit report two hits instead of eighty-one.
+    /// </summary>
+    private static int FieldValueAt(string body, string name)
+    {
+        int depth = 0;
+
+        for (int i = 0; i < body.Length; i++)
+        {
+            char c = body[i];
+
+            if (c == '{') { depth++; continue; }
+            if (c == '}') { depth--; continue; }
+
+            if (depth != 1 || c != name[0] || i + name.Length > body.Length) continue;
+            if (string.CompareOrdinal(body, i, name, 0, name.Length) != 0) continue;
+            if (i > 0 && (char.IsLetterOrDigit(body[i - 1]) || body[i - 1] == '_')) continue;
+
+            int at = i + name.Length;
+            while (at < body.Length && char.IsWhiteSpace(body[at])) at++;
+            if (at >= body.Length || body[at] != '=') continue;
+
+            at++;
+            while (at < body.Length && char.IsWhiteSpace(body[at])) at++;
+            if (at < body.Length) return at;
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// The text of <paramref name="name"/>'s block, braces included, or empty if it has none.
+    /// A scalar field of the same name — <c>is_shown = trigger</c> inside a widget item — is not
+    /// a block and reads as absent.
+    /// </summary>
+    private static string SubBlock(string body, string name)
+    {
+        int at = FieldValueAt(body, name);
+        if (at < 0 || body[at] != '{') return "";
+
+        int depth = 0;
+        for (int j = at; j < body.Length; j++)
+        {
+            if (body[j] == '{') depth++;
+            else if (body[j] == '}' && --depth == 0) return body[at..(j + 1)];
+        }
+
+        return body[at..];
+    }
+
+    /// <summary>
+    /// The localisation key <paramref name="name"/> resolves to, or null when it has no field.
+    ///
+    /// A one-line field is the key itself. A block is one of vanilla's fifty dynamic descriptions
+    /// — <c>desc = { first_valid = { triggered_desc = { … } desc = &lt;fallback&gt; } }</c> — and
+    /// what is taken from that is the last plain <c>desc = &lt;key&gt;</c> inside it, which is the
+    /// unconditional branch a first_valid chain ends with.
+    ///
+    /// Collapsing a dynamic description to its fallback is exactly right for text that never
+    /// renders, and it is why the block is read rather than carried: carrying it would drag the
+    /// triggers along, and their references to vanilla titles, into a stub whose whole point is to
+    /// reference nothing.
+    /// </summary>
+    private static string? LocField(string body, string name)
+    {
+        int at = FieldValueAt(body, name);
+        if (at < 0) return null;
+
+        if (body[at] == '{')
+        {
+            var fallbacks = DynamicDescFallback().Matches(SubBlock(body, name));
+            return fallbacks.Count == 0 ? null : fallbacks[^1].Groups[1].Value;
+        }
+
+        int end = body.IndexOf('\n', at);
+        string value = (end < 0 ? body[at..] : body[at..end]).Trim();
+
+        return value.Length == 0 ? null : value;
+    }
+
+    /// <summary>
+    /// A <c>desc = &lt;key&gt;</c> inside a dynamic description. The lookbehind is what keeps it
+    /// off <c>triggered_desc</c>, and the key pattern is what keeps it off <c>desc = {</c>.
+    /// </summary>
+    [System.Text.RegularExpressions.GeneratedRegex(@"(?<![A-Za-z0-9_])desc\s*=\s*([A-Za-z0-9_.]+)")]
+    private static partial System.Text.RegularExpressions.Regex DynamicDescFallback();
+
+    /// <summary>
     /// Rebinds vanilla's 322 holy sites onto generated counties.
     ///
     /// Every faith names its holy sites, so a holy site whose county does not exist leaves the
@@ -731,6 +1031,30 @@ public static partial class CompatibilityWriter
     }
 
     /// <summary>
+    /// What this world calls its era, short form — "BE", "AC", whatever the export named it.
+    /// Empty when the world is on vanilla's calendar and its years want no suffix at all.
+    ///
+    /// The full name is the fallback because an export may fill one field and not the other, and a
+    /// long era after a year still reads as a date; nothing after a year does not.
+    /// </summary>
+    public static string EraSuffix(MapGen.AzgaarImport? azgaar)
+    {
+        if (azgaar is null) return "";
+
+        string era = azgaar.EraShort.Trim();
+        if (era.Length == 0) era = azgaar.EraName.Trim();
+        return era;
+    }
+
+    /// <summary>
+    /// The era's full name — "the Cladian Era", not "CE" — or empty when the export left it blank.
+    /// <see cref="BookmarkWriter"/> puts this on the bookmark tab, where there is room for it and
+    /// where the export naming its own age beats anything this generator would invent.
+    /// </summary>
+    public static string EraFullName(MapGen.AzgaarImport? azgaar)
+        => azgaar?.EraName.Trim() ?? "";
+
+    /// <summary>
     /// <summary>
     /// Puts the world's own era on the game clock.
     ///
@@ -753,8 +1077,7 @@ public static partial class CompatibilityWriter
     {
         if (azgaar is null) return;
 
-        string era = azgaar.EraShort.Trim();
-        if (era.Length == 0) era = azgaar.EraName.Trim();
+        string era = EraSuffix(azgaar);
         if (era.Length == 0) return;
 
         // Literal rather than through vanilla's $ERA$ token. That token resolves to

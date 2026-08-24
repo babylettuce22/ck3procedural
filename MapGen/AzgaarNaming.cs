@@ -61,6 +61,28 @@ public static class AzgaarNaming
     }
 
     /// <summary>
+    /// The parenthetical a fantasy-preset export tags a culture with, lowercased and trimmed, or
+    /// empty when there is none.
+    ///
+    /// Separate from <see cref="ParseRace"/> because the two questions differ where it matters most.
+    /// ParseRace answers "which of our races is this", and has to say null for a tag with no
+    /// counterpart in our roster. But "Arachnid" and "Drakonic" are the export stating that those
+    /// peoples are *not each other*, and a caller asking only whether two cultures are the same kind
+    /// of thing can act on that perfectly well without knowing what a Drakonic is. See
+    /// <see cref="AzgaarFamilies"/>, which would otherwise put the spiders in with the elves.
+    /// </summary>
+    internal static string Tag(string name)
+    {
+        int open = name.IndexOf('(');
+        if (open < 0) return "";
+
+        int close = name.IndexOf(')', open);
+        if (close < 0) return "";
+
+        return name[(open + 1)..close].Trim().ToLowerInvariant();
+    }
+
+    /// <summary>
     /// The race a fantasy-preset export tags a culture with, read from the parenthetical before
     /// <see cref="StripParenthetical"/> throws it away — "Dunirr (Dwarven)" is the export telling
     /// us these are dwarves, and it beats guessing the same fact back from terrain affinity.
@@ -74,13 +96,7 @@ public static class AzgaarNaming
     /// </summary>
     internal static RaceArchetype? ParseRace(string name)
     {
-        int open = name.IndexOf('(');
-        if (open < 0) return null;
-
-        int close = name.IndexOf(')', open);
-        if (close < 0) return null;
-
-        string tag = name[(open + 1)..close].Trim().ToLowerInvariant();
+        string tag = Tag(name);
         if (tag.Length == 0) return null;
 
         if (tag.Contains("human")) return RaceArchetype.Human;

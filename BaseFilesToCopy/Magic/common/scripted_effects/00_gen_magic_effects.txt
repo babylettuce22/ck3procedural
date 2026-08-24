@@ -1,0 +1,284 @@
+﻿# The accounting. Everything that changes a practitioner's state goes through one of these.
+#
+# The reason for routing rather than letting generated spells write the variables themselves is not
+# tidiness: a spell that forgets to add to the ledger, or that grants a rank without initialising a
+# pool, produces a world that looks correct and is quietly broken in a way no error log mentions.
+# There are a dozen or more generated spells per world and they are written by a machine from a
+# grammar; the only way to be sure all of them pay is for none of them to know how.
+
+
+# --- Turning the system on ---------------------------------------------------------------------
+
+# Called ONCE by the generated half, on on_game_start_after_lobby. Nothing in this set calls it.
+#
+# This is the second of the two switches described in README.txt, and the reason the ordering
+# problem does not exist: rather than the static half initialising the ledger on game start and
+# hoping it runs after whatever sets gen_magic_active — two entries on the same on_action, in
+# whichever order the loader happens to pick — the generated half performs a single call that does
+# both. A world that rolled no magic never calls it and everything stays dormant.
+#
+#     FUEL   flag: which resource practitioners spend (flag:vital, flag:ambient, ...)
+#     DECAY  how much ledger pressure drains per year
+gen_magic_activate_effect = {
+	set_global_variable = {
+		name = gen_magic_active
+		value = 1
+	}
+
+	set_global_variable = {
+		name = gen_magic_fuel
+		value = $FUEL$
+	}
+
+	set_global_variable = {
+		name = gen_magic_pressure
+		value = 0
+	}
+
+	set_global_variable = {
+		name = gen_magic_pressure_decay
+		value = $DECAY$
+	}
+}
+
+
+# --- Membership --------------------------------------------------------------------------------
+
+# Everything a practitioner needs, in an order the arithmetic forces.
+#
+# Rank first, and not for tidiness: gen_magic_capacity_value is a function of rank, so a pool sized
+# before the rank exists is sized against zero and the character enters the system holding nothing.
+gen_magic_initialise_character_effect = {
+	set_variable = {
+		name = gen_magic_rank
+		value = $RANK$
+	}
+
+	set_variable = {
+		name = gen_magic_debt
+		value = 0
+	}
+
+	set_variable = {
+		name = gen_magic_exposure
+		value = 0
+	}
+
+	# Enter with a full pool. A practitioner who has to wait four years before the system does
+	# anything has been handed a notification rather than a power, and in a world where access is
+	# granted late in a life that wait can be the whole of it.
+	set_variable = {
+		name = gen_magic_charge
+		value = gen_magic_capacity_value
+	}
+
+	# Whatever route brought them in, they are no longer waiting on it.
+	remove_variable = gen_magic_latent
+}
+
+# Bring a character into the system at $RANK$.
+#
+# The generated half calls this from whatever its access rule turns out to be — a birth hook under
+# Born, a decision under Taught, a story cycle under Bargained. Idempotent by design: calling it on
+# an existing practitioner re-initialises them rather than stacking, which is what makes it safe to
+# call from a game-start sweep that may overlap with history-stamped practitioners.
+gen_magic_grant_effect = {
+	if = {
+		limit = { gen_magic_active_trigger = yes }
+		gen_magic_initialise_character_effect = { RANK = $RANK$ }
+	}
+}
+
+# Move one step up the ladder, and widen the pool to match.
+#
+# Charge is topped up to the new capacity rather than left where it was, because the rank that just
+# opened the next tier of spells should not also require a four-year wait before any of them can be
+# afforded.
+gen_magic_advance_effect = {
+	if = {
+		limit = { gen_magic_practitioner_trigger = yes }
+
+		change_variable = {
+			name = gen_magic_rank
+			add = 1
+		}
+
+		set_variable = {
+			name = gen_magic_charge
+			value = gen_magic_capacity_value
+		}
+	}
+}
+
+# Out of the system entirely.
+#
+# Every variable goes, not just the rank. Leaving the pool behind on a stripped character means a
+# save carries state for people who are not in the system, and a later re-grant would inherit a
+# charge and a debt from a life the character no longer remembers.
+gen_magic_strip_effect = {
+	remove_variable = gen_magic_rank
+	remove_variable = gen_magic_charge
+	remove_variable = gen_magic_debt
+	remove_variable = gen_magic_exposure
+}
+
+# Mark a character as able to enter without letting them in.
+#
+# The waiting room. A latent character is offered the way in and nothing else — no spells, no pool,
+# no widget beyond whatever the generated half uses to make the offer.
+gen_magic_mark_latent_effect = {
+	if = {
+		limit = {
+			gen_magic_active_trigger = yes
+			NOT = { gen_magic_practitioner_trigger = yes }
+		}
+
+		set_variable = {
+			name = gen_magic_latent
+			value = 1
+		}
+	}
+}
+
+
+# --- Paying -------------------------------------------------------------------------------------
+
+# Spend $COST$, and record whatever could not be covered as debt.
+#
+# The overdraw path is not an error case. In a Debt world it is the normal one — casting is free at
+# the point of use and the bill is the whole mechanic — and in every other world it is what a
+# generated effect uses when it deliberately lets someone reach past what they have. Either way the
+# pool floors at zero rather than going negative, so that a single desperate cast cannot leave a
+# character unable to act for a decade through arithmetic nobody intended.
+gen_magic_spend_effect = {
+	change_variable = {
+		name = gen_magic_charge
+		subtract = $COST$
+	}
+
+	# Read before the floor is applied: once charge is clamped the size of the hole is gone.
+	if = {
+		limit = { gen_magic_charge_value < 0 }
+
+		change_variable = {
+			name = gen_magic_debt
+			add = gen_magic_shortfall_value
+		}
+
+		set_variable = {
+			name = gen_magic_charge
+			value = 0
+		}
+	}
+}
+
+# The yearly top-up.
+#
+# Capped at capacity, so a practitioner who does not cast banks nothing beyond their pool — the
+# resource is a rate, not a savings account, and a fifty-year reign of restraint should not end in
+# one world-ending cast.
+gen_magic_refresh_effect = {
+	change_variable = {
+		name = gen_magic_charge
+		add = gen_magic_refresh_rate_value
+	}
+
+	if = {
+		limit = { gen_magic_charge_value > gen_magic_capacity_value }
+
+		set_variable = {
+			name = gen_magic_charge
+			value = gen_magic_capacity_value
+		}
+	}
+}
+
+# Become more publicly known as a practitioner.
+#
+# Only bites in a concealed world; elsewhere practice is public and exposure is a number nobody
+# reads. Kept in the static half anyway, because whether a world conceals its practitioners is a
+# rolled axis and a spell should not have to know which way it came out.
+gen_magic_expose_effect = {
+	if = {
+		limit = { gen_magic_practitioner_trigger = yes }
+
+		change_variable = {
+			name = gen_magic_exposure
+			add = $AMOUNT$
+		}
+	}
+}
+
+
+# --- The ledger ----------------------------------------------------------------------------------
+
+# Add to the world meter.
+#
+# Guarded on existence rather than assuming activation ran, because a generated effect may add
+# pressure from a context that is not a cast — an entity waking, a site being broken open — and
+# those are exactly the paths most likely to fire in an order nobody predicted.
+gen_magic_ledger_add_effect = {
+	if = {
+		limit = { NOT = { exists = global_var:gen_magic_pressure } }
+
+		set_global_variable = {
+			name = gen_magic_pressure
+			value = 0
+		}
+	}
+
+	change_global_variable = {
+		name = gen_magic_pressure
+		add = $AMOUNT$
+	}
+}
+
+# Drain it. Called once a year with no character in scope; see the on_action file.
+gen_magic_ledger_decay_effect = {
+	if = {
+		limit = { exists = global_var:gen_magic_pressure }
+
+		change_global_variable = {
+			name = gen_magic_pressure
+			subtract = gen_magic_pressure_decay_value
+		}
+
+		if = {
+			limit = { gen_magic_pressure_value < 0 }
+
+			set_global_variable = {
+				name = gen_magic_pressure
+				value = 0
+			}
+		}
+	}
+}
+
+
+# --- The cast ------------------------------------------------------------------------------------
+
+# What every generated spell calls, whatever it does afterwards.
+#
+# Four things happen here and no generated spell has to remember any of them: the fuel is spent,
+# the world meter moves, the threshold seam is offered the chance to react to the new total, and
+# the cast seam fires for anything watching casts in general — a price rule, a hunter faction, an
+# entity keeping count.
+#
+# The seams are on_actions this set FIRES and does not DECLARE. An on_action needs exactly one
+# effect block across all files, and that block belongs to the half that knows what should happen;
+# see README.txt. Firing one nobody declared is unreachable, because every path to here runs
+# through gen_magic_practitioner_trigger, which is false until the generated half activates.
+#
+#     COST      fuel to spend
+#     PRESSURE  what this cast adds to the ledger
+gen_magic_cast_effect = {
+	if = {
+		limit = { gen_magic_practitioner_trigger = yes }
+
+		gen_magic_spend_effect = { COST = $COST$ }
+		gen_magic_ledger_add_effect = { AMOUNT = $PRESSURE$ }
+
+		trigger_event = { on_action = gen_magic_cast_on_action }
+		trigger_event = { on_action = gen_magic_threshold_on_action }
+	}
+}

@@ -36,6 +36,18 @@ public static class StaticFileWriter
     public const string Fantasy = "Fantasy";
 
     /// <summary>
+    /// The static half of the procedural magic system: the practitioner gate, the fuel and ledger
+    /// accounting, the pulses, and the scripted_guis that let a .gui widget ask the same question
+    /// the decisions ask. Gated on <see cref="Config.MapConfig.EnableMagic"/>.
+    ///
+    /// Shipping it does not turn magic on. The set is inert until something sets the global
+    /// <c>gen_magic_active</c>, which only the generated half does and only for a world that rolled
+    /// magic at all — so this can ship ahead of that half, which is where it stands today. See the
+    /// set's own README.txt for the contract between the two.
+    /// </summary>
+    public const string Magic = "Magic";
+
+    /// <summary>
     /// Files that document or configure a set rather than belong in a mod.
     /// </summary>
     private static readonly string[] NotModContent = ["README.txt", "ignore.txt", ".ignore.txt"];

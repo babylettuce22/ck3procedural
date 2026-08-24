@@ -1,0 +1,40 @@
+﻿# The one hook the pioneer path needs.
+#
+# Everything else in this system schedules itself: wilderness_pioneer.0010 books the next winter and
+# no pulse has to go looking for stakes in progress. That is the right shape for a mechanic that at
+# most a handful of characters on the map are ever running at once -- a yearly world scan to find
+# three of them would be a scan for nothing.
+#
+# What a self-scheduling chain cannot do is notice that it stopped, and there is exactly one way for
+# it to stop without passing through an ending: the man dies. Hence this.
+#
+# Appended to on_death rather than redefining it. See the note at the top of
+# 00_colonization_on_actions.txt -- redefining a vanilla on_action's effect silently deletes every
+# other mod's work in it, and this is the compatibility rule that matters most.
+
+on_death = {
+	on_actions = {
+		pioneer_on_death
+	}
+}
+
+# A stake does not pass to the heir, and that is a decision rather than an omission.
+#
+# The variables live on the character because the thing being tracked is one man's company standing
+# in one place through four winters -- it is not a project the title owns, because there is no title.
+# When he dies the company scatters to whoever inherits it and the ground goes back on the board.
+#
+# The alternative -- moving the run to the heir -- would need the meter, the winter count and the
+# absence rule to survive a succession that also relocates the camp and changes who is standing
+# where, and would produce an heir halfway through a fight he never chose, at odds computed from a
+# dead man's stewardship. The frontier being littered with abandoned half-stakes is the better
+# story and much the cheaper code.
+pioneer_on_death = {
+	trigger = {
+		has_variable = pioneer_stake
+	}
+
+	effect = {
+		pioneer_clear_stake_effect = yes
+	}
+}

@@ -1,0 +1,167 @@
+﻿# Every number the colony council scales by.
+#
+# All of these are read from inside a council task — either as a modifier `scale` or as a `progress`
+# term — and inside a task, root is the COUNCILLOR. That is why they name a bare attribute with
+# nothing scoping into it, and it is also why none of them may be reused anywhere else without being
+# re-read: `martial` here means the Warden's martial, not the colonist's.
+#
+# The `progress` terms are the exception and they say so: 00_colony_council_tasks.txt reaches them as
+# `scope:councillor.<value>`, because a progress block's root is the council owner for a county task
+# rather than the councillor, and the two are different people.
+#
+# Every scale carries a `max`. A skill of 30 is reachable — an educated, ambitious, lifestyle-focused
+# courtier at 60 — and a colony is one settlement: without the ceiling the Speaker alone would be
+# worth more county opinion than every law in 00_colonial_laws.txt put together. No `min`: CK3 skills
+# do not go below zero, so a floor would be describing a state that cannot happen.
+
+
+# --- Warden of the Palisade ---------------------------------------------------------------------
+
+# 20% at martial 10, capped at half again.
+colony_warden_garrison = {
+	value = martial
+	divide = 50
+	max = 0.5
+}
+
+# 2.5 at martial 10. Sits on top of the colony government's own +5, which is the frontier's real
+# defence — this is the man who organises it rather than the reason it works.
+colony_warden_advantage = {
+	value = martial
+	divide = 4
+	max = 6
+}
+
+# 10% at martial 10. Small on purpose: the government already grants 25%, and attrition compounds
+# with the defender advantage above into something that decides sieges.
+colony_warden_attrition = {
+	value = martial
+	divide = 100
+	max = 0.3
+}
+
+
+# --- Quartermaster -----------------------------------------------------------------------------
+
+# 20% at stewardship 10, applied to both build cost and build time. See the sign note at
+# task_husband_the_stores.
+colony_quartermaster_thrift = {
+	value = stewardship
+	divide = 50
+	max = 0.4
+}
+
+# 25% at stewardship 10. Supply is what a colony has least of and what a besieging army needs most.
+colony_quartermaster_stores = {
+	value = stewardship
+	divide = 40
+	max = 0.5
+}
+
+
+# --- Speaker for the Settlers ------------------------------------------------------------------
+
+# 25% at diplomacy 10. Development is the promotion gate (can_promote_colony_trigger wants level 4),
+# so this is the office that decides how long a colony stays one.
+colony_speaker_growth = {
+	value = diplomacy
+	divide = 40
+	max = 0.5
+}
+
+# Diplomacy 10 gives +10 county opinion, which is deliberately in the same range as the laws: the
+# Speaker is an alternative to colony_law_homestead's +20, not a supplement that makes it redundant.
+colony_speaker_opinion = {
+	value = diplomacy
+	max = 20
+}
+
+
+# --- Pathfinder ---------------------------------------------------------------------------------
+
+# 5 at intrigue 10, against the blockers' travel_danger of 50 apiece.
+colony_pathfinder_safety = {
+	value = intrigue
+	divide = 2
+	max = 12
+}
+
+colony_pathfinder_speed = {
+	value = intrigue
+	divide = 4
+	max = 6
+}
+
+
+# --- Camp Preacher ------------------------------------------------------------------------------
+
+# At learning 10 this is 0.1, which cancels colony_government's `health = -0.1` exactly. Chosen to
+# land there rather than near there: a colonist with a decent preacher should read as living an
+# ordinary lifespan on the frontier, not a slightly-less-shortened one.
+colony_preacher_health = {
+	value = learning
+	divide = 100
+	max = 0.2
+}
+
+# 20% at learning 10, against the government's `stress_gain_mult = 0.15`.
+colony_preacher_solace = {
+	value = learning
+	divide = 50
+	max = 0.4
+}
+
+colony_preacher_piety = {
+	value = learning
+	divide = 20
+	max = 1
+}
+
+
+# --- Clearing the wilds (progress terms; root is the council owner, see the header) -------------
+
+# Percentage-task progress is applied daily at a thirtieth of these numbers and presented as a
+# monthly rate against a target of 100. So base 1 plus a martial-12 Warden's 2 is 3 a month — a
+# blocker cleared in a little under three years, against the gold-and-months the building route
+# costs. Slow enough that paying for it stays the sensible choice when there is money.
+colony_clearing_base = {
+	value = 1
+}
+
+colony_clearing_monthly_increase = {
+	value = martial
+	divide = 6
+}
+
+# The lord in the camp himself. Worth more than a point of the Warden's martial because presence is
+# the thing this whole system charges for elsewhere — see the oversee activity and
+# colony_refresh_presence_effect.
+colony_clearing_lord_present = {
+	value = 1.5
+}
+
+
+# --- Surveying (progress terms) ----------------------------------------------------------------
+
+# Faster than clearing: base 1.5 plus an intrigue-12 Pathfinder's 2.4 is a county read in a little
+# over two years. It has to beat the expedition it is meant to precede, or nobody would ever wait
+# for it.
+colony_survey_base = {
+	value = 1.5
+}
+
+colony_survey_monthly_increase = {
+	value = intrigue
+	divide = 5
+}
+
+# What a finished survey is actually worth, named rather than written twice.
+#
+# colony_settling_chance adds it when the first winters are rolled, and
+# task_survey_the_wilds_effect_desc prints it through `SCOPE.ScriptValue` so the tooltip states the
+# number the roll will really use. It exists as a value for that reason alone: a literal `add = 10`
+# in the roll plus a literal "+10" in the loc is a pair that drifts the first time either is tuned,
+# and the loc is the half nobody re-reads.
+colony_surveyed_settling_bonus = {
+	value = 10
+}

@@ -1,0 +1,31 @@
+﻿# Who may sit on a colony's council.
+#
+#   $COURT_OWNER$  the colonist whose council it is
+#
+# Character scope: the APPLICANT. This is what every position in 00_colony_council_positions.txt
+# passes to its `valid_character`, and it is written once because five copies of an eligibility rule
+# is five chances for one office to quietly accept somebody the other four refuse.
+#
+# Built out of vanilla's own two halves rather than a hand-rolled list:
+#
+#   can_be_councillor_basics_trigger   adult, sane, free, not at war with the liege, and not the
+#                                      character a travel-option event has temporarily borrowed —
+#                                      that last one is invisible from script and is exactly the
+#                                      sort of thing a hand-rolled check misses.
+#   can_be_councillor_gender_trigger   the faith's council doctrines. A generated faith can carry
+#                                      male_dominated_council or female_dominated_council like any
+#                                      other, so the frontier does not get to opt out of it.
+#
+# The spouse clause is the one addition. The colony keeps vanilla's spouse slot — Emit/GuiWriter.cs
+# hides the other five vanilla seats from a colonist and leaves that one standing — so a wife already
+# advising as councillor_spouse must not also be appointable as Quartermaster, or she holds two of the
+# colony's six seats and both sets of modifiers.
+#
+# No `is_landed`/courtier test: vanilla's own positions do not have one either. A council owner can
+# only appoint from his court and his vassals, and the engine enforces that side of it.
+colony_can_be_councillor_trigger = {
+	can_be_councillor_basics_trigger = yes
+	can_be_councillor_gender_trigger = { COURT_OWNER = $COURT_OWNER$ }
+
+	NOT = { has_council_position = councillor_spouse }
+}

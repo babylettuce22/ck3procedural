@@ -327,6 +327,46 @@ public sealed class MapConfig : CustomTypeDescriptor
     public int StartingWarsCount { get; set; } = 3;
 
     /// <summary>
+    /// Whether the world gets a men-at-arms roster of its own.
+    ///
+    /// Off, the mod ships vanilla's regiments alone and generated cultures keep whatever vanilla
+    /// cultural units their traditions happen to unlock — which is what every run before this
+    /// setting existed produced. On, each heritage fields a regiment its cultures can always
+    /// raise, martial or wealthy cultures earn an elite behind a generated innovation, and the
+    /// traditions that would have handed out vanilla's named units are kept off generated
+    /// cultures so nothing on the map is called a Huscarl. See <c>MapGen/Retinues.cs</c>.
+    /// </summary>
+    [Category("02 World State")]
+    [Description("Generate a men-at-arms roster for the world: one regiment per heritage, plus an elite "
+               + "for cultures that earn one. Vanilla's generic units stay recruitable either way.")]
+    public bool EnableGeneratedRetinues { get; set; } = true;
+
+    /// <summary>
+    /// Whether every independent ruler is handed one regiment of their own people's men-at-arms on
+    /// top of whatever the engine has already bought them.
+    ///
+    /// Off by default, because the hole this was written to fill does not exist. CK3 arms its own
+    /// start-date rulers: <c>MAA_STARTING_EXPENSE_MIN</c> and <c>_MAX</c> in
+    /// <c>common/defines</c> are 0.2 and 0.35, and the comment on them reads "Rulers at game start
+    /// will start out spending this much on men at arms". Every ruler on a generated map therefore
+    /// already opens with a roster sized to a fifth of their income — and because the generated
+    /// regiments carry an <c>ai_quality</c> of 80 to 100 against vanilla's generic roster's 0 to
+    /// 40, that spending goes on the generated units by preference. The world is not raising levies
+    /// alone for twenty years whether or not this is on.
+    ///
+    /// What it still does is *guarantee* the cultural regiment specifically, rather than leaving it
+    /// to a budget a poor count may spend elsewhere. That is a real thing to want and the reason
+    /// this is still here — but it is one free regiment per realm on top of a full engine
+    /// allocation, so it is the one switch in this system that moves the balance of the opening
+    /// rather than only its vocabulary, and it should be turned on deliberately.
+    /// </summary>
+    [Category("02 World State")]
+    [Description("Give every independent ruler one guaranteed regiment of their own people's men-at-arms "
+               + "on the start date, sized by their rank. This is on top of the roster CK3 already buys "
+               + "every start-date ruler, so it raises the opening military balance.")]
+    public bool EnableStartingRetinues { get; set; } = false;
+
+    /// <summary>
     /// How many struggles the world may carry at most.
     ///
     /// A ceiling rather than a target: a struggle is only generated where the chronicle already
@@ -367,6 +407,10 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Description("Ship the wilderness and colonisation system: unsettled counties held by nobody, obstacles that have to be cleared, and colonies that grow into real holdings. Off leaves the mod with no notion of wilderness at all.")]
     public bool EnableWilderness { get; set; } = true;
 
+    [HideInGenerator] // Hiding for now until "completed"
+    [Category("02 World State")]
+    [DisplayName("Magic")]
+    public bool EnableMagic { get; set; } = false;
 
     // =========================================================================
     // 03 Provinces
@@ -1077,6 +1121,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// It still has to be roughly right for a source that puts its coastline somewhere unusual.
     /// 19 is CK3's own. Azgaar's is 20 on its 0-100 scale, which is 51 here.
     /// </summary>
+    [AdvancedSetting]
     [Category("7 Height scale")]
     [Description("Where the source heightmap puts sea level, on the 0-255 scale. CK3's own is 19; This decides only which pixels count as water — the land scale is anchored on a detected floor, so this no longer has to be exactly right for the land side to come out correct.")]
     public double SourceSeaLevel { get; set; } = 19;
@@ -1282,7 +1327,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// </summary>
     [Category("7 Height scale")]
     [Description("What the highest land pixel becomes, on the 0-255 scale. 191 is vanilla's own highest; vanilla never uses the top of the range. Raise towards 255 for a more dramatic map — this is the knob that decides how flat the result reads.")]
-    public double LandTop { get; set; } = 191;
+    public double LandTop { get; set; } = 225;
 
     /// <summary>
     /// How far the terrain CK3 draws may depart — in *either* direction — from the heightmap it
@@ -1577,15 +1622,23 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// <summary>Counties a generated culture covers on average. Lower makes a more fragmented world.</summary>
     [Category("10 Cultures and faiths")]
     [Description("Counties per generated culture. Vanilla averages about 20; lower values make a more fragmented, more polyglot world.")]
+    [AzgaarIncompat("Cultures come from the export — one per people it drew, over the ground it drew them " +
+                    "on. How many counties each covers is then a fact about the map rather than a setting.")]
     public double CountiesPerCulture { get; set; } = 18;
 
     /// <summary>
     /// Cultures sharing one heritage and one language. This is what decides how related neighbours
     /// are: CK3's acceptance, hybridisation and divergence all key off shared heritage, so a world
     /// of one-culture heritages is a world where nobody can ever get along with anybody.
+    ///
+    /// Still applies to an Azgaar import, unlike the culture count above it, and the difference is
+    /// the point: an export states which peoples exist and does not state which of them are
+    /// relatives. See <see cref="MapGen.AzgaarFamilies"/> — the export's own signals are read first,
+    /// and this is only the target whatever they left ungrouped is grouped towards. Set it to 1 to
+    /// switch that pass off and take the export exactly as it stands.
     /// </summary>
     [Category("10 Cultures and faiths")]
-    [Description("Cultures sharing one heritage and language. Higher values give large related families like vanilla's Frankish or North Germanic groups; 1 gives a world where no two cultures are relatives.")]
+    [Description("Cultures sharing one heritage and language. Higher values give large related families like vanilla's Frankish or North Germanic groups; 1 gives a world where no two cultures are relatives. On an Azgaar import this groups only the peoples the export left ungrouped, after its own ancestry and name bases have been read.")]
     public double CulturesPerHeritage { get; set; } = 2;
 
     public enum CultureLookTheme

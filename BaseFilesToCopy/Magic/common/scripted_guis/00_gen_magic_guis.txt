@@ -1,0 +1,66 @@
+﻿# The bridge from the script gate to the GUI gate.
+#
+# A .gui file cannot call a scripted trigger. `is_shown` on a scripted_gui is the only way to ask a
+# script question from a widget, and it is the pattern vanilla uses for exactly this — see
+# common/scripted_guis/knight_permissions_sguis.txt, whose entries are is_shown and nothing else.
+#
+# A widget asks with:
+#
+#     visible = "[GetScriptedGui( 'gen_magic_ui' ).IsShown( GetPlayer.MakeScope )]"
+#
+# and gets the same answer the decisions get, from the same trigger, so a panel cannot be visible to
+# somebody the spells are hidden from. That equivalence is the point of this file: the requirement
+# is that a non-practitioner sees no sign the system exists, and a requirement enforced in two
+# places with two conditions is a requirement enforced in neither.
+#
+# None of these has an `effect`. They answer questions; they do not do anything. A scripted_gui with
+# an effect is a button, and buttons that cast belong to the generated half, which knows what its
+# spells are called.
+
+
+# THE GATE, GUI side. Draw anything on the player's own character?
+#
+# False for everyone in a world with no magic, and false for every non-practitioner in a world that
+# has it. Both halves matter: the first is what keeps the mod silent when these files ship ahead of
+# any generated content, which is the state they are in today.
+gen_magic_ui = {
+	is_shown = {
+		gen_magic_practitioner_trigger = yes
+	}
+}
+
+# Draw anything on somebody ELSE's character?
+#
+# Deliberately a different question. In a world that conceals its practitioners, having magic and
+# being seen to have magic are not the same fact, and a chip drawn on a courtier's portrait would
+# hand the player a list of every hidden practitioner in the realm for free — turning the concealment
+# axis, which is supposed to be the whole tension of those worlds, into a UI convenience.
+gen_magic_ui_other = {
+	is_shown = {
+		gen_magic_visible_practitioner_trigger = yes
+	}
+}
+
+# Draw the offer to someone standing at the door?
+#
+# The waiting room is its own state. A latent character is not a practitioner and must not see a
+# spellbook, but showing them nothing at all makes the world's access rule undiscoverable — under
+# Born or Suffered, nothing the player does causes entry, so the only way they can learn the rule is
+# to be told they are eligible.
+gen_magic_ui_latent = {
+	is_shown = {
+		gen_magic_latent_trigger = yes
+	}
+}
+
+# Draw a world-level readout — the ledger, a phase, an omen?
+#
+# The one gate that is not about the character looking at it. Pressure is a fact about the world and
+# a non-practitioner living in a world being spoiled by other people's casting has every reason to
+# see it; that is what makes the price land on somebody other than the caster. Whether any given
+# world exposes it is the generated half's decision, but the question it asks is this one.
+gen_magic_ui_world = {
+	is_shown = {
+		gen_magic_active_trigger = yes
+	}
+}

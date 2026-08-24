@@ -274,18 +274,71 @@ public sealed class AzgaarFeature
     [JsonPropertyName("area")] public double Area { get; set; }
 }
 
+/// <summary>
+/// The biome table, in the columnar shape older Azgaar builds write it: parallel arrays indexed by
+/// biome id. Newer builds write the same table as an array of objects instead — see
+/// <see cref="AzgaarBiomeEntry"/> and <see cref="From"/>, which folds that shape into this one so
+/// there is a single thing to read.
+/// </summary>
 public sealed class AzgaarBiomes
 {
     [JsonPropertyName("i")] public int[] I { get; set; } = [];
     [JsonPropertyName("name")] public string[] Name { get; set; } = [];
     [JsonPropertyName("color")] public string[] Color { get; set; } = [];
     [JsonPropertyName("habitability")] public int[] Habitability { get; set; } = [];
+
+    /// <summary>
+    /// The same table built from the row-per-biome shape.
+    ///
+    /// Indexed by each entry's own <c>i</c> rather than by its position in the array, because the
+    /// biome editor can leave gaps in the ids and <c>cells[].biome</c> stores the id, not the row.
+    /// </summary>
+    public static AzgaarBiomes From(IReadOnlyList<AzgaarBiomeEntry> rows)
+    {
+        int count = 0;
+        foreach (var row in rows) count = Math.Max(count, row.I + 1);
+
+        var table = new AzgaarBiomes
+        {
+            I = new int[count],
+            Name = new string[count],
+            Color = new string[count],
+            Habitability = new int[count],
+        };
+
+        for (int i = 0; i < count; i++) { table.I[i] = i; table.Name[i] = ""; table.Color[i] = ""; }
+
+        foreach (var row in rows)
+        {
+            if (row.I < 0 || row.I >= count) continue;
+            table.Name[row.I] = row.Name ?? "";
+            table.Color[row.I] = row.Color ?? "";
+            table.Habitability[row.I] = row.Habitability;
+        }
+
+        return table;
+    }
+}
+
+/// <summary>One row of the biome table, as newer Azgaar builds write it.</summary>
+public sealed class AzgaarBiomeEntry
+{
+    [JsonPropertyName("i")] public int I { get; set; }
+    [JsonPropertyName("name")] public string? Name { get; set; }
+    [JsonPropertyName("color")] public string? Color { get; set; }
+    [JsonPropertyName("habitability")] public int Habitability { get; set; }
 }
 
 /// <summary>
-/// A culture. <see cref="Origins"/> is the field worth the whole import: it is the ancestry DAG
-/// Azgaar draws its culture tree from, and it maps directly onto the heritage-then-culture nesting
-/// our own generator has to invent from scratch.
+/// A culture.
+///
+/// <see cref="Origins"/> is the ancestry DAG Azgaar draws its culture tree from, and where an author
+/// has drawn one by hand it maps directly onto the heritage-then-culture nesting our own generator
+/// otherwise invents. It is not, however, the field the import can lean on: Azgaar's *generator*
+/// writes <c>[0]</c> — descended from Wildlands — for every culture it makes, so on a generated
+/// export the DAG is empty and says only that nothing is related to anything.
+/// <see cref="MapGen.AzgaarFamilies"/> is where that is handled, and <see cref="Base"/> is what
+/// carries the grouping when this does not.
 /// </summary>
 public sealed class AzgaarCulture
 {
