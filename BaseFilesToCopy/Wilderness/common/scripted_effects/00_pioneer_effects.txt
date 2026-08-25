@@ -217,9 +217,13 @@ pioneer_clear_stake_effect = {
 # other, it is a foothold -- one settlement, no vassals, the frontier modifiers, and the whole of
 # the existing promotion game still ahead of him. Act two is the mechanic that was already there.
 pioneer_success_effect = {
+	# `this` and never `root`, all the way down. This effect runs from the activity's on_complete,
+	# inside a `scope:host = { }` block -- and a scope block changes `this`, not `root`, so root in
+	# here is the ACTIVITY. `COLONIZER = root` handed a county to an activity once. Scripted effects
+	# run in their caller's scope, so `this` at this level is reliably the host.
 	colonize_county_effect = {
 		COUNTY = scope:stake
-		COLONIZER = root
+		COLONIZER = this
 	}
 
 	# Guarded, because a stake can outlive the condition that started it: a pioneer who won land
@@ -230,7 +234,7 @@ pioneer_success_effect = {
 	# the right answer and needs no branch of its own.
 	if = {
 		limit = { is_landless_adventurer = yes }
-		destroy_laamp_effect = { ADVENTURER = root }
+		destroy_laamp_effect = { ADVENTURER = this }
 	}
 
 	colonization_make_colonist_effect = yes

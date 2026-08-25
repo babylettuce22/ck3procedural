@@ -181,6 +181,12 @@ public static class ContentWriter
             foreach (var county in wilderness.Counties) faiths.ByCounty[county] = unsettledFaith;
         }
 
+        // Who fights and who inherits, settled here because it is the first point at which both
+        // halves of the question exist: the culture was drawn before any faith did, and the answer
+        // has to be the same one its people's religion gives. See MapGen/Cultures.AlignGender.
+        Core.Stage.Time("gender", () => MapGen.Cultures.AlignGender(cultures, faiths, vocabulary,
+            new Rng(cfg.Seed ^ 0x6E1D)));
+
         // Farmland and oases, placed from settlement and drainage rather than from climate. Runs
         // here, after every social layer has been decided, so nothing reads a terrain that only
         // exists *because* of the settlement: development, government, culture and faith all see
@@ -252,7 +258,7 @@ public static class ContentWriter
         Core.Stage.Time("locators", () => LocatorWriter.WriteAll(modDir, gameDir, provinces, order, landCount, provinceElevation, cfg));
         Core.Stage.Time("casus belli", () => CasusBelliWriter.WriteAll(modDir, gameDir, cfg));
         Core.Stage.Time("frontend", () => FrontendWriter.WriteFrontend(modDir, gameDir));
-        Core.Stage.Time("GUI changes", () => GuiWriter.WriteAll(modDir, gameDir, cfg));
+        Core.Stage.Time("GUI changes", () => GuiWriter.WriteAll(modDir, gameDir));
 
         if (cfg.EnableFantasyEthnicities && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly)
         {
@@ -330,11 +336,15 @@ public static class ContentWriter
                     Core.Stage.Time("starting retinues",
                         () => RetinueWriter.WriteStartingRegiments(modDir, cfg, retinues, rulers));
 
+                // Reads prehistory for the same reason the bookmarks do: an heirloom needs the
+                // dead man it was made for and the house it was taken from, and both were decided
+                // a few lines up. Without them every artifact ships with an empty history panel.
                 var artifacts = MapGen.ArtifactMap.Build(
-                    counties, cultures, faiths, realms, wilderness, new Rng(cfg.Seed ^ 0x4A1F));
+                    counties, cultures, faiths, realms, wilderness, prehistory, cfg,
+                    new Rng(cfg.Seed ^ 0x4A1F));
 
                 ArtifactWriter.WriteTemplates(modDir);
-                ArtifactWriter.WriteModifiers(modDir);
+                ArtifactWriter.WriteModifiers(modDir, artifacts);
                 ArtifactWriter.WriteLocalisation(modDir, artifacts);
                 ArtifactWriter.WriteOnGameStart(modDir, artifacts);
 
@@ -383,7 +393,6 @@ public static class ContentWriter
         if (cfg.EnableWilderness) sets.Add(StaticFileWriter.Wilderness);
         if (cfg.EnableFantasyEthnicities && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly)
             sets.Add(StaticFileWriter.Fantasy);
-        if (cfg.EnableMagic) sets.Add(StaticFileWriter.Magic);
         Core.Stage.Time("static files", () => StaticFileWriter.WriteAll(modDir, sets, runStarted));
 
         // After the write rather than during it: cultures and faiths both gain their unsettled

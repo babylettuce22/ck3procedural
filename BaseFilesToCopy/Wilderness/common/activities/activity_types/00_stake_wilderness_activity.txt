@@ -145,8 +145,38 @@ activity_stake_wilderness = {
 
 	# Four winters stood through. The last phase's timer runs out, the activity completes, and this
 	# is the only path to the good ending.
+	#
+	# ---- The work runs HERE and the event only narrates, and the placement is the whole fix ----
+	#
+	# The engine finishes an activity synchronously: on_complete runs, then the teardown books every
+	# attendee's journey home -- against the home they have at that instant. `trigger_event` only
+	# QUEUES an event, so work done in the event lands after the trip is planned even when it sits in
+	# the event's `immediate`. That is not a guess; it shipped that way twice. In the option, the
+	# reward waited on a click. In the immediate, the capital still changed one tick after the engine
+	# had computed "home", and a man who had just won a county was walked back to his old camp site
+	# and then walked back to his county.
+	#
+	# Running the effect here puts the land transfer, the government change and set_realm_capital
+	# ahead of the teardown, so the journey home the engine books is a journey to the ground he is
+	# already standing on.
+	#
+	# scope:stake is saved here rather than in the event because pioneer_success_effect both needs it
+	# and destroys the variable it reads from; saved scopes ride along into the triggered event,
+	# where the text still names the place. The has_variable guard mirrors the one every other reader
+	# of pioneer_stake carries -- if something already cleared the run, completing quietly beats
+	# colonising an unset scope.
 	on_complete = {
-		scope:host = { trigger_event = wilderness_pioneer.0020 }
+		scope:host = {
+			if = {
+				limit = { has_variable = pioneer_stake }
+
+				var:pioneer_stake = { save_scope_as = stake }
+
+				pioneer_success_effect = yes
+
+				trigger_event = wilderness_pioneer.0020
+			}
+		}
 	}
 
 	# Every other way it can end. The vanilla invalidation effects first, so the player gets the

@@ -240,8 +240,10 @@ public sealed class ChronicleMap
             if (wonderAt.TryGetValue(county, out var wonder))
                 Wonder(map, county, wonder, cfg, rng);
 
+            // The best piece in the strongbox, not the first one out of it. Rarity now varies
+            // within a ruler's holdings, and the one worth a line of history is the good one.
             if (artifacts.ByCounty.TryGetValue(county, out var relics) && relics.Count > 0)
-                Relic(map, county, relics[0], cfg, rng);
+                Relic(map, county, relics.MaxBy(r => r.Rarity)!, rng);
         }
 
         // Duchies and up get an opening line of their own. Everything else they show is borrowed
@@ -481,17 +483,22 @@ public sealed class ChronicleMap
         });
     }
 
+    /// <summary>
+    /// The relic line, dated from the artifact rather than from a roll of its own.
+    ///
+    /// It used to pick its own year, so the lore panel would announce a treasure arriving in a year
+    /// the artifact's own history panel knew nothing about. The artifact decides when it was made;
+    /// this reports it.
+    /// </summary>
     private static void Relic(
-        ChronicleMap map, Title county, GeneratedArtifact relic, MapConfig cfg, Rng rng)
+        ChronicleMap map, Title county, GeneratedArtifact relic, Rng rng)
     {
-        int year = cfg.StartYear - rng.Int(30, 260);
-
         map.Add(new ChronicleEvent
         {
             Kind = ChronicleKind.Relic,
-            Year = year,
+            Year = relic.CreatedYear,
             Subject = county,
-            Text = Fill(rng.Pick(Relics), county, string.Empty, year, relic.LocalizedName),
+            Text = Fill(rng.Pick(Relics), county, string.Empty, relic.CreatedYear, relic.LocalizedName),
         });
     }
 

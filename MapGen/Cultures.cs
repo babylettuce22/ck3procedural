@@ -799,6 +799,101 @@ public static class Cultures
         return Choose(preferred, vocab.Ethos, rng);
     }
 
+    /// <summary>
+    /// The two inheritance traditions CK3 ships that override a faith's gender doctrine. There is
+    /// no male-only counterpart to find: male is the unstated default, so the male end of the scale
+    /// is expressed by carrying neither of these.
+    /// </summary>
+    private const string FemaleInheritance = "tradition_female_only_inheritance";
+    private const string EqualInheritance = "tradition_equal_inheritance";
+
+    /// <summary>
+    /// Settles who fights and who inherits, once the faiths exist to be agreed with.
+    ///
+    /// Runs as its own pass rather than inside <see cref="Create"/> because of the order the world
+    /// is built in: cultures are drawn before faiths, so at the moment a culture picks its martial
+    /// custom there is no doctrine on the same ground to read. Deciding it twice — once blind and
+    /// once informed — is cheaper than reordering two stages that each depend on the other for
+    /// something else, and the blind roll is still what a culture with no faith keeps.
+    ///
+    /// A bias rather than a rule. A people whose faith bars women from land but who ride to war
+    /// beside them is a real thing to find on a map, and a table that never produced one would make
+    /// every culture a restatement of its religion.
+    /// </summary>
+    public static void AlignGender(CultureMap cultures, FaithMap faiths, VanillaVocabulary vocab,
+        Rng rng)
+    {
+        // Which way each culture's people actually pray, by weight of counties rather than by
+        // whichever county came up first: a culture spread across a religious border takes the
+        // answer most of it lives under.
+        var votes = new Dictionary<Culture, Dictionary<string, int>>();
+
+        foreach (var (county, culture) in cultures.ByCounty)
+        {
+            if (!faiths.ByCounty.TryGetValue(county, out var faith)) continue;
+
+            string gender = Faiths.GenderOf(faith);
+            if (!votes.TryGetValue(culture, out var tally)) votes[culture] = tally = [];
+            tally[gender] = tally.GetValueOrDefault(gender) + 1;
+        }
+
+        foreach (var culture in cultures.Cultures)
+        {
+            string gender = votes.TryGetValue(culture, out var tally) && tally.Count > 0
+                ? tally.OrderByDescending(kv => kv.Value)
+                       .ThenBy(kv => kv.Key, StringComparer.Ordinal).First().Key
+                : "doctrine_gender_male_dominated";
+
+            double roll = rng.NextDouble();
+
+            string custom = gender switch
+            {
+                "doctrine_gender_female_dominated" => roll switch
+                {
+                    < 0.72 => "martial_custom_female_only",
+                    < 0.95 => "martial_custom_equal",
+                    _ => "martial_custom_male_only",
+                },
+                "doctrine_gender_equal" => roll switch
+                {
+                    < 0.60 => "martial_custom_equal",
+                    < 0.85 => "martial_custom_male_only",
+                    _ => "martial_custom_female_only",
+                },
+                _ => roll switch
+                {
+                    < 0.72 => "martial_custom_male_only",
+                    < 0.95 => "martial_custom_equal",
+                    _ => "martial_custom_female_only",
+                },
+            };
+
+            culture.MartialCustom = Choose([custom], vocab.MartialCustoms, rng);
+
+            // Both are stripped before either is added back. They set contradictory parameters —
+            // female_only_inheritance beside gender_equal_inheritance — and the terrain pass that
+            // filled this list had no reason not to hand a culture both.
+            culture.Traditions.Remove(FemaleInheritance);
+            culture.Traditions.Remove(EqualInheritance);
+
+            // Only ever the tradition the faith would also accept. A culture that hands its land to
+            // daughters under a faith that bars women from holding it is not a contradiction the
+            // game resolves gracefully — the tradition wins the succession and the doctrine goes on
+            // docking everyone's opinion of the woman who won it.
+            string? tradition = culture.MartialCustom switch
+            {
+                "martial_custom_female_only" when gender != "doctrine_gender_male_dominated"
+                    => rng.Chance(0.80) ? FemaleInheritance : null,
+                "martial_custom_equal" when gender != "doctrine_gender_male_dominated"
+                    => rng.Chance(0.60) ? EqualInheritance : null,
+                _ => gender == "doctrine_gender_equal" && rng.Chance(0.35) ? EqualInheritance : null,
+            };
+
+            if (tradition is not null && vocab.Traditions.Contains(tradition))
+                culture.Traditions.Add(tradition);
+        }
+    }
+
     private static string PickMartialCustom(VanillaVocabulary vocab, Rng rng)
     {
         double roll = rng.NextDouble();

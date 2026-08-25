@@ -242,8 +242,12 @@ wilderness_colonization.0029 = {
 
 		add_prestige = medium_prestige_loss
 
+		# The CORE failure effect, not the full one, and the difference is the whole option: the
+		# full effect rolls 35% death on the expedition leader — who is root here — under a button
+		# tooltipped as guaranteed survival, and then fires the generic 0013 window over news this
+		# event has already delivered. See the note on colony_settling_failure_core_effect.
 		hidden_effect = {
-			colony_settling_failure_effect = yes
+			colony_settling_failure_core_effect = yes
 		}
 
 		stress_impact = {
@@ -273,7 +277,8 @@ wilderness_colonization.0029 = {
 				}
 				increase_wounds_effect = { REASON = fight }
 				add_trait = ill
-				colony_settling_failure_effect = yes
+				# Core, not full: the duel already decided root's fate, and 0013 would repeat this.
+				colony_settling_failure_core_effect = yes
 			}
 			30 = {
 				desc = wilderness_starvation_death_desc
@@ -281,7 +286,7 @@ wilderness_colonization.0029 = {
 					value = scope:duel_value
 					multiplier = -3.0
 				}
-				colony_settling_failure_effect = yes
+				colony_settling_failure_core_effect = yes
 				death = {
 					death_reason = death_accident
 				}
@@ -423,14 +428,12 @@ wilderness_colonization.0026 = {
 		custom_tooltip = colonize_relief_column_breakdown_tt
 
 		hidden_effect = {
-			colony_road_roll_effect = { CHANCE = colony_relief_column_chance }
-
-			if = {
-				limit = { has_variable = road_roll_took }
-				scope:colony = { change_variable = { name = expedition_fortune add = 20 } }
-			}
-			else = {
-				scope:colony = { change_variable = { name = expedition_fortune add = 2 } }
+			colony_road_gamble_effect = {
+				CHANCE = colony_relief_column_chance
+				WIN = 20
+				LOSS = 2
+				TITLE_GOOD = colony_road_toast_relief_good
+				TITLE_BAD = colony_road_toast_relief_bad
 			}
 		}
 
@@ -448,14 +451,12 @@ wilderness_colonization.0026 = {
 		custom_tooltip = colonize_forage_breakdown_tt
 
 		hidden_effect = {
-			colony_road_roll_effect = { CHANCE = colony_self_rule_chance }
-
-			if = {
-				limit = { has_variable = road_roll_took }
-				scope:colony = { change_variable = { name = expedition_fortune add = 12 } }
-			}
-			else = {
-				scope:colony = { change_variable = { name = expedition_fortune add = -8 } }
+			colony_road_gamble_effect = {
+				CHANCE = colony_self_rule_chance
+				WIN = 12
+				LOSS = -8
+				TITLE_GOOD = colony_road_toast_forage_good
+				TITLE_BAD = colony_road_toast_forage_bad
 			}
 		}
 
@@ -474,14 +475,12 @@ wilderness_colonization.0026 = {
 		custom_tooltip = colonize_make_do_breakdown_tt
 
 		hidden_effect = {
-			colony_road_roll_effect = { CHANCE = colony_make_do_chance }
-
-			if = {
-				limit = { has_variable = road_roll_took }
-				scope:colony = { change_variable = { name = expedition_fortune add = 5 } }
-			}
-			else = {
-				scope:colony = { change_variable = { name = expedition_fortune add = -18 } }
+			colony_road_gamble_effect = {
+				CHANCE = colony_make_do_chance
+				WIN = 5
+				LOSS = -18
+				TITLE_GOOD = colony_road_toast_make_do_good
+				TITLE_BAD = colony_road_toast_make_do_bad
 			}
 		}
 
@@ -530,14 +529,17 @@ wilderness_colonization.0027 = {
 		custom_tooltip = colonize_authority_breakdown_tt
 
 		hidden_effect = {
-			colony_road_roll_effect = { CHANCE = colony_authority_chance }
-
-			if = {
-				limit = { has_variable = road_roll_took }
-				scope:colony = { change_variable = { name = expedition_fortune add = 14 } }
+			colony_road_gamble_effect = {
+				CHANCE = colony_authority_chance
+				WIN = 14
+				LOSS = -10
+				TITLE_GOOD = colony_road_toast_authority_good
+				TITLE_BAD = colony_road_toast_authority_bad
 			}
-			else = {
-				scope:colony = { change_variable = { name = expedition_fortune add = -10 } }
+
+			# road_roll_took survives the wrapper for exactly this: the side effect re-branches.
+			if = {
+				limit = { NOT = { has_variable = road_roll_took } }
 				add_stress = minor_stress_gain
 			}
 		}
@@ -567,14 +569,12 @@ wilderness_colonization.0027 = {
 				set_variable = { name = colony_led_by_soldier }
 			}
 
-			colony_road_roll_effect = { CHANCE = colony_handover_chance }
-
-			if = {
-				limit = { has_variable = road_roll_took }
-				scope:colony = { change_variable = { name = expedition_fortune add = 8 } }
-			}
-			else = {
-				scope:colony = { change_variable = { name = expedition_fortune add = -12 } }
+			colony_road_gamble_effect = {
+				CHANCE = colony_handover_chance
+				WIN = 8
+				LOSS = -12
+				TITLE_GOOD = colony_road_toast_handover_good
+				TITLE_BAD = colony_road_toast_handover_bad
 			}
 		}
 
@@ -591,14 +591,12 @@ wilderness_colonization.0027 = {
 		custom_tooltip = colonize_self_rule_breakdown_tt
 
 		hidden_effect = {
-			colony_road_roll_effect = { CHANCE = colony_self_rule_chance }
-
-			if = {
-				limit = { has_variable = road_roll_took }
-				scope:colony = { change_variable = { name = expedition_fortune add = 6 } }
-			}
-			else = {
-				scope:colony = { change_variable = { name = expedition_fortune add = -14 } }
+			colony_road_gamble_effect = {
+				CHANCE = colony_self_rule_chance
+				WIN = 6
+				LOSS = -14
+				TITLE_GOOD = colony_road_toast_self_rule_good
+				TITLE_BAD = colony_road_toast_self_rule_bad
 			}
 		}
 
@@ -656,14 +654,12 @@ wilderness_colonization.0028 = {
 		hidden_effect = {
 			scope:colony = { set_variable = { name = settlers_were_promised } }
 
-			colony_road_roll_effect = { CHANCE = colony_promise_chance }
-
-			if = {
-				limit = { has_variable = road_roll_took }
-				scope:colony = { change_variable = { name = expedition_fortune add = 18 } }
-			}
-			else = {
-				scope:colony = { change_variable = { name = expedition_fortune add = 3 } }
+			colony_road_gamble_effect = {
+				CHANCE = colony_promise_chance
+				WIN = 18
+				LOSS = 3
+				TITLE_GOOD = colony_road_toast_promise_good
+				TITLE_BAD = colony_road_toast_promise_bad
 			}
 		}
 
@@ -680,14 +676,12 @@ wilderness_colonization.0028 = {
 		custom_tooltip = colonize_hold_them_tt
 
 		hidden_effect = {
-			colony_road_roll_effect = { CHANCE = colony_hold_them_chance }
-
-			if = {
-				limit = { has_variable = road_roll_took }
-				scope:colony = { change_variable = { name = expedition_fortune add = -2 } }
-			}
-			else = {
-				scope:colony = { change_variable = { name = expedition_fortune add = -16 } }
+			colony_road_gamble_effect = {
+				CHANCE = colony_hold_them_chance
+				WIN = -2
+				LOSS = -16
+				TITLE_GOOD = colony_road_toast_hold_good
+				TITLE_BAD = colony_road_toast_hold_bad
 			}
 		}
 
@@ -756,15 +750,12 @@ wilderness_colonization.0016 = {
 		custom_tooltip = colonize_relief_column_breakdown_tt
 
 		hidden_effect = {
-			colony_road_roll_effect = { CHANCE = colony_relief_column_chance }
-
-			if = {
-				limit = { has_variable = road_roll_took }
-				scope:colony = { change_variable = { name = expedition_fortune  add = 20 } }
-			}
-			else = {
-				# Late arrival
-				scope:colony = { change_variable = { name = expedition_fortune  add = 2 } }
+			colony_road_gamble_effect = {
+				CHANCE = colony_relief_column_chance
+				WIN = 20
+				LOSS = 2  # Late arrival
+				TITLE_GOOD = colony_road_toast_relief_good
+				TITLE_BAD = colony_road_toast_relief_bad
 			}
 		}
 
@@ -792,14 +783,12 @@ wilderness_colonization.0016 = {
 
 		hidden_effect = {
 			# Evaluated against party's martial / leader prowess
-			colony_road_roll_effect = { CHANCE = colony_self_rule_chance }
-
-			if = {
-				limit = { has_variable = road_roll_took }
-				scope:colony = { change_variable = { name = expedition_fortune  add = 12 } }
-			}
-			else = {
-				scope:colony = { change_variable = { name = expedition_fortune  add = -8 } }
+			colony_road_gamble_effect = {
+				CHANCE = colony_self_rule_chance
+				WIN = 12
+				LOSS = -8
+				TITLE_GOOD = colony_road_toast_forage_good
+				TITLE_BAD = colony_road_toast_forage_bad
 			}
 		}
 
@@ -825,14 +814,12 @@ wilderness_colonization.0016 = {
 		custom_tooltip = colonize_make_do_breakdown_tt
 
 		hidden_effect = {
-			colony_road_roll_effect = { CHANCE = colony_make_do_chance }
-
-			if = {
-				limit = { has_variable = road_roll_took }
-				scope:colony = { change_variable = { name = expedition_fortune  add = 5 } }
-			}
-			else = {
-				scope:colony = { change_variable = { name = expedition_fortune  add = -18 } }
+			colony_road_gamble_effect = {
+				CHANCE = colony_make_do_chance
+				WIN = 5
+				LOSS = -18
+				TITLE_GOOD = colony_road_toast_make_do_good
+				TITLE_BAD = colony_road_toast_make_do_bad
 			}
 		}
 
@@ -928,19 +915,21 @@ wilderness_colonization.0017 = {
 		custom_tooltip = colonize_authority_breakdown_tt
 
 		hidden_effect = {
-			colony_road_roll_effect = { CHANCE = colony_authority_chance }
-
-			if = {
-				limit = { has_variable = road_roll_took }
-				scope:colony = { change_variable = { name = expedition_fortune  add = 14 } }
+			colony_road_gamble_effect = {
+				CHANCE = colony_authority_chance
+				WIN = 14
+				LOSS = -10
+				TITLE_GOOD = colony_road_toast_authority_good
+				TITLE_BAD = colony_road_toast_authority_bad
 			}
-			else = {
-				scope:colony = { change_variable = { name = expedition_fortune  add = -10 } }
 
-				if = {
-					limit = { exists = scope:expedition_leader }
-					scope:expedition_leader = { add_stress = minor_stress_gain }
+			# road_roll_took survives the wrapper for exactly this re-branch.
+			if = {
+				limit = {
+					NOT = { has_variable = road_roll_took }
+					exists = scope:expedition_leader
 				}
+				scope:expedition_leader = { add_stress = minor_stress_gain }
 			}
 		}
 
@@ -979,16 +968,17 @@ wilderness_colonization.0017 = {
 				set_variable = { name = colony_led_by_soldier }
 			}
 
-			colony_road_roll_effect = { CHANCE = colony_handover_chance }
-
-			if = {
-				limit = { has_variable = road_roll_took }
-				scope:colony = { change_variable = { name = expedition_fortune  add = 8 } }
+			colony_road_gamble_effect = {
+				CHANCE = colony_handover_chance
+				WIN = 8
+				LOSS = -12
+				TITLE_GOOD = colony_road_toast_handover_good
+				TITLE_BAD = colony_road_toast_handover_bad
 			}
-			else = {
-				scope:colony = { change_variable = { name = expedition_fortune  add = -12 } }
 
-				# Disgraced former leader resentment
+			# Disgraced former leader resentment, on the failed handover only.
+			if = {
+				limit = { NOT = { has_variable = road_roll_took } }
 				scope:expedition_leader = {
 					add_stress = medium_stress_gain
 					add_opinion = {
@@ -1027,18 +1017,21 @@ wilderness_colonization.0017 = {
 		custom_tooltip = colonize_ride_after_breakdown_tt
 
 		hidden_effect = {
-			colony_road_roll_effect = { CHANCE = colony_handover_chance }
+			colony_road_gamble_effect = {
+				CHANCE = colony_handover_chance
+				WIN = 10
+				LOSS = -6
+				TITLE_GOOD = colony_road_toast_handover_good
+				TITLE_BAD = colony_road_toast_handover_bad
+			}
 
+			# He only takes command if the column accepts him.
 			if = {
 				limit = { has_variable = road_roll_took }
 				scope:colony = {
 					set_variable = { name = colony_leader  value = scope:expedition_soldier }
 					set_variable = { name = colony_led_by_soldier }
-					change_variable = { name = expedition_fortune  add = 10 }
 				}
-			}
-			else = {
-				scope:colony = { change_variable = { name = expedition_fortune  add = -6 } }
 			}
 		}
 
@@ -1067,14 +1060,12 @@ wilderness_colonization.0017 = {
 		custom_tooltip = colonize_self_rule_breakdown_tt
 
 		hidden_effect = {
-			colony_road_roll_effect = { CHANCE = colony_self_rule_chance }
-
-			if = {
-				limit = { has_variable = road_roll_took }
-				scope:colony = { change_variable = { name = expedition_fortune  add = 6 } }
-			}
-			else = {
-				scope:colony = { change_variable = { name = expedition_fortune  add = -14 } }
+			colony_road_gamble_effect = {
+				CHANCE = colony_self_rule_chance
+				WIN = 6
+				LOSS = -14
+				TITLE_GOOD = colony_road_toast_self_rule_good
+				TITLE_BAD = colony_road_toast_self_rule_bad
 			}
 		}
 
@@ -1132,15 +1123,13 @@ wilderness_colonization.0018 = {
 		hidden_effect = {
 			scope:colony = { set_variable = { name = settlers_were_promised } }
 
-			colony_road_roll_effect = { CHANCE = colony_promise_chance }
-
-			if = {
-				limit = { has_variable = road_roll_took }
-				scope:colony = { change_variable = { name = expedition_fortune  add = 18 } }
-			}
-			else = {
+			colony_road_gamble_effect = {
+				CHANCE = colony_promise_chance
+				WIN = 18
 				# They take the promise and go on walking, which is not the same as being moved by it.
-				scope:colony = { change_variable = { name = expedition_fortune  add = 3 } }
+				LOSS = 3
+				TITLE_GOOD = colony_road_toast_promise_good
+				TITLE_BAD = colony_road_toast_promise_bad
 			}
 		}
 
@@ -1158,15 +1147,13 @@ wilderness_colonization.0018 = {
 		custom_tooltip = colonize_hold_them_tt
 
 		hidden_effect = {
-			colony_road_roll_effect = { CHANCE = colony_hold_them_chance }
-
-			if = {
-				limit = { has_variable = road_roll_took }
-				scope:colony = { change_variable = { name = expedition_fortune  add = -2 } }
-			}
-			else = {
+			colony_road_gamble_effect = {
+				CHANCE = colony_hold_them_chance
+				WIN = -2
 				# Some of them go home. The ones who stay know exactly how far they are from anywhere.
-				scope:colony = { change_variable = { name = expedition_fortune  add = -16 } }
+				LOSS = -16
+				TITLE_GOOD = colony_road_toast_hold_good
+				TITLE_BAD = colony_road_toast_hold_bad
 			}
 		}
 
@@ -1771,12 +1758,34 @@ wilderness_colonization.0025 = {
 			}
 		}
 		else = {
+			# A face for the frontier delegation. Culture and faith come from the COLONY, not the
+			# court — this is one of the settlers, and without the fields create_character rolls
+			# them from the liege's location, which can match neither side of the conversation.
 			create_character = {
-						location = root.location
-						age = { 50 65 }
-						gender_female_chance = 30
-						save_scope_as = settler_elder
-					}
+				location = root.location
+				age = { 50 65 }
+				gender_female_chance = 30
+				culture = scope:finished_colony.culture
+				faith = scope:finished_colony.faith
+				save_scope_as = settler_elder
+			}
+		}
+	}
+
+	# The created elder is a prop and goes home when the scene ends; without this, every empty-court
+	# firing left a stray character in the pool forever. The courtier branch is untouched — a real
+	# courtier is a courtier of root, and the guard skips them.
+	after = {
+		if = {
+			limit = {
+				exists = scope:settler_elder
+				scope:settler_elder = { NOT = { is_courtier_of = root } }
+			}
+			hidden_effect = {
+				scope:settler_elder = {
+					death = { death_reason = death_vanished }
+				}
+			}
 		}
 	}
 
@@ -2077,7 +2086,18 @@ wilderness_colonization.0050 = {
 		add_internal_flag = special
 		highlight_portrait = scope:petitioning_colonist
 
-		trigger = { gold >= promote_colony_cost }
+		# The gold gate, plus staleness guards. A character event can sit unread for months, and in
+		# that time the colony can promote itself (the colonist found the gold), change hands, or
+		# be lost — after which "fund the promotion" would bill the liege full price to promote a
+		# county that is already a castle, re-firing the ceremony and founder logic at whoever
+		# holds it now. If both funding options go stale, the refusal option below still stands.
+		trigger = {
+			gold >= promote_colony_cost
+			scope:ready_colony = {
+				is_colony_county_trigger = yes
+				holder ?= { this = scope:petitioning_colonist }
+			}
+		}
 		remove_short_term_gold = promote_colony_cost
 
 		scope:ready_colony = {
@@ -2114,7 +2134,18 @@ wilderness_colonization.0050 = {
 		add_internal_flag = special
 		highlight_portrait = scope:petitioning_colonist
 
-		trigger = { gold >= promote_colony_cost }
+		# The gold gate, plus staleness guards. A character event can sit unread for months, and in
+		# that time the colony can promote itself (the colonist found the gold), change hands, or
+		# be lost — after which "fund the promotion" would bill the liege full price to promote a
+		# county that is already a castle, re-firing the ceremony and founder logic at whoever
+		# holds it now. If both funding options go stale, the refusal option below still stands.
+		trigger = {
+			gold >= promote_colony_cost
+			scope:ready_colony = {
+				is_colony_county_trigger = yes
+				holder ?= { this = scope:petitioning_colonist }
+			}
+		}
 		remove_short_term_gold = promote_colony_cost
 
 		scope:ready_colony = {
@@ -2983,8 +3014,267 @@ wilderness_colonization.0064 = {
 
 
 # =====================================================================================
+#  War for the colony: the offer of fealty (0070 - 0073)
+#
+#  Fired by wilderness_colony_war_started when someone declares on an independent player
+#  colonist. The chain runs on the on_war_started scopes the whole way — scope:attacker,
+#  scope:defender, scope:war — and both resolution paths (AI attacker decided by weights here,
+#  human attacker decided in 0071) funnel into the same pair of scripted effects, so the two
+#  kinds of attacker cannot answer the same offer by different rules.
+#
+#  Every trigger re-checks the war still standing, because days pass between links: a war that
+#  ended, an attacker who died, a colonist who found a liege — any of these makes the next event
+#  fizzle silently, which for a letter overtaken by events is the correct outcome.
+# =====================================================================================
+wilderness_colonization.0070 = {
+	type = character_event
+	title = wilderness_colonization.0070.t
+	desc = wilderness_colonization.0070.desc
+	theme = war
+	override_background = { reference = army_camp }
+
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:attacker
+		animation = anger
+	}
+
+	trigger = {
+		exists = scope:war
+		exists = scope:attacker
+		scope:attacker = { is_alive = yes }
+		is_colonist_trigger = yes
+		is_independent_ruler = yes
+	}
+
+	# --- Option A: Offer to bend the knee ---
+	option = {
+		name = wilderness_colonization.0070.a
+
+		custom_tooltip = colony_offer_fealty_tt
+
+		# Hidden because the odds are the drama: the player should be waiting on an answer, not
+		# reading a probability table. A human attacker gets the offer as 0071 and answers it
+		# himself; an AI attacker answers by temperament. Both live in the shared offer effect.
+		hidden_effect = {
+			colony_submission_offer_effect = yes
+		}
+
+		stress_impact = {
+			arrogant = medium_stress_impact_gain
+			brave = minor_stress_impact_gain
+		}
+	}
+
+	# --- Option B: Bend the knee AND take his faith ---
+	#
+	# The sweetener. Only shown when there is something to sweeten with — a colonist who already
+	# shares the attacker's faith has nothing here to offer, and an option reading "and I will take
+	# your faith" when you are both already Catholic is nonsense on the screen.
+	#
+	# The variable is what the roll reads and what colony_submission_accepted_effect settles up on.
+	# Thirty days rather than permanent: it is a promise made in one war, and if that war ends some
+	# other way — a white peace, the attacker's death, a siege that resolves it — the promise should
+	# not still be sitting on the character waiting to be collected by the next man to declare.
+	option = {
+		name = wilderness_colonization.0070.c
+
+		trigger = {
+			exists = scope:attacker
+			NOT = { faith = scope:attacker.faith }
+		}
+
+		custom_tooltip = colony_offer_fealty_and_faith_tt
+
+		hidden_effect = {
+			set_variable = {
+				name = colony_offered_conversion
+				days = 30
+			}
+			colony_submission_offer_effect = yes
+		}
+
+		# Costed at the moment of OFFERING, not of conversion, and only in stress. A zealot who has
+		# just sent word that he will sell his god for a palisade feels it whether or not the letter
+		# is accepted; the piety and the piety levels are charged in the accepted effect, because
+		# those are the price of actually apostatising and a refused offer costs no piety at all.
+		stress_impact = {
+			zealous = major_stress_impact_gain
+			arrogant = medium_stress_impact_gain
+		}
+	}
+
+	# --- Option C: Defiance ---
+	option = {
+		name = wilderness_colonization.0070.b
+
+		add_prestige = minor_prestige_gain
+
+		stress_impact = {
+			craven = medium_stress_impact_gain
+		}
+	}
+}
+
+
+# =====================================================================================
+#  The human attacker's half of the offer
+# =====================================================================================
+wilderness_colonization.0071 = {
+	type = character_event
+	title = wilderness_colonization.0071.t
+	theme = war
+	override_background = { reference = army_camp }
+
+	# Two letters, and the difference has to be on the screen: an attacker who is being offered a
+	# conversion he never demanded should be able to see that is what he is being offered, or the
+	# accept button quietly does something he did not read.
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					scope:defender ?= { has_variable = colony_offered_conversion }
+				}
+				desc = wilderness_colonization.0071.desc.faith
+			}
+			desc = wilderness_colonization.0071.desc
+		}
+	}
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:defender
+		animation = worry
+	}
+
+	trigger = {
+		exists = scope:war
+		exists = scope:defender
+		scope:defender = {
+			is_alive = yes
+			is_colonist_trigger = yes
+			is_independent_ruler = yes
+		}
+	}
+
+	# --- Accept the fealty ---
+	option = {
+		name = wilderness_colonization.0071.a
+
+		colony_submission_accepted_effect = yes
+
+		# Defensive only — the 0070 branch never sends this event to an AI. If one ever receives
+		# it anyway, these weights answer the same way the hidden roll would have, conversion
+		# included.
+		ai_chance = {
+			base = 70
+			modifier = { add = 20  has_trait = content }
+			modifier = { add = 15  has_trait = just }
+			modifier = { add = -25 has_trait = sadistic }
+			modifier = { add = -30 has_relation_rival = scope:defender }
+			modifier = {
+				add = 40
+				scope:defender ?= { has_variable = colony_offered_conversion }
+			}
+			modifier = {
+				add = 25
+				has_trait = zealous
+				scope:defender ?= { has_variable = colony_offered_conversion }
+			}
+		}
+	}
+
+	# --- Refuse: the land, not the settler ---
+	option = {
+		name = wilderness_colonization.0071.b
+
+		colony_submission_refused_effect = yes
+
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 30
+			modifier = { add = 25  has_trait = sadistic }
+			modifier = { add = 15  has_trait = vengeful }
+			modifier = { add = 30  has_relation_rival = scope:defender }
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Word back to the colonist: accepted
+# =====================================================================================
+wilderness_colonization.0072 = {
+	type = character_event
+	title = wilderness_colonization.0072.t
+	theme = diplomacy
+	override_background = { reference = army_camp }
+
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:colony_conversion_done }
+				desc = wilderness_colonization.0072.desc.faith
+			}
+			desc = wilderness_colonization.0072.desc
+		}
+	}
+
+	left_portrait = {
+		character = root
+		animation = happiness
+	}
+	right_portrait = {
+		character = scope:attacker
+		animation = happiness
+	}
+
+	option = {
+		name = wilderness_colonization.0072.a
+	}
+}
+
+
+# =====================================================================================
+#  Word back to the colonist: refused
+# =====================================================================================
+wilderness_colonization.0073 = {
+	type = character_event
+	title = wilderness_colonization.0073.t
+	desc = wilderness_colonization.0073.desc
+	theme = war
+	override_background = { reference = army_camp }
+
+	left_portrait = {
+		character = root
+		animation = anger
+	}
+	right_portrait = {
+		character = scope:attacker
+		animation = dismissal
+	}
+
+	option = {
+		name = wilderness_colonization.0073.a
+	}
+}
+
+
+# =====================================================================================
 #  DEBUG / CHEAT: Upgrade & Manage All Realm Colonies
 #  Console Command: event wilderness_colonization.9999
+#
+#  Two pages: this one and 9998, joined by the last button on each. The split is forced rather than
+#  tidy — see the note on that button — so 9998 is not a category, it is simply the rest.
 # =====================================================================================
 wilderness_colonization.9999 = {
 	type = character_event
@@ -3103,6 +3393,39 @@ wilderness_colonization.9999 = {
 		}
 	}
 
+	# --- Option E: Overflow ---
+	#
+	# An event window draws five option buttons and no more; a sixth is not truncated with a warning,
+	# it simply is not there, which is how this page quietly lost its secession test the moment the
+	# domicile tools were added. So the fifth button is spent on the page break rather than on a
+	# tool, and every tool after the fourth lives on 9998.
+	#
+	# Adding another tool means adding it to 9998, and when THAT page fills, spending its last button
+	# the same way on a 9997. Do not add a fifth tool here.
+	option = {
+		name = "Next page..."
+
+		trigger_event = wilderness_colonization.9998
+	}
+}
+
+
+# =====================================================================================
+#  DEBUG / CHEAT: Colony Tools, page 2
+#  Reached from wilderness_colonization.9999; not meant to be opened directly.
+# =====================================================================================
+wilderness_colonization.9998 = {
+	type = character_event
+	title = "DEBUG: Colony Tools (page 2)"
+	desc = "Colony tools that would not fit on the first page."
+	theme = realm
+	override_background = { reference = study }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+
 	# --- Option: Test Vassal Colony Secession (100% Guaranteed) ---
 	option = {
 		name = "TEST: Force a Vassal Colony to Max & Secede (Event 0021)"
@@ -3156,7 +3479,7 @@ wilderness_colonization.9999 = {
 		}
 	}
 
-	# --- Option E: Why is there no camp? ---
+	# --- Option: Why is there no camp? ---
 	#
 	# colony_government declares `domicile_type = camp`, which should hand every colonist a camp, and
 	# it is not appearing. Three things could be true and they need completely different fixes, so
@@ -3168,7 +3491,7 @@ wilderness_colonization.9999 = {
 	#                        because vanilla's all carry `allowed_domicile_types = { camp }`.
 	#   unplaced             it exists with no location, so nothing draws it. The placement in
 	#                        colonization_make_colonist_effect is running too early or not at all;
-	#                        Option F below re-runs it on the spot to confirm.
+	#                        the next option down re-runs it on the spot to confirm.
 	#   placed               it exists, it is somewhere, and the HUD is simply not offering it. That
 	#                        is `ShouldShowDomicileInHUD`, an engine-side check we cannot read — and
 	#                        the fix is a button of our own, since `ToggleGameViewData( 'domicile',
@@ -3207,7 +3530,7 @@ wilderness_colonization.9999 = {
 		}
 	}
 
-	# --- Option F: Re-run the camp setup on the spot ---
+	# --- Option: Re-run the camp setup on the spot ---
 	#
 	# The same placement and main-tent grant colonization_make_colonist_effect does, minus the
 	# government change. If the camp appears after pressing this but not after colonising, the
@@ -3241,15 +3564,51 @@ wilderness_colonization.9999 = {
 			}
 		}
 
-		domicile ?= {
-			if = {
-				limit = { exists = scope:colony_camp_ground }
-				move_domicile = scope:colony_camp_ground
-			}
-			if = {
-				limit = { NOT = { has_domicile_building = camp_main_01 } }
-				add_domicile_building = camp_main_01
+		# Reports either way, and the first version of this did not — it ran silently, so pressing it
+		# and seeing nothing happen was indistinguishable from pressing it and having it do nothing.
+		# A debug tool that cannot tell those two apart is worse than no tool, because the reader
+		# treats the silence as evidence.
+		if = {
+			limit = { has_domicile = no }
+
+			debug_log = "COLONY CAMP SETUP: nothing to do — this character has no domicile to place"
+			send_interface_toast = {
+				type = event_toast_effect_bad
+				title = colony_debug_domicile_none
+				left_icon = root
 			}
 		}
+		else = {
+			domicile ?= {
+				if = {
+					limit = { exists = scope:colony_camp_ground }
+					move_domicile = scope:colony_camp_ground
+				}
+				if = {
+					limit = {
+						is_domicile_type = camp
+						NOT = { has_domicile_building = camp_main_01 }
+					}
+					add_domicile_building = camp_main_01
+				}
+			}
+
+			debug_log = "COLONY CAMP SETUP: placed the domicile and checked the main tent"
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = colony_debug_camp_setup_ran
+				left_icon = root
+			}
+		}
+	}
+
+	# --- Option: Back ---
+	#
+	# Fourth of five here, so there is room for exactly one more tool on this page before it needs a
+	# 9997 of its own. See the note on the page break in 9999.
+	option = {
+		name = "Back"
+
+		trigger_event = wilderness_colonization.9999
 	}
 }

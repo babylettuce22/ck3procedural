@@ -1,0 +1,59 @@
+﻿# The front door to the artifact index.
+#
+# All this decision does is raise a flag. The window watches for it, and fills itself when it
+# appears -- see gen_artifact_index_window and gen_artifact_index_gather in
+# common/scripted_guis/00_gen_artifact_index_guis.txt, and the window itself, which
+# Emit/GuiWriter.cs writes to gui/gen_artifact_index.gui.
+#
+# It is a decision because a decision is the one surface a player can find without being told it
+# exists. There is no character interaction, no map click and no hotkey that would lead anyone to
+# a window like this.
+#
+# Static rather than generated, and it can be: every key it names is fixed, and what the window
+# lists is decided at runtime by walking the world's artifacts. So this file is identical on every
+# map, ships on maps that predate it, and needs no cooperation from the artifact generator.
+
+gen_artifact_index_decision = {
+	picture = {
+		reference = "gfx/interface/illustrations/decisions/decision_misc.dds"
+	}
+
+	desc = gen_artifact_index_decision_desc
+	selection_tooltip = gen_artifact_index_decision_tooltip
+	confirm_text = gen_artifact_index_decision_confirm
+
+	# Sorted low so it sits with the other informational decisions rather than above the ones that
+	# change the game state.
+	sort_order = 10
+
+	# Hidden in a world with nothing worth indexing -- a map generated with artifacts switched off,
+	# or one whose treasures are all common and masterwork. An empty window reached through a
+	# decision is worse than no decision, because the player has to open it to learn that.
+	is_shown = {
+		any_artifact = {
+			OR = {
+				rarity = famed
+				rarity = illustrious
+			}
+		}
+	}
+
+	is_valid = {
+		always = yes
+	}
+
+	effect = {
+		set_variable = {
+			name = gen_artifact_index_open
+			value = yes
+		}
+	}
+
+	# Never. It costs nothing, does nothing, and an AI ruler taking it would spend its yearly
+	# decision slot opening a window nobody is looking at.
+	ai_will_do = {
+		base = 0
+	}
+
+	ai_check_interval = 0
+}

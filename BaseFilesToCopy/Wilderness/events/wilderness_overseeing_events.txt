@@ -428,10 +428,16 @@ wilderness_colonization.0040 = {
 	}
 
 	immediate = {
+		# The pick repeats the trigger's NOT-yet-discovered condition, and has to: the trigger
+		# asks whether ANY overseen county lacks the marker, and an unconstrained pick could then
+		# land on a different, already-marked one — narrating a first-time discovery twice on the
+		# same ground while the county that actually qualified went unpicked. Only reachable when
+		# two colonies are overseen at once, which is exactly the case nobody play-tests.
 		random_held_title = {
 			limit = {
 				tier = tier_county
 				has_county_modifier = settlement_overseen
+				NOT = { has_variable = discovered_rich_seam }
 			}
 			save_scope_as = colony
 		}
@@ -573,6 +579,9 @@ wilderness_colonization.0041 = {
 		name = wilderness_colonization.0041.b
 		add_internal_flag = dangerous
 
+		# Each branch toasts its outcome — the descs above only ever render in the pre-click
+		# tooltip, so without the toast "I caught it" and "I shook it off" resolved identically
+		# on screen and the first sign of the difference was the ill trait icon days later.
 		random_list = {
 			45 = {
 				desc = wilderness_fever_contracted_desc
@@ -580,11 +589,31 @@ wilderness_colonization.0041 = {
 				scope:colony = {
 					change_county_control = -15
 				}
+				hidden_effect = {
+					if = {
+						limit = { is_ai = no }
+						send_interface_toast = {
+							type = event_toast_effect_bad
+							title = colony_ague_contracted_toast
+							left_icon = root
+						}
+					}
+				}
 			}
 			55 = {
 				desc = wilderness_fever_resisted_desc
 				scope:colony = {
 					change_county_control = -10
+				}
+				hidden_effect = {
+					if = {
+						limit = { is_ai = no }
+						send_interface_toast = {
+							type = event_toast_effect_neutral
+							title = colony_ague_resisted_toast
+							left_icon = root
+						}
+					}
 				}
 			}
 		}

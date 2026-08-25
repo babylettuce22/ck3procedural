@@ -70,10 +70,10 @@ public static class ModWriter
 
     /// <summary>
     /// Files inside the mod folder that survive <see cref="ClearModDir"/>. The edit overlay is the
-    /// user's, not ours — see <see cref="Gui.EditOverlay"/>, which exists precisely so a mod
+    /// user's, not ours — see <see cref="AppGUI.EditOverlay"/>, which exists precisely so a mod
     /// written again under the same name keeps its hand edits.
     /// </summary>
-    private static readonly string[] Keep = [Gui.EditOverlay.FileName];
+    private static readonly string[] Keep = [AppGUI.EditOverlay.FileName];
 
     /// <summary>
     /// Empties the mod folder before a write, so what ships is exactly what this run emitted.

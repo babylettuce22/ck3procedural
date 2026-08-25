@@ -1,4 +1,4 @@
-namespace Ck3MapGen.Emit;
+﻿namespace Ck3MapGen.Emit;
 
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
@@ -7,11 +7,18 @@ using System.IO;
 public static class ArtifactWriter
 {
     /// <summary>
-    /// The five equip templates, which differ only in their slot.
+    /// Two templates: the ordinary one and the one-of-a-kind one.
     ///
-    /// They were five copied blocks; the copies were identical apart from one word, so the slot
-    /// list is the honest way to write them. <c>always = yes</c> on both gates is deliberate — the
-    /// generated artifacts carry their restrictions in their modifiers, not in their templates.
+    /// There were five, one per slot, and they were identical apart from a <c>slot</c> field —
+    /// which is not a template field at all. <c>templates/_templates.info</c> documents
+    /// <c>can_equip</c>, <c>can_benefit</c>, <c>can_reforge</c>, <c>can_repair</c>,
+    /// <c>fallback</c>, <c>ai_score</c> and <c>unique</c>, and no vanilla template contains
+    /// <c>slot</c>; the slot comes from the artifact's *type*. So the five differed only in a line
+    /// the parser does not read, and were one template wearing five names.
+    ///
+    /// <c>can_benefit</c> is where an artifact stops being a stat block. A child or an incapable
+    /// ruler holding the realm's sword gets the <c>fallback</c> instead of the real modifier, which
+    /// is the same gate AGOT puts on every piece of Valyrian steel.
     /// </summary>
     public static void WriteTemplates(string modDir)
     {
@@ -19,24 +26,50 @@ public static class ArtifactWriter
         Directory.CreateDirectory(dir);
 
         var b = new JominiBuilder();
-        b.Comment("Procedurally generated templates ensuring equipability and compatibility");
+        b.Comment("Procedurally generated artifact templates.\n"
+            + "No slot field: the slot is a property of the type, not of the template.");
         b.Blank();
 
-        foreach (string slot in new[] { "weapon", "armor", "crown", "regalia", "book" })
+        using (b.Block("gen_artifact_template"))
         {
-            using (b.Block($"gen_{slot}_template"))
-            {
-                using (b.Block("can_equip")) b.Field("always", "yes");
-                using (b.Block("can_benefit")) b.Field("always", "yes");
-                b.Field("slot", slot);
-            }
+            using (b.Block("can_equip")) b.Field("always", "yes");
 
-            b.Blank();
+            // An artifact does its work for a ruler who can actually wield it. Everyone else keeps
+            // it — and keeps the prestige of keeping it — but not the rest.
+            using (b.Block("can_benefit")) b.Field("is_capable_adult", "yes");
+            using (b.Block("fallback")) b.Field("monthly_prestige", "0.1");
+
+            using (b.Block("ai_score")) b.Field("value", "100");
+        }
+
+        b.Blank();
+
+        using (b.Block("gen_legendary_template"))
+        {
+            using (b.Block("can_equip")) b.Field("always", "yes");
+            using (b.Block("can_benefit")) b.Field("is_capable_adult", "yes");
+            using (b.Block("fallback")) b.Field("monthly_prestige", "0.25");
+
+            // The AI should want these badly enough to scheme for them.
+            using (b.Block("ai_score")) b.Field("value", "250");
+
+            // Marks the artifact as one-of-a-kind in the inventory UI, and blocks reforging it
+            // into something ordinary.
+            b.Field("unique", "yes");
         }
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_templates.txt"), b.ToString());
     }
 
+    /// <summary>
+    /// Spawns the starting treasure, with the history that explains it.
+    ///
+    /// The history is the point of this file. <c>create_artifact</c>'s own <c>history</c> block
+    /// takes the first entry; the rest are <c>add_artifact_history</c> calls on the artifact scope,
+    /// and a sovereign piece also gets <c>add_artifact_title_history</c> so the panel names the
+    /// realm rather than only the man. Without them the artifact panel is blank, which is what
+    /// every generated artifact used to ship as.
+    /// </summary>
     public static void WriteOnGameStart(string modDir, ArtifactMap artifacts)
     {
         string dir = Path.Combine(modDir, "common", "on_action");
@@ -59,13 +92,20 @@ public static class ArtifactWriter
             {
                 using (b.Block($"character:{HistoryWriter.CharacterId(county)}"))
                 {
-                    // create_artifact reads both scopes; the holder is both for a starting relic,
-                    // since nothing in the generated history says who actually made it.
+                    // Feature selection reads scope:owner — vanilla saves it before every
+                    // create_artifact for exactly this reason, and errors in the log without it.
+                    //
+                    // There is deliberately no `creator` here. The maker is set by passing
+                    // `creator = <character>` as a field of create_artifact; saving a scope of that
+                    // name does nothing, which is what the old `save_scope_as = creator` line was.
+                    // This generator does not model smiths, so the artifacts have no maker and say
+                    // so, rather than appearing to have one.
                     b.Field("save_scope_as", "owner");
-                    b.Field("save_scope_as", "creator");
 
                     foreach (var art in arts)
                     {
+                        b.Blank();
+
                         using (b.Block("create_artifact"))
                         {
                             b.Quoted("name", art.NameKey);
@@ -76,7 +116,34 @@ public static class ArtifactWriter
                             b.Field("wealth", art.Wealth);
                             b.Field("quality", art.Quality);
                             b.Field("modifier", art.Modifier);
-                            b.Inline("history", "type = created_before_history");
+                            b.Field("save_scope_as", "gen_new_artifact");
+
+                            // The heirlooms of a world are not allowed to crumble before the
+                            // player has met them.
+                            if (art.Rarity >= ArtifactRarity.Famed) b.Field("decaying", "no");
+
+                            WriteHistory(b, art.Provenance[0]);
+                        }
+
+                        using (b.Block("scope:gen_new_artifact"))
+                        {
+                            foreach (var entry in art.Provenance.Skip(1))
+                            {
+                                using (b.Block("add_artifact_history")) WriteHistoryFields(b, entry);
+                            }
+
+                            if (art.TitleHistory is { } th)
+                            {
+                                using (b.Block("add_artifact_title_history"))
+                                {
+                                    b.Field("target", $"title:{th.TitleKey}");
+                                    b.Field("date", th.Date);
+                                }
+                            }
+
+                            // Created is not equipped. Without this the treasure sits in the
+                            // inventory on the start date and none of the modifiers are live.
+                            b.Field("equip_artifact_to_owner_replace", "yes");
                         }
                     }
                 }
@@ -88,15 +155,38 @@ public static class ArtifactWriter
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_artifacts_on_action.txt"), b.ToString());
     }
 
+    private static void WriteHistory(JominiBuilder b, ArtifactProvenance entry)
+    {
+        using (b.Block("history")) WriteHistoryFields(b, entry);
+    }
+
+    private static void WriteHistoryFields(JominiBuilder b, ArtifactProvenance entry)
+    {
+        b.Field("type", entry.Type);
+        b.Field("date", entry.Date);
+
+        if (entry.ActorId is not null) b.Field("actor", $"character:{entry.ActorId}");
+        if (entry.RecipientId is not null) b.Field("recipient", $"character:{entry.RecipientId}");
+        if (entry.LocationProvinceId > 0) b.Field("location", $"province:{entry.LocationProvinceId}");
+    }
+
     /// <summary>
-    /// The modifier pool the generated artifacts draw from. Fixed content: nothing here varies with
-    /// the world, only which artifact ends up pointing at which key.
+    /// The modifier pool: three shared rungs per family, plus one bespoke block per legendary.
+    ///
+    /// The rungs are keyed by rarity rather than by a quality bucket, because rarity is now the
+    /// thing that is decided and quality is the thing derived from it. Magnitudes are read off
+    /// vanilla's own ladders in <c>00_artifact_modifiers.txt</c> — prowess runs 1..11 across the
+    /// four bands, knight effectiveness 0.02..0.09, monthly piety 0.1..0.8 — so a generated famed
+    /// sword is worth about what a vanilla famed sword is worth.
+    ///
+    /// <c>prowess_no_portrait</c>, not <c>prowess</c>: the plain key visibly rebuilds the
+    /// character's portrait, which is why every artifact in the game uses the other one.
     ///
     /// Values are written as strings rather than numbers on purpose. <c>0.10</c> and <c>0.1</c> are
     /// the same number and not the same file, and these were tuned by reading them next to each
     /// other — formatting them from doubles would silently renumber the whole table.
     /// </summary>
-    public static void WriteModifiers(string modDir)
+    public static void WriteModifiers(string modDir, ArtifactMap artifacts)
     {
         string dir = Path.Combine(modDir, "common", "modifiers");
         Directory.CreateDirectory(dir);
@@ -116,47 +206,64 @@ public static class ArtifactWriter
             b.Blank();
         }
 
-        Modifier("gen_sovereign_opinion_modifier_1", "social_positive", ("direct_vassal_opinion", "5"), ("vassal_opinion", "5"));
-        Modifier("gen_sovereign_opinion_modifier_2", "social_positive", ("direct_vassal_opinion", "10"), ("vassal_opinion", "10"));
-        Modifier("gen_sovereign_opinion_modifier_3", "social_positive", ("direct_vassal_opinion", "15"), ("vassal_opinion", "15"));
+        Modifier("gen_sovereign_modifier_common", "grandeur_positive",
+            ("vassal_opinion", "3"));
+        Modifier("gen_sovereign_modifier_masterwork", "grandeur_positive",
+            ("vassal_opinion", "5"), ("short_reign_duration_mult", "-0.15"));
+        Modifier("gen_sovereign_modifier_famed", "grandeur_positive",
+            ("vassal_opinion", "8"), ("short_reign_duration_mult", "-0.25"),
+            ("dynasty_opinion", "5"), ("monthly_prestige", "0.15"));
 
-        Modifier("gen_martial_prowess_modifier_1", "prowess_positive", ("prowess", "1"), ("knight_effectiveness_mult", "0.05"));
-        Modifier("gen_martial_prowess_modifier_2", "prowess_positive", ("prowess", "2"), ("knight_effectiveness_mult", "0.10"));
-        Modifier("gen_martial_prowess_modifier_3", "prowess_positive", ("prowess", "4"), ("knight_effectiveness_mult", "0.15"));
+        Modifier("gen_martial_modifier_common", "prowess_positive",
+            ("prowess_no_portrait", "1"));
+        Modifier("gen_martial_modifier_masterwork", "prowess_positive",
+            ("prowess_no_portrait", "4"), ("knight_effectiveness_mult", "0.04"));
+        Modifier("gen_martial_modifier_famed", "prowess_positive",
+            ("prowess_no_portrait", "7"), ("knight_effectiveness_mult", "0.08"),
+            ("monthly_prestige", "0.15"));
 
-        Modifier("gen_sacred_piety_modifier_1", "piety_positive", ("monthly_piety", "0.1"), ("same_faith_opinion", "5"));
-        Modifier("gen_sacred_piety_modifier_2", "piety_positive", ("monthly_piety", "0.25"), ("same_faith_opinion", "10"));
-        Modifier("gen_sacred_piety_modifier_3", "piety_positive", ("monthly_piety", "0.5"), ("same_faith_opinion", "15"));
+        Modifier("gen_sacred_modifier_common", "piety_positive",
+            ("monthly_piety", "0.15"), ("same_faith_opinion", "3"));
+        Modifier("gen_sacred_modifier_masterwork", "piety_positive",
+            ("monthly_piety", "0.35"), ("same_faith_opinion", "6"));
+        Modifier("gen_sacred_modifier_famed", "piety_positive",
+            ("monthly_piety", "0.6"), ("same_faith_opinion", "10"), ("clergy_opinion", "8"));
 
-        Modifier("gen_scholar_learning_modifier_1", "learning_positive", ("learning", "1"), ("learning_lifestyle_xp_gain_mult", "0.05"));
-        Modifier("gen_scholar_learning_modifier_2", "learning_positive", ("learning", "2"), ("learning_lifestyle_xp_gain_mult", "0.10"));
-        Modifier("gen_scholar_learning_modifier_3", "learning_positive", ("learning", "3"), ("learning_lifestyle_xp_gain_mult", "0.15"));
+        Modifier("gen_scholar_modifier_common", "learning_positive",
+            ("learning", "1"));
+        Modifier("gen_scholar_modifier_masterwork", "learning_positive",
+            ("learning", "2"), ("learning_lifestyle_xp_gain_mult", "0.1"));
+        Modifier("gen_scholar_modifier_famed", "learning_positive",
+            ("learning", "3"), ("learning_lifestyle_xp_gain_mult", "0.2"),
+            ("monthly_prestige", "0.15"));
 
-        // --- LEGENDARY COMPOSITE MODIFIERS (Truly Incredible Bonuses) ---
+        // --- ONE BLOCK PER LEGENDARY ---
+        //
+        // A shared family base plus the single line that distinguishes this one object, which is
+        // how AGOT writes Valyrian steel: every named sword is prowess 9 and dynasty prestige, and
+        // then Blackfyre alone carries vassal_limit while Longclaw alone carries a forest
+        // advantage. Four fixed legendary keys, which is what this pool used to hold, make the
+        // world's great treasures four objects in a hundred costumes.
 
-        Modifier("gen_legendary_sovereign_modifier", "grandeur_positive",
-            ("direct_vassal_opinion", "15"), ("vassal_opinion", "15"), ("dynasty_opinion", "10"),
-            ("short_reign_duration_mult", "-0.3"), ("monthly_prestige_gain_mult", "0.15"),
-            ("legitimacy_gain_mult", "0.15"), ("vassal_limit", "15"));
+        var signatures = artifacts.Signatures.ToList();
 
-        Modifier("gen_legendary_martial_modifier", "prowess_positive",
-            ("prowess", "8"), ("knight_effectiveness_mult", "0.25"),
-            ("controlled_province_advantage", "10"), ("knight_limit", "3"),
-            ("heavy_infantry_toughness_mult", "0.15"), ("heavy_cavalry_toughness_mult", "0.15"));
-
-        Modifier("gen_legendary_sacred_modifier", "piety_positive",
-            ("monthly_piety", "1.0"), ("same_faith_opinion", "20"), ("clergy_opinion", "20"),
-            ("domain_tax_same_faith_mult", "0.1"), ("learning", "4"));
-
-        // No trailing blank: this is the last block in the file.
-        using (b.Block("gen_legendary_scholar_modifier"))
+        if (signatures.Count > 0)
         {
-            b.Field("icon", "learning_positive");
-            b.Field("learning", "6");
-            b.Field("learning_lifestyle_xp_gain_mult", "0.3");
-            b.Field("development_growth", "0.3");
-            b.Field("build_speed", "-0.2");
-            b.Field("health", "0.5");
+            b.Comment("One-off modifiers, one per legendary artifact in this world.");
+            b.Blank();
+
+            foreach (var art in signatures)
+            {
+                b.Comment(art.LocalizedName);
+
+                using (b.Block(art.Modifier))
+                {
+                    b.Field("icon", art.ModifierIcon);
+                    foreach (var (k, v) in art.ModifierFields!) b.Field(k, v);
+                }
+
+                b.Blank();
+            }
         }
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_artifact_modifiers.txt"), b.ToString());

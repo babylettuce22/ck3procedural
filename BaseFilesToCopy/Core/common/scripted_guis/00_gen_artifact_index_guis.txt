@@ -1,0 +1,74 @@
+﻿# The artifact index: the world's famed and illustrious treasures, and who holds them.
+#
+# Two entries, and the split matters. One owns the window's open state; the other fills it. Keeping
+# them apart is what lets the decision open the window without knowing anything about lists, and
+# lets the window refresh itself without going back through the decision.
+#
+# Emit/GuiWriter.cs writes the window that calls both, so the names below are a contract with it.
+# A .gui file naming a scripted_gui that does not exist logs nothing and evaluates false, so a
+# rename here does not fail loudly -- it just produces a window that never opens.
+
+
+# Is the index open for this character, and close it.
+#
+# One entry answering both directions on purpose. The window's `visible` asks IsShown; the close
+# button in its header runs Execute. Two entries could drift into disagreeing about what "open"
+# means, and the failure mode of that is a window with no way out of it.
+#
+# The open state is a character variable rather than a GUI VariableSystem flag because a DECISION
+# has to be able to set it, and a decision's effect cannot reach the GUI layer at all.
+gen_artifact_index_window = {
+	scope = character
+
+	is_shown = {
+		has_variable = gen_artifact_index_open
+	}
+
+	effect = {
+		remove_variable = gen_artifact_index_open
+	}
+}
+
+
+# Rebuild the list the window draws.
+#
+# Run from the window's own `_show` state rather than from the decision that opens it. That is the
+# difference between a list that is current and a list that was current when the player last opened
+# the decisions panel -- and reopening the window re-reads the world rather than appending a second
+# copy of it, because the list is cleared first.
+#
+# `rarity` takes no comparator: `rarity >= famed` parses and then fails validation, so the two
+# bands are named explicitly. Famed and illustrious are the top two of four, so this is "everything
+# a chronicler would have heard of" rather than an arbitrary cut.
+#
+# Deliberately not filtered to artifacts this generator placed. A sword forged during play that
+# reaches famed belongs on a list of the world's great treasures as much as one that started there,
+# and reading rarity live means the index needs no bookkeeping at creation time and works on a map
+# generated before this file existed.
+gen_artifact_index_gather = {
+	scope = character
+
+	is_shown = {
+		always = yes
+	}
+
+	effect = {
+		clear_global_variable_list = gen_artifact_index_list
+
+		every_artifact = {
+			limit = {
+				OR = {
+					rarity = famed
+					rarity = illustrious
+				}
+			}
+
+			save_scope_as = gen_indexed_artifact
+
+			add_to_global_variable_list = {
+				name = gen_artifact_index_list
+				target = scope:gen_indexed_artifact
+			}
+		}
+	}
+}

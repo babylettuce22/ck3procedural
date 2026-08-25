@@ -1,0 +1,12 @@
+﻿l_english:
+ # The artifact index -- the decision that opens it, and the window's own furniture.
+ # See BaseFilesToCopy/Core/common/decisions/00_gen_artifact_index_decision.txt.
+
+ gen_artifact_index_decision:0 "Consult the Chronicle of Treasures"
+ gen_artifact_index_decision_desc:0 "Your court keeps a record of the great works of the age: the crowns, blades and relics whose names are known well beyond the realms that hold them. Send for it."
+ gen_artifact_index_decision_tooltip:0 "Review every famed and illustrious artifact in the known world, and who holds it."
+ gen_artifact_index_decision_confirm:0 "Send for the chronicle"
+
+ GEN_ARTIFACT_INDEX_TITLE:0 "Chronicle of Treasures"
+ GEN_ARTIFACT_INDEX_BLURB:0 "The famed and illustrious works of the age, and the hands they have come to rest in. The chronicle is copied afresh each time it is called for."
+ GEN_ARTIFACT_INDEX_EMPTY:0 "No work of this age has yet earned a name worth recording."

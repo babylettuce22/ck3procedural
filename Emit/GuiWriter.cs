@@ -1,415 +1,593 @@
-﻿using System.Text.RegularExpressions;
-using Ck3MapGen.Io;
+using Ck3MapGen.GameGui;
 
 namespace Ck3MapGen.Emit;
 
 /// <summary>
-/// Patches vanilla's county, character, title and main menu windows.
+/// Patches vanilla's county, character, title, council and bookmark windows.
+///
+/// Every edit here is a claim about a widget — "the container called holder_info", "the state that
+/// fades the selected bookmark's name" — made against a parsed tree rather than against the file's
+/// bytes. What that buys is not tidiness: an anchor that no longer resolves is reported *by name*
+/// and the file refuses to ship, where a substring anchor that had drifted onto the wrong match
+/// would have patched the wrong widget and said nothing at all. See <see cref="GuiDocument"/> for
+/// the policy and <see cref="GuiBuilder"/> for how the spliced widgets are built.
+///
+/// Each method below opens one vanilla file, patches it, and ships it. A file may be opened once
+/// and patched by any number of callers before shipping, which is worth stating because the writer
+/// this replaces could not: it read vanilla and wrote the mod once per *target*, so two features
+/// touching one file could not both be expressed. The second feature to want window_character.gui
+/// had to be folded into the first by a special case, and it is that limit — not the feature — that
+/// has gone.
 /// </summary>
 public static class GuiWriter
 {
-    private sealed record Target(
-        string File,
-        string ScriptedGui,
-        string Scope,
-        (string Anchor, string What, string? Gui)[] Extend,
-        (string Anchor, string What, string? Gui)[] Insert,
-        (string Anchor, string What, string Block)[] Add);
+    public static void WriteAll(string modDir, string gameDir)
+    {
+        PatchCountyView(modDir, gameDir);
+        PatchCharacterWindow(modDir, gameDir);
+        PatchTitleWindow(modDir, gameDir);
+        PatchCouncilWindow(modDir, gameDir);
+        PatchBookmarkTab(modDir, gameDir);
+        WriteArtifactIndex(modDir);
+    }
 
-    private static readonly Target[] Targets =
-    [
-        new Target(
-        File: "window_county_view.gui",
-        ScriptedGui: "wilderness_county",
-        Scope: "HoldingView.GetProvince",
-        Extend:
-        [
-            ("name = \"holder_info\"", "holder", null),
-            ("name = \"set_realm_capital_button\"", "move-capital button", "wilderness_unfinished_county"),
-            ("name = \"tutorial_highlight_holding_view_taxes_box\"", "holding taxes", null),
-            ("name = \"tutorial_highlight_holding_view_loot_box\"", "holding loot", null),
-        ],
-        Insert:
-        [
-            ("name = \"county_stats\"", "stats", null),
-            ("name = \"county_modifiers_grid\"", "modifiers", null),
-            ("name = \"construct_holding\"", "build-holding prompt", "wilderness_unfinished_county"),
-        ],
-        Add:
-        [
-            ("name = \"county_info\"", "settle button", SettleButton),
-        ]),
+    // ===========================================================================================
+    // The artifact index
+    // ===========================================================================================
 
-    new Target(
-        File: "window_character.gui",
-        ScriptedGui: "wilderness_holder",
-        Scope: "CharacterWindow.GetCharacter",
-        Extend: [],
-        Insert:
-        [
-            ("name = \"main_content\"", "window body", null),
-        ],
-        Add:
-        [
-            ("using = Window_Size_Sidebar", "placeholder", CharacterPlaceholder),
-        ]),
+    /// <summary>
+    /// A window listing every famed and illustrious artifact in the world, and who holds it.
+    ///
+    /// Authored rather than patched, and the first file here that is — <see cref="GuiDocument.Create"/>
+    /// rather than <see cref="GuiDocument.Open"/>. It is the same builder and the same printer
+    /// either way, which is why this lives beside the patches instead of in a writer of its own.
+    ///
+    /// Nothing about it varies with the world. The window is a shape; what fills it is decided at
+    /// runtime by <c>gen_artifact_index_gather</c> in
+    /// <c>BaseFilesToCopy/Core/common/scripted_guis</c>, which walks <c>every_artifact</c> when the
+    /// window opens. So the same file ships on every map, works on a map generated before it
+    /// existed, and lists artifacts forged during play alongside the ones this generator placed.
+    ///
+    /// Modelled on AGOT's artifact market, which solves the two problems this shape has:
+    ///
+    /// The registry needs something to instantiate, so there are two windows. The outer host is
+    /// what <c>gui/scripted_widgets</c> names and is always present at zero size; the inner one
+    /// carries the real geometry and the visibility gate. A window with no parent is never drawn
+    /// otherwise, because nothing in script can create one.
+    ///
+    /// And the list is refreshed by the window's own <c>_show</c> state rather than by the decision
+    /// that opens it. The decision only sets a flag — so the list cannot go stale between opening
+    /// the decisions panel and looking at the window, and reopening it is a re-read rather than a
+    /// second copy.
+    /// </summary>
+    private static void WriteArtifactIndex(string modDir)
+    {
+        var doc = GuiDocument.Create("artifact index", "gui", "gen_artifact_index.gui");
 
-    new Target(
-        File: "window_title.gui",
-        ScriptedGui: "wilderness_title",
-        Scope: "TitleViewWindow.GetTitle",
-        Extend: [],
-        Insert:
-        [
-            ("name = \"title_view_main_tab\"", "window body", null),
-        ],
-        Add:
-        [
-            ("using = Window_Background_Sidebar", "placeholder", TitlePlaceholder),
-            ("using = Window_Background_Sidebar", "lore panel", TitleLorePanel),
-            ("position = { 0 0 }", "lore reset", TitleLoreReset),
-            ("button_sidepanel_right = {", "lore button", TitleLoreButton),
-        ]),
+        // Root is the player for both: the window asks whether *this* player opened it, so two
+        // people in a multiplayer game can have it open independently.
+        var player = GuiScope.Root("GetPlayer");
+        var window = new ScriptedGui("gen_artifact_index_window", player);
+        var gather = new ScriptedGui("gen_artifact_index_gather", player);
 
-        // The colony's council.
-        //
-        // The one target here that ADDS a mechanic rather than emptying a window for the wilderness
-        // dummy, and it is in this file because CK3 leaves no alternative: window_council.gui names
-        // every seat it draws, one `CouncilWindow.GetCouncillor('councillor_marshal')` at a time,
-        // with no datamodel over positions anywhere in it. A council position declared in script and
-        // not named here is invisible — the AI will still fill it, and nothing will report anything.
-        // AGOT ships the same shape for its Castellan and Admiral: new position files plus one
-        // window_council.gui override.
-        //
-        // ---- The three Extends, and why they are rows rather than seats ----
-        //
-        // Vanilla's five council seats are hidden for a colonist by three edits, not five, because
-        // the layout already groups them: Chancellor and Steward share an hbox, Marshal and Spymaster
-        // share another, and both hboxes carry the `visible` that Extend rewrites. Only the Court
-        // Chaplain sits loose in the top row and needs naming on its own.
-        //
-        // Its anchor, `name = "tutorial_court_chaplain"`, appears twice in the file — the second is
-        // the celestial-ministry layout further down. Extend takes the first, which is the one in the
-        // ordinary council, and the ministry layout is gated behind HasAccessToMinistry anyway, which
-        // no colonist has.
-        //
-        // Vanilla's SPOUSE seat is deliberately left alone. A colonist's wife advising him is not a
-        // court office, it is the same person he was already talking to, and it is the one vanilla
-        // seat whose premise survives on a frontier post.
-        //
-        // ---- Why the two Adds land where they do ----
-        //
-        // Add splices its block in *before* the anchor line at the anchor's own indentation, so the
-        // anchor picks the parent as much as the position. `widget_councillor_item = { # Spymaster
-        // (If Nomadic...)` is a seat inside the top row, so the two seats added there become
-        // siblings of the spouse — giving a colonist a top row of Spouse, Warden, Quartermaster once
-        // the nomad and chaplain seats beside them go invisible. Invisible children take no space in
-        // a PdxGui box, which is the same mechanism vanilla's own vizier/spouse swap relies on.
-        //
-        // `hbox = { # Chancellor + Steward` is a row inside the council vbox, so the block added
-        // there is a whole new row of three. Two rows of three, which is vanilla's own shape.
-        //
-        // ---- What happens with --no-wilderness ----
-        //
-        // Nothing, and that is checked rather than hoped for. Without the Wilderness file set there
-        // is no `colony_council` scripted_gui, a .gui naming a scripted_gui that does not exist
-        // evaluates false, and false is the right answer in both directions here: the colony seats
-        // hide themselves and `Not(false)` leaves every vanilla row exactly as it was.
-        new Target(
-        File: "window_council.gui",
-        ScriptedGui: "colony_council",
-        Scope: "CouncilWindow.GetCharacter",
-        Extend:
-        [
-            ("hbox = { # Chancellor + Steward", "chancellor/steward row", null),
-            ("hbox = { # Marshal + Spymaster", "marshal/spymaster row", null),
-            ("name = \"tutorial_court_chaplain\"", "court chaplain seat", null),
-        ],
-        Insert: [],
-        Add:
-        [
-            ("widget_councillor_item = { # Spymaster (If Nomadic it's moved up here)",
-                "warden and quartermaster", ColonyCouncilTopRowSeats),
-            ("hbox = { # Chancellor + Steward", "speaker/pathfinder/preacher row", ColonyCouncilRow),
-        ]),
+        var entries = GuiExpr.Raw("GetGlobalList( 'gen_artifact_index_list' )");
 
-    // No target for gui/shared/portraits.gui, deliberately.
-    //
-    // Inserting a `visible` after `pop_out = no` — the first line of `template portrait_base`, which
-    // every portrait widget in the game uses — would hide the dummy's portrait everywhere in one
-    // edit, and the anchor is still unique in 1.19 with `Character` already in datacontext. It is
-    // not needed: the dummy renders as nothing at the MODEL level via the no_portrait morph in
-    // BaseFilesToCopy/Wilderness/gfx/portraits/portrait_modifiers, which is vanilla's own mechanism
-    // and costs no override of a 3,300-line vanilla file.
-    //
-    // Keep it in reserve rather than in the build. It is the answer if an empty portrait FRAME on
-    // map hover is still too much, but it carries a risk this writer cannot check: a `visible` set
-    // in a template is overridden by one set at the use site, so coverage would be partial in a way
-    // that is invisible from here, and a mistake takes every portrait in the game with it.
-];
-    private static string Placeholder(string text, params string[] onclick) => $$"""
-        widget = {
-            name = "wilderness_placeholder"
-            visible = "{SHOW}"
-            size = { 100% 100% }
+        doc.Add(GuiBuilder.Types("gen_artifact_index").Add(
 
-            button_close = {
-                parentanchor = top|right
-                position = { -18 18 }
-                size = { 30 30 }
-                shortcut = "close_window"
-        {{string.Join('\n', onclick.Select(c => $"        onclick = \"{c}\""))}}
-            }
+            GuiBuilder.Type("gen_artifact_index_host", "window")
+                .Name("gen_artifact_index_host")
+                .AllowOutside()
+                .ParentAnchor("center")
+                .Size(0, 0)
+                // The host is always instantiated, so it carries the conditions under which no
+                // custom window should be on screen at all.
+                .Gap().Visible(GuiExpr.Raw(
+                    "And( Not( IsPauseMenuShown ), And( Or( Not( IsObserver ), GetPlayer.IsValid ), "
+                    + "IsDefaultGUIMode ) )"))
+                .Gap().Add(GuiBuilder.Of("gen_artifact_index_window")),
 
-            text_multi = {
-                name = "wilderness_placeholder_text"
-                parentanchor = center
-                autoresize = yes
-                max_width = 320
-                align = center
-                text = "{{text}}"
-            }
-        }
-        """;
+            GuiBuilder.Type("gen_artifact_index_window", "window")
+                .Gapped()
+                .Name("gen_artifact_index_window")
+                .AllowOutside()
+                .Movable()
+                .ParentAnchor("center")
+                .Position(0, -40)
+                .Size(780, 720)
+                .Using("Window_Background", "Window_Decoration_Spike")
+                .Gap().Visible(window.IsShown())
 
-    private static string CharacterPlaceholder
-        => Placeholder("WILDERNESS_HOLDER_WINDOW", "[CharacterWindow.Close]");
+                // The refresh. A decision cannot reach the GUI layer, so it sets a flag and this
+                // does the work when the flag makes the window appear.
+                .Gap().Add(GuiBuilder.State("_show")
+                    .Using("Animation_FadeIn_Quick", "Sound_WindowShow_Standard")
+                    .Quoted("on_start", gather.Execute().ToString()))
 
-    private static string TitlePlaceholder
-        => Placeholder("WILDERNESS_TITLE_WINDOW",
-            "[TitleViewWindow.Close]",
-            "[TitleViewWindow.CloseHistory]",
-            "[TitleViewWindow.CloseClaimants]");
+                .Gap().Add(GuiBuilder.State("_hide")
+                    .Using("Animation_FadeOut_Quick", "Sound_WindowHide_Standard"))
 
-    // --- The realm-lore panel -------------------------------------------------------------------
-    //
-    // Three pieces, all spliced into window_title.gui, because a fourth Target for the same file
-    // would not work: Patch() reads vanilla and writes the mod once per Target, so a second entry
-    // naming window_title.gui would overwrite the wilderness placeholder rather than join it.
-    //
-    // The text comes from Emit/ChronicleWriter.cs, which writes one `gen_lore_<title key>` per
-    // title into its own localisation file. Nothing else is in the path: no scripted_gui, no
-    // variable, no on_action. The button asks whether that key resolves to anything and hides
-    // itself when it does not, which is what gives baronies and wilderness no button rather than
-    // an empty panel, and what lets the whole feature vanish cleanly under --no-history.
+                .Gap().Add(GuiBuilder.VBox()
+                    .Using("Window_Margins")
+
+                    .Gap().Add(GuiBuilder.Of("header_standard")
+                        .ExpandingH()
+                        .Gap().Add(GuiBuilder.BlockOverride("header_text")
+                            .Text("GEN_ARTIFACT_INDEX_TITLE"))
+                        // The same scripted_gui the window's `visible` asks. One entry owns both
+                        // directions, so opening and closing cannot disagree about what open means.
+                        .Gap().Add(GuiBuilder.BlockOverride("button_close")
+                            .DataContext(GuiExpr.Raw("GetScriptedGui( 'gen_artifact_index_window' )"))
+                            .OnClick(GuiExpr.Raw(
+                                $"ScriptedGui.Execute( {player} )"))))
+
+                    .Gap().Add(GuiBuilder.Of("text_multi")
+                        .ExpandingH()
+                        .MaxWidth(700)
+                        .Text("GEN_ARTIFACT_INDEX_BLURB"))
+
+                    .Gap().Add(GuiBuilder.ScrollBox()
+                        .Expanding()
+                        .Gap().Add(GuiBuilder.BlockOverride("scrollbox_content")
+                            .Add(GuiBuilder.VBox()
+                                .ExpandingH()
+                                .Spacing(4)
+                                .DataModel(entries)
+                                .Gap().Add(GuiBuilder.Item().Add(Treasure()))))
+
+                        .Gap().Add(GuiBuilder.BlockOverride("scrollbox_empty")
+                            .Visible(GuiExpr.IsDataModelEmpty(entries))
+                            .Text("GEN_ARTIFACT_INDEX_EMPTY"))))));
+
+        doc.Ship(modDir);
+
+        // The registry entry. Not a .gui file and so not a GuiDocument, but it is written here
+        // rather than kept in BaseFilesToCopy because it names the file above by path: the two are
+        // one unit, and a registry pointing at a window that moved reports "Could not find widget"
+        // and nothing else.
+        string registry = Path.Combine(modDir, "gui", "scripted_widgets");
+        Directory.CreateDirectory(registry);
+        Io.ParadoxText.WriteNoBom(
+            Path.Combine(registry, "gen_artifact_index.txt"),
+            "# Instantiates the artifact index. Written by Emit/GuiWriter.cs.\n"
+            + "#\n"
+            + "# Names the HOST type, not the window itself: the host is what exists from startup,\n"
+            + "# and the window it contains is what appears when the decision sets the flag.\n"
+            + "gui/gen_artifact_index.gui = gen_artifact_index_host\n");
+    }
+
+    /// <summary>
+    /// One row: what the thing is, and who has it.
+    ///
+    /// Every string is a single datafunction with no literal beside it, which is not a style
+    /// preference — <c>text</c> routes its whole contents through the localizer and logs an
+    /// unlocalized-text error per line per load when a literal is mixed in. Two widgets side by
+    /// side cost nothing and cannot trip it.
+    /// </summary>
+    private static GuiBuilder Treasure()
+    {
+        return GuiBuilder.HBox()
+            .DataContext(GuiExpr.Raw("Scope.Artifact"))
+            .ExpandingH()
+            .Spacing(10)
+
+            .Gap().Add(GuiBuilder.Background()
+                .Texture("gfx/interface/component_masks/mask_brushed.dds")
+                .Color("0.2", "0.2", "0.31", "0.45"))
+
+            // Vanilla's own artifact icon: rarity frame, unique marker and the full artifact
+            // tooltip, all from the datacontext already in scope.
+            .Gap().Add(GuiBuilder.Of("icon_artifact").Size(64, 64))
+
+            .Gap().Add(GuiBuilder.VBox()
+                .ExpandingH()
+                .Align("left")
+                .Add(GuiBuilder.TextSingle()
+                        .ExpandingH()
+                        .Align("left")
+                        .Format("#high")
+                        .Text(GuiExpr.Raw("Artifact.GetName")),
+                     GuiBuilder.TextSingle()
+                        .ExpandingH()
+                        .Align("left")
+                        .Format("#weak")
+                        .Text(GuiExpr.Raw("Artifact.GetRarityAndSlotType"))))
+
+            .Gap().Add(GuiBuilder.VBox()
+                .Align("right")
+                .Add(GuiBuilder.TextSingle()
+                        .Align("right")
+                        .Text(GuiExpr.Raw("Artifact.GetOwner.GetNameNoTooltip")),
+                     GuiBuilder.TextSingle()
+                        .Align("right")
+                        .Format("#weak")
+                        .Text(GuiExpr.Raw("Artifact.GetOwner.GetPrimaryTitle.GetNameNoTooltip"))));
+    }
+
+    // ===========================================================================================
+    // The county window
+    // ===========================================================================================
+
+    /// <summary>
+    /// Empties the county window for unclaimed land, and gives it the frontier actions.
+    ///
+    /// Two kinds of edit, and the difference between them is worth keeping visible. A widget that
+    /// already carries a <c>visible</c> gets the wilderness condition folded into it with
+    /// <c>And</c>, leaving vanilla in charge of every other reason it might hide. A widget with
+    /// none gets one written for it, which makes this project responsible for that widget's whole
+    /// visibility from then on. The first is cheap; the second is a commitment.
+    /// </summary>
+    private static void PatchCountyView(string modDir, string gameDir)
+    {
+        var doc = GuiDocument.Open(gameDir, "gui", "gui", "window_county_view.gui");
+        if (doc is null) return;
+
+        var scope = GuiScope.Root("HoldingView.GetProvince");
+        var wilderness = new ScriptedGui("wilderness_county", scope);
+
+        // A county that has been settled but has no holding yet. The move-capital button and the
+        // build-holding prompt are wrong there for a different reason than in raw wilderness, so
+        // they hang off their own question.
+        var unfinished = new ScriptedGui("wilderness_unfinished_county", scope);
+
+        doc.Widget("holder", "holder_info")
+           .AndVisible(wilderness.IsHidden());
+        doc.Widget("move-capital button", "set_realm_capital_button")
+           .AndVisible(unfinished.IsHidden());
+        doc.Widget("holding taxes", "tutorial_highlight_holding_view_taxes_box")
+           .AndVisible(wilderness.IsHidden());
+        doc.Widget("holding loot", "tutorial_highlight_holding_view_loot_box")
+           .AndVisible(wilderness.IsHidden());
+
+        doc.NameField("stats", "county_stats").InsertVisible(wilderness.IsHidden());
+        doc.NameField("modifiers", "county_modifiers_grid").InsertVisible(wilderness.IsHidden());
+        doc.NameField("build-holding prompt", "construct_holding").InsertVisible(unfinished.IsHidden());
+
+        doc.NameField("settle button", "county_info").InsertBefore(FrontierActions(wilderness));
+
+        doc.Ship(modDir);
+    }
+
+    /// <summary>
+    /// The column of frontier actions: settle, oversee, go home, and the three promotions.
+    ///
+    /// Every button asks the same question it acts on, so a button is on screen exactly when
+    /// pressing it would do something. That is worth stating because the failure is silent: a
+    /// scripted_gui asked in a scope it does not expect evaluates false rather than erroring, so a
+    /// button whose <c>visible</c> and <c>onclick</c> disagree simply goes quiet. Wiring all four
+    /// properties from one object is what makes them unable to disagree.
+    /// </summary>
+    private static GuiNode FrontierActions(ScriptedGui wilderness)
+    {
+        // Not the same scope the window's own widgets use: the wilderness scripted_guis want the
+        // player as root with the province beside it, which is the shape their effects expect.
+        var scope = GuiScope.Root("GetPlayer").With("wilderness", "HoldingView.GetProvince");
+
+        var player = GuiExpr.Raw("GetPlayer.IsValid");
+        var settle = new ScriptedGui("wilderness_settle", scope);
+        var oversee = new ScriptedGui("wilderness_oversee", scope);
+        var returnHome = new ScriptedGui("wilderness_return_home", scope);
+
+        return GuiBuilder.VBox("wilderness_buttons")
+            .ExpandingH()
+            .Margin(5, 10)
+            .Spacing(4)
+            .Gap().Visible(player)
+            .Gap().Add(
+                // The only one that also asks whether this is wilderness at all. The others sit
+                // behind scripted_guis that already imply it.
+                Action("wilderness_settle_button", "WILDERNESS_SETTLE_BUTTON")
+                    .Gap().Visible(GuiExpr.And(player, wilderness.IsShown(), settle.IsShown()))
+                    .Usable(settle, player)
+                    .Tip(settle)
+                    .Runs(settle),
+
+                Action("wilderness_oversee_button", "WILDERNESS_OVERSEE_BUTTON")
+                    .Gap().Shown(oversee, player)
+                    .Usable(oversee, player)
+                    .Tip(oversee)
+                    // Opens the activity window rather than executing the scripted_gui it asks
+                    // about: the scripted_gui is the gate, the activity is the thing.
+                    .OnClick(GuiExpr.Raw(
+                        "ToggleGameViewData( 'activity_list_detail_host_window', "
+                        + "GetActivityType( 'activity_oversee_colony' ).Self )")),
+
+                Action("wilderness_return_home_button", "WILDERNESS_RETURN_HOME_BUTTON")
+                    .Gap().Bind(returnHome, player),
+
+                Promotion("wilderness_promote_button",
+                    "WILDERNESS_PROMOTE_BUTTON", "promote_colony_interaction"),
+                Promotion("wilderness_promote_city_button",
+                    "WILDERNESS_PROMOTE_CITY_BUTTON", "promote_colony_to_city_interaction"),
+                Promotion("wilderness_promote_temple_button",
+                    "WILDERNESS_PROMOTE_TEMPLE_BUTTON", "promote_colony_to_temple_interaction"));
+    }
+
+    private static GuiBuilder Action(string name, string text)
+        => GuiBuilder.ButtonStandard(name).Gapped().Size(280, 40).Text(text);
+
+    /// <summary>
+    /// A promotion button, which goes through a player interaction rather than a scripted_gui.
+    ///
+    /// The county title has to be in the datacontext, because all four of the interaction functions
+    /// aim at <c>Title.Self</c>. Without it every one of them quietly answers no and the button
+    /// never appears — the same silent failure as a mismatched scope, from the other direction.
+    /// </summary>
+    private static GuiBuilder Promotion(string name, string text, string interaction)
+        => Action(name, text)
+            .DataContext("[HoldingView.GetCountyTitle]")
+            .Gap().Bind(new TitleInteraction(interaction));
+
+    // ===========================================================================================
+    // The character window
+    // ===========================================================================================
+
+    private static void PatchCharacterWindow(string modDir, string gameDir)
+    {
+        var doc = GuiDocument.Open(gameDir, "gui", "gui", "window_character.gui");
+        if (doc is null) return;
+
+        var wilderness = new ScriptedGui("wilderness_holder",
+            GuiScope.Root("CharacterWindow.GetCharacter"));
+
+        doc.NameField("window body", "main_content").InsertVisible(wilderness.IsHidden());
+
+        // The placeholder goes in at the window root, above vanilla's first `using`. Root level is
+        // the shape the title lore panel and the colony widget also use: a standalone `window` is
+        // only instantiated if the engine knows about it, and there is no way to register a new
+        // game view from script.
+        doc.Leaf("placeholder", "using", "Window_Size_Sidebar")
+           .InsertBefore(Placeholder("WILDERNESS_HOLDER_WINDOW", wilderness,
+               "[CharacterWindow.Close]"));
+
+        doc.Ship(modDir);
+    }
+
+    /// <summary>
+    /// What the wilderness dummy's window shows instead of a character: one line of text, and a way
+    /// out.
+    ///
+    /// The close button takes every close call the window has, because a window closed halfway
+    /// leaves its sub-panels floating over the map.
+    /// </summary>
+    private static GuiNode Placeholder(string text, ScriptedGui shown, params string[] onclick)
+        => GuiBuilder.Widget("wilderness_placeholder")
+            .Visible(shown.IsShown())
+            .Size("100%", "100%")
+            .Gap().Add(
+                GuiBuilder.ButtonClose()
+                    .ParentAnchor("top|right")
+                    .Position(-18, 18)
+                    .Size(30, 30)
+                    .Shortcut("close_window")
+                    .Add(onclick.Select(call => GuiNode.Leaf("onclick", GuiNode.Quote(call)))),
+
+                GuiBuilder.TextMulti("wilderness_placeholder_text").Gapped()
+                    .ParentAnchor("center")
+                    .AutoResize()
+                    .MaxWidth(320)
+                    .Align("center")
+                    .Text(text));
+
+    // ===========================================================================================
+    // The title window
+    // ===========================================================================================
+
+    /// <summary>
+    /// The wilderness placeholder, and the realm-lore panel.
+    ///
+    /// The lore text comes from <see cref="ChronicleWriter"/>, which writes one
+    /// <c>gen_lore_&lt;title key&gt;</c> per title into its own localisation file. Nothing else is
+    /// in the path: no scripted_gui, no variable, no on_action. The button asks whether that key
+    /// resolves to anything and hides itself when it does not, which is what gives baronies and
+    /// wilderness no button rather than an empty panel, and what lets the whole feature vanish
+    /// cleanly under <c>--no-history</c>.
+    /// </summary>
+    private static void PatchTitleWindow(string modDir, string gameDir)
+    {
+        var doc = GuiDocument.Open(gameDir, "gui", "gui", "window_title.gui");
+        if (doc is null) return;
+
+        var wilderness = new ScriptedGui("wilderness_title",
+            GuiScope.Root("TitleViewWindow.GetTitle"));
+
+        doc.NameField("window body", "title_view_main_tab").InsertVisible(wilderness.IsHidden());
+
+        doc.Leaf("placeholder", "using", "Window_Background_Sidebar")
+           .InsertBefore(
+                Placeholder("WILDERNESS_TITLE_WINDOW", wilderness,
+                    "[TitleViewWindow.Close]",
+                    "[TitleViewWindow.CloseHistory]",
+                    "[TitleViewWindow.CloseClaimants]"),
+                TitleLorePanel(wilderness));
+
+        // One line into vanilla's `_show` state, so the panel starts closed every time the window
+        // opens. GetVariableSystem is global to the UI and outlives both the panel and the window,
+        // so without this the panel would follow you from title to title once opened. Vanilla
+        // clears `display_allegiance` in the same block for the same reason.
+        doc.Inline("lore reset", "position", "0", "0")
+           .InsertBefore(GuiNode.Leaf("on_start", GuiExpr.VariableClear("gen_title_lore").Quoted));
+
+        doc.Block("lore button", "button_sidepanel_right").InsertBefore(TitleLoreButton());
+
+        doc.Ship(modDir);
+    }
 
     /// <summary>
     /// The button, spliced in above vanilla's "view_claimants" as a third entry in the vertical
     /// flowcontainer that already holds it and "title history".
     ///
-    /// No `visible` of its own. It lives inside `title_view_main_tab`, which the wilderness Insert
-    /// above stamps a `visible` onto, so unclaimed land hides it without this having to ask.
+    /// No wilderness check of its own. It lives inside <c>title_view_main_tab</c>, which the insert
+    /// above stamps a <c>visible</c> onto, so unclaimed land hides it without this having to ask.
     ///
-    /// GetVariableSystem rather than a scripted_gui: the panel is pure UI state with nothing to
-    /// tell the game, and vanilla toggles its own expandables exactly this way (see
-    /// tournament_progress_to_victory_widget.gui).
+    /// GetVariableSystem rather than a scripted_gui: the panel is pure UI state with nothing to tell
+    /// the game, and vanilla toggles its own expandables exactly this way — see
+    /// tournament_progress_to_victory_widget.gui.
     /// </summary>
-    private const string TitleLoreButton = """
-        button_sidepanel_right = {
-            name = "gen_title_lore_button"
-            parentanchor = right
+    private static GuiNode TitleLoreButton()
+        => GuiBuilder.Of("button_sidepanel_right", "gen_title_lore_button")
+            .ParentAnchor("right")
+            .Gap().Visible(GuiExpr.Not(GuiExpr.StringIsEmpty(GuiExpr.Localize(LoreKey))))
+            .OnClick(GuiExpr.VariableToggle("gen_title_lore"))
+            .Tooltip("GEN_TITLE_LORE_TOOLTIP")
+            .Gap().Add(GuiBuilder.BlockOverride("button_text")
+                .Text("GEN_TITLE_LORE")
+                .MaxWidth(110));
 
-            visible = "[Not( StringIsEmpty( Localize( Concatenate( 'gen_lore_', Title.GetKey ) ) ) )]"
-            onclick = "[GetVariableSystem.Toggle( 'gen_title_lore' )]"
-            tooltip = "GEN_TITLE_LORE_TOOLTIP"
-
-            blockoverride "button_text"
-            {
-                text = "GEN_TITLE_LORE"
-                max_width = 110
-            }
-        }
-        """;
+    /// <summary>The localisation key ChronicleWriter files this title's lore under.</summary>
+    private static GuiExpr LoreKey
+        => GuiExpr.Concatenate(GuiExpr.Literal("gen_lore_"), GuiExpr.Raw("Title.GetKey"));
 
     /// <summary>
     /// The panel the button opens.
     ///
-    /// A widget at the window's root rather than a `window` of its own: a standalone window is only
-    /// instantiated if the engine knows about it, and there is no way to register a new game view
-    /// from script. A root-level child with `allow_outside` is the same picture — it is what
-    /// vanilla's own pop-outs look like, and what the colony widget in BaseFilesToCopy already does.
+    /// A widget at the window's root rather than a <c>window</c> of its own: a standalone window is
+    /// only instantiated if the engine knows about it, and there is no way to register a new game
+    /// view from script. A root-level child with <c>allow_outside</c> is the same picture — it is
+    /// what vanilla's own pop-outs look like, and what the colony widget in BaseFilesToCopy does.
     ///
-    /// Root level costs it the `Title` datacontext, which is set further down on the main vbox, so
-    /// it sets its own. x = 660 clears the 650-wide title window completely; the vanilla pop-outs
+    /// Root level costs it the <c>Title</c> datacontext, which is set further down on the main vbox,
+    /// so it sets its own. x = 660 clears the 650-wide title window completely; the vanilla pop-outs
     /// sit at 630 and overlap by twenty pixels, which they can afford because they are separate
     /// windows on their own layer and this is a sibling drawn underneath.
     ///
-    /// The wilderness half of the `visible` is not redundant with the button's placement: the
+    /// The wilderness half of the <c>visible</c> is not redundant with the button's placement: the
     /// variable outlives the window, so opening the panel on a real title and then clicking
     /// unclaimed land would otherwise leave it up over the placeholder.
     /// </summary>
-    private const string TitleLorePanel = """
-        widget = {
-            name = "gen_title_lore_panel"
-            datacontext = "[TitleViewWindow.GetTitle]"
-            visible = "[And( GetVariableSystem.Exists( 'gen_title_lore' ), Not( {SHOW_RAW} ) )]"
+    private static GuiNode TitleLorePanel(ScriptedGui wilderness)
+        => GuiBuilder.Widget("gen_title_lore_panel")
+            .DataContext("[TitleViewWindow.GetTitle]")
+            .Visible(GuiExpr.And(
+                GuiExpr.VariableExists("gen_title_lore"),
+                GuiExpr.Not(wilderness.IsShown())))
+            .Gap().Position(660, 80)
+            .Size("480", "60%")
+            .AllowOutside()
+            .Gap().Using("Window_Background", "Window_Decoration")
+            .Gap().Add(GuiBuilder.VBox()
+                .Comment("""
+                    The width budget, because getting it wrong clips every line and the failure is
+                    silent -- a max_width larger than the space available does not wrap early, it
+                    overflows and the scrollbox crops it. Four things take a bite, in this order:
 
-            position = { 660 80 }
-            size = { 480 60% }
-            allow_outside = yes
+                        480  panel
+                       - 36  this vbox's margin (Window_Margins would take 80, which is sized for a
+                             full window and leaves a text panel this wide barely 300 usable)
+                       - 35  Scrollbox_Margins, inside the scrollbox: 15 left, 20 right
+                       - 13  the vertical scrollbar
+                       = 396 usable, against a max_width of 370 below
 
-            using = Window_Background
-            using = Window_Decoration
+                    Change any of those and the max_width has to move with it.
+                    """)
+                .Margin(18, 16)
+                .Spacing(8)
+                .Gap().Add(
+                    GuiBuilder.HBox()
+                        .ExpandingH()
+                        .Gap()
+                        .CommentNext("""
+                            Matches Scrollbox_Margins' own left inset, which the body text below
+                            picks up from inside the scrollbox and this row does not. Without it the
+                            title hangs 15px to the left of the paragraphs it heads.
+                            """)
+                        .MarginLeft(15)
+                        .Gap()
+                        .CommentNext("""
+                            Capped for the same reason as the body, minus the close button's own
+                            width: generated realm names run long and this one is a single line, so
+                            without it a bad name pushes the close button off the panel entirely.
+                            """)
+                        .Add(
+                            GuiBuilder.TextSingle()
+                                .Text(GuiExpr.Raw("Title.GetNameNoTooltip"))
+                                .Format("#high")
+                                .MaxWidth(370)
+                                .Using("Font_Size_Medium"),
 
-            # The width budget, because getting it wrong clips every line and the failure is silent
-            # -- max_width larger than the space available does not wrap early, it overflows and the
-            # scrollbox crops it. Four things take a bite, in this order:
-            #
-            #     480  panel
-            #    - 36  this vbox's margin (Window_Margins would take 80, which is sized for a full
-            #          window and leaves a text panel this wide with barely 300 usable)
-            #    - 35  Scrollbox_Margins, inside the scrollbox: 15 left, 20 right
-            #    - 13  the vertical scrollbar
-            #    = 396 usable, against a max_width of 370 below
-            #
-            # Change any of those and the max_width has to move with it.
-            vbox = {
-                margin = { 18 16 }
-                spacing = 8
+                            GuiBuilder.Expand(),
 
-                hbox = {
-                    layoutpolicy_horizontal = expanding
+                            GuiBuilder.ButtonClose()
+                                .OnClick(GuiExpr.VariableClear("gen_title_lore"))),
 
-                    # Matches Scrollbox_Margins' own left inset, which the body text below picks up
-                    # from inside the scrollbox and this row does not. Without it the title hangs
-                    # 15px to the left of the paragraphs it heads.
-                    margin_left = 15
+                    GuiBuilder.ScrollBox()
+                        .ExpandingH()
+                        .ExpandingV()
+                        .Gap().Add(GuiBuilder.BlockOverride("scrollbox_content")
+                            .Add(GuiBuilder.TextMulti()
+                                .ExpandingH()
+                                .AutoResize()
+                                .MaxWidth(370)
+                                .Text(GuiExpr.Localize(LoreKey))))));
 
-                    # Capped for the same reason as the body, minus the close button's own width:
-                    # generated realm names run long and this one is a single line, so without it a
-                    # bad name pushes the close button off the panel entirely.
-                    text_single = {
-                        text = "[Title.GetNameNoTooltip]"
-                        default_format = "#high"
-                        max_width = 370
-                        using = Font_Size_Medium
-                    }
-
-                    expand = {}
-
-                    button_close = {
-                        onclick = "[GetVariableSystem.Clear( 'gen_title_lore' )]"
-                    }
-                }
-
-                scrollbox = {
-                    layoutpolicy_horizontal = expanding
-                    layoutpolicy_vertical = expanding
-
-                    blockoverride "scrollbox_content"
-                    {
-                        text_multi = {
-                            layoutpolicy_horizontal = expanding
-                            autoresize = yes
-                            max_width = 370
-                            text = "[Localize( Concatenate( 'gen_lore_', Title.GetKey ) )]"
-                        }
-                    }
-                }
-            }
-        }
-        """;
+    // ===========================================================================================
+    // The council window
+    // ===========================================================================================
 
     /// <summary>
-    /// One line into vanilla's `_show` state, so the panel starts closed every time the title
-    /// window opens.
+    /// The colony's council: the one patch here that adds a mechanic rather than emptying a window
+    /// for the wilderness dummy.
     ///
-    /// GetVariableSystem is global to the UI and survives both the panel and the window, so without
-    /// this the panel would follow you from title to title once opened. Vanilla clears
-    /// `display_allegiance` in the same block for the same reason; this just adds a third on_start
-    /// beside the two already there.
+    /// It is in this writer because CK3 leaves no alternative. window_council.gui names every seat
+    /// it draws, one <c>CouncilWindow.GetCouncillor('councillor_marshal')</c> at a time, with no
+    /// datamodel over positions anywhere in it. A council position declared in script and not named
+    /// here is invisible — the AI will still fill it, and nothing will report anything. AGOT ships
+    /// the same shape for its Castellan and Admiral: new position files plus one window_council.gui
+    /// override.
+    ///
+    /// ---- Three edits for five vanilla seats ----
+    ///
+    /// The layout already groups them: Chancellor and Steward share an hbox, Marshal and Spymaster
+    /// share another, and both hboxes carry the <c>visible</c> that gets narrowed. Only the Court
+    /// Chaplain sits loose in the top row and needs naming on its own.
+    ///
+    /// Its name appears twice in the file — the second is the celestial-ministry layout further
+    /// down, which is gated behind HasAccessToMinistry anyway, and which no colonist has. The first
+    /// match is the ordinary council. That was true before this was a tree and was a coincidence of
+    /// search order; it is now a stated rule, and the second occurrence is the one without a
+    /// <c>visible</c> of its own, so aiming at it would be caught rather than silently taken.
+    ///
+    /// Vanilla's SPOUSE seat is deliberately left alone. A colonist's wife advising him is not a
+    /// court office, it is the same person he was already talking to, and it is the one vanilla seat
+    /// whose premise survives on a frontier post.
+    ///
+    /// ---- What happens with --no-wilderness ----
+    ///
+    /// Nothing, and that is checked rather than hoped for. Without the Wilderness file set there is
+    /// no <c>colony_council</c> scripted_gui, a .gui naming a scripted_gui that does not exist
+    /// evaluates false, and false is the right answer in both directions here: the colony seats hide
+    /// themselves and <c>Not(false)</c> leaves every vanilla row exactly as it was.
     /// </summary>
-    private const string TitleLoreReset =
-        "on_start = \"[GetVariableSystem.Clear( 'gen_title_lore' )]\"";
+    private static void PatchCouncilWindow(string modDir, string gameDir)
+    {
+        var doc = GuiDocument.Open(gameDir, "gui", "gui", "window_council.gui");
+        if (doc is null) return;
 
-    private const string SettleButton = """
-        vbox = {
-            name = "wilderness_buttons"
-            layoutpolicy_horizontal = expanding
-            margin = { 5 10 }
-            spacing = 4
+        var colony = new ScriptedGui("colony_council", GuiScope.Root("CouncilWindow.GetCharacter"));
 
-            visible = "[GetPlayer.IsValid]"
+        doc.BlockWithComment("chancellor/steward row", "hbox = { # Chancellor + Steward")
+           .AndVisible(colony.IsHidden());
+        doc.BlockWithComment("marshal/spymaster row", "hbox = { # Marshal + Spymaster")
+           .AndVisible(colony.IsHidden());
+        doc.Widget("court chaplain seat", "tutorial_court_chaplain")
+           .AndVisible(colony.IsHidden());
 
-            button_standard = {
-                name = "wilderness_settle_button"
-                size = { 280 40 }
-                text = "WILDERNESS_SETTLE_BUTTON"
+        // Two loose seats rather than a row of their own, because the anchor is itself a seat in
+        // vanilla's top row. The spouse stays, the nomad spymaster and the chaplain beside them go
+        // invisible for a colonist, and a box container gives invisible children no width — so the
+        // row a colonist reads is Spouse, Warden, Quartermaster. That is the same mechanism
+        // vanilla's own vizier/spouse swap relies on.
+        doc.BlockWithComment("warden and quartermaster",
+                "widget_councillor_item = { # Spymaster (If Nomadic it's moved up here)")
+           .InsertBefore(
+                CouncilSeat(colony, "councillor_colony_warden", "bg_council_marshal.dds"),
+                CouncilSeat(colony, "councillor_colony_quartermaster", "bg_council_steward.dds"));
 
-                onclick = "[GetScriptedGui('wilderness_settle').Execute( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End )]"
-                tooltip = "[GetScriptedGui('wilderness_settle').BuildTooltip( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End )]"
-                enabled = "[And( GetPlayer.IsValid, GetScriptedGui('wilderness_settle').IsValid( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End ) )]"
-                visible = "[And( GetPlayer.IsValid, And( {SHOW_RAW}, GetScriptedGui('wilderness_settle').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End ) ) )]"
-            }
+        // A whole new row above vanilla's hidden ones. Two rows of three is vanilla's own shape.
+        doc.BlockWithComment("speaker/pathfinder/preacher row", "hbox = { # Chancellor + Steward")
+           .InsertBefore(CouncilRow(colony));
 
-            button_standard = {
-                name = "wilderness_oversee_button"
-                size = { 280 40 }
-                text = "WILDERNESS_OVERSEE_BUTTON"
-
-                visible = "[And( GetPlayer.IsValid, GetScriptedGui('wilderness_oversee').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End ) )]"
-                enabled = "[And( GetPlayer.IsValid, GetScriptedGui('wilderness_oversee').IsValid( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End ) )]"
-                tooltip = "[GetScriptedGui('wilderness_oversee').BuildTooltip( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End )]"
-                onclick = "[ToggleGameViewData( 'activity_list_detail_host_window', GetActivityType( 'activity_oversee_colony' ).Self )]"
-            }
-
-            button_standard = {
-                name = "wilderness_return_home_button"
-                size = { 280 40 }
-                text = "WILDERNESS_RETURN_HOME_BUTTON"
-
-                visible = "[And( GetPlayer.IsValid, GetScriptedGui('wilderness_return_home').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End ) )]"
-                enabled = "[And( GetPlayer.IsValid, GetScriptedGui('wilderness_return_home').IsValid( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End ) )]"
-                tooltip = "[GetScriptedGui('wilderness_return_home').BuildTooltip( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End )]"
-                onclick = "[GetScriptedGui('wilderness_return_home').Execute( GuiScope.SetRoot( GetPlayer.MakeScope ).AddScope( 'wilderness', HoldingView.GetProvince.MakeScope ).End )]"
-            }
-
-            button_standard = {
-                name = "wilderness_promote_button"
-                size = { 280 40 }
-                text = "WILDERNESS_PROMOTE_BUTTON"
-                datacontext = "[HoldingView.GetCountyTitle]"
-
-                visible = "[GetPlayer.IsPlayerInteractionShownAndCanPickTitle( 'promote_colony_interaction', Title.Self )]"
-                enabled = "[GetPlayer.IsPlayerInteractionWithTargetTitleValid( 'promote_colony_interaction', Title.Self )]"
-                tooltip = "[GetPlayer.GetPlayerInteractionWithTargetTitleTooltip( 'promote_colony_interaction', Title.Self )]"
-                onclick = "[GetPlayer.OpenPlayerInteractionWithTargetTitle( 'promote_colony_interaction', Title.Self )]"
-            }
-
-            button_standard = {
-                name = "wilderness_promote_city_button"
-                size = { 280 40 }
-                text = "WILDERNESS_PROMOTE_CITY_BUTTON"
-                datacontext = "[HoldingView.GetCountyTitle]"
-
-                visible = "[GetPlayer.IsPlayerInteractionShownAndCanPickTitle( 'promote_colony_to_city_interaction', Title.Self )]"
-                enabled = "[GetPlayer.IsPlayerInteractionWithTargetTitleValid( 'promote_colony_to_city_interaction', Title.Self )]"
-                tooltip = "[GetPlayer.GetPlayerInteractionWithTargetTitleTooltip( 'promote_colony_to_city_interaction', Title.Self )]"
-                onclick = "[GetPlayer.OpenPlayerInteractionWithTargetTitle( 'promote_colony_to_city_interaction', Title.Self )]"
-            }
-
-            button_standard = {
-                name = "wilderness_promote_temple_button"
-                size = { 280 40 }
-                text = "WILDERNESS_PROMOTE_TEMPLE_BUTTON"
-                datacontext = "[HoldingView.GetCountyTitle]"
-
-                visible = "[GetPlayer.IsPlayerInteractionShownAndCanPickTitle( 'promote_colony_to_temple_interaction', Title.Self )]"
-                enabled = "[GetPlayer.IsPlayerInteractionWithTargetTitleValid( 'promote_colony_to_temple_interaction', Title.Self )]"
-                tooltip = "[GetPlayer.GetPlayerInteractionWithTargetTitleTooltip( 'promote_colony_to_temple_interaction', Title.Self )]"
-                onclick = "[GetPlayer.OpenPlayerInteractionWithTargetTitle( 'promote_colony_to_temple_interaction', Title.Self )]"
-            }
-        }
-        """;
-
-    // --- The colony council seats ---------------------------------------------------------------
-    //
-    // Every position key below is a contract with
-    // BaseFilesToCopy/Wilderness/common/council_positions/00_colony_council_positions.txt, and the
-    // asymmetry of getting it wrong is worth knowing before editing either side: a position with no
-    // seat here is silently invisible, while a seat naming a position that does not exist draws an
-    // empty, nameless panel. The second is what a colonist's council looked like before any of this
-    // existed, when colony_government still said `council = no`.
+        doc.Ship(modDir);
+    }
 
     /// <summary>
     /// One council seat, in the shape vanilla gives its own — four datacontexts walking from the
@@ -420,172 +598,113 @@ public static class GuiWriter
     /// before it can name the OFFICE. That is also why every colony position carries a default task
     /// — a seat whose owner has no valid task for it renders as blank as a seat with no position.
     ///
+    /// Every position key is a contract with
+    /// BaseFilesToCopy/Wilderness/common/council_positions/00_colony_council_positions.txt, and the
+    /// asymmetry of getting it wrong is worth knowing before editing either side: a position with no
+    /// seat here is silently invisible, while a seat naming a position that does not exist draws an
+    /// empty, nameless panel.
+    ///
     /// Backgrounds are vanilla's council illustrations, matched by skill rather than by fiction:
     /// there is no frontier art to point at, and a stone chancellery behind the Speaker is a better
     /// wrong answer than an empty frame. The alpha is vanilla's own 0.6.
     /// </summary>
-    private static string ColonyCouncilSeat(string position, string illustration) => $$"""
-        widget_councillor_item = { # {{position}}
-            layoutpolicy_horizontal = expanding
-            layoutpolicy_vertical = expanding
-            datacontext = "[CouncilWindow.GetCouncillor('{{position}}')]"
-            datacontext = "[GuiCouncilPosition.GetActiveCouncilTask]"
-            datacontext = "[ActiveCouncilTask.GetPositionType]"
-            datacontext = "[ActiveCouncilTask.GetCouncillor]"
+    private static GuiNode CouncilSeat(ScriptedGui colony, string position, string illustration)
+        => GuiBuilder.Of("widget_councillor_item")
+            .Comment(position)
+            .Expanding()
+            .DataContext($"[CouncilWindow.GetCouncillor('{position}')]")
+            .DataContext("[GuiCouncilPosition.GetActiveCouncilTask]")
+            .DataContext("[ActiveCouncilTask.GetPositionType]")
+            .DataContext("[ActiveCouncilTask.GetCouncillor]")
+            .Gap().Visible(colony.IsShown())
+            .Gap().Add(
+                GuiBuilder.Background()
+                    .Texture($"gfx/interface/skinned/illustrations/council/{illustration}")
+                    .FitType("centercrop")
+                    .Alpha("0.6")
+                    .Using("Mask_Rough_Edges"),
 
-            visible = "{SHOW}"
-
-            background =  {
-                texture = "gfx/interface/skinned/illustrations/council/{{illustration}}"
-                fittype = centercrop
-                alpha = 0.6
-                using = Mask_Rough_Edges
-            }
-
-            background = {
-                texture = "gfx/interface/component_masks/mask_vignette.dds"
-                color = { 0.15 0.15 0.15 1 }
-                alpha = 0.3
-            }
-        }
-        """;
+                GuiBuilder.Background().Gapped()
+                    .Texture("gfx/interface/component_masks/mask_vignette.dds")
+                    .Color("0.15", "0.15", "0.15", "1")
+                    .Alpha("0.3"));
 
     /// <summary>
-    /// Warden and Quartermaster, spliced into vanilla's top row as siblings of the spouse seat.
-    ///
-    /// Two loose widgets rather than a row of their own, because the anchor they are added at is
-    /// itself a seat in that row. The spouse stays, the nomad spymaster and the chaplain beside them
-    /// go invisible for a colonist, and a box container gives invisible children no width — so the
-    /// row a colonist reads is Spouse, Warden, Quartermaster.
-    /// </summary>
-    private static string ColonyCouncilTopRowSeats
-        => ColonyCouncilSeat("councillor_colony_warden", "bg_council_marshal.dds")
-           + "\n\n"
-           + ColonyCouncilSeat("councillor_colony_quartermaster", "bg_council_steward.dds");
-
-    /// <summary>
-    /// Speaker, Pathfinder and Camp Preacher, as a row of their own above vanilla's hidden ones.
+    /// Speaker, Pathfinder and Camp Preacher, as a row of their own.
     ///
     /// The <c>visible</c> sits on the hbox rather than on each of the three, so the row is one
     /// question asked once. Its margins are copied from the Marshal/Spymaster row it stands in place
     /// of, so a colony council occupies the same space on screen as a privy council does.
     /// </summary>
-    private static string ColonyCouncilRow
+    private static GuiNode CouncilRow(ScriptedGui colony)
+        => GuiBuilder.HBox()
+            .Comment("Colony council — Speaker, Pathfinder, Camp Preacher")
+            .Expanding()
+            .Margin(10, 0)
+            .MarginBottom(5)
+            .Spacing(5)
+            .Gap().Visible(colony.IsShown())
+            .Gap().Add(
+                CouncilSeat(colony, "councillor_colony_speaker", "bg_council_chancellor.dds"),
+                CouncilSeat(colony, "councillor_colony_pathfinder", "bg_council_spymaster.dds"),
+                CouncilSeat(colony, "councillor_colony_preacher", "bg_council_chaplain.dds"));
+
+    // ===========================================================================================
+    // The bookmark tab
+    // ===========================================================================================
+
+    /// <summary>
+    /// Adds a line to the frontend's date tab, which vanilla builds as a bare year and nothing else.
+    ///
+    /// Nothing about vanilla's own widget is retyped: the year block stays exactly as written and
+    /// the new line goes in after it, so a CK3 patch that restyles the year carries straight
+    /// through.
+    /// </summary>
+    private static void PatchBookmarkTab(string modDir, string gameDir)
     {
-        get
-        {
-            string seats = string.Join("\n\n",
-                ColonyCouncilSeat("councillor_colony_speaker", "bg_council_chancellor.dds"),
-                ColonyCouncilSeat("councillor_colony_pathfinder", "bg_council_spymaster.dds"),
-                ColonyCouncilSeat("councillor_colony_preacher", "bg_council_chaplain.dds"));
+        var doc = GuiDocument.Open(gameDir, "gui", "gui", "frontend_bookmarks.gui");
+        if (doc is null) return;
 
-            string indented = string.Join('\n', seats
-                .Split('\n')
-                .Select(line => line.Length == 0 ? line : "    " + line));
+        // Anchored on what the widget SAYS, not on its name. `name = "year"` looks like the obvious
+        // anchor and is the wrong one: the file has two, and the first belongs to the bookmark row
+        // in the sidebar, which is a different widget showing the bookmark's own year.
+        // `[BookmarkGroup.GetName]` is only ever the tab — asked for as unique rather than assumed
+        // to be, so a vanilla change that introduces a second one skips the file instead of
+        // patching whichever came first.
+        var year = doc.Unique("date tab year",
+            n => !n.IsBlock && n.Key == "text" && n.Value == "\"[BookmarkGroup.GetName]\"");
 
-            return $$"""
-                hbox = { # Colony council — Speaker, Pathfinder, Camp Preacher
-                    layoutpolicy_horizontal = expanding
-                    layoutpolicy_vertical = expanding
-                    margin = { 10 0 }
-                    margin_bottom = 5
-                    spacing = 5
+        // The year TEXT is the anchor; the widget holding it is what the new line goes after.
+        // Reaching the container by walking up from the anchor is most of why this is a tree: the
+        // writer this replaces searched backwards for the nearest `text_single = {` and then
+        // brace-matched forward to find where it ended, with its own comment- and string-aware
+        // scanner to do it.
+        doc.At("date tab subtitle", year.Node?.Parent).InsertAfter(BookmarkTabSubtitle());
 
-                    visible = "{SHOW}"
+        ShowSelectedBookmarkName(doc);
 
-                {{indented}}
-                }
-                """;
-        }
+        doc.Ship(modDir);
     }
 
     /// <summary>
     /// The second line under the year on the bookmark tab — see
     /// <see cref="BookmarkWriter.GroupSubtitleKey"/> for what fills it.
     ///
-    /// A sibling of vanilla's "year" text rather than a replacement for it, and spliced in below
-    /// rather than written out here, so vanilla keeps authoring the year itself: the line this
-    /// writer owns is only ever the one it adds.
+    /// A sibling of vanilla's "year" text rather than a replacement for it, so vanilla keeps
+    /// authoring the year itself: the line this writer owns is only ever the one it adds.
     ///
-    /// The <c>visible</c> is what makes the splice safe to ship unconditionally. A run that wrote
-    /// no bookmark wrote no subtitle key either, and a `text` pointing at a key with nothing behind
-    /// it renders the key — so the widget asks first, exactly as the title-lore button does.
+    /// The <c>visible</c> is what makes the splice safe to ship unconditionally. A run that wrote no
+    /// bookmark wrote no subtitle key either, and a <c>text</c> pointing at a key with nothing
+    /// behind it renders the key — so the widget asks first, exactly as the title-lore button does.
     /// </summary>
-    private static string BookmarkTabSubtitle => $$"""
-        text_single = {
-            name = "gen_bookmark_group_subtitle"
-            text = "{{BookmarkWriter.GroupSubtitleKey}}"
-            default_format = "#weak;glow_color:{0,0,0,1}"
-            using = Font_Size_Small
-            using = Font_Type_Flavor
-            max_width = 190
-            visible = "[Not( StringIsEmpty( Localize( '{{BookmarkWriter.GroupSubtitleKey}}' ) ) )]"
-        }
-        """;
-
-    public static void WriteAll(string modDir, string gameDir, Config.MapConfig cfg)
-    {
-        foreach (var target in Targets) Patch(modDir, gameDir, target);
-        PatchBookmarkTab(modDir, gameDir);
-    }
-
-    /// <summary>
-    /// Adds a line to the frontend's date tab, which vanilla builds as a bare year and nothing else.
-    ///
-    /// Nothing about vanilla's own widget is retyped: the year block is lifted out of the file as
-    /// written and put back with the new line after it, so a CK3 patch that restyles the year
-    /// carries straight through. If either anchor is gone the file is not written at all — a mod
-    /// with no <c>gui/frontend_bookmarks.gui</c> falls back on vanilla's, and the tab is a bare year
-    /// again, which is the state this whole method is an improvement on rather than a dependency of.
-    /// </summary>
-    private static void PatchBookmarkTab(string modDir, string gameDir)
-    {
-        const string file = "frontend_bookmarks.gui";
-        string source = Path.Combine(gameDir, "gui", file);
-
-        if (!File.Exists(source))
-        {
-            Console.WriteLine($"  gui: SKIPPED ({file} not found in game folder)");
-            return;
-        }
-
-        string text = File.ReadAllText(source);
-
-        // Anchored on what the widget *says*, not on its name. `name = "year"` looks like the
-        // obvious anchor and is the wrong one: the file has two, and the first belongs to the
-        // bookmark row in the sidebar, which is a different widget showing the bookmark's own year.
-        // `[BookmarkGroup.GetName]` is only ever the tab. Counted rather than assumed, so a vanilla
-        // change that introduces a second one skips the file instead of patching the wrong widget.
-        const string anchor = "text = \"[BookmarkGroup.GetName]\"";
-
-        int at = text.IndexOf(anchor, StringComparison.Ordinal);
-        int open = at < 0 ? -1 : text.LastIndexOf("text_single = {", at, StringComparison.Ordinal);
-        int end = open < 0 ? -1 : MatchBrace(text, text.IndexOf('{', open));
-
-        if (end < 0 || text.IndexOf(anchor, at + 1, StringComparison.Ordinal) >= 0)
-        {
-            Console.WriteLine($"  gui: SKIPPED {file} — the date tab's year text is not where "
-                + "vanilla used to keep it. Not shipping a partial override.");
-            return;
-        }
-
-        int lineStart = text.LastIndexOf('\n', open) + 1;
-        string indent = text[lineStart..open];
-
-        string block = string.Join('\n', BookmarkTabSubtitle
-            .Split('\n')
-            .Select(line => line.Length == 0 ? line : indent + line));
-
-        text = text[..(end + 1)] + "\n\n" + block + text[(end + 1)..];
-
-        text = ShowSelectedBookmarkName(text, file);
-
-        string dest = Path.Combine(modDir, "gui", file);
-        Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-        ParadoxText.WriteNoBom(dest, text);
-
-        Console.WriteLine($"  gui: {file} — patched date tab subtitle");
-    }
+    private static GuiNode BookmarkTabSubtitle()
+        => GuiBuilder.TextSingle("gen_bookmark_group_subtitle")
+            .Text(BookmarkWriter.GroupSubtitleKey)
+            .Format("#weak;glow_color:{0,0,0,1}")
+            .Using("Font_Size_Small", "Font_Type_Flavor")
+            .MaxWidth(190)
+            .Visible(GuiExpr.Not(GuiExpr.StringIsEmpty(
+                GuiExpr.Localize(GuiExpr.Literal(BookmarkWriter.GroupSubtitleKey)))));
 
     /// <summary>
     /// Stops the bookmark's own tab going blank the moment it is selected.
@@ -593,141 +712,34 @@ public static class GuiWriter
     /// Vanilla fades the name off the selected row — with three or six bookmarks in a group that
     /// reads as the selected one stepping aside for the panel that now names it. This mod ships
     /// exactly one bookmark, so it is selected from the moment the screen opens and its name is
-    /// never once drawn: the tab is the bare ornament and nothing else, which is what it looked
-    /// like in game.
+    /// never once drawn: the tab is the bare ornament and nothing else.
     ///
     /// The state is left in place and its alpha flipped, rather than the state being cut. It is
-    /// paired with a `bookmark_tab_reset` state that fades the name back in, and a widget that can
-    /// be animated to 1 but never to 0 is a widget whose two animations disagree.
+    /// paired with a <c>bookmark_tab_reset</c> state that fades the name back in, and a widget that
+    /// can be animated to 1 but never to 0 is a widget whose two animations disagree.
+    ///
+    /// Best-effort, and deliberately not a shipping condition: a hidden bookmark name is a cosmetic
+    /// loss, and refusing to write the file over it would cost the date-tab subtitle too.
     /// </summary>
-    private static string ShowSelectedBookmarkName(string text, string file)
+    private static void ShowSelectedBookmarkName(GuiDocument doc)
     {
-        // Walked in one direction from a unique landmark, because none of these strings is unique
-        // on its own: the shadowed widget wrapping the row's name, then the name itself, then the
-        // selected-state trigger, then the one alpha that trigger sets.
-        int at = text.IndexOf("gfx/interface/bookmarks/bm_shadow.dds", StringComparison.Ordinal);
-        if (at >= 0) at = text.IndexOf("text = \"[Bookmark.GetName]\"", at, StringComparison.Ordinal);
-        if (at >= 0) at = text.IndexOf("[GameSetup.IsBookmarkSelected( Bookmark.Self )]", at, StringComparison.Ordinal);
+        // Identified by what the state DOES. The writer this replaces walked four IndexOf hops from
+        // a texture path and then guarded the result with `alpha - at > 400` — a character distance
+        // standing in for "is this still the same block".
+        var fades = doc.Nodes()
+            .Where(n => n.IsBlock
+                && n.Key == "state"
+                && n.Field("trigger_when") == "\"[GameSetup.IsBookmarkSelected( Bookmark.Self )]\""
+                && n.Field("alpha") == "0")
+            .ToList();
 
-        int alpha = at < 0 ? -1 : text.IndexOf("alpha = 0", at, StringComparison.Ordinal);
-
-        // The whole sequence lives inside one state block. A hit further off than that is some
-        // other widget's alpha, and dimming the wrong thing is worse than leaving the name hidden.
-        if (alpha < 0 || alpha - at > 400)
+        if (fades.Count != 1)
         {
-            Console.WriteLine($"  gui: {file} — left the selected bookmark's name hidden; vanilla "
-                + "no longer fades it where it used to");
-            return text;
-        }
-
-        return text.Remove(alpha, "alpha = 0".Length).Insert(alpha, "alpha = 1");
-    }
-
-    private static void Patch(string modDir, string gameDir, Target target)
-    {
-        string source = Path.Combine(gameDir, "gui", target.File);
-
-        if (!File.Exists(source))
-        {
-            Console.WriteLine($"  gui: SKIPPED ({target.File} not found in game or mod folder)");
+            Console.WriteLine("  gui: frontend_bookmarks.gui — left the selected bookmark's name "
+                + $"hidden; vanilla no longer fades it where it used to ({fades.Count} candidates)");
             return;
         }
 
-        string text = File.ReadAllText(source);
-
-        string Hide(string? gui)
-            => $"[Not( GetScriptedGui('{gui ?? target.ScriptedGui}').IsShown( GuiScope.SetRoot( "
-               + $"{target.Scope}.MakeScope ).End ) )]";
-
-        var patched = new List<string>();
-
-        // --- Widgets that already have a `visible` -------------------------------------------
-        foreach (var (anchor, what, gui) in target.Extend)
-        {
-            var match = Regex.Match(text,
-                Regex.Escape(anchor) + @"[\s\S]{0,400}?visible\s*=\s*""(\[[^""]*\])""");
-
-            if (!match.Success) continue;
-
-            var group = match.Groups[1];
-            string combined = $"[And( {Inner(group.Value)}, {Inner(Hide(gui))} )]";
-
-            text = text.Remove(group.Index, group.Length).Insert(group.Index, combined);
-            patched.Add(what);
-        }
-
-        // --- Widgets with none ----------------------------------------------------------------
-        foreach (var (anchor, what, gui) in target.Insert)
-        {
-            int at = text.IndexOf(anchor, StringComparison.Ordinal);
-            if (at < 0) continue;
-
-            int lineStart = text.LastIndexOf('\n', at) + 1;
-            string indent = text[lineStart..at];
-
-            int lineEnd = text.IndexOf('\n', at);
-            if (lineEnd < 0) continue;
-
-            text = text.Insert(lineEnd + 1, $"{indent}visible = \"{Hide(gui)}\"\n");
-            patched.Add(what);
-        }
-
-        // --- Whole widgets spliced in ----------------------------------------------------------
-        string show = string.IsNullOrEmpty(target.ScriptedGui)
-            ? "yes"
-            : $"[GetScriptedGui('{target.ScriptedGui}').IsShown( GuiScope.SetRoot( {target.Scope}.MakeScope ).End )]";
-
-        foreach (var (anchor, what, block) in target.Add)
-        {
-            int at = text.IndexOf(anchor, StringComparison.Ordinal);
-            if (at < 0) continue;
-
-            int lineStart = text.LastIndexOf('\n', at) + 1;
-            string indent = text[lineStart..at];
-
-            string body = string.Join('\n',
-                block.Replace("{SHOW_RAW}", Inner(show))
-                     .Replace("{SHOW}", show)
-                     .Split('\n')
-                     .Select(line => line.Length == 0 ? line : indent + line)) + "\n\n";
-
-            text = text.Insert(lineStart, body);
-            patched.Add(what);
-        }
-
-        int expected = target.Extend.Length + target.Insert.Length + target.Add.Length;
-        if (patched.Count != expected)
-        {
-            Console.WriteLine($"  gui: SKIPPED {target.File} — found {patched.Count} of {expected} "
-                + $"widgets ({string.Join(", ", patched)}). Vanilla has changed shape; "
-                + "not shipping a partial override.");
-            return;
-        }
-
-        string dest = Path.Combine(modDir, "gui", target.File);
-        Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-
-        ParadoxText.WriteNoBom(dest, text);
-
-        Console.WriteLine($"  gui: {target.File} — patched {string.Join(", ", patched)}");
+        fades[0].Set("alpha", "1");
     }
-
-    private static int MatchBrace(string text, int open)
-    {
-        int depth = 0;
-        for (int i = open; i < text.Length; i++)
-        {
-            char c = text[i];
-            if (c == '#') { while (i < text.Length && text[i] != '\n') i++; continue; }
-            if (c == '"') { i++; while (i < text.Length && text[i] != '"') i++; continue; }
-            if (c == '{') depth++;
-            else if (c == '}' && --depth == 0) return i;
-        }
-        return -1;
-    }
-
-    private static string Inner(string expression)
-        => expression.StartsWith('[') && expression.EndsWith(']')
-            ? expression[1..^1].Trim()
-            : expression;
 }

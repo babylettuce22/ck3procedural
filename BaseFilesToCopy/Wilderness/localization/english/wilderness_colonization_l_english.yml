@@ -591,6 +591,41 @@ building_colony_office_01:0 "Colonial Bailiff's Office"
  colony_purged_quarter:0 "Charred Quarters"
  colony_purged_quarter_desc:0 "The ruthless burning of infected huts curbed the fever, but left bitter resentment among surviving families."
 
+ # The three Promised Land outcomes (event 0025). These showed raw keys in the county view.
+ settlers_freeholder_charter:0 "Freeholders' Charter"
+ settlers_freeholder_charter_desc:0 "The promise of the road was honored in full: every founding family holds its acres in its own name, and works them like it."
+ settlers_commuted_settlement:0 "A Purse for Every Hearth"
+ settlers_commuted_settlement_desc:0 "The old promise of land was bought out in silver. Fair, by the letter of it — and everyone can name the difference between fair and kept."
+ settlers_betrayed_unrest:0 "The Broken Charter"
+ settlers_betrayed_unrest_desc:0 "They walked the road on a lord's sworn word and were made tenants on the ground they cleared. The frontier has a long memory for exactly this."
+
+ # --- Word-from-the-road outcome toasts (colony_road_gamble_effect) -------------------------
+ #
+ # One pair per gamble. The title is the whole message — what you tried, and which way it went.
+ colony_road_toast_relief_good:0 "The Relief Carts Got Through"
+ colony_road_toast_relief_bad:0 "The Carts Came Late"
+ colony_road_toast_forage_good:0 "The Land Provides"
+ colony_road_toast_forage_bad:0 "Hungry and Scattered"
+ colony_road_toast_make_do_good:0 "They Made Do"
+ colony_road_toast_make_do_bad:0 "Want in the Wagons"
+ colony_road_toast_authority_good:0 "The Lord's Word Held"
+ colony_road_toast_authority_bad:0 "Words on Cold Ears"
+ colony_road_toast_handover_good:0 "The Soldier Takes Command"
+ colony_road_toast_handover_bad:0 "A Bitter Handover"
+ colony_road_toast_self_rule_good:0 "They Sort It Out Themselves"
+ colony_road_toast_self_rule_bad:0 "The Column Frays"
+ colony_road_toast_promise_good:0 "The Promise Moves Them"
+ colony_road_toast_promise_bad:0 "Fine Words, Cold Feet"
+ colony_road_toast_hold_good:0 "They March On"
+ colony_road_toast_hold_bad:0 "Some Turn Back"
+
+ # --- Ague gamble outcomes (event 0041, option B) --------------------------------------------
+ colony_ague_contracted_toast:0 "The Ague Takes Hold"
+ colony_ague_resisted_toast:0 "The Fever Breaks"
+
+ # --- Debug-only toast (0062/0064 collapse reporting) -----------------------------------------
+ colony_control_collapse_debug_toast_title:0 "DEBUG: A colony collapsed at zero control"
+
  # vassal asks for money to complete colony
  wilderness_colonization.0050.t:0 "A Seat on the Frontier"
  wilderness_colonization.0050.desc:0 "A dust-stained messenger kneels before our dais, bearing a letter bearing the seal of [petitioning_colonist.GetTitledFirstName].\n\nThe ditch is cleared at [ready_colony.GetName], the palisade is reinforced, and the land is ready to support a proper fortress. Yet [petitioning_colonist.GetTitledFirstName] has exhausted their local levies and granaries reaching this threshold.\n\nThey ask for #bold [SCOPE.ScriptValue('promote_colony_cost')|0] gold#! to raise the castle walls and complete the colony's coming-of-age."
@@ -726,3 +761,35 @@ OVERSEE_COLONY_ACTIVITY_STATUS:0 "You are dwelling among the settlers, directing
  colony_subsidy_heavy: "Heavy Patronage"
  colony_subsidy_heavy_short: "Heavy Patronage"
  colony_subsidy_heavy_desc: "The Crown heavily funds the colony with gold, masonry, and armed escorts:\n$EFFECT_LIST_BULLET$Liege Upkeep: #negative_value -0.75 gold/month#!\n$EFFECT_LIST_BULLET$Development Growth: #positive_value +25%#!\n$EFFECT_LIST_BULLET$Building & Clearance Cost: #positive_value -20%#!\n$EFFECT_LIST_BULLET$Control Growth: #positive_value +0.20/month#!\n$EFFECT_LIST_BULLET$Secession Risk: #positive_value -10%#!\n$EFFECT_LIST_BULLET$Vassal Opinion: #positive_value +25#!"
+
+ ###################################################
+ # War for the colony: the offer of fealty (0070-0073)
+ ###################################################
+
+ wilderness_colonization.0070.t: "Banners on the Tree Line"
+ wilderness_colonization.0070.desc: "The wall is half-raised and the first fields barely stubble when the riders come in shouting: [attacker.GetTitledFirstName] has raised [attacker.GetHerHis] banners against us, and the demand behind them is simple — everything. Every felled trunk, every drained acre, every grave already behind the palisade, claimed by someone who watched other hands do the work.\n\nThe men look to walls that are not finished and a storehouse that is not full. There is another way wars like this end, and everyone in the yard knows it: a colony that kneels is a colony that stands."
+ wilderness_colonization.0070.a: "Send an envoy. Better a bent knee than a burnt palisade."
+ wilderness_colonization.0070.c: "Offer the knee — and [attacker.GetHerHis] god with it."
+ wilderness_colonization.0070.b: "We did not carve this out of the wild to hand it over."
+ colony_offer_fealty_tt: "An envoy will carry your offer to [attacker.GetTitledFirstName]: the war ends, and you keep the colony — as [attacker.GetHerHis] sworn #high vassal#!. The offer may be refused, and the war go on."
+ colony_offer_fealty_and_faith_tt: "The same offer, with the one thing [attacker.GetTitledFirstName] cannot take by siege thrown in: you will #high convert to [attacker.GetFaith.GetName]#!, and your colonies with you.\n\n#high Far likelier to be accepted#!, and likelier still if [attacker.GetSheHe] is #high Zealous#!. Should [attacker.GetSheHe] accept, you will lose #negative_value piety#! and #negative_value three levels of devotion#!."
+
+ wilderness_colonization.0071.t: "An Offer From the Palisade"
+ wilderness_colonization.0071.desc: "An envoy from the half-built settlement rides into camp under a truce-branch. The offer is plain: [defender.GetTitledFirstName] will bend the knee — the palisade, the cleared fields and the county they stand in brought into your realm whole, held in your name by the one person who knows how to run them.\n\nThe war would be over before a single ladder was raised against walls [defender.GetSheHe] built with [defender.GetHerHis] own hands."
+ wilderness_colonization.0071.desc.faith: "An envoy from the half-built settlement rides into camp under a truce-branch, and the offer [defender.GetSheHe] carries is larger than the county.\n\n[defender.GetTitledFirstName] will bend the knee — the palisade, the cleared fields and the ground they stand on brought into your realm whole. And more: [defender.GetSheHe] will come to [ROOT.Char.GetFaith.GetName] and bring the settlement with [defender.GetHerHim], font and all, rather than see it burned over a god.\n\nThe war would be over before a single ladder was raised — and you would have gained a soul the siege could only have killed."
+ wilderness_colonization.0071.a: "A county gained, and not a drop of blood. Accepted."
+ wilderness_colonization.0071.b: "No. I want the land, not the settler."
+
+ wilderness_colonization.0072.t: "The Knee Bends, the Palisade Stands"
+ wilderness_colonization.0072.desc: "[attacker.GetTitledFirstName] has accepted. The siege that never began is over; the banners on the tree line turn for home, and a rider brings back the sealed terms: the colony is ours as it always was — its fields, its walls, its dead — held now in [attacker.GetHerHis] name rather than our own.\n\nThe men on the wall cheer as if it were a victory. Perhaps it is."
+ wilderness_colonization.0072.desc.faith: "[attacker.GetTitledFirstName] has accepted, and the price is paid in full. The banners on the tree line turn for home; the colony stands as it always did — its fields, its walls, its dead — held now in [attacker.GetHerHis] name.\n\nAnd on the first morning of the peace, the settlement is called out to the yard to hear [ROOT.Char.GetFaith.GetName] read over the ground they cleared. Some of the older hands will not look up from their boots. The walls are still standing, and there was a day when that was the only thing anyone out here prayed for."
+ wilderness_colonization.0072.a: "The colony endures."
+
+ wilderness_colonization.0073.t: "No Quarter for the Kneeling"
+ wilderness_colonization.0073.desc: "The offer comes back refused — the seal broken, nothing written beneath it. [attacker.GetTitledFirstName] does not want fealty, or taxes, or a practiced hand on the place. [attacker.GetSheHe] wants the ground itself, cleared and drained and paid for in other men's years.\n\nSo it will be war after all, against walls we raised ourselves. Let [attacker.GetHerHim] learn what those cost."
+ wilderness_colonization.0073.a: "Then we fight."
+
+ # The grace truce a fresh independent colonist gets with every bordering realm, and what the new
+ # liege thinks of a colonist who knelt (both from the war-for-the-colony additions).
+ TRUCE_COLONIAL_GRACE: "colonial grace"
+ colony_knelt_opinion: "Knelt Without Bloodshed"

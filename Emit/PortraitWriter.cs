@@ -92,6 +92,14 @@ public static class PortraitWriter
             return men;
         }
 
+        // Headgear is graded across every pool at once: a crown template declares male and female
+        // variants alike, so the right hat for a duchess may only appear on a man's record.
+        var allTemplates = men.AllTemplates
+            .Concat(women.AllTemplates)
+            .Concat(boys.AllTemplates)
+            .Concat(girls.AllTemplates)
+            .ToList();
+
         var rng = new Rng(seed ^ 0x5087);
         var dnaFileBuilder = new StringBuilder();
         dnaFileBuilder.Append("# Generated DNA mappings for in-game characters\n\n");
@@ -126,6 +134,7 @@ public static class PortraitWriter
                 // from the pool that does. Men are the donor set: 238 records over 33 regions.
                 body = Wardrobe(body, face, req, men, rng);
                 body = Grooming(body, req, men, rng);
+                body = Regalia(body, req, allTemplates, rng);
 
                 // Repaint the borrowed DNA in the character's own ethnicity before anything is
                 // written, so the bookmark screen and the in-game portrait agree and both match the
@@ -274,7 +283,7 @@ public static class PortraitWriter
     /// One borrowed vanilla portrait, filed under the clothing region and rank it is actually
     /// wearing rather than under a guess made from its filename.
     /// </summary>
-    private record Template(string Path, string Region, string Rank, string Beards);
+    private record Template(string Path, string Region, string Rank, string Beards, string Headgear);
 
     private record TemplatePool(Dictionary<string, List<Template>> ByRegion, List<Template> AllTemplates);
 
@@ -284,6 +293,51 @@ public static class PortraitWriter
 
     private static readonly Regex BeardsGeneRegex =
         new(@"\bbeards=\{\s*""([a-z0-9_]+)""", RegexOptions.IgnoreCase);
+
+    private static readonly Regex HeadgearGeneRegex =
+        new(@"\bheadgear=\{\s*""([a-z0-9_]+)""", RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Rank words a headgear accessory can end in, longest first. Vanilla's headgear is graded on the
+    /// same ladder as its clothes, but in a separate gene — which is how a duke ended up in
+    /// high-nobility robes under <c>afr_royalty</c>, wearing a crown he has no claim to.
+    /// </summary>
+    private static readonly string[] HeadgearRankWords =
+    [
+        "high_nobility", "low_nobility", "nobility", "imperial", "royalty", "royal",
+        "commoner", "common", "high",
+    ];
+
+    /// <summary>
+    /// What a headgear outranks, or empty when it is not a rank at all.
+    ///
+    /// Plenty of headgear carries no rank: <c>ep2_western_era1_veils</c> is a woman's head covering,
+    /// <c>northern_war</c> a helmet, <c>tgp_japanese_shogun</c> an office. Those are left exactly as
+    /// the borrowed record had them — a veil is not a claim to a throne.
+    /// </summary>
+    private static (string Region, string Rank) HeadgearOf(string name)
+    {
+        foreach (string rank in HeadgearRankWords)
+        {
+            if (name.EndsWith("_" + rank, StringComparison.Ordinal))
+                return (name[..^(rank.Length + 1)], rank == "royal" ? "royalty" : rank);
+        }
+
+        return ("", "");
+    }
+
+    /// <summary>
+    /// The headgear ranks a title tier may wear, best first. A crown is the line that matters: a
+    /// duke or a count wearing one reads as a mistake at a glance, which is why royalty and imperial
+    /// appear only for kings and emperors.
+    /// </summary>
+    private static string[] HeadgearRanksFor(string tier) => tier switch
+    {
+        "e" => ["imperial", "royalty", "high_nobility", "nobility"],
+        "k" => ["royalty", "high_nobility", "nobility"],
+        "d" => ["high_nobility", "nobility", "low_nobility"],
+        _ => ["nobility", "low_nobility", "common", "commoner"],
+    };
 
     /// <summary>
     /// Beard sets reserved for named historical characters. Borrowing one is the same mistake as
@@ -669,6 +723,76 @@ public static class PortraitWriter
                 : $"{gene}={{ 0 {m.Groups["y1"].Value} 0 {m.Groups["y2"].Value} }}");
     }
 
+    /// <summary>
+    /// Takes the crown off anyone who has no right to one, and leaves the rest of the outfit alone.
+    ///
+    /// Headgear is a gene of its own, graded on its own ladder, so matching a record by its *clothes*
+    /// rank still let a duke through in <c>afr_royalty</c> and put crowns on heirs and on dukes'
+    /// wives. The replacement is drawn from the region the character is already dressed in, so the
+    /// hat still belongs with the robes; where that region has nothing of the right station, bare
+    /// head is the honest answer.
+    ///
+    /// Children are demoted one tier: an heir in his father's crown is the same mistake twice in one
+    /// family portrait.
+    /// </summary>
+    private static string Regalia(
+        string body, CharacterPortraitRequest req, IReadOnlyList<Template> all, Rng rng)
+    {
+        var worn = HeadgearGeneRegex.Match(body);
+        if (!worn.Success) return body;
+
+        var (region, rank) = HeadgearOf(worn.Groups[1].Value.ToLowerInvariant());
+
+        // A veil, a helmet or a bare head claims nothing; only graded headgear can be out of place.
+        if (rank.Length == 0) return body;
+
+        string tier = req.Child ? DemoteTier(req.Tier) : req.Tier;
+        var allowed = HeadgearRanksFor(tier);
+        if (allowed.Contains(rank, StringComparer.Ordinal)) return body;
+
+        // Stay in the region the clothes came from, not the region of the hat being replaced: the
+        // wardrobe transplant may have moved the outfit since this record was picked.
+        string dressedAs = WardrobeOf(body).Region;
+        if (dressedAs.Length == 0) dressedAs = region;
+
+        foreach (string want in allowed)
+        {
+            var options = all
+                .Select(t => t.Headgear)
+                .Where(h => h.Length > 0)
+                .Distinct()
+                .Where(h =>
+                {
+                    var (r, k) = HeadgearOf(h);
+                    return k == want && r == dressedAs;
+                })
+                .ToList();
+
+            if (options.Count == 0) continue;
+
+            return ReplaceGene(body, "headgear",
+                $@"headgear={{ ""{rng.Pick(options)}"" {rng.Int(40, 220)} ""no_headgear"" 0 }}");
+        }
+
+        return ReplaceGene(body, "headgear", @"headgear={ ""no_headgear"" 0 ""no_headgear"" 0 }");
+    }
+
+    private static string DemoteTier(string tier) => tier switch
+    {
+        "e" => "k",
+        "k" => "d",
+        _ => "c",
+    };
+
+    /// <summary>Swaps one whole gene line for <paramref name="value"/>, indentation kept.</summary>
+    private static string ReplaceGene(string body, string gene, string value)
+    {
+        var into = Regex.Match(body, $@"(?<ind>[ \t]*)\b{gene}=\{{[^{{}}]*\}}");
+        return into.Success
+            ? body.Remove(into.Index, into.Length).Insert(into.Index, into.Groups["ind"].Value + value)
+            : body;
+    }
+
     private static TemplatePool LoadCategorizedTemplates(string sourceDir, Regex typeRegex)
     {
         var byRegion = new Dictionary<string, List<Template>>(StringComparer.Ordinal);
@@ -683,8 +807,10 @@ public static class PortraitWriter
 
             var (region, rank) = WardrobeOf(text);
             var beards = BeardsGeneRegex.Match(text);
+            var headgear = HeadgearGeneRegex.Match(text);
             var template = new Template(path, region, rank,
-                beards.Success ? beards.Groups[1].Value.ToLowerInvariant() : "");
+                beards.Success ? beards.Groups[1].Value.ToLowerInvariant() : "",
+                headgear.Success ? headgear.Groups[1].Value.ToLowerInvariant() : "");
             all.Add(template);
 
             if (region.Length == 0) continue;

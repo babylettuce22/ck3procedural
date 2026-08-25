@@ -137,7 +137,7 @@ public sealed class PrehistoryMap
         // 1. Build Dynasties and Cadet Houses
         BuildDynastiesAndHouses(map, rulerCounties, realms, cultures, rng);
 
-        // 2. Build Multi-Generational Ancestry (Deceased Fathers & Sibling Bonds)
+        // 2. Build Multi-Generational Ancestry (Deceased Parents & Sibling Bonds)
         BuildAncestryAndBrothers(map, rulerCounties, realms, cultures, faiths, cfg, rng);
 
         // 3. Build Adjacencies (Ruler-to-Ruler and TopLiege-to-TopLiege)
@@ -302,6 +302,18 @@ public sealed class PrehistoryMap
         map.CharacterHouseMap[county] = houseKey;
     }
 
+    /// <summary>
+    /// One given name from the culture's own list for that sex.
+    ///
+    /// One draw whichever list it reads, so a world whose rulers are women walks the same streams
+    /// in the same order as one whose rulers are men and differs only in the names that come out.
+    /// </summary>
+    private static string GivenName(Culture culture, bool female, Rng rng)
+    {
+        var names = female ? culture.FemaleNames : culture.MaleNames;
+        return names.Count > 0 ? names[rng.Int(0, names.Count - 1)] : female ? "Nullberta" : "Nullbert";
+    }
+
     private static string? CulturePrefix(string cultureKey)
     {
         if (cultureKey.Contains("french") || cultureKey.Contains("norman") || cultureKey.Contains("breton") || cultureKey.Contains("occitan"))
@@ -326,7 +338,7 @@ public sealed class PrehistoryMap
         MapConfig cfg,
         Rng rng)
     {
-        // Grouped by realm rather than walked flat, because a shared father is a fact about a realm:
+        // Grouped by realm rather than walked flat, because a shared parent is a fact about a realm:
         // whether two rulers are brothers depends on who they both answer to.
         var byTopLiege = new Dictionary<Title, List<Title>>();
 
@@ -346,30 +358,31 @@ public sealed class PrehistoryMap
             var topRng = new Rng(topLiege.Index ^ 0x7E1B);
             int topBirthYear = HistoryWriter.GetRulerBirthYear(topLiege.Index, cfg.StartYear);
 
-            string topFatherName = culture.MaleNames.Count > 0
-                ? culture.MaleNames[topRng.Int(0, culture.MaleNames.Count - 1)]
-                : "Nullbert";
+            // The line runs through the parent of the ruler's own sex: a countess is her mother's
+            // daughter, and the house descends the way the world's laws say land does.
+            bool topFemale = HistoryWriter.RulerIsFemale(topLiege, faith);
+            string topParentName = GivenName(culture, topFemale, topRng);
 
-            int topFatherBirth = topBirthYear - topRng.Int(22, 35);
-            int topFatherDeath = cfg.StartYear - topRng.Int(2, 12);
+            int topParentBirth = topBirthYear - topRng.Int(22, 35);
+            int topParentDeath = cfg.StartYear - topRng.Int(2, 12);
 
-            var topFather = new HistoricalCharacter
+            var topParent = new HistoricalCharacter
             {
-                Id = $"gen_char_father_{topLiege.Index}",
-                Name = topFatherName,
-                Female = false,
+                Id = $"gen_char_parent_{topLiege.Index}",
+                Name = topParentName,
+                Female = topFemale,
                 DynastyId = map.CharacterDynastyMap[topLiege],
                 DynastyHouseKey = map.CharacterHouseMap[topLiege],
                 CultureKey = culture.Key,
                 FaithKey = faith.Key,
-                BirthDate = $"{topFatherBirth}.{topRng.Int(1, 12)}.{topRng.Int(1, 28)}",
-                DeathDate = $"{topFatherDeath}.{topRng.Int(1, 12)}.{topRng.Int(1, 28)}",
+                BirthDate = $"{topParentBirth}.{topRng.Int(1, 12)}.{topRng.Int(1, 28)}",
+                DeathDate = $"{topParentDeath}.{topRng.Int(1, 12)}.{topRng.Int(1, 28)}",
                 AssociatedCounty = topLiege,
                 IsDeadAncestor = true
             };
 
-            map.DeceasedParents[topLiege] = topFather;
-            map.AllExtraCharacters.Add(topFather);
+            map.DeceasedParents[topLiege] = topParent;
+            map.AllExtraCharacters.Add(topParent);
 
             // Only vassals of the same dynasty can be the liege's brother, highest tier first so the
             // brother is the realm's second man rather than whichever county came up first.
@@ -379,7 +392,7 @@ public sealed class PrehistoryMap
                 .OrderByDescending(c => HistoryWriter.Rank(HistoryWriter.Primary(c, realms)))
                 .ToList();
 
-            // At most one. Sharing a father across a whole realm produced courts of a dozen
+            // At most one. Sharing a parent across a whole realm produced courts of a dozen
             // siblings, which is both wrong and slow to draw.
             bool brotherTaken = false;
 
@@ -392,7 +405,7 @@ public sealed class PrehistoryMap
 
                 if (!brotherTaken && ageGap <= 10 && kinRng.Chance(0.4))
                 {
-                    map.DeceasedParents[kinCounty] = topFather;
+                    map.DeceasedParents[kinCounty] = topParent;
                     brotherTaken = true;
 
                     // Brothers of consequence hold claims on each other. Only from a duchy or a
@@ -412,35 +425,34 @@ public sealed class PrehistoryMap
                 var kinCulture = cultures.For(kinCounty);
                 var kinFaith = faiths.For(kinCounty);
 
-                string kinFatherName = kinCulture.MaleNames.Count > 0
-                    ? kinCulture.MaleNames[kinRng.Int(0, kinCulture.MaleNames.Count - 1)]
-                    : "Nullbert";
+                bool kinFemale = HistoryWriter.RulerIsFemale(kinCounty, kinFaith);
+                string kinParentName = GivenName(kinCulture, kinFemale, kinRng);
 
-                int kinFatherBirth = kinBirthYear - kinRng.Int(22, 35);
-                int kinFatherDeath = cfg.StartYear - kinRng.Int(2, 16);
+                int kinParentBirth = kinBirthYear - kinRng.Int(22, 35);
+                int kinParentDeath = cfg.StartYear - kinRng.Int(2, 16);
 
-                var kinFather = new HistoricalCharacter
+                var kinParent = new HistoricalCharacter
                 {
-                    Id = $"gen_char_father_{kinCounty.Index}",
-                    Name = kinFatherName,
-                    Female = false,
+                    Id = $"gen_char_parent_{kinCounty.Index}",
+                    Name = kinParentName,
+                    Female = kinFemale,
                     DynastyId = map.CharacterDynastyMap[kinCounty],
                     DynastyHouseKey = map.CharacterHouseMap[kinCounty],
                     CultureKey = kinCulture.Key,
                     FaithKey = kinFaith.Key,
-                    BirthDate = $"{kinFatherBirth}.{kinRng.Int(1, 12)}.{kinRng.Int(1, 28)}",
-                    DeathDate = $"{kinFatherDeath}.{kinRng.Int(1, 12)}.{kinRng.Int(1, 28)}",
+                    BirthDate = $"{kinParentBirth}.{kinRng.Int(1, 12)}.{kinRng.Int(1, 28)}",
+                    DeathDate = $"{kinParentDeath}.{kinRng.Int(1, 12)}.{kinRng.Int(1, 28)}",
                     AssociatedCounty = kinCounty,
                     IsDeadAncestor = true
                 };
 
-                map.DeceasedParents[kinCounty] = kinFather;
-                map.AllExtraCharacters.Add(kinFather);
+                map.DeceasedParents[kinCounty] = kinParent;
+                map.AllExtraCharacters.Add(kinParent);
             }
         }
 
         // Everyone the grouping missed — rulers of another dynasty, and any county whose realm was
-        // not walked — still needs a father, or their house begins with them and nothing inherits.
+        // not walked — still needs a parent, or their house begins with them and nothing inherits.
         foreach (var county in rulerCounties)
         {
             if (map.DeceasedParents.ContainsKey(county)) continue;
@@ -450,30 +462,29 @@ public sealed class PrehistoryMap
             var fRng = new Rng(county.Index ^ 0x981C);
 
             int birthYear = HistoryWriter.GetRulerBirthYear(county.Index, cfg.StartYear);
-            int fatherBirth = birthYear - fRng.Int(22, 35);
-            int fatherDeath = cfg.StartYear - fRng.Int(2, 15);
+            int parentBirth = birthYear - fRng.Int(22, 35);
+            int parentDeath = cfg.StartYear - fRng.Int(2, 15);
 
-            string fatherName = culture.MaleNames.Count > 0
-                ? culture.MaleNames[fRng.Int(0, culture.MaleNames.Count - 1)]
-                : "Nullbert";
+            bool female = HistoryWriter.RulerIsFemale(county, faith);
+            string parentName = GivenName(culture, female, fRng);
 
-            var father = new HistoricalCharacter
+            var parent = new HistoricalCharacter
             {
-                Id = $"gen_char_father_{county.Index}",
-                Name = fatherName,
-                Female = false,
+                Id = $"gen_char_parent_{county.Index}",
+                Name = parentName,
+                Female = female,
                 DynastyId = map.CharacterDynastyMap[county],
                 DynastyHouseKey = map.CharacterHouseMap[county],
                 CultureKey = culture.Key,
                 FaithKey = faith.Key,
-                BirthDate = $"{fatherBirth}.{fRng.Int(1, 12)}.{fRng.Int(1, 28)}",
-                DeathDate = $"{fatherDeath}.{fRng.Int(1, 12)}.{fRng.Int(1, 28)}",
+                BirthDate = $"{parentBirth}.{fRng.Int(1, 12)}.{fRng.Int(1, 28)}",
+                DeathDate = $"{parentDeath}.{fRng.Int(1, 12)}.{fRng.Int(1, 28)}",
                 AssociatedCounty = county,
                 IsDeadAncestor = true
             };
 
-            map.DeceasedParents[county] = father;
-            map.AllExtraCharacters.Add(father);
+            map.DeceasedParents[county] = parent;
+            map.AllExtraCharacters.Add(parent);
         }
     }
 
@@ -515,6 +526,7 @@ public sealed class PrehistoryMap
 
             var rulerFaith = faiths.For(ruler);
             var rulerCulture = cultures.For(ruler);
+            bool rulerFemale = HistoryWriter.RulerIsFemale(ruler, rulerFaith);
             var mRng = new Rng(ruler.Index ^ 0x6E19);
 
             if (!mRng.Chance(0.88)) continue;
@@ -523,7 +535,7 @@ public sealed class PrehistoryMap
             var topLiege = TopLiegeCounty(ruler, realms);
             bool isTopLiege = (ruler == topLiege);
 
-            Title? brideOriginCounty = null;
+            Title? spouseOriginCounty = null;
             var neighbors = rulerNeighbors.GetValueOrDefault(ruler, []);
 
             // === 1. TOP LIEGE MARRIAGE SELECTION ===
@@ -543,15 +555,15 @@ public sealed class PrehistoryMap
 
                 if (foreignEligible.Count > 0 && mRng.Chance(0.55))
                 {
-                    brideOriginCounty = foreignEligible[mRng.Int(0, foreignEligible.Count - 1)];
+                    spouseOriginCounty = foreignEligible[mRng.Int(0, foreignEligible.Count - 1)];
                 }
                 else if (internalVassals.Count > 0 && mRng.Chance(0.65))
                 {
-                    brideOriginCounty = internalVassals[mRng.Int(0, internalVassals.Count - 1)];
+                    spouseOriginCounty = internalVassals[mRng.Int(0, internalVassals.Count - 1)];
                 }
                 else if (foreignEligible.Count > 0)
                 {
-                    brideOriginCounty = foreignEligible[mRng.Int(0, foreignEligible.Count - 1)];
+                    spouseOriginCounty = foreignEligible[mRng.Int(0, foreignEligible.Count - 1)];
                 }
             }
             // === 2. VASSAL MARRIAGE SELECTION ===
@@ -575,107 +587,115 @@ public sealed class PrehistoryMap
 
                 if (canMarryLiege && mRng.Chance(0.35))
                 {
-                    brideOriginCounty = topLiege;
+                    spouseOriginCounty = topLiege;
                 }
                 else if (coVassals.Count > 0 && mRng.Chance(0.50))
                 {
-                    brideOriginCounty = coVassals[mRng.Int(0, coVassals.Count - 1)];
+                    spouseOriginCounty = coVassals[mRng.Int(0, coVassals.Count - 1)];
                 }
                 else if (foreignBorder.Count > 0 && mRng.Chance(0.40))
                 {
-                    brideOriginCounty = foreignBorder[mRng.Int(0, foreignBorder.Count - 1)];
+                    spouseOriginCounty = foreignBorder[mRng.Int(0, foreignBorder.Count - 1)];
                 }
                 else if (canMarryLiege)
                 {
-                    brideOriginCounty = topLiege;
+                    spouseOriginCounty = topLiege;
                 }
                 else if (coVassals.Count > 0)
                 {
-                    brideOriginCounty = coVassals[mRng.Int(0, coVassals.Count - 1)];
+                    spouseOriginCounty = coVassals[mRng.Int(0, coVassals.Count - 1)];
                 }
 
-                if (brideOriginCounty == topLiege)
+                if (spouseOriginCounty == topLiege)
                     liegeHouseMarriages[topLiege] = liegeHouseMarriages.GetValueOrDefault(topLiege) + 1;
             }
 
             // === 3. GENERATE SPOUSE CHARACTER ===
-            string brideDynasty;
-            string? brideHouse;
-            string? brideFather = null;
-            Culture brideCulture;
-            Faith brideFaith;
-            int brideBirthYear = cfg.StartYear - mRng.Int(20, 44);
+            string spouseDynasty;
+            string? spouseHouse;
+            string? spouseParent = null;
+            bool spouseParentIsMother = false;
+            Culture spouseCulture;
+            Faith spouseFaith;
+            int spouseBirthYear = cfg.StartYear - mRng.Int(20, 44);
 
-            if (brideOriginCounty != null)
+            if (spouseOriginCounty != null)
             {
-                brideCulture = cultures.For(brideOriginCounty);
-                brideFaith = faiths.For(brideOriginCounty);
-                brideDynasty = map.CharacterDynastyMap.GetValueOrDefault(brideOriginCounty, map.CharacterDynastyMap[ruler]);
-                brideHouse = map.CharacterHouseMap.GetValueOrDefault(brideOriginCounty);
+                spouseCulture = cultures.For(spouseOriginCounty);
+                spouseFaith = faiths.For(spouseOriginCounty);
+                spouseDynasty = map.CharacterDynastyMap.GetValueOrDefault(spouseOriginCounty, map.CharacterDynastyMap[ruler]);
+                spouseHouse = map.CharacterHouseMap.GetValueOrDefault(spouseOriginCounty);
 
-                // The bride must be close kin of the origin ruler or the engine dissolves the
+                // The match must be close kin of the origin ruler or the engine dissolves the
                 // marriage alliance on the first tick — house membership alone is not kinship.
-                // Sharing his deceased father makes her his sister.
-                if (map.DeceasedParents.TryGetValue(brideOriginCounty, out var df))
+                // Sharing that ruler's deceased parent makes them siblings.
+                if (map.DeceasedParents.TryGetValue(spouseOriginCounty, out var df))
                 {
-                    brideFather = df.Id;
-                    int fatherBirthYear = int.Parse(df.BirthDate.Split('.')[0]);
-                    brideBirthYear = Math.Max(brideBirthYear, fatherBirthYear + 17);
+                    spouseParent = df.Id;
+                    spouseParentIsMother = df.Female;
+                    int parentBirthYear = int.Parse(df.BirthDate.Split('.')[0]);
+                    spouseBirthYear = Math.Max(spouseBirthYear, parentBirthYear + 17);
                 }
             }
             else
             {
                 // Fallback: Generate a distinct local noble house so rulers never marry their own dynasty
-                brideCulture = rulerCulture;
-                brideFaith = rulerFaith;
+                spouseCulture = rulerCulture;
+                spouseFaith = rulerFaith;
 
-                string nobleDynName = brideCulture.DynastyNames.Count > 1
-                    ? brideCulture.DynastyNames[(ruler.Index + 3) % brideCulture.DynastyNames.Count]
-                    : $"{brideCulture.Name}court_{ruler.Index}";
+                string nobleDynName = spouseCulture.DynastyNames.Count > 1
+                    ? spouseCulture.DynastyNames[(ruler.Index + 3) % spouseCulture.DynastyNames.Count]
+                    : $"{spouseCulture.Name}court_{ruler.Index}";
 
-                brideDynasty = $"gen_dynasty_noble_{ruler.Index}";
-                brideHouse = $"house_gen_noble_{ruler.Index}";
+                spouseDynasty = $"gen_dynasty_noble_{ruler.Index}";
+                spouseHouse = $"house_gen_noble_{ruler.Index}";
                 string nobleNameKey = $"dynn_gen_noble_{ruler.Index}";
 
-                if (!map.Dynasties.ContainsKey(brideDynasty))
+                if (!map.Dynasties.ContainsKey(spouseDynasty))
                 {
-                    map.Dynasties[brideDynasty] = new DynastyDef
+                    map.Dynasties[spouseDynasty] = new DynastyDef
                     {
-                        Id = brideDynasty,
+                        Id = spouseDynasty,
                         NameKey = nobleNameKey,
                         LocalizedName = nobleDynName,
-                        CultureKey = brideCulture.Key
+                        CultureKey = spouseCulture.Key
                     };
-                    map.Houses[brideHouse] = new DynastyHouseDef
+                    map.Houses[spouseHouse] = new DynastyHouseDef
                     {
-                        Key = brideHouse,
+                        Key = spouseHouse,
                         NameKey = nobleNameKey,
                         LocalizedName = nobleDynName,
-                        DynastyId = brideDynasty,
-                        Prefix = CulturePrefix(brideCulture.Key)
+                        DynastyId = spouseDynasty,
+                        Prefix = CulturePrefix(spouseCulture.Key)
                     };
                 }
             }
 
-            string femaleName = brideCulture.FemaleNames.Count > 0
-                ? brideCulture.FemaleNames[mRng.Int(0, brideCulture.FemaleNames.Count - 1)]
-                : $"{brideCulture.Name}a";
+            // CK3 has no doctrine on a generated faith that permits a same-sex marriage, so the
+            // consort is whatever the ruler is not.
+            bool spouseFemale = !rulerFemale;
+            string spouseName = GivenName(spouseCulture, spouseFemale, mRng);
 
-            int earliestMarriageYear = Math.Max(rulerBirthYear + 16, brideBirthYear + 16);
+            int earliestMarriageYear = Math.Max(rulerBirthYear + 16, spouseBirthYear + 16);
             int marriageYear = Math.Min(cfg.StartYear - 2, earliestMarriageYear + mRng.Int(0, 8));
             string weddingDate = $"{marriageYear}.{mRng.Int(1, 12)}.{mRng.Int(1, 28)}";
 
             var spouse = new HistoricalCharacter
             {
                 Id = $"gen_char_spouse_{ruler.Index}",
-                Name = femaleName,
-                Female = true,
-                DynastyId = brideDynasty,
-                DynastyHouseKey = brideHouse,
-                CultureKey = brideCulture.Key,
-                FaithKey = brideFaith.Key,
-                BirthDate = $"{brideBirthYear}.{mRng.Int(1, 12)}.{mRng.Int(1, 28)}",
-                FatherId = brideFather,
+                Name = spouseName,
+                Female = spouseFemale,
+                DynastyId = spouseDynasty,
+                DynastyHouseKey = spouseHouse,
+                CultureKey = spouseCulture.Key,
+                FaithKey = spouseFaith.Key,
+                BirthDate = $"{spouseBirthYear}.{mRng.Int(1, 12)}.{mRng.Int(1, 28)}",
+
+                // Which side of the parentage this hangs on is the dead parent's sex, not the
+                // ruler's: under a matriarchy the sibling this consort was drawn from descends from
+                // a mother, and hanging it on `father` would point them at a woman.
+                FatherId = spouseParentIsMother ? null : spouseParent,
+                MotherId = spouseParentIsMother ? spouseParent : null,
                 AssociatedCounty = ruler,
                 MarriageDate = weddingDate
             };
@@ -686,12 +706,12 @@ public sealed class PrehistoryMap
 
             // Establish Alliance and House Amity if married into an existing ruler's house.
             // No kinship link means no alliance: the engine would only dissolve it again.
-            if (brideOriginCounty != null && brideFather != null)
+            if (spouseOriginCounty != null && spouseParent != null)
             {
-                AddMarriageAlliance(map, ruler, brideOriginCounty, spouse.Id, weddingDate);
+                AddMarriageAlliance(map, ruler, spouseOriginCounty, spouse.Id, weddingDate);
 
                 if (map.CharacterHouseMap.TryGetValue(ruler, out var hA) &&
-                    map.CharacterHouseMap.TryGetValue(brideOriginCounty, out var hB) && hA != hB)
+                    map.CharacterHouseMap.TryGetValue(spouseOriginCounty, out var hB) && hA != hB)
                 {
                     map.HouseRelations.Add(new HouseRelationDef
                     {
@@ -709,6 +729,7 @@ public sealed class PrehistoryMap
         {
             var culture = cultures.For(ruler);
             var faith = faiths.For(ruler);
+            bool rulerFemale = HistoryWriter.RulerIsFemale(ruler, faith);
             var cRng = new Rng(ruler.Index ^ 0x51E3);
 
             int childCount = cRng.Int(1, 3);
@@ -721,9 +742,7 @@ public sealed class PrehistoryMap
             for (int i = 0; i < childCount; i++)
             {
                 bool isFemale = cRng.Chance(0.48);
-                string childName = isFemale
-                    ? (culture.FemaleNames.Count > 0 ? culture.FemaleNames[cRng.Int(0, culture.FemaleNames.Count - 1)] : "Asta")
-                    : (culture.MaleNames.Count > 0 ? culture.MaleNames[cRng.Int(0, culture.MaleNames.Count - 1)] : "Ragnarr");
+                string childName = GivenName(culture, isFemale, cRng);
 
                 int birthYear = Math.Min(cfg.StartYear, weddingYear + 1 + (i * cRng.Int(2, 4)) + cRng.Int(0, 2));
 
@@ -737,8 +756,8 @@ public sealed class PrehistoryMap
                     CultureKey = culture.Key,
                     FaithKey = faith.Key,
                     BirthDate = $"{birthYear}.{cRng.Int(1, 12)}.{cRng.Int(1, 28)}",
-                    FatherId = HistoryWriter.CharacterId(ruler),
-                    MotherId = spouse.Id,
+                    FatherId = rulerFemale ? spouse.Id : HistoryWriter.CharacterId(ruler),
+                    MotherId = rulerFemale ? HistoryWriter.CharacterId(ruler) : spouse.Id,
                     AssociatedCounty = ruler,
                     IsHeir = false
                 };
@@ -747,35 +766,44 @@ public sealed class PrehistoryMap
                 map.AllExtraCharacters.Add(child);
             }
 
-            // Assign Primary Heir based on faith gender doctrines (male-preference default).
+            // Assign Primary Heir by what the family's faith says succession is.
+            //
+            // The list is in birth order, so "first that qualifies" is the eldest that qualifies —
+            // which is what preference means. A house with no child of the favoured sex falls back
+            // to the eldest of any, exactly as the game would when the preferred line runs out.
             //
             // Marked in place rather than replaced with a copy carrying the flag. The copy went into
             // Children while AllExtraCharacters kept the original, so one child in the world existed
             // as two objects that agreed about everything except this flag — and anything stamped
             // onto the one in Children (a portrait key, say) never reached the one the character
             // file writes.
-            var designatedHeir = childrenList.FirstOrDefault(c => !c.Female) ?? childrenList.FirstOrDefault();
+            var designatedHeir = Faiths.GenderOf(faith) switch
+            {
+                "doctrine_gender_female_dominated" => childrenList.FirstOrDefault(c => c.Female),
+                "doctrine_gender_equal" => childrenList.FirstOrDefault(),
+                _ => childrenList.FirstOrDefault(c => !c.Female),
+            } ?? childrenList.FirstOrDefault();
             if (designatedHeir != null) designatedHeir.IsHeir = true;
 
             map.Children[ruler] = childrenList;
         }
     }
 
-    private static void AddMarriageAlliance(PrehistoryMap map, Title groomCounty, Title brideOriginCounty, string brideId, string weddingDate)
+    private static void AddMarriageAlliance(PrehistoryMap map, Title rulerCounty, Title spouseOriginCounty, string spouseId, string weddingDate)
     {
-        if (!map.Alliances.TryGetValue(groomCounty, out var listA)) map.Alliances[groomCounty] = listA = [];
-        if (!map.Alliances.TryGetValue(brideOriginCounty, out var listB)) map.Alliances[brideOriginCounty] = listB = [];
+        if (!map.Alliances.TryGetValue(rulerCounty, out var listA)) map.Alliances[rulerCounty] = listA = [];
+        if (!map.Alliances.TryGetValue(spouseOriginCounty, out var listB)) map.Alliances[spouseOriginCounty] = listB = [];
 
-        // The through-characters must be the wedded pair itself: the groom-ruler on his side, and
-        // the bride — his wife and the origin ruler's sister — on her family's side. Anything else
-        // (e.g. the origin ruler directly) fails the engine's marriage-alliance check and the
-        // alliance is dissolved on the first tick after game start.
-        string groomId = HistoryWriter.CharacterId(groomCounty);
+        // The through-characters must be the wedded pair itself: the ruler on their own side, and
+        // the consort — the ruler's spouse and the origin ruler's sibling — on their family's side.
+        // Anything else (e.g. the origin ruler directly) fails the engine's marriage-alliance check
+        // and the alliance is dissolved on the first tick after game start.
+        string rulerId = HistoryWriter.CharacterId(rulerCounty);
 
-        if (!listA.Any(al => al.PartnerCounty == brideOriginCounty))
-            listA.Add(new AllianceLink { PartnerCounty = brideOriginCounty, ThroughSpouseId = groomId, ThroughPartnerId = brideId, FormationDate = weddingDate });
-        if (!listB.Any(al => al.PartnerCounty == groomCounty))
-            listB.Add(new AllianceLink { PartnerCounty = groomCounty, ThroughSpouseId = brideId, ThroughPartnerId = groomId, FormationDate = weddingDate });
+        if (!listA.Any(al => al.PartnerCounty == spouseOriginCounty))
+            listA.Add(new AllianceLink { PartnerCounty = spouseOriginCounty, ThroughSpouseId = rulerId, ThroughPartnerId = spouseId, FormationDate = weddingDate });
+        if (!listB.Any(al => al.PartnerCounty == rulerCounty))
+            listB.Add(new AllianceLink { PartnerCounty = rulerCounty, ThroughSpouseId = spouseId, ThroughPartnerId = rulerId, FormationDate = weddingDate });
     }
 
     private static void AddDirectAlliance(PrehistoryMap map, Title a, Title b, string allianceDate)

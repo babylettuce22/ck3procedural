@@ -40,12 +40,66 @@ public static class HistoryWriter
         WriteDynastyLocalisation(modDir, prehistory);
     }
 
-    public static (string FirstName, string DynastyName) RulerNames(Title county, Culture culture)
+    /// <summary>
+    /// Whether the ruler of a seat is a woman.
+    ///
+    /// Read from the faith rather than from <see cref="MapConfig.Gender"/> directly, so that the
+    /// map agrees with its own laws county by county: the one realm in fifty whose religion leans
+    /// the other way is ruled the other way too, instead of the setting's global average being
+    /// sprayed evenly over a world whose doctrines vary.
+    ///
+    /// Its own stream, seeded from the seat, because it is asked twice — once by
+    /// <see cref="MapGen.PrehistoryMap.Build"/>, which needs to know whose mother to bury and whom
+    /// to marry the ruler to before any ruler object exists, and once by
+    /// <see cref="MapGen.RulerMap.Build"/> afterwards. Both must get the same answer, and neither
+    /// may disturb the draw the other is walking.
+    /// </summary>
+    public static bool RulerIsFemale(Title county, Faith faith)
+    {
+        double share = MapGen.Faiths.GenderOf(faith) switch
+        {
+            "doctrine_gender_female_dominated" => 0.95,
+            "doctrine_gender_equal" => 0.45,
+            _ => 0.05,
+        };
+
+        return new Rng(county.Index ^ 0x6ED5).Chance(share);
+    }
+
+    /// <summary>
+    /// Whether a faith's head is a woman.
+    ///
+    /// Not flavour: <c>doctrine_clerical_gender_female_only</c> means women are the only clergy,
+    /// and every generated head of faith was a man regardless — so a third of the worlds this
+    /// generator has ever made crowned a man over a priesthood he could not have joined.
+    /// </summary>
+    public static bool ClergyIsFemale(Faith faith)
+    {
+        string clerical = faith.Religion.Doctrines.GetValueOrDefault("doctrine_clerical_gender", "");
+        if (clerical == "doctrine_clerical_gender_female_only") return true;
+        if (clerical == "doctrine_clerical_gender_male_only") return false;
+
+        // An open priesthood still leans the way the faith does about everything else, rather than
+        // being decided by a coin that knows nothing about the religion it is being flipped for.
+        double share = MapGen.Faiths.GenderOf(faith) switch
+        {
+            "doctrine_gender_female_dominated" => 0.85,
+            "doctrine_gender_equal" => 0.45,
+            _ => 0.10,
+        };
+
+        return new Rng(Rng.StableHash(faith.Key) ^ 0x48A2UL).Chance(share);
+    }
+
+    public static (string FirstName, string DynastyName) RulerNames(Title county, Culture culture,
+        bool female = false)
     {
         var rng = new Rng(county.Index ^ 0x5A17);
 
-        string first = culture.MaleNames.Count > 0
-            ? culture.MaleNames[rng.Int(0, culture.MaleNames.Count - 1)]
+        var names = female ? culture.FemaleNames : culture.MaleNames;
+
+        string first = names.Count > 0
+            ? names[rng.Int(0, names.Count - 1)]
             : culture.Name;
 
         string dynasty = culture.DynastyNames.Count > 0
@@ -187,7 +241,12 @@ public static class HistoryWriter
                     b.Field("trait", GetPhenotypeTrait(ancestorCulture, ethnicities, cfg));
 
                 b.Inline(ancestor.BirthDate, "birth = yes");
-                b.Inline(ancestor.DeathDate, "death = yes");
+
+                // Every ancestor generated here is given a death date, but the field is optional on
+                // the record. Writing a missing one would emit a nameless ` = { death = yes }` and
+                // CK3 abandons the whole file at that point, taking every later character with it.
+                if (ancestor.DeathDate is not null)
+                    b.Inline(ancestor.DeathDate, "death = yes");
             }
 
             b.Blank();
@@ -241,7 +300,7 @@ public static class HistoryWriter
                 foreach (string otherTrait in profile.OtherTraits) b.Field("trait", otherTrait);
 
                 b.Field("trait", GetPhenotypeTrait(culture, ethnicities, cfg));
-                b.Field("father", ruler.FatherId);
+                b.Field(ruler.ParentIsMother ? "mother" : "father", ruler.ParentId);
 
                 // --- Character Birth Date ---
                 b.Inline(ruler.BirthDate, "birth = yes");
@@ -436,7 +495,8 @@ public static class HistoryWriter
 
             var sampleCounty = counties.FirstOrDefault(c => faiths.For(c) == faith) ?? counties[0];
             var culture = cultures.For(sampleCounty);
-            var (firstName, _) = RulerNames(sampleCounty, culture);
+            bool female = ClergyIsFemale(faith);
+            var (firstName, _) = RulerNames(sampleCounty, culture, female);
 
             var rng = new Rng(Rng.StableHash(faith.Key) ^ 0x48A1UL);
             int birthYear = cfg.StartYear - rng.Int(35, 60);
@@ -444,8 +504,9 @@ public static class HistoryWriter
             using (b.Block($"gen_hof_{hofIndex++}"))
             {
                 b.Quoted("name", firstName);
+                if (female) b.Field("female", "yes");
 
-                if (culture is not null) b.Field("trait", GetPhenotypeTrait(culture, ethnicities, cfg));
+                b.Field("trait", GetPhenotypeTrait(culture, ethnicities, cfg));
 
                 b.Field("religion", faith.Key);
                 b.Field("culture", culture.Key);

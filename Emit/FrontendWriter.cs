@@ -7,8 +7,12 @@ using Ck3MapGen.Io;
 namespace Ck3MapGen.Emit;
 
 /// <summary>
-/// Disables vanilla's main-menu 3D character portrait widgets in frontend_main.gui
-/// to prevent cold-boot CTDs when running on procedural maps, and injects generator metadata.
+/// Rewrites vanilla's <c>gui/frontend_main.gui</c>: injects the generator's info box, and — when the
+/// suppression below is switched back on — blanks the main-menu 3D character portrait widgets that
+/// used to cold-boot CTD on a procedural map.
+///
+/// As of 2026-08-24 the suppression is off on trial, so the main menu draws its portraits again. See
+/// the block comment in <see cref="WriteFrontend"/> for why, and for how to put it back.
 /// </summary>
 public static class FrontendWriter
 {
@@ -66,9 +70,26 @@ public static class FrontendWriter
         }
 
         var lines = File.ReadAllLines(source).ToList();
+
+        // 1. Comment out all main-menu portrait widgets wholesale.
+        //
+        // ---- TURNED OFF 2026-08-24, on trial ----------------------------------------------------
+        // This suppression existed because CK3 hard-crashes on the main menu when a bookmark file
+        // names a character with no common/bookmark_portraits/<name>.txt, and the generated bookmarks
+        // used to do exactly that — nested companions especially, since they are easy to add without
+        // noticing they need a record each. Blanking the widgets was the only way to boot.
+        //
+        // Every name the bookmark files mention now has both a portrait record and a dna_data entry,
+        // checked on two seeds, and ck3-tiger reports no crash-graded findings. So the portraits are
+        // being let through to see whether the menu draws them. Not yet confirmed in the running
+        // game — if the cold-boot CTD comes back, this block is the first thing to restore.
+        //
+        // To restore: delete the /* */ around the loop, and put `disabled` back in the Console line
+        // at the end of this method and `IsLiveTrigger` back at the bottom.
+        // ------------------------------------------------------------------------------------------
+        /*
         var disabled = new List<string>();
 
-        // 1. Comment out all main-menu portrait widgets wholesale
         while (true)
         {
             int anchor = lines.FindIndex(IsLiveTrigger);
@@ -111,6 +132,7 @@ public static class FrontendWriter
             for (int i = start; i <= end; i++) lines[i] = "#" + lines[i];
             disabled.Add($"{start + 1}-{end + 1}");
         }
+        */
 
         // 2. Inject Generator Info Text right before clickable_version_number
         string fullText = string.Join('\n', lines);
@@ -124,12 +146,14 @@ public static class FrontendWriter
         Directory.CreateDirectory(dir);
         ParadoxText.WriteBom(Path.Combine(dir, "frontend_main.gui"), fullText + "\n");
 
-        Console.WriteLine($"  frontend: disabled main-menu portraits " +
-                          $"(commented lines {string.Join(", ", disabled)} of frontend_main.gui), info box injected");
+        Console.WriteLine("  frontend: main-menu portraits left ENABLED (suppression off, on trial), "
+                          + "info box injected");
         return;
 
+        /*
         bool IsLiveTrigger(string line) =>
             !line.TrimStart().StartsWith('#') &&
             Triggers.Any(t => line.Contains(t, StringComparison.Ordinal));
+        */
     }
 }

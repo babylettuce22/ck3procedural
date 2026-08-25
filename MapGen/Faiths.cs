@@ -727,6 +727,11 @@ public static class Faiths
         bool monotheist = monotheistOverride
             ?? rng.Chance(Math.Clamp(cfg.MonotheistShare * (0.15 + 1.45 * settled), 0.0, 1.0));
 
+        // Rolled before the loop because two groups read it: the clergy's sex follows the faith's,
+        // rather than being drawn again from a hat and leaving a faith that bars women from land
+        // with a female-only priesthood.
+        string gender = GenderDoctrine(cfg.Gender, rng);
+
         var doctrines = new Dictionary<string, string>();
         foreach (string group in FilledGroups)
         {
@@ -756,6 +761,24 @@ public static class Faiths
                     ["doctrine_pilgrimage_encouraged", "doctrine_pilgrimage_mandatory"], rng),
 
                 "doctrine_theocracy" => Prefer(members, ["doctrine_theocracy_temporal"], rng),
+
+                "doctrine_gender" => Prefer(members, [gender], rng),
+
+                // Clergy of the sex the faith already favours, most of the time. An open
+                // priesthood is the interesting exception rather than the rule, so it is what the
+                // remaining fifth gets.
+                "doctrine_clerical_gender" => Prefer(members, gender switch
+                {
+                    "doctrine_gender_female_dominated" => rng.Chance(0.8)
+                        ? ["doctrine_clerical_gender_female_only"]
+                        : ["doctrine_clerical_gender_either"],
+                    "doctrine_gender_equal" => rng.Chance(0.8)
+                        ? ["doctrine_clerical_gender_either"]
+                        : ["doctrine_clerical_gender_male_only"],
+                    _ => rng.Chance(0.8)
+                        ? ["doctrine_clerical_gender_male_only"]
+                        : ["doctrine_clerical_gender_either"],
+                }, rng),
 
                 _ => rng.Pick(members),
             };
@@ -867,6 +890,52 @@ public static class Faiths
             };
         }
     }
+
+    /// <summary>
+    /// The <c>doctrine_gender</c> key <see cref="MapConfig.Gender"/> asks for this time.
+    ///
+    /// Weighted rather than absolute even at the ends of the scale, because a world where every
+    /// single faith answers the question the same way has nothing to notice about any of them: the
+    /// two percent that lean the other way are what make the other ninety-eight legible as a
+    /// choice. Equal is the middle rung on CK3's own scale and is never rare.
+    /// </summary>
+    private static string GenderDoctrine(GenderPreference preference, Rng rng)
+    {
+        double roll = rng.NextDouble();
+
+        return preference switch
+        {
+            GenderPreference.FemaleDominated => roll switch
+            {
+                < 0.86 => "doctrine_gender_female_dominated",
+                < 0.98 => "doctrine_gender_equal",
+                _ => "doctrine_gender_male_dominated",
+            },
+            GenderPreference.Mixed => roll switch
+            {
+                < 0.42 => "doctrine_gender_male_dominated",
+                < 0.72 => "doctrine_gender_equal",
+                _ => "doctrine_gender_female_dominated",
+            },
+            _ => roll switch
+            {
+                < 0.86 => "doctrine_gender_male_dominated",
+                < 0.98 => "doctrine_gender_equal",
+                _ => "doctrine_gender_female_dominated",
+            },
+        };
+    }
+
+    /// <summary>
+    /// Which way a faith leans, for everything downstream that has to agree with it — the culture
+    /// on the same ground, the sex of the ruler who holds it, which of their children inherits.
+    ///
+    /// Answers <c>doctrine_gender_male_dominated</c> for a faith whose religion never got the
+    /// group, which is what an install missing the doctrine and the wilderness faith both look
+    /// like, and is the answer that changes nothing.
+    /// </summary>
+    public static string GenderOf(Faith faith)
+        => faith.Religion.Doctrines.GetValueOrDefault("doctrine_gender", "doctrine_gender_male_dominated");
 
     private static string Prefer(List<string> members, string[] preferred, Rng rng)
     {

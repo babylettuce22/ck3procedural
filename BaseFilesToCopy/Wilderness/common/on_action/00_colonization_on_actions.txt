@@ -81,6 +81,15 @@ wilderness_yearly_colony_events = {
 	trigger = {
 		# is_ai = no
 		has_character_modifier = overseeing_the_settlement
+
+		# A colonist standing in his own colony carries the overseeing modifier too — presence is
+		# presence — so without this line he drew from BOTH yearly pools, this one and
+		# wilderness_yearly_colonist_flavor, on two independent cooldown variables: worst case two
+		# colony windows a year, every year, on the same character. The colonist pulse is his; and
+		# these events read wrong for him anyway — 0030 opens on the cold "from our halls at home",
+		# which is nobody's line about the palisade they live in.
+		is_colonist_trigger = no
+
 		# Cooldown gate: won't trigger if you had an overseer event in the last 2 years
 		NOT = { has_variable = overseer_event_cooldown }
 	}
@@ -481,6 +490,13 @@ wilderness_yearly_colonist_petition_check = {
 		# Not `exists = liege`, which is true even for an independent colonist (the liege scope is
 		# self), and would have him petitioning himself for promotion money every other year.
 		is_independent_ruler = no
+
+		# The sibling check below has always had a cooldown; this one ran bare, which meant a
+		# liege who refused was re-petitioned on a coin flip every single year — the same window
+		# and the same -30 opinion, forever, until somebody paid. Three years, not two, because
+		# refusing a direct petition should buy more quiet than never having been asked.
+		NOT = { has_variable = petition_cooldown }
+
 		any_held_title = {
 			tier = tier_county
 			can_promote_colony_trigger = yes
@@ -500,6 +516,12 @@ wilderness_yearly_colonist_petition_check = {
 		# 50% chance each year to send a formal petition to their liege
 		random = {
 			chance = 50
+
+			set_variable = {
+				name = petition_cooldown
+				years = 3
+			}
+
 			liege = {
 				trigger_event = wilderness_colonization.0050
 			}
@@ -598,6 +620,72 @@ wilderness_yearly_colonist_development_aid_check = {
 
 			liege = {
 				trigger_event = wilderness_colonization.0051
+			}
+		}
+	}
+}
+
+
+# --- The frontier at war ---------------------------------------------------------------------------
+#
+# An independent colonist is the softest target on the map — one county, no allies, no realm behind
+# him — and every neighbour whose truce has run out knows it. This hook is the second half of the
+# answer (the first is the colonial-grace truce in colonization_make_colonist_effect): when a war
+# lands on him anyway, the colonist gets to offer the one thing an attacker might want more than a
+# siege — the county, in the attacker's realm, without a fight. See the 0070 chain.
+#
+# Vanilla's on_war_started saves scope:attacker, scope:defender and scope:war — its own header says
+# the scopes match the CBs' on_declaration — and those saved scopes ride along into the triggered
+# event and everything downstream of it, exactly as scope:leak_county rides into the deferred 0099.
+
+on_war_started = {
+	on_actions = {
+		wilderness_colony_war_started
+	}
+}
+
+wilderness_colony_war_started = {
+	trigger = {
+		exists = scope:attacker
+		exists = scope:defender
+		exists = scope:war
+
+		# Player-only by design. An AI colonist attacked by an AI just fights his war — scripting a
+		# hidden AI-to-AI submission would be a diplomacy AI written in event weights, and the grace
+		# truce already covers the window where an AI colonist is helpless.
+		scope:defender = {
+			is_ai = no
+			is_colonist_trigger = yes
+
+			# A vassal colonist is his liege's problem to defend, and cannot swear fealty to a
+			# second lord anyway. This chain is for the pioneer who answers to nobody — yet.
+			is_independent_ruler = yes
+		}
+
+		scope:attacker = {
+			# A landless adventurer company raiding the palisade is a battle, not a change of
+			# allegiance — there is no realm to kneel into.
+			is_landed = yes
+
+			# Kneeling to a fellow one-county colonist is nonsense both ways, and the wilderness
+			# dummy declares nothing but is excluded anyway on principle.
+			is_colonist_trigger = no
+			NOT = { has_trait = wilderness }
+			NOT = { government_has_flag = government_is_uninteractable }
+
+			# Equal tier is allowed on purpose: a count taking a count's fealty is unusual but the
+			# engine supports it, and on a frontier of one-county lords it is the common case.
+			highest_held_title_tier >= scope:defender.highest_held_title_tier
+		}
+	}
+
+	effect = {
+		scope:defender = {
+			# A few days' delay so the declaration itself — the war screen, the alert — lands
+			# first, and the offer reads as a response to it rather than as part of the same click.
+			trigger_event = {
+				id = wilderness_colonization.0070
+				days = 5
 			}
 		}
 	}

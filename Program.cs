@@ -11,10 +11,6 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
-        // The magic designer is not part of the pipeline: it builds no world and writes no mod, so
-        // it takes the process before any of the generation machinery is constructed. Two lines
-        // here and one folder is the whole of its footprint until it is wired up.
-        if (args.Length > 0 && Magic.MagicCli.Handles(args[0])) return Magic.MagicCli.Run(args);
 
         var options = new GenerationOptions();
         var cfg = options.Config;
@@ -155,6 +151,12 @@ public static class Program
                 case "--era-anchor" when i + 1 < args.Length:
                     cfg.EraAnchorYear = int.Parse(args[++i],
                         System.Globalization.CultureInfo.InvariantCulture);
+                    break;
+
+                // Which way the world's faiths, cultures and rulers lean on inheritance and
+                // knighthood; see GenderPreference. Historical is the default.
+                case "--gender" when i + 1 < args.Length:
+                    cfg.Gender = Enum.Parse<GenderPreference>(args[++i], ignoreCase: true);
                     break;
 
                 case "--no-history":
@@ -365,10 +367,6 @@ public static class Program
             {
                 sets.Add(Ck3MapGen.Emit.StaticFileWriter.Fantasy);
             }
-            if (cfg.EnableMagic)
-            {
-                sets.Add(Ck3MapGen.Emit.StaticFileWriter.Magic);
-            }
 
             // Using UtcNow as runStarted ensures all previously existing files in the target
             // folder are considered older than this run and will be overwritten/refreshed.
@@ -379,7 +377,6 @@ public static class Program
         if (guiOnly)
         {
             modDir ??= GenerationOptions.DefaultModDir;
-            options.GameDir ??= Core.GameLocator.FindGameDir();
 
             if (string.IsNullOrWhiteSpace(options.GameDir) || !Core.GameLocator.IsGameDir(options.GameDir))
             {
@@ -395,7 +392,7 @@ public static class Program
             FrontendWriter.WriteFrontend(modDir, options.GameDir);
 
             // 2. Write/patch in-game views (county view, character view, title view)
-            GuiWriter.WriteAll(modDir, options.GameDir, cfg);
+            GuiWriter.WriteAll(modDir, options.GameDir);
 
             return 0;
         }
@@ -403,7 +400,7 @@ public static class Program
         if (gui)
         {
             ApplicationConfiguration.Initialize();
-            System.Windows.Forms.Application.Run(new Gui.MainForm(options));
+            System.Windows.Forms.Application.Run(new AppGUI.MainForm(options));
             return 0;
         }
 
@@ -429,6 +426,8 @@ public static class Program
                 "       [--impassable-mask <mask.png>]  optional; white = impassable, black = passable, painted over provinces.png");
             Console.Error.WriteLine(
                 "       [--impassable-mask-mode snap|touch]  snap (default) cuts provinces to the paint; touch turns whole provinces");
+            Console.Error.WriteLine(
+                "       [--gender historical|mixed|femaledominated]  which way the world's laws and rulers lean; historical is the default");
             Console.Error.WriteLine(
                 "This tool builds a CK3 mod around a heightmap: one you supply as a 16-bit PNG, or "
                 + "one produced from a CK3 Heightmap Forge preset.");
@@ -481,17 +480,17 @@ public static class Program
         var normalized = loaded.Levels(cfg);
 
         const int Width = 1600, Height = 900;
-        var field = Gui.Heightfield.Downsample(normalized, loaded.Width, loaded.Height, Gui.Heightfield.PreviewCols);
+        var field = AppGUI.Heightfield.Downsample(normalized, loaded.Width, loaded.Height, AppGUI.Heightfield.PreviewCols);
 
         Console.WriteLine($"  field {field.Cols}x{field.Rows}, " +
                           $"{100 * field.LandShare:F1}% land, highest {field.LandMax}/65535");
 
-        var view = Gui.HeightfieldView.Default;
+        var view = AppGUI.HeightfieldView.Default;
 
         foreach (var (name, yaw) in ((string, double)[])
                  [("ne", 0.7), ("se", 2.4), ("sw", 3.9), ("nw", 5.5)])
         {
-            var frame = Gui.HeightfieldRenderer.Render(
+            var frame = AppGUI.HeightfieldRenderer.Render(
                 field, view with { Yaw = yaw }, Width, Height);
 
             string file = Path.Combine(outDir, $"preview3d_{name}.png");
@@ -519,14 +518,14 @@ public static class Program
                           $"mean {(changed == 0 ? 0 : (double)sum / changed) / MapDataWriter.Step255:F2}/255, " +
                           $"worst {(double)worst / MapDataWriter.Step255:F2}/255");
 
-        var packedField = Gui.Heightfield.Downsample(packed, loaded.Width, loaded.Height, Gui.Heightfield.PreviewCols);
-        var packedFrame = Gui.HeightfieldRenderer.Render(packedField, view, Width, Height);
+        var packedField = AppGUI.Heightfield.Downsample(packed, loaded.Width, loaded.Height, AppGUI.Heightfield.PreviewCols);
+        var packedFrame = AppGUI.HeightfieldRenderer.Render(packedField, view, Width, Height);
 
         string packedPath = Path.Combine(outDir, "preview3d_as_ck3_renders_it.png");
         Io.PngWriter.WriteRgb8(packedPath, packedFrame.Width, packedFrame.Height, packedFrame.Rgb);
         Console.WriteLine($"  wrote {packedPath}");
 
-        var plain = Gui.HeightfieldRenderer.Render(field, view, Width, Height);
+        var plain = AppGUI.HeightfieldRenderer.Render(field, view, Width, Height);
         string plainPath = Path.Combine(outDir, "preview3d_source.png");
         Io.PngWriter.WriteRgb8(plainPath, plain.Width, plain.Height, plain.Rgb);
         Console.WriteLine($"  wrote {plainPath}");
@@ -538,7 +537,7 @@ public static class Program
         for (int s = -1; s <= 1; s++)
         {
             var step = panned.Panned(0, s * 0.22);
-            var frame = Gui.HeightfieldRenderer.Render(field, step, Width, Height);
+            var frame = AppGUI.HeightfieldRenderer.Render(field, step, Width, Height);
             string file = Path.Combine(outDir, $"preview3d_pan{s + 1}.png");
             Io.PngWriter.WriteRgb8(file, frame.Width, frame.Height, frame.Rgb);
             Console.WriteLine($"  wrote {file}");
@@ -549,7 +548,7 @@ public static class Program
         foreach (double pitch in (double[])[0.25, 0.55, 1.05])
         {
             var tilted = view with { Pitch = pitch };
-            var frame = Gui.HeightfieldRenderer.Render(field, tilted, Width, Height);
+            var frame = AppGUI.HeightfieldRenderer.Render(field, tilted, Width, Height);
             string file = Path.Combine(outDir, $"preview3d_tilt{pitch:F2}.png");
             Io.PngWriter.WriteRgb8(file, frame.Width, frame.Height, frame.Rgb);
             Console.WriteLine($"  wrote {file}");
@@ -559,10 +558,10 @@ public static class Program
         // at — across a whole map a 64-pixel tile is smaller than a screen pixel.
         var close = view.Zoomed(0.18) with { PanX = 0.10, PanY = -0.14 };
 
-        foreach (var (name, from) in ((string, Gui.Heightfield)[])
+        foreach (var (name, from) in ((string, AppGUI.Heightfield)[])
                  [("close_source", field), ("close_as_ck3_renders_it", packedField)])
         {
-            var frame = Gui.HeightfieldRenderer.Render(from, close, Width, Height);
+            var frame = AppGUI.HeightfieldRenderer.Render(from, close, Width, Height);
             string file = Path.Combine(outDir, $"preview3d_{name}.png");
             Io.PngWriter.WriteRgb8(file, frame.Width, frame.Height, frame.Rgb);
             Console.WriteLine($"  wrote {file}");

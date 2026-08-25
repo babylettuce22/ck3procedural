@@ -115,6 +115,75 @@ public enum ImpassableMaskMode : byte
 }
 
 /// <summary>
+/// Which way the world's peoples lean on the one question CK3 asks about sex: who inherits, who
+/// may be granted a title, who sits on a council, who rides as a knight.
+///
+/// One knob rather than four, because the four levers CK3 gives are not independent. The faith's
+/// <c>doctrine_gender</c> is the one that decides succession; the culture's <c>martial_custom</c>
+/// decides who fights; the inheritance traditions override the doctrine; and the sex of the rulers
+/// written into history is what a player actually sees on the map. Roll those separately and a
+/// world contradicts itself — which is what this generator did before this setting existed, with
+/// a third of every world's faiths female-dominated and every last count a man.
+///
+/// So this only moves one distribution — how the doctrine falls — and everything downstream reads
+/// the doctrine that came out. See <see cref="MapGen.Faiths"/> for the roll,
+/// <see cref="MapGen.Cultures.AlignGender"/> for the culture that follows it, and
+/// <see cref="Emit.HistoryWriter.RulerIsFemale"/> for the ruler.
+/// </summary>
+public enum GenderPreference
+{
+    /// <summary>
+    /// Overwhelmingly male-dominated, with the rare exception vanilla's own map has. About one
+    /// ruler in nine is a woman, nearly all of them under the faiths that allow it.
+    /// </summary>
+    Historical,
+
+    /// <summary>
+    /// A genuine spread — no answer is the world's answer. Each religion is still coherent within
+    /// itself, so a matriarchy borders a patriarchy rather than every realm being confused.
+    /// </summary>
+    Mixed,
+
+    /// <summary>The mirror of <see cref="Historical"/>: women hold the land and the titles.</summary>
+    FemaleDominated,
+}
+
+/// <summary>
+/// Spells <see cref="GenderPreference"/> the way the setting is read aloud rather than the way an
+/// identifier has to be spelled — "Female-dominated", not the run-together FemaleDominated a
+/// PropertyGrid would otherwise print.
+///
+/// Display only. Presets go through System.Text.Json, which does not consult type converters, so
+/// nothing on disk depends on these strings.
+/// </summary>
+public sealed class GenderPreferenceConverter() : EnumConverter(typeof(GenderPreference))
+{
+    private static readonly (GenderPreference Value, string Text)[] Names =
+    [
+        (GenderPreference.Historical, "Historical"),
+        (GenderPreference.Mixed, "Mixed"),
+        (GenderPreference.FemaleDominated, "Female-dominated"),
+    ];
+
+    public override object? ConvertTo(ITypeDescriptorContext? context, CultureInfo? culture,
+        object? value, Type destinationType)
+        => destinationType == typeof(string) && value is GenderPreference preference
+            ? Names.First(n => n.Value == preference).Text
+            : base.ConvertTo(context, culture, value, destinationType);
+
+    public override object? ConvertFrom(ITypeDescriptorContext? context, CultureInfo? culture,
+        object value)
+    {
+        if (value is string text)
+            foreach (var (option, spelling) in Names)
+                if (string.Equals(text, spelling, StringComparison.OrdinalIgnoreCase))
+                    return option;
+
+        return base.ConvertFrom(context, culture, value);
+    }
+}
+
+/// <summary>
 /// Shows <see cref="MapConfig.EraAnchorYear"/>'s zero as what it means rather than as a number.
 ///
 /// Zero is a sentinel — "however advanced the world's own year would make it" — and a grid row
@@ -127,7 +196,7 @@ public enum ImpassableMaskMode : byte
 /// </summary>
 public sealed class FollowWorldYearConverter : Int32Converter
 {
-    public const string Follow = "Follow World Year";
+    public const string Follow = "0 (Follow World Year)";
 
     public override object? ConvertTo(ITypeDescriptorContext? context, CultureInfo? culture,
         object? value, Type destinationType)
@@ -306,6 +375,12 @@ public sealed class MapConfig : CustomTypeDescriptor
     public bool ShatteredWorld { get; set; } = false;
 
     [Category("02 World State")]
+    [DisplayName("Gender Preference")]
+    [TypeConverter(typeof(GenderPreferenceConverter))]
+    [Description("Which way the world leans on inheritance, titles, councils and knighthood. Sets the faiths' gender doctrine, and the cultures' martial custom, inheritance traditions and the sex of the rulers written into history all follow from it, so a matriarchy is ruled by women rather than only legislated by them.")]
+    public GenderPreference Gender { get; set; } = GenderPreference.Historical;
+
+    [Category("02 World State")]
     [Description("Enable procedural Centers of the World: focal metropolises with monumental wonders, hyper-development, and primary holy sites.")]
     public bool EnableWorldCenters { get; set; } = true;
 
@@ -410,7 +485,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     [HideInGenerator] // Hiding for now until "completed"
     [Category("02 World State")]
     [DisplayName("Magic")]
-    public bool EnableMagic { get; set; } = false;
+    public bool EnableMagic { get; set; } = true;
 
     // =========================================================================
     // 03 Provinces

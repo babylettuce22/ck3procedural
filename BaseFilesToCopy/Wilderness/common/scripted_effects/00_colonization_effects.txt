@@ -196,6 +196,55 @@ colony_road_roll_effect = {
 	}
 }
 
+# The full shape of a road gamble: roll, move the fortune, and TELL the player which way it went.
+#
+#   $CHANCE$      the script value rolled against
+#   $WIN$/$LOSS$  what expedition_fortune moves by on each outcome
+#   $TITLE_GOOD$/$TITLE_BAD$  the toast titles
+#
+# The toast is the point of this wrapper existing. The six word-from-the-road events used to roll
+# inside hidden_effect and move the fortune in silence — the odds were printed before the click
+# and the result of taking them was never shown at all, so "the carts got through" and "the carts
+# came late" were indistinguishable until the settling news two years later. The pioneer file
+# already toasts every one of its rolls for exactly this reason; this is the same rule applied to
+# the sponsor's side. The fortune NUMBER stays hidden — the sponsor is months away and does not
+# get a meter — but the outcome itself is news, and news gets reported.
+#
+# road_roll_took survives this effect on purpose: an option with side effects beyond the fortune
+# (a stress hit on failure, a command handed over on success) re-branches on it afterwards.
+#
+# Player-gated because the AI answers these events too, and a toast for an AI's dice would either
+# vanish or land on the wrong screen.
+colony_road_gamble_effect = {
+	colony_road_roll_effect = { CHANCE = $CHANCE$ }
+
+	if = {
+		limit = { has_variable = road_roll_took }
+		scope:colony = { change_variable = { name = expedition_fortune  add = $WIN$ } }
+
+		if = {
+			limit = { is_ai = no }
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = $TITLE_GOOD$
+				left_icon = root
+			}
+		}
+	}
+	else = {
+		scope:colony = { change_variable = { name = expedition_fortune  add = $LOSS$ } }
+
+		if = {
+			limit = { is_ai = no }
+			send_interface_toast = {
+				type = event_toast_effect_bad
+				title = $TITLE_BAD$
+				left_icon = root
+			}
+		}
+	}
+}
+
 # Takes the temporary expedition marks off both the character and the county.
 # NOTE: settlers_were_promised is deliberately preserved here so it survives to mature promotion.
 colony_clear_expedition_effect = {
@@ -370,6 +419,26 @@ colony_settling_success_effect = {
 	trigger_event = wilderness_colonization.0012
 }
 
+# The part of failure that is about the GROUND: the promise dies with the expedition, and the
+# county's markers come off so it can be aimed at again.
+#
+# Split out of colony_settling_failure_effect for 0029's sake, and the split is a bug fix twice
+# over, not tidiness. 0029 is the player-led crisis — root IS the expedition leader — and it used
+# to call the full effect from both of its options. That meant: (a) the "butcher the beasts and
+# retreat" option, designed and tooltipped as guaranteed survival, quietly ran the leader's 35%
+# death-by-starvation roll against the player who had just been promised they would live; and
+# (b) after 0029 had narrated the failure in full, the effect's closing trigger_event put the
+# generic "it did not take" window (0013) on top of it — the same news twice. 0029 now calls this
+# core and owns its own consequences; the full effect below is unchanged for every other caller.
+colony_settling_failure_core_effect = {
+	# Clean up promise if the expedition never took root
+	scope:colony = {
+		if = { limit = { has_variable = settlers_were_promised } remove_variable = settlers_were_promised }
+	}
+
+	colony_clear_expedition_effect = { COUNTY = scope:colony }
+}
+
 colony_settling_failure_effect = {
 	if = {
 		limit = { exists = scope:expedition_leader }
@@ -387,12 +456,7 @@ colony_settling_failure_effect = {
 		}
 	}
 
-	# Clean up promise if the expedition never took root
-	scope:colony = {
-		if = { limit = { has_variable = settlers_were_promised } remove_variable = settlers_were_promised }
-	}
-
-	colony_clear_expedition_effect = { COUNTY = scope:colony }
+	colony_settling_failure_core_effect = yes
 
 	trigger_event = wilderness_colonization.0013
 }
@@ -699,9 +763,66 @@ colonization_make_colonist_effect = {
 			# vanilla's destroy_laamp_effect struck it on the way through — but that effect is
 			# vanilla's and its teardown list is not ours to predict, so this asks rather than
 			# assumes. A colonist made by a feudal realm's expedition never had a camp at all.
+			#
+			# Guarded on the TYPE as well, because domicile buildings are bound to one by key:
+			# camp_main_01 carries `allowed_domicile_types = { camp }`, so handing it to anything
+			# else is not a no-op but an invalid write. That matters right now — colony_government is
+			# pointed at `yurt` as a control while we work out why a landed character gets no camp,
+			# and it will matter again for the colony_camp type that replaces it, which will want its
+			# own main building named here.
 			if = {
-				limit = { NOT = { has_domicile_building = camp_main_01 } }
+				limit = {
+					is_domicile_type = camp
+					NOT = { has_domicile_building = camp_main_01 }
+				}
 				add_domicile_building = camp_main_01
+			}
+		}
+
+		# ---- Colonial grace ----
+		#
+		# A truce with every realm that borders the colony, five years, both ways. Only for an
+		# INDEPENDENT colonist — a granted or inherited colonist shelters under his liege's wars and
+		# needs nothing here — which in practice means the pioneer path: a man who was a landless
+		# adventurer last week and is now a one-county count with no allies, no levies to speak of,
+		# and a de jure hole every neighbour has a CB on.
+		#
+		# Without this, the rational move for every bordering AI is to declare on the new count the
+		# month the palisade goes up, and "won land as an adventurer" becomes "donated a county to
+		# whoever moved first". Five years matches the independence truce above: long enough to clear
+		# the first obstacles and raise walls, short enough that holding the frontier is still the
+		# colonist's problem and not a gift. Realms formed later, or reached by a ranged CB from
+		# beyond the border, are not covered — that case is the submission chain's
+		# (wilderness_colonization.0070) rather than this one's.
+		#
+		# `top_liege`, not `holder` — the holder of a bordering county is a vassal count; the realm
+		# that would actually declare is his king's. Two bordering counties under one king re-add the
+		# same truce, which merely refreshes it. The wilderness dummy is its own top liege and never
+		# declares anything, so it is skipped rather than given a truce a player would see in the UI.
+		if = {
+			limit = { is_independent_ruler = yes }
+			every_held_title = {
+				limit = {
+					tier = tier_county
+					is_colony_county_trigger = yes
+				}
+				every_title_to_title_neighboring_and_across_water_county = {
+					limit = {
+						holder ?= {
+							top_liege = {
+								NOT = { has_trait = wilderness }
+								NOT = { this = scope:new_colonist }
+							}
+						}
+					}
+					holder.top_liege ?= {
+						add_truce_both_ways = {
+							character = scope:new_colonist
+							years = 5
+							name = TRUCE_COLONIAL_GRACE
+						}
+					}
+				}
 			}
 		}
 	}
@@ -908,6 +1029,221 @@ release_excess_colony_effect = {
 			position = 0
 
 			abandon_county_effect = { COUNTY = this }
+		}
+	}
+}
+
+
+# =====================================================================================
+#  War for the colony: submission instead of dispossession
+# =====================================================================================
+#
+# Both effects run with the on_war_started scopes still saved — scope:attacker, scope:defender,
+# scope:war — whoever calls them: the AI branch of 0070's offer option and the human attacker's
+# 0071 both funnel through here, so the two kinds of attacker cannot resolve the same offer
+# differently.
+#
+# The guard re-checks everything, because an event option is clicked days after the event fired:
+# the war may have ended, the attacker may have died, the colonist may have found a liege some
+# other way. If any of that has happened the offer silently comes to nothing, which is the right
+# amount of drama for a letter overtaken by events.
+
+colony_submission_accepted_effect = {
+	if = {
+		limit = {
+			exists = scope:war
+			exists = scope:attacker
+			exists = scope:defender
+			scope:attacker = { is_alive = yes }
+			scope:defender = {
+				is_alive = yes
+				is_independent_ruler = yes
+			}
+		}
+
+		# The war ends FIRST. change_liege between two rulers who are at war with each other is
+		# exactly the state the engine most wants to refuse, and the whole point of the offer is
+		# that the fighting stops the moment the knee bends.
+		scope:war = { end_war = white_peace }
+
+		create_title_and_vassal_change = {
+			type = swear_fealty
+			save_scope_as = change
+		}
+		scope:defender = {
+			change_liege = {
+				liege = scope:attacker
+				change = scope:change
+			}
+			resolve_title_and_vassal_change = scope:change
+		}
+
+		# The attacker got what the war was for — the county, in the realm — without paying for a
+		# single assault, and a vassal who chose him over ruin starts the relationship warm. The
+		# colonist keeps the palisade and pays for it in standing.
+		scope:attacker = {
+			add_prestige = minor_prestige_gain
+			add_opinion = {
+				target = scope:defender
+				modifier = colony_knelt_opinion
+				opinion = 30
+			}
+		}
+		scope:defender = {
+			add_prestige = minor_prestige_loss
+		}
+
+		# ---- And the second half of the bargain, if it was offered ----
+		#
+		# Costed straight off vanilla's convert_at_war_interaction_effect, which is the same
+		# transaction under a different name: a defender buys his way out of a holy war by taking the
+		# attacker's faith. Piety loss, three piety LEVELS, and zealous stress — apostasy at
+		# swordpoint is supposed to hurt, and if it did not, offering it would be free and every
+		# colonist would offer it every time. Vanilla waives the piety-level hit when the new faith
+		# is unreformed pagan, and so does this.
+		if = {
+			limit = { scope:defender = { has_variable = colony_offered_conversion } }
+
+			# The variable is consumed here, so 0072 — which fires at the bottom of this effect —
+			# can no longer see it. A scope value carries the fact forward instead, which is
+			# vanilla's own idiom for exactly this: see the `convert_capital` value saved by
+			# demand_conversion_vassal_ruler_interaction_effect purely so the letter can mention it.
+			save_scope_value_as = {
+				name = colony_conversion_done
+				value = yes
+			}
+
+			scope:defender = {
+				remove_variable = colony_offered_conversion
+
+				set_character_faith_with_conversion = scope:attacker.faith
+
+				# The colonies follow their lord. `_with_conversion` takes the capital along by
+				# itself, which for a one-county colonist is the whole of it — but the settlement
+				# cap allows several, and a colonist who kept his old faith in the outposts while
+				# professing the new one at home has bought the attacker nothing. Re-converting the
+				# capital here is a no-op, so this is written as one loop rather than as a branch.
+				every_held_title = {
+					limit = {
+						tier = tier_county
+						is_colony_county_trigger = yes
+					}
+					set_county_faith = scope:attacker.faith
+				}
+
+				add_piety = medium_piety_loss
+				if = {
+					limit = {
+						NOT = { scope:attacker.faith = { has_doctrine_parameter = unreformed } }
+					}
+					add_piety_level = -3
+				}
+				stress_impact = { zealous = medium_stress_impact_gain }
+			}
+
+			# Converting a heathen count is a genuine devotional win, and the attacker banked it
+			# without a siege. Same line vanilla pays the recipient in the interaction above.
+			scope:attacker = { add_piety_experience = major_piety_value }
+		}
+
+		scope:defender = {
+			if = {
+				limit = { is_ai = no }
+				trigger_event = wilderness_colonization.0072
+			}
+		}
+	}
+}
+
+colony_submission_refused_effect = {
+	scope:defender ?= {
+		# The offer died with the refusal — nothing was converted and nothing is owed. Cleared
+		# explicitly rather than left to the 30-day expiry, so a second war inside the month cannot
+		# inherit a promise made in the first one.
+		if = {
+			limit = { has_variable = colony_offered_conversion }
+			remove_variable = colony_offered_conversion
+		}
+
+		if = {
+			limit = { is_ai = no }
+			trigger_event = wilderness_colonization.0073
+		}
+	}
+}
+
+
+# The offer, sent. Runs in the COLONIST's scope, with the on_war_started scopes still saved, and is
+# called from both of 0070's offer options — the bare one and the one that throws in conversion.
+#
+# One home for the odds is the point. The two options differ by a single variable, and if each
+# carried its own copy of this list the sweetened offer would drift out of step with the plain one
+# the first time either was tuned — which is precisely the bug the promotion check had when it lived
+# in three interactions at once (see can_promote_colony_trigger).
+colony_submission_offer_effect = {
+	if = {
+		limit = { scope:attacker = { is_ai = yes } }
+		random_list = {
+			70 = {
+				# The sensible answer: the county joins the realm, the war costs nothing.
+				modifier = { add = 20  scope:attacker = { has_trait = content } }
+				modifier = { add = 15  scope:attacker = { has_trait = just } }
+				modifier = { add = 10  scope:attacker = { has_trait = compassionate } }
+
+				# ---- What conversion is worth ----
+				#
+				# +40 flat, and it also cancels the heathen penalty below, so conversion swings the
+				# roll by 55 weight in total. Worked through: a rival of another faith and no other
+				# traits refuses 75-against-70, about 52% — and with conversion 60-against-110,
+				# about 35%. A plain neighbour of another faith goes 39% to 21%.
+				#
+				# That is the intended shape. Conversion is the concession that makes an ordinary
+				# hostile neighbour take the deal; it does not save you from a man who wants you
+				# personally ruined, because the rival and sadist weights are untouched by it.
+				#
+				# Asked of scope:defender rather than of `this`, here and below. A scripted effect
+				# runs in its caller's scope, and every read in this list has to agree about whose
+				# variable it is looking at — see the note at the top of pioneer_success_effect for
+				# what an implicit scope in a shared effect cost last time.
+				modifier = {
+					add = 40
+					scope:defender = { has_variable = colony_offered_conversion }
+				}
+
+				# The zealot is the one this is really aimed at. To him a converted count is a
+				# better prize than the county was, and he is the likeliest to have been the
+				# different-faith refusal in the first place.
+				modifier = {
+					add = 25
+					scope:defender = { has_variable = colony_offered_conversion }
+					scope:attacker = { has_trait = zealous }
+				}
+
+				colony_submission_accepted_effect = yes
+			}
+			30 = {
+				# The refusals are personal, every one: this is a man who wants the ground itself,
+				# or the colonist humbled, and a kneeling settler robs him of it.
+				modifier = { add = 25  scope:attacker = { has_trait = sadistic } }
+				modifier = { add = 15  scope:attacker = { has_trait = vengeful } }
+				modifier = { add = 10  scope:attacker = { has_trait = greedy } }
+				modifier = { add = 30  scope:attacker = { has_relation_rival = scope:defender } }
+
+				# Suppressed once conversion is on the table, because the objection it encodes —
+				# a heathen holding ground in my realm — is the exact thing being offered away.
+				modifier = {
+					add = 15
+					NOT = { scope:defender = { has_variable = colony_offered_conversion } }
+					scope:attacker = { NOT = { faith = scope:defender.faith } }
+				}
+
+				colony_submission_refused_effect = yes
+			}
+		}
+	}
+	else = {
+		scope:attacker = {
+			trigger_event = wilderness_colonization.0071
 		}
 	}
 }

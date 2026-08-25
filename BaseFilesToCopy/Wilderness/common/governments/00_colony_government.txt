@@ -28,44 +28,54 @@ colony_government = {
 
 	court_generate_commanders = no
 
-	# ---- The camp survives the settling ----
-	#
-	# A colonist keeps the camp domicile: the tents he arrived in ARE the colony until something is
-	# built to replace them, and the domicile window is where that reads.
+	# ---- A domicile for the colony: CURRENTLY A CONTROL, NOT THE ANSWER ----
 	#
 	# `domicile_type` is a TOP-LEVEL field, not a government_rules entry — same trap as
 	# court_generate_commanders above and royal_court in 00_wilderness_government.txt. Inside the
 	# rules block it is silently ignored and the colonist simply has no domicile, with nothing logged.
 	#
-	# ---- Why vanilla's `camp` rather than a colony_camp of our own ----
+	# ---- What has been measured ----
 	#
-	# Because domicile buildings are bound to a type BY KEY: every entry in
-	# common/domiciles/buildings/00_camp_buildings.txt carries `allowed_domicile_types = { camp }`.
-	# A type of our own would be a domicile with no buildings available in it — an empty window —
-	# unless we either overrode all twenty-odd vanilla camp buildings to name our type as well, or
-	# authored a parallel set of our own. Reusing the key is what makes the main tent, the officer
-	# tents and the supply tents work for a colonist without touching one vanilla file.
+	# `domicile_type = camp` was shipped first, on the reasoning that nothing in vanilla's camp type
+	# objects to a landed owner: it carries no `allowed_for_character` at all (only `estate` and
+	# `east_asian_estate` do, and theirs want a noble family title), and `camp_main_01` has no
+	# can_construct. Colonists got no camp. Placing it explicitly after the government change did not
+	# help either, and the debug readout on wilderness_colonization.9998 then answered why:
+	# `has_domicile = no`. The engine never made one. It is creation that fails, not placement and
+	# not the HUD.
 	#
-	# Nothing in the camp type objects to a landed owner. It carries no `allowed_for_character` at
-	# all — only `estate` and `east_asian_estate` do, and theirs wants a noble family title — and
-	# `camp_main_01` has no can_construct. A landed government owning a travelling domicile is
-	# vanilla's own arrangement besides: nomad_government holds counties and owns a `yurt`.
+	# ---- Why `yurt`, of all things ----
 	#
-	# ---- The two things to watch ----
+	# It is the one type that isolates the variable, and it is temporary. Line up what vanilla ships:
 	#
-	# The camp sets `provisions = yes`, so `domicile_uses_provisions` is true for a colonist and the
-	# low-provisions alerts in vanilla's travel_on_actions become reachable. Riding out to oversee a
-	# colony is travel, so this is not hypothetical; nomads do NOT prove it safe, because a yurt uses
-	# `herd` rather than provisions. If it turns out a colonist can drain provisions with no way to
-	# restock, the fix is a colony_camp type after all, which then owes the buildings problem above.
+	#   estate, east_asian_estate   landed owner, no resource, GATED on a noble family title  — works
+	#   japanese_manor              landed owner, no resource                                 — works
+	#   yurt                        landed owner (nomads hold counties), no gate, `herd`       — works
+	#   camp                        landless owner, no gate, `provisions`                      — ours failed
 	#
-	# The camp also sets `rename_window = primary_title`, which for a landless adventurer means the
-	# camp title and for a colonist means his county. Renaming the camp renames the colony. That is
-	# arguably correct — the camp is the place — but it is a surprise if it is not intended.
+	# `yurt` differs from `camp` in exactly two things that could matter: it manages `herd` where the
+	# camp manages `provisions`, and it carries `move_with_realm_capital = yes` so the engine places
+	# it without being asked. If a colonist gets a yurt, then a gateless domicile on a landed
+	# government is fine and `provisions` — an adventurer resource — is what the engine is refusing.
+	# If a colonist gets no yurt either, the government field cannot grant a landed character a
+	# domicile at all here, and a type of our own would fail the same way.
 	#
-	# Promotion needs no cleanup: promote_colony_effect moves the ruler off colony_government, the
-	# new government declares no domicile_type, and the camp stops existing on its own.
-	domicile_type = camp
+	# Do not ship this. A colonist with a yurt gets a herd meter, which is worse than the provisions
+	# meter this was meant to avoid.
+	#
+	# ---- What replaces it once the control has answered ----
+	#
+	# If provisions is the culprit: a `colony_camp` type of our own with `provisions = no` and
+	# `move_with_realm_capital = yes`, which also retires the explicit placement in
+	# colonization_make_colonist_effect. That owes one thing — domicile buildings are bound to a type
+	# BY KEY, and every entry in vanilla's 00_camp_buildings.txt carries
+	# `allowed_domicile_types = { camp }` — so it needs a small building set of its own rather than
+	# an override of twenty-odd vanilla files. That is the reason `camp` was reached for first.
+	#
+	# Promotion needs no cleanup whichever way this lands: promote_colony_effect moves the ruler off
+	# colony_government, the new government declares no domicile_type, and the domicile stops
+	# existing on its own.
+	domicile_type = yurt
 
 	primary_holding = settlement_holding
 	valid_holdings = { settlement_holding }

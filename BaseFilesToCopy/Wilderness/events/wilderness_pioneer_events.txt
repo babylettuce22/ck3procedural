@@ -767,31 +767,25 @@ wilderness_pioneer.0020 = {
 		animation = personality_honorable
 	}
 
+	# `exists = scope:stake` and NOT pioneer_stake_still_live_trigger: by the time this fires the
+	# work is already done and the stake variables that trigger reads are gone. The scope survives
+	# the cleanup because it was saved in the activity's on_complete, and saved scopes ride along
+	# into the events the same effect chain triggers -- which is also how the text below can still
+	# name the place.
 	trigger = {
-		pioneer_stake_still_live_trigger = yes
+		exists = scope:stake
 	}
 
-	# ---- The work happens HERE, not in the option ----
+	# ---- There is deliberately no immediate here, and no work in the option ----
 	#
-	# It was in the option, and that was wrong twice over.
+	# The work runs in the activity's on_complete, and it had to move twice to get there. From the
+	# option, because an unclicked notification meant an unpaid reward. Then from this event's
+	# immediate, which LOOKED early enough and was not: trigger_event queues, and the engine books
+	# the host's journey home synchronously during activity teardown, before the queue is read -- so
+	# the capital still changed one tick after "home" was computed, and the new count was marched
+	# back to his old camp site. See the note on on_complete in 00_stake_wilderness_activity.txt.
 	#
-	# The visible fault: the engine books the ride home the instant the activity ends, computed
-	# against the home the character had when it started -- the old camp. Applying the land transfer
-	# when the player got round to clicking the event meant the plan was already made against a home
-	# that was about to stop existing, so a man who had just won a county was walked back to the spot
-	# he set out from. pioneer_success_effect now moves his home before the engine looks at it.
-	#
-	# The quieter fault: an unclicked notification meant an unpaid reward. Four winters, and whether
-	# you ever got the county depended on clearing your event queue.
-	#
-	# The option below is acknowledgement only, which is what a single-option event with no choice in
-	# it always was.
-	immediate = {
-		var:pioneer_stake = { save_scope_as = stake }
-
-		pioneer_success_effect = yes
-	}
-
+	# This event is the town crier, not the land office.
 	option = {
 		name = wilderness_pioneer.0020.a
 

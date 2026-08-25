@@ -64,3 +64,12 @@ lost_a_colony_opinion = {
 	decaying = yes
 	stacking = yes
 }
+
+
+# Applied to the new liege, about a colonist who offered fealty rather than making him fight for
+# the county (the 0070 submission chain). Decays like the rest: choosing sense over siege is a fact
+# about a day, and ten years on the man is just another vassal.
+colony_knelt_opinion = {
+	monthly_change = -0.15
+	decaying = yes
+}

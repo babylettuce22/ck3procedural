@@ -14,3 +14,4 @@
  colony_debug_domicile_none:0 "DEBUG — No domicile at all. The government's #V domicile_type#! did not produce one, so the camp needs a type of its own."
  colony_debug_domicile_unplaced:0 "DEBUG — A domicile exists but stands nowhere. It is the placement that is failing, not the creation."
  colony_debug_domicile_placed:0 "DEBUG — A domicile exists and is placed. It is the HUD that is not offering it, so the fix is a button of our own."
+ colony_debug_camp_setup_ran:0 "DEBUG — Camp setup ran: the domicile was placed and the main tent checked."

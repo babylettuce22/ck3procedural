@@ -46,8 +46,19 @@ public sealed class Ruler
     public required string DynastyId { get; init; }
     public required string HouseKey { get; init; }
 
-    /// <summary>The deceased father's history id, when prehistory gave this ruler one.</summary>
-    public string? FatherId { get; init; }
+    /// <summary>The deceased parent's history id, when prehistory gave this ruler one.</summary>
+    public string? ParentId { get; init; }
+
+    /// <summary>
+    /// Whether that parent is the ruler's mother, which decides only which field the character file
+    /// writes it in.
+    ///
+    /// Not the same question as the ruler's own sex, and the two must not be collapsed. A realm's
+    /// second man can be his liege's brother — prehistory hands both of them the same dead parent —
+    /// so under a matriarchy a male count inherits from his mother, and writing that as
+    /// <c>father = </c> points him at a woman.
+    /// </summary>
+    public bool ParentIsMother { get; init; }
 
     /// <summary>True when nobody holds the ruler's primary title in fief.</summary>
     public required bool Independent { get; init; }
@@ -60,9 +71,13 @@ public sealed class Ruler
     public required string Name { get; set; }
 
     /// <summary>
-    /// Always false as generated — prehistory marries every ruler to a bride and names him from
-    /// the male list — but written out wherever the engine asks for a sex, so a ruler made female
-    /// later needs nothing in the writers to change.
+    /// Drawn from the seat's faith by <see cref="HistoryWriter.RulerIsFemale"/>, so a realm is held
+    /// by whoever its own religion says may hold it. <see cref="MapConfig.Gender"/> is upstream of
+    /// that, and moves the doctrines rather than the rulers.
+    ///
+    /// Decided in two places that must agree — here, and in prehistory, which has to know before
+    /// any ruler exists whom to marry this one to and which of their children inherits — which is
+    /// why the draw lives in one shared helper rather than in either caller.
     /// </summary>
     public bool Female { get; set; }
 
@@ -148,7 +163,9 @@ public sealed class RulerMap
             if (wilderness.Contains(county) || !seats.Contains(county)) continue;
 
             var culture = cultures.For(county);
-            var (firstName, _) = HistoryWriter.RulerNames(county, culture);
+            var faith = faiths.For(county);
+            bool female = HistoryWriter.RulerIsFemale(county, faith);
+            var (firstName, _) = HistoryWriter.RulerNames(county, culture, female);
             var primaryTitle = HistoryWriter.Primary(county, realms);
             string government = governments.For(county);
 
@@ -168,7 +185,7 @@ public sealed class RulerMap
 
             string dynastyId = prehistory.CharacterDynastyMap.GetValueOrDefault(county, HistoryWriter.DynastyId(county));
             string houseKey = prehistory.CharacterHouseMap.GetValueOrDefault(county, $"house_gen_{county.Index}");
-            string? fatherId = prehistory.DeceasedParents.TryGetValue(county, out var f) ? f.Id : null;
+            var parent = prehistory.DeceasedParents.GetValueOrDefault(county);
 
             int gold = primaryTitle.Tier switch
             {
@@ -221,14 +238,16 @@ public sealed class RulerMap
                 PrimaryTitle = primaryTitle,
                 Id = HistoryWriter.CharacterId(county),
                 Culture = culture,
-                Faith = faiths.For(county),
+                Faith = faith,
                 Government = government,
                 DynastyId = dynastyId,
                 HouseKey = houseKey,
-                FatherId = fatherId,
+                ParentId = parent?.Id,
+                ParentIsMother = parent?.Female ?? false,
                 Independent = !realms.Liege.ContainsKey(primaryTitle),
                 HasVassals = liegeCounties.Contains(county),
                 Name = firstName,
+                Female = female,
                 BirthYear = birthYear,
                 BirthMonth = birthMonth,
                 BirthDay = birthDay,
