@@ -6,8 +6,12 @@ namespace Ck3MapGen.AppGUI;
 
 /// <summary>
 /// A property-grid editor for the string-array fields whose values are CK3 script keys with a
-/// known, harvested vocabulary — tenets, traditions. Replaces the stock StringArrayEditor, which
-/// was a bare multiline textbox that only worked if you already knew the keys by heart.
+/// known, harvested vocabulary. Replaces the stock StringArrayEditor, which was a bare multiline
+/// textbox that only worked if you already knew the keys by heart.
+///
+/// This is for the fields whose length genuinely varies — a culture carries three to five
+/// traditions. A field with a fixed number of slots is better as one dropdown per slot; see the
+/// tenet slots on <see cref="FaithInspector.Fields"/>, which used to be a list here.
 ///
 /// The list is a CheckedListBox of every key the install actually has, drawn from the same
 /// <see cref="VanillaVocabulary"/> harvest the generator itself writes from — the same reason the
@@ -147,10 +151,6 @@ public abstract class VocabularyListEditor(
         return result.ToArray();
     }
 }
-
-/// <summary>Faith tenets, from the install's own three-pick tenet pool.</summary>
-public sealed class TenetListEditor()
-    : VocabularyListEditor(v => v.Tenets, "tenets", "vanilla faiths carry exactly 3");
 
 /// <summary>Culture traditions, from the install's harvested tradition list.</summary>
 public sealed class TraditionListEditor()

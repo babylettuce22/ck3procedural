@@ -1,0 +1,35 @@
+﻿# Why anybody goes.
+#
+# `host_intents` is not optional -- an activity type with no intents block offers the planner
+# nothing to select, and the planner refuses to start while reporting nothing at all. That
+# was learned twice already on the wilderness activities; the note is repeated here rather
+# than cross-referenced because the failure is silent and the fix is one block.
+#
+# One intent, because there is one reason to attend. Vanilla's feast carries four because a
+# feast is a room full of people you might want something from; a rite is a room full of
+# people who are all there for the same thing.
+#
+# `auto_complete = yes` for the same reason the pioneer intent uses it: what resolves the
+# intent is the rite finishing, and an intent with its own success state would be a second
+# verdict competing with the activity's own.
+#
+# The icon is vanilla's `worship_devil_intent` -- the closest thing in the shipped set to
+# "people meeting for a purpose they would not write down". Placeholder, like the trait icon.
+
+society_rite_intent = {
+	icon = worship_devil_intent
+
+	auto_complete = yes
+
+	# Vanilla's generic "your intent stopped being possible" notification. Every vanilla
+	# intent points at it; there is no reason to write another.
+	on_invalidated = { trigger_event = activity_system.0090 }
+
+	ai_will_do = {
+		value = 100
+	}
+
+	scripted_animation = {
+		animation = personality_callous
+	}
+}

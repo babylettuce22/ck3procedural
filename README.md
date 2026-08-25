@@ -107,7 +107,10 @@ stops inventing the things Azgaar already decided:
 - **Vegetation** — the export's biome map paints what grows on the ground, broken up by the same
   mosaic noise a generated map uses so its cell polygons do not show. Relief stays ours throughout:
   beach, hills, mountains and the snow line are altitude facts our heightmap resolves far finer than
-  Azgaar's cells do.
+  Azgaar's cells do. The climate zone is pulled along wherever it flatly contradicts the imported
+  vegetation, because the zone is what chooses the ground textures and the tree species — otherwise
+  a forest ends up with steppe soil painted under its canopy. It is kept everywhere the two can both
+  be true, since Koppen is the finer answer through the whole temperate range.
 - **Peoples** — one CK3 culture per culture the export drew, over the ground it drew them on. The
   heritages above them come from the export's ancestry where it drew one; where every culture
   descends from Wildlands — which is what Azgaar's own generator writes — from shared name bases, and

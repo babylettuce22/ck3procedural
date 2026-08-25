@@ -139,7 +139,7 @@ public static class ContentWriter
 
         var realms = Core.Stage.Time("realms", () => Realms.Build(
                     empires, development, wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17), provinces, order,
-                    baronyCount, azgaar));
+                    baronyCount, azgaar, cultures));
 
         var governments = Core.Stage.Time("governments", () => MapGen.Governments.Build(
             empires, counties, realms, provinceTerrain, development, cultures,
@@ -219,6 +219,26 @@ public static class ContentWriter
         Core.Stage.Time("wonder index", () => WonderIndex.Write(modDir, worldCenters));
 
         Core.Stage.Time("title tiers", () => TitleTierWriter.WriteAll(modDir, cultures, empires));
+
+        // After the de jure tree and the wilderness pass, because the formation decisions read
+        // both, and before nothing in particular: no other writer reads what this one produces.
+        Core.Stage.Time("decisions", () =>
+        {
+            var decisions = FormationDecisions.Build(empires, wilderness);
+            int written = DecisionsWriter.WriteAll(modDir, decisions,
+                comment: "Generated decisions. One per de jure empire, shown while it has no holder.");
+
+            // Whether an empire is held is a runtime question and the decision asks it at runtime,
+            // so every empire gets one. The start-date count is reported anyway because it is the
+            // only number that says how many a player could take on day one.
+            int openAtStart = empires.Count(e => FormationDecisions.HasFormation(decisions, e)
+                                              && !realms.HolderCounty.ContainsKey(e));
+
+            Console.WriteLine(written == 0
+                ? "  decisions: none (no empire with enough settled land to be worth forming)"
+                : $"  decisions: {written} empire formations of {empires.Count} empires, "
+                + $"{openAtStart} unformed at the start date");
+        });
 
         // The world's way of war. Runs here because it is the last social layer and reads all of
         // the others — the ground a people holds *after* cultivation has moved the farmland, the
@@ -402,19 +422,28 @@ public static class ContentWriter
         }
         else Console.WriteLine("  history: SKIPPED (--no-history)");
 
-        // Last of the writers that read the world, and deliberately so: it reports what every one
-        // of them decided, and a number gathered before the phase that could still change it would
-        // be a debug panel that lies. See Emit/GuiWindows/DebugPanel.cs.
-        Core.Stage.Time("debug panel", () => DebugPanel.Write(modDir, DebugFacts(
-            modDir, cfg, provinces, empires, counties, cultures, faiths, wilderness, worldCenters,
-            retinues, landCount, riverCount, baronyCount, artifactCount, struggleCount,
-            writeHistory, azgaar, runStarted)));
-
         List<string> sets = [StaticFileWriter.Core];
         if (cfg.EnableWilderness) sets.Add(StaticFileWriter.Wilderness);
         if (cfg.EnableFantasyEthnicities && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly)
             sets.Add(StaticFileWriter.Fantasy);
+        if (cfg.EnableSocieties) sets.Add(StaticFileWriter.Societies);
         Core.Stage.Time("static files", () => StaticFileWriter.WriteAll(modDir, sets, runStarted));
+
+        // DEAD LAST, and both halves of that matter.
+        //
+        // It is last among the writers that read the world because it reports what every one of
+        // them decided, and a number gathered before a phase that could still change it would be a
+        // debug panel that lies.
+        //
+        // It is also after StaticFileWriter, which is newer and easier to undo by accident: the
+        // panel's Events tab is built by SCANNING the mod's own events/ folder, and most of the
+        // events live in BaseFilesToCopy and arrive on the line above. Moved back before it, the
+        // scan finds only the generated handful and the tab quietly loses fifty buttons — no error,
+        // no warning, just a shorter list than there should be. See Emit/GuiWindows/ShippedEvents.cs.
+        Core.Stage.Time("debug panel", () => DebugPanel.Write(modDir, DebugFacts(
+            modDir, cfg, provinces, empires, counties, cultures, faiths, wilderness, worldCenters,
+            retinues, landCount, riverCount, baronyCount, artifactCount, struggleCount,
+            writeHistory, azgaar, runStarted)));
 
         // After the write rather than during it: cultures and faiths both gain their unsettled
         // entries above, and a capture taken where each was built would not have them.
@@ -552,6 +581,12 @@ public static class ContentWriter
     {
         var all = Titles.Flatten(empires);
 
+        int faithHeads = faiths.Faiths
+            .Where(f => f.Head is not null)
+            .Select(f => f.Head!.TitleKey)
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+
         return new DebugPanel.Facts
         {
             // The folder, not the mod's display name: this method never sees GenerationOptions, and
@@ -575,9 +610,19 @@ public static class ContentWriter
             WaterProvinces = provinces.Count - riverCount,
             Baronies = baronyCount,
 
+            // The de jure hierarchy is not everything WriteLandedTitles emits, and the panel has to
+            // count what SHIPPED or its two columns are measuring different things. Two additions,
+            // both landless and both invisible to Titles.Flatten:
+            //
+            //   * one duchy-tier title per faith with a head of faith;
+            //   * one kingdom-tier title, k_gen_wilderness, when there is any unsettled land.
+            //
+            // Distinct rather than a plain count, because two faiths may name the same head and the
+            // database keeps one title either way.
             Empires = all.Count(t => t.Tier == "e"),
-            Kingdoms = all.Count(t => t.Tier == "k"),
-            Duchies = all.Count(t => t.Tier == "d"),
+            Kingdoms = all.Count(t => t.Tier == "k") + (wilderness.Count > 0 ? 1 : 0),
+            Duchies = all.Count(t => t.Tier == "d") + faithHeads,
+            LandlessDuchies = faithHeads,
             Counties = counties.Count,
 
             Cultures = cultures.Cultures.Count,

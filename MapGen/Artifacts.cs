@@ -9,7 +9,37 @@ public enum ArtifactCategory
     SovereignJewels,
     MartialRelics,
     SacredScriptures,
-    ScholarlyWorks
+    ScholarlyWorks,
+
+    // ---- Court artifacts. Everything below needs a royal court to exist in. ----
+    //
+    // Separated from the four above by more than theme. The four above go in inventory slots every
+    // character has; these go in court slots, which require Royal Court (EP1) AND a holder of at
+    // least kingdom tier — MIN_ROYAL_COURT_TIER in 00_defines.txt, and every government in the game
+    // declares royal_court = any, so tier is the real gate. A world's court treasure therefore
+    // reaches a handful of rulers where its inventory treasure reaches every one of them.
+    //
+    // They are drawn IN ADDITION to a ruler's inventory artifacts rather than instead of them,
+    // because they compete for different slots and a king should not own fewer swords for owning a
+    // throne.
+
+    /// <summary>A faith's relic, on a pedestal. Vanilla's commonest court artifact by far.</summary>
+    CourtRelic,
+
+    /// <summary>The seat itself. One slot in the room, so one per court and only for the grandest.</summary>
+    CourtThrone,
+
+    // There is deliberately no banner here, though vanilla's game-start pass makes one the first
+    // thing every court gets. That pass is the reason: `historical_artifacts.0023` fires from
+    // vanilla's own game_start.txt, which this generator does not blank, so every royal court in
+    // every generated world ALREADY receives a house banner — and a dynasty banner too, if its
+    // holder is the dynast.
+    //
+    // Generating our own put a third banner on the wall, and a worse one. Vanilla's
+    // create_artifact_wall_banner_effect takes a TARGET of a title, house or dynasty and renders
+    // the banner with that entity's actual coat of arms; ours could only ask for `visuals = banner`
+    // and get the generic cloth. Two of the three wall slots were being spent to duplicate, badly,
+    // something the base game already does correctly.
 }
 
 /// <summary>
@@ -93,6 +123,17 @@ public sealed class GeneratedArtifact
     public IReadOnlyList<(string Key, string Value)>? ModifierFields { get; init; }
 
     public string ModifierIcon { get; init; } = "prowess_positive";
+
+    /// <summary>
+    /// Whether this artifact needs a royal court to exist in, and so has to be created behind a
+    /// runtime check rather than unconditionally.
+    ///
+    /// Court slots come from Royal Court and belong to kingdom-tier holders. Creating one for a
+    /// player who has neither leaves an artifact with nowhere to sit — so the spawn is guarded and
+    /// such a world simply gets the inventory treasure, with nothing missing that it could have
+    /// used. See <see cref="Emit.ArtifactWriter.WriteOnGameStart"/>.
+    /// </summary>
+    public bool NeedsRoyalCourt { get; init; }
 }
 
 public sealed class ArtifactMap
@@ -173,6 +214,9 @@ public sealed class ArtifactMap
 
             var list = new List<GeneratedArtifact>();
 
+            // Which of this ruler's one-of-a-kind slots are already spoken for.
+            var usedSlots = new HashSet<string>(StringComparer.Ordinal);
+
             bool isEmperor = primaryTitle.Tier == "e";
             bool isKing = primaryTitle.Tier == "k";
             bool isDuke = primaryTitle.Tier == "d";
@@ -234,6 +278,36 @@ public sealed class ArtifactMap
                 var look = Compose(
                     category, rarity, culture, faith, primaryTitle, firstName, taken, artRng);
 
+                // Redraw the category rather than fill a slot twice. The draw is per-artifact and
+                // knows nothing about its siblings, so a ruler with three or four pieces can roll
+                // MartialRelics twice — and martial is a weapon four times in five, so two martials
+                // is usually two swords.
+                //
+                // The sovereign piece is exempt: a king's first artifact is his crown by
+                // construction, and there is only ever one of those.
+                bool forced = i == 0 && (isEmperor || isKing);
+
+                for (int attempt = 0; !forced && attempt < 5 && !SlotFree(usedSlots, look.Type); attempt++)
+                {
+                    category = DrawCategory(
+                        headline: i == 0, holy: sacred.Contains(county), artRng);
+
+                    look = Compose(
+                        category, rarity, culture, faith, primaryTitle, firstName, taken, artRng);
+                }
+
+                // Still nowhere to put it, so this ruler simply owns less. An emperor draws four
+                // pieces but the non-sovereign categories only reach three slots — weapon, armour
+                // and journal, since scripture and scholarship both go to the journal — so a full
+                // strongbox genuinely runs out of places, and no number of redraws invents one.
+                //
+                // Stopping is the honest answer, and stopping the whole loop rather than skipping
+                // one index is right for the same reason: if the slots are full at i, they are full
+                // at i+1 too. Three artifacts a ruler can use beats four with one that does nothing.
+                if (!forced && !SlotFree(usedSlots, look.Type)) break;
+
+                usedSlots.Add(SlotOf(look.Type));
+
                 var (chain, titleHistory) = BuildProvenance(
                     county, primaryTitle, rarity, category, prehistory, houseSeat, cfg, artRng);
 
@@ -280,6 +354,83 @@ public sealed class ArtifactMap
 
                 list.Add(art);
                 map.AllArtifacts.Add(art);
+            }
+
+            // --- Court artifacts, for the rulers who have a room to put them in ---------------
+            //
+            // Appended rather than mixed into the draw above: they occupy court slots rather than
+            // inventory ones, so a king owning a throne should not mean owning one sword fewer.
+            // Vanilla's own game-start pass has the same shape — every court gets its house banner,
+            // then a scattering of faith relics on top.
+            if (isEmperor || isKing)
+            {
+                var courtRng = new Rng((int)(county.Index ^ 0x2B91));
+                var court = new List<ArtifactCategory>();
+
+                // A relic is the commonest court piece in vanilla and the one that says which faith
+                // the hall belongs to. Emperors keep one as a matter of course; kings often enough.
+                if (isEmperor || courtRng.Int(0, 99) < 55) court.Add(ArtifactCategory.CourtRelic);
+
+                // One throne slot in the room, so this is the piece a court either has or does not.
+                if (isEmperor || courtRng.Int(0, 99) < 25) court.Add(ArtifactCategory.CourtThrone);
+
+                for (int c = 0; c < court.Count; c++)
+                {
+                    var artRng = new Rng((int)(cfg.Seed ^ county.Index ^ 0x6C07 ^ (c * 4409)));
+                    var category = court[c];
+
+                    // A hall's treasure is drawn at the same standing as its owner's strongbox: a
+                    // court piece is not automatically grander, it is just kept somewhere else.
+                    var rarity = RarityFor(primaryTitle.Tier, 0, standing, artRng);
+
+                    var (quality, wealth) = Roll(rarity, artRng);
+
+                    var look = Compose(
+                        category, rarity, culture, faith, primaryTitle, firstName, taken, artRng);
+
+                    // A hall has one throne. The relic sits on a pedestal, of which there are four,
+                    // so only the throne can collide here — but it is checked the same way rather
+                    // than by knowing which of the two this is.
+                    if (!SlotFree(usedSlots, look.Type)) continue;
+
+                    usedSlots.Add(SlotOf(look.Type));
+
+                    var (chain, titleHistory) = BuildProvenance(
+                        county, primaryTitle, rarity, category, prehistory, houseSeat, cfg, artRng);
+
+                    string description = look.Description + ProvenanceClause(rarity, chain, artRng);
+                    int index = targetCount + c;
+
+                    var art = new GeneratedArtifact
+                    {
+                        Id = $"gen_art_{county.Index}_{index}",
+                        NameKey = $"gen_art_name_{county.Index}_{index}",
+                        DescriptionKey = $"gen_art_desc_{county.Index}_{index}",
+                        Type = look.Type,
+                        Visuals = look.Visuals,
+                        Template = rarity == ArtifactRarity.Illustrious
+                            ? "gen_legendary_template"
+                            : "gen_artifact_template",
+                        Wealth = wealth,
+                        Quality = quality,
+                        Modifier = rarity == ArtifactRarity.Illustrious
+                            ? $"gen_legend_{county.Index}_{index}_modifier"
+                            : $"gen_{look.Family}_modifier_{rarity.ToString().ToLowerInvariant()}",
+                        ModifierFields = look.Signature,
+                        ModifierIcon = look.Icon,
+                        Category = category,
+                        Rarity = rarity,
+                        LocalizedName = look.Name,
+                        LocalizedDescription = description,
+                        CreatedYear = YearOf(chain[0].Date),
+                        Provenance = chain,
+                        TitleHistory = titleHistory,
+                        NeedsRoyalCourt = true,
+                    };
+
+                    list.Add(art);
+                    map.AllArtifacts.Add(art);
+                }
             }
 
             if (list.Count > 0)
@@ -355,16 +506,20 @@ public sealed class ArtifactMap
         // them all made prominence the common case, which is the one thing it cannot be and still
         // mean anything. Only the principal sites are scarce — one per faith, about a dozen.
         //
-        // Minor sites still steer what KIND of thing a county holds, below. Being worth a relic and
-        // being worth a famous relic are different claims.
+        // Principal sites also carry the scripture bias, and ONLY they do. An earlier pass let every
+        // holy site steer what kind of thing its county held, on the reasoning that being worth a
+        // relic and being worth a famous relic are different claims. Measured, that was too
+        // expensive: sixty holy counties against a hundred and fifty rulers meant the bias fired on
+        // a third of the world and pushed written works to half of all treasure. Sharpened to the
+        // dozen seats a faith actually centres on, it says something instead of colouring
+        // everything.
         foreach (var faith in faiths.Faiths)
         {
-            for (int i = 0; i < faith.HolySites.Count; i++)
-            {
-                var county = faith.HolySites[i].County;
-                if (i == 0) Add(county, HolySiteScore + PrincipalSiteBonus);
-                sacred.Add(county);
-            }
+            if (faith.HolySites.Count == 0) continue;
+
+            var principal = faith.HolySites[0].County;
+            Add(principal, HolySiteScore + PrincipalSiteBonus);
+            sacred.Add(principal);
         }
 
         // And wealth — but only genuinely exceptional wealth. The thresholds here were 6/10/15
@@ -468,17 +623,17 @@ public sealed class ArtifactMap
         // most standing, so they win most of the legendaries; at fifty-five a measured world's
         // three greatest treasures were three books, which is coherent and dull. The bias should
         // colour a shrine's holdings, not monopolise the top of the world.
-        if (holy && roll < 40) return ArtifactCategory.SacredScriptures;
+        if (holy && roll < 30) return ArtifactCategory.SacredScriptures;
 
         if (headline)
         {
-            return roll < 65 ? ArtifactCategory.MartialRelics
-                 : roll < 83 ? ArtifactCategory.SacredScriptures
+            return roll < 72 ? ArtifactCategory.MartialRelics
+                 : roll < 86 ? ArtifactCategory.SacredScriptures
                  : ArtifactCategory.ScholarlyWorks;
         }
 
-        return roll < 45 ? ArtifactCategory.MartialRelics
-             : roll < 73 ? ArtifactCategory.SacredScriptures
+        return roll < 62 ? ArtifactCategory.MartialRelics
+             : roll < 81 ? ArtifactCategory.SacredScriptures
              : ArtifactCategory.ScholarlyWorks;
     }
 
@@ -710,10 +865,91 @@ public sealed class ArtifactMap
             case ArtifactCategory.SacredScriptures:
                 return Sacred(legendary, culture, faith, primaryTitle, firstName, taken, rng);
 
+            case ArtifactCategory.CourtRelic:
+                return CourtRelic(legendary, culture, faith, primaryTitle, firstName, taken, rng);
+
+            case ArtifactCategory.CourtThrone:
+                return CourtThrone(legendary, culture, primaryTitle, firstName, taken, rng);
+
             case ArtifactCategory.ScholarlyWorks:
             default:
                 return Scholarly(legendary, culture, primaryTitle, firstName, taken, rng);
         }
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Court artifacts
+    //
+    // Visuals are picked from 00_court_artifacts.txt and paired with the type that file declares
+    // as their own `default_type`, which matters more here than anywhere else in this writer: a
+    // court visual carries a `pedestal` field naming the stand the engine draws under it, and a
+    // model used in a court slot without one is rendered sitting on the floor. That is exactly what
+    // the old book-on-a-lectern did, using a personal-inventory visual in a court slot.
+    //
+    // So every visual below is one 00_court_artifacts.txt lists with a pedestal — reliquary,
+    // cross, urn, scroll, skull, riches — or one whose slot needs no stand at all, which is the
+    // wall and throne pieces.
+    // ---------------------------------------------------------------------------------------
+
+    /// <summary>Pedestal visuals that declare a stand, so the model does not sit on the floor.</summary>
+    private static readonly List<string> RelicVisuals =
+        ["reliquary", "cross", "urn", "scroll", "human_skull", "rock", "riches", "diamond"];
+
+    private static readonly List<string> RelicNouns =
+        ["Reliquary", "Relic", "Remnant", "Vessel", "Offering", "Token"];
+
+    private static readonly List<string> ThroneNouns = ["Throne", "Seat", "Chair", "High Seat"];
+
+    private static ArtifactLook CourtRelic(
+        bool legendary, Culture culture, Faith faith, Title primaryTitle, string firstName,
+        HashSet<string> taken, Rng rng)
+    {
+        var (fields, clause) = legendary ? Signature(SacredFlourishes, SacredBase, rng) : (null, "");
+        string place = primaryTitle.Name;
+        string creed = faith.Name;
+
+        var bank = new List<string>
+        {
+            $"The {creed} Reliquary", $"The Relic of {place}", $"The {creed} Vessel",
+            $"The Holy Remnant of {place}", $"The {creed} Offering",
+        };
+
+        return new ArtifactLook(
+            "pedestal", rng.Pick(RelicVisuals), "courtrelic", "piety_positive",
+            legendary
+                ? Claim(taken, LegendaryName(culture, primaryTitle, RelicNouns, false, false, taken, rng), place, firstName)
+                : Claim(taken, PickFree(bank, taken, rng), place, firstName),
+            legendary
+                // Both written about the object rather than about where it currently sits. The
+                // earlier drafts said "in the hall at {place}", which stops being true the moment
+                // the relic changes hands — and a relic is among the likelier things to.
+                ? $"A relic of the {creed} faith whose authenticity no one has ever been permitted to question aloud. Whichever hall holds it treats its presence as the closest thing to a promise from its god. {clause}"
+                : $"A venerated {creed} relic out of {place}, displayed where petitioners can see it and be reminded whose house they are standing in.",
+            fields);
+    }
+
+    private static ArtifactLook CourtThrone(
+        bool legendary, Culture culture, Title primaryTitle, string firstName,
+        HashSet<string> taken, Rng rng)
+    {
+        var (fields, clause) = legendary ? Signature(SovereignFlourishes, SovereignBase, rng) : (null, "");
+        string place = primaryTitle.Name;
+
+        var bank = new List<string>
+        {
+            $"The Throne of {place}", $"The High Seat of {place}", $"The Seat of {firstName}",
+            $"The Old Throne of {place}", $"The Great Chair of {place}",
+        };
+
+        return new ArtifactLook(
+            "throne", "throne", "courtthrone", "grandeur_positive",
+            legendary
+                ? Claim(taken, LegendaryName(culture, primaryTitle, ThroneNouns, false, false, taken, rng), place, firstName)
+                : Claim(taken, PickFree(bank, taken, rng), place, firstName),
+            legendary
+                ? $"The seat of {place}, and the argument that settles every other one. Sitting in it has decided more successions than any law written down. {clause}"
+                : $"The seat from which {place} is ruled — not comfortable, and not meant to be. Its occupant is meant to be looked at rather than rested.",
+            fields);
     }
 
     // ---------------------------------------------------------------------------------------
@@ -728,6 +964,37 @@ public sealed class ArtifactMap
     // registry that makes them impossible. The registry is the one place this file gives up
     // per-county independence, which is why Build now iterates in index order.
     // ---------------------------------------------------------------------------------------
+
+    // ---------------------------------------------------------------------------------------
+    // Slots
+    //
+    // A character has exactly one weapon slot, one armour, one crown, one regalia, one journal and
+    // one throne. Handing them a second artifact for a slot they have already filled produces an
+    // object that can never be equipped and never does anything — and worse, it reads as an
+    // oversight: a king with a famed blade should not also be carrying a plain one he will never
+    // draw. Trinkets and pedestals have four apiece and are exempt.
+    //
+    // This was measured, not guessed: before the redraw below, seven rulers in a hundred and fifty
+    // held two weapons and five held two written works.
+    // ---------------------------------------------------------------------------------------
+
+    private static readonly HashSet<string> SingleSlots =
+        ["weapon", "armor", "crown", "regalia", "journal", "throne"];
+
+    private static string SlotOf(string type) => type switch
+    {
+        "sword" or "axe" or "mace" or "spear" or "dagger" => "weapon",
+        "helmet" => "crown",
+        _ when type.StartsWith("armor_", StringComparison.Ordinal) => "armor",
+        _ => type,
+    };
+
+    /// <summary>Whether an artifact of this type would go somewhere this ruler has not filled.</summary>
+    private static bool SlotFree(HashSet<string> used, string type)
+    {
+        string slot = SlotOf(type);
+        return !SingleSlots.Contains(slot) || !used.Contains(slot);
+    }
 
     /// <summary>Draws from a bank, preferring names the world has not used yet.</summary>
     private static string PickFree(List<string> bank, HashSet<string> taken, Rng rng)
@@ -938,7 +1205,10 @@ public sealed class ArtifactMap
                 : Claim(taken, PickFree(crowns, taken, rng), place, firstName),
             legendary
                 ? $"An awe-inspiring masterpiece, rumored to have been crafted by angelic hands. It radiates an ethereal glow, asserting the divine right to rule over {place}. {clause}"
-                : $"The majestic ceremonial crown of {place}, worn by {firstName} to project dynastic authority.",
+                // "worn by {firstName}" was a present-tense claim about a man who will be dead
+                // within a generation and whose heir wears it next. Past tense keeps it true: the
+                // crown was made for him, and remains the crown of the realm either way.
+                : $"The majestic ceremonial crown of {place}, made for {firstName} to project dynastic authority.",
             fields);
     }
 
@@ -1012,12 +1282,22 @@ public sealed class ArtifactMap
     /// <summary>
     /// Scripture and scholarship, carried rather than displayed.
     ///
-    /// The type is <c>miscellaneous</c>, not <c>book</c>. A <c>book</c> sits in slot <c>book</c>,
-    /// and the only slots of that type are <c>lectern_1</c> and <c>lectern_2</c> — both
-    /// <c>category = court</c>, so a count or a duke has nowhere to put one and gets no modifier
-    /// from it at all. Since two of the four categories here are written matter, that was most of
-    /// the generated treasure doing nothing. <c>miscellaneous</c> goes to the trinket slots, which
-    /// every character has.
+    /// The type is <c>journal</c>. Not <c>book</c>, which sits in slot <c>book</c> whose only slots
+    /// are <c>lectern_1</c> and <c>lectern_2</c> — both <c>category = court</c>, so a count or a
+    /// duke has nowhere to put one and gets no modifier from it at all. Since two of the four
+    /// categories here are written matter, that was most of the generated treasure doing nothing.
+    ///
+    /// <c>journal</c> is the ninth INVENTORY slot, sitting beside crown, regalia, armour, weapon
+    /// and the four trinkets. Nothing gates it: the slot carries no trigger, the type carries no
+    /// trigger, and <c>window_inventory.gui</c> draws <c>journal_slot</c> with no DLC condition on
+    /// it. Vanilla only ever fills it from Royal Court content, which is where vanilla happens to
+    /// make books rather than a restriction on the slot.
+    ///
+    /// The cost of preferring it over the trinket slots is that there is exactly one, so a ruler
+    /// who owns two written works can only benefit from the better of them. That is the right
+    /// trade: a dedicated book slot with a book icon says what the thing is, where a scripture
+    /// competing with jewellery for one of four trinket slots does not, and most rulers hold at
+    /// most one.
     ///
     /// It also settles the art: <c>pocket_book</c> and <c>artifact_scroll</c> live in
     /// <c>00_personal_misc.txt</c> and declare no <c>pedestal</c>, so a court slot has no stand to
@@ -1049,7 +1329,7 @@ public sealed class ArtifactMap
             };
 
         return new ArtifactLook(
-            "miscellaneous",
+            "journal",
             rng.Int(0, 1) == 0 ? "pocket_book" : "artifact_scroll",
             "sacred", "piety_positive",
             legendary
@@ -1080,11 +1360,16 @@ public sealed class ArtifactMap
                 $"A Survey of the Lands of {place}",
                 $"Notes on Law and Custom in {place}",
                 $"The {place} Herbal",
-                $"The Reckoning of Years, kept at {place}",
+                // Not "kept at {place}". A name is baked into localisation once and never revisited,
+                // so any claim about where the thing currently IS becomes false the first time it
+                // is inherited, stolen or taken in war — and artifacts are built to move. Naming
+                // the place it came FROM stays true forever, which is also how real objects are
+                // named: the Book of Kells is not a statement about Dublin's present holdings.
+                $"The {place} Reckoning of Years",
             };
 
         return new ArtifactLook(
-            "miscellaneous",
+            "journal",
             rng.Int(0, 1) == 0 ? "pocket_book" : "artifact_scroll",
             "scholar", "learning_positive",
             legendary

@@ -1,0 +1,114 @@
+﻿# Membership of the society, and the ladder inside it.
+#
+# ---- Why one trait and not four ----
+#
+# A society has ranks, and the obvious way to write four ranks is four traits with an
+# `opposites` list keeping them mutually exclusive. That works and it is what the phenotype
+# traits do, but it is the wrong shape here: rank is a POSITION ON A LADDER, not a choice
+# between alternatives, and CK3 already has a first-class way to say that -- a trait with
+# `tracks`. One trait, one track, four rungs at 25/50/75/100.
+#
+# What that buys, none of which has to be written:
+#   - the tooltip draws the ladder and marks which rung the character is on
+#   - the modifiers of every rung reached stack, so rank 3 keeps what rank 1 gave
+#   - `has_trait_xp = { trait = society_member track = society_rank value >= 50 }` is the
+#     rank gate any rite can ask, and there is exactly one number to compare
+#   - promotion is `add_trait_xp`, which cannot desync from the trait the way a parallel
+#     `var:society_rank` could
+#
+# The shape is copied from world_weary in ../../../Fantasy/common/traits/01_gen_aging_traits.txt,
+# which is this project's own working example of a levelled track, and from vanilla's
+# tourney_participant, which is the example of a track that is not an age ailment.
+#
+# ---- No `group` ----
+#
+# For the reason spelled out at the top of the phenotype traits file: trait groups are for
+# LEVELLED EDUCATION tiers, and a grouped trait without a level is an error the engine
+# "fixes" at load, one error.log line per trait per boot. `tracks` is a different mechanism
+# and needs no group.
+#
+# ---- Art ----
+#
+# Vanilla's schemer.dds, chosen over witch.dds on purpose: the witch icon says witchcraft,
+# which is one specific society, and this trait is the generic one. Placeholder either way --
+# a generated society will want its own icon, the way the struggles get theirs.
+
+society_member = {
+	category = fame
+
+	icon = "schemer.dds"
+
+	# Deliberately small. The rungs below are where the power is, so that a member who has
+	# actually done something outranks one who merely joined -- which is the whole point of
+	# having ranks. A generous flat bonus would flatten that back out.
+	intrigue = 1
+
+	# Members recognise each other. This is the cheapest possible version of the CK2
+	# society's cross-realm solidarity, and it costs nothing to have: the engine applies it
+	# only between two holders of the trait.
+	same_opinion = 20
+
+	# Not offered in the ruler designer. A society is something the world puts you in, and a
+	# designed character starting inside one would need the society to exist before the game
+	# does. The cost is set anyway because the engine reads it if the trait is ever shown.
+	shown_in_ruler_designer = no
+	ruler_designer_cost = 10
+
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					NOT = { exists = this }
+				}
+				desc = trait_society_member_desc
+			}
+			desc = trait_society_member_character_desc
+		}
+	}
+
+	# Who drifts toward this on their own. Bold enough to sit in a room they should not be
+	# in, and not troubled by the fact. These are the AI weights, not a gate -- the gate is
+	# the induction interaction.
+	ai_boldness = medium_positive_ai_value
+	ai_honor = medium_negative_ai_value
+
+	# ---- The ladder ----
+	#
+	# THE RUNGS HAVE NO NAMES, and that is the engine's decision rather than an omission here.
+	# A track is localised by ONE pair of keys -- trait_track_society_rank and its _desc -- and
+	# the levels underneath it are rendered as "Current Level: 2" from
+	# TRAIT_LEVEL_TRACK_TT in vanilla's own localisation. There is no trait_track_<name>_1 key
+	# to override, checked against the shipped files rather than assumed.
+	#
+	# So a society with NAMED ranks -- which is most of the point of a society -- cannot get
+	# those names from the track alone. They have to come from somewhere that can switch on
+	# `GetTraitTrackLevel`: a customizable localization, or our own window drawing the roster.
+	# Worth knowing before the generator is written, because it is the difference between rank
+	# names being free and rank names being a surface of their own.
+	#
+	# The numbers climb gently. Four rungs across 100 XP means the induction grant (10) plus
+	# a handful of rites reaches the second rung, and the fourth is a long game -- which is
+	# the correct pacing for something whose top rank should mean the character has spent
+	# years inside it.
+	tracks = {
+		society_rank = {
+			25 = {
+				intrigue = 1
+			}
+			50 = {
+				intrigue = 1
+				learning = 1
+			}
+			75 = {
+				intrigue = 1
+				learning = 1
+				dread_baseline_add = 5
+			}
+			100 = {
+				intrigue = 2
+				learning = 1
+				dread_baseline_add = 10
+			}
+		}
+	}
+}

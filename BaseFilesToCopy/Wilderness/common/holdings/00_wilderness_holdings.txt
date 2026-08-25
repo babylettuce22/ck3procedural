@@ -16,6 +16,10 @@ wilderness_holding = {
 		flooded_lands
 		scree_slopes
 		killing_cold
+
+		# Not an obstacle — see the note in 00_wilderness_buildings.txt. Listed here so an event
+		# can place ruins on a county nobody has claimed yet.
+		ruins
 	}
 
 	# The dummy holder is immortal and blocks inheritance anyway, but saying it here means a
@@ -39,6 +43,8 @@ settlement_holding = {
 		scree_slopes_cleared
 		killing_cold
 		killing_cold_cleared
+		ruins
+		ruins_cleared
 		colony_timber_works_01
 		colony_timber_works_02
 		colony_pallisade_01

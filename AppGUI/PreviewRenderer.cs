@@ -500,6 +500,14 @@ public static class PreviewRenderer
     /// wonder to waive it, so the counties that would have been administrative fall through to
     /// clan and feudal.
     ///
+    /// One further gap, and it is a difference in kind rather than in precision. With
+    /// <see cref="MapConfig.SimulateFormation"/> on, the written realms are grown by
+    /// <see cref="MapGen.Formation"/> from a culture map that does not exist yet here — so before a
+    /// write, this estimate necessarily falls back to the de jure allocation and its realms are not
+    /// a rough version of the written ones, they are the other algorithm's answer. Only the
+    /// government render reads it, and only until a world has been written; the Realms map mode
+    /// takes the written realms directly and is unaffected.
+    ///
     /// Measured against the written mod, counties disagreeing, four-argument version → this one:
     /// Fleunland import, 184 counties — wilderness 47 → 0, government 121 → 0, both renders
     /// byte-identical to the written-backed ones. Generated, seed 4242 (111 counties) government
@@ -544,7 +552,7 @@ public static class PreviewRenderer
 
         var realms = MapGen.Realms.Build(empires, development, wilderness, cfg,
             new Rng(cfg.Seed ^ 0x2E17), result.Provinces, result.ProvinceOrder,
-            result.BaronyCount, azgaar);
+            result.BaronyCount, azgaar, cultures);
 
         var stateGovernments = azgaar is null ? null : MapGen.AzgaarGovernments.ByState(azgaar, cfg);
 

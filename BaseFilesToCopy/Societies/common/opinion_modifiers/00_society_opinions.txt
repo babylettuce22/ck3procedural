@@ -1,0 +1,55 @@
+﻿# What refusing costs.
+#
+# One modifier, and it belongs to the recruiter rather than to the society: the person who
+# thinks less of you is the one who said something out loud in front of somebody who then said
+# no. Nobody else in the society knows it happened, which is correct -- if they did, this would
+# be a realm-wide opinion penalty and refusing an approach would be a strategic error rather
+# than a personal one.
+#
+# Decaying, because it is embarrassment rather than enmity. A refusal should sour a court
+# relationship for a few years and then stop mattering, which is also what makes a second
+# approach later plausible.
+
+society_refused_the_oath_opinion = {
+	opinion = -15
+	monthly_change = 0.1
+	decaying = yes
+}
+
+# ---- What the rite leaves behind ----
+#
+# All three come out of society.0110 and society.0111. They are ordinary opinion modifiers and
+# not hooks or secrets on purpose: this set has no secret type yet, so the only durable record a
+# rite can leave is how the people in the room feel about the person who ran it.
+#
+# Decay times differ because the three memories differ. Being passed over fades; being struck
+# from the roll in front of witnesses does not fade nearly as fast; being raised is a debt, and
+# debts are remembered longest of the three.
+#
+# `years` rather than `monthly_change`, which is the form vanilla uses for every decaying
+# modifier with a POSITIVE opinion -- and the form that cannot be got backwards. A decaying
+# monthly_change has to carry the sign that walks the value toward zero, which is positive for a
+# penalty and negative for a bonus, and getting it wrong produces a modifier that grows forever
+# instead of fading. society_refused_the_oath_opinion above predates this note and is correct;
+# it is left as it is rather than churned.
+
+# society.0110, "Strike their name" -- the absentee, about the host.
+society_struck_from_the_roll_opinion = {
+	opinion = -30
+	years = 15
+	decaying = yes
+}
+
+# society.0111, "Raise them" -- the elevated guest, about the host.
+society_elevated_by_opinion = {
+	opinion = 25
+	years = 25
+	decaying = yes
+}
+
+# society.0111, "Raise yourself" -- everybody else in the room, about the host.
+society_took_the_rite_opinion = {
+	opinion = -15
+	years = 8
+	decaying = yes
+}

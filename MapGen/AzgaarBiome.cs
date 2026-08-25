@@ -218,6 +218,103 @@ public static class AzgaarBiome
     public static bool HasOpinion(Kind kind) => kind is not (Kind.Unknown or Kind.Marine);
 
     /// <summary>
+    /// The Koppen zone this ground should be *painted* from, given what the export says grows on it.
+    ///
+    /// This exists because the terrain class is not the only thing that decides how a pixel looks.
+    /// <see cref="Emit.TerrainPalette.Label"/> packs the terrain class together with a climate
+    /// family derived from the Koppen zone, and it is the family that chooses the actual material
+    /// set — gen_northern against gen_tropical against gen_desert. Trees and bridges read the zone
+    /// the same way. While both came out of one Koppen classification the two could not disagree;
+    /// importing the vegetation and leaving the zone alone broke that, and the result is a forest
+    /// painted on steppe ground, which is exactly the kind of thing that reads wrong on the map
+    /// without being traceable to any one wrong value.
+    ///
+    /// <b>Not a substitution — a constraint.</b> The zone is kept wherever the two can both be true,
+    /// because Koppen is *finer* than an Azgaar biome through the whole temperate range: one
+    /// "Temperate deciduous forest" covers ground our model separates into Mediterranean, oceanic
+    /// and humid continental, and those paint from three different families. Overwriting the zone
+    /// with a biome-derived guess would throw that away and flatten every temperate map. Only an
+    /// outright contradiction moves, and it moves to the biome's own zone.
+    /// </summary>
+    public static KoppenClass Reconcile(Kind kind, KoppenClass zone)
+        => !HasOpinion(kind) || Accepts(kind, zone) ? zone : Represents(kind);
+
+    /// <summary>
+    /// Whether this biome and this Koppen zone can describe the same ground.
+    ///
+    /// <b>The question is deliberately weak, and getting that wrong costs a quarter of the map.</b>
+    /// It is not "would our model have produced this zone here" — that is a question about the
+    /// climate model and the answer is often no on ground the export drew by hand. It is only
+    /// "would painting this vegetation out of that material family look wrong", because the family
+    /// is the entire visible consequence. A grassland is at home on anything from a Mediterranean
+    /// hillside to a subarctic plain and paints acceptably from every one of those families; it is
+    /// only bare desert and jungle floor underneath it that read as a mistake.
+    ///
+    /// The first cut of this table asked the strong question and refused 25.1% of Fleunland's land,
+    /// most of it grassland our model called subarctic and savanna it called cold steppe — both of
+    /// which paint perfectly well. Refusing them threw away a real distinction our model had made
+    /// and the export had no opinion on, which is the failure this whole method exists to avoid.
+    /// </summary>
+    private static bool Accepts(Kind kind, KoppenClass zone) => kind switch
+    {
+        // True desert, and nothing green under it. Any of the arid or semi-arid families will do.
+        Kind.HotDesert or Kind.ColdDesert
+            => zone is KoppenClass.HotDesert or KoppenClass.ColdDesert
+                    or KoppenClass.HotSteppe or KoppenClass.ColdSteppe,
+
+        // Open dry grass with scattered trees: the dry families and the tropical dry ones, but not
+        // bare desert under it and not the wet temperate greens.
+        Kind.Savanna => zone is KoppenClass.HotSteppe or KoppenClass.ColdSteppe
+                             or KoppenClass.TropicalSavanna or KoppenClass.TropicalMonsoon
+                             or KoppenClass.Mediterranean,
+
+        // Open ground, at home nearly everywhere. Only sand and jungle floor look wrong beneath it.
+        Kind.Grassland => zone is not (KoppenClass.HotDesert or KoppenClass.ColdDesert
+                                    or KoppenClass.TropicalRainforest or KoppenClass.TropicalMonsoon
+                                    or KoppenClass.TropicalSavanna or KoppenClass.IceCap),
+
+        Kind.TropicalSeasonalForest or Kind.TropicalRainforest
+            => zone is KoppenClass.TropicalRainforest or KoppenClass.TropicalMonsoon
+                    or KoppenClass.TropicalSavanna or KoppenClass.HumidSubtropical,
+
+        // Broadleaf and mixed woodland. Subarctic is allowed: a temperate forest on cold ground
+        // paints from the northern set, which is what vanilla paints Poland's forests from.
+        Kind.TemperateForest or Kind.TemperateRainforest
+            => zone is KoppenClass.Oceanic or KoppenClass.HumidSubtropical
+                    or KoppenClass.Mediterranean or KoppenClass.HumidContinental
+                    or KoppenClass.Subarctic,
+
+        Kind.Taiga => zone is KoppenClass.Subarctic or KoppenClass.HumidContinental
+                           or KoppenClass.Tundra or KoppenClass.Oceanic,
+        Kind.Tundra => zone is KoppenClass.Tundra or KoppenClass.IceCap or KoppenClass.Subarctic,
+        Kind.Glacier => zone is KoppenClass.IceCap or KoppenClass.Tundra,
+
+        // Standing water and rank growth: anywhere it is neither frozen solid nor a desert.
+        Kind.Wetland => zone is not (KoppenClass.HotDesert or KoppenClass.ColdDesert
+                                  or KoppenClass.IceCap),
+
+        _ => true,
+    };
+
+    /// <summary>The zone a biome falls back to when nothing our model said about it can stand.</summary>
+    private static KoppenClass Represents(Kind kind) => kind switch
+    {
+        Kind.HotDesert => KoppenClass.HotDesert,
+        Kind.ColdDesert => KoppenClass.ColdDesert,
+        Kind.Savanna => KoppenClass.TropicalSavanna,
+        Kind.Grassland => KoppenClass.ColdSteppe,
+        Kind.TropicalSeasonalForest => KoppenClass.TropicalMonsoon,
+        Kind.TropicalRainforest => KoppenClass.TropicalRainforest,
+        Kind.TemperateForest => KoppenClass.Oceanic,
+        Kind.TemperateRainforest => KoppenClass.Oceanic,
+        Kind.Taiga => KoppenClass.Subarctic,
+        Kind.Tundra => KoppenClass.Tundra,
+        Kind.Glacier => KoppenClass.IceCap,
+        Kind.Wetland => KoppenClass.Oceanic,
+        _ => KoppenClass.Oceanic,
+    };
+
+    /// <summary>
     /// Desert enough that rock above the tree line is desert rock.
     ///
     /// Only the two deserts. A savanna mountain is a mountain — CK3's desert_mountains is the Atlas

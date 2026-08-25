@@ -257,8 +257,13 @@ public static class Faiths
             }
             else
             {
+                // Partition returns one slot per *graph node*, not one per member, so it is read at
+                // the county's own index. Reading it positionally instead handed the first
+                // members.Count nodes' labels to the members - mostly -1, because those nodes
+                // belong to some other religion - and a religion all of whose counties came back
+                // -1 ended up written with an empty `faiths = { }`.
                 var rawPartition = RegionGrowth.Partition(graph, members, faithCount, rng, out _);
-                for (int i = 0; i < members.Count; i++) faithOf[members[i]] = rawPartition[i];
+                foreach (int m in members) faithOf[m] = rawPartition[m];
             }
 
             for (int f = 0; f < faithCount; f++)
@@ -424,10 +429,11 @@ public static class Faiths
         if (remaining.Count > 0)
         {
             int minorFaithCount = faithCount - 1;
+            // Node-indexed, as above.
             var minorPartition = RegionGrowth.Partition(graph, remaining, minorFaithCount, rng, out _);
-            for (int i = 0; i < remaining.Count; i++)
+            foreach (int m in remaining)
             {
-                result[remaining[i]] = minorPartition[i] + 1;
+                result[m] = minorPartition[m] + 1;
             }
         }
 
@@ -700,7 +706,7 @@ public static class Faiths
             Religion = religion,
             Color = (0.42, 0.40, 0.37),
             Icon = vocab.FaithIcons.Count > 0 ? rng.Pick(vocab.FaithIcons) : "germanic",
-            Tenets = Sample(vocab.Tenets, 3, rng),
+            Tenets = SampleCompatible(vocab.Tenets, 3, religion.Doctrines.Values, vocab, rng),
             IsOrganized = false,
         };
 
@@ -782,11 +788,23 @@ public static class Faiths
 
                 _ => rng.Pick(members),
             };
+
+            // A doctrine already taken can rule this one out — doctrine_no_head beside an
+            // anointment rite is the pair this catches most — so a clashing pick is drawn again
+            // from what is still compatible. Groups are visited in a fixed order, so the earlier
+            // group wins; a group with nothing compatible left keeps its pick rather than being
+            // dropped, because a faith missing a doctrine is worse than a faith with a contradiction.
+            var others = doctrines.Where(d => d.Key != group).Select(d => d.Value).ToList();
+            if (!vocab.Compatible(doctrines[group], others))
+            {
+                var free = members.Where(m => vocab.Compatible(m, others)).ToList();
+                if (free.Count > 0) doctrines[group] = rng.Pick(free);
+            }
         }
 
         var localization = new List<(string, string)>();
         var text = new Dictionary<string, string>();
-        BuildLocalization(key, language, vocab, rng, localization, text);
+        BuildLocalization(key, language, monotheist, gender, vocab, rng, localization, text);
 
         return new Religion
         {
@@ -805,14 +823,63 @@ public static class Faiths
         };
     }
 
-    private static void BuildLocalization(string religionKey, Language language,
-        VanillaVocabulary vocab, Rng rng, List<(string, string)> into, Dictionary<string, string> text)
+    /// <summary>
+    /// Only the <em>tags</em> of <see cref="VanillaVocabulary.ReligionLocTemplate"/> are reusable.
+    /// Its values name the template religion's own gods, so any that survives into a generated
+    /// religion verbatim is a vanilla deity — or a vanilla deity's pronoun — wearing the generated
+    /// religion's clothes, identically in every religion on the map. The three kinds of value that
+    /// used to leak through are handled up front here: the god-name lists, the pronoun sets and the
+    /// pantheon's verb agreement.
+    /// </summary>
+    private static void BuildLocalization(string religionKey, Language language, bool monotheist,
+        string gender, VanillaVocabulary vocab, Rng rng, List<(string, string)> into,
+        Dictionary<string, string> text)
     {
         var words = new Dictionary<string, string>(StringComparer.Ordinal);
+        var genders = new Dictionary<string, DeityGender>(StringComparer.Ordinal);
+        var godLists = new List<int>();
 
         foreach (var (tag, value) in vocab.ReligionLocTemplate)
         {
-            if (IsConstant(value) || IsGrammatical(tag)) { into.Add((tag, value)); continue; }
+            // Filled in below, once every deity's name key is known.
+            if (tag is "GoodGodNames" or "EvilGodNames")
+            {
+                godLists.Add(into.Count);
+                into.Add((tag, value));
+                continue;
+            }
+
+            // "has" or "have", agreeing with this pantheon's size rather than the template's.
+            if (tag is "PantheonTermHasHave")
+            {
+                into.Add((tag, monotheist ? "pantheon_term_has" : "pantheon_term_have"));
+                continue;
+            }
+
+            string? suffix = PronounSuffixes.FirstOrDefault(s => tag.EndsWith(s, StringComparison.Ordinal));
+            if (suffix is not null)
+            {
+                // Every tag for one deity shares a slot name, so the whole set is rolled once and
+                // stays internally consistent: the war god cannot be "he" and "itself" at once.
+                string slot = tag[..^suffix.Length];
+                if (slot.EndsWith("Name", StringComparison.Ordinal)) slot = slot[..^"Name".Length];
+
+                if (!genders.TryGetValue(slot, out var deity))
+                    genders[slot] = deity = RollDeityGender(gender, rng);
+
+                into.Add((tag, suffix switch
+                {
+                    "SheHe" => deity.SheHe,
+                    "HerHis" => deity.HerHis,
+                    "HerHim" => deity.HerHim,
+                    "HerselfHimself" => deity.Self,
+                    "MistressMaster" => deity.Title,
+                    _ => deity.Parent,
+                }));
+                continue;
+            }
+
+            if (IsConstant(value)) { into.Add((tag, value)); continue; }
 
             string locKey = $"{religionKey}_{tag.ToLowerInvariant()}";
             string word;
@@ -830,18 +897,89 @@ public static class Faiths
             text[locKey] = word;
             into.Add((tag, locKey));
         }
+
+        foreach (int index in godLists)
+        {
+            var (tag, fallback) = into[index];
+            string[] slots = tag is "GoodGodNames"
+                ? monotheist ? MonotheistGoodGodSlots : GoodGodSlots
+                : monotheist ? MonotheistEvilGodSlots : EvilGodSlots;
+
+            var keys = slots
+                .Select(s => $"{religionKey}_{s.ToLowerInvariant()}")
+                .Where(text.ContainsKey)
+                .ToList();
+
+            // An empty list would be worse than the template's: CK3 picks from these at random and
+            // has nothing to fall back on. Only reachable if the template drops the name tags.
+            into[index] = keys.Count > 0 ? (tag, "{ " + string.Join(' ', keys) + " }") : (tag, fallback);
+        }
     }
 
     private static bool IsConstant(string value)
         => value.StartsWith('{') || value.All(c => !char.IsLower(c));
 
-    private static bool IsGrammatical(string tag) =>
-        tag.EndsWith("SheHe", StringComparison.Ordinal)
-        || tag.EndsWith("HerHis", StringComparison.Ordinal)
-        || tag.EndsWith("HerHim", StringComparison.Ordinal)
-        || tag.EndsWith("HerselfHimself", StringComparison.Ordinal)
-        || tag.EndsWith("MistressMaster", StringComparison.Ordinal)
-        || tag.EndsWith("MotherFather", StringComparison.Ordinal);
+    /// <summary>
+    /// The pantheon slots a faith swears by and swears at. CK3 reads <c>GoodGodNames</c> and
+    /// <c>EvilGodNames</c> as lists of localisation keys and picks one at random, so they have to
+    /// name this religion's own gods. Monotheists get the short lists for the reason vanilla's do —
+    /// there is one god to swear by, under its two names.
+    /// </summary>
+    private static readonly string[] GoodGodSlots =
+    [
+        "HighGodName", "HighGodNameAlternate", "CreatorName", "HealthGodName", "FertilityGodName",
+        "WealthGodName", "HouseholdGodName", "FateGodName", "KnowledgeGodName", "WarGodName",
+        "TricksterGodName", "NightGodName", "WaterGodName",
+    ];
+
+    private static readonly string[] MonotheistGoodGodSlots = ["HighGodName", "HighGodNameAlternate"];
+    private static readonly string[] EvilGodSlots = ["DevilName", "DeathDeityName"];
+    private static readonly string[] MonotheistEvilGodSlots = ["DevilName"];
+
+    /// <summary>
+    /// One deity's grammar. The four pronouns are CK3's own constants; the last two are the nouns
+    /// the witch god's <c>MistressMaster</c> and <c>MotherFather</c> tags want, which vanilla keeps
+    /// in step with that god's pronouns and so do we.
+    /// </summary>
+    private readonly record struct DeityGender(
+        string SheHe, string HerHis, string HerHim, string Self, string Title, string Parent);
+
+    private static readonly DeityGender[] DeityGenders =
+    [
+        new("CHARACTER_SHEHE_HE", "CHARACTER_HERHIS_HIS", "CHARACTER_HERHIM_HIM",
+            "CHARACTER_HIMSELF", "master", "father"),
+        new("CHARACTER_SHEHE_SHE", "CHARACTER_HERHIS_HER", "CHARACTER_HERHIM_HER",
+            "CHARACTER_HERSELF", "mistress", "mother"),
+        new("CHARACTER_SHEHE_THEY", "CHARACTER_HERHIS_THEIR", "CHARACTER_HERHIM_THEM",
+            "CHARACTER_THEMSELF", "witch_spirit", "witch_source"),
+        new("CHARACTER_SHEHE_IT", "CHARACTER_HERHIS_ITS", "CHARACTER_HERHIM_IT",
+            "CHARACTER_ITSELF", "witch_spirit", "witch_source"),
+    ];
+
+    /// <summary>Longest first, so <c>HerselfHimself</c> is never read as <c>HerHis</c>.</summary>
+    private static readonly string[] PronounSuffixes =
+        ["HerselfHimself", "MistressMaster", "MotherFather", "SheHe", "HerHis", "HerHim"];
+
+    /// <summary>
+    /// She and he carry a pantheon between them; they and it are the rare god that is a force
+    /// rather than a person, and split the last tenth. Leaned by the faith's own gender doctrine so
+    /// a female-dominated religion reads as one from its flavour text and not only from its
+    /// succession law.
+    /// </summary>
+    private static DeityGender RollDeityGender(string genderDoctrine, Rng rng)
+    {
+        (double male, double female) = genderDoctrine switch
+        {
+            "doctrine_gender_female_dominated" => (0.30, 0.60),
+            "doctrine_gender_equal" => (0.45, 0.45),
+            _ => (0.60, 0.30),
+        };
+
+        double roll = rng.Double();
+        if (roll < male) return DeityGenders[0];
+        if (roll < male + female) return DeityGenders[1];
+        return DeityGenders[rng.Chance(0.5) ? 2 : 3];
+    }
 
     private static Faith CreateFaith(Religion religion, int index, VanillaVocabulary vocab,
         HashSet<string> usedNames, MapConfig cfg, Rng rng)
@@ -860,7 +998,12 @@ public static class Faiths
             Religion = religion,
             Color = (rng.Decimal(0.1, 0.9), rng.Decimal(0.1, 0.9), rng.Decimal(0.1, 0.9)),
             Icon = vocab.FaithIcons.Count > 0 ? rng.Pick(vocab.FaithIcons) : "germanic",
-            Tenets = Sample(pool, 3, rng),
+
+            // Drawn against each other *and* against the religion's doctrines: CK3's own can_pick
+            // rules forbid human sacrifice beside pacifism, or natural primitivism beside a faith
+            // that criminalises witchcraft. The faith-creation screen would refuse both, and the
+            // generator used to write them anyway because a scripted faith is never checked.
+            Tenets = SampleCompatible(pool, 3, religion.Doctrines.Values, vocab, rng),
         };
     }
 
@@ -950,6 +1093,36 @@ public static class Faiths
         var copy = pool.ToList();
         rng.Shuffle(copy);
         return [.. copy.Take(Math.Min(count, copy.Count))];
+    }
+
+    /// <summary>
+    /// <see cref="Sample"/>, refusing anything CK3 would not let sit beside what is already held —
+    /// the doctrines in <paramref name="alongside"/> and the earlier picks themselves. Greedy over
+    /// one shuffle rather than a search: the tenet pool is seventy-odd wide against three picks, so
+    /// the first compatible run is always found, and a short draw means the install harvested
+    /// almost nothing rather than that the constraints were tight.
+    /// </summary>
+    private static List<string> SampleCompatible(List<string> pool, int count,
+        IEnumerable<string> alongside, VanillaVocabulary vocab, Rng rng)
+    {
+        if (pool.Count == 0) return [];
+
+        var copy = pool.ToList();
+        rng.Shuffle(copy);
+
+        var held = new List<string>(alongside);
+        var picked = new List<string>();
+
+        foreach (string candidate in copy)
+        {
+            if (picked.Count == count) break;
+            if (!vocab.Compatible(candidate, held)) continue;
+
+            picked.Add(candidate);
+            held.Add(candidate);
+        }
+
+        return picked;
     }
 
     private static string Unique(string name, HashSet<string> used)

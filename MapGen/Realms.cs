@@ -3,11 +3,67 @@ using Ck3MapGen.Core;
 
 namespace Ck3MapGen.MapGen;
 
+/// <summary>
+/// Why one title answers to another.
+///
+/// Recorded rather than inferred because the answer used to be structural: vassalage was *derived*
+/// by walking up the de jure tree, so "who is this ruler's liege" and "what is above his title on
+/// the de jure map" were the same question and there was nowhere to write a different answer down.
+/// Conquest cannot express itself against that, which is the whole reason the simulation needed
+/// this field before it needed anything else.
+/// </summary>
+public enum LiegeOrigin
+{
+    /// <summary>The nearest realized title above this one on the de jure map.</summary>
+    DeJure,
+
+    /// <summary>Azgaar's own relations named this realm a vassal of that one.</summary>
+    Export,
+
+    /// <summary>The formation simulation put it there — homage, or the internal structure of a realm.</summary>
+    Conquest,
+}
+
 public sealed class RealmMap
 {
     public required Dictionary<Title, Title> HolderCounty { get; init; }
     public required Dictionary<Title, Title> Liege { get; init; }
-    public required List<Title> Greatest { get; init; }
+
+    /// <summary>
+    /// Every seat, greatest first. Settable rather than <c>required init</c> because it is an
+    /// ordering derived from the finished map, and the simulated path cannot know it until it has
+    /// handed out every title.
+    /// </summary>
+    public List<Title> Greatest { get; set; } = [];
+
+    /// <summary>
+    /// How each entry in <see cref="Liege"/> was decided. Same keys, always — a liege relation with
+    /// no provenance is a bug in whoever wrote it, not a legal state.
+    /// </summary>
+    public Dictionary<Title, LiegeOrigin> Origin { get; init; } = [];
+
+    /// <summary>
+    /// The realms as the simulation left them, or null when titles were handed out down the de jure
+    /// tree instead. Kept so later work — the chronicle, claims, a de jure snapshot — can read what
+    /// actually happened rather than inferring it back out of the finished map.
+    /// </summary>
+    public FormationHistory? History { get; init; }
+
+    /// <summary>Records that <paramref name="vassal"/> answers to <paramref name="lord"/>.</summary>
+    public void SetLiege(Title vassal, Title lord, LiegeOrigin origin)
+    {
+        Liege[vassal] = lord;
+        Origin[vassal] = origin;
+    }
+
+    /// <summary>How many liege relations came from each source, for the run log.</summary>
+    public string OriginTally()
+    {
+        var parts = Origin.Values.GroupBy(o => o)
+            .OrderBy(g => g.Key)
+            .Select(g => $"{g.Count()} {g.Key.ToString().ToLowerInvariant()}");
+        return string.Join(", ", parts);
+    }
 }
 
 public static class Realms
@@ -93,7 +149,8 @@ public static class Realms
         ProvinceMap? provinces = null,
         int[]? order = null,
         int baronyCount = 0,
-        AzgaarImport? azgaar = null)
+        AzgaarImport? azgaar = null,
+        CultureMap? cultures = null)
     {
         var all = Titles.Flatten(empires).ToList();
         var weight = Weigh(empires, development, wilderness);
@@ -137,14 +194,42 @@ public static class Realms
         foreach (var county in nonWildCounties)
             holderCounty[county] = county;
 
+        // Read before the simulation branch as well as by Step 0 below, because "did the export
+        // draw countries" is what decides which of the two ways of making realms runs at all.
+        var stateTitles = azgaar?.StateTitles is { Count: > 0 } bound ? bound : null;
+        bool fromExport = stateTitles is not null;
+
+        // --- Realms grown rather than allocated ---
+        //
+        // Everything below this block hands out titles by walking the de jure tree from the top,
+        // which is why the political map it produces is the de jure map with some titles left
+        // unheld: both are the same geographic clustering, read twice. The simulation is the
+        // alternative — it grows realms across the county adjacency graph, which knows nothing
+        // about the tree, and then FromFormation looks for titles to describe what it drew.
+        //
+        // Left off for imports on purpose. Azgaar already states its own countries and which of
+        // them are vassals; there is nothing here to discover and a simulation could only disagree
+        // with the export.
+        // Cultures are optional on this call and their absence quietly takes the de jure path,
+        // because the GUI's pre-write estimate has no culture map to give — see PreviewRenderer.
+        // The adjacency graph is likewise required rather than worked around: without it the
+        // simulation has no notion of which counties border which, and there is nothing to grow.
+        if (cfg.SimulateFormation && !fromExport && countyAdj is not null && cultures is not null)
+        {
+            int deJureKingdoms = all.Count(t => t.Tier == "k" && weight.GetValueOrDefault(t) > 0);
+
+            var history = Formation.Run(nonWildCounties, countyAdj, development, cultures,
+                                        cfg, deJureKingdoms);
+
+            return FromFormation(history, all, development, weight, holderCounty, countyAdj, cfg, rng);
+        }
+
         // --- Step 0: Countries the export drew ---
         //
         // One realm per Azgaar state, which is what makes the realm map read like the export rather
         // than like our own clustering. When there is one, the generated empire and kingdom
         // selection below is skipped entirely: it would hand independence to titles the export never
         // drew and split the countries it did.
-        var stateTitles = azgaar?.StateTitles is { Count: > 0 } bound ? bound : null;
-        bool fromExport = stateTitles is not null;
 
         if (stateTitles is not null)
         {
@@ -310,6 +395,7 @@ public static class Realms
                 if (!countryOf.ContainsKey(title)) countryOf[title] = id;
 
         var liege = new Dictionary<Title, Title>();
+        var origin = new Dictionary<Title, LiegeOrigin>();
         foreach (var (county, top) in primary)
         {
             for (var above = top.Parent; above is not null; above = above.Parent)
@@ -338,6 +424,7 @@ public static class Realms
                     continue;
 
                 liege[top] = above;
+                origin[top] = LiegeOrigin.DeJure;
                 break;
             }
         }
@@ -347,6 +434,7 @@ public static class Realms
             // Azgaar's own vassalage, which is the only liege relation the export actually states.
             // Applied after the de jure walk so it overrides it rather than competing with it.
             int vassals = 0;
+            int outranked = 0;
             var suzerained = new HashSet<Title>();
 
             foreach (var state in azgaar!.World.RealStates)
@@ -364,7 +452,24 @@ public static class Realms
                 if (vassalSeat == suzerainSeat) continue;
                 if (countyAdj is not null && !IsReachable(vassalSeat, suzerainSeat, countyAdj)) continue;
 
+                // CK3 will not seat a vassal at his lord's own rank, and the export is perfectly
+                // happy to call one kingdom the vassal of another — Ondrerol states six such pairs.
+                // Written through unchecked they produce `k_a = { liege = k_b }`, which is not a
+                // relation the game can represent.
+                //
+                // The homage is dropped rather than repaired, because both repairs are worse: the
+                // tiers here are the export's own ranking of its states, so promoting the lord needs
+                // an empire title it never asked for, and demoting the vassal contradicts the rank
+                // the export drew. An independent neighbour is at least something the export would
+                // recognise.
+                if (Rank(suzerainTitle) <= Rank(vassalTitle))
+                {
+                    outranked++;
+                    continue;
+                }
+
                 liege[vassalTitle] = suzerainTitle;
+                origin[vassalTitle] = LiegeOrigin.Export;
                 suzerained.Add(vassalTitle);
                 vassals++;
             }
@@ -377,6 +482,7 @@ public static class Realms
             {
                 if (!liege.ContainsKey(title) || suzerained.Contains(title)) continue;
                 liege.Remove(title);
+                origin.Remove(title);
                 freed++;
             }
 
@@ -395,6 +501,10 @@ public static class Realms
             if (shared > 0)
                 Console.WriteLine($"  realms: {shared} states still share a ruler with a neighbour");
 
+            if (outranked > 0)
+                Console.WriteLine($"  realms: {outranked} states the export made vassals of a realm " +
+                                  "of their own rank — left independent, CK3 cannot seat them");
+
             Console.WriteLine($"  realms: bound to {stateTitles.Count} azgaar states — " +
                               $"{independent} independent, {vassals} vassal to a suzerain");
         }
@@ -412,8 +522,409 @@ public static class Realms
         {
             HolderCounty = holderCounty,
             Liege = liege,
+            Origin = origin,
             Greatest = greatest,
         };
+    }
+
+    // =================================================================================================
+    // Simulated realms
+    // =================================================================================================
+
+    /// <summary>
+    /// Dresses the realms <see cref="Formation"/> grew in de jure titles.
+    ///
+    /// The simulation produces blobs of counties and a chain of homage between them, and knows
+    /// nothing about the title tree. This is where the two meet: each realm is graded to a tier by
+    /// how much of the world it holds, then given the de jure title of that tier it covers most of.
+    /// A kingdom that took half of its neighbour's de jure ground still gets one kingdom title and
+    /// simply holds the rest directly, which is both how CK3 works and what makes the finished
+    /// political map stop agreeing with the de jure one.
+    ///
+    /// Three CK3 rules constrain everything here and are worth stating because breaking any of them
+    /// produces a map that loads and then reads as broken. A vassal may not be the same tier as his
+    /// liege. A ruler may not hold more counties directly than his domain limit without paying for
+    /// it. And a title may have exactly one holder — hence <c>claimed</c>.
+    /// </summary>
+    private static RealmMap FromFormation(
+        FormationHistory history,
+        List<Title> all,
+        Dictionary<Title, int> development,
+        Dictionary<Title, int> weight,
+        Dictionary<Title, Title> holderCounty,
+        Dictionary<Title, HashSet<Title>> countyAdj,
+        MapConfig cfg,
+        Rng rng)
+    {
+        var map = new RealmMap { HolderCounty = holderCounty, Liege = [], History = history };
+
+        // Homage across ground the vassal cannot actually cross. The same test the de jure walk
+        // applies, for the same reason: a ruler whose lord is unreachable is not a vassal, he is an
+        // independent neighbour the map is lying about.
+        int unreachable = 0;
+        foreach (var p in history.Polities.OrderBy(p => p.Capital.Index))
+        {
+            if (p.Suzerain is null) continue;
+            if (IsReachable(p.Capital, p.Suzerain.Capital, countyAdj)) continue;
+            p.Suzerain = null;
+            unreachable++;
+        }
+
+        // Rebuilt rather than assigned once, because the tier rules below cut homage as they go and
+        // everything downstream — the title vote, the claiming order — asks this who is in whose
+        // realm. Read stale, a lord went on being titled for ground that had just walked out on him.
+        // RealmSize closes over the variable, so reassigning it is what updates both.
+        Dictionary<Polity, List<Polity>> vassalsOf = [];
+
+        void IndexVassals() => vassalsOf = history.Polities
+            .Where(p => p.Suzerain is not null)
+            .GroupBy(p => p.Suzerain!)
+            .ToDictionary(g => g.Key, g => g.OrderBy(v => v.Capital.Index).ToList());
+
+        IndexVassals();
+
+        int RealmSize(Polity p) => p.Counties.Count
+            + (vassalsOf.TryGetValue(p, out var vs) ? vs.Sum(RealmSize) : 0);
+
+        var rank = FitTiers(history, RealmSize, weight, all, cfg);
+
+        // A vassal must sit strictly below his lord. That is the only rule; the tier it lands on is
+        // whatever is left over.
+        //
+        // Lords before vassals, which is why this walks by depth rather than by capital. Graded in
+        // capital order, a king could be demoted by his own emperor *after* his duke had already
+        // been graded against the rank he used to have — leaving the duke level with him, which the
+        // backstop below then had to fix by cutting the homage entirely. Ordering the walk is what
+        // turns those from severed relations into correct ones.
+        int freed = 0;
+        foreach (var p in history.Polities.OrderBy(p => p.Depth).ThenBy(p => p.Capital.Index))
+        {
+            if (p.Suzerain is null) continue;
+
+            rank[p] = Math.Min(rank[p], rank[p.Suzerain] - 1);
+
+            // A duke may hold counts — CK3 allows it, and an earlier version of this did not, which
+            // freed every client of every duke-tier realm on the map and inflated the count of
+            // independent realms by a third. What a duke may not hold is a vassal that needs a
+            // duchy of its own, and nobody at all may hold a vassal of their own tier.
+            bool needsDuchy = p.Counties.Count > 1;
+            if (rank[p] >= 1 && !(needsDuchy && rank[p] < 2)) continue;
+
+            p.Suzerain = null;
+            rank[p] = needsDuchy ? 2 : 1;
+            freed++;
+        }
+
+        IndexVassals();
+
+        // --- Titles ---------------------------------------------------------------------------
+        var claimed = new HashSet<Title>();
+        var primaryOf = new Dictionary<Polity, Title>();
+
+        // Greatest first, so an emperor takes the de jure empire he covers most of before the kings
+        // beneath him go looking for something to be called.
+        foreach (var p in history.Polities
+                     .OrderByDescending(p => rank[p])
+                     .ThenByDescending(RealmSize)
+                     .ThenBy(p => p.Capital.Index))
+        {
+            var title = ClaimTitle(p, rank[p], claimed, vassalsOf);
+            primaryOf[p] = title;
+            claimed.Add(title);
+            holderCounty[title] = p.Capital;
+            rank[p] = Rank(title);
+        }
+
+        // --- Homage ----------------------------------------------------------------------------
+        foreach (var p in history.Polities.OrderBy(p => p.Capital.Index))
+        {
+            if (p.Suzerain is null) continue;
+
+            // Checked again against the titles actually claimed, not against the tiers asked for.
+            // A lord who wanted an empire and found every one taken comes out a king, and his
+            // king-tier vassal then has nowhere to stand.
+            var mine = primaryOf[p];
+            var lord = primaryOf[p.Suzerain];
+
+            if (Rank(mine) >= Rank(lord))
+            {
+                p.Suzerain = null;
+                freed++;
+                continue;
+            }
+
+            map.SetLiege(mine, lord, LiegeOrigin.Conquest);
+        }
+
+        // --- The inside of each realm ----------------------------------------------------------
+        double dukeChance = Math.Clamp(cfg.DuchyTitleShare + 0.35, 0.05, 0.95);
+        int dukes = 0, counts = 0;
+
+        foreach (var p in history.Polities.OrderBy(p => p.Capital.Index))
+            Interior(p, primaryOf[p], rank[p]);
+
+        // --- Report ----------------------------------------------------------------------------
+        var primary = new Dictionary<Title, Title>();
+        foreach (var (title, county) in holderCounty)
+            if (!primary.TryGetValue(county, out var current) || Rank(title) > Rank(current))
+                primary[county] = title;
+
+        map.Greatest = primary
+            .OrderByDescending(kv => Rank(kv.Value))
+            .ThenByDescending(kv => weight.GetValueOrDefault(kv.Value))
+            .ThenBy(kv => kv.Key.Index)
+            .Select(kv => kv.Key)
+            .ToList();
+
+        if (unreachable > 0 || freed > 0)
+            Console.WriteLine($"  realms: {unreachable} vassals could not reach their lord, " +
+                              $"{freed} had no tier to stand on — all set free");
+
+        Console.WriteLine($"  realms: {history.Polities.Count} simulated realms titled — " +
+                          $"{dukes} internal duchies, {counts} vassal counties");
+
+        Report(claimed, primary, map.Liege, all);
+        Console.WriteLine($"  realms: vassalage by origin — {map.OriginTally()}");
+
+        return map;
+
+        // -----------------------------------------------------------------------------------------
+
+        // The de jure title of the given rank that this realm covers most of, dropping a tier at a
+        // time until something unclaimed turns up. The capital's own county title is the floor, and
+        // is always available because two realms never share a capital.
+        Title ClaimTitle(Polity p, int want, HashSet<Title> taken,
+                         Dictionary<Polity, List<Polity>> vassals)
+        {
+            // Voted on by the whole realm, vassals included: an emperor should be named for the
+            // ground his realm covers, not for the corner of it he holds in his own hands.
+            var realm = new List<Title>();
+            void Gather(Polity q)
+            {
+                realm.AddRange(q.Counties);
+                if (vassals.TryGetValue(q, out var vs)) foreach (var v in vs) Gather(v);
+            }
+            Gather(p);
+
+            for (int r = want; r >= 2; r--)
+            {
+                var votes = new Dictionary<Title, int>();
+                foreach (var c in realm)
+                {
+                    var a = AncestorAtRank(c, r);
+                    if (a is null || taken.Contains(a)) continue;
+                    votes[a] = votes.GetValueOrDefault(a) + 1;
+                }
+
+                if (votes.Count > 0)
+                {
+                    return votes.OrderByDescending(kv => kv.Value)
+                                .ThenBy(kv => kv.Key.Index)
+                                .First().Key;
+                }
+            }
+
+            return p.Capital;
+        }
+
+        // Carves a realm's own counties up between its ruler, his dukes and his counts.
+        //
+        // Without this a simulated kingdom is one character personally holding forty counties, which
+        // CK3 renders as a ruler drowning in domain penalties and a realm with no court in it. The
+        // de jure duchies are the seams cut along — they are the only sensible grouping available,
+        // and a duke whose duchy is half in his liege's realm and half in somebody else's is exactly
+        // the texture the whole exercise is for.
+        void Interior(Polity p, Title primaryTitle, int r)
+        {
+            var byDuchy = new Dictionary<Title, List<Title>>();
+            var loose = new List<Title>();
+
+            foreach (var c in p.Counties.OrderBy(c => c.Index))
+            {
+                var duchy = AncestorAtRank(c, 2);
+
+                // A county with no duchy over it has no group to be cut into. Skipping it silently
+                // is what the first version did, and it leaves the county holding itself with no
+                // liege at all — an independent count sitting inside somebody's realm, which reads
+                // on the map as a hole rather than as a mistake.
+                if (duchy is null) { loose.Add(c); continue; }
+
+                if (!byDuchy.TryGetValue(duchy, out var list)) byDuchy[duchy] = list = [];
+                list.Add(c);
+            }
+
+            var capitalDuchy = AncestorAtRank(p.Capital, 2);
+
+            // The ruler's own duchy, when it is going spare. Costs nothing and stops a king whose
+            // primary title is a kingdom from holding no duchy at all.
+            if (r >= 3 && capitalDuchy is not null && claimed.Add(capitalDuchy))
+                holderCounty[capitalDuchy] = p.Capital;
+
+            var demesne = new HashSet<Title> { p.Capital };
+            holderCounty[p.Capital] = p.Capital;
+
+            // Nothing below a count to grant to, so a realm that ended up with only its capital's
+            // county title holds the rest in hand. Rare, and only reachable when every de jure
+            // duchy it touches was already spoken for.
+            if (r < 2)
+            {
+                foreach (var c in p.Counties) holderCounty[c] = p.Capital;
+                return;
+            }
+
+            int demesneCap = r >= 3 ? 3 : 2;
+
+            // The ruler's own counties: his capital plus whatever borders what he already holds.
+            if (capitalDuchy is not null && byDuchy.TryGetValue(capitalDuchy, out var home))
+            {
+                foreach (var c in home.Where(c => c != p.Capital)
+                                      .OrderByDescending(c => development.GetValueOrDefault(c))
+                                      .ThenBy(c => c.Index))
+                {
+                    if (demesne.Count >= demesneCap) break;
+                    if (!countyAdj.TryGetValue(c, out var near) || !near.Any(demesne.Contains)) continue;
+                    demesne.Add(c);
+                    holderCounty[c] = p.Capital;
+                }
+            }
+
+            foreach (var (duchy, group) in byDuchy.OrderByDescending(kv => kv.Value.Count)
+                                                  .ThenBy(kv => kv.Key.Index))
+            {
+                var spare = group.Where(c => !demesne.Contains(c)).ToList();
+                if (spare.Count == 0) continue;
+
+                // A duke, when the realm is big enough to have one and the duchy is going spare.
+                // Never under a duke-tier realm: that would be a vassal of his liege's own rank.
+                if (r >= 3 && spare.Count >= 2 && !claimed.Contains(duchy) && rng.Chance(dukeChance))
+                {
+                    var seat = spare.OrderByDescending(c => development.GetValueOrDefault(c))
+                                    .ThenBy(c => c.Index).First();
+
+                    claimed.Add(duchy);
+                    holderCounty[duchy] = seat;
+                    holderCounty[seat] = seat;
+                    map.SetLiege(duchy, primaryTitle, LiegeOrigin.Conquest);
+                    dukes++;
+
+                    var his = new HashSet<Title> { seat };
+                    foreach (var c in spare.Where(c => c != seat)
+                                           .OrderByDescending(c => development.GetValueOrDefault(c))
+                                           .ThenBy(c => c.Index))
+                    {
+                        if (his.Count < 2)
+                        {
+                            his.Add(c);
+                            holderCounty[c] = seat;
+                            continue;
+                        }
+
+                        holderCounty[c] = c;
+                        map.SetLiege(c, duchy, LiegeOrigin.Conquest);
+                        counts++;
+                    }
+
+                    continue;
+                }
+
+                // Otherwise everything left over is a count answering to the realm's ruler — under
+                // his own duchy title where he has one, so the chain reads count → duke → king.
+                var above = duchy == capitalDuchy && holderCounty.GetValueOrDefault(duchy) == p.Capital
+                    ? duchy
+                    : primaryTitle;
+
+                foreach (var c in spare)
+                {
+                    if (c == above) continue;
+                    holderCounty[c] = c;
+                    map.SetLiege(c, above, LiegeOrigin.Conquest);
+                    counts++;
+                }
+            }
+
+            foreach (var c in loose.Where(c => !demesne.Contains(c)))
+            {
+                holderCounty[c] = c;
+                map.SetLiege(c, primaryTitle, LiegeOrigin.Conquest);
+                counts++;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The de jure title of <paramref name="rank"/> that <paramref name="county"/> belongs to.
+    /// </summary>
+    private static Title? AncestorAtRank(Title county, int rank)
+    {
+        for (var t = county; t is not null; t = t.Parent)
+            if (Rank(t) == rank) return t;
+        return null;
+    }
+
+    /// <summary>
+    /// Grades every simulated realm to a tier, and this is where the share knobs finally land.
+    ///
+    /// They are not quotas any more. A realm qualifies for a tier by absolute size relative to the
+    /// map — a kingdom is a realm about the size of a de jure kingdom — and the share only trims the
+    /// top when the simulation produced far more of a tier than the world was configured to want.
+    /// It never promotes: a run that fragmented into forty duchies gets zero emperors no matter what
+    /// <see cref="MapConfig.EmpireTitleShare"/> says, which is the entire difference from the old
+    /// allocation and the reason a world can now come out looking like something other than itself.
+    /// </summary>
+    private static Dictionary<Polity, int> FitTiers(
+        FormationHistory history,
+        Func<Polity, int> realmSize,
+        Dictionary<Title, int> weight,
+        List<Title> all,
+        MapConfig cfg)
+    {
+        int counties = history.Owner.Count;
+        int deJureDuchies = Math.Max(1, all.Count(t => t.Tier == "d" && weight.GetValueOrDefault(t) > 0));
+        int deJureKingdoms = Math.Max(1, all.Count(t => t.Tier == "k" && weight.GetValueOrDefault(t) > 0));
+        int deJureEmpires = Math.Max(1, all.Count(t => t.Tier == "e" && weight.GetValueOrDefault(t) > 0));
+
+        double avgKingdom = (double)counties / deJureKingdoms;
+
+        // Both thresholds hang off the kingdom, and the empire deliberately does not hang off the
+        // de jure empire count. That count is an artifact of how the clustering happened to cut the
+        // map — a world with one de jure empire on it would need a realm holding the entire
+        // landmass to qualify, so no run could ever produce an emperor. An empire is a realm worth
+        // about two and a bit kingdoms, which is both what CK3 means by one and a figure that means
+        // the same thing on any map.
+        double kingdomAt = avgKingdom * 0.50;
+        double empireAt = avgKingdom * 2.20;
+
+        var rank = new Dictionary<Polity, int>();
+        foreach (var p in history.Polities)
+        {
+            int size = realmSize(p);
+            rank[p] = size >= empireAt ? 4
+                    : size >= kingdomAt ? 3
+                    : p.Counties.Count > 1 ? 2
+                    : 1;
+        }
+
+        // The trim. A tier that came out far more crowded than the configured share wants has its
+        // smallest members demoted; one that came out sparse is left alone.
+        void Trim(int tier, double share, int deJureCount)
+        {
+            int target = share <= 0 ? 0 : Math.Max(1, (int)Math.Round(deJureCount * share));
+            int ceiling = Math.Max(target, (int)Math.Round(target * 1.75));
+
+            var held = history.Polities.Where(p => rank[p] == tier)
+                .OrderByDescending(realmSize)
+                .ThenBy(p => p.Capital.Index)
+                .ToList();
+
+            if (held.Count <= ceiling) return;
+
+            foreach (var p in held.Skip(ceiling)) rank[p] = tier - 1;
+        }
+
+        Trim(4, cfg.EmpireTitleShare, deJureEmpires);
+        Trim(3, cfg.KingdomTitleShare, deJureKingdoms);
+
+        return rank;
     }
 
     /// <summary>

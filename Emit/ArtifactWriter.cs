@@ -106,6 +106,25 @@ public static class ArtifactWriter
                     {
                         b.Blank();
 
+                        // A court artifact needs a room. Without Royal Court there are no court
+                        // slots at all, and below kingdom tier the holder has no court to put them
+                        // in — so the whole creation is skipped rather than producing an artifact
+                        // that exists and can never be displayed. Inventory artifacts are written
+                        // unguarded, which is why a world without the DLC still gets its treasure.
+                        IDisposable? guard = null;
+
+                        if (art.NeedsRoyalCourt)
+                        {
+                            var gate = b.Block("if");
+                            using (b.Block("limit"))
+                            {
+                                b.Field("has_dlc_feature", "royal_court");
+                                b.Field("has_royal_court", "yes");
+                            }
+
+                            guard = gate;
+                        }
+
                         using (b.Block("create_artifact"))
                         {
                             b.Quoted("name", art.NameKey);
@@ -145,6 +164,8 @@ public static class ArtifactWriter
                             // inventory on the start date and none of the modifiers are live.
                             b.Field("equip_artifact_to_owner_replace", "yes");
                         }
+
+                        guard?.Dispose();
                     }
                 }
 
@@ -228,6 +249,32 @@ public static class ArtifactWriter
             ("monthly_piety", "0.35"), ("same_faith_opinion", "6"));
         Modifier("gen_sacred_modifier_famed", "piety_positive",
             ("monthly_piety", "0.6"), ("same_faith_opinion", "10"), ("clergy_opinion", "8"));
+
+        // --- COURT LADDERS ---
+        //
+        // court_grandeur_baseline_add is the line that makes a court artifact a court artifact.
+        // Vanilla's own values cluster tight — forty uses of 3, eighteen each of 1 and 6, with 10
+        // and 16 as the only outliers in the game — so these stay inside 1..6 and the banner, which
+        // every court gets for free, sits at the bottom of it.
+        Modifier("gen_courtrelic_modifier_common", "piety_positive",
+            ("court_grandeur_baseline_add", "1"), ("monthly_piety", "0.15"));
+        Modifier("gen_courtrelic_modifier_masterwork", "piety_positive",
+            ("court_grandeur_baseline_add", "2"), ("monthly_piety", "0.35"), ("clergy_opinion", "5"));
+        Modifier("gen_courtrelic_modifier_famed", "piety_positive",
+            ("court_grandeur_baseline_add", "4"), ("monthly_piety", "0.6"),
+            ("clergy_opinion", "10"), ("same_faith_opinion", "5"));
+
+        // No banner ladder. Vanilla's own game-start pass already hangs a house banner in every
+        // royal court, rendered with the house's real coat of arms — see the note in
+        // ArtifactCategory. Generating a rival was three wall slots spent on a worse copy.
+        Modifier("gen_courtthrone_modifier_common", "grandeur_positive",
+            ("court_grandeur_baseline_add", "2"), ("vassal_opinion", "3"));
+        Modifier("gen_courtthrone_modifier_masterwork", "grandeur_positive",
+            ("court_grandeur_baseline_add", "4"), ("vassal_opinion", "5"),
+            ("short_reign_duration_mult", "-0.15"));
+        Modifier("gen_courtthrone_modifier_famed", "grandeur_positive",
+            ("court_grandeur_baseline_add", "6"), ("vassal_opinion", "8"),
+            ("short_reign_duration_mult", "-0.25"), ("monthly_prestige", "0.15"));
 
         Modifier("gen_scholar_modifier_common", "learning_positive",
             ("learning", "1"));

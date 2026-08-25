@@ -474,9 +474,16 @@ wilderness_travel_presence_refresh = {
 	}
 }
 
-# The backstop, appended to the yearly pulse declared at the top of this file rather than declaring
-# `yearly_playable_pulse` a second time — two definitions of the same on_action key do not merge,
-# and the later one silently wins, which would have deleted the AI's whole frontier look.
+# The backstop, appended to the yearly pulse declared at the top of this file. Declaring
+# `yearly_playable_pulse` a second time with its own `on_actions = { }` list would also have
+# worked: measured 2026-08-25, a second declaration of a key in `common/on_action` APPENDS its
+# list to the entry rather than replacing it, and does not disturb the effect block vanilla
+# already declared there. Keeping both hooks on the one declaration is a locality choice, not a
+# safety requirement.
+#
+# That is only established for the `on_actions = { }` list form used throughout this file. Whether
+# a second `effect = { }` at the same key merges with vanilla's or replaces it has NOT been tested
+# — the caution at the top of this file stands.
 #
 # The five hooks above catch every ordinary way of arriving and leaving. This catches the rest —
 # imprisonment, a county lost in a war, a colony promoted out from under a lord who was standing in

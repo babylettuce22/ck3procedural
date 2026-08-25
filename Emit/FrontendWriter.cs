@@ -7,12 +7,12 @@ using Ck3MapGen.Io;
 namespace Ck3MapGen.Emit;
 
 /// <summary>
-/// Rewrites vanilla's <c>gui/frontend_main.gui</c>: injects the generator's info box, and — when the
-/// suppression below is switched back on — blanks the main-menu 3D character portrait widgets that
-/// used to cold-boot CTD on a procedural map.
+/// Rewrites vanilla's <c>gui/frontend_main.gui</c>: injects the generator's info box, and blanks the
+/// main-menu 3D character portrait widgets that cold-boot CTD on a procedural map.
 ///
-/// As of 2026-08-24 the suppression is off on trial, so the main menu draws its portraits again. See
-/// the block comment in <see cref="WriteFrontend"/> for why, and for how to put it back.
+/// The suppression was lifted on trial on 2026-08-24 and restored on 2026-08-25 after the game
+/// crashed on load. It is not a cosmetic setting — see the block comment in
+/// <see cref="WriteFrontend"/> for what a clean ck3-tiger run does and does not prove about it.
 /// </summary>
 public static class FrontendWriter
 {
@@ -73,21 +73,22 @@ public static class FrontendWriter
 
         // 1. Comment out all main-menu portrait widgets wholesale.
         //
-        // ---- TURNED OFF 2026-08-24, on trial ----------------------------------------------------
-        // This suppression existed because CK3 hard-crashes on the main menu when a bookmark file
-        // names a character with no common/bookmark_portraits/<name>.txt, and the generated bookmarks
-        // used to do exactly that — nested companions especially, since they are easy to add without
-        // noticing they need a record each. Blanking the widgets was the only way to boot.
+        // CK3 hard-crashes on the main menu when a bookmark file names a character with no
+        // common/bookmark_portraits/<name>.txt — nested companions especially, since they are easy
+        // to add without noticing each one needs a record. Blanking the widgets is the only way to
+        // boot past it.
         //
-        // Every name the bookmark files mention now has both a portrait record and a dna_data entry,
-        // checked on two seeds, and ck3-tiger reports no crash-graded findings. So the portraits are
-        // being let through to see whether the menu draws them. Not yet confirmed in the running
-        // game — if the cold-boot CTD comes back, this block is the first thing to restore.
+        // ---- Turned off 2026-08-24 on trial, RESTORED 2026-08-25 --------------------------------
+        // The trial was run on the strength of static checks: every name the bookmark files mention
+        // had a portrait record and a dna_data entry on two seeds, and ck3-tiger reported no
+        // crash-graded findings. The game crashed on load anyway.
         //
-        // To restore: delete the /* */ around the loop, and put `disabled` back in the Console line
-        // at the end of this method and `IsLiveTrigger` back at the bottom.
+        // Which is the lesson worth keeping: tiger clearing the bookmarks is not evidence the menu
+        // will build their portraits. It checks that a record exists for each name, not that the
+        // record's genes resolve against the wardrobe this map actually ships — and an unresolvable
+        // gene reference is a null the frontend walks straight into. Do not turn this off again
+        // without a confirmed cold boot in the running game; the static pass cannot see the failure.
         // ------------------------------------------------------------------------------------------
-        /*
         var disabled = new List<string>();
 
         while (true)
@@ -132,7 +133,6 @@ public static class FrontendWriter
             for (int i = start; i <= end; i++) lines[i] = "#" + lines[i];
             disabled.Add($"{start + 1}-{end + 1}");
         }
-        */
 
         // 2. Inject Generator Info Text right before clickable_version_number
         string fullText = string.Join('\n', lines);
@@ -146,14 +146,14 @@ public static class FrontendWriter
         Directory.CreateDirectory(dir);
         ParadoxText.WriteBom(Path.Combine(dir, "frontend_main.gui"), fullText + "\n");
 
-        Console.WriteLine("  frontend: main-menu portraits left ENABLED (suppression off, on trial), "
-                          + "info box injected");
+        Console.WriteLine(disabled.Count == 0
+            ? "  frontend: no main-menu portrait widgets found to suppress, info box injected"
+            : $"  frontend: {disabled.Count} main-menu portrait widgets suppressed "
+              + $"(lines {string.Join(", ", disabled)}), info box injected");
         return;
 
-        /*
         bool IsLiveTrigger(string line) =>
             !line.TrimStart().StartsWith('#') &&
             Triggers.Any(t => line.Contains(t, StringComparison.Ordinal));
-        */
     }
 }

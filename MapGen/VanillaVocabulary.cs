@@ -111,6 +111,34 @@ public sealed class VanillaVocabulary
     public List<string> Tenets { get; } = [];
 
     /// <summary>
+    /// Which doctrines CK3 refuses to let one faith hold at once, read off the <c>can_pick</c>
+    /// triggers its faith-creation screen enforces — human sacrifice beside pacifism, an
+    /// anointment rite beside no head of faith. Symmetric, because vanilla states a pair from one
+    /// side only about half the time and the game blocks the combination either way round.
+    ///
+    /// A faith written straight into script is never checked against these, so a generated one can
+    /// carry a contradiction the game itself would not have let a player pick.
+    /// </summary>
+    public Dictionary<string, HashSet<string>> IncompatibleDoctrines { get; } = [];
+
+    /// <summary>Whether <paramref name="doctrine"/> may sit beside every one of <paramref name="with"/>.</summary>
+    public bool Compatible(string doctrine, IEnumerable<string> with)
+        => !IncompatibleDoctrines.TryGetValue(doctrine, out var clashes) || !with.Any(clashes.Contains);
+
+    /// <summary>Everything that may not sit beside any of <paramref name="held"/>, held included.</summary>
+    public HashSet<string> IncompatibleWithAll(IEnumerable<string> held)
+    {
+        var blocked = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string doctrine in held)
+        {
+            blocked.Add(doctrine);
+            if (IncompatibleDoctrines.TryGetValue(doctrine, out var clashes)) blocked.UnionWith(clashes);
+        }
+
+        return blocked;
+    }
+
+    /// <summary>
     /// The religion-level localization block of a vanilla pagan religion, as (tag, value) pairs.
     ///
     /// We do not know the full tag set ourselves and must not guess it: a religion missing
@@ -258,6 +286,7 @@ public sealed class VanillaVocabulary
         v.ReadPillars(Path.Combine(gameDir, "common", "culture", "pillars"));
         v.ReadCultures(Path.Combine(gameDir, "common", "culture", "cultures"));
         v.ReadDoctrines(Path.Combine(gameDir, "common", "religion", "doctrine_group_types"));
+        v.ReadDoctrineConflicts(Path.Combine(gameDir, "common", "religion", "doctrine_types"));
         v.ReadReligions(Path.Combine(gameDir, "common", "religion", "religion_types"));
         v.ReadInnovationDefs(Path.Combine(gameDir, "common", "culture", "innovations"));
         v.ReadInnovations(Path.Combine(gameDir, "history", "cultures"));
@@ -411,6 +440,79 @@ public sealed class VanillaVocabulary
         if (DoctrineGroups.TryGetValue("doctrine_core_tenets", out var tenets)) Tenets.AddRange(tenets);
     }
 
+    /// <summary>
+    /// Matches, in priority order: a comment, a `doctrine:x` reference, a `name = {` block opener,
+    /// a bare brace. Comments come first so a doctrine named in one is not read as a reference, and
+    /// the reference beats the block opener so `doctrine:x = {` is read as a reference and not as a
+    /// block called "doctrine:x".
+    /// </summary>
+    private const string ConflictToken =
+        @"#[^\n]*|doctrine:(?<ref>\w+)|(?<block>[A-Za-z_][\w.]*)\s*=\s*\{|\{|\}";
+
+    /// <summary>
+    /// The <c>can_pick</c> triggers, which are where CK3 keeps its doctrine incompatibilities.
+    ///
+    /// A `doctrine:x = { is_in_list = selected_doctrines }` reference only means "conflicts with"
+    /// when an odd number of NOT/NOR/NAND encloses it. Read positively the identical reference is a
+    /// *prerequisite* — tenet_divine_marriage requires doctrine_consanguinity_unrestricted, and
+    /// tenet_fp3_fedayeen requires one of six militant tenets — so the polarity is not optional
+    /// detail. Taking every reference as a conflict would forbid the pairs the game demands.
+    ///
+    /// A reference nested inside anything other than a negation, an OR or a custom_description is
+    /// dropped rather than guessed at, because it is a conditional statement about something else.
+    /// Every one in the install belongs to tenet_rite, whose can_pick is entirely about what the
+    /// *head of faith's* faith believes and constrains this faith's own doctrines not at all.
+    ///
+    /// 51 doctrines and 65 pairs on a full install; a stub or a DLC-less one just harvests fewer.
+    /// </summary>
+    private void ReadDoctrineConflicts(string dir)
+    {
+        if (!Directory.Exists(dir)) return;
+
+        foreach (string path in Directory.GetFiles(dir, "*.txt").OrderBy(p => p, StringComparer.Ordinal))
+        {
+            foreach (var (key, body) in TopLevelBlocks(File.ReadAllText(path)))
+            {
+                string? pick = Block(body, "can_pick");
+                if (pick is null) continue;
+
+                var open = new List<string>();
+
+                foreach (Match m in Regex.Matches(pick, ConflictToken))
+                {
+                    if (m.Groups["block"].Success) { open.Add(m.Groups["block"].Value); continue; }
+                    if (m.Value == "{") { open.Add("{"); continue; }
+                    if (m.Value == "}") { if (open.Count > 0) open.RemoveAt(open.Count - 1); continue; }
+                    if (!m.Groups["ref"].Success) continue;   // a comment
+
+                    string other = m.Groups["ref"].Value;
+                    bool negated = open.Count(Negates) % 2 == 1;
+                    bool conditional = open.Any(o => !Negates(o) && !Transparent(o));
+
+                    if (!negated || conditional || string.Equals(other, key, StringComparison.Ordinal))
+                        continue;
+
+                    Link(key, other);
+                    Link(other, key);
+                }
+            }
+        }
+
+        void Link(string a, string b)
+        {
+            if (!IncompatibleDoctrines.TryGetValue(a, out var set))
+                IncompatibleDoctrines[a] = set = new HashSet<string>(StringComparer.Ordinal);
+
+            set.Add(b);
+        }
+
+        static bool Negates(string block) => block is "NOT" or "NOR" or "NAND";
+
+        // An OR only widens whatever is being negated around it, and a custom_description only
+        // names the tooltip the refusal shows. Neither changes what the reference asserts.
+        static bool Transparent(string block) => block is "OR" or "custom_description";
+    }
+
     private void ReadReligions(string dir)
     {
         if (!Directory.Exists(dir)) return;
@@ -457,6 +559,10 @@ public sealed class VanillaVocabulary
         Virtues.AddRange(virtues.Except(sins).OrderBy(t => t, StringComparer.Ordinal));
         Sins.AddRange(sins.Except(virtues).OrderBy(t => t, StringComparer.Ordinal));
 
+        // The winner is whichever pagan religion sorts last, which as of now is Zunism. That is
+        // fine for the tag set and only the tag set: every *value* here is that one religion's own
+        // localisation key, and copying one into a generated religion gives all of them the same
+        // vanilla god. Faiths.BuildLocalization is what decides which values may pass through.
         if (bestTemplate is null) return;
         foreach (Match m in Regex.Matches(bestTemplate, @"^\s*(\w+)\s*=\s*([^\r\n{]+|\{[^}]*\})",
                      RegexOptions.Multiline))

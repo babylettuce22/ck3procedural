@@ -1,0 +1,86 @@
+﻿# The recruiter's half of the approach.
+#
+# ---- One decision, in one place ----
+#
+# This interaction does not decide anything. It fires society.0001 at the target with the actor
+# saved as the recruiter, and the event does the rest -- the offer, the odds, the trait, the
+# stress, the refusal.
+#
+# That is deliberate and it is the point of the shape. The first draft of this file carried its
+# own `ai_accept` block with its own trait weights, which meant the society had two different
+# opinions about who it recruits: one for characters it approached on its own, one for
+# characters a player pointed it at. They would have drifted apart the first time either was
+# tuned. Now there is a single set of odds, in society.0001's `ai_chance`, and both routes in
+# read it.
+#
+# `auto_accept = yes` follows from that: the negotiation is the event, so there is nothing for
+# the interaction itself to negotiate. What the actor is agreeing to is the risk of asking.
+#
+# ---- What is deliberately absent ----
+#
+# No rank requirement. The obvious rule is that a novice cannot recruit -- bringing people in
+# should be a privilege of the middle rungs -- and it is one `has_trait_xp` line away. It is
+# left out because the first member in an unseeded game is at rank 1, and gating recruitment on
+# rank would mean nobody could ever recruit anybody. A generated society solves this by seeding
+# members of every rank at the bookmark; this prototype has no history writer, so it cannot.
+#
+# No secrecy. Approaching somebody here is a plain interaction with no risk attached, because
+# this set has no secret type yet. When it does, the refusal branch in society.0001 is where a
+# secret gets created on the actor -- and this interaction becomes a genuine gamble rather than
+# a free attempt.
+
+society_offer_oath_interaction = {
+	category = interaction_category_friendly
+	icon = icon_scheme_convert_to_witchcraft
+	interface_priority = 50
+
+	desc = society_offer_oath_interaction_desc
+
+	use_diplomatic_range = yes
+
+	# The interaction is the ASKING, and the asking always succeeds. Whether the offer is taken
+	# is society.0001's business.
+	auto_accept = yes
+
+	# Only a member can extend the offer, and only to somebody who is not already in. The
+	# recipient test is what stops this appearing on every member of the society the moment
+	# there is more than one.
+	is_shown = {
+		scope:actor = {
+			has_trait = society_member
+		}
+		scope:recipient = {
+			NOT = { has_trait = society_member }
+			is_adult = yes
+		}
+		scope:recipient != scope:actor
+	}
+
+	is_valid_showing_failures_only = {
+		scope:actor = { is_available = yes }
+		scope:recipient = { is_available = yes }
+	}
+
+	on_accept = {
+		# Saved before the event is queued, not inside it: a scope saved in this effect chain
+		# rides along into the triggered event, which is how society.0001 skips its own
+		# recruiter-finding branches and uses the character who actually did the asking.
+		scope:actor = {
+			save_scope_as = society_recruiter
+		}
+
+		scope:recipient = {
+			trigger_event = society.0001
+		}
+	}
+
+	# The AI does not work its way through its own court with this. Recruitment on the AI's own
+	# initiative belongs on the yearly pulse that will eventually fire society.0001 directly --
+	# see the note at the top of events/society_events.txt -- not on a player-facing button
+	# being pressed by everybody on the map at once.
+	ai_will_do = {
+		base = 0
+	}
+
+	cooldown = { years = 5 }
+}

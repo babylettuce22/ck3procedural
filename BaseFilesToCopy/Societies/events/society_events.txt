@@ -1,0 +1,975 @@
+﻿# Being asked.
+#
+# =====================================================================================
+#  Why this is an event and not a decision
+# =====================================================================================
+#
+# Because a society finds you. That is the whole texture of the mechanic in CK2 and the
+# reason it reads as a society rather than a menu: the offer arrives unasked, from somebody
+# who has been in your court the entire time, and the interesting decision is not "would I
+# like to be in a society" but "do I trust the person in front of me, and what does it cost
+# me to say no to them now that they have said this out loud".
+#
+# A decisions-panel entry cannot produce any of that. It would be available forever, aimed at
+# nobody, and free to refuse. So there is no decision in this set at all -- the first member
+# in any game is made here.
+#
+# =====================================================================================
+#  How it fires, now and later
+# =====================================================================================
+#
+# NOW: by hand, from the console --
+#
+#     event society.0001
+#
+# LATER: from a yearly on_action, rolled against the traits the society recruits for, with a
+# cooldown so a character who refuses is not asked again next spring. That is one small file
+# (common/on_action/) and it is deliberately not written yet -- the point of this prototype is
+# the gating, and an approach that fires on its own would make testing the gating harder, not
+# easier. The generated version rolls the same way but reads its recruiting profile off the
+# host faith's list of sins rather than the hardcoded traits below.
+#
+# =====================================================================================
+#  The recruiter, and the one liberty this file takes
+# =====================================================================================
+#
+# The event needs somebody to be doing the asking. It looks for a real member first -- in the
+# court, then in the realm -- and if it finds none it picks a courtier and makes them one.
+#
+# That last step is a liberty, and it is the honest kind: in a world where the society has not
+# been seeded, SOMEBODY has to have been in it first, and a courtier who turns out to have been
+# a member all along is exactly the fiction the mechanic wants. It also means the recruiter
+# survives a refusal -- decline, and there is still a member in your court, which is the
+# correct and uncomfortable outcome.
+#
+# When the generator seeds members at the bookmark, the third branch stops being reached and
+# can be deleted.
+
+namespace = society
+
+society.0001 = {
+	type = character_event
+	title = society.0001.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:society_recruiter }
+				desc = society.0001.desc
+			}
+			desc = society.0001.desc_alone
+		}
+	}
+
+	theme = secret
+
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+
+	right_portrait = {
+		trigger = { exists = scope:society_recruiter }
+		character = scope:society_recruiter
+		animation = scheme
+	}
+
+	immediate = {
+		# A member of our own court, if there is one. Preferred over everybody else because
+		# proximity is what makes the approach plausible at all.
+		if = {
+			limit = { NOT = { exists = scope:society_recruiter } }
+
+			random_courtier = {
+				limit = {
+					this != root
+					is_adult = yes
+					has_trait = society_member
+				}
+				save_scope_as = society_recruiter
+			}
+		}
+
+		# Failing that, anybody in the realm.
+		if = {
+			limit = { NOT = { exists = scope:society_recruiter } }
+
+			random_vassal_or_below = {
+				limit = {
+					is_adult = yes
+					has_trait = society_member
+				}
+				save_scope_as = society_recruiter
+			}
+		}
+
+		# Failing that, the society has no members yet and one is revealed. See the note at the
+		# top of the file for why this is allowed to exist and when it stops being reached.
+		#
+		# The 40 XP is not decoration: somebody sent to recruit should not be a novice, and it
+		# puts them on the second rung so that the ladder is visible on an inspectable character
+		# from the first minute of testing.
+		if = {
+			limit = { NOT = { exists = scope:society_recruiter } }
+
+			random_courtier = {
+				limit = {
+					this != root
+					is_adult = yes
+					NOT = { has_trait = society_member }
+				}
+
+				add_trait = society_member
+
+				add_trait_xp = {
+					trait = society_member
+					track = society_rank
+					value = 40
+				}
+
+				save_scope_as = society_recruiter
+			}
+		}
+	}
+
+	# ---- Accept ----
+	#
+	# The stress is the whole price, and it is deliberately the only one. A character who
+	# believes what their faith tells them has just agreed to something they know is wrong, and
+	# that should cost them something no amount of gold covers. A cynic pays nothing.
+	option = {
+		name = society.0001.a
+
+		add_trait = society_member
+
+		add_trait_xp = {
+			trait = society_member
+			track = society_rank
+			value = 10
+		}
+
+		# The recruiter is credited for the introduction, guarded because the third branch
+		# above can fail on a ruler with an empty court.
+		#
+		# ---- The toast is not decoration; it is the only thing the recruiter ever sees ----
+		#
+		# `society_offer_oath_interaction` is auto_accept, so clicking it sends this event to the
+		# RECIPIENT and returns. When the recipient is AI -- which is every courtier a player will
+		# ever try this on -- the whole decision happens off-screen against the ai_chance block
+		# below, and the actor is told nothing at all. Offering the oath looked like a button that
+		# did nothing, and roughly half the time the only evidence it had worked was a trait
+		# appearing on somebody else's character sheet.
+		#
+		# The XP grant sits INSIDE the toast for the same reason vanilla puts effects there: an
+		# effect inside a send_interface_toast block renders in the toast's body, so the recruiter
+		# is told what the introduction earned them in the same breath as whether it landed.
+		#
+		# Fired unconditionally rather than only at players. An AI recruiter receives a toast
+		# nobody looks at, which costs nothing, and gating on `is_ai = no` would mean the mechanic
+		# behaved differently depending on who was watching it.
+		if = {
+			limit = { exists = scope:society_recruiter }
+
+			scope:society_recruiter = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = society_oath_accepted_toast
+					left_icon = root
+
+					add_trait_xp = {
+						trait = society_member
+						track = society_rank
+						value = 5
+					}
+				}
+			}
+		}
+
+		stress_impact = {
+			zealous = medium_stress_impact_gain
+			just = minor_stress_impact_gain
+			cynical = minor_stress_loss
+		}
+
+		# ---- Who says yes ----
+		#
+		# The society recruits on character, not on station. These weights are a stand-in for
+		# what a GENERATED society would read straight off its host faith's list of sins: the
+		# traits the orthodoxy calls vices are exactly the traits the society calls promise.
+		# Hardcoded here only because this prototype has no host faith to ask.
+		#
+		# This block is also the recruiter-side answer, not just the AI's: the induction
+		# interaction fires this same event at its target, so there is one set of odds in the
+		# set rather than two that can drift apart.
+		ai_chance = {
+			base = 40
+
+			modifier = {
+				add = 30
+				has_trait = ambitious
+			}
+
+			modifier = {
+				add = 25
+				has_trait = cynical
+			}
+
+			modifier = {
+				add = 20
+				has_trait = deceitful
+			}
+
+			modifier = {
+				add = -50
+				has_trait = zealous
+			}
+
+			modifier = {
+				add = -25
+				has_trait = just
+			}
+
+			# You are being asked to take a serious step on somebody's word. What you think of
+			# them is most of the answer.
+			modifier = {
+				add = 25
+				exists = scope:society_recruiter
+				opinion = {
+					target = scope:society_recruiter
+					value >= 40
+				}
+			}
+
+			modifier = {
+				add = -40
+				exists = scope:society_recruiter
+				opinion = {
+					target = scope:society_recruiter
+					value <= 0
+				}
+			}
+		}
+	}
+
+	# ---- Refuse ----
+	#
+	# Nothing happens, and that is the gap this prototype is leaving open on purpose.
+	#
+	# Refusing should be dangerous for BOTH people. The recruiter has just admitted something
+	# in a room with somebody who said no, which is how a society starts leaking -- in the real
+	# version this branch creates a secret on the recruiter with root as its discoverer, and
+	# from there vanilla's blackmail and exposure machinery does the rest. There is no secret
+	# type in this set yet, so the branch is left inert rather than half-guessed.
+	#
+	# The opinion hit is the one real consequence: you now know something about them, and they
+	# know you know.
+	option = {
+		name = society.0001.b
+
+		# Toasted for the same reason the accepting branch is -- see the note there. A refusal is
+		# the outcome the recruiter most needs to be told about, because it is the one that leaves
+		# somebody walking around knowing what they were asked, and a player who is not told has
+		# no reason to treat that person any differently afterwards.
+		if = {
+			limit = { exists = scope:society_recruiter }
+
+			scope:society_recruiter = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = society_oath_refused_toast
+					left_icon = root
+
+					add_opinion = {
+						target = root
+						modifier = society_refused_the_oath_opinion
+					}
+				}
+			}
+		}
+
+		ai_chance = {
+			base = 60
+
+			modifier = {
+				add = 40
+				has_trait = zealous
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  THE RITE -- society.0100 to society.0111
+# =====================================================================================
+#
+# Until now the rite was a fortnight that granted Standing and narrated nothing, which made it
+# impossible to tell a working rite from a rite that had quietly failed to gather anybody. These
+# four events are what happens in the room.
+#
+# ---- Where they are fired from, and why not from on_enter_active_state ----
+#
+# All four hang off the phase's `on_phase_active` and not off the activity-level state hooks.
+# The phase block already proved that `this` is the attending character there -- the existing
+# `if = { limit = { this = scope:host } }` guard around progress_activity_phase_after only makes
+# sense if the block runs for everyone -- so one hook separates host from guest with no guessing
+# about what root is. witch_ritual does the same thing in its own `on_end`.
+#
+# `scope:activity` and `scope:host` ride along into a triggered event, which is how 0100 can
+# count the room and 0101 can name the host without either of them re-deriving anything.
+#
+# ---- Every one of those reads is `?=`, and that is not defensive style ----
+#
+# DebugPanel gives every character-scoped event in the mod a fire button, so all four of these
+# WILL be fired from outside an activity -- that is what the panel is for, and it is the first
+# thing anybody does with a new event. Fired that way there is no activity and no host, and a
+# plain `scope:activity = { ... }` against an unset scope does not fail quietly:
+#
+#   Error: Undefined event target 'activity'
+#   Error: Event target link 'scope' returned an unset scope
+#
+# once per iteration, per render, per tooltip. One session of pressing these buttons produced
+# 23,000 of them and buried everything else in error.log, which is the real cost -- the events
+# themselves did nothing worse than nothing.
+#
+# `scope:activity ?= { ... }` is the engine's own answer and vanilla uses it 26 times on this
+# exact scope. The block is skipped when the scope is unset, so a debug firing degrades to the
+# solitary version of each event rather than to a wall of log noise. The descs already branch on
+# `exists =` for the same reason, and 0101's host portrait carries a `trigger` for it.
+#
+# ---- The shape, and what the generated version inherits from it ----
+#
+# 0100 asks the host what the gathering is being SPENT on, and that question is the whole design.
+# A society that meets and does nothing is a club; the interesting thing about a rite is that
+# assembling is itself expensive and dangerous, so it had better be for something. The three
+# answers are discipline, patronage, and restraint -- which is the same triad a generated society
+# will offer, with the flavour and the targets read off its host faith instead of hardcoded.
+#
+# The purpose is chosen here rather than in the activity's own `options` block, which is where it
+# eventually belongs: options are picked at PLANNING time and show in the planner, so the host
+# commits before travelling rather than deciding on the night. That is the better mechanic and it
+# is deliberately not the first one -- options need their own loc, their own category and their
+# own AI weights, and none of that is worth writing before the room is known to fill at all.
+
+# ---- The Convening: the host, on the night ----
+society.0100 = {
+	type = character_event
+	title = society.0100.t
+	desc = society.0100.desc
+
+	theme = secret
+
+	left_portrait = {
+		character = root
+		animation = personality_callous
+	}
+
+	# Counted once, here, so that every string below and every option's arithmetic talk about the
+	# same number. Reading it twice is how a desc ends up disagreeing with an effect.
+	immediate = {
+		set_variable = {
+			name = society_rite_attendance
+			value = 0
+		}
+
+		scope:activity ?= {
+			every_attending_character = {
+				limit = { this != root }
+
+				root = {
+					change_variable = {
+						name = society_rite_attendance
+						add = 1
+					}
+				}
+			}
+		}
+	}
+
+	# ---- Discipline ----
+	option = {
+		name = society.0100.a
+
+		trigger_event = {
+			id = society.0110
+			days = 4
+		}
+
+		ai_chance = {
+			base = 30
+
+			modifier = {
+				add = 30
+				has_trait = arbitrary
+			}
+
+			modifier = {
+				add = 20
+				has_trait = vengeful
+			}
+		}
+	}
+
+	# ---- Patronage ----
+	option = {
+		name = society.0100.b
+
+		trigger_event = {
+			id = society.0111
+			days = 4
+		}
+
+		ai_chance = {
+			base = 40
+
+			modifier = {
+				add = 25
+				has_trait = generous
+			}
+
+			modifier = {
+				add = 20
+				has_trait = gregarious
+			}
+		}
+	}
+
+	# ---- Restraint ----
+	#
+	# The third answer is "nothing", and it is not a null option. A secret society's safest move
+	# is always to disperse without having done anything, and the mechanic should reward that
+	# rather than treat it as a wasted fortnight -- everyone still gains for having stood in the
+	# room together, just less than a rite that was spent on something.
+	#
+	# This is also the seam the exposure system will attach to: when membership becomes a secret,
+	# a rite that did nothing is the one that nobody outside ever hears about, and the other two
+	# each leave somebody with a reason to talk.
+	option = {
+		name = society.0100.c
+
+		add_trait_xp = {
+			trait = society_member
+			track = society_rank
+			value = 4
+		}
+
+		scope:activity ?= {
+			every_attending_character = {
+				limit = { this != root }
+
+				add_trait_xp = {
+					trait = society_member
+					track = society_rank
+					value = 4
+				}
+			}
+		}
+
+		stress_impact = {
+			base = minor_stress_loss
+			paranoid = medium_stress_loss
+			ambitious = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 30
+
+			modifier = {
+				add = 40
+				has_trait = paranoid
+			}
+
+			modifier = {
+				add = 25
+				has_trait = craven
+			}
+		}
+	}
+
+	# The count is only ever read by this event's own desc, which has already rendered by the time
+	# anything here runs. Cleared rather than left lying on the host, because a rite is held once
+	# every five years and a stale attendance number from the last one is exactly the sort of
+	# thing a later reader would trust.
+	after = {
+		remove_variable = society_rite_attendance
+	}
+}
+
+# ---- The Room: every guest, on arrival ----
+#
+# Short on purpose. A guest is not running the rite and should not be handed the rite's decisions;
+# what they get is the one choice anybody actually has at a gathering they can be hanged for
+# attending, which is how visible to be while they are there.
+#
+# It exists mostly so that guests are not furniture. A rite where only the host receives events is
+# a rite that tells you nothing about whether the guest list worked -- if this never fires, nobody
+# came, and that is worth knowing without reading the attendance number off a tooltip.
+society.0101 = {
+	type = character_event
+	title = society.0101.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:host }
+				desc = society.0101.desc
+			}
+			desc = society.0101.desc_alone
+		}
+	}
+
+	theme = secret
+
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+
+	right_portrait = {
+		trigger = { exists = scope:host }
+		character = scope:host
+		animation = personality_callous
+	}
+
+	# Be seen.
+	option = {
+		name = society.0101.a
+
+		add_trait_xp = {
+			trait = society_member
+			track = society_rank
+			value = 3
+		}
+
+		stress_impact = {
+			paranoid = minor_stress_impact_gain
+			shy = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 50
+
+			modifier = {
+				add = 30
+				has_trait = ambitious
+			}
+		}
+	}
+
+	# Stand near the door.
+	option = {
+		name = society.0101.b
+
+		stress_impact = {
+			base = minor_stress_loss
+		}
+
+		ai_chance = {
+			base = 50
+
+			modifier = {
+				add = 40
+				has_trait = paranoid
+			}
+
+			modifier = {
+				add = 25
+				has_trait = craven
+			}
+		}
+	}
+}
+
+# ---- The Reckoning: who did not come ----
+#
+# The absentee is found by listing everybody in the room first and then looking for a sworn member
+# who is not on that list. There is no "is attending" trigger to ask directly, and building the
+# list is both cheaper and more honest than guessing from travel state.
+#
+# The search is court-only, which matches the invite rule's first branch. A member elsewhere in
+# the realm who did not come is not really an absentee -- nobody expected them to cross a kingdom
+# for a fortnight -- and treating them as one would punish the host's own geography.
+society.0110 = {
+	type = character_event
+	title = society.0110.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:society_absentee }
+				desc = society.0110.desc
+			}
+			desc = society.0110.desc_full
+		}
+	}
+
+	theme = secret
+
+	left_portrait = {
+		character = root
+		animation = disapproval
+	}
+
+	right_portrait = {
+		trigger = { exists = scope:society_absentee }
+		character = scope:society_absentee
+		animation = shame
+	}
+
+	immediate = {
+		scope:activity ?= {
+			every_attending_character = {
+				add_to_list = society_present
+			}
+		}
+
+		random_courtier = {
+			limit = {
+				this != root
+				is_adult = yes
+				has_trait = society_member
+				NOT = { is_in_list = society_present }
+			}
+			save_scope_as = society_absentee
+		}
+	}
+
+	# ---- Strike their name ----
+	#
+	# Negative trait XP is a real effect and vanilla's own tournaments use it; this is not a
+	# reimplementation of demotion, it is demotion. Whether it drops them below a breakpoint
+	# depends on where they were, which is correct -- a novice loses nothing they had.
+	option = {
+		name = society.0110.a
+
+		trigger = { exists = scope:society_absentee }
+
+		scope:society_absentee = {
+			add_trait_xp = {
+				trait = society_member
+				track = society_rank
+				value = -20
+			}
+
+			add_opinion = {
+				target = root
+				modifier = society_struck_from_the_roll_opinion
+			}
+		}
+
+		add_dread = 5
+
+		stress_impact = {
+			just = minor_stress_impact_gain
+			forgiving = medium_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 50
+
+			modifier = {
+				add = 30
+				has_trait = vengeful
+			}
+
+			modifier = {
+				add = -40
+				has_trait = forgiving
+			}
+		}
+	}
+
+	# ---- Let it stand ----
+	#
+	# Costs the host nothing and buys the room something, which is the point: mercy in a society
+	# that keeps no roll is indistinguishable from strength, and everyone present understands the
+	# message either way.
+	option = {
+		name = society.0110.b
+
+		trigger = { exists = scope:society_absentee }
+
+		scope:activity ?= {
+			every_attending_character = {
+				add_trait_xp = {
+					trait = society_member
+					track = society_rank
+					value = 5
+				}
+			}
+		}
+
+		stress_impact = {
+			base = minor_stress_loss
+			vengeful = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 50
+
+			modifier = {
+				add = 40
+				has_trait = forgiving
+			}
+		}
+	}
+
+	# ---- Everybody came ----
+	#
+	# `fallback` rather than a third trigger. Both options above are gated on an absentee
+	# existing, and an event whose every option is triggered off can render with no options at
+	# all -- which in CK3 is a window the player cannot close.
+	option = {
+		name = society.0110.c
+
+		fallback = yes
+
+		scope:activity ?= {
+			every_attending_character = {
+				add_trait_xp = {
+					trait = society_member
+					track = society_rank
+					value = 8
+				}
+			}
+		}
+	}
+}
+
+# ---- The Elevation: raising somebody, or yourself ----
+#
+# One guest at random rather than the most senior one. Ordering the room by Standing would mean a
+# script_value to read trait XP back out, and "the one the room has been talking about" is a
+# better fiction than "the highest number present" anyway.
+society.0111 = {
+	type = character_event
+	title = society.0111.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:society_candidate }
+				desc = society.0111.desc
+			}
+			desc = society.0111.desc_alone
+		}
+	}
+
+	theme = secret
+
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+
+	right_portrait = {
+		trigger = { exists = scope:society_candidate }
+		character = scope:society_candidate
+		animation = worry
+	}
+
+	immediate = {
+		scope:activity ?= {
+			every_attending_character = {
+				limit = {
+					this != root
+					has_trait = society_member
+				}
+				add_to_list = society_candidates
+			}
+		}
+
+		random_in_list = {
+			list = society_candidates
+			save_scope_as = society_candidate
+		}
+	}
+
+	# ---- Raise them ----
+	option = {
+		name = society.0111.a
+
+		trigger = { exists = scope:society_candidate }
+
+		scope:society_candidate = {
+			add_trait_xp = {
+				trait = society_member
+				track = society_rank
+				value = 25
+			}
+
+			add_opinion = {
+				target = root
+				modifier = society_elevated_by_opinion
+			}
+		}
+
+		add_trait_xp = {
+			trait = society_member
+			track = society_rank
+			value = 5
+		}
+
+		ai_chance = {
+			base = 55
+
+			modifier = {
+				add = 30
+				has_trait = generous
+			}
+
+			modifier = {
+				add = -30
+				has_trait = ambitious
+			}
+		}
+	}
+
+	# ---- Raise yourself ----
+	#
+	# The room notices. Every attendee except the host takes the opinion hit, including the
+	# candidate who was about to be raised and now was not -- there is no branch that spares
+	# them, because the whole cost of this option is that it happened in front of witnesses.
+	option = {
+		name = society.0111.b
+
+		add_trait_xp = {
+			trait = society_member
+			track = society_rank
+			value = 25
+		}
+
+		scope:activity ?= {
+			every_attending_character = {
+				limit = { this != root }
+
+				add_opinion = {
+					target = root
+					modifier = society_took_the_rite_opinion
+				}
+			}
+		}
+
+		stress_impact = {
+			humble = medium_stress_impact_gain
+			generous = minor_stress_impact_gain
+			ambitious = minor_stress_loss
+		}
+
+		ai_chance = {
+			base = 45
+
+			modifier = {
+				add = 40
+				has_trait = ambitious
+			}
+
+			modifier = {
+				add = 25
+				has_trait = arrogant
+			}
+
+			modifier = {
+				add = -40
+				has_trait = humble
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  society.9001 -- swear the whole court, for debugging
+# =====================================================================================
+#
+# The gating in this set is only observable when there is a population to gate. One member
+# cannot demonstrate a guest list, and the approach event makes exactly one member per firing,
+# so testing the rite meant firing society.0001 at a courtier, waiting on an ai_chance roll,
+# and repeating until enough of them had said yes. This does it in one press.
+#
+# It needs no trigger and no way in: DebugPanel scans events/ off the finished mod and gives
+# every character-scoped event a fire button, so an event that exists here is already reachable.
+# That is also why it lives in this file rather than a society_debug_events.txt of its own --
+# the panel groups by file, and a second file would have to redeclare `namespace = society`,
+# which vanilla never does anywhere in its own events folder.
+#
+# 9001 rather than 0002 so the debug tooling sorts to the bottom and never collides with the
+# content chain, which has the low numbers and will grow into them.
+#
+# ---- What it swears, and what it deliberately does not ----
+#
+# The COURT: every adult courtier, plus the player, because a rite the player cannot see is not
+# a rite anyone can test. Vassals are left alone on purpose -- `activity_invite_rule_society_members`
+# gathers courtiers AND vassals AND family AND spouses AND liege, and swearing only the court
+# means an empty guest list points at the courtier branch specifically rather than at all five
+# at once.
+#
+# Ranks are staggered rather than flat. Everyone at the same Standing tells you nothing about
+# whether the track works; 30/55/80 puts members either side of the first three breakpoints, so
+# one glance at the court says whether the modifiers are landing.
+society.9001 = {
+	type = character_event
+	hidden = yes
+
+	immediate = {
+		set_variable = {
+			name = society_debug_sworn
+			value = 0
+		}
+
+		# The player first. A host who is not a member fails the rite's own is_shown, and
+		# a court full of members with no way to convene them is a confusing place to start
+		# debugging from.
+		if = {
+			limit = { NOT = { has_trait = society_member } }
+
+			add_trait = society_member
+
+			add_trait_xp = {
+				trait = society_member
+				track = society_rank
+				value = 80
+			}
+		}
+
+		every_courtier = {
+			limit = {
+				this != root
+				is_adult = yes
+				NOT = { has_trait = society_member }
+			}
+
+			add_trait = society_member
+
+			# Staggered across the first three breakpoints -- see the note above.
+			#
+			# Ranges off the running counter rather than a modulo: `%` is not a trigger
+			# operator in this language. Arithmetic of that kind belongs in a script_value,
+			# and one file of them is not worth carrying for a debug stagger when counting
+			# says the same thing. The first three sworn come out senior, the next three
+			# middling, the rest junior -- which is also the shape a real society has.
+			if = {
+				limit = { root = { var:society_debug_sworn < 3 } }
+				add_trait_xp = { trait = society_member track = society_rank value = 80 }
+			}
+			else_if = {
+				limit = { root = { var:society_debug_sworn < 6 } }
+				add_trait_xp = { trait = society_member track = society_rank value = 55 }
+			}
+			else = {
+				add_trait_xp = { trait = society_member track = society_rank value = 30 }
+			}
+
+			root = {
+				change_variable = {
+					name = society_debug_sworn
+					add = 1
+				}
+			}
+		}
+
+		# The count is the actual diagnostic. A toast reading zero means the court is empty or
+		# entirely children, which is a different problem from the guest list being broken --
+		# and telling those two apart by eye is exactly what cost the time this event exists
+		# to save.
+		send_interface_toast = {
+			type = event_toast_effect_good
+			title = society_debug_sworn_toast
+			left_icon = root
+		}
+	}
+}

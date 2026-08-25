@@ -107,6 +107,57 @@ public static class WonderIndex
     private static GuiExpr Province(GeneratedWonder wonder)
         => GuiExpr.Raw($"GetPlayer.MakeScope.Var('{ProvinceVariable(wonder)}').Province");
 
+    /// <summary>How wide the hover panel's text is allowed to run.</summary>
+    private const int TooltipWidth = 360;
+
+    /// <summary>
+    /// The hover panel on a wonder's icon: what it is, and — one hover further in — what it does.
+    ///
+    /// The name line is the important one, and it is <c>GetName</c> rather than
+    /// <c>GetNameNoTooltip</c> on purpose. CK3 returns object names as text LINKS, and hovering one
+    /// makes the engine draw that object's own full tooltip: for a building, the header, the
+    /// description and every modifier it grants, sectioned by holding, county and holder. That is
+    /// where the real information comes from, and none of it is reachable any other way — there is
+    /// no <c>building_tooltip</c> widget to instantiate (vanilla declares object tooltips for
+    /// characters, holdings, faiths, landed titles and dynasties, and nothing for buildings), and
+    /// <c>GetEffectDesc</c> renders empty on the building this chain reaches, exactly as ck3-tiger
+    /// warns that it will.
+    ///
+    /// So the panel is deliberately a doorway rather than the room. Reaching the modifiers costs a
+    /// second hover, on the name inside it. Putting the link on the row's title instead, to save
+    /// that hop, was tried and does not work — the title renders as plain text there.
+    ///
+    /// The container's four lines are vanilla's recipe for a tooltip carrying its own content, and
+    /// all four are load-bearing. <c>preferred</c> especially: it means "be the size of your
+    /// content", and without it the tooltip layer offers the whole screen and the panel takes it.
+    /// </summary>
+    private static GuiBuilder WonderTooltip()
+        => GuiBuilder.Of("tooltipwidget")
+            .Add(GuiBuilder.Of("container")
+                .Using("DefaultTooltipBackground", "GeneralTooltipSetup")
+                .LayoutPolicy("horizontal", "preferred")
+                .Field("alwaystransparent", "no")
+
+                .Gap().Add(GuiBuilder.VBox()
+                    .LayoutPolicy("horizontal", "preferred")
+                    .Margin(14, 10)
+                    .Spacing(4)
+
+                    // The building actually standing there, so the panel reports what the province
+                    // has now rather than what the generator laid down at year zero.
+                    .DataContext(GuiExpr.Raw("Province.GetHolding.GetSpecialBuildingType"))
+
+                    .Gap().Add(GuiBuilder.TextSingle()
+                        .Format("#high")
+                        .Using("Font_Size_Medium")
+                        .MaxWidth(TooltipWidth)
+                        .Text(GuiExpr.Raw("Building.GetName")))
+
+                    .Gap().Add(GuiBuilder.TextSingle()
+                        .Format("#weak")
+                        .MaxWidth(TooltipWidth)
+                        .Text("GEN_WONDER_INDEX_GOTO"))));
+
     public static void Write(string modDir, WorldCenterMap worldCenters)
     {
         // No wonders, no window — and no decision, no scripted_gui and no registry entry either. A
@@ -259,7 +310,7 @@ public static class WonderIndex
                 // going straight to the map is the gesture it invites. Consistency with shields is
                 // worth less here than doing the obvious thing.
                 .OnClick(GuiExpr.Raw("Province.ZoomCameraTo"))
-                .Tooltip("GEN_WONDER_INDEX_GOTO")
+                .Add(WonderTooltip())
 
                 // Gold ADDED to the icon. This is vanilla's own recipe, and the order matters.
                 //
@@ -285,20 +336,17 @@ public static class WonderIndex
                     .Texture(wonder.IconTexture)
                     .ModifyTexture(GoldSwatch, "add")))
 
-            // The building's LIVE name, not the static loc key, and `GetName` rather than
-            // `GetNameNoTooltip` — the difference is the whole point of this line.
+            // The building's LIVE name, not the static `building_<key>` loc key.
             //
-            // CK3 returns object names as text LINKS, and hovering one makes the engine draw that
-            // object's full tooltip: for a building, the header, the description and every modifier
-            // it grants, sectioned by holding, county and holder. That panel cannot be built here.
-            // There is no `building_tooltip` widget to instantiate — vanilla declares object
-            // tooltips for characters, holdings, faiths, landed titles and dynasties and nothing
-            // else — and the modifier text behind it is not reachable from any datafunction a
-            // building answers to.
+            // Two things come with `GetName` rather than `GetNameNoTooltip`. The plain one: the row
+            // reports what is actually standing there, so a wonder renamed in game or replaced by a
+            // later tier titles itself correctly instead of showing what the generator wrote at year
+            // zero. The better one: CK3 returns object names as text LINKS, so the title is live —
+            // and where a link is live, hovering it makes the engine draw that object's own full
+            // tooltip, modifiers and all.
             //
-            // So the link IS the feature. Putting it on the row's title means one hover gets the
-            // panel. It was briefly on a tooltip of its own, which worked but cost a hop: hover the
-            // icon, get a small box, then hover the name inside THAT to reach the real thing.
+            // The datacontext is the building rather than the province, because `Building` is what
+            // tiger calls what `GetSpecialBuildingType` yields, and the name hangs off that.
             .Gap().Add(GuiBuilder.TextSingle()
                 .Position(TextLeft, 10)
                 .MaxWidth(RowWidth - TextLeft - 12)

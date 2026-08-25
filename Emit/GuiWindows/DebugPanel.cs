@@ -29,12 +29,10 @@ namespace Ck3MapGen.Emit;
 /// generator already printed to <c>proctool.txt</c> — the log says what was *written*, and only the
 /// running game says what was *loaded*.
 ///
-/// Baked values go in as <c>raw_text</c> rather than through localisation. That is not laziness: a
-/// seed is not a translatable string, and vanilla's own developer widgets under <c>gui/debug/</c>
-/// write their labels the same way. It also means the generator can bake a number without emitting
-/// a loc key for it, which is what keeps the fact list cheap to extend. The prose a person actually
-/// reads — the decision, the window title, the tab and button labels — still goes through
-/// <see cref="LocFile"/>.
+/// Only numbers, versions and timestamps go in as <c>raw_text</c>. Every fixed WORD — the row
+/// labels, and values like "on" or "written" — goes through a localisation key, because
+/// <c>raw_text</c> is not the literal it looks like: see <see cref="LabelSet"/> for the row that
+/// rendered itself as "County Titles".
 ///
 /// Shape follows <see cref="ArtifactIndex"/> and <see cref="WonderIndex"/>: a zero-sized host for
 /// the registry to instantiate, the real window inside it, a decision that sets a character
@@ -87,6 +85,7 @@ public static class DebugPanel
     private const string WorldTab = "world";
     private const string RealmTab = "realm";
     private const string ToolsTab = "tools";
+    private const string EventsTab = "events";
 
     // ===========================================================================================
     // What the generator knows
@@ -119,6 +118,15 @@ public static class DebugPanel
         public int Kingdoms { get; init; }
         public int Duchies { get; init; }
         public int Counties { get; init; }
+
+        /// <summary>
+        /// How many of <see cref="Duchies"/> hold no de jure land — the head-of-faith titles.
+        ///
+        /// Its live counterpart also counts every holy order and mercenary company the game creates
+        /// for itself at start, which is why the row exists: without it those show up as duchies
+        /// this generator failed to write.
+        /// </summary>
+        public int LandlessDuchies { get; init; }
 
         public int Cultures { get; init; }
         public int Heritages { get; init; }
@@ -153,17 +161,68 @@ public static class DebugPanel
 
     public static void Write(string modDir, Facts facts)
     {
-        WriteWindow(modDir, facts);
-        WriteScriptedGuis(modDir, facts);
+        // The labels are collected while the window is built rather than listed separately, so a
+        // row cannot be added without its localisation key coming with it.
+        var labels = new LabelSet();
+
+        // Read off the finished folder, so both the generated events and everything
+        // StaticFileWriter copied out of BaseFilesToCopy are covered. This is why DebugPanel is
+        // written last -- see the call site in ContentWriter.
+        var events = ShippedEvents.Scan(modDir);
+
+        Console.WriteLine($"  debug panel: {events.Count} shipped event(s) listed");
+
+        WriteWindow(modDir, facts, labels, events);
+        WriteScriptedGuis(modDir, facts, events);
         WriteDecision(modDir);
-        WriteLocalisation(modDir);
+        WriteLocalisation(modDir, labels, events);
+    }
+
+    /// <summary>
+    /// Every row label, as a localisation key rather than a literal.
+    ///
+    /// This exists because of a trap that <c>raw_text</c>'s own documentation denies:
+    /// <b><c>raw_text</c> is not literal.</b> A string that exactly matches a localisation key is
+    /// resolved like any other. Vanilla ships keys named <c>counties</c>, <c>baronies</c> and
+    /// <c>cultures</c>, so the first build of this panel rendered its own row labels as "County
+    /// Titles", "Baronies" and "Cultures" — the right idea, the wrong words, and no way to tell
+    /// from the file that it would happen. Neither the preview nor ck3-tiger can see it; the only
+    /// oracle was a screenshot.
+    ///
+    /// So every fixed string this window shows now goes through a key of its own, in a namespace
+    /// nothing else uses. What stays in <c>raw_text</c> is only what cannot be known ahead of time
+    /// — numbers, a version, a timestamp — and a bare integer is not a localisation key in any
+    /// language file the game ships.
+    /// </summary>
+    private sealed class LabelSet
+    {
+        private readonly Dictionary<string, string> _byKey = [];
+
+        /// <summary>Registers a label and hands back the key the <c>.gui</c> should name.</summary>
+        public string Key(string text)
+        {
+            string key = "GEN_DEBUG_L_" + new string([.. text.Select(
+                c => char.IsLetterOrDigit(c) ? char.ToUpperInvariant(c) : '_')]);
+
+            // Same text twice is the same key, which is what makes "empires" on two tabs one entry
+            // rather than a silent overwrite of one wording by another.
+            _byKey[key] = text;
+            return key;
+        }
+
+        public void WriteInto(LocFile loc)
+        {
+            foreach (var (key, text) in _byKey.OrderBy(e => e.Key, StringComparer.Ordinal))
+                loc.Add(key, text);
+        }
     }
 
     // ===========================================================================================
     // The window
     // ===========================================================================================
 
-    private static void WriteWindow(string modDir, Facts facts)
+    private static void WriteWindow(string modDir, Facts facts, LabelSet labels,
+        List<ShippedEvents.Entry> events)
     {
         var doc = GuiDocument.Create("debug panel", "gui", "gen_debug_panel.gui");
 
@@ -241,9 +300,10 @@ public static class DebugPanel
                                 // the visible one starts two screens down. A hidden widget is not
                                 // a widget of no size unless the parent is told to skip it.
                                 .IgnoreInvisible()
-                                .Gap().Add(WorldPanel(facts))
-                                .Gap().Add(RealmPanel(facts))
-                                .Gap().Add(ToolsPanel(facts))))))));
+                                .Gap().Add(WorldPanel(facts, labels))
+                                .Gap().Add(RealmPanel(facts, labels))
+                                .Gap().Add(ToolsPanel(facts))
+                                .Gap().Add(EventsPanel(events))))))));
 
         // The bare instantiation the registry resolves. Without it the file loads clean and then
         // "Could not find widget 'gen_debug_panel_host'", with nothing else to distinguish that
@@ -281,6 +341,7 @@ public static class DebugPanel
             .Add(Tab(WorldTab, "GEN_DEBUG_PANEL_TAB_WORLD"),
                  Tab(RealmTab, "GEN_DEBUG_PANEL_TAB_REALM"),
                  Tab(ToolsTab, "GEN_DEBUG_PANEL_TAB_TOOLS"),
+                 Tab(EventsTab, "GEN_DEBUG_PANEL_TAB_EVENTS"),
                  GuiBuilder.Expand());
     }
 
@@ -300,53 +361,69 @@ public static class DebugPanel
     // Tab one: what the generator wrote
     // ===========================================================================================
 
-    private static GuiBuilder WorldPanel(Facts facts)
+    private static GuiBuilder WorldPanel(Facts facts, LabelSet labels)
     {
         return Panel(WorldTab)
 
             .Gap().Add(Heading("GEN_DEBUG_PANEL_HEAD_RUN"))
-            .Add(Row("mod", facts.ModName),
-                 Row("tool version", facts.ToolVersion),
-                 Row("generated", facts.Generated),
-                 Row("seed", $"{facts.Seed}"),
-                 Row("source", facts.Source),
-                 Row("start year", $"{facts.StartYear}"))
+            .Add(Row(labels, "mod", facts.ModName),
+                 Row(labels, "tool version", facts.ToolVersion),
+                 Row(labels, "generated", facts.Generated),
+                 Row(labels, "seed", $"{facts.Seed}"),
+                 Word(labels, "source", facts.Source),
+                 Row(labels, "start year", $"{facts.StartYear}"))
 
             .Gap().Add(Heading("GEN_DEBUG_PANEL_HEAD_MAP"))
-            .Add(Row("heightmap", $"{facts.Width} x {facts.Height} px"),
-                 Row("land provinces", $"{facts.LandProvinces}"),
-                 Row("sea provinces", $"{facts.WaterProvinces}"),
-                 Row("river provinces", $"{facts.Rivers}"),
-                 Row("baronies", $"{facts.Baronies}"))
+            .Add(Row(labels, "heightmap", $"{facts.Width} x {facts.Height} px"),
+                 Row(labels, "land provinces", $"{facts.LandProvinces}"),
+                 Row(labels, "sea provinces", $"{facts.WaterProvinces}"),
+                 Row(labels, "river provinces", $"{facts.Rivers}"),
+                 Row(labels, "baronies", $"{facts.Baronies}"))
 
             // The four rows the panel exists for. Each names a live counter beside it, and the
             // gather fills those from the world the game actually loaded -- so a mismatch on any
             // of these four lines is a title or history emitter that dropped something quietly.
             .Gap().Add(Heading("GEN_DEBUG_PANEL_HEAD_TITLES"))
-            .Add(Row("empires", $"{facts.Empires}", Counter("empires")),
-                 Row("kingdoms", $"{facts.Kingdoms}", Counter("kingdoms")),
-                 Row("duchies", $"{facts.Duchies}", Counter("duchies")),
-                 Row("counties", $"{facts.Counties}", Counter("counties")))
+            .Add(Row(labels, "empires", $"{facts.Empires}", Counter("empires")),
+                 Row(labels, "kingdoms", $"{facts.Kingdoms}", Counter("kingdoms")),
+                 Row(labels, "duchies", $"{facts.Duchies}", Counter("duchies")),
+                 Row(labels, "of those, landless", $"{facts.LandlessDuchies}", Counter("landless")),
+                 Row(labels, "counties", $"{facts.Counties}", Counter("counties")))
+
+            .Gap().Add(Note("GEN_DEBUG_PANEL_TITLES_NOTE"))
 
             .Gap().Add(Heading("GEN_DEBUG_PANEL_HEAD_PEOPLES"))
-            .Add(Row("cultures", $"{facts.Cultures}", Counter("cultures")),
-                 Row("heritages", $"{facts.Heritages}"),
-                 Row("faiths", $"{facts.Faiths}", Counter("faiths")),
-                 Row("religions", $"{facts.Religions}", Counter("religions")))
+            .Add(Row(labels, "cultures", $"{facts.Cultures}", Counter("cultures")),
+                 Row(labels, "heritages", $"{facts.Heritages}"),
+                 Row(labels, "faiths", $"{facts.Faiths}", Counter("faiths")),
+                 Row(labels, "religions", $"{facts.Religions}", Counter("religions")))
+
+            // These three rows are NOT a check, and saying so is the whole point of the note.
+            //
+            // The map replaces vanilla's TITLES -- descriptor.mod carries
+            // replace_path="common/landed_titles" -- but it does not replace vanilla's peoples. It
+            // drops one file of its own into common/culture/cultures and overrides nothing, so all
+            // 244 vanilla cultures are still in the database beside the generated ones. Measured on
+            // 2026-08-25: 244 + 34 generated = 278, which was exactly what the live column read.
+            //
+            // Without the note that row looks like 34 cultures written and 278 loaded, which reads
+            // as a catastrophic bug and is in fact the intended design. A number that needs a
+            // paragraph of context is worse than no number unless the context is next to it.
+            .Gap().Add(Note("GEN_DEBUG_PANEL_PEOPLES_NOTE"))
 
             .Gap().Add(Heading("GEN_DEBUG_PANEL_HEAD_FEATURES"))
-            .Add(Row("wonders", $"{facts.Wonders}"),
+            .Add(Row(labels, "wonders", $"{facts.Wonders}"),
                  // Live counterpart is counties with no holder, which is what wilderness IS at
                  // runtime -- so this row also reads as "how much has been colonised since".
-                 Row("wilderness counties", $"{facts.WildernessCounties}", Counter("wilderness")),
-                 Row("artifacts placed", $"{facts.Artifacts}", Counter("artifacts")),
-                 Row("struggles", $"{facts.Struggles}"),
-                 Row("men-at-arms types", $"{facts.MenAtArms}"),
-                 Row("races", facts.Races),
-                 Row("magic", OnOff(facts.Magic)),
-                 Row("generated retinues", OnOff(facts.Retinues)),
-                 Row("wilderness system", OnOff(facts.Wilderness)),
-                 Row("history", facts.History ? "written" : "SKIPPED"));
+                 Row(labels, "wilderness counties", $"{facts.WildernessCounties}", Counter("wilderness")),
+                 Row(labels, "artifacts placed", $"{facts.Artifacts}", Counter("artifacts")),
+                 Row(labels, "struggles", $"{facts.Struggles}"),
+                 Row(labels, "men-at-arms types", $"{facts.MenAtArms}"),
+                 Word(labels, "races", facts.Races),
+                 Word(labels, "magic", OnOff(facts.Magic)),
+                 Word(labels, "generated retinues", OnOff(facts.Retinues)),
+                 Word(labels, "wilderness system", OnOff(facts.Wilderness)),
+                 Word(labels, "history", facts.History ? "written" : "not written"));
     }
 
     // ===========================================================================================
@@ -362,31 +439,31 @@ public static class DebugPanel
     /// walk fifteen hundred counties sixty times a second. The gather does it once, when the
     /// window appears.
     /// </summary>
-    private static GuiBuilder RealmPanel(Facts facts)
+    private static GuiBuilder RealmPanel(Facts facts, LabelSet labels)
     {
         return Panel(RealmTab)
 
             .Gap().Add(Heading("GEN_DEBUG_PANEL_HEAD_PLAYER"))
-            .Add(Row("name", GuiExpr.Raw("GetPlayer.GetNameNoTooltip")),
-                 Row("id", GuiExpr.Raw("GetPlayer.GetID")),
-                 Row("primary title", GuiExpr.Raw("GetPlayer.GetPrimaryTitle.GetNameNoTooltip")),
-                 Row("culture", GuiExpr.Raw("GetPlayer.GetCulture.GetName")),
-                 Row("faith", GuiExpr.Raw("GetPlayer.GetFaith.GetName")),
+            .Add(Row(labels, "name", GuiExpr.Raw("GetPlayer.GetNameNoTooltip")),
+                 Row(labels, "id", GuiExpr.Raw("GetPlayer.GetID")),
+                 Row(labels, "primary title", GuiExpr.Raw("GetPlayer.GetPrimaryTitle.GetNameNoTooltip")),
+                 Row(labels, "culture", GuiExpr.Raw("GetPlayer.GetCulture.GetName")),
+                 Row(labels, "faith", GuiExpr.Raw("GetPlayer.GetFaith.GetName")),
                  // GetNameNoTooltip, not GetName. A government has no GetName -- vanilla writes
                  // this spelling and never the short one, and the wrong name would have resolved
                  // to a blank line with nothing logged and ck3-tiger passing it. Caught by the
                  // preview's "calls vanilla never makes" report, which is the only check in the
                  // toolchain that distinguishes a wrong datafunction from a right one.
-                 Row("government", GuiExpr.Raw("GetPlayer.GetGovernment.GetNameNoTooltip")),
-                 Row("gold", GuiExpr.Raw("GetPlayer.GetGold|0")))
+                 Row(labels, "government", GuiExpr.Raw("GetPlayer.GetGovernment.GetNameNoTooltip")),
+                 Row(labels, "gold", GuiExpr.Raw("GetPlayer.GetGold|0")))
 
             .Gap().Add(Heading("GEN_DEBUG_PANEL_HEAD_LIVE"))
-            .Add(Row("counties held", Counter("held")),
-                 Row("vassals", Counter("vassals")),
-                 Row("rulers alive", Counter("rulers")),
-                 Row("independent rulers", Counter("independent")),
-                 Row("counties with no holder", Counter("wilderness")),
-                 Row("artifacts in the world", Counter("artifacts")))
+            .Add(Row(labels, "counties held", Counter("held")),
+                 Row(labels, "vassals", Counter("vassals")),
+                 Row(labels, "rulers alive", Counter("rulers")),
+                 Row(labels, "independent rulers", Counter("independent")),
+                 Row(labels, "counties with no holder", Counter("wilderness")),
+                 Row(labels, "artifacts in the world", Counter("artifacts")))
 
             .Gap().Add(Heading("GEN_DEBUG_PANEL_HEAD_MINE"))
             .Add(GuiBuilder.Of("text_multi")
@@ -449,6 +526,126 @@ public static class DebugPanel
     }
 
     /// <summary>
+    /// Every event this mod ships, one button each, grouped by the file it came from.
+    ///
+    /// The buttons are BAKED — one widget per event, and one scripted_gui behind each — for the
+    /// same reason the wonder index bakes its rows: a <c>.gui</c> cannot name an event. There is no
+    /// datafunction that turns a string into an event id, so a datamodel of event names could be
+    /// listed but not fired, and the one thing this tab exists to do is fire them. Baking is not the
+    /// cheap option here, it is the only one.
+    ///
+    /// It scales fine. 57 events is 57 four-line scripted_guis, which is a 12KB file the game reads
+    /// once, and the count only moves when somebody adds an event.
+    ///
+    /// <b>Pressing a button is not a promise that the event appears.</b> <c>trigger_event</c>
+    /// evaluates the event's own <c>trigger</c> block, so an event that wants a colony underway or
+    /// a scope it has not been given does nothing at all — no window, no log line. Six of the events
+    /// here are <c>hidden = yes</c> as well, and those never show a window even when they do fire.
+    /// Both are called out in the note and in each button's tooltip, because otherwise the first
+    /// silent button reads as a bug in this panel.
+    /// </summary>
+    private static GuiBuilder EventsPanel(List<ShippedEvents.Entry> events)
+    {
+        var player = GuiScope.Root("GetPlayer");
+        var panel = Panel(EventsTab);
+
+        if (events.Count == 0)
+        {
+            // A map generated with every optional system switched off really does ship no events.
+            // An empty tab with a line saying so beats an empty tab.
+            panel.Gap().Add(Note("GEN_DEBUG_PANEL_EVENTS_NONE"));
+            return panel;
+        }
+
+        panel.Gap().Add(Note("GEN_DEBUG_PANEL_EVENTS_NOTE"));
+
+        // Grouped by file, in the order the scan found them, which is the order they sit in on
+        // disk. Feature by feature, in other words -- all the colonisation events together.
+        foreach (var group in events.GroupBy(e => e.File))
+        {
+            panel.Gap().Add(Heading(FileHeadingKey(group.Key)));
+
+            foreach (var entry in group)
+                panel.Add(entry.CanFire
+                    ? FireButton(entry, player)
+                    : UnfirableEvent(entry));
+        }
+
+        return panel;
+    }
+
+    /// <summary>
+    /// One event's button.
+    ///
+    /// Both strings are localisation keys rather than <c>raw_text</c>, and the label one is not
+    /// paranoia: an event id contains a dot and could not collide with a vanilla key, but routing it
+    /// through <see cref="LocFile"/> anyway is what lets the tooltip carry the type, the file and
+    /// the caveat without any of it being assembled in the <c>.gui</c>.
+    /// </summary>
+    private static GuiBuilder FireButton(ShippedEvents.Entry entry, GuiScope scope)
+        => GuiBuilder.Of("button_standard")
+            .Size(360, 28)
+            .MarginBottom(2)
+            .Text(EventLabelKey(entry))
+            .Tooltip(EventTooltipKey(entry))
+            .Runs(new ScriptedGui(FireKey(entry), scope));
+
+    /// <summary>
+    /// An event the panel lists but will not fire: a row, not a button.
+    ///
+    /// Deliberately not a disabled button. A greyed button says "this might work later"; this will
+    /// never work from here, because the panel has no way to produce the scope the event runs in.
+    /// Saying which scope that is turns a dead entry into the answer to "why isn't this here".
+    /// </summary>
+    private static GuiBuilder UnfirableEvent(ShippedEvents.Entry entry)
+        => GuiBuilder.Of("text_single")
+            .Size(360, 28)
+            .MarginBottom(2)
+            .MarginLeft(6)
+            .Format("#weak")
+            .Text(EventLabelKey(entry))
+            .Tooltip(EventTooltipKey(entry));
+
+    /// <summary>The scripted_gui that fires one event. Named off the id so it cannot collide.</summary>
+    private static string FireKey(ShippedEvents.Entry entry) => $"gen_dbg_fire_{entry.Key}";
+
+    private static string EventLabelKey(ShippedEvents.Entry entry) => $"GEN_DEBUG_EV_{entry.Key}";
+
+    private static string EventTooltipKey(ShippedEvents.Entry entry) => $"GEN_DEBUG_EV_{entry.Key}_TT";
+
+    /// <summary>
+    /// A readable name for an events file: <c>wilderness_colonization_events.txt</c> reads as
+    /// "Wilderness colonization".
+    ///
+    /// Cosmetic, and deliberately dumb. The filenames this project ships are already descriptive,
+    /// so trimming the parts every one of them repeats gets a good heading without a lookup table
+    /// that a new file would not be in.
+    /// </summary>
+    private static string FileHeading(string file)
+    {
+        string stem = Path.GetFileNameWithoutExtension(file);
+
+        // Anchored. An unanchored Replace strips the noise wherever it appears, which turned
+        // `zzz_scan_probe` into "Zscan probe" -- the trailing z of the load-order prefix eaten out
+        // of the middle of a word. Same trap waiting in any name containing "gen" or "events".
+        foreach (string prefix in new[] { "zz_", "gen_" })
+            if (stem.StartsWith(prefix, StringComparison.Ordinal))
+                stem = stem[prefix.Length..];
+
+        if (stem.EndsWith("_events", StringComparison.Ordinal))
+            stem = stem[..^"_events".Length];
+
+        stem = stem.Replace('_', ' ').Trim();
+
+        return stem.Length == 0 ? file : char.ToUpperInvariant(stem[0]) + stem[1..];
+    }
+
+    /// <summary>A heading key per source file, derived so the loc writer can rebuild it.</summary>
+    private static string FileHeadingKey(string file)
+        => "GEN_DEBUG_EVFILE_" + new string([.. Path.GetFileNameWithoutExtension(file)
+            .Select(c => char.IsLetterOrDigit(c) ? char.ToUpperInvariant(c) : '_')]);
+
+    /// <summary>
     /// One button that runs one scripted_gui.
     ///
     /// All four of visible/enabled/tooltip/onclick would come off a single <see cref="ScriptedGui"/>
@@ -483,6 +680,16 @@ public static class DebugPanel
             .Spacing(2)
             .Visible(GuiExpr.VariableHasValue(TabVariable, tab));
 
+    /// <summary>A wrapped paragraph under a section: what a number means, where it is not obvious.</summary>
+    private static GuiBuilder Note(string key)
+        => GuiBuilder.Of("text_multi")
+            .ExpandingH()
+            .AutoResize()
+            .MaxWidth(RowWidth)
+            .MarginBottom(4)
+            .Format("#weak")
+            .Text(key);
+
     private static GuiBuilder Heading(string key)
         => GuiBuilder.VBox()
             .ExpandingH()
@@ -499,15 +706,26 @@ public static class DebugPanel
                     .ExpandingH());
 
     /// <summary>A row whose middle column is a fact baked in when the map was written.</summary>
-    private static GuiBuilder Row(string label, string generated, GuiExpr? live = null)
-        => Line(label, Escape(generated), live);
+    private static GuiBuilder Row(LabelSet labels, string label, string generated, GuiExpr? live = null)
+        => Line(labels.Key(label), Escape(generated), live);
 
     /// <summary>
     /// A row whose middle column is a datafunction rather than a baked string — the live tab's only
     /// shape, since nothing there is known when the map is written.
     /// </summary>
-    private static GuiBuilder Row(string label, GuiExpr value)
-        => Line(label, value.ToString(), null);
+    private static GuiBuilder Row(LabelSet labels, string label, GuiExpr value)
+        => Line(labels.Key(label), value.ToString(), null);
+
+    /// <summary>
+    /// A row whose value is one of a fixed set of words rather than a number.
+    ///
+    /// Separate from the ordinary string row because these carry the same hazard the labels do —
+    /// "on", "off" and "written" are exactly the kind of short word a language file already has a
+    /// key for — so the value goes through <see cref="LabelSet"/> as well. Numbers, versions and
+    /// timestamps do not need this and stay literal.
+    /// </summary>
+    private static GuiBuilder Word(LabelSet labels, string label, string value)
+        => Line(labels.Key(label), labels.Key(value), null, valueIsKey: true);
 
     /// <summary>
     /// The row itself: a label, what the generator wrote, and what the game has.
@@ -522,7 +740,8 @@ public static class DebugPanel
     /// datafunction — because <c>raw_text</c> makes no distinction between them and neither should
     /// this.
     /// </summary>
-    private static GuiBuilder Line(string label, string value, GuiExpr? live)
+    private static GuiBuilder Line(string labelKey, string value, GuiExpr? live,
+        bool valueIsKey = false)
     {
         var row = GuiBuilder.Widget()
             .Size(RowWidth, RowHeight)
@@ -532,7 +751,8 @@ public static class DebugPanel
                 .MaxWidth(ValueLeft - 10)
                 .Elide("right")
                 .Format("#weak")
-                .RawText(label));
+                // `text`, not `raw_text`: see LabelSet for the word this used to render as.
+                .Text(labelKey));
 
         // Baked values go in as literal text. `raw_text` is not localised, so a number needs no
         // loc key of its own -- which is the difference between a fact list that is cheap to extend
@@ -542,7 +762,8 @@ public static class DebugPanel
             .MaxWidth((live is null ? RowWidth : LiveLeft) - ValueLeft - 10)
             .Elide("right")
             .Format("#high")
-            .RawText(value));
+            .Add(valueIsKey ? GuiNode.Leaf("text", GuiNode.Quote(value))
+                            : GuiNode.Leaf("raw_text", GuiNode.Quote(value))));
 
         if (live is not null)
             row.Gap().Add(GuiBuilder.TextSingle()
@@ -598,7 +819,8 @@ public static class DebugPanel
     /// generator knows: the gather has to be told which culture the unsettled counties were given,
     /// and the wonder-index opener only exists on a map that has one.
     /// </summary>
-    private static void WriteScriptedGuis(string modDir, Facts facts)
+    private static void WriteScriptedGuis(string modDir, Facts facts,
+        List<ShippedEvents.Entry> events)
     {
         string dir = Path.Combine(modDir, "common", "scripted_guis");
         Directory.CreateDirectory(dir);
@@ -777,9 +999,64 @@ public static class DebugPanel
             }
             WONDERS
 
-            """.Replace("WONDERS", wonders));
+            """.Replace("WONDERS", wonders) + FireEntries(events));
 
         WriteGatherEffect(modDir);
+    }
+
+    /// <summary>
+    /// One scripted_gui per shipped event, each firing exactly that event.
+    ///
+    /// The repetition is the mechanism, not an accident of code generation. A scripted_gui takes no
+    /// arguments, and no datafunction turns a string into an event id, so "fire the event this
+    /// button names" can only be expressed as one entry per event. Nothing here is shared between
+    /// them and nothing needs to be.
+    ///
+    /// <c>is_shown = { always = yes }</c> throughout. Whether the event will actually do anything is
+    /// the event's own <c>trigger</c> to decide, and second-guessing it here would mean copying
+    /// every event's conditions into this file and keeping them in step forever. A button that
+    /// fires into a failed trigger is honest; a button hidden by a stale copy of somebody else's
+    /// trigger is not.
+    /// </summary>
+    private static string FireEntries(List<ShippedEvents.Entry> events)
+    {
+        if (events.Count == 0) return "";
+
+        var b = new System.Text.StringBuilder();
+
+        b.AppendLine().Append("""
+            # ===========================================================================
+            # One entry per shipped event, for the panel's Events tab.
+            #
+            # Generated from a scan of the mod's own events/ folder, so this list follows
+            # whatever is actually there -- including anything dropped into
+            # BaseFilesToCopy since the last time this file was looked at.
+            # ===========================================================================
+
+            """);
+
+        foreach (var entry in events.Where(e => e.CanFire))
+        {
+            // A province event cannot be fired at a character. Everything this project ships today
+            // is a character_event, so this branch is unexercised -- but it costs three lines and
+            // the alternative is a button that silently does nothing the first time somebody adds
+            // a province event.
+            string fire = entry.IsProvinceEvent
+                ? $"capital_province = {{ trigger_event = {entry.Id} }}"
+                : $"trigger_event = {entry.Id}";
+
+            // Plain concatenation rather than a raw interpolated literal. A `$"""…"""` would need
+            // every one of the eight braces below doubled, and a script file that is mostly braces
+            // is exactly where that stops being readable.
+            b.Append('\n')
+             .Append(FireKey(entry)).Append(" = {\n")
+             .Append("\tscope = character\n\n")
+             .Append("\tis_shown = { always = yes }\n\n")
+             .Append("\teffect = {\n\t\t").Append(fire).Append("\n\t}\n")
+             .Append("}\n");
+        }
+
+        return b.ToString();
     }
 
     /// <summary>
@@ -824,6 +1101,7 @@ public static class DebugPanel
             	set_variable = { name = gen_dbg_artifacts value = 0 }
             	set_variable = { name = gen_dbg_held value = 0 }
             	set_variable = { name = gen_dbg_vassals value = 0 }
+            	set_variable = { name = gen_dbg_landless value = 0 }
 
             	save_scope_as = gen_dbg_root
 
@@ -841,15 +1119,37 @@ public static class DebugPanel
             		}
             	}
 
+            	# The tier walks all skip the vanilla shims.
+            	#
+            	# common/landed_titles/zz_vanilla_titulars.txt re-declares every vanilla e_/k_/d_/h_
+            	# key as an empty titular title, so the ~12,900 hardcoded references in vanilla script
+            	# still resolve. There are about 1,450 of them, and counting them here made the live
+            	# column read 1288 duchies against 111 written -- a comparison that looks like a
+            	# catastrophe and means nothing at all.
+            	#
+            	# gen_vanilla_titular is the variable CompatibilityWriter's own guard stamps on each
+            	# shim at game start; reusing it means the two can never disagree about what a shim is.
             	every_duchy = {
+            		limit = { NOT = { has_variable = gen_vanilla_titular } }
             		scope:gen_dbg_root = { change_variable = { name = gen_dbg_duchies add = 1 } }
+
+            		# Landless duchies are not de jure land: the head-of-faith titles this generator
+            		# writes, plus every holy order and mercenary company the game creates for itself
+            		# at start. Broken out rather than filtered away, because "written 111, live 192"
+            		# is a question and "of which 81 landless" is the answer to it.
+            		if = {
+            			limit = { is_landless_type_title = yes }
+            			scope:gen_dbg_root = { change_variable = { name = gen_dbg_landless add = 1 } }
+            		}
             	}
 
             	every_kingdom = {
+            		limit = { NOT = { has_variable = gen_vanilla_titular } }
             		scope:gen_dbg_root = { change_variable = { name = gen_dbg_kingdoms add = 1 } }
             	}
 
             	every_empire = {
+            		limit = { NOT = { has_variable = gen_vanilla_titular } }
             		scope:gen_dbg_root = { change_variable = { name = gen_dbg_empires add = 1 } }
             	}
 
@@ -962,9 +1262,18 @@ public static class DebugPanel
     /// The prose. Only what a person reads — every baked number goes in as <c>raw_text</c> and
     /// needs no key here.
     /// </summary>
-    private static void WriteLocalisation(string modDir)
+    private static void WriteLocalisation(string modDir, LabelSet labels,
+        List<ShippedEvents.Entry> events)
     {
         var loc = new LocFile();
+
+        labels.WriteInto(loc);
+
+        // A heading per event file, titled from the filename with the noise trimmed. Derived rather
+        // than tabulated, so a new events file needs no entry here.
+        foreach (string file in events.Select(e => e.File).Distinct(StringComparer.Ordinal))
+            loc.Add(FileHeadingKey(file), FileHeading(file));
+        loc.Blank();
 
         loc.Add("gen_debug_panel_decision", "Generated World (debug)");
         loc.Add("gen_debug_panel_decision_desc",
@@ -985,6 +1294,53 @@ public static class DebugPanel
         loc.Add("GEN_DEBUG_PANEL_HEAD_TITLES", "Titles written, and titles loaded");
         loc.Add("GEN_DEBUG_PANEL_HEAD_PEOPLES", "Peoples");
         loc.Add("GEN_DEBUG_PANEL_HEAD_FEATURES", "Features");
+
+        loc.Add("GEN_DEBUG_PANEL_TAB_EVENTS", "Events");
+
+        loc.Add("GEN_DEBUG_PANEL_EVENTS_NONE",
+            "This map ships no events. Every optional system that brings them — the wilderness, "
+            + "wonders, struggles — was switched off when it was generated.");
+
+        loc.Add("GEN_DEBUG_PANEL_EVENTS_NOTE",
+            "Every event this mod ships, fired on you. #high A button doing nothing is a normal "
+            + "result#!: #EMP trigger_event#! still evaluates the event's own trigger, so one that "
+            + "wants a colony underway, a war, or a scope it has not been given will decline "
+            + "silently. Events marked #EMP hidden#! run their effects without ever showing a "
+            + "window.");
+
+        // One label and one tooltip per event. Written from the same scan the window was built
+        // from, so a button can never name a key this loop did not write.
+        foreach (var entry in events)
+        {
+            loc.Add(EventLabelKey(entry), entry.Id
+                + (entry.Hidden ? "  (hidden)" : "")
+                + (entry.CanFire ? "" : $"  — {entry.Scope} scope"));
+
+            // AddBuilt, not Add: LocFile.Add runs ParadoxText.Loc, which collapses a real newline
+            // to a space. A tooltip wants the two-character \n that CK3 reads as a line break, and
+            // that is precisely what Loc would flatten.
+            loc.AddBuilt(EventTooltipKey(entry),
+                $"#high {entry.Id}#!\\n"
+                + $"#weak {entry.Type} · {entry.File}#!\\n\\n"
+                + (entry.Hidden
+                    ? "This event is #EMP hidden#! — it runs its effects and shows no window, so "
+                      + "look for what it changed rather than for a popup.\\n\\n"
+                    : "")
+                + (entry.CanFire
+                    ? "Fires it on you now. If nothing happens, the event's own trigger said no."
+                    : $"#EMP Cannot be fired from here.#! It runs in a {entry.Scope} scope, and this "
+                      + "panel can only produce you and your capital. Listed so you know it ships."));
+        }
+
+        loc.Add("GEN_DEBUG_PANEL_TITLES_NOTE",
+            "These four should agree. The live figures skip the ~1,450 vanilla titular shims in "
+            + "#high zz_vanilla_titulars.txt#!, which exist only so vanilla's hardcoded references "
+            + "still resolve. Landless duchies are broken out because the game creates its own at "
+            + "start: every holy order and mercenary company.");
+        loc.Add("GEN_DEBUG_PANEL_PEOPLES_NOTE",
+            "These will not agree, and should not. The map replaces vanilla's #high titles#! but "
+            + "adds its #high peoples#! alongside vanilla's rather than replacing them, so the live "
+            + "figure counts every vanilla culture, faith and religion too.");
 
         loc.Add("GEN_DEBUG_PANEL_HEAD_PLAYER", "You");
         loc.Add("GEN_DEBUG_PANEL_HEAD_LIVE", "The world as loaded");

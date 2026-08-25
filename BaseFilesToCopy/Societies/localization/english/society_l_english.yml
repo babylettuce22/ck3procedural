@@ -1,0 +1,145 @@
+﻿l_english:
+
+ # Every string the society prototype needs.
+ #
+ # Voice: cold and specific. Nobody here is having an adventure, nobody is cackling, and the
+ # society does not explain itself to people who are not in it. The same register the wilderness
+ # files use, pointed at a different subject.
+ #
+ # WHERE THE GENERATED VERSION WILL DIFFER
+ # ---------------------------------------
+ # Every bare "the society" below is a placeholder for a name a generator would supply,
+ # and every one of them is a `$gen_cult_name$`-shaped substitution in the real thing -- CK3
+ # resolves $another_loc_key$ against another entry, which this project already relies on for
+ # holy site names. The prose around those nouns does NOT need to be generated, and should not
+ # be: what varies between worlds is the vocabulary, not the sentences.
+ #
+ # The strings below are written to make those seams visible. Nothing refers to a specific god,
+ # a specific faith or a specific crime, because the prototype has no host faith to borrow that
+ # vocabulary from -- which is exactly the gap the generated version fills.
+
+ # --- The trait ------------------------------------------------------------------------------
+
+ trait_society_member:0 "Society Member"
+ trait_society_member_desc:0 "Sworn into a body that keeps no roll of its members and meets where it will not be counted."
+ trait_society_member_character_desc:0 "[ROOT.GetCharacter.GetFirstNameNoTooltip] belongs to something that does not put its name to things."
+
+ # The track is named once and its levels are numbered by the engine -- see the note in
+ # common/traits/00_society_traits.txt for why there are no per-rung keys to write here.
+ trait_track_society_rank:0 "Standing"
+ trait_track_society_rank_desc:0 "How far in. Nobody is told where they stand; they work it out from what they are asked to do."
+
+ # --- The rite -------------------------------------------------------------------------------
+ #
+ # CK3 derives about a dozen keys from an activity's name and documents none of them. The set
+ # below is the working inventory, taken from the wilderness activities -- a missing one shows
+ # the raw key in the planner and reports nothing to the log.
+
+ activity_society_rite:0 "Hold the Rite"
+ activity_society_rite_name:0 "Hold the Rite"
+ activity_society_rite_owner:0 "Convened by [ROOT.Char.GetTitledFirstName]"
+ activity_society_rite_selection_tooltip:0 "Call the society together. Only members will come, because only members are asked."
+ activity_society_rite_host_desc:0 "We convene it, which means we answer for it."
+ activity_society_rite_guest_desc:0 "Only sworn members appear on this list. There is no version of it that does not."
+ activity_society_rite_guest_help_text:0 "Members within reach. Anyone not sworn cannot be invited and cannot attend."
+ activity_society_rite_destination_selection:0 "Where are we holding it?"
+ activity_society_rite_predicted_cost:0 "Nothing in coin. What it costs is that everyone who comes now knows who else came."
+ activity_society_rite_conclusion_desc:0 "It is done, and everyone who stood through it stands a little further in."
+ # NO datafunctions in this one. An activity's `_desc` is not rendered with a character root --
+ # every vanilla activity desc that wants dynamic text reaches for GetActivityType() or
+ # ActivityWindow.GetActivity, and none of them use ROOT. A [ROOT.Char.GetHerHis] here produced
+ # "Data error in loc string 'activity_society_rite_desc'" 376 times in a single session, once per
+ # render of the planner. The neighbouring _owner key CAN use ROOT.Char and does.
+ activity_society_rite_desc:0 "The society meets rarely and never by accident. A rite is convened, the people who are owed an invitation receive one, and for a fortnight one room in one capital holds more of the society than any other room in the world.\n\nNobody outside it is asked, because nobody outside it is told. That is not caution about this particular gathering — it is the arrangement the society exists under, and the reason it has survived long enough to be worth joining."
+ # The travel plan's name for the journey out. Derived from the activity key, named nowhere,
+ # and caught only by ck3-tiger -- an unlocalised one shows the raw key on the travel banner.
+ TRAVEL_NAME_FOR_activity_society_rite:0 "Journey to the Rite"
+
+ activity_society_rite_province_desc:0 "The host's own seat. Somewhere with doors, and people who have learned not to ask about the traffic through them."
+
+ # --- The intent -----------------------------------------------------------------------------
+
+ society_rite_intent:0 "Stand Through It"
+ society_rite_intent_desc:0 "There is one reason to be here and everyone present already knows it."
+
+ # --- The phase ------------------------------------------------------------------------------
+
+ society_rite_phase:0 "The Rite"
+ society_rite_phase_desc:0 "A fortnight. Most of it is waiting, and the waiting is done together on purpose."
+
+ # --- The guest list -------------------------------------------------------------------------
+
+ # TEMPORARY, paired with the control rule at the bottom of 00_society_invite_rules.txt. Remove
+ # both when the guest tab is known to fill.
+ activity_invite_rule_society_debug:0 "DEBUG: Everyone in Court"
+ activity_invite_rule_society_debug_desc:0 "Control group. The whole court with no conditions at all, so that an empty Sworn Members tab beside a full one means the trait test, and two empty tabs mean the rule is not running or the per-candidate veto is eating everybody."
+
+ activity_invite_rule_society_members:0 "Sworn Members"
+ activity_invite_rule_society_members_desc:0 "Members of the society whose allegiance is known to us — our court, our vassals, our blood, and our liege. Nobody else can be added to this list."
+
+ # --- Tooltips -------------------------------------------------------------------------------
+
+ society_rite_requires_membership_tt:0 "Must be a sworn member of the society"
+
+ # --- The approach, from the recruiter's side ------------------------------------------------
+
+ society_offer_oath_interaction:0 "Offer the Oath"
+ society_offer_oath_interaction_desc:0 "Say it out loud to [recipient.GetTitledFirstNameNoTooltip], and find out what [recipient.GetSheHe] does with it."
+
+ # The two toasts are the recruiter's only account of what happened. The interaction is
+ # auto_accept and the decision is taken inside society.0001 by whoever was asked, so without
+ # these the button reports nothing at all — see the notes on both options in the event file.
+ society_oath_accepted_toast:0 "[ROOT.Char.GetTitledFirstName] Is Sworn"
+ society_oath_refused_toast:0 "[ROOT.Char.GetTitledFirstName] Refused"
+
+ # --- The approach, from the other side ------------------------------------------------------
+
+ society.0001.t:0 "A Quiet Word"
+ society.0001.desc:0 "[society_recruiter.GetTitledFirstName] has been in this court long enough that [society_recruiter.GetSheHe] is furniture, and [society_recruiter.GetSheHe] chooses a moment when the room has emptied to stop being furniture.\n\nWhat [society_recruiter.GetSheHe] describes has no name that [society_recruiter.GetSheHe] is willing to say, no holdings, and no head that [society_recruiter.GetSheHe] will admit to. It has members, in more courts than this one, and it has been asking about us.\n\n[society_recruiter.GetSheHe] does not press, which is somehow worse. [society_recruiter.GetSheHe] has already taken the risk simply by finishing the sentence."
+ society.0001.desc_alone:0 "The approach comes, and it comes badly — a note with no hand on it, left where only we would find it, describing a body with no name and asking whether we would care to be counted among it.\n\nThere is nobody to ask about it. Whoever wrote it is not in this court, or is and is not going to say so."
+ society.0001.a:0 "Say yes. Quietly."
+ society.0001.b:0 "Refuse — and remember the face."
+
+ # --- The rite ---------------------------------------------------------------------------------
+ #
+ # Voice: the same as everything else in this set. Nobody here is having an adventure, nothing is
+ # eldritch, and the society is not described from outside — it is described by people who are in
+ # it and who have got used to it. The horror, where there is any, is administrative.
+
+ society.0100.t:0 "The Convening"
+ society.0100.desc:0 "They arrive over three days, in ones and twos, by routes that do not cross. #bold [ROOT.Char.MakeScope.Var('society_rite_attendance').GetValue|0]#! of them in the end, in a room chosen because it has one door and nothing overlooking the yard.\n\nNobody has said what it is for. That is ours to say, and it is the only thing any of them will remember about the fortnight. A rite is expensive and it is dangerous, and a society that gathers for nothing does not get asked to gather twice."
+ society.0100.a:0 "Ask who is not here."
+ society.0100.b:0 "Raise somebody."
+ society.0100.c:0 "Say nothing at all. Let them go home."
+
+ society.0101.t:0 "The Room"
+ society.0101.desc:0 "We were given a night and a door and no other detail, and the room turns out to hold more of the society than we had any idea existed. [host.GetTitledFirstName] is standing where everyone can see [host.GetHerHim].\n\nHalf the room is lit and half of it is not, and everybody here worked out which half they were standing in before they took their coat off."
+ society.0101.desc_alone:0 "We were given a night and a door and no other detail.\n\nHalf the room is lit and half of it is not, and everybody here worked out which half they were standing in before they took their coat off."
+ society.0101.a:0 "Stand in the light."
+ society.0101.b:0 "Stand near the door."
+
+ society.0110.t:0 "The Reckoning"
+ society.0110.desc:0 "[society_absentee.GetTitledFirstName] is not here.\n\n[society_absentee.GetSheHe|U] was asked. [society_absentee.GetSheHe|U] is half a day's ride away and in good health, and [society_absentee.GetSheHe] is not here. Nobody in the room says the name out loud. Every one of them is waiting to see whether we will."
+ society.0110.desc_full:0 "Everyone who was asked came.\n\nThat has not happened before, and the room knows it. There is nobody to make an example of tonight, which leaves only the bare fact of all of us being in one place at one time, and how much that would be worth to somebody outside."
+ society.0110.a:0 "Say the name."
+ society.0110.b:0 "Let it stand."
+ society.0110.c:0 "Let them see that the room is whole."
+
+ society.0111.t:0 "The Elevation"
+ society.0111.desc:0 "[society_candidate.GetTitledFirstName] has spent years doing the parts of this that nobody writes down, and has never once asked to be thanked for it where anyone could hear.\n\nThe room is expecting a name tonight. It is expecting that one. Nothing obliges us to agree with it."
+ society.0111.desc_alone:0 "The room is expecting a name tonight.\n\nThere is nobody in the room but us, which narrows it considerably."
+ society.0111.a:0 "Say [society_candidate.GetFirstNameNoTooltip]."
+ society.0111.b:0 "Say our own name."
+
+ # --- Debug ----------------------------------------------------------------------------------
+ #
+ # society.9001's only output. The number is the point: a zero means the court is empty or all
+ # children, which is a different fault from the guest list being broken.
+ society_debug_sworn_toast:0 "#bold [ROOT.Char.MakeScope.Var('society_debug_sworn').GetValue|0]#! courtiers sworn into the society"
+
+ # --- Opinion --------------------------------------------------------------------------------
+
+ society_refused_the_oath_opinion:0 "I said something to you I should not have"
+ society_struck_from_the_roll_opinion:0 "Said my name in front of all of them"
+ society_elevated_by_opinion:0 "Raised me when it cost you to do it"
+ society_took_the_rite_opinion:0 "Took the night for yourself"

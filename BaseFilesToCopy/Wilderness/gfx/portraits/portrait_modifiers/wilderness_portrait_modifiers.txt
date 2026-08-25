@@ -9,7 +9,9 @@
 # renderer to draw no head and no body. Paradox uses it for exactly one character, the Prophet, in
 # gfx/portraits/portrait_modifiers/99_special.txt, and the recipe below is that block with its
 # character check swapped for the wilderness trait. Following it matters: a portrait that is merely
-# hidden still lights the model, and the accessory lines are what stop a set of floating clothes.
+# hidden still lights the model, and the accessory lines are what stop a set of floating clothes --
+# or, as happened here, a floating pair of eyes and a mouth, which are meshes in their own right and
+# survive no_portrait until eye_accessory and teeth_accessory are cleared too.
 #
 # **Structure is load-bearing.** A portrait_modifiers file is TWO levels deep -- an outer GROUP
 # carrying `usage`, then named modifiers inside it carrying `dna_modifiers` and `weight`. An earlier
@@ -44,6 +46,40 @@ wilderness_hidden_portrait = {
 				gene = complexion
 				template = complexion_no_face
 				value = 1.0
+			}
+
+			# The eyes and the teeth are separate meshes hung off the head rather than part of it,
+			# so no_portrait does not take them with it: what is left is a floating pair of eyes and
+			# a mouth. Vanilla's Prophet block clears all four of these; ours had dropped them.
+			accessory = {
+				mode = modify
+				gene = eye_accessory
+				template = no_eyes
+				value = 0.5
+			}
+			accessory = {
+				mode = modify
+				gene = teeth_accessory
+				template = no_teeth
+				value = 0.5
+			}
+			accessory = {
+				mode = replace
+				gene = eyelashes_accessory
+				template = no_eyelashes
+				value = 0.5
+			}
+			morph = {
+				mode = modify
+				gene = gene_eyebrows_shape
+				template = no_eyebrows
+				value = 0.5
+			}
+			morph = {
+				mode = modify
+				gene = gene_eyebrows_fullness
+				template = no_eyebrows
+				value = 0.5
 			}
 
 			# Accessories are meshes rather than morphs, so they are not covered by no_portrait and

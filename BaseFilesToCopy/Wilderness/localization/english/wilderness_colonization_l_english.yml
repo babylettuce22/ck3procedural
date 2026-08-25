@@ -132,6 +132,13 @@
  building_type_killing_cold:0 "Killing Cold"
  building_type_killing_cold_desc:0 "Winters that are a cause of death rather than a season."
 
+ building_ruins:0 "Ruins"
+ building_ruins_desc:0 "Somebody built here once. Walls to the knee, a road going nowhere, and no story of what became of them."
+ building_ruins_cleared:0 "Clear the Ruins"
+ building_ruins_cleared_desc:0 "Pull down what still stands, cart off the good stone, and find out what the last lot left behind."
+ building_type_ruins:0 "Ruins"
+ building_type_ruins_desc:0 "The remains of a settlement that failed here before yours."
+
  # --- The colony ---------------------------------------------------------------------------
  building_settlement_01:0 "Colony"
  building_settlement_01_desc:0 "A palisade and a few dozen souls. It costs more than it earns and will for years."
@@ -402,26 +409,8 @@ wilderness_colonization.0010.d:0 "I will lead the column myself. No one else has
 
  wilderness_colonization.0012.a:0 "The county stays in our own hands."
  wilderness_colonization.0012.b:0 "Invest [expedition_leader.GetFirstName] as its first lord."
- colonize_keep_direct_control_tt:0 "The new county is yours to hold directly, as part of your personal domain.\nIt takes the name you have entered."
- colonize_grant_to_leader_tt:0 "#V [expedition_leader.GetShortUIName]#! is granted the new county and becomes your colonial vassal.\nIt takes the name you have entered."
-
- # --- Naming the colony ----------------------------------------------------------------------
- # `colony_entered_name` is the only one of these the game ever stores. The text widget on 0012
- # keeps whatever was typed under `colony_chosen_name` on the character, GetLocalizedText reads it
- # back out, and `set_title_name_dynamic` in the event's `after` resolves this key once and bakes
- # the result onto the title. Nothing here is looked up again afterwards, so these strings are
- # free to change without touching colonies that were already named.
- colony_entered_name:0 "[ROOT.Char.GetLocalizedText('colony_chosen_name')]"
-
- # The suggestions under the box. `colony_name_keep` is first, so it is what the box is pre-filled
- # with, and clicking straight through leaves the generated name alone.
- colony_name_keep:0 "[colony.GetName]"
- colony_name_wood:0 "Thornwood"
- colony_name_jungle:0 "Greenmarch"
- colony_name_stone:0 "Stonewatch"
- colony_name_dry:0 "Dryhold"
- colony_name_fen:0 "Fenmarch"
- colony_name_field:0 "Longfield"
+ colonize_keep_direct_control_tt:0 "The new county is yours to hold directly, as part of your personal domain."
+ colonize_grant_to_leader_tt:0 "#V [expedition_leader.GetShortUIName]#! is granted the new county and becomes your colonial vassal."
 
  # --- A colony comes of age ------------------------------------------------------------------
  wilderness_colonization.0020.t:0 "The Seat Is Raised"

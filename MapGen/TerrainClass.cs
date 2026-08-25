@@ -64,6 +64,12 @@ public static class TerrainClassifier
     /// because it is the only way to check the model: a terrain map can look plausible while the
     /// temperatures behind it are nonsense, and <c>debug_climate.png</c> is directly comparable
     /// with any published Koppen map.
+    ///
+    /// <see cref="Climate"/> is also what the ground is *painted* from — it picks the material
+    /// family in <see cref="Emit.TerrainPalette"/> and the tree species in
+    /// <see cref="Emit.TreeWriter"/> — so on an imported map it is the reconciled zone rather than
+    /// the raw one, and the run reports how many pixels that moved. <see cref="Field"/> is
+    /// untouched either way and is where the temperatures and rainfall themselves live.
     /// </summary>
     public sealed class Result
     {
@@ -131,6 +137,13 @@ public static class TerrainClassifier
         var biomeTable = azgaar is null ? null : AzgaarBiome.Table(azgaar.World);
         var biomeRaster = azgaar?.Raster;
         var imported = new int[height];
+        var reconciled = new int[height];
+
+        // Which biome each correction was made under, per row so the loop stays lock-free. Worth
+        // keeping rather than counting only the total: a single over-strict rule and a genuinely
+        // cold climate model produce the same headline number and want opposite fixes.
+        int kinds = Enum.GetValues<AzgaarBiome.Kind>().Length;
+        var reconciledBy = new int[height * kinds];
 
         // Thresholds derived from this map's own distributions.
         float hills = LandPercentile(elevation, landMask, 1.0 - HillShareOfLand);
@@ -191,11 +204,7 @@ public static class TerrainClassifier
 
                 var zone = Koppen.Classify(climate.WarmC[i], climate.ColdC[i], climate.MeanC[i],
                     climate.AnnualMm[i], climate.SummerMm[i], climate.WinterMm[i]);
-                zones[i] = zone;
 
-                // The climate map is left alone deliberately, imported or not: it is what
-                // debug_climate.png is checked against, and the export's biome is a statement about
-                // the vegetation rather than a second opinion on the Koppen class behind it.
                 var biome = AzgaarBiome.Kind.Unknown;
                 if (biomeTable is not null)
                 {
@@ -205,6 +214,26 @@ public static class TerrainClassifier
 
                 bool stated = AzgaarBiome.HasOpinion(biome);
                 if (stated) imported[y]++;
+
+                // The zone travels with the vegetation or the map paints itself wrong.
+                //
+                // It is tempting to leave the climate map alone on the grounds that a biome is a
+                // statement about what grows and not a second opinion on the Koppen class behind it.
+                // That is true of the classification and false of everything downstream: the zone is
+                // what picks the *material family* the ground is painted from, and what trees get
+                // planted on it. Import the vegetation and leave the zone and a forest gets steppe
+                // soil under its canopy, with nothing in either layer individually wrong. Only a
+                // flat contradiction is corrected — see AzgaarBiome.Reconcile, which keeps our
+                // finer answer wherever the two can both be true.
+                var painted = AzgaarBiome.Reconcile(biome, zone);
+                if (painted != zone)
+                {
+                    reconciled[y]++;
+                    reconciledBy[y * kinds + (int)biome]++;
+                }
+                zone = painted;
+
+                zones[i] = zone;
 
                 // Aridity is regional and the export states it better than we infer it, so where it
                 // has spoken it decides outright. Polar is the other way round — it is an altitude
@@ -293,8 +322,9 @@ public static class TerrainClassifier
 
         if (biomeTable is not null)
         {
-            long stated = 0, land = 0;
+            long stated = 0, moved = 0, land = 0;
             foreach (int n in imported) stated += n;
+            foreach (int n in reconciled) moved += n;
             foreach (byte m in landMask) if (m != 0) land++;
 
             // The shortfall is the coastline the two maps draw differently, plus whatever the export
@@ -302,6 +332,29 @@ public static class TerrainClassifier
             // heightmap and the JSON are not the same view, which CheckAlignment has already said.
             Console.WriteLine($"    vegetation follows the export on {stated} of {land} land pixels " +
                               $"({(land == 0 ? 0 : 100.0 * stated / land):F1}%)");
+
+            // The second number is the honest measure of how far the climate model and the export
+            // disagree, and it is worth watching rather than hiding: it should be small, because the
+            // climate is already reanchored on the same temperature and rainfall the export derived
+            // its biomes from. If it climbs, the reanchoring has drifted, not the biome table.
+            Console.WriteLine($"    climate zone pulled to the export's vegetation on {moved} " +
+                              $"({(land == 0 ? 0 : 100.0 * moved / land):F1}%) — the rest already agreed");
+
+            if (moved > 0)
+            {
+                var byKind = new long[kinds];
+                for (int y = 0; y < height; y++)
+                    for (int k = 0; k < kinds; k++) byKind[k] += reconciledBy[y * kinds + k];
+
+                string worst = string.Join(", ", Enumerable.Range(0, kinds)
+                    .Where(k => byKind[k] > 0)
+                    .OrderByDescending(k => byKind[k])
+                    .ThenBy(k => k)
+                    .Take(4)
+                    .Select(k => $"{(AzgaarBiome.Kind)k} {100.0 * byKind[k] / moved:F0}%"));
+
+                Console.WriteLine($"      of those: {worst}");
+            }
         }
 
         return new Result { Terrain = result, Climate = zones, Field = climate };

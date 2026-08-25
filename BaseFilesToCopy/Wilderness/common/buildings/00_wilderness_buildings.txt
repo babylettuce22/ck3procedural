@@ -366,3 +366,74 @@ killing_cold_cleared = {
 		remove_building = killing_cold_cleared
 	}
 }
+
+
+# =====================================================================================
+#  Ruins — a county feature, NOT one of the six obstacles
+# =====================================================================================
+#
+# Somebody built here before, and whatever happened to them is the point. This uses the same
+# pair-and-`next_building` shape as the obstacles above, for the same reason: clearing it becomes
+# a real construction job with a cost, a timer and a queue entry, for free.
+#
+# It deliberately does NOT carry `flag = obstacle`, and that is the whole difference:
+#
+#   * It is not seeded by the generator, so a county that acquires ruins from an event would
+#     otherwise gain a promotion blocker that nothing in the colonisation flow expects. With no
+#     flag, `county_obstacles_cleared_trigger` ignores it and no colony can be soft-locked by it.
+#   * `wilderness_clear_hardest_obstacle_effect` clears obstacles by NAME, from a fixed list of
+#     six. Ruins are not in it, so a pioneer or a council task can never strip the ruins out from
+#     under an event chain that was counting on them still being there.
+#
+# If ruins should ever gate promotion after all, that is one line — add `flag = obstacle` to
+# `ruins` — plus a matching entry in `wilderness_clear_hardest_obstacle_effect`.
+#
+# `ruins_cleared` removes itself on completion like the other cleared halves, so it costs no
+# permanent building slot. Its `on_complete` is the intended hook for the discovery event: what
+# was found under the stones is decided there, not by the building's modifiers.
+
+ruins = {
+	# Placed by script or by event, never built.
+	can_construct = { always = no }
+	can_construct_potential = { always = no }
+
+	county_modifier = {
+		# Peasants will not settle next to it and will not go near it after dark.
+		county_opinion_add = -5
+		development_growth_factor = -0.10
+		travel_danger = 20
+	}
+
+	province_modifier = {
+		# Dressed stone already cut and lying where it fell. Robbing it out is cheaper than
+		# quarrying — which is exactly why nobody has ever bothered to look underneath.
+		build_gold_cost = -0.10
+	}
+
+	next_building = ruins_cleared
+	type_icon = "icon_megalith.dds"
+	ai_value = { base = -100 }
+}
+
+ruins_cleared = {
+	construction_time = standard_construction_time
+	cost = { gold = wilderness_clear_cost_standard }
+
+	can_construct = { wilderness_can_clear_obstacle_trigger = yes }
+	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
+
+	type_icon = "icon_megalith.dds"
+	ai_value = {
+			base = 200
+			modifier = {
+				add = 1000
+				scope:holder ?= { is_colonist_trigger = yes }
+			}
+		}
+	on_complete = {
+		# Reuses the obstacle toast so clearing ruins announces itself the same way everything
+		# else in the holding does. A future discovery event fires from here.
+		wilderness_obstacle_cleared_effect = yes
+		remove_building = ruins_cleared
+	}
+}

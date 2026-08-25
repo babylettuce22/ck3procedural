@@ -487,6 +487,19 @@ public sealed class MapConfig : CustomTypeDescriptor
     [DisplayName("Magic")]
     public bool EnableMagic { get; set; } = true;
 
+    /// <summary>
+    /// Ships the hand-written society prototype — see <see cref="Emit.StaticFileWriter.Societies"/>.
+    ///
+    /// Off by default and hidden, because it is a prototype rather than a feature: one society
+    /// with a placeholder name, joined through an event that has to be fired from the console.
+    /// Nothing in the set is generated and nothing generated depends on it, so switching it on
+    /// changes no other part of a map.
+    /// </summary>
+    [Category("02 World State")]
+    [DisplayName("Societies (prototype)")]
+    [Description("Ship the hand-written society prototype: one membership trait with a rank ladder, one rite only members can see, hold or be invited to, and the approach event that makes the first member. Nothing about it is generated yet — the society has a placeholder name and is joined by firing 'event society.0001' from the console. Off by default. See BaseFilesToCopy/Societies/README.txt.")]
+    public bool EnableSocieties { get; set; } = true;
+
     // =========================================================================
     // 03 Provinces
     // =========================================================================
@@ -1860,6 +1873,44 @@ public sealed class MapConfig : CustomTypeDescriptor
                     "tree. Read again only if no state bound to a title.")]
     [Description("Share of empires actually held by an emperor at the start date. Kept low on purpose — an emperor should be a rarity the map is built around.")]
     public double EmpireTitleShare { get; set; } = 0.15;
+
+    /// <summary>
+    /// Whether realms are grown by simulating centuries of conquest, or handed out by walking the
+    /// de jure tree from the top.
+    ///
+    /// Off, the political map is the de jure map with some titles left unheld — the two are built
+    /// by the same geographic clustering, so every realm border is also a de jure border and no
+    /// duchy is ever split between two kingdoms. On, realms are grown across the county adjacency
+    /// graph by <see cref="MapGen.Formation"/>, which does not know the de jure tree exists, and the
+    /// three shares above stop being quotas: they lean on how hard the simulation consolidates
+    /// rather than deciding how many of each tier come out of it.
+    /// </summary>
+    [Category("11 Rulers")]
+    [DisplayName("Simulate Realm Formation")]
+    [AzgaarIncompat("The export already states its own countries and which of them are vassals, so there is " +
+                    "nothing to simulate — realms come from the states. Read again only if no state bound " +
+                    "to a title, which is the case an export with no countries drawn on it falls into.")]
+    [Description("Grow realms by simulating centuries of conquest, rather than handing out titles down the de jure tree. On, realm borders cut across de jure lines and the tier shares become an influence rather than a quota. Off, de facto and de jure are the same map.")]
+    public bool SimulateFormation { get; set; } = true;
+
+    /// <summary>
+    /// How long the formation simulation runs before the start date, in years. Ticked a reign at a
+    /// time, so this divided by 25 is how many rounds of conquest the map has been through.
+    /// </summary>
+    [Category("11 Rulers")]
+    [DisplayName("Formation Years")]
+    [Description("How many years of conquest to simulate before the start date. Longer runs consolidate further, and give the oldest realms more time to become coherent — but also more time to overreach and come apart.")]
+    public int FormationYears { get; set; } = 600;
+
+    /// <summary>
+    /// How readily simulated realms fragment and collapse. At zero the simulation only ever
+    /// consolidates and the map ends up dominated by a few very large realms; at one, great powers
+    /// rise and shatter repeatedly and the start date catches a world of successor states.
+    /// </summary>
+    [Category("11 Rulers")]
+    [DisplayName("Formation Turbulence")]
+    [Description("How readily simulated realms overreach, fragment, and collapse. Low leaves a few large stable powers; high leaves a crowded map of successor states with long memories. This is the main control on how much history the world has been through.")]
+    public double FormationTurbulence { get; set; } = 0.5;
 
     /// <summary>
     /// Share of *eligible* counties — settled, coastal and well above the tribal line — that start

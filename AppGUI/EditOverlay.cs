@@ -112,6 +112,8 @@ public sealed class ReligionEdit
 {
     public required string Generated { get; set; }
     public string? Name { get; set; }
+    public List<string>? Virtues { get; set; }
+    public List<string>? Sins { get; set; }
 }
 
 public sealed class RulerEdit

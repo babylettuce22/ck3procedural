@@ -161,13 +161,34 @@ public sealed class WorldEdits
         }
     }
 
-    private sealed record ReligionSnapshot(Religion Target, string Name) : ISnapshot
+    /// <summary>
+    /// Virtues and sins are held as copies and put back by mutating in place, because
+    /// <see cref="Religion.Virtues"/> is init-only — the religion hands out the same list object
+    /// for its whole life, and every reader holds that reference.
+    /// </summary>
+    private sealed record ReligionSnapshot(
+        Religion Target, string Name, List<string> Virtues, List<string> Sins) : ISnapshot
     {
-        public bool Differs() => !string.Equals(Target.Name, Name, StringComparison.Ordinal);
-        public void Restore() => Target.Name = Name;
+        public bool Differs()
+            => !string.Equals(Target.Name, Name, StringComparison.Ordinal)
+               || !Target.Virtues.SequenceEqual(Virtues)
+               || !Target.Sins.SequenceEqual(Sins);
+
+        public void Restore()
+        {
+            Target.Name = Name;
+            Target.Virtues.Clear(); Target.Virtues.AddRange(Virtues);
+            Target.Sins.Clear(); Target.Sins.AddRange(Sins);
+        }
 
         public void Capture(EditOverlay into)
-            => into.Religions[Target.Key] = new ReligionEdit { Generated = Name, Name = Target.Name };
+            => into.Religions[Target.Key] = new ReligionEdit
+            {
+                Generated = Name,
+                Name = !string.Equals(Target.Name, Name, StringComparison.Ordinal) ? Target.Name : null,
+                Virtues = !Target.Virtues.SequenceEqual(Virtues) ? [.. Target.Virtues] : null,
+                Sins = !Target.Sins.SequenceEqual(Sins) ? [.. Target.Sins] : null,
+            };
     }
 
     /// <summary>
@@ -363,10 +384,18 @@ public sealed class WorldEdits
         Apply(faith, () => Snapshot(faith), () => faith.Name = checkedName, WorldAspect.Faiths);
     }
 
+    /// <summary>
+    /// A religion's virtues and sins, edited from the faith window because that is the only place a
+    /// religion is reachable. It is shared, so this lands on every faith under it — the same as
+    /// renaming one.
+    /// </summary>
+    public void EditReligion(Religion religion, Action<Religion> change)
+        => Apply(religion, () => Snapshot(religion), () => change(religion), WorldAspect.Faiths);
+
     public void RenameReligion(Religion religion, string name)
     {
         string checkedName = Checked(name);
-        Apply(religion, () => new ReligionSnapshot(religion, religion.Name),
+        Apply(religion, () => Snapshot(religion),
             () => religion.Name = checkedName, WorldAspect.Faiths);
     }
 
@@ -445,6 +474,9 @@ public sealed class WorldEdits
         => new(c, c.Name, c.Color, c.Ethos, c.MartialCustom, c.HeadDetermination, [.. c.Traditions],
                c.CoaGfx, c.BuildingGfx, c.ClothingGfx, c.UnitGfx, new(c.RealmWords));
     private static FaithSnapshot Snapshot(Faith f) => new(f, f.Name, f.Color, f.Icon, [.. f.Tenets]);
+
+    private static ReligionSnapshot Snapshot(Religion r)
+        => new(r, r.Name, [.. r.Virtues], [.. r.Sins]);
 
     /// <summary>
     /// Re-derives every descendant title's colour from this one's current colour.
@@ -576,6 +608,16 @@ public sealed class WorldEdits
         {
             if (!religions.TryGetValue(key, out var religion) || religion.Name != edit.Generated) { missed++; continue; }
             if (edit.Name is { } name && !Try(() => RenameReligion(religion, name))) { missed++; continue; }
+
+            if (edit.Virtues is not null || edit.Sins is not null)
+            {
+                if (!Try(() => EditReligion(religion, r =>
+                {
+                    if (edit.Virtues is { } virtues) { r.Virtues.Clear(); r.Virtues.AddRange(virtues); }
+                    if (edit.Sins is { } sins) { r.Sins.Clear(); r.Sins.AddRange(sins); }
+                }))) { missed++; continue; }
+            }
+
             applied++;
         }
 

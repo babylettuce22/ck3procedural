@@ -1,0 +1,421 @@
+﻿# The rite: a society's members meet, and being a member is the only way to be in the room.
+#
+# =====================================================================================
+#  What this file is a test of
+# =====================================================================================
+#
+# Three separate gates have to hold, and CK3 puts them in three different places. Getting
+# them confused is the failure mode this prototype exists to rule out:
+#
+#   SEEING IT       `is_shown`                        -- not in the planner at all
+#   STARTING IT     `can_start_showing_failures_only` -- there, greyed, with a reason
+#   BEING INVITED   `can_be_activity_guest`           -- the engine's per-candidate veto
+#
+# Plus a fourth that is not a gate but behaves like one: `guest_invite_rules`, which decides
+# which names the planner OFFERS. See 00_society_invite_rules.txt for why that is a builder
+# rather than a filter, and why the veto below is still necessary with it in place.
+#
+# The whole arrangement is modelled on vanilla's activity_witch_ritual, which is the only
+# shipped activity that gates on a trait the way a society has to. Where this departs from it:
+# vanilla shows the witch ritual to anyone in a house carrying the witch_coven house modifier
+# and only demands the trait at the point of starting. Here membership is the gate at every
+# level, because a society is not a house -- there is no outer body that would know about the
+# rite without being in it.
+#
+# =====================================================================================
+#  What a real rite would add, and why it is not here
+# =====================================================================================
+#
+# Nothing here costs the society anything. A generated rite pays out of a currency pool and is
+# gated on rank, and both are one line each in the blocks below:
+#
+#   cost = { gold = ... }   plus a has_variable/var: check on the society's currency
+#   can_start_showing_failures_only = { has_trait_xp = { trait = society_member
+#                                                        track = society_rank value >= 50 } }
+#
+# They are left out on purpose. This file should demonstrate the gating and nothing else, so
+# that when a rite misbehaves later it is obvious whether the membership plumbing or the new
+# economy is at fault.
+
+activity_society_rite = {
+	# ---- Gate one: who knows it exists ----
+	#
+	# A non-member does not see this in the planner. That is the property the whole prototype
+	# exists to demonstrate, and it is one line.
+	#
+	# The rest of the block is the playable-character hygiene every vanilla activity carries:
+	# an unlanded character has no capital to hold it in, and the AI is kept out of it while at
+	# war or mid-conquest so it does not wander off to a rite with an army in the field. The
+	# uncrowned check is vanilla's own rule that an uncrowned AI ruler must fix that before
+	# doing anything else; every vanilla activity repeats it, so this one does too.
+	is_shown = {
+		has_trait = society_member
+
+		is_playable_character = yes
+		highest_held_title_tier > tier_barony
+
+		trigger_if = {
+			limit = { is_ai = yes }
+			is_at_war = no
+			NOT = { has_variable = conqueror }
+			NOT = { has_realm_law = uncrowned }
+		}
+	}
+
+	# ---- Gate two: who may actually begin one ----
+	#
+	# `can_always_plan = no` means the Start button greys rather than the activity vanishing,
+	# which is the right behaviour once a character CAN see it: a member who cannot hold a rite
+	# this year should be told why, not left wondering where the option went.
+	#
+	# The trait is asserted a second time here, wrapped in a custom_tooltip. That looks
+	# redundant against is_shown and is not: is_shown is evaluated when the planner list is
+	# built, and a character can lose the trait between that and the button being pressed.
+	# Vanilla's witch ritual makes the same double check for the same reason.
+	can_always_plan = no
+
+	can_start_showing_failures_only = {
+		is_available_adult = yes
+
+		NOT = { is_activity_type_on_cooldown = activity_society_rite }
+
+		custom_tooltip = {
+			text = society_rite_requires_membership_tt
+			has_trait = society_member
+		}
+	}
+
+	# Ends the activity if the host stops being someone who could hold it. is_valid is checked
+	# against a LIVE activity, so everything in it must be true of a rite already under way --
+	# which is why the trait is here too: a member expelled mid-rite is no longer hosting
+	# anything.
+	is_valid = {
+		NOT = { has_variable = activity_invalidated }
+
+		scope:host = {
+			is_playable_character = yes
+			is_incapable = no
+			has_trait = society_member
+		}
+	}
+
+	on_host_death = {
+		scope:activity = {
+			set_variable = { name = activity_invalidated }
+		}
+	}
+
+	# Vanilla's own invalidation notifications, so the player gets the engine's explanation of
+	# why it stopped before anything of ours.
+	on_invalidated = {
+		invalidation_imprisoned_effect = yes
+		invalidation_incapable_effect = yes
+	}
+
+	###################
+	# WHERE
+	###################
+
+	# The host's own capital and nowhere else. A society meets where its members can be got
+	# indoors without explaining themselves, and restricting it to one province also keeps the
+	# planner's map picker from being a world tour.
+	is_location_valid = {
+		this = scope:host.capital_province
+	}
+
+	province_filter = capital
+	ai_province_filter = capital
+	is_single_location = yes
+	max_province_icons = 3
+
+	province_description = {
+		desc = activity_society_rite_province_desc
+	}
+
+	###################
+	# WHEN
+	###################
+
+	# Three months for guests to travel, then a fortnight of rite. Both copied from the witch
+	# ritual, the closest vanilla analogue in scale -- a private gathering, not a season-long
+	# festival.
+	wait_time_before_start = { months = 3 }
+	max_guest_arrival_delay_time = { months = 5 }
+
+	cooldown = { years = 5 }
+
+	###################
+	# OPTIONS
+	###################
+
+	# Declared and empty, which is what witch_ritual does. There are no options to offer yet --
+	# the rite's purpose is chosen on the night in society.0100 rather than in the planner --
+	# but the planner draws an "Activity Options" header regardless, and the invite rules'
+	# documented contract mentions `scope:special_option` being "not set if the activity has no
+	# special option category". An empty block is the shape vanilla ships for an activity in
+	# exactly this position, so it is not worth being the one that differs.
+	#
+	# This is also where the purpose eventually moves: options are picked before travelling,
+	# which is the better mechanic. See the header of the rite chain in events/society_events.txt.
+	options = {
+	}
+
+	###################
+	# PHASES
+	###################
+
+	# One predefined phase. Every single-location vanilla activity -- hunt, feast, funeral,
+	# pilgrimage, witch ritual -- has exactly one, and the multi-phase shape needs
+	# `is_predefined = no` phases the player assigns locations to, which is a tournament thing
+	# and not this. See the long note in 00_stake_wilderness_activity.txt for what happens if
+	# you reach for it anyway.
+	phases = {
+		society_rite_phase = {
+			is_predefined = yes
+
+			# ---- Both branches run: this block is per attending character ----
+			#
+			# The `this = scope:host` guard was already here for the phase timer, and it is the
+			# proof that the block runs for everybody -- guarding a timer that only the host
+			# could set would otherwise be pointless. So the same hook feeds the host his
+			# convening event and every guest theirs, with no second hook and no guessing about
+			# what root is in the activity-level state hooks.
+			#
+			# The one-day and two-day delays are not cosmetic. Firing on the same tick as the
+			# phase activating means competing with the engine's own arrival and phase-start
+			# notifications for the same frame, and the host's decision in 0100 reads better
+			# after the room has visibly filled than during the shuffle of people coming in.
+			on_phase_active = {
+				if = {
+					limit = { this = scope:host }
+
+					scope:activity = { progress_activity_phase_after = { weeks = 2 } }
+
+					trigger_event = {
+						id = society.0100
+						days = 1
+					}
+				}
+				else = {
+					trigger_event = {
+						id = society.0101
+						days = 2
+					}
+				}
+			}
+		}
+	}
+
+	###################
+	# INTENTS
+	###################
+
+	host_intents = {
+		default = society_rite_intent
+		intents = { society_rite_intent }
+	}
+
+	guest_intents = {
+		default = society_rite_intent
+		intents = { society_rite_intent }
+	}
+
+	###################
+	# GUESTS
+	###################
+
+	max_guests = 12
+
+	# The society cannot be gathered if nobody else has been inducted yet, and a rite of one is
+	# not a rite. `allow_zero_guest_invites = no` turns that into a legible refusal at the
+	# planner instead of an empty room three months later.
+	allow_zero_guest_invites = no
+	open_invite = no
+
+	# One tab, and it is the members tab.
+	#
+	# ---- `rules` and not `defaults`, which is a correction ----
+	#
+	# This block used to read `defaults`, on the reasoning that there is no second list a host
+	# would want and making them find it is friction for nothing. That reasoning was fine and the
+	# key was wrong. The schema in _activity_type.info is explicit about what the two mean:
+	#
+	#   rules    = all rules to pick from
+	#   defaults = "same as above but these rules are enabled by default for the player"
+	#
+	# A rule under `defaults` is already ticked when the planner opens, so every member in reach is
+	# already on the guest list and there is nothing left to do. What looked like "invitation is
+	# broken" was invitation having silently already happened -- the host never chooses, because the
+	# choice was pre-made. Under `rules` the tab arrives unticked and the guest list is built by the
+	# host, which is the behaviour a society rite wants: who you were willing to name to each other
+	# is the interesting decision, and it is the one that was being skipped.
+	#
+	# The info also warns that a rule should be in one list or the other and never both -- defaults
+	# "will be appended to the main rules and insert their priority, so they should not be in the
+	# above list" -- so this is a move, not an addition.
+	guest_invite_rules = {
+		rules = {
+			1 = activity_invite_rule_society_members
+
+			# TEMPORARY control group -- see the note at the bottom of
+			# 00_society_invite_rules.txt. Remove both this line and the rule once the guest tab
+			# is known to fill.
+			2 = activity_invite_rule_society_debug
+		}
+	}
+
+	# ---- Gate three: the per-candidate veto ----
+	#
+	# The engine runs this for every character proposed as a guest, whatever route proposed
+	# them -- the invite rule above, an event, a scripted effect, anything added later. It is
+	# the only one of the three gates that cannot be routed around, which is why the trait test
+	# is repeated here even though the invite rule already filtered on it.
+	#
+	# ---- `is_healthy` and not `is_available`, which is a correction ----
+	#
+	# This block used to ask `is_available = yes`, on the reasoning that the list should not
+	# offer characters who cannot physically come. The engine already enforces that, and more
+	# carefully than we were. Vanilla's own scripted rule of the same name is checked FIRST and
+	# always, in addition to this block, and it reads:
+	#
+	#   is_available_allow_travelling = yes
+	#   OR = {
+	#       is_travelling = no
+	#       AND = { ... already travelling TO THIS ACTIVITY ... }
+	#   }
+	#
+	# Note which trigger it uses, and the carve-out under it: a guest who accepted and set off
+	# must not stop being a valid guest halfway there. A plain `is_available` layered on top
+	# re-imposes exactly the restriction that carve-out exists to lift.
+	#
+	# So availability is answered upstream and this block should not ask it again. What is left
+	# is the three lines vanilla's feast uses -- the closest analogue in the game, a single
+	# location gathering that invites courtiers -- plus the trait.
+	can_be_activity_guest = {
+		has_trait = society_member
+
+		is_adult = yes
+		is_healthy = yes
+		in_diplomatic_range = scope:host
+	}
+
+	# How likely an invited member is to actually turn up. base_activity_modifier and the
+	# shared accept modifier are vanilla's standard pair -- distance, opinion, war, the usual.
+	# The base is generous because a member declining their own society's rite should be the
+	# exception rather than the coin flip a feast invitation is.
+	guest_join_chance = {
+		base = 40
+		base_activity_modifier = yes
+		activity_guest_shared_ai_accept_modifier = yes
+	}
+
+	###################
+	# PAYOUT
+	###################
+
+	# ---- What the rite is FOR ----
+	#
+	# on_complete runs once per attending character, with `this` set to that character -- which
+	# is why the host's extra share needs the guard and the base share does not. That is the
+	# same structure vanilla's witch ritual uses to disburse its host rewards.
+	#
+	# The payout is rank progress rather than gold, and that is the point of the prototype: a
+	# rite is how a member climbs. 8 to everyone who came, 12 more to whoever convened it,
+	# against rungs at 25/50/75/100 -- so attending is worth something, hosting is worth
+	# roughly twice as much, and neither is a shortcut to the top of a society.
+	on_complete = {
+		add_trait_xp = {
+			trait = society_member
+			track = society_rank
+			value = 8
+		}
+
+		if = {
+			limit = { this = scope:host }
+
+			add_trait_xp = {
+				trait = society_member
+				track = society_rank
+				value = 12
+			}
+		}
+	}
+
+	###################
+	# AI
+	###################
+
+	# The AI will hold these, and should: a society whose rites only ever happen when the
+	# player convenes one is a society the player is carrying. Weighted up for the personality
+	# that would have joined in the first place, and off entirely for barons, who have no court
+	# to gather.
+	ai_will_do = {
+		value = 40
+
+		if = {
+			limit = { has_trait = ambitious }
+			add = 20
+		}
+
+		if = {
+			limit = { has_trait = zealous }
+			add = 15
+		}
+
+		if = {
+			limit = { is_at_war = yes }
+			add = -40
+		}
+	}
+
+	ai_check_interval_by_tier = {
+		barony = 0
+		county = 60
+		duchy = 60
+		kingdom = 60
+		empire = 60
+		hegemony = 60
+	}
+
+	ai_will_select_province = {
+		value = 10
+	}
+
+	###################
+	# GRAPHICS
+	###################
+
+	# One unconditional background, and no `environment` or `ambience` line. Both of those are
+	# asset keys that have to exist, and inventing one is a silent failure -- the same rule the
+	# wilderness activities follow. The texture is vanilla's own.
+	# The texture alone is not a complete background. A block without `environment` and `ambience`
+	# loads and then logs two errors per boot --
+	#
+	#   Activity background ambience is empty at ... (activity_society_rite)
+	#   Field 'background' not set at/near 'activity_society_rite'
+	#
+	# -- and the second one reads as though the background were missing entirely, which sends you
+	# looking for a texture path that was fine all along. All three values are vanilla's own and
+	# are taken together from pilgrimage.txt and coronation.txt, which pair exactly this texture
+	# with exactly this environment and ambience.
+	background = {
+		trigger = { always = yes }
+		texture = "gfx/interface/illustrations/event_scenes/temple.dds"
+		environment = "environment_event_temple"
+		ambience = "event:/SFX/Events/Backgrounds/temple_generic"
+	}
+
+	window_characters = {
+		host = {
+			camera = camera_body
+
+			effect = {
+				scope:host = { add_to_list = characters }
+			}
+
+			scripted_animation = {
+				animation = personality_callous
+			}
+		}
+	}
+}

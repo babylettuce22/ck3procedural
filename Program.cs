@@ -183,6 +183,34 @@ public static class Program
                     options.WriteHistory = false;
                     break;
 
+                // Hands out titles down the de jure tree instead of simulating centuries of
+                // conquest first. Here as well as on the config object because the two produce
+                // visibly different worlds from one heightmap, and comparing them from a terminal
+                // is the only cheap way to see what the simulation actually changed.
+                case "--no-formation":
+                    cfg.SimulateFormation = false;
+                    break;
+
+                // The two dials on that simulation. Exposed for the same reason: the only way to
+                // tell whether a world is fragmented because of the terrain or because of the
+                // settings is to hold one fixed and move the other.
+                case "--formation-years" when i + 1 < args.Length:
+                    cfg.FormationYears = int.Parse(args[++i]);
+                    break;
+
+                case "--formation-turbulence" when i + 1 < args.Length:
+                    cfg.FormationTurbulence = double.Parse(
+                        args[++i], System.Globalization.CultureInfo.InvariantCulture);
+                    break;
+
+                // Ships the hand-written society prototype. Here as well as on the config object
+                // because the whole point of it is to be looked at in a running game, and the
+                // headless loop is how a world gets built to look at it in. See
+                // BaseFilesToCopy/Societies/README.txt.
+                case "--societies":
+                    cfg.EnableSocieties = true;
+                    break;
+
                 // Ship only heightmap.png and let -mapeditor's repack build the packed/indirection
                 // pair, which is what both the wiki and ck2rpg's tutorial prescribe.
                 case "--no-packed":
@@ -386,6 +414,10 @@ public static class Program
             if (cfg.EnableFantasyEthnicities && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly)
             {
                 sets.Add(Ck3MapGen.Emit.StaticFileWriter.Fantasy);
+            }
+            if (cfg.EnableSocieties)
+            {
+                sets.Add(Ck3MapGen.Emit.StaticFileWriter.Societies);
             }
 
             // Using UtcNow as runStarted ensures all previously existing files in the target

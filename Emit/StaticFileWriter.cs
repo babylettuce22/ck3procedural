@@ -36,6 +36,17 @@ public static class StaticFileWriter
     public const string Fantasy = "Fantasy";
 
     /// <summary>
+    /// The hand-written society prototype: one membership trait with a rank track, one rite
+    /// gated on it, and the approach event that puts the first member in the world.
+    ///
+    /// Gated, and off by default, because none of it is generated yet — the keys are
+    /// <c>society_*</c> rather than <c>gen_*</c> and no emitter writes or reads them. It ships
+    /// so the gating can be exercised in a real game ahead of the generator that will replace
+    /// it, and it references nothing a seed can change, so it is safe on any map.
+    /// </summary>
+    public const string Societies = "Societies";
+
+    /// <summary>
     /// Files that document or configure a set rather than belong in a mod.
     /// </summary>
     private static readonly string[] NotModContent = ["README.txt", "ignore.txt", ".ignore.txt"];

@@ -422,6 +422,13 @@ public sealed class PrehistoryMap
                     continue;
                 }
 
+                // Belt and braces, matching the sweep at the end of this method. Nothing should
+                // reach here twice now that TopLiegeCounty climbs by holder — a county is a member
+                // of exactly one realm and is never also another realm's key — but a second parent
+                // for one county does not fail, it writes two characters under one id and CK3 loads
+                // whichever it read last.
+                if (map.DeceasedParents.ContainsKey(kinCounty)) continue;
+
                 var kinCulture = cultures.For(kinCounty);
                 var kinFaith = faiths.For(kinCounty);
 
@@ -1148,17 +1155,44 @@ public sealed class PrehistoryMap
         }
     }
 
+    /// <summary>
+    /// The county of the independent ruler at the top of this county's chain of allegiance.
+    ///
+    /// <b>Climbs by holder, not only by title.</b> <see cref="RealmMap.Liege"/> records the
+    /// relationship on a ruler's *primary* title, so a ruler's secondary titles have no liege entry
+    /// of their own even when that ruler is somebody's vassal. Walking title-to-liege alone
+    /// therefore stops dead at the first such title and reports a mid-tier vassal as independent:
+    /// measured on the Fleunland export, four counties held a duchy under their own kingdom and had
+    /// their sub-vassals' walks terminate on the duchy, so four dukes came back as top lieges while
+    /// their own walks correctly reported the emperor above them.
+    ///
+    /// That inconsistency is not cosmetic. Everything that groups the world into realms reads this,
+    /// and a county that is a group *key* by one route and a group *member* by another is counted
+    /// twice — which is how two different dead parents came to be written under one character id.
+    /// So each round climbs the title chain, and then re-enters at the holder it lands on rather
+    /// than stopping there, until a ruler is reached who is genuinely above no one but themselves.
+    ///
+    /// Cycle-guarded: a liege loop is something the realm layer can produce and an unguarded walk
+    /// would hang on it rather than fail.
+    /// </summary>
     private static Title TopLiegeCounty(Title county, RealmMap realms)
     {
-        var primary = HistoryWriter.Primary(county, realms);
-        var current = primary;
+        var current = county;
+        var seen = new HashSet<Title>();
 
-        while (realms.Liege.TryGetValue(current, out var liege))
+        while (seen.Add(current))
         {
-            current = liege;
+            var top = HistoryWriter.Primary(current, realms);
+            while (realms.Liege.TryGetValue(top, out var liege)) top = liege;
+
+            // No holder above, or the chain came back to the ruler it started from: this is the top.
+            if (!realms.HolderCounty.TryGetValue(top, out var holder)
+                || ReferenceEquals(holder, current)) return current;
+
+            current = holder;
         }
 
-        return realms.HolderCounty.TryGetValue(current, out var topHolder) ? topHolder : county;
+        return current;
     }
 
     private static void AddRivalry(PrehistoryMap map, Title a, Title b, string date)
