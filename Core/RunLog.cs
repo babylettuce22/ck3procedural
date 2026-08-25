@@ -139,7 +139,11 @@ public static class RunLog
         return JsonSerializer.Serialize(values, new JsonSerializerOptions { WriteIndented = true });
     }
 
-    private static string ToolVersion()
+    /// <summary>
+    /// The build this mod came out of. Public because the debug panel reports it inside the game,
+    /// and a version printed in two places that disagree is worse than one printed in neither.
+    /// </summary>
+    public static string ToolVersion()
     {
         var assembly = typeof(RunLog).Assembly;
         string? informational = assembly

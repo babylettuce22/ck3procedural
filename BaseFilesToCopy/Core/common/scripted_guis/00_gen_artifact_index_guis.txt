@@ -55,13 +55,29 @@ gen_artifact_index_gather = {
 	effect = {
 		clear_global_variable_list = gen_artifact_index_list
 
+		# Two passes rather than one, purely for order.
+		#
+		# `every_artifact` returns the engine's own order, which is neither sorted nor stable enough
+		# to reason about, so a single pass produces a list whose sequence says nothing. Appending
+		# the illustrious band first and the famed band second groups them without the GUI needing
+		# to sort anything -- a datamodel draws its list in list order, so the script side is the
+		# only place the question can be answered.
+		#
+		# Order inside a band is still the engine's. That is fine: the bands are the distinction a
+		# reader is making, and there is no second key worth ranking on within one.
 		every_artifact = {
-			limit = {
-				OR = {
-					rarity = famed
-					rarity = illustrious
-				}
+			limit = { rarity = illustrious }
+
+			save_scope_as = gen_indexed_artifact
+
+			add_to_global_variable_list = {
+				name = gen_artifact_index_list
+				target = scope:gen_indexed_artifact
 			}
+		}
+
+		every_artifact = {
+			limit = { rarity = famed }
 
 			save_scope_as = gen_indexed_artifact
 

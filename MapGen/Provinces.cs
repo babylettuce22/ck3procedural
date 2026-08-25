@@ -203,6 +203,7 @@ public static class Provinces
             Console.WriteLine($"  province borders sit on relief " +
                               $"{borderRelief / borderPairs / (allRelief / allPairs):F2}x the land average");
 
+        ReportEdge(map);
         ReportSizes(map, cfg);
         return;
 
@@ -218,6 +219,41 @@ public static class Provinces
             borderRelief += relief;
             borderPairs++;
         }
+    }
+
+    /// <summary>
+    /// How many provinces run off the side of the map, split land from water.
+    ///
+    /// This is the number <see cref="MapConfig.OceanBorder"/> exists to move: forcing a ring of
+    /// ocean around the edge drives the land count to zero by drowning whatever reached it. With
+    /// the ring off, this line is the only way to tell whether a seed actually has land at the
+    /// boundary, and how much — a handful of clipped provinces is a different proposition from a
+    /// continent running off the pole.
+    /// </summary>
+    private static void ReportEdge(ProvinceMap map)
+    {
+        var land = new HashSet<int>();
+        var water = new HashSet<int>();
+
+        void Note(int cell)
+        {
+            int label = map.Label[cell];
+            (map.Seeds[label].IsLand ? land : water).Add(label);
+        }
+
+        for (int x = 0; x < map.Width; x++)
+        {
+            Note(x);
+            Note((map.Height - 1) * map.Width + x);
+        }
+
+        for (int y = 0; y < map.Height; y++)
+        {
+            Note(y * map.Width);
+            Note(y * map.Width + map.Width - 1);
+        }
+
+        Console.WriteLine($"  provinces touching the map edge: {land.Count} land, {water.Count} water");
     }
 
     private static void ReportSizes(ProvinceMap map, MapConfig cfg)

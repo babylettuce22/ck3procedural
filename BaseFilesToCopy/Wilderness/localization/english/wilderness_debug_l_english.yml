@@ -15,3 +15,10 @@
  colony_debug_domicile_unplaced:0 "DEBUG — A domicile exists but stands nowhere. It is the placement that is failing, not the creation."
  colony_debug_domicile_placed:0 "DEBUG — A domicile exists and is placed. It is the HUD that is not offering it, so the fix is a button of our own."
  colony_debug_camp_setup_ran:0 "DEBUG — Camp setup ran: the domicile was placed and the main tent checked."
+
+ # The disabled-holding probe. Same rule as above: each string names the branch that produced it,
+ # and says what follows from it, because the point of the readout is to choose between two fixes.
+ colony_debug_disable_none:0 "DEBUG — No held colony has a disabled building, so there is nothing to measure. Get above your [domain_limit|E] and colonise, then press this again within the year."
+ colony_debug_disable_gate_holds:0 "DEBUG — Holding disabled, and BOTH obstacle tests still see the blockers. The promotion gate holds; what is lost is the maluses, and only until the holding re-enables."
+ colony_debug_disable_gate_leaks:0 "DEBUG — Holding disabled. #V has_building#! sees the blockers but the obstacle #V flag#! count reads zero. The promotion gate LEAKS — this colony can be promoted with its obstacles still standing."
+ colony_debug_disable_all_blind:0 "DEBUG — Holding disabled, and NEITHER obstacle test sees a blocker. Open the holding view before believing it: greyed-out blockers there mean both tests are blind; an empty holding means this colony had nothing to say."

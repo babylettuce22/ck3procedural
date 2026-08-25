@@ -1,0 +1,98 @@
+﻿# Keeps the wilderness dummy out of reach of landless adventurers.
+#
+# ---- What this is ----
+#
+# A single-object override of vanilla's `ep3_laamp_diplo_range_trigger` from
+# common/scripted_triggers/07_ep3_triggers.txt. Script is last-wins, so redefining the one trigger
+# here replaces vanilla's without touching the file it lives in. The filename sorts last so the
+# override cannot lose to another mod's copy of the same directory.
+#
+# Everything below is vanilla's own definition verbatim, with ONE line added.
+#
+# ---- Why this trigger ----
+#
+# A landless adventurer has no diplomatic range in the ordinary sense, so vanilla gates every
+# adventurer-to-landed interaction on this trigger instead. Its own comment at each call site reads
+# "Has to be used instead of diplo range checks in laamp to landed interactions", and every call
+# site wraps it in `has_government = landless_adventurer_government` — so nothing but an adventurer
+# ever sees the line we add.
+#
+# That makes it the chokepoint for the whole class of problem. An adventurer camped in or travelling
+# through wilderness could otherwise buy counties off the King of the Wilderness
+# (purchase_land_interaction), ask it to sponsor an invasion, seize its realm, procure an estate from
+# it, add it to their contact list, negotiate a settlement with it, or run a murder, abduct,
+# befriend, seduce, sway or court scheme against it. None of those are checks vanilla knows to fail:
+# to the base game the dummy is an ordinary landed king, and the two land interactions in that list
+# do not even test `is_incapable`. Sixteen interactions across six files, one object.
+#
+# ---- What this does NOT cover ----
+#
+# Ordinary landed rulers reach each other through real diplomatic range, which this trigger has
+# nothing to do with. Against them the dummy is held off by the `incapable` trait it is given at
+# game start (wilderness_setup_on_start_effect), which fails the `is_available*` test most
+# interactions put on their target, by the casus belli triggers for war, and by
+# `county_can_be_claimed_trigger` for its land.
+#
+# ---- Where the added line sits ----
+#
+# Inside the custom_description rather than beside it, so a failure shows vanilla's own
+# "out of reach" tooltip rather than a blank one. The wilderness being out of reach is exactly what
+# we mean by it.
+#
+# ---- The four ck3-tiger warnings this adds ----
+#
+# `ep3_laamp_diplo_range_trigger expects scope:actor/scope:recipient to be set`, pointing at
+# common/important_actions/contract_actions.txt lines 345 and 359. That is vanilla calling its own
+# trigger from a place where neither scope exists, and it fires only because the definition now
+# lives in the mod — tiger does not check vanilla against vanilla. It is not caused by the added
+# line, and it says nothing about this file. Do not "fix" it by dropping the subject/object lines:
+# they are what makes the tooltip name the two characters everywhere else.
+
+ep3_laamp_diplo_range_trigger = {
+	custom_description = {
+		text = ep3_laamp_diplo_range_trigger_tt
+		subject = scope:actor
+		object = scope:recipient
+
+		# THE ONE ADDED LINE. The dummy holds land the way a wall holds a field in: there is nobody
+		# there to bargain with, threaten, court or murder.
+		NOT = { $TARGET$ = { has_trait = wilderness } }
+
+		trigger_if = {
+			limit = { exists = $LAAMP$.domicile.domicile_location }
+			trigger_if = {
+				limit = {
+					NOT = { exists = $TARGET$.capital_province }
+					exists = $TARGET$.host.capital_province
+				}
+				$TARGET$.host.capital_province ?= {
+					squared_distance = {
+						target = $LAAMP$.domicile.domicile_location
+						value < define:NTaskContract|ADVENTURER_DISTANCE_RESTRICTION
+					}
+				}
+			}
+			trigger_else_if = {
+				limit = {
+					NOT = { exists = $TARGET$.capital_province }
+					exists = $TARGET$.location
+				}
+				$TARGET$.location ?= {
+					squared_distance = {
+						target = $LAAMP$.domicile.domicile_location
+						value < define:NTaskContract|ADVENTURER_DISTANCE_RESTRICTION
+					}
+				}
+			}
+			trigger_else = {
+				$TARGET$.capital_province ?= {
+					squared_distance = {
+						target = $LAAMP$.domicile.domicile_location
+						value < define:NTaskContract|ADVENTURER_DISTANCE_RESTRICTION
+					}
+				}
+			}
+		}
+		trigger_else = { always = no }
+	}
+}

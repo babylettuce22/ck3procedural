@@ -104,9 +104,14 @@ public sealed class ArtifactMap
     public IEnumerable<GeneratedArtifact> Signatures
         => AllArtifacts.Where(a => a.ModifierFields is not null);
 
+    /// <param name="worldCenters">Optional, and optional in the strong sense: a world may have no
+    /// wonders at all, now or because a later map generates them some other way. Placement reads it
+    /// for weighting only and never for structure.</param>
+    /// <param name="development">Optional for the same reason.</param>
     public static ArtifactMap Build(
                 List<Title> counties, CultureMap cultures, FaithMap faiths,
                 RealmMap realms, WildernessMap wilderness, PrehistoryMap prehistory,
+                WorldCenterMap? worldCenters, Dictionary<Title, int>? development,
                 MapConfig cfg, Rng rng)
     {
         var map = new ArtifactMap();
@@ -136,8 +141,14 @@ public sealed class ArtifactMap
         foreach (var (county, house) in prehistory.CharacterHouseMap)
             houseSeat.TryAdd(house, county);
 
-        // Draw a fated bearer among settled counties only
-        var fatedCounty = rng.Pick(settledCounties);
+        // Where a famous thing would plausibly be, and how strongly.
+        var (prominence, sacred) = Prominence(settledCounties, worldCenters, faiths, development);
+
+        // The fated bearer, drawn against that rather than uniformly. Weighted rather than
+        // forced: the great relic of the age usually sits somewhere the world already cares
+        // about, and occasionally turns up in a county nobody has heard of, which is the more
+        // interesting outcome precisely because it is not the rule.
+        var fatedCounty = WeightedPick(settledCounties, prominence, rng);
 
         // Every name this world has handed out. Two artifacts sharing a name is wrong on any of
         // them and absurd on a template that declares `unique = yes`.
@@ -149,7 +160,15 @@ public sealed class ArtifactMap
             var faith = faiths.For(county);
             var primaryTitle = HistoryWriter.Primary(county, realms);
 
-            var countyRng = new Rng(county.Index ^ 0x7E1A);
+            // Seeded from the county AND the world.
+            //
+            // The county half is the original point of these: a county's treasure should not move
+            // because something unrelated changed elsewhere on the map. But the world half was
+            // missing, and without it county 159 rolled the same stream in every world ever
+            // generated — which is why the same legendary names kept coming back run after run, no
+            // matter how wide the name banks got. Wider banks cannot help a generator that is
+            // asking them the same question every time.
+            var countyRng = new Rng(cfg.Seed ^ county.Index ^ 0x7E1A);
             var (firstName, _) = HistoryWriter.RulerNames(county, culture);
 
             var list = new List<GeneratedArtifact>();
@@ -166,6 +185,13 @@ public sealed class ArtifactMap
             else if (isDuke) targetCount = roll > 70 ? 2 : (roll > 15 ? 1 : 0);
             else targetCount = roll > 60 ? 1 : 0;
 
+            int standing = prominence.GetValueOrDefault(county);
+
+            // A wonder or a great shrine draws treasure the way it draws pilgrims: things get
+            // given to it, left at it, and not moved again. One extra piece, not a hoard — the
+            // tier of the ruler still decides how much of a treasury there is.
+            if (standing >= WonderScore) targetCount++;
+
             if (county == fatedCounty && targetCount == 0)
             {
                 targetCount = 1;
@@ -173,15 +199,24 @@ public sealed class ArtifactMap
 
             for (int i = 0; i < targetCount; i++)
             {
-                var artRng = new Rng((int)(county.Index ^ 0x3D7F ^ (i * 7177)));
-                bool isLegendary = (county == fatedCounty && i == 0) || (artRng.Int(0, 100) < 2);
+                var artRng = new Rng((int)(cfg.Seed ^ county.Index ^ 0x3D7F ^ (i * 7177)));
+                // Two ways to be legendary: being the world's fated bearer, or rolling it.
+                //
+                // The roll is scaled by standing for the same reason the fated draw is weighted.
+                // It used to be a flat 2%, which on a large map produces more legendaries than the
+                // fated one does — so the single relic this generator placed deliberately was
+                // outnumbered by ones scattered at random, and the geography never showed up in the
+                // tier anybody looks at. A plain county is now well under one percent; a county
+                // with a wonder and wealth behind it is nearer ten.
+                bool isLegendary = (county == fatedCounty && i == 0)
+                                || artRng.Int(0, 999) < 6 + standing * 9;
 
                 // Rarity first, then the numbers that produce it. The reverse — which is what this
                 // used to do — leaves the tier to chance, and the tier is the part of an artifact
                 // the player reacts to.
                 var rarity = isLegendary
                     ? ArtifactRarity.Illustrious
-                    : RarityFor(primaryTitle.Tier, i, artRng);
+                    : RarityFor(primaryTitle.Tier, i, standing, artRng);
 
                 var (quality, wealth) = Roll(rarity, artRng);
 
@@ -192,7 +227,8 @@ public sealed class ArtifactMap
                 }
                 else
                 {
-                    category = DrawCategory(headline: i == 0, artRng);
+                    category = DrawCategory(
+                        headline: i == 0, holy: sacred.Contains(county), artRng);
                 }
 
                 var look = Compose(
@@ -273,6 +309,107 @@ public sealed class ArtifactMap
     }
 
     // ---------------------------------------------------------------------------------------
+    // Placement
+    //
+    // Artifacts used to be drawn per county in isolation, and the world's one legendary was put
+    // wherever `rng.Pick` landed. That produces treasure with no geography: nothing about where a
+    // relic is says anything about the world, and the Chronicle of Treasures — which lists a dozen
+    // of them side by side — reads as a loot table rather than as a place.
+    //
+    // What follows is a weighting, never a rule. Every input is optional and every term is
+    // additive, so a world with no wonders, no holy sites and no development data scores every
+    // county zero and the draws below reduce exactly to the uniform ones they replace. That
+    // matters beyond tidiness: wonders are not guaranteed to exist at world start, now or later.
+    // ---------------------------------------------------------------------------------------
+
+    private const int WonderScore = 6;
+    private const int HolySiteScore = 3;
+    private const int PrincipalSiteBonus = 2;
+
+    /// <summary>
+    /// How much of a reason each county gives for something famous to be there, and which counties
+    /// are sacred ground.
+    /// </summary>
+    private static (Dictionary<Title, int> Score, HashSet<Title> Sacred) Prominence(
+        List<Title> counties, WorldCenterMap? worldCenters, FaithMap faiths,
+        Dictionary<Title, int>? development)
+    {
+        var score = new Dictionary<Title, int>();
+        var sacred = new HashSet<Title>();
+
+        void Add(Title county, int amount)
+            => score[county] = score.GetValueOrDefault(county) + amount;
+
+        // A wonder is the strongest single claim a county can have, and the only one that can push
+        // an ordinary count's holdings past his station on its own.
+        if (worldCenters is not null)
+        {
+            foreach (var center in worldCenters.Centers)
+                Add(center.County, WonderScore);
+        }
+
+        // Holy sites, but only each faith's PRINCIPAL one — the seat its head sits at.
+        //
+        // Every site scored at first, and that was wrong by a factor of five: HolySitesPerFaith is
+        // 5 by default, so a measured world had 60 holy-site counties against 156 rulers. Scoring
+        // them all made prominence the common case, which is the one thing it cannot be and still
+        // mean anything. Only the principal sites are scarce — one per faith, about a dozen.
+        //
+        // Minor sites still steer what KIND of thing a county holds, below. Being worth a relic and
+        // being worth a famous relic are different claims.
+        foreach (var faith in faiths.Faiths)
+        {
+            for (int i = 0; i < faith.HolySites.Count; i++)
+            {
+                var county = faith.HolySites[i].County;
+                if (i == 0) Add(county, HolySiteScore + PrincipalSiteBonus);
+                sacred.Add(county);
+            }
+        }
+
+        // And wealth — but only genuinely exceptional wealth. The thresholds here were 6/10/15
+        // against a world whose development runs median 9 and p90 20, so half the map scored and
+        // the five wonder counties were drowned out by it. Measure before picking a number.
+        if (development is not null)
+        {
+            foreach (var county in counties)
+            {
+                int dev = development.GetValueOrDefault(county);
+                if (dev >= 30) Add(county, 3);
+                else if (dev >= 20) Add(county, 2);
+            }
+        }
+
+        return (score, sacred);
+    }
+
+    /// <summary>
+    /// A county drawn in proportion to its standing, with every county keeping a floor of one.
+    ///
+    /// The floor is what keeps this a weighting. With nothing prominent anywhere every weight is
+    /// 1 and this is a uniform draw; with a wonder somewhere that county is seven times likelier
+    /// than a plain one and still not certain.
+    /// </summary>
+    private static Title WeightedPick(
+        List<Title> counties, Dictionary<Title, int> prominence, Rng rng)
+    {
+        int total = 0;
+        foreach (var county in counties) total += 1 + prominence.GetValueOrDefault(county);
+
+        int roll = rng.Int(0, total - 1);
+
+        foreach (var county in counties)
+        {
+            roll -= 1 + prominence.GetValueOrDefault(county);
+            if (roll < 0) return county;
+        }
+
+        // Unreachable while the weights above are positive. Answering with a real county rather
+        // than throwing keeps a rounding mistake from taking the whole generation down.
+        return counties[^1];
+    }
+
+    // ---------------------------------------------------------------------------------------
     // Rarity
     // ---------------------------------------------------------------------------------------
 
@@ -283,7 +420,7 @@ public sealed class ArtifactMap
     /// the strongbox is the rest of the strongbox. Without the step an emperor's four items were
     /// four equals, which is not how a treasury reads.
     /// </summary>
-    private static ArtifactRarity RarityFor(string tier, int index, Rng rng)
+    private static ArtifactRarity RarityFor(string tier, int index, int standing, Rng rng)
     {
         var top = tier switch
         {
@@ -297,7 +434,14 @@ public sealed class ArtifactMap
 
         // One in twelve is better than its owner's station: a poor count with his
         // great-grandfather's sword is the reason artifacts are worth stealing.
-        if (rng.Int(0, 11) == 0) band++;
+        //
+        // Standing shortens those odds rather than removing them — at a wonder or a principal
+        // shrine it is closer to one in four. This is the lever that lets a minor lord holding
+        // famous ground keep something out of proportion to his rank, which is a far better
+        // reason for a famed relic to be somewhere than "the dice said so".
+        int odds = Math.Max(4, 12 - Math.Min(standing, 8));
+
+        if (rng.Int(0, odds - 1) == 0) band++;
 
         return (ArtifactRarity)Math.Clamp(band, (int)ArtifactRarity.Common, (int)ArtifactRarity.Famed);
     }
@@ -312,9 +456,19 @@ public sealed class ArtifactMap
     /// without removing the scholarship, and leans harder for the first piece a ruler owns, which
     /// is the one the chronicle will name.
     /// </summary>
-    private static ArtifactCategory DrawCategory(bool headline, Rng rng)
+    private static ArtifactCategory DrawCategory(bool headline, bool holy, Rng rng)
     {
         int roll = rng.Int(0, 99);
+
+        // Sacred ground keeps scripture. Not exclusively — a shrine county still has lords with
+        // swords — but the relic of a holy site being a psalter rather than a mace is the whole
+        // reason to know the site is there.
+        //
+        // Held at forty rather than the fifty-five it started on. Principal shrines also carry the
+        // most standing, so they win most of the legendaries; at fifty-five a measured world's
+        // three greatest treasures were three books, which is coherent and dull. The bias should
+        // colour a shrine's holdings, not monopolise the top of the world.
+        if (holy && roll < 40) return ArtifactCategory.SacredScriptures;
 
         if (headline)
         {
@@ -548,17 +702,17 @@ public sealed class ArtifactMap
         switch (category)
         {
             case ArtifactCategory.SovereignJewels:
-                return Sovereign(legendary, primaryTitle, firstName, taken, rng);
+                return Sovereign(legendary, culture, primaryTitle, firstName, taken, rng);
 
             case ArtifactCategory.MartialRelics:
                 return Martial(legendary, culture, primaryTitle, firstName, taken, rng);
 
             case ArtifactCategory.SacredScriptures:
-                return Sacred(legendary, faith, primaryTitle, firstName, taken, rng);
+                return Sacred(legendary, culture, faith, primaryTitle, firstName, taken, rng);
 
             case ArtifactCategory.ScholarlyWorks:
             default:
-                return Scholarly(legendary, primaryTitle, firstName, taken, rng);
+                return Scholarly(legendary, culture, primaryTitle, firstName, taken, rng);
         }
     }
 
@@ -580,6 +734,132 @@ public sealed class ArtifactMap
     {
         var free = bank.Where(n => !taken.Contains(n)).ToList();
         return rng.Pick(free.Count > 0 ? free : bank);
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Legendary names
+    //
+    // The world registry made names unique WITHIN a world; it could do nothing about the same five
+    // strings turning up in world after world, because the legendary banks were five fixed English
+    // literals per weapon kind and a world only has three to five legendaries to spend them on.
+    // "The Nightfall Dagger" was arriving in most runs.
+    //
+    // Three sources instead, mixed per draw:
+    //
+    //   Compounds, built from parts. This is how the names people actually remember are made —
+    //   Oathkeeper, Widow's Wail, Heartsbane, Orphan-Maker, Longclaw, Brightroar — and a few dozen
+    //   parts multiply into thousands of results rather than adding five.
+    //
+    //   Epithet-and-noun, for the register compounds cannot reach: "The Patient Edge" is a
+    //   different kind of name from "Frostfang" and a world wants both.
+    //
+    //   And the culture's own invented language, which is the only source that is *structurally*
+    //   incapable of repeating across worlds, because every world invents its phonology from
+    //   scratch. Weighted heavily for that reason. It is the same generator the wonders and the
+    //   faiths name themselves from.
+    //
+    // Concrete and abstract parts are kept apart on purpose. Free crossing produces "Oathtooth"
+    // and "Bonemercy" at the same rate as the good ones, and a name bank that has to be read
+    // before it can be trusted is not doing its job.
+    // ---------------------------------------------------------------------------------------
+
+    private static readonly List<string> ConcreteRoots =
+    [
+        "Iron", "Blood", "Bone", "Frost", "Ember", "Star", "Moon", "Wolf", "Raven", "Thorn",
+        "Storm", "Night", "Shadow", "Sun", "Serpent", "Briar", "Salt", "Stone", "Sea", "Winter",
+    ];
+
+    private static readonly List<string> ConcreteTails =
+    [
+        "fang", "claw", "biter", "brand", "thorn", "reaver", "render", "drinker", "tooth", "hook",
+    ];
+
+    private static readonly List<string> AbstractRoots =
+    [
+        "Oath", "Sorrow", "Wrath", "Doom", "Silence", "Dawn", "Dusk", "Mercy", "Ruin", "Vigil",
+        "Memory", "Exile", "Judgement", "Reckoning", "Lament", "Fury", "Patience", "Hunger",
+        "Grief", "Truth",
+    ];
+
+    private static readonly List<string> AbstractTails =
+    [
+        "keeper", "bane", "breaker", "song", "cry", "wail", "call", "light", "fall", "ward",
+        "seeker", "bringer",
+    ];
+
+    private static readonly List<string> Epithets =
+    [
+        "Silent", "Patient", "Unbroken", "Last", "First", "Sleepless", "Nameless", "Hollow",
+        "Weeping", "Faithful", "Unyielding", "Forgotten", "Crowned", "Bitter", "Radiant", "Quiet",
+        "Waking", "Drowned", "Kindly", "Wintering",
+    ];
+
+    /// <summary>A compound in the Oathkeeper / Frostfang mould, kept to one register.</summary>
+    private static string Compound(Rng rng)
+    {
+        var (root, tail) = rng.Int(0, 1) == 0
+            ? (rng.Pick(ConcreteRoots), rng.Pick(ConcreteTails))
+            : (rng.Pick(AbstractRoots), rng.Pick(AbstractTails));
+
+        // Elide a doubled letter at the join: Serpent + thorn is Serpenthorn, not Serpentthorn.
+        // English compounds do this and the eye notices when they do not.
+        if (char.ToLowerInvariant(root[^1]) == tail[0]) tail = tail[1..];
+
+        return root + tail;
+    }
+
+    /// <summary>
+    /// A legendary name, from whichever source this draw calls for.
+    ///
+    /// <paramref name="nouns"/> is what the thing IS in the categories that need saying — an Edge, a
+    /// Codex, a Diadem. Weapons often do without one entirely, which is why the bare forms are here:
+    /// Ice and Blackfyre do not say "sword".
+    /// </summary>
+    /// <param name="bare">Whether the name may stand with no noun at all. True only for weapons:
+    /// Ice and Blackfyre never say "sword", but a crown that does not say crown is just a word, and
+    /// an invented word on its own is the weightless case — "Sceeprardto" as the name of a
+    /// legendary diadem tells a reader nothing.</param>
+    /// <param name="compounds">Whether Frostfang-style compounds fit. They belong to arms and, at a
+    /// stretch, regalia. On scripture they produce "The Bonefang Gospel", which is not a holy book
+    /// anyone would write.</param>
+    private static string LegendaryName(
+        Culture culture, Title primaryTitle, List<string> nouns, bool bare, bool compounds,
+        HashSet<string> taken, Rng rng)
+    {
+        // Two attempts before falling through to a qualified form. The registry below still
+        // guarantees uniqueness; this just avoids reaching for the qualifier when a re-roll of a
+        // combinatorial source would do.
+        for (int attempt = 0; attempt < 2; attempt++)
+        {
+            // The invented word appears in about two names in five, but nearly always ATTACHED to
+            // an English noun. A name has to land the first time it is read, and an invented word
+            // standing alone carries no meaning to land with — "Zvaretheth" is a sound, where
+            // "Zvaretheth's Edge" is a story about somebody. Bare is kept for the rare case that
+            // works (Ice, Blackfyre) and kept rare.
+            int roll = rng.Int(0, 99);
+            string noun = rng.Pick(nouns);
+
+            // A form this category cannot use falls through to the next one rather than being
+            // re-rolled, so disallowing compounds simply moves that weight onto the epithet forms
+            // instead of skewing the whole distribution toward whatever comes first.
+            string candidate =
+                  roll < 8 && bare      ? culture.Language.Word(rng, 2, 3)
+                : roll < 26             ? $"The {culture.Language.Word(rng, 2, 3)} {noun}"
+
+                // Reads as the possession of a figure the world remembers, which is where most
+                // real legendary names come from — and it carries an English noun, so it lands
+                // even when the invented half means nothing to the reader.
+                : roll < 38             ? $"{culture.Language.Word(rng, 2, 3)}'s {noun}"
+
+                : roll < 60 && compounds ? (bare ? Compound(rng) : $"The {Compound(rng)} {noun}")
+                : roll < 78             ? $"The {rng.Pick(Epithets)} {noun}"
+                : roll < 90             ? $"The {noun} of {rng.Pick(AbstractRoots)}"
+                : $"The {rng.Pick(Epithets)} {noun} of {primaryTitle.Name}";
+
+            if (!taken.Contains(candidate)) return candidate;
+        }
+
+        return $"The {rng.Pick(Epithets)} {rng.Pick(nouns)} of {primaryTitle.Name}";
     }
 
     /// <summary>
@@ -610,34 +890,52 @@ public sealed class ArtifactMap
         return at < 0 ? $"{name} of {with}" : $"{name[..at]} of {with}";
     }
 
+    private static readonly List<string> RegaliaNouns = ["Scepter", "Rod", "Staff", "Seal", "Standard"];
+    private static readonly List<string> CrownNouns = ["Crown", "Diadem", "Circlet", "Coronet", "Wreath"];
+    private static readonly List<string> BladeNouns = ["Edge", "Blade", "Fang", "Point", "Answer"];
+    private static readonly List<string> ArmourNouns = ["Aegis", "Harness", "Mail", "Guard", "Shell"];
+    private static readonly List<string> ScriptureNouns =
+        ["Codex", "Testament", "Gospel", "Scripture", "Revelation", "Psalter", "Canon"];
+    private static readonly List<string> TomeNouns =
+        ["Compendium", "Almanac", "Chronicle", "Treatise", "Survey", "Commentary", "Register"];
+
     private static ArtifactLook Sovereign(
-        bool legendary, Title primaryTitle, string firstName, HashSet<string> taken, Rng rng)
+        bool legendary, Culture culture, Title primaryTitle, string firstName,
+        HashSet<string> taken, Rng rng)
     {
         var (fields, clause) = legendary ? Signature(SovereignFlourishes, SovereignBase, rng) : (null, "");
         string place = primaryTitle.Name;
 
         if (rng.Int(0, 100) < 30)
         {
-            var bank = legendary
-                ? new List<string> { "The Scepter of Supreme Dominion", "The Rod of Heaven", $"The Sovereign Star of {place}", "The Unbroken Staff", $"The Writ-Rod of {place}" }
-                : new List<string> { $"Scepter of {place}", $"The Rod of {firstName}", $"The Regalia of {place}", $"The Staff of {firstName}", $"The Elder Scepter of {place}" };
+            var bank = new List<string>
+            {
+                $"Scepter of {place}", $"The Rod of {firstName}", $"The Regalia of {place}",
+                $"The Staff of {firstName}", $"The Elder Scepter of {place}",
+            };
 
             return new ArtifactLook(
                 "regalia", "regalia", "sovereign", "grandeur_positive",
-                Claim(taken, PickFree(bank, taken, rng), place, firstName),
+                legendary
+                    ? Claim(taken, LegendaryName(culture, primaryTitle, RegaliaNouns, false, true, taken, rng), place, firstName)
+                    : Claim(taken, PickFree(bank, taken, rng), place, firstName),
                 legendary
                     ? $"The ultimate symbol of earthly power over {place}. Those who stand before its bearer are filled with uncontrollable awe and absolute obedience. {clause}"
                     : $"A ceremonial scepter crafted from precious metals, symbolizing de jure lordship over {place}.",
                 fields);
         }
 
-        var crowns = legendary
-            ? new List<string> { "The Crown of Eternity", "The Solar Diadem", $"The Imperial Diadem of {place}", "The Unfallen Crown", $"The Starlit Crown of {place}" }
-            : new List<string> { $"Crown of {place}", $"The Diadem of {firstName}", $"The {place} Circlet", $"The Old Crown of {place}", $"The Coronet of {firstName}" };
+        var crowns = new List<string>
+        {
+            $"Crown of {place}", $"The Diadem of {firstName}", $"The {place} Circlet",
+            $"The Old Crown of {place}", $"The Coronet of {firstName}",
+        };
 
         return new ArtifactLook(
             "helmet", "crown", "sovereign", "grandeur_positive",
-            Claim(taken, PickFree(crowns, taken, rng), place, firstName),
+            legendary
+                ? Claim(taken, LegendaryName(culture, primaryTitle, CrownNouns, false, true, taken, rng), place, firstName)
+                : Claim(taken, PickFree(crowns, taken, rng), place, firstName),
             legendary
                 ? $"An awe-inspiring masterpiece, rumored to have been crafted by angelic hands. It radiates an ethereal glow, asserting the divine right to rule over {place}. {clause}"
                 : $"The majestic ceremonial crown of {place}, worn by {firstName} to project dynastic authority.",
@@ -656,13 +954,17 @@ public sealed class ArtifactMap
             string[] armors = { "armor_plate", "armor_mail", "armor_scale", "armor_lamellar", "armor_laminar", "armor_brigandine" };
             string armorType = armors[rng.Int(0, armors.Length - 1)];
 
-            var bank = legendary
-                ? new List<string> { $"The Aegis of {place}", "The Impervious Plate", $"The Sun-Forged Mail of {firstName}", "The Unpierced Coat", $"The Iron Vigil of {place}" }
-                : new List<string> { $"The Guard of {place}", $"The Armor of {firstName}", $"The {place} Harness", $"{firstName}'s War-Harness", $"The Mail of {place}" };
+            var bank = new List<string>
+            {
+                $"The Guard of {place}", $"The Armor of {firstName}", $"The {place} Harness",
+                $"{firstName}'s War-Harness", $"The Mail of {place}",
+            };
 
             return new ArtifactLook(
                 armorType, "armor", "martial", "prowess_positive",
-                Claim(taken, PickFree(bank, taken, rng), place, firstName),
+                legendary
+                    ? Claim(taken, LegendaryName(culture, primaryTitle, ArmourNouns, false, true, taken, rng), place, firstName)
+                    : Claim(taken, PickFree(bank, taken, rng), place, firstName),
                 legendary
                     ? $"A legendary suit of armor that seems completely untouched by blade or arrow. It was forged in secret fires and bears the eternal protection of the {culture.Name} deities. {clause}"
                     : $"A fine suit of protective mail designed in the traditional {culture.Name} pattern, bearing the heraldry of {place}.",
@@ -681,28 +983,26 @@ public sealed class ArtifactMap
             _ => "Dagger"
         };
 
-        var weaponBank = legendary
-            ? weaponKind switch
-            {
-                "sword" => new List<string> { "The Sunslayer", "Eternity's Edge", $"The Holy Sword of {firstName}", "The Widowing", $"The Oathblade of {place}" },
-                "axe" => new List<string> { "The Earthsplitter", "The Doomcleaver", "Famine", "The Reaping", $"The Red Axe of {place}" },
-                "mace" => new List<string> { "The Worldcrusher", "The Skull-Render", "The Starfall Mace", "The Judgement", $"The Iron Word of {place}" },
-                "spear" => new List<string> { "The Sky-Piercer", "The Last Watch", "The Thousandth Wound", "The Long Silence", $"The Standing Spear of {place}" },
-                _ => new List<string> { "The Whisperer", "Death's Kiss", "The Nightfall Dagger", "The Quiet Argument", $"The Blackthorn of {place}" },
-            }
-            : new List<string>
-            {
-                $"{firstName}'s Trusty {weaponName}",
-                $"The {weaponName} of {place}",
-                $"The {place} {weaponName}",
-                $"{firstName}'s {weaponName}",
-                $"The Old {weaponName} of {place}",
-                $"The Hearth {weaponName} of {place}",
-            };
+        var weaponBank = new List<string>
+        {
+            $"{firstName}'s Trusty {weaponName}",
+            $"The {weaponName} of {place}",
+            $"The {place} {weaponName}",
+            $"{firstName}'s {weaponName}",
+            $"The Old {weaponName} of {place}",
+            $"The Hearth {weaponName} of {place}",
+        };
+
+        // The one category that takes a bare name. A great sword is allowed to be called Frostfang
+        // and nothing else — Ice and Blackfyre never say "sword" — where a crown that does not say
+        // crown is just a word.
+        var blades = new List<string>(BladeNouns) { weaponName };
 
         return new ArtifactLook(
             weaponKind, weaponKind, "martial", "prowess_positive",
-            Claim(taken, PickFree(weaponBank, taken, rng), place, firstName),
+            legendary
+                ? Claim(taken, LegendaryName(culture, primaryTitle, blades, true, true, taken, rng), place, firstName)
+                : Claim(taken, PickFree(weaponBank, taken, rng), place, firstName),
             legendary
                 ? $"A mythical {weaponKind} of incomparable balance and terrifying power. The weapon itself hums with the memory of a thousand battlefields. {clause}"
                 : $"A balanced steel {weaponKind} made for combat, decorated in classic {culture.Name} style.",
@@ -724,7 +1024,7 @@ public sealed class ArtifactMap
     /// draw them on and drops the model on the floor.
     /// </summary>
     private static ArtifactLook Sacred(
-        bool legendary, Faith faith, Title primaryTitle, string firstName,
+        bool legendary, Culture culture, Faith faith, Title primaryTitle, string firstName,
         HashSet<string> taken, Rng rng)
     {
         var (fields, clause) = legendary ? Signature(SacredFlourishes, SacredBase, rng) : (null, "");
@@ -734,16 +1034,7 @@ public sealed class ArtifactMap
         // Ten forms rather than one. This category alone put fifty artifacts into a single string
         // — thirteen copies of "A Study of the Deesi Faith" in one world — because the name did not
         // vary at all once the faith was fixed.
-        var bank = legendary
-            ? new List<string>
-            {
-                "The Codex of Revelation",
-                $"The Celestial Scrolls of the {creed} Faith",
-                "The Words of the Primeval Creator",
-                $"The First Testament of the {creed} Faith",
-                "The Unwritten Gospel",
-            }
-            : new List<string>
+        var bank = new List<string>
             {
                 $"A Study of the {creed} Faith",
                 $"The {creed} Psalter",
@@ -761,7 +1052,9 @@ public sealed class ArtifactMap
             "miscellaneous",
             rng.Int(0, 1) == 0 ? "pocket_book" : "artifact_scroll",
             "sacred", "piety_positive",
-            Claim(taken, PickFree(bank, taken, rng), place, firstName),
+            legendary
+                ? Claim(taken, LegendaryName(culture, primaryTitle, ScriptureNouns, false, false, taken, rng), place, firstName)
+                : Claim(taken, PickFree(bank, taken, rng), place, firstName),
             legendary
                 ? $"The pristine, original manuscript containing direct divine revelations. Its holy verses inspire unmatched devotion, and a single page is worth more than a kingdom. {clause}"
                 : $"A hand-bound volume outlining the holy customs, teachings, and heritage of {place}.",
@@ -770,21 +1063,13 @@ public sealed class ArtifactMap
 
     /// <summary>Learning, on the same trinket slot and for the same reason as <see cref="Sacred"/>.</summary>
     private static ArtifactLook Scholarly(
-        bool legendary, Title primaryTitle, string firstName, HashSet<string> taken, Rng rng)
+        bool legendary, Culture culture, Title primaryTitle, string firstName,
+        HashSet<string> taken, Rng rng)
     {
         var (fields, clause) = legendary ? Signature(ScholarFlourishes, ScholarBase, rng) : (null, "");
         string place = primaryTitle.Name;
 
-        var bank = legendary
-            ? new List<string>
-            {
-                "The Opus of the Universe",
-                "The Grand Compendium of the Stars",
-                "The Chronicles of the First Age",
-                "The Book of Every River",
-                $"The Great Survey of {place}",
-            }
-            : new List<string>
+        var bank = new List<string>
             {
                 $"The Chronicles of {place}",
                 $"A History of {place}",
@@ -802,7 +1087,9 @@ public sealed class ArtifactMap
             "miscellaneous",
             rng.Int(0, 1) == 0 ? "pocket_book" : "artifact_scroll",
             "scholar", "learning_positive",
-            Claim(taken, PickFree(bank, taken, rng), place, firstName),
+            legendary
+                ? Claim(taken, LegendaryName(culture, primaryTitle, TomeNouns, false, false, taken, rng), place, firstName)
+                : Claim(taken, PickFree(bank, taken, rng), place, firstName),
             legendary
                 ? $"An exhaustive library of universal secrets, ancient lineages, and advanced geometries compiled by legendary scholars. Its pages contain the blueprints of civilization itself. {clause}"
                 : $"A compilation of local wisdom, records, and philosophical notes commissioned during the reign of {firstName}.",

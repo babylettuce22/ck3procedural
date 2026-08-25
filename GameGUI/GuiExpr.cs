@@ -93,6 +93,26 @@ public sealed class GuiExpr
     public static GuiExpr VariableClear(string name)
         => new($"GetVariableSystem.Clear( '{name}' )");
 
+    /// <summary>
+    /// Sets a UI variable to a named value — the first half of vanilla's tab pattern.
+    ///
+    /// Distinct from <see cref="VariableToggle"/>, which is the two-state version: a toggle answers
+    /// "is this panel open", a set answers "which of these panels is open". A window with three
+    /// tabs cannot be written with toggles, because nothing would make them exclusive.
+    /// </summary>
+    public static GuiExpr VariableSet(string name, string value)
+        => new($"GetVariableSystem.Set( '{name}', '{value}' )");
+
+    /// <summary>
+    /// Whether a UI variable currently holds a given value — the other half of the tab pattern.
+    ///
+    /// Asked three times per tab in vanilla's own windows: once by the panel's <c>visible</c>, and
+    /// twice by the button, as <c>down</c> so it looks pressed and as <c>alwaystransparent</c> so
+    /// the tab you are already on cannot be clicked again.
+    /// </summary>
+    public static GuiExpr VariableHasValue(string name, string value)
+        => new($"GetVariableSystem.HasValue( '{name}', '{value}' )");
+
     /// <summary>The bracketed form, which is what a property value actually holds.</summary>
     public override string ToString() => $"[{Inner}]";
 

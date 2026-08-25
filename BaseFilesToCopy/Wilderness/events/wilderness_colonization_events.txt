@@ -3602,10 +3602,110 @@ wilderness_colonization.9998 = {
 		}
 	}
 
+	# --- Option: What can script still see inside a disabled holding? ---
+	#
+	# CK3 disables a holding outright in two situations we care about: `HOLDING_GRACE_PERIOD` (365
+	# days) suspends a newly gained holding that would push its owner above the domain limit, and a
+	# holding whose government is wrong for it is disabled permanently. Either way the buildings
+	# inside stop paying out — and our six obstacles are buildings, so their maluses stop biting.
+	#
+	# That much is visible in the holding view. What is NOT visible, and what decides whether this
+	# is a cosmetic dent or a hole in the promotion gate, is whether the TRIGGERS still see the
+	# obstacles. Two of ours ask the same question different ways:
+	#
+	#   has_wilderness_obstacle_trigger    six explicit `has_building` calls, by name
+	#   county_obstacles_cleared_trigger   one `has_building_with_flag = { flag = obstacle count = 0 }`
+	#
+	# On a healthy colony they are exact opposites. Reading them side by side on a DISABLED colony
+	# is the whole experiment:
+	#
+	#   obstacle yes / cleared no    both see the blockers. The gate holds; only the maluses are
+	#                                lost, and only until the holding re-enables.
+	#   obstacle yes / cleared yes   the flag count is blind to disabled buildings and the name
+	#                                check is not. The promotion gate LEAKS — a colony can be
+	#                                promoted with its wolves still standing.
+	#   obstacle no  / cleared yes   neither sees them. Ambiguous on its own, so read it against
+	#                                the holding view: if greyed-out blockers are drawn there, both
+	#                                triggers are blind; if the holding is genuinely clear, this
+	#                                colony simply had nothing to tell us.
+	#
+	# Deliberately reports rather than fixes. Which of the three above is true decides whether the
+	# answer is a domain-limit bonus per colony, moving the maluses onto script-applied county
+	# modifiers, or both — and guessing between them is how this system got its last three bugs.
+	option = {
+		name = "DEBUG: Probe a disabled colony holding"
+
+		# Prefer a colony that is actually in the disabled state, because it is the only one that
+		# can answer anything. `has_disabled_building` is a barony trigger, not a county one — see
+		# vanilla's `action_disabled_building`, which reaches it through `title_province.barony`.
+		random_held_title = {
+			limit = {
+				tier = tier_county
+				is_colony_county_trigger = yes
+				title_province.barony ?= { has_disabled_building = yes }
+			}
+			save_scope_as = probe_colony
+		}
+
+		if = {
+			limit = { NOT = { exists = scope:probe_colony } }
+
+			debug_log = "COLONY DISABLE PROBE: no held colony county has a disabled building — nothing to measure"
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = colony_debug_disable_none
+				left_icon = root
+			}
+		}
+		else_if = {
+			limit = {
+				scope:probe_colony = {
+					has_wilderness_obstacle_trigger = yes
+					county_obstacles_cleared_trigger = no
+				}
+			}
+
+			debug_log = "COLONY DISABLE PROBE: [probe_colony.GetNameNoTier] disabled; obstacles seen by BOTH tests. Gate holds, maluses suppressed."
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = colony_debug_disable_gate_holds
+				left_icon = root
+				right_icon = scope:probe_colony
+			}
+		}
+		else_if = {
+			limit = {
+				scope:probe_colony = {
+					has_wilderness_obstacle_trigger = yes
+					county_obstacles_cleared_trigger = yes
+				}
+			}
+
+			debug_log = "COLONY DISABLE PROBE: [probe_colony.GetNameNoTier] disabled; has_building sees obstacles but the obstacle FLAG count reads 0. Promotion gate leaks."
+			send_interface_toast = {
+				type = event_toast_effect_bad
+				title = colony_debug_disable_gate_leaks
+				left_icon = root
+				right_icon = scope:probe_colony
+			}
+		}
+		else = {
+			debug_log = "COLONY DISABLE PROBE: [probe_colony.GetNameNoTier] disabled; NEITHER test sees an obstacle. Check the holding view before believing it."
+			send_interface_toast = {
+				type = event_toast_effect_bad
+				title = colony_debug_disable_all_blind
+				left_icon = root
+				right_icon = scope:probe_colony
+			}
+		}
+	}
+
 	# --- Option: Back ---
 	#
-	# Fourth of five here, so there is room for exactly one more tool on this page before it needs a
-	# 9997 of its own. See the note on the page break in 9999.
+	# Fifth of five, so this page is now full. An event window draws five option buttons and no
+	# more, and a sixth is not truncated with a warning — it simply is not there. The next tool
+	# needs a 9997 of its own, reached by spending THIS button on the page break and moving "Back"
+	# there. See the note on the page break in 9999.
 	option = {
 		name = "Back"
 

@@ -5,6 +5,29 @@ namespace Ck3MapGen.Emit;
 /// <summary>
 /// Patches vanilla's county, character, title, council and bookmark windows.
 ///
+/// Patching only. The windows this project writes from nothing live one per file in
+/// <c>Emit/GuiWindows/</c> — see <see cref="ArtifactIndex"/> and <see cref="WonderIndex"/> — because
+/// authoring grew past patching and keeps growing, while the set of vanilla files worth patching
+/// does not.
+///
+/// ---- House rule: every GUI addition names its related base files ----
+///
+/// Each method below, and each file under <c>Emit/GuiWindows/</c>, carries a <c>Related base
+/// files:</c> block listing the <c>BaseFilesToCopy</c> entries it depends on, and a <c>Related
+/// generated files</c> block for anything another writer emits for it. Add one to anything new.
+///
+/// It is worth the lines because a <c>.gui</c> and the script behind it fail as a PAIR and fail
+/// silently: a widget naming a scripted_gui that does not exist logs nothing and evaluates false, so
+/// a rename on either side yields a window that never opens rather than an error. Nothing in the
+/// build connects the two halves, and neither does ck3-tiger — the comment is the only link there
+/// is.
+///
+/// The blocks also record what a change costs to test. Only the <c>.gui</c> half answers to the
+/// console's <c>reload gui</c>; script and localisation are read at game start and need a restart.
+/// And <c>--gui-only</c> runs just this writer plus <see cref="FrontendWriter"/>, so it rewrites the
+/// <c>.gui</c> files alone — it will not re-copy a base file, and it will not emit a window whose
+/// writer needs generator data at all.
+///
 /// Every edit here is a claim about a widget — "the container called holder_info", "the state that
 /// fades the selected bookmark's name" — made against a parsed tree rather than against the file's
 /// bytes. What that buys is not tidiness: an anchor that no longer resolves is reported *by name*
@@ -28,179 +51,10 @@ public static class GuiWriter
         PatchTitleWindow(modDir, gameDir);
         PatchCouncilWindow(modDir, gameDir);
         PatchBookmarkTab(modDir, gameDir);
-        WriteArtifactIndex(modDir);
-    }
-
-    // ===========================================================================================
-    // The artifact index
-    // ===========================================================================================
-
-    /// <summary>
-    /// A window listing every famed and illustrious artifact in the world, and who holds it.
-    ///
-    /// Authored rather than patched, and the first file here that is — <see cref="GuiDocument.Create"/>
-    /// rather than <see cref="GuiDocument.Open"/>. It is the same builder and the same printer
-    /// either way, which is why this lives beside the patches instead of in a writer of its own.
-    ///
-    /// Nothing about it varies with the world. The window is a shape; what fills it is decided at
-    /// runtime by <c>gen_artifact_index_gather</c> in
-    /// <c>BaseFilesToCopy/Core/common/scripted_guis</c>, which walks <c>every_artifact</c> when the
-    /// window opens. So the same file ships on every map, works on a map generated before it
-    /// existed, and lists artifacts forged during play alongside the ones this generator placed.
-    ///
-    /// Modelled on AGOT's artifact market, which solves the two problems this shape has:
-    ///
-    /// The registry needs something to instantiate, so there are two windows. The outer host is
-    /// what <c>gui/scripted_widgets</c> names and is always present at zero size; the inner one
-    /// carries the real geometry and the visibility gate. A window with no parent is never drawn
-    /// otherwise, because nothing in script can create one.
-    ///
-    /// And the list is refreshed by the window's own <c>_show</c> state rather than by the decision
-    /// that opens it. The decision only sets a flag — so the list cannot go stale between opening
-    /// the decisions panel and looking at the window, and reopening it is a re-read rather than a
-    /// second copy.
-    /// </summary>
-    private static void WriteArtifactIndex(string modDir)
-    {
-        var doc = GuiDocument.Create("artifact index", "gui", "gen_artifact_index.gui");
-
-        // Root is the player for both: the window asks whether *this* player opened it, so two
-        // people in a multiplayer game can have it open independently.
-        var player = GuiScope.Root("GetPlayer");
-        var window = new ScriptedGui("gen_artifact_index_window", player);
-        var gather = new ScriptedGui("gen_artifact_index_gather", player);
-
-        var entries = GuiExpr.Raw("GetGlobalList( 'gen_artifact_index_list' )");
-
-        doc.Add(GuiBuilder.Types("gen_artifact_index").Add(
-
-            GuiBuilder.Type("gen_artifact_index_host", "window")
-                .Name("gen_artifact_index_host")
-                .AllowOutside()
-                .ParentAnchor("center")
-                .Size(0, 0)
-                // The host is always instantiated, so it carries the conditions under which no
-                // custom window should be on screen at all.
-                .Gap().Visible(GuiExpr.Raw(
-                    "And( Not( IsPauseMenuShown ), And( Or( Not( IsObserver ), GetPlayer.IsValid ), "
-                    + "IsDefaultGUIMode ) )"))
-                .Gap().Add(GuiBuilder.Of("gen_artifact_index_window")),
-
-            GuiBuilder.Type("gen_artifact_index_window", "window")
-                .Gapped()
-                .Name("gen_artifact_index_window")
-                .AllowOutside()
-                .Movable()
-                .ParentAnchor("center")
-                .Position(0, -40)
-                .Size(780, 720)
-                .Using("Window_Background", "Window_Decoration_Spike")
-                .Gap().Visible(window.IsShown())
-
-                // The refresh. A decision cannot reach the GUI layer, so it sets a flag and this
-                // does the work when the flag makes the window appear.
-                .Gap().Add(GuiBuilder.State("_show")
-                    .Using("Animation_FadeIn_Quick", "Sound_WindowShow_Standard")
-                    .Quoted("on_start", gather.Execute().ToString()))
-
-                .Gap().Add(GuiBuilder.State("_hide")
-                    .Using("Animation_FadeOut_Quick", "Sound_WindowHide_Standard"))
-
-                .Gap().Add(GuiBuilder.VBox()
-                    .Using("Window_Margins")
-
-                    .Gap().Add(GuiBuilder.Of("header_standard")
-                        .ExpandingH()
-                        .Gap().Add(GuiBuilder.BlockOverride("header_text")
-                            .Text("GEN_ARTIFACT_INDEX_TITLE"))
-                        // The same scripted_gui the window's `visible` asks. One entry owns both
-                        // directions, so opening and closing cannot disagree about what open means.
-                        .Gap().Add(GuiBuilder.BlockOverride("button_close")
-                            .DataContext(GuiExpr.Raw("GetScriptedGui( 'gen_artifact_index_window' )"))
-                            .OnClick(GuiExpr.Raw(
-                                $"ScriptedGui.Execute( {player} )"))))
-
-                    .Gap().Add(GuiBuilder.Of("text_multi")
-                        .ExpandingH()
-                        .MaxWidth(700)
-                        .Text("GEN_ARTIFACT_INDEX_BLURB"))
-
-                    .Gap().Add(GuiBuilder.ScrollBox()
-                        .Expanding()
-                        .Gap().Add(GuiBuilder.BlockOverride("scrollbox_content")
-                            .Add(GuiBuilder.VBox()
-                                .ExpandingH()
-                                .Spacing(4)
-                                .DataModel(entries)
-                                .Gap().Add(GuiBuilder.Item().Add(Treasure()))))
-
-                        .Gap().Add(GuiBuilder.BlockOverride("scrollbox_empty")
-                            .Visible(GuiExpr.IsDataModelEmpty(entries))
-                            .Text("GEN_ARTIFACT_INDEX_EMPTY"))))));
-
-        doc.Ship(modDir);
-
-        // The registry entry. Not a .gui file and so not a GuiDocument, but it is written here
-        // rather than kept in BaseFilesToCopy because it names the file above by path: the two are
-        // one unit, and a registry pointing at a window that moved reports "Could not find widget"
-        // and nothing else.
-        string registry = Path.Combine(modDir, "gui", "scripted_widgets");
-        Directory.CreateDirectory(registry);
-        Io.ParadoxText.WriteNoBom(
-            Path.Combine(registry, "gen_artifact_index.txt"),
-            "# Instantiates the artifact index. Written by Emit/GuiWriter.cs.\n"
-            + "#\n"
-            + "# Names the HOST type, not the window itself: the host is what exists from startup,\n"
-            + "# and the window it contains is what appears when the decision sets the flag.\n"
-            + "gui/gen_artifact_index.gui = gen_artifact_index_host\n");
-    }
-
-    /// <summary>
-    /// One row: what the thing is, and who has it.
-    ///
-    /// Every string is a single datafunction with no literal beside it, which is not a style
-    /// preference — <c>text</c> routes its whole contents through the localizer and logs an
-    /// unlocalized-text error per line per load when a literal is mixed in. Two widgets side by
-    /// side cost nothing and cannot trip it.
-    /// </summary>
-    private static GuiBuilder Treasure()
-    {
-        return GuiBuilder.HBox()
-            .DataContext(GuiExpr.Raw("Scope.Artifact"))
-            .ExpandingH()
-            .Spacing(10)
-
-            .Gap().Add(GuiBuilder.Background()
-                .Texture("gfx/interface/component_masks/mask_brushed.dds")
-                .Color("0.2", "0.2", "0.31", "0.45"))
-
-            // Vanilla's own artifact icon: rarity frame, unique marker and the full artifact
-            // tooltip, all from the datacontext already in scope.
-            .Gap().Add(GuiBuilder.Of("icon_artifact").Size(64, 64))
-
-            .Gap().Add(GuiBuilder.VBox()
-                .ExpandingH()
-                .Align("left")
-                .Add(GuiBuilder.TextSingle()
-                        .ExpandingH()
-                        .Align("left")
-                        .Format("#high")
-                        .Text(GuiExpr.Raw("Artifact.GetName")),
-                     GuiBuilder.TextSingle()
-                        .ExpandingH()
-                        .Align("left")
-                        .Format("#weak")
-                        .Text(GuiExpr.Raw("Artifact.GetRarityAndSlotType"))))
-
-            .Gap().Add(GuiBuilder.VBox()
-                .Align("right")
-                .Add(GuiBuilder.TextSingle()
-                        .Align("right")
-                        .Text(GuiExpr.Raw("Artifact.GetOwner.GetNameNoTooltip")),
-                     GuiBuilder.TextSingle()
-                        .Align("right")
-                        .Format("#weak")
-                        .Text(GuiExpr.Raw("Artifact.GetOwner.GetPrimaryTitle.GetNameNoTooltip"))));
+        // The windows this project authors itself live in Emit/GuiWindows. Called from here so a
+        // --gui-only run still emits them; the ones that need generator data are called from
+        // ContentWriter instead, because this method has none.
+        ArtifactIndex.Write(modDir);
     }
 
     // ===========================================================================================
@@ -215,6 +69,14 @@ public static class GuiWriter
     /// <c>And</c>, leaving vanilla in charge of every other reason it might hide. A widget with
     /// none gets one written for it, which makes this project responsible for that widget's whole
     /// visibility from then on. The first is cheap; the second is a commitment.
+    ///
+    /// <code>
+    /// Related base files:
+    ///   Wilderness/common/scripted_guis/00_wilderness_scripted_gui.txt      every gate below
+    ///   Wilderness/common/character_interactions/00_colonization_interactions.txt  the promotions
+    ///   Wilderness/common/activities/activity_types/00_oversee_colony_activity.txt oversee opens it
+    ///   Wilderness/localization/english/wilderness_colonization_l_english.yml      the button text
+    /// </code>
     /// </summary>
     private static void PatchCountyView(string modDir, string gameDir)
     {
@@ -321,6 +183,19 @@ public static class GuiWriter
     // The character window
     // ===========================================================================================
 
+    /// <summary>
+    /// Empties the character window for the wilderness dummy and puts a closable placeholder over it.
+    ///
+    /// <code>
+    /// Related base files:
+    ///   Wilderness/common/scripted_guis/00_wilderness_scripted_gui.txt   wilderness_holder
+    ///   Wilderness/localization/english/wilderness_colonist_l_english.yml the placeholder's text
+    ///   Wilderness/gfx/portraits/portrait_modifiers/                     the no_portrait morph
+    /// </code>
+    ///
+    /// That last one is why there is no portrait edit here: the dummy renders as nothing at the
+    /// MODEL level, which costs no override of vanilla's 3,300-line portraits.gui.
+    /// </summary>
     private static void PatchCharacterWindow(string modDir, string gameDir)
     {
         var doc = GuiDocument.Open(gameDir, "gui", "gui", "window_character.gui");
@@ -381,6 +256,14 @@ public static class GuiWriter
     /// resolves to anything and hides itself when it does not, which is what gives baronies and
     /// wilderness no button rather than an empty panel, and what lets the whole feature vanish
     /// cleanly under <c>--no-history</c>.
+    ///
+    /// <code>
+    /// Related base files:
+    ///   Wilderness/common/scripted_guis/00_wilderness_scripted_gui.txt   wilderness_title
+    ///
+    /// Related generated files, written elsewhere:
+    ///   Emit/ChronicleWriter.cs   the `gen_lore_&lt;title key&gt;` loc the panel reads
+    /// </code>
     /// </summary>
     private static void PatchTitleWindow(string modDir, string gameDir)
     {
@@ -556,6 +439,19 @@ public static class GuiWriter
     /// no <c>colony_council</c> scripted_gui, a .gui naming a scripted_gui that does not exist
     /// evaluates false, and false is the right answer in both directions here: the colony seats hide
     /// themselves and <c>Not(false)</c> leaves every vanilla row exactly as it was.
+    ///
+    /// <code>
+    /// Related base files:
+    ///   Wilderness/common/scripted_guis/00_wilderness_scripted_gui.txt      colony_council
+    ///   Wilderness/common/council_positions/00_colony_council_positions.txt every seat named below
+    ///   Wilderness/common/council_tasks/00_colony_council_tasks.txt         their default tasks
+    ///   Wilderness/localization/english/wilderness_council_l_english.yml    position names
+    /// </code>
+    ///
+    /// The position keys are a contract with that positions file, and getting it wrong is asymmetric:
+    /// a position with no seat here is silently invisible, while a seat naming a position that does
+    /// not exist draws an empty, nameless panel. A seat also needs its default task to exist, since
+    /// the label comes from the active TASK rather than from the office.
     /// </summary>
     private static void PatchCouncilWindow(string modDir, string gameDir)
     {
@@ -659,6 +555,17 @@ public static class GuiWriter
     /// Nothing about vanilla's own widget is retyped: the year block stays exactly as written and
     /// the new line goes in after it, so a CK3 patch that restyles the year carries straight
     /// through.
+    ///
+    /// <code>
+    /// Related base files: NONE.
+    ///
+    /// Related generated files, written elsewhere:
+    ///   Emit/BookmarkWriter.cs   GroupSubtitleKey, and the loc behind it
+    /// </code>
+    ///
+    /// The subtitle asks whether that key resolves to anything before drawing, so a run that wrote
+    /// no bookmark wrote no key either and the line simply does not appear — rather than rendering
+    /// the key name, which is what a <c>text</c> pointing at nothing does.
     /// </summary>
     private static void PatchBookmarkTab(string modDir, string gameDir)
     {

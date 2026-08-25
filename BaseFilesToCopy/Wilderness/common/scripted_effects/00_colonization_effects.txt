@@ -96,6 +96,13 @@ wilderness_setup_on_start_effect = {
 		death = { death_reason = death_vanished }
 	}
 
+	# Nothing this generator writes puts an artifact here, but another mod's game-start pass can,
+	# and the dummy must not open the game holding treasure. The recurring sweep in
+	# wilderness_yearly_cleanup is the backstop for whatever arrives later.
+	every_character_artifact = {
+		destroy_artifact = this
+	}
+
 	every_held_title = {
 		limit = { tier = tier_county }
 

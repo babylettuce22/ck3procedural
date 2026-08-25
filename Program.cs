@@ -22,6 +22,9 @@ public static class Program
         bool staticOnly = false;
         bool guiOnly = false;
         bool preview3d = false;
+        string? previewTarget = null;
+        string previewOut = Path.Combine(AppContext.BaseDirectory, "gui-preview.html");
+        int previewRows = 1;
         bool fitHeightmap = false;
         bool allowUnverifiedSize = false;
 
@@ -31,6 +34,23 @@ public static class Program
             {
                 case "--gui":
                     gui = true;
+                    break;
+
+                // Draw a .gui widget to an HTML page instead of generating anything. Takes a widget
+                // name from the indexed files, or the path to a .gui file.
+                case "--preview" when i + 1 < args.Length:
+                    previewTarget = args[++i];
+                    gui = false;
+                    break;
+
+                case "--preview-out" when i + 1 < args.Length:
+                    previewOut = args[++i];
+                    break;
+
+                // How many entries to draw for a datamodel list. A list previewed at one row hides
+                // every question worth asking about it.
+                case "--preview-rows" when i + 1 < args.Length:
+                    previewRows = int.Parse(args[++i]);
                     break;
 
                 case "--static-only": 
@@ -372,6 +392,20 @@ public static class Program
             // folder are considered older than this run and will be overwritten/refreshed.
             Ck3MapGen.Emit.StaticFileWriter.WriteAll(modDir, sets, DateTime.UtcNow);
             return 0;
+        }
+
+        // Draw a widget and stop. Nothing is generated and nothing is written to the mod, so this
+        // is safe to run against a live mod folder while the game is open.
+        if (previewTarget is not null)
+        {
+            if (string.IsNullOrWhiteSpace(options.GameDir) || !Core.GameLocator.IsGameDir(options.GameDir))
+            {
+                Console.Error.WriteLine("Error: Crusader Kings III game directory not found. Please specify with --game <path>.");
+                return 1;
+            }
+
+            return Core.GuiPreviewCommand.Run(previewTarget, options.GameDir, modDir, previewOut,
+                previewRows);
         }
 
         if (guiOnly)

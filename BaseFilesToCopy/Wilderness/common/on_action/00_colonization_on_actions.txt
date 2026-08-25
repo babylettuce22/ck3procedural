@@ -58,6 +58,22 @@ wilderness_yearly_cleanup = {
 				death = { death_reason = death_vanished }
 			}
 		}
+
+		# Same reasoning, for treasure. The generator never places an artifact on the dummy — it
+		# draws only from settled ruler counties — but the engine hands artifacts out on its own:
+		# the dummy holds a titular kingdom, so vanilla's yearly AI coronation pass will forge it a
+		# crown, and anything looted or inherited lands here too. An empty county cannot be a
+		# treasury, and an artifact nobody can reach through war, theft or inheritance is a dead
+		# entry in the artifact index. Destroy rather than transfer: there is no owner it belongs to.
+		every_ruler = {
+			limit = {
+				has_trait = wilderness
+				any_character_artifact = { always = yes }
+			}
+			every_character_artifact = {
+				destroy_artifact = this
+			}
+		}
 	}
 }
 

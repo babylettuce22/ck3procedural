@@ -57,10 +57,30 @@ public static class PngWriter
         Rgba = 6,
     }
 
+    /// <summary>
+    /// 8-bit RGBA straight to bytes, for a caller that is not writing a file.
+    ///
+    /// The GUI preview embeds vanilla textures in an HTML page as <c>data:</c> URIs, so the encoded
+    /// image never touches disk. Same encoder as everything above it — there is no second PNG path
+    /// in this project and there should not be one.
+    /// </summary>
+    public static byte[] EncodeRgba8(int width, int height, byte[] rgba)
+    {
+        using var stream = new MemoryStream();
+        Write(stream, width, height, 8, ColorType.Rgba, rgba, bytesPerPixel: 4);
+        return stream.ToArray();
+    }
+
     private static void Write(string path, int width, int height, int bitDepth, ColorType colorType,
         byte[] pixels, int bytesPerPixel)
     {
         using var stream = File.Create(path);
+        Write(stream, width, height, bitDepth, colorType, pixels, bytesPerPixel);
+    }
+
+    private static void Write(Stream stream, int width, int height, int bitDepth,
+        ColorType colorType, byte[] pixels, int bytesPerPixel)
+    {
         WriteSignature(stream);
         WriteIhdr(stream, width, height, (byte)bitDepth, colorType);
         WriteIdat(stream, width, height, pixels, bytesPerPixel);

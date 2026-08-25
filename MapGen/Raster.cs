@@ -150,7 +150,11 @@ public static class Raster
 
     /// <summary>
     /// Drowns a margin around the map so no province is clipped by the edge, matching vanilla,
-    /// whose top and bottom rows are entirely ocean. See <see cref="MapConfig.OceanBorder"/>.
+    /// whose top and bottom rows are entirely ocean.
+    ///
+    /// Off by default — a thin ring is absorbed into the neighbouring ocean instead of becoming its
+    /// own province, which turns every land province at the boundary coastal and makes the rim
+    /// sailable. See <see cref="MapConfig.OceanBorder"/> for the full reasoning.
     /// </summary>
     private static void ForceOceanBorder(byte[] mask, int width, int height, int border)
     {

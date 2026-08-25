@@ -30,6 +30,48 @@ public sealed class GeneratedWonder
     /// </summary>
     public required string Mesh { get; init; }
 
+    /// <summary>
+    /// The building key for one rung of the wonder's ladder, numbered as vanilla numbers its own —
+    /// <c>hagia_sophia_01</c>, <c>_02</c>, <c>_03</c>.
+    ///
+    /// <see cref="Key"/> is never a building on its own any more. It is the family name, and every
+    /// reference to a wonder in script has to say which rung it means, because a county whose
+    /// library has been upgraded no longer has a building called <see cref="Key"/> at all.
+    /// </summary>
+    public string TierKey(int tier) => $"{Key}_{tier:00}";
+
+    /// <summary>
+    /// The icon's filename, with exactly one <c>.dds</c> on the end.
+    ///
+    /// <see cref="Icon"/> is written by hand in the archetype tables and has arrived both with and
+    /// without the extension, and occasionally with it twice.
+    /// </summary>
+    public string IconFile
+    {
+        get
+        {
+            string name = Icon;
+
+            if (name.EndsWith(".dds.dds", StringComparison.OrdinalIgnoreCase)) name = name[..^4];
+            if (!name.EndsWith(".dds", StringComparison.OrdinalIgnoreCase)) name += ".dds";
+
+            return name;
+        }
+    }
+
+    /// <summary>
+    /// The icon as a texture PATH, which is a different thing from the filename.
+    ///
+    /// A building's <c>type_icon</c> takes the bare name and lets the engine find it; a <c>.gui</c>
+    /// <c>icon</c> widget takes a path from the game root and silently draws nothing without one.
+    /// Both spellings of the same icon are needed, so both live here rather than being reconstructed
+    /// at each end.
+    /// </summary>
+    public string IconTexture => "gfx/interface/icons/building_types/" + IconFile;
+
+    /// <summary>How many rungs the ladder has. Tier one is placed at game start; the rest are built.</summary>
+    public const int Tiers = 3;
+
     public required Dictionary<string, string> CharacterModifiers { get; init; }
     public required Dictionary<string, string> CountyModifiers { get; init; }
     public required Dictionary<string, string> ProvinceModifiers { get; init; }
@@ -258,47 +300,90 @@ public sealed class WorldCenterMap
         var countyMod = new Dictionary<string, string>();
         var provMod = new Dictionary<string, string>();
 
+        // These are the values of a FULLY UPGRADED wonder — tier three. WonderWriter scales them
+        // down for the two tiers below it, so the numbers a reader tunes are the ones at the top of
+        // the ladder rather than the ones a world starts with.
+        //
+        // Rebalanced against vanilla's own envelope, because the previous table was not merely
+        // generous, it was wrong by orders of magnitude in two places:
+        //
+        //   garrison_size was 1000. Vanilla's building values run 0.01 to 0.2 — it is a MULTIPLIER,
+        //   so that was five thousand times the largest garrison bonus in the game.
+        //
+        //   monthly_income ran to 4.0 flat. The richest ordinary building in vanilla is
+        //   good_tax_tier_8, which resolves to 0.5 + 7 x 0.3 = 2.6, and most special buildings sit
+        //   far below that.
+        //
+        // The rest is measured against ORDINARY buildings at the top of their line, which is the
+        // comparison that actually matters and the one a first pass here got wrong by only looking
+        // at special buildings' character modifiers. `caravanserai_08` — a standard economy
+        // building, not a wonder — gives:
+        //
+        //     monthly_income             3.85   (excellent_tax_tier_8: 0.7 + 7 x 0.45)
+        //     development_growth_factor  0.32   (plus 0.16 flat growth on top)
+        //     defender_holding_advantage 16     (normal_advantage_tier_8: 2 + 7 x 2)
+        //
+        // A wonder that gives less income than a caravanserai is not a wonder. So the province and
+        // county lines below sit at or above that, and the character lines — which ordinary
+        // buildings mostly do not have — are what make the wonder more than a very good building.
+        //
+        // Character values stay inside the envelope of vanilla's famous things: the Ark of the
+        // Covenant's court_grandeur_baseline_add is 6 and the Reichskrone's vassal_limit is 25, so
+        // a palace at 8 and 10 is grand without being unprecedented. Hagia Sophia carries
+        // monthly_dynasty_prestige_mult 0.05, which is why every prestige archetype here does too.
+        //
+        // development_growth_factor rather than development_growth throughout: the flat version
+        // adds to the county's growth pool and the factor multiplies it, and a wonder is a reason a
+        // place grows faster rather than a fixed drip.
+        //
+        // monthly_dynasty_prestige_mult on the three "prestige" archetypes is deliberate copying —
+        // it is the line vanilla puts on nearly every great building and famous artifact, and it is
+        // what makes owning one feel like a dynastic fact rather than a stat.
         switch (archetype)
         {
             case WonderArchetype.Sanctuary:
-                charMod["monthly_piety"] = "1.5";
-                charMod["same_faith_opinion"] = "5";
-                countyMod["county_opinion_add"] = "15";
-                countyMod["development_growth"] = "0.2";
+                charMod["monthly_piety"] = "1.0";
+                charMod["same_faith_opinion"] = "10";
+                charMod["monthly_dynasty_prestige_mult"] = "0.05";
+                countyMod["county_opinion_add"] = "20";
+                countyMod["development_growth_factor"] = "0.35";
                 provMod["monthly_income"] = "2.0";
                 break;
 
             case WonderArchetype.GreatHarbor:
                 charMod["monthly_prestige"] = "1.0";
-                countyMod["development_growth"] = "0.4";
-                countyMod["development_growth_factor"] = "0.25";
+                charMod["monthly_dynasty_prestige_mult"] = "0.05";
+                countyMod["development_growth_factor"] = "0.45";
                 provMod["monthly_income"] = "4.0";
-                provMod["supply_limit_mult"] = "0.3";
+                provMod["supply_limit_mult"] = "0.5";
                 break;
 
             case WonderArchetype.GreatLibrary:
-                charMod["learning"] = "2";
-                charMod["cultural_head_fascination_mult"] = "0.2";
-                charMod["monthly_lifestyle_xp_gain_mult"] = "0.15";
-                countyMod["development_growth"] = "0.3";
+                charMod["learning"] = "5";
+                charMod["cultural_head_fascination_mult"] = "0.3";
+                charMod["monthly_lifestyle_xp_gain_mult"] = "0.3";
+                countyMod["development_growth_factor"] = "0.45";
                 provMod["monthly_income"] = "1.5";
                 break;
 
             case WonderArchetype.Citadel:
-                charMod["dread_gain_mult"] = "0.25";
-                charMod["advantage"] = "4";
-                countyMod["defender_holding_advantage"] = "1.5"; // Corrected modifier scope
-                provMod["fort_level"] = "4";
-                provMod["garrison_size"] = "1000";
+                charMod["dread_gain_mult"] = "0.3";
+                charMod["advantage"] = "6";
+                countyMod["defender_holding_advantage"] = "20";
+                countyMod["development_growth_factor"] = "0.2";
+                provMod["fort_level"] = "5";
+                provMod["garrison_size"] = "0.35";
+                provMod["monthly_income"] = "1.0";
                 break;
 
             case WonderArchetype.ImperialPalace:
             default:
-                charMod["monthly_prestige"] = "2.0";
+                charMod["monthly_prestige"] = "1.0";
                 charMod["vassal_limit"] = "10";
-                charMod["court_grandeur_baseline_add"] = "15";
-                countyMod["development_growth"] = "0.35";
-                provMod["monthly_income"] = "3.5";
+                charMod["court_grandeur_baseline_add"] = "8";
+                charMod["monthly_dynasty_prestige_mult"] = "0.05";
+                countyMod["development_growth_factor"] = "0.45";
+                provMod["monthly_income"] = "3.0";
                 break;
         }
 

@@ -127,6 +127,20 @@ public sealed class GuiBuilder
     public static GuiBuilder Expand() => Of("expand");
 
     /// <summary>
+    /// A fixed-pitch grid of <see cref="Item"/> slots.
+    ///
+    /// <paramref name="columnWidth"/> and <paramref name="rowHeight"/> are the STEP between slots
+    /// rather than the size of a card, and <paramref name="wrap"/> is how many go on a line before
+    /// the next begins. A card larger than the step overlaps its neighbour — the engine does not
+    /// grow the lattice to fit it.
+    /// </summary>
+    public static GuiBuilder FixedGridBox(int columnWidth, int rowHeight, int wrap)
+        => Of("fixedgridbox")
+            .Field("addcolumn", $"{columnWidth}")
+            .Field("addrow", $"{rowHeight}")
+            .Field("datamodel_wrap", $"{wrap}");
+
+    /// <summary>
     /// The template a <see cref="DataModel"/> container draws once per entry: <c>item = { … }</c>.
     ///
     /// Inside it the entry is the datacontext, so its widgets address the entry's own type rather
@@ -210,6 +224,18 @@ public sealed class GuiBuilder
 
     public GuiBuilder ExpandingV() => Field("layoutpolicy_vertical", "expanding");
 
+    /// <summary>
+    /// A layout policy other than <c>expanding</c> — <c>preferred</c>, <c>fixed</c>, <c>growing</c>,
+    /// <c>shrinking</c>.
+    ///
+    /// <c>preferred</c> is the one worth knowing: it means "be the size of your content" where
+    /// expanding means "take everything on offer". Leaving it off a container that has no size of
+    /// its own is not neutral — a custom tooltip written without it filled the entire screen with
+    /// its own background, because the tooltip layer offered it the screen and nothing declined.
+    /// </summary>
+    public GuiBuilder LayoutPolicy(string axis, string policy)
+        => Field($"layoutpolicy_{axis}", policy);
+
     /// <summary>A vanilla template mixed in. Repeats are meaningful, so these accumulate.</summary>
     public GuiBuilder Using(params string[] templates)
     {
@@ -274,6 +300,23 @@ public sealed class GuiBuilder
 
     public GuiBuilder OnClick(string action) => Quoted("onclick", action);
 
+    /// <summary>
+    /// A button drawn in its pressed state — what marks the tab you are looking at.
+    ///
+    /// Pairs with <see cref="AlwaysTransparent"/> on the same condition. A tab that looks pressed
+    /// but still takes the click re-runs its own <c>onclick</c>, which is harmless for a plain
+    /// <c>Set</c> and is not for anything else, so vanilla writes both every time.
+    /// </summary>
+    public GuiBuilder Down(GuiExpr condition) => Quoted("down", condition.ToString());
+
+    /// <summary>Whether the mouse passes straight through this widget.</summary>
+    public GuiBuilder AlwaysTransparent(GuiExpr condition)
+        => Quoted("alwaystransparent", condition.ToString());
+
+    /// <summary>The literal form: a widget that never takes the mouse at all.</summary>
+    public GuiBuilder AlwaysTransparent(bool value = true)
+        => Field("alwaystransparent", YesNo(value));
+
     /// <summary>A localisation key as the tooltip.</summary>
     public GuiBuilder Tooltip(string key) => Quoted("tooltip", key);
 
@@ -283,6 +326,26 @@ public sealed class GuiBuilder
     public GuiBuilder Shortcut(string shortcut) => Quoted("shortcut", shortcut);
 
     public GuiBuilder Texture(string path) => Quoted("texture", path);
+
+    /// <summary>
+    /// A second texture combined with this widget's own: <c>modify_texture = { … }</c>.
+    ///
+    /// The route to drawing a vanilla icon in a colour. Building-type icons are pure black with an
+    /// alpha mask — every opaque pixel of them is <c>(0,0,0)</c> — so <c>color</c> cannot tint them,
+    /// because a multiply against black is black. Painting a swatch and masking it with the icon is
+    /// what works: <c>Texture("…/colors/gold.dds").ModifyTexture(icon, "mask")</c>.
+    ///
+    /// <paramref name="blendMode"/> is the engine's own vocabulary — <c>alphamultiply</c>,
+    /// <c>overlay</c>, <c>colordodge</c>, <c>multiply</c>, <c>mask</c>, <c>add</c>, <c>darken</c>.
+    /// </summary>
+    public GuiBuilder ModifyTexture(string path, string blendMode)
+    {
+        Attach(GuiNode.Block("modify_texture", "=")
+            .Add(GuiNode.Leaf("texture", GuiNode.Quote(path)))
+            .Add(GuiNode.Leaf("blend_mode", blendMode)));
+
+        return this;
+    }
 
     public GuiBuilder FitType(string fit) => Field("fittype", fit);
 

@@ -216,6 +216,7 @@ public static class ContentWriter
         });
 
         Core.Stage.Time("wonders", () => WonderWriter.WriteAll(modDir, worldCenters));
+        Core.Stage.Time("wonder index", () => WonderIndex.Write(modDir, worldCenters));
 
         Core.Stage.Time("title tiers", () => TitleTierWriter.WriteAll(modDir, cultures, empires));
 
@@ -315,6 +316,13 @@ public static class ContentWriter
         PrehistoryMap? prehistory = null;
         BookmarkCast? bookmarks = null;
 
+        // Hoisted out of the block below for the debug panel, which reports them, and for the same
+        // reason the three above are: nothing outside the history phase can see what it decided.
+        // Counts rather than the maps themselves — the panel wants a number, and keeping a whole
+        // ArtifactMap alive past the block that used it to say "312" would be the wrong trade.
+        int artifactCount = 0;
+        int struggleCount = 0;
+
         // --- AFTER (clean and unified) ---
         if (writeHistory)
         {
@@ -339,14 +347,18 @@ public static class ContentWriter
                 // Reads prehistory for the same reason the bookmarks do: an heirloom needs the
                 // dead man it was made for and the house it was taken from, and both were decided
                 // a few lines up. Without them every artifact ships with an empty history panel.
+                // World centres and development are read for placement weighting only, and both are
+                // optional there: a map with no wonders scatters its treasure exactly as this did
+                // before, rather than needing a branch of its own.
                 var artifacts = MapGen.ArtifactMap.Build(
-                    counties, cultures, faiths, realms, wilderness, prehistory, cfg,
-                    new Rng(cfg.Seed ^ 0x4A1F));
+                    counties, cultures, faiths, realms, wilderness, prehistory,
+                    worldCenters, development, cfg, new Rng(cfg.Seed ^ 0x4A1F));
 
                 ArtifactWriter.WriteTemplates(modDir);
                 ArtifactWriter.WriteModifiers(modDir, artifacts);
                 ArtifactWriter.WriteLocalisation(modDir, artifacts);
                 ArtifactWriter.WriteOnGameStart(modDir, artifacts);
+                artifactCount = artifacts.AllArtifacts.Count;
 
                 var bookmarkResult = BookmarkWriter.WriteAll(
                     modDir, gameDir, cfg, provinces, order, empires,
@@ -382,12 +394,21 @@ public static class ContentWriter
                 ChronicleWriter.WriteAll(modDir, chronicle, struggles, empires);
 
                 StruggleWriter.WriteAll(modDir, gameDir, cfg, struggles, flatmap, provinces, order);
+                struggleCount = struggles.Struggles.Count;
 
                 WarWriter.WriteAll(modDir, prehistory);
                 PortraitWriter.WriteAll(modDir, gameDir, bookmarkResult.PortraitRequests, ethnicities, cfg.Seed);
             });
         }
         else Console.WriteLine("  history: SKIPPED (--no-history)");
+
+        // Last of the writers that read the world, and deliberately so: it reports what every one
+        // of them decided, and a number gathered before the phase that could still change it would
+        // be a debug panel that lies. See Emit/GuiWindows/DebugPanel.cs.
+        Core.Stage.Time("debug panel", () => DebugPanel.Write(modDir, DebugFacts(
+            modDir, cfg, provinces, empires, counties, cultures, faiths, wilderness, worldCenters,
+            retinues, landCount, riverCount, baronyCount, artifactCount, struggleCount,
+            writeHistory, azgaar, runStarted)));
 
         List<string> sets = [StaticFileWriter.Core];
         if (cfg.EnableWilderness) sets.Add(StaticFileWriter.Wilderness);
@@ -513,6 +534,91 @@ public static class ContentWriter
         }
     }
 
+    /// <summary>
+    /// Everything the debug panel bakes into the mod: what this run decided, gathered in one place
+    /// so the window can report it back from inside the game.
+    ///
+    /// Deliberately a plain projection of things already computed above — it counts, it does not
+    /// decide. A number here that disagreed with what was written would be worse than no panel at
+    /// all, because the panel's whole use is as the thing you trust when the game disagrees with
+    /// the log.
+    /// </summary>
+    private static DebugPanel.Facts DebugFacts(string modDir, MapConfig cfg, ProvinceMap provinces,
+        List<Title> empires, List<Title> counties, MapGen.CultureMap cultures,
+        MapGen.FaithMap faiths, MapGen.WildernessMap wilderness, WorldCenterMap worldCenters,
+        MapGen.RetinueMap? retinues, int landCount, int riverCount, int baronyCount,
+        int artifactCount, int struggleCount, bool writeHistory, MapGen.AzgaarImport? azgaar,
+        DateTime runStarted)
+    {
+        var all = Titles.Flatten(empires);
+
+        return new DebugPanel.Facts
+        {
+            // The folder, not the mod's display name: this method never sees GenerationOptions, and
+            // the folder is what a person looking for the files on disk would actually type.
+            ModName = Path.GetFileName(modDir.TrimEnd(Path.DirectorySeparatorChar,
+                                                      Path.AltDirectorySeparatorChar)),
+            // The informational version carries the whole commit SHA, which is forty characters of
+            // a row that has two hundred and forty pixels. Seven is what every git UI shows and is
+            // enough to find the commit.
+            ToolVersion = ShortVersion(Core.RunLog.ToolVersion()),
+            Generated = runStarted.ToString("yyyy-MM-dd HH:mm") + " UTC",
+            Seed = cfg.Seed,
+            StartYear = cfg.StartYear,
+
+            Width = cfg.Width,
+            Height = cfg.Height,
+            LandProvinces = landCount,
+            // The three ranges default.map is written from, read the same way MapDataWriter reads
+            // them, so the panel and default.map cannot disagree about where the sea starts.
+            Rivers = riverCount - landCount,
+            WaterProvinces = provinces.Count - riverCount,
+            Baronies = baronyCount,
+
+            Empires = all.Count(t => t.Tier == "e"),
+            Kingdoms = all.Count(t => t.Tier == "k"),
+            Duchies = all.Count(t => t.Tier == "d"),
+            Counties = counties.Count,
+
+            Cultures = cultures.Cultures.Count,
+            Heritages = cultures.Heritages.Count,
+            Faiths = faiths.Faiths.Count,
+            Religions = faiths.Religions.Count,
+
+            Wonders = worldCenters.Centers.Count,
+            WildernessCounties = wilderness.Count,
+            Artifacts = artifactCount,
+            Struggles = struggleCount,
+            MenAtArms = retinues?.Regiments.Count ?? 0,
+
+            Source = azgaar is null ? "procedural" : "Azgaar import",
+            Races = cfg.EnableFantasyEthnicities
+                ? cfg.RaceMode.ToString()
+                : "human only",
+            Wilderness = cfg.EnableWilderness,
+            Magic = cfg.EnableMagic,
+            Retinues = retinues is not null,
+            History = writeHistory,
+
+            // The same condition WonderIndex.Write returns early on. Said twice rather than shared,
+            // because what this asks is "was that file written" and what that asks is "is there
+            // anything to put in it" — they agree today and are not the same question.
+            HasWonderIndex = worldCenters.Centers.Count > 0,
+        };
+    }
+
+    /// <summary>
+    /// <c>1.2.3+abcdef0123…</c> cut down to <c>1.2.3+abcdef0</c>. Anything without a <c>+</c> is
+    /// already short and passes through.
+    /// </summary>
+    private static string ShortVersion(string version)
+    {
+        int plus = version.IndexOf('+');
+        if (plus < 0 || version.Length - plus <= 8) return version;
+
+        return version[..(plus + 8)];
+    }
+
     private static void ReportTerrain(TerrainClass[] terrain)
     {
         var counts = new long[Enum.GetValues<TerrainClass>().Length];
@@ -598,6 +704,91 @@ public static class ContentWriter
 
     /// <returns>The holding written for every barony, by province id — see
     /// <see cref="WrittenContent.Holdings"/> for why it is kept rather than replayed.</returns>
+    /// <summary>
+    /// How much of a wonder already stands on the start date: 0 for an empty slot, up to
+    /// <see cref="GeneratedWonder.Tiers"/> for one finished long ago.
+    ///
+    /// A monument is a claim about how long a place has been important and how much surplus it had
+    /// to spend on something that is not a wall or a granary. Three things argue about that, and
+    /// none of them is decisive on its own:
+    ///
+    /// The era. A world that starts a century into its own history has had time to finish things a
+    /// world starting at its dawn has not. Read from <see cref="MapConfig.EraYear"/> rather than
+    /// StartYear, because a fictional calendar can put the same era at any number.
+    ///
+    /// The wealth around it. Development is the generator's own measure of how much a place could
+    /// afford, and it is already boosted at world centres, so this asks whether the county is rich
+    /// even by that standard.
+    ///
+    /// And who holds it. A tribal or nomadic realm builds differently — not worse, but a permanent
+    /// monument in stone is a settled people's answer, and a horde's capital having a finished
+    /// palace on day one reads wrong in a way the other two do not.
+    ///
+    /// Deliberately a weighting rather than a table: every combination stays possible, so a rich
+    /// late-era feudal centre is usually well along and occasionally has nothing but foundations,
+    /// which is the more interesting world to be handed.
+    /// </summary>
+    private static int StartingWonderTier(
+        GeneratedWonder wonder, Dictionary<Title, int> development, int medianDevelopment,
+        GovernmentMap governments, MapConfig cfg, Rng rng)
+    {
+        int score = 0;
+
+        // Era. The anchor is 1000 because that is roughly where vanilla's own start dates put a
+        // settled, building world; earlier is a younger age, later a more finished one.
+        int era = cfg.EraYear;
+        if (era >= 1200) score += 3;
+        else if (era >= 1000) score += 2;
+        else if (era >= 850) score += 1;
+
+        // Wealth RELATIVE to the world, which is the only way this term says anything. Absolute
+        // thresholds were tried first and were worthless: WorldCenterDevBoost is 32, so every
+        // world centre lands at development 35-53 against a world median of 9, and any fixed
+        // threshold below 35 scores all of them identically. What varies — and what a monument
+        // actually reflects — is how far above its neighbours a place stands.
+        double ratio = development.GetValueOrDefault(wonder.County)
+                     / (double)Math.Max(1, medianDevelopment);
+
+        // Bands chosen from the measured spread rather than from what "rich" sounds like. With the
+        // boost applied a centre sits at development 35-53 against a median of 9, so the whole
+        // population lands between ratio 3.9 and 5.8 — thresholds at 2 or 3 score every centre
+        // identically and the term does no work. These split that range into thirds, so the
+        // question being asked is "exceptional among world centres", which is the only question
+        // with an answer that varies.
+        if (ratio >= 5.5) score += 3;
+        else if (ratio >= 4.5) score += 2;
+        else if (ratio >= 3.5) score += 1;
+
+        switch (governments.For(wonder.County))
+        {
+            case GovernmentMap.Administrative: score += 2; break;
+            case GovernmentMap.Feudal:
+            case GovernmentMap.Republic:
+            case GovernmentMap.Theocracy: score += 1; break;
+
+            // Tribal and clan build, but not in this idiom. Nomads least of all.
+            case GovernmentMap.Nomad: score -= 2; break;
+            case GovernmentMap.Tribal: score -= 1; break;
+        }
+
+        // The roll. Score shifts the odds; it never picks the answer.
+        //
+        // Bands set so a middling centre — score around four — is usually a tier or two along and
+        // occasionally bare ground: roughly 10% nothing, 50% tier one, 30% tier two, 10% finished.
+        // A primitive one (early era, tribal, barely above its neighbours) scores zero and cannot
+        // reach tier two at all; a rich late administrative capital scores eight and finishes half
+        // the time.
+        int roll = rng.Int(0, 9) + score;
+
+        return roll switch
+        {
+            >= 13 => 3,
+            >= 10 => 2,
+            >= 5 => 1,
+            _ => 0,
+        };
+    }
+
     private static Dictionary<int, string> WriteProvinceHistory(string modDir, MapConfig cfg,
         List<Title> empires,
         TerrainClass[] provinceTerrain, Dictionary<Title, int> development, CultureMap cultures,
@@ -610,6 +801,12 @@ public static class ContentWriter
         var rng = new Rng(cfgSeed ^ 0x8A12);
         var counts = new Dictionary<string, int>();
         var holdings = new Dictionary<int, string>();
+
+        // The world's ordinary level of wealth, for the wonder roll below to measure its centres
+        // against. Median rather than mean: development has a long tail — the centres themselves
+        // are in it — and a mean would be dragged up by exactly the counties being judged.
+        var devLevels = development.Values.OrderBy(v => v).ToList();
+        int medianDevelopment = devLevels.Count == 0 ? 1 : devLevels[devLevels.Count / 2];
 
         // Four spaces again, matching landed_titles above.
         var b = new JominiBuilder(JominiStyle.Spaced);
@@ -646,7 +843,19 @@ public static class ContentWriter
                     b.Field("holding", holding);
 
                     if (wondersByBarony.TryGetValue(barony, out var wonder))
-                        b.Field("special_building", wonder.Key);
+                    {
+                        // How far up its own ladder this wonder already is on the start date.
+                        int built = StartingWonderTier(
+                            wonder, development, medianDevelopment, governments, cfg,
+                            new Rng(barony.ProvinceId ^ 0x5C0E));
+
+                        // The slot is declared either way. Without it a world that rolled "not yet
+                        // built" would have nowhere to build it, and the wonder would be a
+                        // building nobody could ever construct.
+                        b.Field("special_building_slot", wonder.TierKey(1));
+
+                        if (built > 0) b.Field("special_building", wonder.TierKey(built));
+                    }
                 }
             }
         }

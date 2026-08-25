@@ -1,0 +1,42 @@
+﻿namespace = gen_wonder_events
+
+# Fired when a generated wonder reaches its final tier.
+#
+# One event for every wonder in every world, rather than one per archetype. What the player did is
+# the same in each case -- they finished a generations-long building programme -- and everything
+# that differs between a Great Library and a Citadel is already carried by the building itself: its
+# name, its description, its modifiers and its model. An event per archetype would restate all of
+# that in prose and then have to be regenerated whenever the archetype list changed.
+#
+# Static, so it ships on every map and needs nothing from the generator beyond the trigger_event in
+# on_complete. Emit/WonderWriter.cs writes that call on the tier-three building only.
+#
+# Scope: the county holder, sent from `county.holder` inside the building's on_complete.
+#
+# This is the hook for tying wonders to artifacts later -- create_artifact here would make finishing
+# a wonder mint something, and a famed-or-better result would appear in the Chronicle of Treasures
+# on its own. Deliberately not done yet: an artifact wants a name, a rarity and a history chain, and
+# those are the artifact writer's to decide rather than this file's.
+
+gen_wonder_events.0001 = {
+	type = character_event
+	title = gen_wonder_completed.t
+	desc = gen_wonder_completed.desc
+	theme = realm
+
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+
+	# No is_triggered_only gate and no trigger block: the only thing that fires this is the
+	# building's own on_complete, which cannot happen twice for one wonder.
+	option = {
+		name = gen_wonder_completed.a
+
+		# Prestige rather than a modifier. The wonder's own tier-three modifiers are the reward and
+		# they are already live by the time this fires; a second standing bonus here would be
+		# balancing the same act twice, in two files, with nothing pointing between them.
+		add_prestige = major_prestige_gain
+	}
+}

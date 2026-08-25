@@ -803,17 +803,39 @@ public sealed class MapConfig : CustomTypeDescriptor
 
     /// <summary>
     /// Rows and columns of forced ocean around the edge of the province map, in province pixels.
+    /// Off by default; see below for what turning it on costs.
     ///
-    /// Vanilla has water along every edge — its top and bottom rows are entirely sea, and its
-    /// province map has only a handful of large ocean provinces touching them. A generated map
-    /// happily runs land off the poles instead: on seed 1 at vanilla size, 33 land provinces
-    /// touched the top edge and 17 the bottom. A province clipped by the map boundary has an
-    /// open border, which is the sort of thing a boundary-following walk cannot close.
+    /// The case for it: vanilla has water along every edge — its top and bottom rows are entirely
+    /// sea, and its province map has only a handful of large ocean provinces touching them. A
+    /// generated map happily runs land off the poles instead: on seed 1 at vanilla size, 33 land
+    /// provinces touched the top edge and 17 the bottom. A province clipped by the map boundary
+    /// has an open border, which is the sort of thing a boundary-following walk cannot close.
+    ///
+    /// The case against, and why it is now 0: a one-pixel ring is not an ocean, it is a channel.
+    /// The sea seeds are scattered before the ring exists, so the ring never becomes a province of
+    /// its own — it is absorbed into whichever ocean province grows into it. Every land province
+    /// that reached the boundary therefore came out COASTAL, sea-connected around the whole rim to
+    /// every other one, and an inland region that merely happened to touch the pole could be
+    /// invaded by sea. Drowning the edge fixed the geometry by creating a gameplay hole.
+    ///
+    /// Nothing downstream needs the ring. <c>Drainage.WaterBodies</c> says so in as many words —
+    /// if no water body touches the border the largest one stands in for the ocean — and
+    /// <c>ProvinceAnchor.DistanceFromEdge</c> already counts the map boundary as a province border,
+    /// so a clipped province does not read as infinitely deep when locators are placed.
+    ///
+    /// The `provinces touching the map edge` line in the province report is the measurement to
+    /// watch: it is what this setting moves, and it is how a seed that genuinely runs a continent
+    /// off the pole would show up.
+    ///
+    /// If a future map does need the edge closed, the right shape is not a wider ring — it is a
+    /// ring carved into sea provinces of its own and declared `impassable_seas` in default.map,
+    /// which is what vanilla does at its own fringe (see the `IMPASSABLE SEA ZONES` block there).
+    /// That keeps the water without making it sailable.
     /// </summary>
     [AdvancedSetting]
     [Category("03 Provinces")]
-    [Description("Rows and columns of forced ocean around the edge of the province map, in province pixels. Vanilla has water along every edge — its top and bottom rows are entirely sea, and its province map has only a handful of large ocean provinces touching them. A generated map happily runs land off the poles instead: on seed 1 at vanilla size, 33 land provinces touched the top edge and 17 the bottom. A prov...")]
-    public int OceanBorder { get; set; } = 1;
+    [Description("Rows and columns of forced ocean around the edge of the province map, in province pixels. 0 (the default) lets land run to the boundary. Raising it drowns the edge so no province is clipped — but the ring is absorbed into the neighbouring ocean rather than becoming its own province, so every land province at the boundary turns coastal and the whole rim becomes one sailable waterway.")]
+    public int OceanBorder { get; set; } = 0;
 
 
     // =========================================================================

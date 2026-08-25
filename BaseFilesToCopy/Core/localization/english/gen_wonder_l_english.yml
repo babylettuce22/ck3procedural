@@ -1,0 +1,18 @@
+﻿l_english:
+ # The wonder-completed event. See BaseFilesToCopy/Core/events/gen_wonder_events.txt.
+ #
+ # The building names itself. One event serves every archetype and every world, so the alternative
+ # was "it" and "the work" throughout, which reads as a template even when the rest does not. The
+ # chain is the one vanilla uses in seventy-odd of its own strings -- GetHolding, then
+ # GetSpecialBuildingType -- read off the province the building sits in, which the building saves as
+ # scope:gen_wonder_site before firing this.
+ #
+ # Nothing here claims anything the generator cannot guarantee. Earlier drafts had predecessors dying
+ # before they saw it finished and masons whose sons had joined the guild, and neither survives
+ # contact with the facts: a wonder can begin at tier two and be finished inside one reign, or be
+ # completed by the same character who laid the first stone. What IS always true on this event is
+ # narrow -- the final tier is built, this character holds the county, and the thing has a name.
+
+ gen_wonder_completed.t:0 "[gen_wonder_site.GetHolding.GetSpecialBuildingType.GetNameNoTooltip]"
+ gen_wonder_completed.desc:0 "The last of the scaffolding comes down, and the masons are paid off.\n\n[gen_wonder_site.GetHolding.GetSpecialBuildingType.GetName] is finished — no longer a work with a foundation under it and a plan attached, but the thing itself, standing over [gen_wonder_county.GetName] where anyone approaching will see it long before they arrive.\n\nWhat a house has built outlives most of what it has won."
+ gen_wonder_completed.a:0 "Let it stand."
