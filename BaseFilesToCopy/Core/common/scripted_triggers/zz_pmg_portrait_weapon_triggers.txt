@@ -1,0 +1,22 @@
+# Gate for showing an equipped weapon artifact on the idle portrait.
+# Referenced by gfx/portraits/portrait_animations/zz_procedural_weapon_idle.txt.
+#
+# Default behaviour matches AGOT: the weapon appears on characters who would already be
+# drawn in armour, so rulers do not stand around in court holding a naked blade. The two
+# character flags are the per-character overrides.
+
+pmg_show_equipped_weapon_trigger = {
+	exists = this
+	is_incapable = no
+	is_imprisoned = no
+
+	# explicit suppression always wins
+	NOT = { has_character_flag = pmg_hide_equipped_weapon }
+
+	OR = {
+		# vanilla's own "would this portrait be armoured" test
+		portrait_wear_armor_trigger = yes
+		# opt in a specific character regardless of context
+		has_character_flag = pmg_always_show_equipped_weapon
+	}
+}
