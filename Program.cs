@@ -60,7 +60,13 @@ public static class Program
                     previewRows = int.Parse(args[++i]);
                     break;
 
-                case "--static-only": 
+                // Diagnostic, not a generation mode: checks that attach-composed weapons land where
+                // the merged ones do and exits. Generates nothing and needs no heightmap, so it can
+                // run on its own in a second rather than behind a full map.
+                case "--verify-compose":
+                    return MapGen.WeaponComposeCheck.Run() ? 0 : 1;
+
+                case "--static-only":
                     staticOnly = true;
                     break;
 

@@ -25,6 +25,41 @@ public sealed record ForgedWeapon(
     IReadOnlyList<WeaponPart> Parts);
 
 /// <summary>
+/// One part of a composed weapon: its own mesh, in its own space, and where it hangs off the root.
+/// </summary>
+/// <param name="Mesh">
+/// The part's geometry translated so the socket it mates on sits at the origin. That is what makes
+/// the file shareable: the same blade mesh serves every hilt, because everything about the pairing
+/// has moved into <paramref name="Locator"/>.
+/// </param>
+/// <param name="Locator">
+/// Where this part attaches, in the root's space. Zero for the root itself.
+/// </param>
+/// <param name="Shared">
+/// Whether <paramref name="Mesh"/> is genuinely combination-independent. False when a join was
+/// missing a socket on one side, in which case the part keeps its original geometry and the locator
+/// carries the whole placement instead — still correct, but that mesh belongs to this pairing alone
+/// and cannot be shared with another. Reported rather than silently emitted, because it is the one
+/// way the composition can quietly go back to costing one mesh per combination.
+/// </param>
+public sealed record ComposedPart(
+    WeaponPart Part, PdxNode Mesh, ForgedMaterial Material, float[] Locator, bool Shared);
+
+/// <summary>
+/// A weapon expressed as separate entities rather than one merged mesh: a root and the parts
+/// attached to it.
+///
+/// The root is the <see cref="WeaponSchema.Lead"/> — see <see cref="WeaponSchema.Reanchored"/> for
+/// why it has to be, and why it is the only part that can carry a procedural recolour.
+/// </summary>
+public sealed record ComposedWeapon(
+    string Name, ComposedPart Root, IReadOnlyList<ComposedPart> Children)
+{
+    /// <summary>Root first, then children — the order the emitted entity tree is written in.</summary>
+    public IEnumerable<ComposedPart> AllParts => new[] { Root }.Concat(Children);
+}
+
+/// <summary>
 /// Where a part sits on its weapon. Not every kind uses every slot — see <see cref="WeaponSchema"/>.
 /// </summary>
 public enum WeaponPartSlot
@@ -108,6 +143,81 @@ public sealed record WeaponSchema(
     };
 
     public IEnumerable<WeaponPartSlot> AllSlots => Required.Concat(Optional);
+
+    /// <summary>What <paramref name="slot"/> mounts onto, or null if it is the anchor.</summary>
+    public WeaponPartSlot? MountOf(WeaponPartSlot slot)
+    {
+        foreach (var (part, mountsOn) in Chain)
+            if (part == slot) return mountsOn;
+
+        return null;
+    }
+
+    /// <summary>
+    /// The same weapon, re-rooted so the <see cref="Lead"/> is the anchor.
+    ///
+    /// **This is what makes attach-composition affordable, and it is the whole reason the method
+    /// exists.** A composed weapon is one root entity with the other parts hung off it, and
+    /// <see cref="WeaponForge.Place"/> gives the anchor a shift of exactly zero while every other
+    /// part's shift depends on what it was paired with. So only the anchor's mesh is the same file
+    /// in every combination — any other part would need one mesh per pairing, which is the
+    /// combinatorial cost the composition is meant to remove.
+    ///
+    /// The root is also the only part that gets a <c>portrait_accessory</c>: an attached child
+    /// receives no pattern binding of its own and none from its parent, measured in-game rather than
+    /// inferred (see the attach probes). So the part that is the anchor is also the only part that
+    /// can be procedurally recoloured — which is why the lead is the one worth anchoring on. A blade
+    /// keeps its palette; the fittings wear the art they were cut with.
+    ///
+    /// Re-rooting is a plain tree walk. <see cref="Chain"/> is a tree of joins expressed as
+    /// (part, mounts-on) edges; reading them undirected and breadth-first from the lead re-emits
+    /// the same joins pointing the other way. Breadth-first is not incidental — the chain's contract
+    /// is that a mount appears before anything hanging off it, and BFS from the root guarantees
+    /// exactly that.
+    ///
+    /// Every join is authored from both sides (<c>AUTHORING_PARTS.md</c>: "one per side of every
+    /// join" — a guard carries <c>socket_grip</c> and <c>socket_blade</c>, a blade carries
+    /// <c>socket_guard</c>), so reversing an edge always finds the sockets it needs. A library cut
+    /// without one side of a join would fail here in the same way it already fails to assemble.
+    /// </summary>
+    public WeaponSchema Reanchored()
+    {
+        if (Anchor == Lead) return this;
+
+        var adjacent = new Dictionary<WeaponPartSlot, List<WeaponPartSlot>>();
+
+        void Link(WeaponPartSlot from, WeaponPartSlot to)
+        {
+            if (!adjacent.TryGetValue(from, out var list)) adjacent[from] = list = [];
+            list.Add(to);
+        }
+
+        foreach (var (part, mountsOn) in Chain)
+        {
+            Link(part, mountsOn);
+            Link(mountsOn, part);
+        }
+
+        var rechained = new List<(WeaponPartSlot Part, WeaponPartSlot MountsOn)>();
+        var seen = new HashSet<WeaponPartSlot> { Lead };
+        var queue = new Queue<WeaponPartSlot>();
+        queue.Enqueue(Lead);
+
+        while (queue.Count > 0)
+        {
+            var mount = queue.Dequeue();
+            if (!adjacent.TryGetValue(mount, out var neighbours)) continue;
+
+            foreach (var next in neighbours)
+            {
+                if (!seen.Add(next)) continue;
+                rechained.Add((next, mount));
+                queue.Enqueue(next);
+            }
+        }
+
+        return this with { Anchor = Lead, Chain = rechained };
+    }
 }
 
 /// <summary>
@@ -454,6 +564,127 @@ public static class WeaponForge
     }
 
     /// <summary>
+    /// The same weapon as <see cref="Assemble"/>, but left in pieces: one mesh per part plus the
+    /// offsets that put them back together.
+    ///
+    /// **The invariant.** Every part lands at exactly the vertex positions <see cref="Assemble"/>
+    /// would have given it — <c>mesh + locator</c> here equals <c>mesh + shift</c> there, term for
+    /// term. That is not a hope, it is arithmetic: <see cref="Mate"/> defines a part's shift as
+    /// <c>mount.socket + mount.shift - own.socket</c>, so subtracting <c>own.socket</c> from the
+    /// geometry and putting <c>mount.socket + mount.shift</c> in the locator moves the same total.
+    /// <c>--verify-compose</c> checks it numerically against <see cref="Assemble"/> for every
+    /// combination the libraries can make, because an error here is a weapon that looks subtly
+    /// wrong rather than one that fails.
+    ///
+    /// **What it buys.** The root's mesh is the lead's own geometry unmodified (its shift is zero by
+    /// construction), and every child's mesh is normalised onto its own socket, so no part's mesh
+    /// depends on what it was paired with. N blades and M hilts cost N+M mesh files instead of N×M,
+    /// and a pairing becomes a few lines of text in an <c>.asset</c>.
+    /// </summary>
+    public static ComposedWeapon Compose(
+        string name, IReadOnlyList<WeaponPart> parts, WeaponSchema schema)
+    {
+        if (parts.Count == 0) throw new ArgumentException("No parts supplied", nameof(parts));
+
+        // The caller chooses the anchoring by handing in either the schema or its Reanchored()
+        // form, because which part is the root is a design decision with a measured cost rather
+        // than something this method can settle. Anchoring on the lead lets the blade keep a
+        // procedural palette but slides the weapon in the hand by however much the hilts differ --
+        // tolerable on bladed weapons (a sword's worst lead varies 11.08 units across bases),
+        // ruinous on hafted ones, where haft lengths differ so much that a spear head anchored in
+        // place swings the grip 148.62 units. `--verify-compose` prints both numbers.
+        var composed = schema;
+
+        var root = parts.FirstOrDefault(p => p.Slot == composed.Anchor)
+            ?? throw new ArgumentException(
+                $"A composed {schema.Kind} weapon needs a {composed.Anchor}: it is the root entity "
+                + "every other part hangs off, and the only one that can carry a recolour.",
+                nameof(parts));
+
+        var shifts = Place(parts, root, composed);
+        var children = new List<ComposedPart>();
+
+        foreach (var part in parts)
+        {
+            if (ReferenceEquals(part, root)) continue;
+
+            var mountSlot = composed.MountOf(part.Slot);
+            var mount = mountSlot is { } ms ? parts.FirstOrDefault(p => p.Slot == ms) : null;
+
+            // Both sides of the join have to be authored for the geometry to be shareable. When
+            // either is missing the part is still placed correctly -- the locator simply carries the
+            // shift Place already worked out -- but this one mesh now belongs to this pairing.
+            bool shared = mount is not null
+                && mount.Sockets.ContainsKey(part.Slot)
+                && part.Sockets.ContainsKey(mount.Slot);
+
+            float[] locator;
+            PdxNode mesh;
+
+            if (shared)
+            {
+                float[] mountSocket = mount!.Sockets[part.Slot];
+                float[] ownSocket = part.Sockets[mount.Slot];
+                float[] mountShift = shifts[mount];
+
+                locator =
+                [
+                    mountSocket[0] + mountShift[0],
+                    mountSocket[1] + mountShift[1],
+                    mountSocket[2] + mountShift[2],
+                ];
+
+                mesh = Translated(part.Mesh, [-ownSocket[0], -ownSocket[1], -ownSocket[2]]);
+            }
+            else
+            {
+                locator = [.. shifts[part]];
+                mesh = Translated(part.Mesh, [0f, 0f, 0f]);
+            }
+
+            children.Add(new ComposedPart(part, mesh, MaterialOf(part), locator, shared));
+        }
+
+        return new ComposedWeapon(
+            name,
+            new ComposedPart(root, Translated(root.Mesh, [0f, 0f, 0f]), MaterialOf(root),
+                [0f, 0f, 0f], Shared: true),
+            children);
+    }
+
+    /// <summary>The textures a part's own material node names, in the form the .asset declares.</summary>
+    private static ForgedMaterial MaterialOf(WeaponPart part)
+    {
+        var material = part.Mesh.Children.FirstOrDefault(c => c.Name == "material");
+
+        return new ForgedMaterial(
+            material?.Prop("diff")?.Text ?? "",
+            material?.Prop("n")?.Text ?? "",
+            material?.Prop("spec")?.Text ?? "");
+    }
+
+    /// <summary>
+    /// One part's mesh moved by <paramref name="delta"/>, as a fresh node.
+    ///
+    /// Goes through <see cref="MeshBuilder"/> rather than editing <c>p</c> in place for two reasons:
+    /// the source part is shared between every weapon built from it and must not be mutated, and the
+    /// builder already recomputes the bounding sphere and aabb, which the engine reads for culling.
+    /// A hand-rolled translation that forgot them would produce a weapon that vanishes at certain
+    /// camera angles.
+    /// </summary>
+    private static PdxNode Translated(PdxNode mesh, float[] delta)
+    {
+        var builder = new MeshBuilder();
+        builder.Append(mesh, delta);
+        var node = builder.ToNode();
+
+        if (mesh.Children.FirstOrDefault(c => c.Name == "material") is { } material)
+            node.Children.Add(material);
+
+        return node;
+    }
+
+    /// <summary>
     /// Where each part ends up once assembled, as a translation in file space.
     ///
     /// <see cref="Assemble"/> merges parts into one mesh node per material and the per-part
@@ -538,7 +769,7 @@ public static class WeaponForge
     /// </summary>
     private sealed class MeshBuilder
     {
-        private readonly List<float> _p = [], _n = [], _ta = [], _u0 = [];
+        private readonly List<float> _p = [], _n = [], _ta = [], _u0 = [], _u1 = [];
         private readonly List<int> _tri = [];
         private int _vertices;
 
@@ -553,6 +784,22 @@ public static class WeaponForge
             _ta.AddRange(mesh.Floats("ta"));
             _u0.AddRange(mesh.Floats("u0"));
 
+            // u1 is the pattern UV the recolour swatch tiles over, and it used to be dropped here:
+            // every stream but this one was copied, so an assembled weapon carried a mask (sampled
+            // in u0) and no coordinates for the swatch. It survived review because the generated
+            // palettes are flat colour swatches, where sampling the same texel everywhere looks
+            // identical to tiling correctly — the fault would only have shown on a swatch with
+            // detail in it. WeaponPart.HasPatternUv gates recolouring on the SOURCE part having it,
+            // so the check was reading a stream the output then discarded.
+            //
+            // A part missing u1 pads to zero rather than being skipped, because the streams are
+            // parallel arrays indexed by vertex: appending nothing would slide every later part's
+            // pattern coordinates onto the wrong vertices.
+            float[] u1 = mesh.Floats("u1");
+
+            if (u1.Length == added * 2) _u1.AddRange(u1);
+            else _u1.AddRange(new float[added * 2]);
+
             foreach (int idx in mesh.Ints("tri")) _tri.Add(idx + _vertices);
             _vertices += added;
         }
@@ -564,6 +811,11 @@ public static class WeaponForge
             mesh.Set("n", PdxProp.Of([.. _n]));
             if (_ta.Count > 0) mesh.Set("ta", PdxProp.Of([.. _ta]));
             if (_u0.Count > 0) mesh.Set("u0", PdxProp.Of([.. _u0]));
+
+            // Only when something real is in it. A weapon built entirely from parts with no pattern
+            // UV would otherwise ship an all-zero stream, which claims a capability the geometry
+            // does not have and would defeat any later check for its absence.
+            if (_u1.Count > 0 && _u1.Exists(v => v != 0f)) mesh.Set("u1", PdxProp.Of([.. _u1]));
             mesh.Set("tri", PdxProp.Of([.. _tri]));
 
             var (min, max) = Bounds();

@@ -447,7 +447,7 @@ public static class WeaponForgeStep
     /// copied beside the built exe, but a <c>dotnet run</c> from the repo resolves it from the
     /// working directory instead.
     /// </summary>
-    private static string? Locate(string relPath)
+    public static string? Locate(string relPath)
     {
         string rel = relPath.Replace('/', Path.DirectorySeparatorChar);
 
