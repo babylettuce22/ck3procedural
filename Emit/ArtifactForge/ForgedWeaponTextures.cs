@@ -172,4 +172,48 @@ public static class ForgedWeaponTextures
             + "assets/<library>/textures/, correcting the texture name in the part's material in "
             + "Blender and re-exporting the library, or removing the family from the library.");
     }
+
+    /// <summary>
+    /// The average colour of a texture's opaque texels, or null when it cannot be found or read.
+    ///
+    /// Used to colour a part the recolour never touched — an attached lead keeps the textures it was
+    /// cut with, so the honest colour for it in an icon is whatever those textures actually are.
+    /// Transparent texels are skipped because a weapon atlas is mostly empty space, and averaging
+    /// that in washes every part toward the background.
+    /// </summary>
+    public static (byte R, byte G, byte B)? AverageColour(string gameDir, string diffuse)
+    {
+        if (string.IsNullOrWhiteSpace(diffuse)) return null;
+
+        string? path = Find(gameDir, diffuse);
+        if (path is null) return null;
+
+        if (Io.DdsReader.Load(path) is not { } image) return null;
+
+        long r = 0, g = 0, b = 0, n = 0;
+
+        for (int i = 0; i + 3 < image.Bgra.Length; i += 4)
+        {
+            if (image.Bgra[i + 3] < 128) continue;
+
+            b += image.Bgra[i];
+            g += image.Bgra[i + 1];
+            r += image.Bgra[i + 2];
+            n++;
+        }
+
+        return n == 0 ? null : ((byte)(r / n), (byte)(g / n), (byte)(b / n));
+    }
+
+    /// <summary>First match for a bare texture name anywhere under the game's model tree.</summary>
+    private static string? Find(string gameDir, string name)
+    {
+        string root = Path.Combine(gameDir, "gfx", "models");
+        if (!Directory.Exists(root)) return null;
+
+        foreach (string path in Directory.EnumerateFiles(root, name, SearchOption.AllDirectories))
+            return path;
+
+        return null;
+    }
 }

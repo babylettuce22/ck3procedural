@@ -433,12 +433,22 @@ public static class ContentWriter
                 // from this pool, so the pool has to exist first. One pool per weapon kind that has
                 // a parts library; kinds without one fall back to the stock catalogue, which is a
                 // supported answer rather than a failure.
-                var forgedWeapons = Core.Stage.Detail("  · weapon forge",
+                var composed = Core.Stage.Detail("  · weapon forge",
                     () => WeaponForgeStep.ComposeWeaponCatalogue(modDir, gameDir, new Rng(cfg.Seed ^ 0x5A0D)));
 
                 var artifacts = Core.Stage.Detail("  · artifacts", () => MapGen.ArtifactMap.Build(
                     counties, cultures, faiths, realms, wilderness, prehistory,
-                    worldCenters, development, cfg, new Rng(cfg.Seed ^ 0x4A1F), forgedWeapons));
+                    worldCenters, development, cfg, new Rng(cfg.Seed ^ 0x4A1F), composed.Looks));
+
+                // Icons come after the artifacts and not with the catalogue, because which pairings
+                // deserve one depends on which the world actually handed out. A thumbnail is the one
+                // thing composition does not make cheap — geometry and masks are shared between
+                // pairings, a thumbnail belongs to exactly one — so only the upper bands get drawn
+                // and everything else keeps its kind's stock art.
+                var forgedWeapons = Core.Stage.Detail("  · weapon icons",
+                    () => WeaponForgeStep.RenderChosenIcons(modDir, gameDir, composed,
+                        artifacts.AllArtifacts.Select(a => (a.Visuals, a.Rarity)),
+                        ArtifactRarity.Masterwork));
 
                 ArtifactWriter.WriteTemplates(modDir);
                 Core.Stage.Detail("  · artifact visuals", () => ArtifactWriter.WriteVisuals(modDir, forgedWeapons));

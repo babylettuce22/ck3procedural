@@ -19,7 +19,7 @@ public sealed record ComposedLook(
 public sealed record ComposedKind(
     string Kind,
     IReadOnlyList<(string Family, WeaponBase Built)> Bases,
-    IReadOnlyList<(string Family, WeaponPiece Built)> Leads);
+    IReadOnlyList<(string Family, WeaponPiece Built, WeaponPart Part)> Leads);
 
 /// <summary>
 /// Writes composed weapons into the mod: one <c>.mesh</c> per shareable piece, and one <c>.asset</c>
@@ -102,7 +102,7 @@ public static class ComposedWeaponWriter
 
         foreach (var kind in kinds)
             foreach (var (baseFamily, _) in kind.Bases)
-                foreach (var (leadFamily, _) in kind.Leads)
+                foreach (var (leadFamily, _, _) in kind.Leads)
                     if (mayCombine(leadFamily, baseFamily))
                         looks.Add(new ComposedLook(
                             kind.Kind, leadFamily, baseFamily, PairName(leadFamily, baseFamily)));
@@ -143,7 +143,7 @@ public static class ComposedWeaponWriter
                 WritePdxMesh(b, built.Piece, BaseMeshName(family), patterned: recolour is not null);
             }
 
-            foreach (var (family, built) in kind.Leads)
+            foreach (var (family, built, _) in kind.Leads)
             {
                 PdxMesh.Write(Path.Combine(dir, $"{LeadMeshName(family)}.mesh"), built.Root);
                 WritePdxMesh(b, built, LeadMeshName(family), patterned: false);
@@ -158,7 +158,7 @@ public static class ComposedWeaponWriter
             {
                 float[] at = built.LeadLocator;
 
-                foreach (var (leadFamily, _) in kind.Leads)
+                foreach (var (leadFamily, _, _) in kind.Leads)
                 {
                     if (!mayCombine(leadFamily, baseFamily)) continue;
 

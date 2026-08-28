@@ -237,6 +237,20 @@ public static class WeaponForgeStep
     /// falls back to the vanilla catalogue.
     /// </summary>
     /// <summary>
+    /// The composed catalogue, plus what a later pass needs to draw icons for part of it.
+    ///
+    /// Icons cannot be rendered while the catalogue is built, because which pairings deserve one
+    /// depends on which the world actually hands out and at what rarity — and that is decided by
+    /// <see cref="MapGen.ArtifactMap"/>, which runs afterwards and needs the catalogue to run at
+    /// all. So the pieces are carried forward rather than rebuilt.
+    /// </summary>
+    public sealed record ComposedCatalogue(
+        IReadOnlyList<WeaponAsset> Looks,
+        IReadOnlyList<ComposedKind> Kinds,
+        IReadOnlyList<ComposedLook> Pairings,
+        ForgedRecolour? Recolour);
+
+    /// <summary>
     /// The pseudo-weapon a base family's finish is worked out under, one per rarity band.
     ///
     /// The recolour machinery takes a set of parts and returns a mask plus a palette, and a base
@@ -253,7 +267,7 @@ public static class WeaponForgeStep
     public static string BaseLookName(string family, ArtifactRarity tier)
         => $"{ComposedWeaponWriter.BaseMeshName(family)}_{tier.ToString().ToLowerInvariant()}";
 
-    public static IReadOnlyList<WeaponAsset> ComposeWeaponCatalogue(
+    public static ComposedCatalogue ComposeWeaponCatalogue(
         string modDir, string gameDir, Rng rng)
     {
         var kinds = new List<ComposedKind>();
@@ -286,7 +300,7 @@ public static class WeaponForgeStep
                 .ToList();
 
             var bases = new List<(string, WeaponBase)>();
-            var leads = new List<(string, WeaponPiece)>();
+            var leads = new List<(string, WeaponPiece, WeaponPart)>();
 
             foreach (var family in families)
             {
@@ -308,7 +322,7 @@ public static class WeaponForgeStep
                     var built = WeaponForge.BuildLead(
                         ComposedWeaponWriter.LeadMeshName(family.Key), leadPart, schema);
 
-                    if (built is not null) leads.Add((family.Key, built));
+                    if (built is not null) leads.Add((family.Key, built, leadPart));
                     else Console.WriteLine($"  composed weapons: {family.Key} "
                         + $"{schema.Lead.ToString().ToLowerInvariant()} carries no socket toward its "
                         + "mount - dropped as a lead");
@@ -326,7 +340,7 @@ public static class WeaponForgeStep
             kinds.Add(new ComposedKind(kind, bases, leads));
         }
 
-        if (kinds.Count == 0) return [];
+        if (kinds.Count == 0) return new ComposedCatalogue([], [], [], null);
 
         // Pairings first, because the tier plan is what decides which finish each one wears, and the
         // finishes cannot be written until the bands are known.
@@ -346,7 +360,123 @@ public static class WeaponForgeStep
         Console.WriteLine($"  composed weapons: {looks.Count} pairings from {meshes} shared meshes "
             + $"across {kinds.Count} kind(s)");
 
-        return catalogue;
+        return new ComposedCatalogue(catalogue, kinds, pairings, recolour);
+    }
+
+    /// <summary>
+    /// Renders a real icon for the pairings the world actually hands out at the given rarity or
+    /// better, and returns the catalogue with those rows repointed.
+    ///
+    /// **Why so few.** An icon is the one thing composition does not make cheap: geometry and masks
+    /// are shared between pairings, but a thumbnail belongs to exactly one. Rendering all 843 would
+    /// undo the saving for art almost none of which is ever seen — a world places 23 forged weapons.
+    /// Restricting to the upper bands renders a handful and puts them where a player is looking.
+    ///
+    /// **Everything else keeps its kind's stock icon, and that is deliberate rather than a
+    /// shortfall.** Weapons the *game* creates resolve through the visual override, where a cell
+    /// offers many assets and the engine rolls <c>icon</c> and <c>asset</c> independently — so no
+    /// per-look icon there could match the model it is drawn beside. Vanilla settles the same
+    /// question the same way: its <c>chest</c> visual carries one icon over ten different assets.
+    /// </summary>
+    public static IReadOnlyList<WeaponAsset> RenderChosenIcons(
+        string modDir, string gameDir, ComposedCatalogue catalogue,
+        IEnumerable<(string Visuals, ArtifactRarity Rarity)> placed, ArtifactRarity from)
+    {
+        if (catalogue.Recolour is not { } recolour || catalogue.Looks.Count == 0)
+            return catalogue.Looks;
+
+        var wanted = placed
+            .Where(a => a.Rarity >= from)
+            .Select(a => a.Visuals)
+            .ToHashSet(StringComparer.Ordinal);
+
+        if (wanted.Count == 0) return catalogue.Looks;
+
+        var byKey = catalogue.Pairings.ToDictionary(p => p.VisualKey, StringComparer.Ordinal);
+        var tierOf = catalogue.Looks.ToDictionary(
+            r => r.VisualKey, r => r.Tier ?? ArtifactRarity.Common, StringComparer.Ordinal);
+
+        var partsByKind = catalogue.Kinds.ToDictionary(k => k.Kind, k => k, StringComparer.Ordinal);
+        var drawn = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (string key in wanted.OrderBy(k => k, StringComparer.Ordinal))
+        {
+            if (!byKey.TryGetValue(key, out var look)) continue;
+            if (!partsByKind.TryGetValue(look.Kind, out var kind)) continue;
+
+            var schema = WeaponSchema.For(look.Kind);
+
+            var baseBuilt = kind.Bases.FirstOrDefault(b => b.Family == look.BaseFamily).Built;
+            var leadPart = kind.Leads.FirstOrDefault(l => l.Family == look.LeadFamily);
+            if (baseBuilt is null || leadPart.Family is null) continue;
+
+            // Reassembled rather than composed: the renderer wants the whole weapon in one frame,
+            // and Assemble is still the shortest way to get it. Nothing is written -- this geometry
+            // exists only to be photographed.
+            var parts = new List<WeaponPart>(baseBuilt.Parts);
+            var lead = FindLead(kind, look.LeadFamily, schema);
+            if (lead is null) continue;
+            parts.Add(lead);
+
+            var weapon = WeaponForge.Assemble(look.Name, parts, schema);
+            var colours = ColoursFor(weapon, baseBuilt, recolour,
+                BaseLookName(look.BaseFamily, tierOf.GetValueOrDefault(key, ArtifactRarity.Common)),
+                gameDir);
+
+            if (ForgedWeaponRender.Write(modDir, gameDir, weapon, schema, look.Kind, colours) is { } file)
+                drawn[key] = file;
+        }
+
+        Console.WriteLine($"  composed weapons: rendered {drawn.Count} icon(s) for "
+            + $"{from.ToString().ToLowerInvariant()}-and-better artifacts, "
+            + $"{catalogue.Looks.Count - drawn.Count} on stock art");
+
+        return [.. catalogue.Looks.Select(r =>
+            drawn.TryGetValue(r.VisualKey, out string? icon) ? r with { Icon = icon } : r)];
+    }
+
+    /// <summary>
+    /// The lead part of one family, or null when this kind's library has none.
+    ///
+    /// Read off <see cref="ComposedKind.Leads"/> and not off a base's parts: a base is built by
+    /// excluding the lead, so searching there can only ever return nothing. It did, silently, and
+    /// the icon pass rendered zero.
+    /// </summary>
+    private static WeaponPart? FindLead(ComposedKind kind, string family, WeaponSchema schema)
+    {
+        foreach (var (name, _, part) in kind.Leads)
+            if (string.Equals(name, family, StringComparison.Ordinal)) return part;
+
+        return null;
+    }
+
+    /// <summary>
+    /// A colour per part, in the order <see cref="ForgedWeaponRender"/> walks them.
+    ///
+    /// The base's parts take the finish they were given. The lead has none — it is an attached child
+    /// and keeps the textures it was cut with — so its colour is sampled from its own diffuse
+    /// instead, which is what the model will actually look like. Guessing a neutral steel here would
+    /// draw a bronze axe head silver.
+    /// </summary>
+    private static List<(byte R, byte G, byte B)> ColoursFor(
+        ForgedWeapon weapon, WeaponBase built, ForgedRecolour recolour, string look, string gameDir)
+    {
+        var baseColours = recolour.PartColour.TryGetValue(look, out var list) ? list : [];
+        var colours = new List<(byte, byte, byte)>(weapon.Parts.Count);
+
+        foreach (var part in weapon.Parts)
+        {
+            int index = -1;
+
+            for (int i = 0; i < built.Parts.Count; i++)
+                if (ReferenceEquals(built.Parts[i], part)) index = i;
+
+            colours.Add(index >= 0 && index < baseColours.Count
+                ? baseColours[index]
+                : ForgedWeaponTextures.AverageColour(gameDir, part.Diffuse) ?? ((byte)150, (byte)150, (byte)155));
+        }
+
+        return colours;
     }
 
     /// <summary>
