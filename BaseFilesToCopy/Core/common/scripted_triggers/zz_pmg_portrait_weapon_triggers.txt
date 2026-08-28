@@ -1,9 +1,19 @@
 # Gate for showing an equipped weapon artifact on the idle portrait.
 # Referenced by gfx/portraits/portrait_animations/zz_procedural_weapon_idle.txt.
 #
-# Default behaviour matches AGOT: the weapon appears on characters who would already be
-# drawn in armour, so rulers do not stand around in court holding a naked blade. The two
-# character flags are the per-character overrides.
+# Shows by default. This used to require portrait_wear_armor_trigger, mirroring AGOT, so that a
+# ruler did not stand about in court holding a naked blade. That was the wrong trade for a mod whose
+# weapons are procedurally generated: it made almost every generated weapon invisible in peacetime,
+# and the only characters who reliably displayed one were those a debug option had stamped with
+# pmg_always_show_equipped_weapon -- a permanent flag, which is why such a character then rendered
+# every weapon they were ever handed and nobody else rendered any. The flag still exists and the
+# "Debug: Forge a Weapon" event still sets it, so that trap is still live: a character used for
+# testing keeps showing every weapon forever.
+#
+# The two flags remain the per-character overrides, and the artifact details window carries a
+# per-artifact toggle (gen_artifact_hide_on_portrait) for suppressing one item without silencing
+# the character. To restore the old armour-gated behaviour, put portrait_wear_armor_trigger back
+# into the OR below and drop the always = yes branch.
 
 pmg_show_equipped_weapon_trigger = {
 	exists = this
@@ -14,9 +24,9 @@ pmg_show_equipped_weapon_trigger = {
 	NOT = { has_character_flag = pmg_hide_equipped_weapon }
 
 	OR = {
-		# vanilla's own "would this portrait be armoured" test
-		portrait_wear_armor_trigger = yes
-		# opt in a specific character regardless of context
+		always = yes
+		# kept so the flag still reads as meaningful, and so narrowing the default later does not
+		# silently strip the characters that were opted in explicitly
 		has_character_flag = pmg_always_show_equipped_weapon
 	}
 }

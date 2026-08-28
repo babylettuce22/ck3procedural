@@ -29,6 +29,17 @@
  trait_track_society_rank:0 "Standing"
  trait_track_society_rank_desc:0 "How far in. Nobody is told where they stand; they work it out from what they are asked to do."
 
+ # --- The planner category -------------------------------------------------------------------
+ #
+ # Header of the society's own foldout in the activity list. The key is "activity_group_type"
+ # plus the group's key, which is the only loc an activity group takes -- there is no _desc and
+ # no icon; the foldout is a text header and nothing else.
+ #
+ # In the generated version this becomes the cult's own name -- "$gen_cult_name$ Rites" -- and
+ # a world with two societies gets two headers rather than one shared shelf.
+
+ activity_group_type_society:0 "Rites"
+
  # --- The rite -------------------------------------------------------------------------------
  #
  # CK3 derives about a dozen keys from an activity's name and documents none of them. The set
@@ -69,17 +80,81 @@
 
  # --- The guest list -------------------------------------------------------------------------
 
- # TEMPORARY, paired with the control rule at the bottom of 00_society_invite_rules.txt. Remove
- # both when the guest tab is known to fill.
- activity_invite_rule_society_debug:0 "DEBUG: Everyone in Court"
- activity_invite_rule_society_debug_desc:0 "Control group. The whole court with no conditions at all, so that an empty Sworn Members tab beside a full one means the trait test, and two empty tabs mean the rule is not running or the per-candidate veto is eating everybody."
-
- activity_invite_rule_society_members:0 "Sworn Members"
- activity_invite_rule_society_members_desc:0 "Members of the society whose allegiance is known to us — our court, our vassals, our blood, and our liege. Nobody else can be added to this list."
+ # Two categories, matching vanilla's witch ritual. A preference, not a requirement — an earlier
+ # note claiming a single rule broke the guest window was wrong. The split is also the
+ # useful one: which of the two is empty says which iterator found nobody.
+ activity_invite_rule_society_court:0 "Sworn in Our Court"
+ activity_invite_rule_society_court_desc:0 "Members under our own roof. The ones we swore ourselves, mostly, and the ones who swore us."
+ activity_invite_rule_society_abroad:0 "Sworn Elsewhere"
+ activity_invite_rule_society_abroad_desc:0 "Members among our vassals, our blood and our liege — everyone whose allegiance we know of without sharing a hall with them. Nobody outside these lists can be invited or attend."
 
  # --- Tooltips -------------------------------------------------------------------------------
 
  society_rite_requires_membership_tt:0 "Must be a sworn member of the society"
+ society_rite_requires_standing_tt:0 "Must have standing enough to be listened to — #bold 50#! or better"
+
+ # --- The powers ------------------------------------------------------------------------------
+ #
+ # `_filter_tag_desc` is the header the filtered interaction menu shows above this group. The
+ # key is the tag plus that suffix and it is documented only in _character_interactions.info --
+ # without it the menu shows the raw tag.
+
+ society_power_filter_tag_desc:0 "Powers"
+
+ # TWO different strings, and the category's `desc` field is NOT the one on the header.
+ #
+ # The header in the right-click menu is drawn by `InteractionCategoryItem.GetName`, which looks
+ # up a loc key named EXACTLY after the category's own key — vanilla keeps those in
+ # localization/english/gui/characterinteractionwindow_l_english.yml
+ # (interaction_category_hostile: "Hostile", interaction_category_friendly: "Personal", and so
+ # on). Nothing points at them from script, so nothing tells you they exist: leaving this key out
+ # renders the literal string "interaction_category_society" as the header and logs nothing.
+ # ck3-tiger does not catch it either, because from its side the category is fully defined.
+ #
+ # Title Case here, not the lowercase used just below, because these are headers sitting in a
+ # column beside "Personal", "Hostile" and "Prison".
+ interaction_category_society:0 "Societies"
+
+ # The category's `desc` field. Vanilla writes these as lowercase noun phrases because they are
+ # used inside sentences rather than as a header — "hostile actions", "vassal actions".
+ # The generated version substitutes the cult's own name into both of these the same way the
+ # Rites activity header does.
+ SOCIETY_ACTIONS:0 "society actions"
+
+ # Shared across every power, so the reason a button is grey is worded the same way each time.
+ society_power_requires_membership_tt:0 "Must be a sworn member of the society"
+ society_power_requires_standing_tt:0 "Must have standing enough to be trusted with it"
+
+ # Sacrifice. The society does not publish its rates — the number is deliberately absent here,
+ # which is the voice and also means the formula can be retuned without touching this file.
+ society_sacrifice_interaction:0 "Sacrifice"
+ society_sacrifice_interaction_desc:0 "There is a use for [recipient.GetTitledFirstNameNoTooltip] that does not require [recipient.GetHerHim] to agree to it."
+ society_sacrifice_gain_tt:0 "Gain #bold Dark Power#! in proportion to what they were"
+
+ # public_knowledge = no on the death reason, so the first string is what the world reads and
+ # the second is what anyone who learns the truth reads instead.
+ death_society_sacrifice:0 "died in captivity"
+ death_society_sacrifice_killer:1 "was given to something in [TARGET_CHARACTER.GetUINamePossessive] keeping"
+
+ # Abduction. The first power that SPENDS, so the cost tooltip is the only place in the whole set
+ # where the society states a number out loud — a price is the one thing it has to be explicit
+ # about, because a greyed button with no figure on it is just a broken button.
+ society_abduct_interaction:0 "Take Them"
+ society_abduct_interaction_desc:0 "[recipient.GetTitledFirstNameNoTooltip] can be somewhere else by spring, and in no position to be asked about it. Arranging that costs the society, and the society does not refund arrangements that are abandoned halfway."
+ society_abduct_cost_tt:0 "Costs #bold 100 Dark Power#!"
+ society_abduct_no_great_lords_tt:0 "Must not be a Duke or greater — a lord of that standing is a war, not a disappearance"
+ society_abduct_started_toast:0 "Arrangements Are Made"
+
+ # The scheme itself. A scheme names itself in four places and CK3 derives none of them.
+ society_abduct:0 "Take Them"
+ # `<key>_action` is a second name for the same scheme, used where the UI needs it as a verb
+ # phrase rather than a title. Vanilla carries both for every scheme (abduct / abduct_action) and
+ # ck3-tiger is the only thing that reports the second one missing.
+ society_abduct_action:0 "Take Them"
+ society_abduct_desc:0 "Someone is being moved, and the people moving them have been paid enough not to ask why."
+ society_abduct_success_desc:0 "They are ours, and nobody who matters saw it happen."
+ society_abduct_discovery_desc:0 "Somebody has worked out what the comings and goings were for."
+ society_abduct_invalidated_title:0 "The Arrangement Lapses"
 
  # --- The approach, from the recruiter's side ------------------------------------------------
 
@@ -136,6 +211,7 @@
  # society.9001's only output. The number is the point: a zero means the court is empty or all
  # children, which is a different fault from the guest list being broken.
  society_debug_sworn_toast:0 "#bold [ROOT.Char.MakeScope.Var('society_debug_sworn').GetValue|0]#! courtiers sworn into the society"
+ society_debug_standing_toast:0 "Standing raised. Two presses from a fresh induction clears the rite's threshold of 50."
 
  # --- Opinion --------------------------------------------------------------------------------
 
@@ -143,3 +219,63 @@
  society_struck_from_the_roll_opinion:0 "Said my name in front of all of them"
  society_elevated_by_opinion:0 "Raised me when it cost you to do it"
  society_took_the_rite_opinion:0 "Took the night for yourself"
+
+ # --- The panel ------------------------------------------------------------------------------
+ #
+ # Modelled on CK2's society screen: rank, currency, and the full ladder of powers with the ones
+ # above your rank listed rather than hidden. The rank names are deliberately plain — this
+ # prototype's society has no name and no flavour of its own, and a generated one will draw all
+ # five of these from its host religion's language instead.
+
+ # The HUD tab's hover text. Vanilla's siblings are COUNCIL_BUTTON, INTRIGUE_BUTTON and so on;
+ # this one is written by Emit/GuiWriter.cs into gui/hud.gui and reads the key from here, which
+ # is the usual split — the .gui is generated, everything it names is static.
+ # `#T ... #!` and not bare text. Every vanilla tab tooltip is wrapped this way -- INTRIGUE_BUTTON
+ # is "#T Intrigue#!" -- and the tag is what gives them their heavier weight. Without it ours was
+ # the one tooltip in the column rendering in body text.
+ SOCIETY_TAB_BUTTON:0 "#T The Society#!"
+
+ SOCIETY_PANEL_TITLE:0 "The Society"
+ SOCIETY_PANEL_BLURB:0 "It keeps no roll. What follows is only what we have been able to work out from the people we have met and the nights we have stood through."
+
+ SOCIETY_PANEL_STANDING_LABEL:0 "STANDING"
+ SOCIETY_PANEL_DARK_POWER_LABEL:0 "DARK POWER"
+ SOCIETY_PANEL_VISIBILITY_LABEL:0 "VISIBILITY"
+
+ # SOCIETY_PANEL_LADDER_HEADER and SOCIETY_PANEL_LADDER_HERE are gone with the seven-row ladder.
+ # The header restated the Standing line directly above it, and the "you are here" marker existed
+ # only because the rows were far enough apart that the lit one was hard to pick out. On one line
+ # the bold rung is its own marker.
+
+ SOCIETY_PANEL_POWERS_HEADER:0 "POWERS"
+ SOCIETY_PANEL_POWER_RITE:0 "Hold the Rite — convene the society at your seat"
+ SOCIETY_PANEL_POWER_AVAILABLE:0 "Available"
+ SOCIETY_PANEL_POWER_LOCKED:0 "Standing 50"
+
+ SOCIETY_PANEL_ROSTER_HEADER:0 "KNOWN MEMBERS"
+ SOCIETY_PANEL_ROSTER_EMPTY:0 "Nobody. Either we are the only one within reach, or the others are better at this than we are."
+
+ # The five rungs. Two forms of each: the bare name for the standing block and the roster, and a
+ # row form for the ladder that says what the rung is worth.
+ SOCIETY_RANK_0:0 "Unproven"
+ SOCIETY_RANK_1:0 "Sworn"
+ SOCIETY_RANK_2:0 "Trusted"
+ SOCIETY_RANK_3:0 "Adept"
+ SOCIETY_RANK_4:0 "Inner Circle"
+
+ # PARKED, not dead. These carry what each rung actually grants, which the one-line ladder has no
+ # room for and which is the only thing lost in the change. Nothing references them today; they are
+ # kept because the obvious home for them is a tooltip on each rung name, and rewriting them later
+ # would be worse than leaving five finished lines where they are.
+ SOCIETY_RANK_0_ROW:0 "Unproven — sworn, and nothing more than that yet"
+ SOCIETY_RANK_1_ROW:0 "Sworn (25) — #bold +1#! Intrigue"
+ SOCIETY_RANK_2_ROW:0 "Trusted (50) — #bold +1#! Intrigue, #bold +1#! Learning, and the rite is yours to call"
+ SOCIETY_RANK_3_ROW:0 "Adept (75) — #bold +1#! Intrigue, #bold +1#! Learning, #bold +5#! Dread"
+ SOCIETY_RANK_4_ROW:0 "Inner Circle (100) — #bold +2#! Intrigue, #bold +1#! Learning, #bold +10#! Dread"
+
+ # --- The way in ------------------------------------------------------------------------------
+
+ society_panel_decision:0 "Take Stock of the Society"
+ society_panel_decision_desc:0 "Sit down and work out, from what we have been told and what we have guessed, how far in we actually are and who else is in with us."
+ society_panel_decision_tooltip:0 "Open the society panel."
+ society_panel_decision_confirm:0 "Take stock"

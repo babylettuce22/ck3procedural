@@ -1,0 +1,44 @@
+﻿# The society's own category in the activity planner.
+#
+# Vanilla splits the planner into foldable groups -- "Grand Activities", "Activities",
+# "Joinable Activities" and so on -- and that split is a plain script database, not code:
+# game/common/activities/activity_group_types/00_activity_group_types.txt holds all six
+# vanilla groups, and gui/window_activity_list.gui renders whatever is in it by iterating
+# `ActivityListWindow.GetActivityGroupItems`. Nothing in the GUI names a group. So a new
+# category costs one entry here, one `activity_group_type =` line on the activity, and one
+# loc key -- no vanilla file is touched and no .gui is patched.
+#
+# The six vanilla keys are commented "referred to in code (DO NOT REMOVE)" because the engine
+# assigns activities to `unavailable`, `joinable` and `invitations` itself. That is a reason
+# not to delete them; it is not a reason a seventh key cannot exist beside them. This file
+# adds one and leaves theirs alone -- the database merges across files, and the filename
+# differs from vanilla's, so both load.
+#
+# WHY THIS IS WORTH HAVING, and not just cosmetics
+# ------------------------------------------------
+# The foldout carries `visible = "[Not( IsDataModelEmpty( ActivityGroupItem.GetActivities ) )]"`,
+# so a group with nothing in it does not render at all. A non-member fails the rite's `is_shown`,
+# the group empties, and the header disappears with it. The category is self-gating: it is a
+# fourth expression of membership that costs nothing to maintain, and it never advertises to an
+# outsider that a category they cannot see exists.
+#
+# FOR THE GENERATED VERSION
+# -------------------------
+# One group per generated society, keyed `gen_cult_<n>_rites`, titled with the cult's own
+# generated name through the same `$key$` substitution the rest of the loc file uses. Two
+# societies in one world then get two headers rather than sharing one, and a character in both
+# sees them separately -- which is the arrangement CK2 had and the reason to spend the group on
+# societies rather than on "rites" generically.
+
+society = {
+	# Vanilla's bands: joinable 220, invitations 210, grand 200 at the top; activities 10,
+	# unavailable 5, debug -1 at the bottom. 150 is the empty middle band -- under the three
+	# the engine fills for itself, over the generic list. A member opening the planner sees
+	# the rite above the hunts and feasts without it displacing a wedding invitation.
+	sort_order = 150
+
+	# The same tag vanilla gives `grand`. It is the only tag window_activity_list.gui reads:
+	# it takes the row from 55px to 65px and the button from 527x50 to 527x60, which is what
+	# lets the entry show its header illustration instead of being a bare text line.
+	gui_tags = { big_button }
+}

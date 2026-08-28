@@ -18,39 +18,81 @@
 #
 # Because you cannot invite someone you have never heard of. There is no world-wide roster in
 # this prototype -- when the generator writes a real society it will keep one, as a global
-# list maintained at game start, and this rule becomes a single walk over it. Until then the
+# list maintained at game start, and these rules become a single walk over it. Until then the
 # reachable sets below are both the honest answer and the cheap one: a ruler's court, his
 # vassals, his family, his spouses and his liege are the people he could plausibly know the
 # allegiance of.
 #
 # `bannable_serving_diarch_trigger = no` is copied from every vanilla invite rule. A serving
 # diarch cannot leave, so offering one is offering a name that will always decline.
+#
+# =====================================================================================
+#  TWO rules
+# =====================================================================================
+#
+# This was one combined rule for a while and is now two. An earlier version of this note
+# claimed the split was a FIX -- that a single entry left the guest window with no tabs and made
+# the rite unstartable. That was wrong. The guest failure had a separate cause and a separate
+# fix; the number of rules was never the problem, and nothing here should be read as evidence
+# that the engine requires more than one category.
+#
+# The split is kept because it is better, not because it repaired anything:
+#
+#   - It is the shape vanilla uses for the analogous activity. The witch ritual, the only
+#     shipped activity that gates a guest list on a trait, declares two rules
+#     (house_witches, other_witches) rather than one combined list.
+#   - Court and Elsewhere are a real distinction to a player deciding who to expose to whom.
+#   - They are separately diagnostic. If one tab fills and the other does not, the empty one
+#     names the iterator that found nobody, with no scaffolding needed to find that out.
+#
+# ---- The debug_log lines ----
+#
+# `debug_log` is a legal effect in an invite rule and writes to debug.log, which is the only
+# way to see a count the tab does not show. An empty tab has four possible causes -- rule never
+# ran, ran and matched nobody, matched people who were then vetoed by can_be_activity_guest, or
+# the planner declined to draw an empty tab -- and the UI distinguishes none of them. One line
+# at the top of an effect says it ran; one inside an iterator counts what it proposed.
+#
+# They cost a line in a log nobody reads unless something is wrong. Removing them prematurely is
+# what turned the last round of this into three cycles of re-reading script that was fine.
 
-activity_invite_rule_society_members = {
+
+# =====================================================================================
+#  Sworn in our court
+# =====================================================================================
+#
+# The household. In practice this is where the first few members come from, because the
+# induction interaction is easiest to use on somebody already standing there, and it is the tab
+# that should never be empty once society.9001 has been pressed.
+activity_invite_rule_society_court = {
 	effect = {
-		# ---- Instrumentation, and why it is worth carrying ----
-		#
-		# An empty guest tab has at least four possible causes and the UI reports none of them:
-		# the rule never ran, the rule ran and matched nobody, the rule matched people and
-		# `can_be_activity_guest` vetoed all of them, or the planner declined to draw a tab that
-		# came back empty. Reading the list from the outside cannot tell those apart.
-		#
-		# These two lines can. The first says the effect executed at all; the second fires once
-		# per name the rule is proposing, so `debug.log` carries the count the tab will not show.
-		# No line at all means the rule is not being run and the fault is in the activity's
-		# `guest_invite_rules` block, not here. Lines but an empty tab means the veto ate them.
-		debug_log = "SOCIETY: invite rule running"
+		debug_log = "SOCIETY: court invite rule running"
 
-		# The household. In practice this is where the first few members come from, because
-		# the induction interaction is easiest to use on somebody already standing there.
 		every_courtier = {
 			limit = {
 				has_trait = society_member
 				bannable_serving_diarch_trigger = no
 			}
-			debug_log = "SOCIETY: proposing a sworn courtier"
+
+			debug_log = "SOCIETY: court rule proposing a sworn courtier"
+
 			add_to_list = characters
 		}
+	}
+}
+
+
+# =====================================================================================
+#  Sworn elsewhere
+# =====================================================================================
+#
+# Everybody else this ruler could plausibly know the allegiance of. Blood is in here rather than
+# in the court rule because it crosses realm borders where vassalage does not -- it is the
+# nearest thing this prototype has to the cross-realm reach a society is supposed to have, and
+# it is the half a world-wide roster will eventually replace.
+activity_invite_rule_society_abroad = {
+	effect = {
+		debug_log = "SOCIETY: abroad invite rule running"
 
 		# Downward through the realm.
 		every_vassal_or_below = {
@@ -58,16 +100,20 @@ activity_invite_rule_society_members = {
 				has_trait = society_member
 				bannable_serving_diarch_trigger = no
 			}
+
+			debug_log = "SOCIETY: abroad rule proposing a sworn vassal"
+
 			add_to_list = characters
 		}
 
-		# Blood, which crosses realm borders where vassalage does not -- the nearest thing
-		# this prototype has to the cross-realm reach a society is supposed to have.
 		every_close_or_extended_family_member = {
 			limit = {
 				has_trait = society_member
 				bannable_serving_diarch_trigger = no
 			}
+
+			debug_log = "SOCIETY: abroad rule proposing sworn kin"
+
 			add_to_list = characters
 		}
 
@@ -76,52 +122,25 @@ activity_invite_rule_society_members = {
 				has_trait = society_member
 				bannable_serving_diarch_trigger = no
 			}
+
+			debug_log = "SOCIETY: abroad rule proposing a sworn spouse"
+
 			add_to_list = characters
 		}
 
-		# Upward. `?=` because a top-level ruler has no liege and the engine should not be
-		# asked what trait nobody has.
+		# Upward. `?=` because a top-level ruler has no liege and the engine should not be asked
+		# what trait nobody has.
 		liege ?= {
 			if = {
 				limit = {
 					has_trait = society_member
 					bannable_serving_diarch_trigger = no
 				}
+
+				debug_log = "SOCIETY: abroad rule proposing a sworn liege"
+
 				add_to_list = characters
 			}
-		}
-	}
-}
-
-# =====================================================================================
-#  The control group
-# =====================================================================================
-#
-# TEMPORARY. Delete this rule and its line in 00_society_rite_activity.txt once the guest tab
-# is known to work.
-#
-# It gathers the court with NO conditions whatsoever -- not the trait, not the diarch check,
-# nothing -- so the planner draws two tabs side by side and the difference between them is the
-# answer:
-#
-#   Both tabs empty                  the rule is not being run, or can_be_activity_guest is
-#                                    vetoing every candidate. Check debug.log for the
-#                                    "SOCIETY: invite rule running" line to tell those apart.
-#   This tab full, the other empty   the rule runs and the veto passes, so the fault is the
-#                                    trait limit -- nobody in court is actually sworn, or
-#                                    has_trait is being asked of the wrong scope.
-#   Both tabs full                   the guest list works and the bug was upstream of it.
-#
-# A control that shares as much as possible with the thing it is testing and differs in exactly
-# one way is worth more than any amount of reading the rule again, which is what the last three
-# rounds of this have been.
-activity_invite_rule_society_debug = {
-	effect = {
-		debug_log = "SOCIETY: control rule running"
-
-		every_courtier = {
-			debug_log = "SOCIETY: control proposing a courtier"
-			add_to_list = characters
 		}
 	}
 }

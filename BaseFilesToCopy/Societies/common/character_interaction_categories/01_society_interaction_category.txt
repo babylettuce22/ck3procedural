@@ -1,0 +1,54 @@
+﻿# The society's own subheader in the right-click menu.
+#
+# =====================================================================================
+#  Why 15, and why not a round number with room above it
+# =====================================================================================
+#
+# Vanilla's file opens with, in a box, in capitals:
+#
+#   DO NOT LEAVE GAPS IN "index" OR THE GAME WILL CRASH
+#
+# and fills 0-14 solid. `index` is the only ordering field this database has -- there is no
+# `sort_order` like activity_group_types carries -- which is consistent with it being an array
+# slot in code rather than a sort key. The same instruction appears in _court_amenities.info
+# about its tiers. So 15 is the only legal value: the next one up, no gap beneath it.
+#
+# 20 was considered, on the theory that leaving 15-19 free would let a future DLC add categories
+# without colliding with us. It does not work, and it is worth writing down why, because the
+# reasoning is appealing and wrong twice over:
+#
+#   1. 15-19 empty IS the gap the warning is about. It fails immediately, not eventually.
+#   2. It reserves nothing anyway. A DLC adding a category takes the next free LOW index -- 15,
+#      then 16 -- and walks into 20 on the fifth one. The gap buys no distance.
+#
+# The honest position is that this database cannot be future-proofed from a mod at any index. If
+# a DLC ever adds a sixteenth category we will be holding a duplicate 15 and the numbering will
+# have to be redone by hand. That is survivable precisely because nothing depends on this file:
+# `filter_tags = { society_power }` on each power is the durable grouping, this is the cosmetic
+# one, and deleting this file costs two `category =` lines and nothing else.
+#
+# =====================================================================================
+#  Where it appears
+# =====================================================================================
+#
+# Last among the visible headers, under "religious actions". Putting it higher -- between the
+# friendly and hostile blocks, which is where it reads best -- means taking index 4 and pushing
+# `hostile` through `debug_tgp` up by one, i.e. redefining eleven vanilla entries and owning
+# their numbering forever. That is a large, brittle bill for moving a header four rows, and it
+# belongs in a generated file rather than this hand-kept set if it is ever paid.
+#
+# The header renders itself: gui/interaction_templates.gui:2808 draws the name from
+# `InteractionCategoryItem.GetName` and tints the bar with `GetColor`, and no .gui file names any
+# category. It also carries `visible = "[InteractionCategoryItem.IsVisible]"`, so a category with
+# nothing valid in it does not draw -- a non-member never sees this header on anybody, which is
+# the same self-gating the Rites activity group has.
+
+interaction_category_society = {
+	index = 15
+
+	desc = "SOCIETY_ACTIONS"
+
+	# Muted violet, dark enough to read as its own thing beside prison's black and hostile's red
+	# without competing with succession's lighter purple.
+	color = { 0.35 0.15 0.45 1 }
+}

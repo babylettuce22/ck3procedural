@@ -655,7 +655,16 @@ public static class Titles
     public static void RecolorChildren(Title parent, Rng rng)
         => DistributeChildren(parent, Hsl.FromRgb(parent.Color), rng);
 
-    private const float GoldenAngle = 137.507764f;
+    /// <summary>
+    /// The same hue-to-pixel conversion the title palette is built with, for a caller that needs a
+    /// colour of its own rather than a title's. Shared rather than reimplemented so a palette drawn
+    /// beside these ones lands in the same saturation and lightness range instead of near it —
+    /// <see cref="Hsl"/> clamps both, and a second converter would clamp differently or not at all.
+    /// </summary>
+    internal static (byte R, byte G, byte B) FromHsl(float hue, float saturation, float lightness)
+        => new Hsl(hue, saturation, lightness).ToRgb();
+
+    internal const float GoldenAngle = 137.507764f;
 
     private static void AssignColors(List<Title> empires, Rng rng, bool deJure = true)
     {

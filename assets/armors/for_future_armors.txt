@@ -1,0 +1,836 @@
+PROCEDURAL ARMOUR — WHAT IS KNOWN
+=================================
+
+Written 2026-08-27, against CK3 1.19.0.6. Everything here was either measured on this machine or
+learned by watching the game reject something. Where a thing is unverified it says so.
+
+The armour forge is built and validates clean. Code lives in Emit/ArtifactForge/ alongside the
+weapon forge: ArmorCatalogue.cs finds vanilla garments, ArmorForgeStep.cs selects and emits.
+
+
+1. WHAT IT DOES
+---------------
+84 looks per world = 7 cultures x 6 armour types x 2 genders. Per look it emits an entity, an
+accessory, a variation and a 16x4 palette — text plus a few hundred bytes. No geometry.
+
+Culture picks the silhouette, artifact type picks the material. That split is forced, not chosen:
+vanilla's war garments are organised by culture and era with no material in any name, and vanilla
+collapses all six armour types onto two visuals of its own (`armor` 26 uses, `plate` 4). So type
+cannot drive shape. It drives the palette instead.
+
+Culture matching is real rather than arbitrary: generated cultures carry a vanilla `clothing_gfx`,
+which already decides their ordinary clothes, so war dress is matched to it. east_slavic gets
+steppe, byzantine gets byzantine, mongol gets mongol.
+
+
+2. THE MECHANISM, END TO END
+----------------------------
+Five files have to agree or nothing shows:
+
+  common/genes/05_genes_special_accessories_clothes.txt   our template, spliced into a vanilla copy
+  gfx/portraits/accessories/00_gen_armor.txt              accessory -> entity
+  gfx/models/artifacts/gen_armor/00_gen_armor.asset       entity -> vanilla mesh + our variation
+  gfx/portraits/accessory_variations/00_gen_armor_*.txt   variation -> palette + swatch
+  gfx/portraits/portrait_modifiers/zz_gen_artifact_armor  when to wear it
+
+Armour is the mirror image of a weapon. A weapon costs nothing per artifact — the engine substitutes
+its entity through `game_entity_override = weapon` — but needs an animation hook to be drawn at all.
+Armour has no such override (`game_entity_override` has exactly ONE value in the whole game and it
+is `weapon`), so it is built AGOT-style as a portrait modifier plus an accessory per look. That
+needs no animation hook, because a `usage = game` group runs on every portrait, but it costs
+emitted text per look.
+
+
+3. THINGS THAT COST A ROUND TO LEARN
+------------------------------------
+** The engine enforces gene-template membership. ck3-tiger does not. **
+   A portrait modifier's `accessory` must be a member of the `template` it names. Tiger checks only
+   that the accessory exists somewhere, so a wrong template passes validation silently and the game
+   says, 84 times, in error.log:
+       Can't find accessory 'gen_armor_..._plate_m' in gene template most_clothes
+   The garment then falls back to the culture's ordinary war dress — which is the SAME ART — so the
+   failure looks like "the recolour did nothing" rather than like an error. Check error.log.
+
+** Redeclaring an accessory gene REPLACES it. It does not merge. **
+   A separate file containing `special_genes = { accessory_genes = { clothes = { our_template } } }`
+   wipes every vanilla template. Tiger catches this one loudly (`most_clothes not found in category
+   clothes`, 46 of them); in game it would strip clothing from every character alive.
+   AGOT suggests otherwise but does not contradict it: AGOT adds a whole new GENE in its own file,
+   and merging happens at `accessory_genes` — one level above the templates inside a single gene.
+   The only route is to copy vanilla's gene file and splice a template in. Read the INSTALLED file
+   at generation time and it tracks whatever patch is on the machine.
+
+** A palette column is a BLOCK of four. **
+   The shader indexes at `channel * 4 + <the swatch's own colormask channel>`. Our swatches fire red
+   alone, so mask channel g reads column g*4 — columns 0, 4, 8, 12. Writing four colours into
+   columns 0-3 tints only the red channel; the rest stay white, and white is not a colour there, it
+   is "no tint". Three quarters of the garment keeps its vanilla diffuse and every armour type looks
+   identical. The weapon recolour already had this right; the armour one was written from an older
+   copy of the method.
+
+** An accessory's GENDER is read from its name prefix. **
+   Not from the block it sits in, not from the entity it points at — from the first characters of
+   its own name. Across all 630 entries in vanilla's clothes gene there is not one exception: every
+   name in a `male` block starts with m_ or male_, every name in a `female` block with f_ or
+   female_. Named gen_armor_..._f, with the gender as a SUFFIX, all 42 female accessories were read
+   as male; a female portrait then looked in the female list, found nothing it considered female,
+   and fell back. All 42 male worked throughout, which is what made it look like a female-only bug
+   rather than a naming rule. Names are now f_gen_armor_... and m_gen_armor_....
+
+** Every accessory template needs `boy = male` and `girl = female`. **
+   197 of vanilla's 197 clothes templates carry both. A template without them does not fail to
+   parse and ck3-tiger says nothing, but female lookups into it do not resolve. The two lines map
+   children onto their sex's adult list, so it is not obvious why adult women depend on them — but
+   they do, and it was the last structural difference between our template and vanilla's.
+
+   Both of these were found the same way: count how vanilla does a thing across every instance, and
+   treat 100%-with-no-exceptions as a rule rather than a habit. That heuristic has now caught two
+   bugs that tiger passed and that the files themselves looked fine under.
+
+** A pattern shader with no pattern data reads RUBBISH. It does not fall back. **
+   The custom breastplate was emitted with the shader its mesh carried,
+   portrait_attachment_pattern_alpha_to_coverage, but with no `portrait_accessory` block — so no
+   pattern_mask and no variation were ever bound. portrait_accessory_variation.fxh opens with
+       float4 Mask = PdxTex2D( PatternMask, Input.UV0 );
+   and with nothing bound that samples whatever texture is left in the slot: in practice the
+   clothing the character is already wearing, whose pattern textures are bound for its own draw.
+   The piece came out patched with black in a pattern that CHANGED WITH THE OUTFIT, and looked
+   clean on a bare-chested character because nothing else had bound pattern data. Two symptoms
+   that looked unrelated; one cause.
+
+   A piece with no variation must use the plain shader. The generator now strips `_pattern` from
+   whatever the mesh was exported with — portrait_attachment (103 vanilla uses) and
+   portrait_attachment_alpha_to_coverage (67) both exist, so alpha coverage survives the swap.
+
+** There are TWO `_properties.dds` conventions and they are NOT the same. **
+   Confusing them is a live risk: "correcting" our swatch to the model convention would break the
+   working weapon recolour. Both were read out of the shader, not inferred.
+
+     MODEL properties (a mesh's texture_specular), portrait.shader line 275:
+         GetMaterialProperties( Diffuse, Normal, saturate(Properties.a), Properties.g, Properties.b )
+       -> A = roughness, G = spec, B = metalness.
+          R is NOT AO here - it is the scattering / second-colour mask (lines 293, 479), which is
+          why vanilla's model maps have R black. Written as `- - M R`.
+
+     PATTERN SWATCH properties (a pattern_textures entry), portrait_accessory_variation.fxh 171:
+         Diffuse.rgb *= PatternProperties.rrr;   // the comment in the file says "pattern AO"
+       -> R IS AO here, and defaults to 1.0 (line 134) where no pattern applies.
+          Our gen_steel swatch is R=255 AO, G=0 spec, B=230 metal, A=51 rough. Correct as it is.
+
+** Normal maps are RRxG. Blue is not normal-Z. **
+   portrait.shader unpacks with UnpackRRxGNormal: X from R, Y from G, blue unused for the normal.
+   So a bump photo dropped in whole does not give a tangent normal - the shader reads two channels
+   that happen to contain photo luminance. (A claim that blue is EMISSIVE is UNVERIFIED here:
+   `emissive` appears nowhere in portrait.shader. It may hold for another shader; it does not
+   demonstrably hold for this one.)
+
+** Armour visuals are evaluated per render. Weapon visuals are not. **
+   An artifact's `visuals` entry resolves once, INSIDE create_artifact — proven from the call chain
+   in error.log. A portrait modifier is different: it runs every time the character is drawn. So for
+   armour, gating on the wearer's culture would repaint a stolen cuirass in the thief's colours.
+   Gate on `creator ?= { ... }` instead; the creator never changes. Vanilla's own artifact triggers
+   use exactly that form, with the owner as fallback.
+
+** The coat of arms on the tabard is a shader. **
+   42 war garments use `portrait_attachment_with_coa_and_variations`, which paints the wearer's
+   dynasty on. `portrait_attachment_pattern` is the same shader without that stage (574 vanilla
+   assets use it). BUT the swap only applies where the entity declares `meshsettings` — many do not,
+   including all six a default world currently picks, and those take their shader from the .mesh
+   material instead. Not a gap worth closing: the garments with no meshsettings are already on a
+   pattern shader, because the CoA variants are the ones vanilla configures explicitly.
+
+
+4. THE NUMBERS
+--------------
+  war garments, recolourable          38 male / 37 female  (near parity - no male-only trap)
+  all recolourable worn garments      780
+  vanilla armour visuals              5 (armor, armor_court, armor_japan, plate, pedestal_alexander)
+  armour artifact types               6 (mail, plate, scale, lamellar, laminar, brigandine)
+  clothing_gfx families               43
+  garment culture stems               32
+  clothes gene templates, vanilla     indices 0..202 (ours sits at 900)
+  portrait modifier priorities        clothes 1, armour 4, situational 5, special 6, OURS 7
+
+Priority 7 is deliberately above vanilla's whole ladder, so an artifact outranks the dress a
+character would otherwise pick. It is aggressive: an artifact cuirass shows over prison rags. First
+thing to reconsider if that reads badly.
+
+
+5. THE SAMPLE BREASTPLATE IN THIS FOLDER
+----------------------------------------
+custom_breastplate_01 — from a Krakow museum scan, CC0, decimated 261856 -> 6002 tris.
+
+  >> Read 5B before trusting any front/back measurement, including the ones in
+  >> BLENDER_HANDOFF.md sitting next to this file. That document's facing convention is
+  >> inverted, and every number in it that keys off "front-most = max z" is inverted with it.
+
+Measured, and it is in good shape:
+  verts 18006, tris 6002        (verts fully split, 3x tris - normal for exported split normals)
+  skin present                  bones = 4 influences/vertex, ix 4/vert, w 4/vert
+  skeleton                      134 bones
+  UV2 present                   18006 uvs - so it can take a pattern swatch
+  shader                        portrait_attachment_pattern_alpha_to_coverage (correct, no CoA)
+  textures                      diffuse / normal / properties, all three present
+
+** ONE BLOCKER, and it is a rename. **
+   The bone NAMES do not match vanilla's. Same 134 bones, same order, identical suffixes — only the
+   prefix and separator differ:
+
+       vanilla   male_body_skeleton_01:ground_joint
+       ours      male_body_rig_01_ground_joint
+
+   Bones bind by name, so as exported this will not attach to the portrait body. The rig itself is
+   correct; only the naming is wrong. Two ways to fix:
+     a) rename the armature in Blender to `male_body_skeleton_01` and get the colon separator, or
+     b) do it on our side — Io/PdxMesh.cs reads and writes these files, and rewriting 134 node names
+        in the skeleton block touches nothing else.
+   (b) is probably better, because it fixes every future export without the Blender side having to
+   remember. Unverified either way: nothing has been through the engine yet.
+
+** Also missing: `sfs` **
+   Vanilla worn garments carry an `sfs` property (4 floats) on the mesh node. Ours does not. Meaning
+   still unknown — it was flagged as unverified in the weapon handoff and still is. Find out before
+   assuming it can be left off.
+
+
+5B. WHICH WAY IS FRONT  (corrected 2026-08-27 - the earlier convention was backwards)
+--------------------------------------------------------------------------------
+
+  THE CHARACTER FACES  -z  IN FILE SPACE  =  -Y IN BLENDER.
+
+BLENDER_HANDOFF.md states the opposite ("z is front/back with +z toward the viewer") and every
+measurement in it that took the front-most surface as MAX z is therefore measuring the BACK. That
+includes its radius table, which was comparing the plate's back against the garment's back.
+
+HOW IT WAS SETTLED - three independent checks, all agreeing, none relying on eyeballing a render:
+
+  1. The body mesh. gfx/models/portraits/male_body/male_body.mesh viewed from -Y shows pectorals,
+     navel, kneecaps and the tops of the feet with toes. That is a front.
+  2. The rig. male_body_rig_01_bn_l_ftToe sits at -Y relative to bn_l_ftBall. Toes lead.
+  3. The body's feet. Vertices in the lowest 6% of the figure span Y -16.81..+10.60 with median
+     -9.75: the mass (forefoot and toes) is on the -Y side, the compact heel on +Y.
+
+THE AXIS MAPPING, verified by exporting a known mesh and reading the bytes back:
+
+     file = ( blender.x , blender.z , blender.y )     -- NO sign flips on any axis
+
+  So file z IS Blender Y, same sign. There is no hidden negation to account for; the convention
+  statement was simply wrong.
+
+MEASURED SURFACES at the chest centre line (|x| < 8, z 105-135), Blender Y:
+
+     byzantine war garment, front .......  -20.57
+     male body, own chest wall ..........  -15.75
+     breastplate as FIRST exported ......  -12.52
+
+WHAT THIS MEANS FOR THE SAMPLE - it was never reversed, it was BURIED. At -12.52 the shell sat
+behind the body's own chest wall at -15.75, i.e. inside the torso, so it rendered as nothing. That
+absence was read as "facing backwards" and a 180-degree rotation was prescribed. The rotation moved
+it from invisible to genuinely on the character's back, which is worse and harder to diagnose.
+
+  Diagnostic rule: a piece that does not appear is more often INSIDE the body than reversed. Compare
+  its front-most surface against the BODY's chest wall before concluding anything about facing. If
+  the piece is behind the body surface, no rotation will help - it needs translating forward.
+
+PLACEMENT RULE for anything worn on the torso: put the shell's front-most surface about 1.4 units
+in front of the garment it must clear, not in front of the body. The garment is the outer surface,
+and on this byzantine dress it is 4.8 units proud of the body itself.
+
+BLENDER VIEWPORT TRAP - Numpad 1 ("Front") looks along +Y and therefore shows the character's BACK.
+A correctly built breastplate looks wrong there. Use Ctrl+Numpad 1 ("Back") to see the front. This
+cost a full round trip: a screenshot from Numpad 1 was read as proof the piece faced the right way.
+
+CURRENT STATE of custom_breastplate_01 - placement hand-tuned in Blender 2026-08-27 and shipped:
+
+     object xform   loc (-0.820, -3.869, -8.924)  rot (-0.060, 0, 0)  scale (0.998, 1.060, 1.116)
+     dims           39.64 wide x 26.40 deep x 38.36 tall
+     bbox (Blender) x -20.64..19.00   y -22.14..4.26   z 108.31..146.67
+     in file space  x -20.64..19.00   y 108.31..146.67   z -22.14..4.26
+     rotation       a ~3.4-degree forward tilt about X - a plate hangs off the chest, it is not
+                    vertical, and the tilt is what stops the lower edge digging into the stomach
+
+  The transform was baked before export (transform_apply), verified by asserting the world bbox was
+  identical before and after. Bake before exporting: it makes local == world so every later
+  measurement means one thing.
+
+  NOTE the top reaches z 146.67, ABOVE the rig's neck joint at 142.8. That is deliberate - it has to
+  clear bulky collars - but it is the first thing to drop ~4 units if the straps intersect a head.
+
+  Scale width and depth freely if a piece reads small. Be careful scaling height: the band between
+  lumbar (100.9) and shoulder (135.7) is fixed by the skeleton, and a taller plate rides up the neck.
+
+ONE REFERENCE GARMENT IS NOT A FIT TARGET. Fitting was done against
+m_clothes_sec_ep3_byzantine_era2_war_nob_01, and against THAT the plate cleared everywhere by
+1.4-4.5 units - while still reading as buried in game, because the character on screen was wearing a
+far bulkier eastern robe. Garment bulk at the chest varies a lot between cultures. Fit against the
+BULKIEST war garment you expect the piece to appear over, not a typical one.
+
+
+5C. VERTEX GROUP NAMING IS NOT CONSISTENT ACROSS VANILLA GARMENTS
+-----------------------------------------------------------------
+
+Relevant to the rename blocker in 5, because it decides what you are renaming FROM.
+
+Weights are transferred from a vanilla garment (see 5D), and the group names come with them. Those
+names differ between garments:
+
+     m_clothes_religious_african_hi_01 ......  male_body_rig_01_body_root   (prefixed)
+     m_clothes_sec_ep3_byzantine_era2_war_nob_01 ....  body_root            (bare)
+
+Transferring from the byzantine garment produced 134 bare group names, and io_pdx_mesh refused the
+export outright:
+
+     Mesh ...Shape has vertices skinned to a group (body_root) targeting a missing or excluded
+     armature bone!
+
+which is at least a loud failure rather than a silent one. Re-prefix to match whichever armature the
+mesh is actually bound to before exporting. If the fix for the vanilla-name mismatch is done on the
+C# side as 5 suggests, it must tolerate BOTH input spellings, or handle whichever one it sees and
+say so when it sees neither.
+
+
+5D. WEIGHTING: TRANSFER, NEVER AUTOMATIC
+-----------------------------------------
+
+io_pdx_mesh imports joints as bones roughly 0.1-0.5 units long on a 150-unit figure. They are
+positioned correctly but have no meaningful length, so "With Automatic Weights" - which works off
+bone envelopes - has nothing to work from and produces garbage.
+
+Use a Data Transfer modifier from a vanilla garment instead:
+
+     object              the vanilla garment
+     use_vert_data       True
+     data_types_verts    {'VGROUP_WEIGHTS'}
+     vert_mapping        'POLYINTERP_NEAREST'
+     layers_vgroup_src   ALL        layers_vgroup_dst   NAME
+
+First try on the breastplate: 134 groups, 0 unweighted vertices, influences anatomically sensible
+(thoracic 2853, lumbar 1546, body_root 792, deltoids next).
+
+RE-TRANSFER AFTER ANY TRANSFORM. Weights are bound to vertices, not to positions, so rotating or
+moving the mesh leaves each vertex holding its old bone. A 180-degree turn about the vertical is the
+dangerous one: it swaps left and right, so the left shoulder bone ends up driving the right side.
+Nothing errors, and it only shows in animation.
+
+
+5E. TEXTURES: THE PROPERTIES MAP IS PACKED, NOT A PHOTO
+--------------------------------------------------------
+
+This caused the black patches on the first in-game render, and it is worth understanding because
+nothing about it looks wrong in Blender.
+
+  CORRECTED 2026-08-27. An earlier version of this section had the channels wrong, having
+  generalised from ONE garment. The authoritative packing, from Owl's portrait-modding thread
+  and confirmed against 8 more vanilla maps:
+
+      channel   what it is       vanilla cloth
+      R         (unused, black)  0 on 8 of 8 measured
+      G         (unused, black)  0 on 8 of 8 measured
+      B         METALNESS        0.00 - 0.13 for cloth; vanilla banners 0.35 - 0.71
+      A         ROUGHNESS        0.33 - 0.78
+
+  m_clothes_sec_ep3_byzantine_era2_war_nob_01 measures G = 0.32 and is the ONE outlier in nine
+  files. It was the file this section was originally written from. Sample several before you
+  generalise.
+
+  What was shipped first, by writing a greyscale roughness photo into all three channels:
+
+      R         mean 0.62, max 0.87
+
+  R is metalness, so the engine was told the breastplate was ~62% metal. A metallic surface with no
+  environment reflection to catch, under portrait lighting, renders BLACK. The parts that did show
+  texture were simply where that photo happened to be dark.
+
+  DIAGNOSTIC: black patches are a TEXTURE problem, not a depth problem. A buried piece is invisible -
+  you see the garment through it. A piece that is present but black is being lit wrongly. Do not
+  chase geometry for this.
+
+  Build the map by channel, do not paste a photo. One line, ImageMagick 7:
+
+      magick ( -size 2048x2048 xc:black ) ( -size 2048x2048 xc:black ) ( -size 2048x2048 xc:"gray(153)" ) ( rough.jpg -resize 2048x2048 -colorspace Gray ) -channel RGBA -combine -colorspace sRGB -define dds:compression=dxt5 -define dds:mipmaps=11 out_properties.dds
+
+        arg 1 -> R = black
+        arg 2 -> G = black
+        arg 3 -> B = METALNESS   gray(153) = 0.60, a steel-ish value
+        arg 4 -> A = ROUGHNESS   the only channel carrying photographic detail
+      Note -channel RGBA: without it -combine only fills RGB and the alpha is lost.
+      In bash the parentheses need escaping as \( and \) ; in PowerShell they do not.
+
+  B is the metal lever. Prove the piece renders at B = 0 first, then raise it, so a black result
+  has only one possible cause.
+
+  THE NORMAL MAP IS ALSO PACKED, and its blue channel is EMISSIVE, not normal Z:
+
+      normal RGBA = R R E G    R = Normal.X, G = Normal.X, B = EMISSIVE, A = Normal.Y
+
+  A bump or height photo dropped in whole therefore makes the piece GLOW. Neutral flat normal is
+  0.502 / 0.502 / 0 / 0.502, which is exactly what vanilla measures. Normals are +Y (OpenGL).
+
+  In Maya the properties map plugs into the Specular Color node; in Blender with io_pdx_mesh it
+  goes into the Principled BSDF ROUGHNESS socket, which the exporter writes as `spec`.
+
+  Source for the packing: forum.paradoxplaza.com, "[RESOURCE] Owl's CK3 Portrait Modding corner",
+  post #1. It is more precise than the CK3 wiki's 3D_models page, which disagrees and is wrong.
+
+OTHER TEXTURE NOTES
+
+  * DDS conversion: ImageMagick is on this machine and writes DXT5 with mipmaps. CK3 will not read
+    jpg or png, so conversion is mandatory, and there is no Blender-side export for it.
+  * alpha_to_coverage uses the DIFFUSE ALPHA for coverage. Source jpgs have no alpha; ImageMagick
+    fills it opaque (verified mean = min = max = 1), which is what you want. If a piece ever renders
+    partly transparent, check the diffuse alpha first - that is the channel that would do it.
+  * Only the BASENAME is written into the .mesh, and CK3 resolves textures globally by filename.
+    Nothing needs to sit beside the mesh, but keeping it adjacent matches vanilla.
+
+
+5F. REFERENCE GEOMETRY NOW IN THE BLEND
+----------------------------------------
+
+ck3_artifacts_armors.blend carries a hidden REFERENCE collection, excluded from every export:
+
+      REF_body_male     5486 tris   x -59.61..59.61   y -17.79..11.42   z   0.32..145.08
+      REF_body_female   5486 tris   x -55.05..55.05   y -15.84..12.40   z   0.31..134.83
+
+  The female body is 10.25 units SHORTER. A torso piece fitted to the male rig will sit high on a
+  female character, so the female variants are a separate fitting pass, not a copy. This has not yet
+  been tested in game.
+
+  The bodies are also the fastest way to sanity-check a placement: the male body's own chest wall is
+  at y -15.75, so anything further back than that is inside the character no matter what it is
+  wearing. Import them, do not measure against a garment alone.
+
+
+5G. BLEND SHAPES - THE REAL COST, AND THE EXPORT TRAP
+------------------------------------------------------
+
+A worn garment does not deform to body type on its own. Every body shape needs its own MESH,
+listed on the entity as an attribute:
+
+    attribute = { name = "bs_body_fat_1"  blend_shape = "<garment>_bs_fat" }
+
+COUNT (from Owl, post #23):
+    male    6   fat, infant, gaunt, old, muscular, dwarf
+    female  9   the same six PLUS breast_min_size, breast_max_size, pregnant
+
+So a piece shipped for both genders is 15 extra meshes, not 12. Vanilla bears this out: 2614
+of 2960 clothing meshes under m_clothes/f_clothes are _bs_ variants - about 88% of the files.
+
+MAKING THEM is not hard, just laborious: duplicate the base mesh and move vertices to fit each
+extreme body. The vanilla body meshes for each shape are in the game files to fit against, so
+it is automatable with a shrinkwrap-and-correct pass.
+
+** EXPORT TRAP - UNTICK "MERGE VERTICES" **
+   Blendshapes are matched by VERTEX ORDER, not by name or position. Vanilla meshes have
+   overlapping verts along seams; letting the exporter merge them renumbers every vertex ID and
+   the blendshape comes out, in Owl's words, "a jumbled mess". In Blender's io_pdx_mesh this is
+   the "skip merging vertices" option - tick it.
+
+** Blendshape meshes export MESH ONLY - no skeleton. **
+
+Our custom_breastplate_01 has NO blendshapes, which is why it stays rigid while the character
+changes weight. That is expected, not a bug, and it is the next piece of work.
+
+
+5H. HEAD AND BODY ARE SEPARATE SKELETONS
+-----------------------------------------
+
+Anything attached to the head cannot take body skin weights, and vice versa. A helmet is fine, a
+gorget or a high collar that spans the neck is not - it will clip whichever skeleton it is not
+weighted to, no matter how carefully it is painted. Plan pieces so they sit clearly on one side
+of the neck line.
+
+This also makes a helmet the EASIEST first custom piece: the skull does not change across the
+body blendshapes, so a helmet needs far fewer variants than a torso piece.
+
+
+NOTE ON 5I-5L: these were added 2026-08-27 after gambeson_01 shipped and rendered
+correctly in game. They extend 5E (textures) and 5G (blend shapes) with measured
+numbers and a working method; where they disagree with the earlier sections, these
+are the later evidence.
+
+5I. TEXTURE AUTHORING - CHANNEL PACKING AND THE BAKE
+-----------------------------------------------------
+
+CHANNEL PACKING. From Owl's portrait-modding thread, verified against vanilla:
+
+     diffuse      RGB = colour,  A = opacity
+     normal       RGBA = X  X  Emissive  Y      (+Y / OpenGL, NOT DirectX)
+     properties   RGBA = -  -  Metallic  Roughness
+
+  So R and G of the properties map must be BLACK. Measured across 8 vanilla clothing
+  properties maps: R=0 and G=0 on every one, metallic 0..0.13, roughness 0.33..0.78.
+  Vanilla banners run metallic 0.35..0.71, so metal does render - cloth is simply not metal.
+  A neutral normal map is 0.502 / 0.502 / 0 / 0.502.
+
+  GETTING THIS WRONG LOOKS LIKE LIGHTING DAMAGE, NOT A TEXTURE BUG. Feeding a greyscale
+  roughness photo into all three channels put 0.62 in R and G and lit the piece as
+  emissive/metallic - it read as "the model is broken" rather than "the map is packed wrong".
+
+BAKING A TILING MATERIAL INTO A GARMENT'S UV LAYOUT (Cycles):
+  1. Material samples the source through Texture Coordinate -> Object -> Mapping, with the
+     Image Texture node set projection='BOX', projection_blend ~0.3. Scale 0.09 gives about
+     one fabric tile per 11 world units on a 145-unit body.
+  2. Make map1 the active UV layer - that is the bake target space.
+  3. Add an Image Texture node holding the destination image and make it the ACTIVE node.
+     That is what marks it as the bake target; nothing else does.
+  4. bake(type='DIFFUSE') with use_pass_direct=False and use_pass_indirect=False, then
+     'ROUGHNESS', then 'NORMAL'. Margin 8.
+
+  TWO CALIBRATIONS, both found by measuring rather than by looking:
+    * Blender bakes LINEAR values. Read back as sRGB the diffuse came out at 0.15 mean.
+      Gamma 2.2 brings it to 0.32.
+    * Even corrected, 0.32 is far darker than vanilla clothing, which sits at 0.72..0.91.
+      A further 2.1x linear multiply reached 0.61 with no clipping. CHECK YOUR DIFFUSE
+      MEAN AGAINST VANILLA before shipping - portrait lighting is dim and a "correct"
+      texture reads as near-black.
+
+
+5J. BLEND SHAPES - DERIVE THEM, DO NOT SCULPT THEM
+---------------------------------------------------
+
+The single biggest cost in custom clothing, and most of it is avoidable.
+
+WHAT IT COSTS IF YOU SCULPT. Vanilla ships 2614 _bs_ variant meshes against 346 base
+clothing meshes - ~88% of all clothing files are body-shape correctives. AGOT, which fits
+garments independently, hand-sculpts ~5.8 correctives per garment: 1240 corrective meshes
+for 213 base garments. AGOT pays a SECOND manual pass on top, tagging each accessory
+set_tags = "shrink_arms,shrink_chest,shrink_belly,..." so vanilla's gene_shrink_body
+deflates the body wherever the garment would clip it.
+
+REQUIRED SHAPES:  male   fat, gaunt, muscular, old, dwarf, infant                 (6)
+                  female the same plus breast_min_size, breast_max_size, pregnant (9)
+
+THE KEY FACT. The body's own morph targets ship as separate meshes in
+gfx/models/portraits/male_body/blendshapes/ and ALL SHARE THE BASE BODY'S VERTEX ORDER.
+Verified: male_body.mesh and every male_bs_body_*.mesh are 3206 verts / 5486 tris. The
+deformation is large - the fat morph moves vertices up to 12.28 units.
+
+METHOD A - DERIVED GARMENT  (proven, working in game, zero sculpting)
+  Build the garment FROM the body mesh and the morphs become arithmetic:
+
+      garment_morph[i] = garment_neutral[i] + ( body_morph[i] - body_neutral[i] )
+
+  Steps that worked for gambeson_01:
+    1. Copy male_body.mesh. Offset every vertex along its own normal by 0.5.
+       (Vanilla deflates the body under clothing by mean 0.147 / p90 0.568 / max 2.088,
+       concentrated at the shoulders, so ~0.5 is the right order. Use 1.0-1.5 for
+       something padded like a quilted gambeson.)
+    2. Build all seven meshes at FULL body resolution first.
+    3. ONLY THEN delete the regions the garment does not cover, deleting the SAME vertex
+       indices from all seven so correspondence survives. Hands and feet are identifiable
+       by dominant bone: "fi_*" = fingers (654 verts), "ftToe"/"ftBall" = toes (332).
+    4. Weights, map1 UVs and the rig all come free - they are the body's.
+
+  This CANNOT clip the body, because it is the body. No shrink_* tags needed at all.
+
+METHOD B - DELTA TRANSFER  (untested, for meshes that are not body-derived)
+  A standoff piece - breastplate, pauldron, flared skirt - does not share body topology,
+  so Method A does not apply directly. The deltas can still be transferred by PROXIMITY
+  rather than by index: for each garment vertex find the nearest point on the body
+  surface and apply that point's interpolated morph delta. Same trick as the Data
+  Transfer weight step in 5D, applied to positions instead of weights, and scriptable.
+  Expect it to need a shrink_* tag or a hand pass where a piece stands far off the body
+  and the interpolated delta stops being meaningful. NOT YET TESTED.
+
+  The split: derive the close layer, delta-transfer or sculpt the standoff layer.
+
+EXPORT RULES FOR BLEND SHAPE MESHES
+  * MESH ONLY - chk_skel=False. The base carries the skeleton and skin; the morph meshes
+    must carry neither. Verified in the shipped files: base 134 bones + skin block,
+    morphs 0 bones and no skin.
+  * DO NOT merge vertices. Blend shapes match by vertex ORDER; merging renumbers them.
+  * Every morph must match the base's vertex and triangle count exactly. Assert it.
+  * Put them in a blendshapes/ subfolder - vanilla's own convention.
+
+WIRING (gambeson_01.asset is a working example)
+    pdxmesh = {
+        blend_shape = { id = "<name>_bs_fat"  type = "blendshapes/<name>_bs_fat_1.mesh" }
+    }
+    entity = {
+        attribute = { name = "bs_body_fat_1"  blend_shape = "<name>_bs_fat" }
+    }
+  The `attribute name` is the contract - it says "drive my shape with whatever weight the
+  body's bs_body_fat_1 currently has". The blend_shape id is yours to choose; the
+  attribute name is not.
+
+
+5K. gambeson_01 - THE WORKED EXAMPLE
+-------------------------------------
+Confirmed working in game, blend shapes deforming correctly.
+
+  source        derived from male_body.mesh, +0.5 along normals, hands and feet removed
+  geometry      3852 tris, 2220 verts (11556 split), 134 bones, map1 + map2
+  morphs        6, all derived, all verified identical vert/tri counts
+  textures      ambientCG Fabric063 (CC0), box-projected object-space, baked into map1
+  shader        portrait_attachment  - deliberately NOT the _pattern_ variant
+
+  IT USES THE PLAIN SHADER ON PURPOSE. The pattern shader samples a pattern_mask and a
+  variation; supply neither and the piece renders black (see 5H). To recolour it
+  procedurally, add a portrait_accessory block with pattern_mask + variation first.
+
+  A base layer like this belongs in the CLOTHES gene, not cloaks - it is a replacement
+  outfit. That is the point: it frees the single cloak slot for a standoff piece, and it
+  removes garment-vs-body clipping at source instead of tagging around it.
+
+
+5L. WHY A CUSTOM PIECE RENDERS BLACK
+-------------------------------------
+Cost several rounds. In order of likelihood:
+
+  1. THE PATTERN MASK IS SAMPLED IN UV0 (= map1), AND IT IS THE GARMENT'S MASK, NOT YOURS.
+     The generated entity inherits pattern_mask from the vanilla garment it is modelled
+     on. That mask is authored for the garment's UV layout; sampled through a custom
+     piece's unrelated map1 it lights arbitrary channels, and
+     Diffuse.rgb *= PatternProperties.rrr then drives whole regions to zero.
+     TELL: black on clothed characters but correctly textured on an unclothed one, and
+     irregular islands of visible texture rather than uniform black.
+     FIX: author a mask in your own map1 space (a solid R=1 image assigns the whole piece
+     to palette channel 0) and point pattern_mask at it - or drop pattern_mask and
+     variation and use shader = "portrait_attachment".
+  2. PROPERTIES MAP PACKED WRONG - see 5E. Non-zero R/G lights the piece as metal.
+  3. Textures genuinely not loading. Check the DDS header matches vanilla: 'DDS ' magic,
+     DXT5 fourcc, pfflags 0x4. ImageMagick's DXT5 output is accepted by the engine.
+
+  DIAGNOSTIC ORDER MATTERS: a piece that is INVISIBLE is usually buried inside the body
+  (5B); a piece that is BLACK is usually a shader/mask fault. Different faults, different
+  fixes, and they are easy to confuse.
+
+
+6. THE END GOAL: ARMOUR ASSEMBLED FROM LAYERED PIECES
+-----------------------------------------------------
+Proven as of 2026-08-27: a body-derived base garment (gambeson_01, clothes slot) and a hard piece
+over it (custom_breastplate_01, cloaks slot) render TOGETHER on one character, overriding the
+clothing underneath. That is the two-layer stack the whole idea rests on, and it works.
+
+** THE LAYERING BUDGET IS THREE, NOT TWO. **
+   The constraint that decides how far this can go is how many gene slots attach at the torso, and
+   it is more generous than the clothes/cloaks pair suggests. Counted over every vanilla accessory
+   carrying `shared_pose_entity = torso` (771 of them), grouped by the gene each belongs to:
+
+       clothes           626      the base layer; REPLACES the outfit
+       legwear            61      also torso-attached, despite the name
+       cloaks             54      LAYERS over clothes
+       special_legwear     2
+
+   So a character can wear a base, a torso overlay AND a leg piece simultaneously, with helmets
+   arriving separately through the headgear genes. Anatomically that lines up better than it has any
+   right to: gambeson underneath, cuirass over it, tassets or greaves on the legwear slot.
+
+   Untested: whether legwear layers over clothes the way cloaks do, or replaces like clothes. That
+   is the first thing to establish, because it decides whether the budget is three layers or two
+   plus a substitution.
+
+** RECOLOURING THE BASE IS ALREADY BUILT. **
+   Making the gambeson read as mail, or as any material, needs no new machinery — only a
+   `portrait_accessory` block on its entity naming a pattern_mask and a variation, which is exactly
+   what ArmorForgeStep already emits for vanilla garments, palette and all. The piece ships map1 and
+   map2, so it can take a swatch. What it does NOT yet ship is a mask; the breastplate does
+   (custom_breastplate_01_masks.dds, R=1 across the plate).
+
+** WHAT WOULD ACTUALLY BE HARD. **
+   Not the plumbing - that is all proven now. The hard parts are:
+     - Seams. Two rigid pieces meeting on a deforming body is a much worse visual problem than a
+       seam on a rigid sword, and it is the thing the weapon forge never had to solve.
+     - Per-piece morphs. Every hand-modelled piece needs its own blend shapes or it stays rigid
+       while the body changes. The body-derivation trick makes those free for close-fitting pieces
+       and does nothing for a piece that is not body-shaped.
+     - Combinatorics. A base x an overlay x a leg piece x a palette is a lot of emitted text, and
+       every combination needs its own accessory, entity and template entry.
+
+
+7. WHAT WOULD COME NEXT
+-----------------------
+Custom armour meshes are the natural next step now that recolouring works, and the path is shorter
+than it looks: a custom garment needs the same five files as a vanilla one, and only the entity's
+`pdxmesh` changes. The catalogue would gain a source of garments beyond vanilla's 75.
+
+Open questions, in the order they would bite:
+  - Does the bone rename actually make it bind? Nothing has been in the engine yet.
+  - What is `sfs` for?
+  - Do custom garments need the blend-shape attributes (bs_body_fat_1, _gaunt, _muscular, _old,
+    _dwarf, _infant) that vanilla entities carry? Our emitted entities copy them verbatim from the
+    vanilla entity precisely so a garment follows a fat or dwarf body. A custom mesh has no blend
+    shapes, so it would be rigid across body types — probably visible, probably needs authoring.
+  - Vanilla garments set tags (`shrink_arms,shrink_chest,shrink_belly,short_skirt`) that shrink the
+    body underneath so it does not poke through. A custom piece will need its own.
+
+
+8. HOW TO TEST
+--------------
+The debug menu autopopulates from events. Two are relevant:
+  Debug: Forge a Weapon    weapons, one option per kind
+  Debug: Forge Armour      one option per armour TYPE, so plate and mail can be compared directly
+
+Mint plate, then mail, on the same character — those are the furthest apart. Then hand one to a
+ruler of another culture and confirm it does NOT change: that is the creator gate, and it is the
+requirement most likely to break quietly.
+
+And read error.log. Three assumptions about this feature have been wrong so far — visual caching,
+template membership, gene merging — and tiger passed all three. The log caught every one.
+
+
+9. PIPELINE: TAKING A DOWNLOADED ARMOUR SET INTO CK3
+-----------------------------------------------------
+Written 2026-08-28 from doing it end to end with DevonLux's "5 Piece Platemail" (CC-BY, Sketchfab).
+Every number here was measured on this machine. The order below is the order the traps appear in.
+
+9A. SOURCING
+  CC0 HAS NO LIMB ARMOUR. Searched downloadable CC0 on Sketchfab for pauldron, gauntlet, vambrace,
+  greave, sabaton, tasset, cuisse, sallet, armet, barbute, backplate, chainmail: ZERO results for
+  every one. CC0 yields helmets and breastplates only (Wirtualne Muzea Malopolski, Cleveland
+  Museum of Art). A full harness is reachable under CC-BY or not at all.
+  Best CC-BY sources found: DevonLux (6 MetaHuman-rigged sets, pre-split into slots),
+  ernst52 (historically accurate harnesses plus 8 helmets), Multipainkiller_Studio (already at
+  game polycount, 1-7k tris).
+  Sketchfab's API answers this far faster than the web UI: api.sketchfab.com/v3/search
+  ?type=models&downloadable=true&license=<slug>. Slugs come from /v3/licenses - it is "by",
+  not "cc-by", and a wrong slug returns zero for everything rather than erroring.
+
+9B. ** THE IMPORTED RIG IS BROKEN UNLESS YOU TURN OFF THE BIND-POSE GUESS **
+  Sketchfab auto-converts uploads to glTF and the skeleton loses fidelity. Imported with defaults,
+  283 of 342 bones collapsed onto ONE point (83%); the other three armature copies were 42-91%
+  collapsed. The mesh still DEFORMS CORRECTLY because the pose carries it, so nothing looks wrong
+  until you try to retarget and the maths returns garbage.
+
+      bpy.ops.import_scene.gltf(filepath=..., guess_original_bind_pose=False)
+
+  drops that to 2 of 342 and makes all four armature copies identical. No re-download needed.
+  NOTE this changes the space of the imported data: with the guess off, meshes stay in glTF Y-up.
+  Calibrate in WORLD space (obj.evaluated_get(dg), then matrix_world) and the question disappears.
+
+9C. SCALE AND FACING - CHECK BEFORE ASSUMING A CONVERSION IS NEEDED
+  MetaHuman and CK3 are almost the same scale. Neck-to-neck, MetaHuman torso top 134.97 against
+  CK3's REF_body_male 145.08: a uniform 1.075x. Not a unit conversion.
+  Facing: in the glTF the feet run z -5.8..+20.5, so toes lead +Z. Blender's importer maps
+  +Z to -Y, and CK3 characters face -Y in Blender (5B). So a plain import already faces correctly.
+
+9D. RETARGETING THE POSE - AIM AT JOINT POSITIONS, NOT BONE ORIENTATIONS
+  io_pdx_mesh imports CK3 joints as bones 0.095-0.5 units long, so CK3 bone DIRECTIONS are
+  meaningless (5D). Retarget on positions: for each (parent, child) pair, rotate the parent so the
+  child's head lands on the CK3 joint it maps to; iterate the whole chain 3-4 times.
+  Mapping that worked: pelvis to body_root, spine_02 to bn_sp_lumbar, spine_04 to bn_sp_thoracic,
+  neck_01 to bn_sp_cervical, clavicle_l to bn_l_clavicle, upperarm_l to bn_l_shoulder,
+  lowerarm_l to bn_l_elbow, hand_l to bn_l_wrist, thigh_l to bn_l_hip, calf_l to bn_l_knee,
+  foot_l to bn_l_ankle. CK3 has NO head bone on the body rig - the head is a separate skeleton (5H).
+  Result: cervical 6.82 to 0.32, shoulder 6.55 to 0.66, wrist 10.45 to 4.39, and arm divergence
+  across the forearm went from about -12 units to plus/minus 2.
+  ** LIMIT: aiming fixes DIRECTION ONLY. ** Where the source bone length differs from CK3's, no
+  rotation closes the gap - the elbow got WORSE (1.31 to 2.98) and the legs barely moved. Residuals
+  of 3-4 units on a 145-unit figure do not show. If they ever matter, scale bone lengths too.
+
+9E. ** CLEAR THE SOURCE VERTEX GROUPS BEFORE TRANSFERRING WEIGHTS **
+  The imported mesh arrives skinned to its own rig. Run a Data Transfer without deleting those
+  groups first and you get 342 + 134 = 476 groups; the 4-influence cap then keeps the ORIGINAL
+  weights over the transferred ones, because they are heavier. The gloves came out driven by 210
+  bones. It does not error, and the group count is the only tell.
+
+      d.vertex_groups.clear()      # BEFORE adding the Data Transfer modifier
+
+  Transfer source: use the BODY (male_body.mesh), not a garment. It is the only source with full
+  coverage - a robe stops at |x| 49.6 and z 8.7, so it cannot weight hands or feet, and it has the
+  finger and toe groups a gauntlet or sabaton needs.
+  Afterwards: vertex_group_limit_total(limit=4), then normalize_all. CK3 skins are 4 influences.
+  VERIFY by dominant bone per piece - it should read anatomically (boots to ankle/ftBall, gloves to
+  wrist plus fingers). That check also revealed the piece the glTF called "Chest_Knight.003" is
+  actually the VAMBRACES.
+  AND VERIFY LEFT/RIGHT (5D warns of this): establish the body's convention (+x maps to bn_l_*) and
+  confirm every piece agrees. A mirrored binding only shows in animation.
+
+9F. EXPORT REQUIREMENTS
+  * The material needs a "shader" CUSTOM PROPERTY or io_pdx_mesh refuses outright:
+    "found no meshes with PDX materials applied". The PDXmat_ name alone is not enough.
+        mat["shader"] = "portrait_attachment_pattern_alpha_to_coverage"
+  * Shape name comes from obj.data.name and IS the contract. Copying a piece whose datablock name
+    is already taken silently yields "plate01_cuirassShape.001", which matches nothing. Rename the
+    full-res masters out of the way (_src) so the shipping tier can hold the clean names.
+  * chk_selected=True or it exports the whole scene; chk_split_vtx=True (both shipped pieces are
+    fully split); chk_locs=False - armour parts need NO locators, unlike weapon parts, because the
+    pieces are skinned into one shared body space and self-assemble at zero translation.
+  VERIFY the written file against a known-good one: magic "@@b@", and the same count of distinct
+  bn_* names (129) as gambeson_01.mesh.
+
+9G. TEXTURES FROM A glTF SOURCE
+  glTF packs metallicRoughness as G=roughness, B=metalness. CK3 wants "- - Metal Rough" (5I).
+  So properties = [black, black, MR.blue, MR.green] and normal = [N.red, N.red, black, N.green].
+  Size to match the piece - 2048, DXT5, 12 mips, like custom_breastplate_01.
+  MEASURE THE RESULT against a shipped piece rather than against absolute figures. Ours came out
+  properties R=0 G=0 B=53.2 A=65.4 against the breastplate's 0/0/60/62.4, and normal
+  50.0/49.9/0/50.0 against 50.2/50.2/0/50.2. Diffuse luma 62.7% against vanilla war garments at
+  63.4-85.6%.
+  Do not judge diffuse by per-channel RGB means - measure luma, the same way, across all files.
+  The textures must be wired into the Blender material as image nodes (diffuse to Base Color,
+  properties to Roughness, normal to Normal Map to Normal) BEFORE export: the .mesh stores
+  basenames only, and a material with no image nodes exports with none.
+
+9H. ** A MIRRORED SOURCE MODEL HAS INVERTED WINDING ON ONE HALF **
+  Symptom: one arm renders see-through in game, the other is fine. Blender draws faces double-sided
+  so it looks perfect there; CK3 BACKFACE-CULLS, so the bad half renders as its own interior.
+  DIAGNOSTIC that names it beyond doubt: measure the share of faces whose normal points away from
+  the nearest body vertex, per side. Ours read
+      vambrace  L 4.5%  R 95.2%      gloves  L 30%  R 70.6%      cuirass  L 26.7%  R 76.8%
+  i.e. L is almost exactly 100 - R on every piece: a pure inversion of the left half, not noise.
+  FIX: bmesh.ops.recalc_face_normals. Note this is a per-shell heuristic and it is NOT reliable on
+  layered pieces - it fixed the vambrace (L to 95.5, symmetric) and the gloves, but on the cuirass
+  it dropped the GOOD side from 76.8 to 51.8. On a piece with many separate lames, flipping only
+  the mirrored half is safer than a global recalculate.
+
+9I. ** OPEN SHELLS: THERE IS NO NO-CULL SHADER. IT MUST BE FIXED WITH GEOMETRY **
+  Symptom: undersides of pauldrons, and any surface facing away from the camera, are invisible.
+  CK3 ships 19 portrait_attachment effect variants; the feature axes are alpha, alpha_to_coverage,
+  pattern, no_blend, with_coa, and_variations, selection. NONE is two-sided, and portrait.shader
+  declares no rasterizer or cull state at all - culling is engine-fixed, not selectable.
+  Every piece of this set was an open shell: cuirass 21.4% boundary edges, legs 36.5%, boots 33.3%,
+  gloves 26.5%, vambrace 11%.
+  FIX: Solidify, thickness about 0.5, offset -1.0, and ** use_even_offset = False **.
+  With even-offset ON, the cuirass's 222 non-manifold edges blew the bounding box up by +124 in x
+  and +70 in z; thickness_clamp does NOT rescue it. With it OFF the growth is exactly 0 on all
+  three axes - the shell thickens inward, silhouette untouched - and boundary edges fall 1590 to 56.
+  COST: the cuirass went 4,499 to 12,172 tris. Budget about 2.7x for any piece you solidify.
+
+9J. TAGS: THE BODY SHRINKS, IT DOES NOT HIDE
+  There is NO way to stop CK3 rendering hands. The complete body-morph vocabulary is
+  shrink_{arms,belly,chest,feet,hands,legs} plus bs_body_no_portrait (the whole figure) and
+  bs_body_no_left_leg (that one limb only). Hands can only be deflated.
+  Measured: male_bs_body_shrink_hands moves hand vertices by median 0.68, max 2.02 units. That is
+  a small correction - if fingers still poke through a gauntlet, suspect the gauntlet's decimation
+  before suspecting the tag.
+  Vanilla set_tags vocabulary by frequency: shrink_belly 624, shrink_chest 616, shrink_arms 600,
+  snug_headgear 356, no_hair 238, short_skirt 233, mask_hat 171, offset 163, hat 128, crown 102,
+  no_beard 82, enclosed_helmet 68, hood 63, cap 63, shrink_legs 60, shrink_hands 56, shrink_feet 53,
+  helmet 37, fit_over_headgear 28, fit_under_crown 16, nose_guard 7, stealth 4.
+  gfx/portraits/accessories/ccp5_armor.txt is the template for a full harness:
+      set_tags = "shrink_arms,shrink_chest,shrink_belly,short_skirt,shrink_hands"
+  CustomArmorStep currently EARNS only shrink_arms, by arm-region vertex share. A full harness
+  should earn shrink_chest, shrink_belly, shrink_legs, shrink_feet and shrink_hands on the same
+  measured principle - that is the fix for body-through-armour clipping at the belly and legs.
+
+9K. WHAT IS STILL NOT DONE ON plate01_parts
+  * No blend shapes. These are standoff pieces, so 5J Method A does not apply; Method B (delta
+    transfer by proximity) is still untested. The set is rigid across body types.
+  * The helm is unused: it is unskinned, and head gear binds to a separate skeleton (5H).
+  * Only shrink_arms is emitted; see 9J.
+  * The cuirass's right side may have been damaged by the global normal recalculate; see 9H.
+    PM_TEST in the blend still holds the pristine-winding original if it needs rebuilding.
+
+9L. ** EARNED TAGS ARE SHARES OF THE WHOLE, SO GEOMETRY ANYWHERE DILUTES THEM **
+  CustomArmorStep decides each shrink tag from the share of a piece's vertices inside a region.
+  That share is a fraction of the piece's TOTAL vertex count - so adding geometry ANYWHERE lowers
+  every other region's share, even though nothing about those regions changed.
+
+  It has already bitten once. Solidifying the cuirass (9I) added roughly 6,000 vertices, all of
+  them on the torso. The arm share fell from the 42.9% recorded in 9J to 31.67%, against a 30%
+  threshold; the hand share fell to 16.30% against 15%. Both tags survive, but by 1.7 and 1.3
+  points respectively - and losing one is SILENT. The armour simply stops occluding that part of
+  the body and the limb starts poking through again, with nothing in error.log to say why.
+
+  Measured after the solidify and a 0.01 merge-by-distance, over 13,033 vertices:
+      legs 36.4%   arms 31.7%   chest 26.7%   belly 22.5%   hands 16.3%   feet 8.0%
+      thresholds:  arm 0.30   hand 0.15   chest/belly/legs 0.10   feet 0.05
+  All six tags earned:
+      shrink_arms,shrink_chest,shrink_belly,shrink_legs,shrink_hands,shrink_feet
+
+  ** RE-CHECK THE SHARES AFTER ANY GEOMETRY CHANGE ** - solidify, decimate, merge by distance, or
+  adding a part to the library. The arm and hand thresholds are the ones with no margin left.
+  If this keeps biting, the durable fix is to measure each region against the BODY's own vertex
+  count in that region - i.e. "how much of the arm is covered" - rather than against the piece's
+  own total, which is what actually makes a tag earned or not.

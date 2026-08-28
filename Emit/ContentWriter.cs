@@ -266,7 +266,7 @@ public static class ContentWriter
             CompatibilityWriter.WriteDefines(modDir, gameDir, cfg);
             CompatibilityWriter.WriteCultureEras(modDir, gameDir, cfg);
             CompatibilityWriter.WriteCalendarLocalisation(modDir, azgaar);
-            CompatibilityWriter.WriteGeographicalRegions(modDir, gameDir, empires);
+            CompatibilityWriter.WriteGeographicalRegions(modDir, gameDir, empires, cultures);
             CompatibilityWriter.WriteHolySites(modDir, gameDir, empires, faiths);
             CompatibilityWriter.WriteDecisionBlocks(modDir, gameDir);
         });
@@ -276,10 +276,17 @@ public static class ContentWriter
         Core.Stage.Time("vanilla titulars",
             () => CompatibilityWriter.WriteVanillaTitulars(modDir, gameDir, empires));
 
-        Core.Stage.Time("locators", () => LocatorWriter.WriteAll(modDir, gameDir, provinces, order, landCount, provinceElevation, cfg));
+        // Once, for both the locators and the city scatter: a slope field and a distance transform
+        // over the whole province raster, which each of them used to run for itself off the same
+        // two inputs. Hoisted here rather than memoised inside ProvinceAnchor so the sharing is
+        // visible at the call site and the two writers cannot drift apart.
+        var anchors = Core.Stage.Time("province anchors",
+            () => MapGen.ProvinceAnchor.Compute(provinces, provinceElevation, cfg));
+
+        Core.Stage.Time("locators", () => LocatorWriter.WriteAll(modDir, gameDir, provinces, order, landCount, anchors, cfg));
         Core.Stage.Time("casus belli", () => CasusBelliWriter.WriteAll(modDir, gameDir, cfg));
         Core.Stage.Time("frontend", () => FrontendWriter.WriteFrontend(modDir, gameDir));
-        Core.Stage.Time("GUI changes", () => GuiWriter.WriteAll(modDir, gameDir));
+        Core.Stage.Time("GUI changes", () => GuiWriter.WriteAll(modDir, gameDir, cfg.EnableSocieties));
 
         if (cfg.EnableFantasyEthnicities && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly)
         {
@@ -326,6 +333,10 @@ public static class ContentWriter
         Core.Stage.Time("animals", () => AnimalWriter.WriteAll(modDir, cfg, terrain, renderedElevation, rng));
         Core.Stage.Time("env effects", () => EnvEffectWriter.WriteAll(modDir, cfg, terrain, renderedElevation, rng));
         Core.Stage.Time("bridges", () => BridgeWriter.WriteAll(modDir, cfg, terra.MajorRiversList, classified.Climate, renderedElevation, rng));
+        // Prototype, deliberately severable: its own Rng stream and its own output file, so
+        // MapConfig.EnableCityScatter (--no-city-scatter) removes it without moving anything else.
+        Core.Stage.Time("city scatter", () => CityScatterWriter.WriteAll(modDir, cfg, empires,
+            holdings, development, cultures, provinces, order, anchors, renderedElevation));
         Core.Stage.Time("map table", () => MapTableWriter.WriteAll(modDir, cfg));
         Core.Stage.Time("holding models", () => HoldingModelWriter.WriteAll(modDir, gameDir, cfg));
 
@@ -370,15 +381,49 @@ public static class ContentWriter
                 // World centres and development are read for placement weighting only, and both are
                 // optional there: a map with no wonders scatters its treasure exactly as this did
                 // before, rather than needing a branch of its own.
+                // Forged before the artifacts that wear them: a generated weapon picks its look
+                // from this pool, so the pool has to exist first. One pool per weapon kind that has
+                // a parts library; kinds without one fall back to the stock catalogue, which is a
+                // supported answer rather than a failure.
+                var forgedWeapons = WeaponForgeStep.ForgeWeaponPools(
+                    modDir, gameDir, new Rng(cfg.Seed ^ 0x5A0D), cfg.WeaponPoolSizePerKind);
+
                 var artifacts = MapGen.ArtifactMap.Build(
                     counties, cultures, faiths, realms, wilderness, prehistory,
-                    worldCenters, development, cfg, new Rng(cfg.Seed ^ 0x4A1F));
+                    worldCenters, development, cfg, new Rng(cfg.Seed ^ 0x4A1F), forgedWeapons);
 
                 ArtifactWriter.WriteTemplates(modDir);
+                ArtifactWriter.WriteVisuals(modDir, forgedWeapons);
+
+                // Dresses weapons the *game* creates - inspirations, tournament prizes, adventurer
+                // finds - from the same pool. Without it every player-earned weapon would be vanilla
+                // art standing next to forged art in the same inventory. Keyed on culture, so it
+                // needs this world's culture list rather than just the weapons.
+                ForgedVisualOverrides.Write(modDir, forgedWeapons,
+                    [.. cultures.Cultures.Select(c => c.Key)]);
+
+                // Armour, which needs no geometry at all: a vanilla war garment already carries the
+                // mask and variation hooks a forged weapon does, so a look is a palette and some
+                // text. Culture picks the garment, the artifact's type picks the material.
+                ArmorForgeStep.WriteAll(modDir, gameDir,
+                    [.. cultures.Cultures.Select(c => c.Key)],
+                    cultures.Cultures.ToDictionary(c => c.Key, c => c.ClothingGfx, StringComparer.Ordinal));
+
+                // Hand-modelled pieces from assets/armors, worn from a debug flag. After the forge
+                // above, because that is what splices the gene template both of them rely on.
+                CustomArmorStep.WriteAll(modDir, gameDir);
                 ArtifactWriter.WriteModifiers(modDir, artifacts);
                 ArtifactWriter.WriteLocalisation(modDir, artifacts);
                 ArtifactWriter.WriteOnGameStart(modDir, artifacts);
                 artifactCount = artifacts.AllArtifacts.Count;
+
+                if (forgedWeapons.Count > 0)
+                {
+                    Console.WriteLine("  forged weapons: " + string.Join(", ",
+                        forgedWeapons.GroupBy(a => a.Kind)
+                            .Select(g => $"{g.Count()} {g.Key}(s)"))
+                        + " in the artifact pool");
+                }
 
                 var bookmarkResult = BookmarkWriter.WriteAll(
                     modDir, gameDir, cfg, provinces, order, empires,

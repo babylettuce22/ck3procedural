@@ -376,7 +376,16 @@ public sealed class ChronicleMap
         // Anchored on the ruler's own birth year so the house cannot be said to have taken the seat
         // after the man holding it was born into it.
         int born = HistoryWriter.GetRulerBirthYear(county.Index, cfg.StartYear);
-        int year = born - rng.Int(10, 90);
+        int offset = rng.Int(10, 90);
+
+        // A main house is older than the man holding it and the seat came down to him. A cadet is
+        // not: the branch was founded by that man, so it can have held nothing before he was grown,
+        // and a line reading "has held the seat since" a year before its own founder was born is
+        // the kind that makes a reader stop trusting the rest of the page. One draw either way, so
+        // which branch is taken cannot shift the stream for everything after it.
+        int year = house.IsCadet
+            ? Math.Min(cfg.StartYear, born + 16 + offset % 15)
+            : born - offset;
 
         map.Add(new ChronicleEvent
         {

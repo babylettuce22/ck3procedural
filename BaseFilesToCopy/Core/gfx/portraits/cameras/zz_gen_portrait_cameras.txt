@@ -1,0 +1,81 @@
+# Generated-mod camera for the inventory window's full-body portrait panel.
+#
+# Cameras are a database keyed on the top-level name and merged across every file in this
+# folder -- vanilla itself ships two, portrait_cameras.txt and shop_cameras.txt -- so a new
+# FILE NAME adds a key and leaves vanilla's alone. It must NOT be named portrait_cameras.txt:
+# a same-path file replaces the vanilla file outright and would drop all ~150 of vanilla's
+# cameras with it. Same rule, and same reason, as zz_procedural_weapon_idle.txt next door.
+#
+# Read by gui/window_inventory.gui, which Emit/GuiWriter.cs patches. Neither half fails
+# loudly: a .gui naming a camera that does not exist draws an empty portrait and logs
+# nothing, so a rename on either side is silent.
+#
+# Body copied from vanilla 1.19 camera_ruler_designer -- the full-body shot behind the ruler
+# designer's 'full_body' view -- with exactly two numbers changed:
+#
+#   radius    390 -> 355    closer, so the character fills more of the panel
+#   look_at    -32 -> -38   aimed lower, so the zoom eats headroom rather than feet
+#
+# Those two are the whole tuning surface. Radius is the zoom. look_at's second number is
+# what the frame is centred on, and making it MORE negative moves the character up in the
+# panel, which is how the crop is kept off the feet while zooming in.
+#
+# Unlike the .gui that reads it, this file is read at game start. `reload gui` will not pick
+# up an edit here -- it needs a full run and a restart.
+
+gen_camera_inventory_body = {
+	camera = {
+		position = cylindrical{ 355 -22 0 } # Radius, height, angle
+		position_node = {
+			default = camera_torso_look_at
+		}
+
+		look_at = {	0 -38 0 } # L/R, U/D, F/B
+		look_at_node = {
+			default = camera_torso_look_at
+		}
+		fov = 20
+		camera_near_far = { 10 800 }
+	}
+
+	unknown = camera_body
+}
+
+# The same shot, pulled back for the two-handed pose.
+#
+# Not a preference -- a pose-extent problem. Every weapon the mod forges is held on a
+# one-handed idle except the spear, which zz_procedural_weapon_idle.txt puts on
+# throneRoom_twoHandedPassive1_entry. That pose plants the shaft out to the side, and an
+# arm's length of spear falls outside a frame that fits a sword comfortably.
+#
+# So the camera the panel uses is chosen at draw time: gen_inventory_wide_pose (a
+# scripted_gui in common/scripted_guis) answers "is this character holding a rendered
+# spear", and window_inventory.gui picks between the two with Select_CString. Everything
+# not on the two-handed pose keeps the tighter shot above, unchanged.
+#
+#   radius   355 -> 395   back far enough for the shaft; 390 is the width a sword needed,
+#                         so this is that plus a little margin
+#   look_at  -38 -> -36   aim raised slightly, since pulling back already regained the
+#                         headroom the lower aim was protecting
+#
+# If the spear still clips, widen with radius before anything else. look_at's FIRST number
+# shifts the frame left/right and would re-centre on the shaft without shrinking the
+# character, but the sign is untested here -- get it backwards and the crop doubles.
+
+gen_camera_inventory_body_wide = {
+	camera = {
+		position = cylindrical{ 395 -22 0 } # Radius, height, angle
+		position_node = {
+			default = camera_torso_look_at
+		}
+
+		look_at = {	0 -36 0 } # L/R, U/D, F/B
+		look_at_node = {
+			default = camera_torso_look_at
+		}
+		fov = 20
+		camera_near_far = { 10 800 }
+	}
+
+	unknown = camera_body
+}

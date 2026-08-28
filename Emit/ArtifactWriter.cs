@@ -62,6 +62,72 @@ public static class ArtifactWriter
     }
 
     /// <summary>
+    /// Binds each weapon look in <see cref="WeaponAssets"/> to a concrete icon and 3D entity.
+    ///
+    /// This is the file that makes a generated weapon show a *particular* model rather than
+    /// whatever vanilla's culture triggers happen to pick. The form is AGOT's, which is the only
+    /// worked example of per-artifact models in the wild:
+    ///
+    /// <code>
+    /// vs_blackfyre_visuals = { icon = "vs_blackfyre.dds"  asset = blackfyre_sword_entity }
+    /// </code>
+    ///
+    /// Two fields and no triggers. <c>_visuals.info</c> also allows the conditional form
+    /// (<c>asset = { trigger = { ... } reference = ... }</c>), which AGOT uses for Longclaw to
+    /// swap the pommel by dynasty — worth knowing when generated weapons start carrying house
+    /// marks, but unnecessary while one look means one model.
+    ///
+    /// <c>default_type</c> is deliberately omitted: it has no gameplay effect and exists only for
+    /// the automatic test-artifact generator.
+    /// </summary>
+    public static void WriteVisuals(string modDir, IReadOnlyList<WeaponAsset>? forgedWeapons = null)
+    {
+        string dir = Path.Combine(modDir, "common", "artifacts", "visuals");
+        Directory.CreateDirectory(dir);
+
+        var b = new JominiBuilder();
+        b.Comment("Procedurally generated weapon visuals: one entry per look in WeaponAssets.cs.\n"
+            + "Each binds an inventory icon and the entity the portrait draws once the artifact\n"
+            + "is equipped, which works because vanilla's equipped-weapon accessory declares\n"
+            + "game_entity_override = weapon and lets the engine substitute this entity.");
+
+        foreach (var kind in WeaponAssets.Kinds)
+        {
+            b.Blank();
+            b.Comment(kind);
+
+            foreach (var asset in WeaponAssets.ForKind(kind))
+            {
+                using (b.Block(asset.VisualKey))
+                {
+                    b.Quoted("icon", asset.Icon);
+                    b.Field("asset", asset.Entity);
+                }
+            }
+        }
+
+        // Forged weapons are emitted alongside rather than inside the loop above: they are not in
+        // WeaponAssets, because they do not exist until this world is generated. Their entities are
+        // written by ForgedWeaponWriter next to the .mesh files they name.
+        if (forgedWeapons is { Count: > 0 })
+        {
+            b.Blank();
+            b.Comment("forged weapons — procedurally assembled meshes, one per pool entry");
+
+            foreach (var asset in forgedWeapons)
+            {
+                using (b.Block(asset.VisualKey))
+                {
+                    b.Quoted("icon", asset.Icon);
+                    b.Field("asset", asset.Entity);
+                }
+            }
+        }
+
+        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_weapon_visuals.txt"), b.ToString());
+    }
+
+    /// <summary>
     /// Spawns the starting treasure, with the history that explains it.
     ///
     /// The history is the point of this file. <c>create_artifact</c>'s own <c>history</c> block
@@ -76,10 +142,14 @@ public static class ArtifactWriter
         Directory.CreateDirectory(dir);
 
         var b = new JominiBuilder();
-        b.Comment("Spawn procedural starting artifacts safely on game start");
+        b.Comment("Spawn procedural starting artifacts safely on game start.\n"
+            + "on_game_start_after_lobby, not on_game_start: an artifact equipped before the\n"
+            + "lobby closes never reaches the portrait, so a generated weapon stayed invisible\n"
+            + "until its owner equipped something else and forced a rebuild. After the lobby is\n"
+            + "the same moment the artifact-window toggle acts, which always worked.");
         b.Blank();
 
-        using (b.Block("on_game_start"))
+        using (b.Block("on_game_start_after_lobby"))
         using (b.Block("on_actions"))
             b.Token("gen_spawn_startup_artifacts");
 

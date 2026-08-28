@@ -1,0 +1,50 @@
+﻿# Swearing somebody in, in one place.
+#
+# =====================================================================================
+#  Why this exists
+# =====================================================================================
+#
+# Membership is granted in five places -- the approach event's accept option, the branch of that
+# event that reveals a recruiter who "was a member all along", and three debug events. Every one
+# of them used to be a bare `add_trait = society_member`, and every one of them was therefore a
+# place that could forget to do the rest of what joining means.
+#
+# It already had: the panel reads two character variables, and CK3 is strict about this in a way
+# that is easy to miss --
+#
+#   [E][jomini_effect.cpp:1161]: Variable 'society_dark_power' is used but is never set.
+#                               Setting it in an unused scripted trigger or effect does not count
+#
+# -- logged once per read, which for a GUI meter means once per redraw. Roughly 200 in a few
+# minutes of having the panel open. A variable read before anything writes it is an error, not a
+# zero, and the `|0` format spec in the .gui hides the symptom rather than the cause.
+#
+# So joining initialises the meters. One effect, called everywhere, and a sixth caller added later
+# gets it for free.
+
+society_swear_in_effect = {
+	add_trait = society_member
+
+	# `set_variable` and not `change_variable`: this runs at the moment of joining, so there is
+	# nothing to add to, and change_variable against an unset variable is the same error again.
+	#
+	# Guarded so that swearing in somebody who is already sworn -- which society.9002 does on
+	# purpose, and the debug events can do by accident -- does not wipe what they have earned.
+	if = {
+		limit = { NOT = { has_variable = society_dark_power } }
+
+		set_variable = {
+			name = society_dark_power
+			value = 0
+		}
+	}
+
+	if = {
+		limit = { NOT = { has_variable = society_visibility } }
+
+		set_variable = {
+			name = society_visibility
+			value = 0
+		}
+	}
+}

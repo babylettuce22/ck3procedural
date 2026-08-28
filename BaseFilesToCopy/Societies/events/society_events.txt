@@ -118,7 +118,7 @@ society.0001 = {
 					NOT = { has_trait = society_member }
 				}
 
-				add_trait = society_member
+				society_swear_in_effect = yes
 
 				add_trait_xp = {
 					trait = society_member
@@ -139,7 +139,7 @@ society.0001 = {
 	option = {
 		name = society.0001.a
 
-		add_trait = society_member
+		society_swear_in_effect = yes
 
 		add_trait_xp = {
 			trait = society_member
@@ -179,6 +179,25 @@ society.0001 = {
 						trait = society_member
 						track = society_rank
 						value = 5
+					}
+
+					# ---- Visibility ----
+					#
+					# Straight out of CK2, including the number: recruiting cost +5 visibility
+					# there, and accumulated visibility is what got you found out. It is the
+					# mechanic worth copying most directly out of that system, because it makes
+					# exposure a thing the player is spending rather than a die nobody sees --
+					# every use of the society is a small, visible, permanent risk.
+					#
+					# Charged on ACCEPTANCE only, and that is the interesting asymmetry: a
+					# refusal is charged in the other option instead, and more heavily, because
+					# a person who said no is a person who knows and owes you nothing.
+					#
+					# Nothing consumes visibility yet. When the secret arrives this is what its
+					# discovery chance reads.
+					change_variable = {
+						name = society_visibility
+						add = 5
 					}
 				}
 			}
@@ -281,6 +300,14 @@ society.0001 = {
 					add_opinion = {
 						target = root
 						modifier = society_refused_the_oath_opinion
+					}
+
+					# Three times what acceptance costs -- see the note in the other option.
+					# Someone who joined has the same reasons as you to say nothing; someone who
+					# refused has none, and is still standing there.
+					change_variable = {
+						name = society_visibility
+						add = 15
 					}
 				}
 			}
@@ -893,9 +920,10 @@ society.0111 = {
 # ---- What it swears, and what it deliberately does not ----
 #
 # The COURT: every adult courtier, plus the player, because a rite the player cannot see is not
-# a rite anyone can test. Vassals are left alone on purpose -- `activity_invite_rule_society_members`
-# gathers courtiers AND vassals AND family AND spouses AND liege, and swearing only the court
-# means an empty guest list points at the courtier branch specifically rather than at all five
+# a rite anyone can test. Vassals are left alone on purpose -- the guest list is split into a
+# court rule and an "elsewhere" rule that gathers vassals, kin, spouses and liege, and swearing
+# only the court means the two tabs answer separately: Court fills, Elsewhere does not, and an
+# empty Court tab therefore points at the courtier branch specifically rather than at all five
 # at once.
 #
 # Ranks are staggered rather than flat. Everyone at the same Standing tells you nothing about
@@ -917,7 +945,7 @@ society.9001 = {
 		if = {
 			limit = { NOT = { has_trait = society_member } }
 
-			add_trait = society_member
+			society_swear_in_effect = yes
 
 			add_trait_xp = {
 				trait = society_member
@@ -933,7 +961,7 @@ society.9001 = {
 				NOT = { has_trait = society_member }
 			}
 
-			add_trait = society_member
+			society_swear_in_effect = yes
 
 			# Staggered across the first three breakpoints -- see the note above.
 			#
@@ -970,6 +998,55 @@ society.9001 = {
 			type = event_toast_effect_good
 			title = society_debug_sworn_toast
 			left_icon = root
+		}
+	}
+}
+
+# =====================================================================================
+#  society.9002 -- DEBUG: climb one rung
+# =====================================================================================
+#
+# Nothing but the rite grants Standing, and the rite is now gated on Standing. That is a real
+# design (CK2 gated the powers that summoned a society on rank, and the top rung's powers were
+# the whole reason to climb) and a bootstrapping problem: a character who joined through
+# society.0001 has 10 and cannot convene anything, so the mechanic the prototype exists to show
+# cannot be reached by playing.
+#
+# society.9001 sidesteps it by handing the player 80 on the way past, but only if they were not
+# already a member -- so the ordinary route in, join with 0001 and then swear the court, leaves
+# the player stuck at 10 while their courtiers outrank them.
+#
+# This is the missing rung-by-rung control. +25 a press walks the four breakpoints one at a time
+# (25/50/75/100), which is more useful than jumping to the top: the interesting thing to look at
+# is the modifiers arriving and the rite's tooltip changing from red to green, and a single jump
+# shows neither. Press it twice from a fresh induction to unlock the rite.
+#
+# Fires from the DebugPanel like the rest -- character-scoped and non-hidden events get a button
+# automatically, so this needs no wiring and no trigger. It is `hidden = yes` because there is
+# nothing to read; the toast is the entire report.
+society.9002 = {
+	type = character_event
+	hidden = yes
+
+	immediate = {
+		# Membership first, so the event is usable as the only thing you press. add_trait_xp
+		# against a trait the character does not have is a silent no-op, and a debug button that
+		# does nothing on the most obvious way to use it is worse than no button.
+		if = {
+			limit = { NOT = { has_trait = society_member } }
+			society_swear_in_effect = yes
+		}
+
+		send_interface_toast = {
+			type = event_toast_effect_good
+			title = society_debug_standing_toast
+			left_icon = root
+
+			add_trait_xp = {
+				trait = society_member
+				track = society_rank
+				value = 25
+			}
 		}
 	}
 }

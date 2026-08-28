@@ -1,0 +1,181 @@
+﻿namespace = pmg_debug_forge
+
+# Mints a weapon artifact on demand, through the game's OWN creation path.
+#
+# WHY NOT create_artifact DIRECTLY
+# The point of this event is to test the parts of the forge that only the vanilla path exercises.
+# Calling create_artifact here would name a forged look explicitly and prove nothing; calling
+# create_artifact_weapon_effect goes through the same chokepoint every inspiration, tournament
+# prize and adventurer find uses, so what appears is what a player would actually earn.
+#
+# WHAT IT IS ACTUALLY CHECKING
+# The visual override in common/artifacts/visuals resolves a vanilla visual key -- `sword`, `axe`
+# -- to a forged look by reading the gen_forge_index variable, which is set by a hidden event
+# hooked onto on_artifact_changed_owner. That leaves one thing unproven on paper: whether
+# create_artifact firing with an owner counts as an ownership CHANGE. If it does, a weapon made
+# here arrives already dressed. If it does not, it arrives wearing look #1 -- the untriggered
+# default -- and only picks up a real index the first time it changes hands. One click answers it,
+# and the answer decides whether the on_action hook is sufficient on its own.
+#
+# Two weapon types have no parts library: spear has none at all, and hammer is cut into the mace
+# library as families rather than given its own. Both are offered anyway, because seeing what they
+# fall back to is part of what this is for.
+#
+# No trigger and no is_shown: the debug menu autopopulates from the event list.
+
+pmg_debug_forge.0001 = {
+	type = character_event
+	title = pmg_debug_forge.0001.t
+	desc = pmg_debug_forge.0001.desc
+	theme = realm
+
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+
+	# Forces the weapon onto the portrait regardless of context. The idle-animation gate honours
+	# this flag; without it an equipped weapon still only shows in an armoured context, which reads
+	# exactly like the model failing to load.
+	immediate = {
+		add_character_flag = pmg_always_show_equipped_weapon
+	}
+
+	option = {
+		name = pmg_debug_forge.0001.a
+		pmg_debug_forge_weapon_effect = { TYPE = flag:artifact_weapon_type_sword }
+	}
+
+	option = {
+		name = pmg_debug_forge.0001.b
+		pmg_debug_forge_weapon_effect = { TYPE = flag:artifact_weapon_type_dagger }
+	}
+
+	option = {
+		name = pmg_debug_forge.0001.c
+		pmg_debug_forge_weapon_effect = { TYPE = flag:artifact_weapon_type_axe }
+	}
+
+	option = {
+		name = pmg_debug_forge.0001.d
+		pmg_debug_forge_weapon_effect = { TYPE = flag:artifact_weapon_type_mace }
+	}
+
+	option = {
+		name = pmg_debug_forge.0001.e
+		pmg_debug_forge_weapon_effect = { TYPE = flag:artifact_weapon_type_hammer }
+	}
+
+	option = {
+		name = pmg_debug_forge.0001.f
+		pmg_debug_forge_weapon_effect = { TYPE = flag:artifact_weapon_type_spear }
+	}
+
+	option = {
+		name = pmg_debug_forge.0001.g
+	}
+}
+
+# Armour, on its own event because the six types each get their own palette and telling them apart
+# means minting them side by side. One option per type, no random option: a random type would answer
+# "does armour render" and nothing else, which the probe already answered.
+pmg_debug_forge.0002 = {
+	type = character_event
+	title = pmg_debug_forge.0002.t
+	desc = pmg_debug_forge.0002.desc
+	theme = realm
+
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+
+	option = {
+		name = pmg_debug_forge.0002.a
+		pmg_debug_forge_armor_effect = { TYPE = flag:armor_type_plate }
+	}
+
+	option = {
+		name = pmg_debug_forge.0002.b
+		pmg_debug_forge_armor_effect = { TYPE = flag:armor_type_mail }
+	}
+
+	option = {
+		name = pmg_debug_forge.0002.c
+		pmg_debug_forge_armor_effect = { TYPE = flag:armor_type_scale }
+	}
+
+	option = {
+		name = pmg_debug_forge.0002.d
+		pmg_debug_forge_armor_effect = { TYPE = flag:armor_type_lamellar }
+	}
+
+	option = {
+		name = pmg_debug_forge.0002.e
+		pmg_debug_forge_armor_effect = { TYPE = flag:armor_type_laminar }
+	}
+
+	option = {
+		name = pmg_debug_forge.0002.f
+		pmg_debug_forge_armor_effect = { TYPE = flag:armor_type_brigandine }
+	}
+
+	# The hand-modelled pieces from assets/armors, worn from a flag rather than from an artifact.
+	# Deliberately not artifact-gated: this exists to answer "does the mesh bind and deform", and an
+	# artifact gate would add two more things that could be the reason nothing showed.
+	option = {
+		name = pmg_debug_forge.0002.h
+		add_character_flag = pmg_wear_custom_armor
+	}
+
+	option = {
+		name = pmg_debug_forge.0002.i
+		remove_character_flag = pmg_wear_custom_armor
+	}
+
+	option = {
+		name = pmg_debug_forge.0002.g
+	}
+}
+
+
+# The rarity axis, held to one armour type so only one thing changes between options.
+#
+# The forge walks a surface ladder as rarity climbs - rough iron to steel to polished on metal
+# regions, cloth to leather to lacquer on soft ones - while the palette stays put. So these four
+# should differ in FINISH, not in colour: the same armour, better made.
+pmg_debug_forge.0003 = {
+	type = character_event
+	title = pmg_debug_forge.0003.t
+	desc = pmg_debug_forge.0003.desc
+	theme = realm
+
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+
+	option = {
+		name = pmg_debug_forge.0003.a
+		pmg_debug_forge_rarity_effect = { TYPE = flag:armor_type_mail RARITY = common }
+	}
+
+	option = {
+		name = pmg_debug_forge.0003.b
+		pmg_debug_forge_rarity_effect = { TYPE = flag:armor_type_mail RARITY = masterwork }
+	}
+
+	option = {
+		name = pmg_debug_forge.0003.c
+		pmg_debug_forge_rarity_effect = { TYPE = flag:armor_type_mail RARITY = famed }
+	}
+
+	option = {
+		name = pmg_debug_forge.0003.d
+		pmg_debug_forge_rarity_effect = { TYPE = flag:armor_type_mail RARITY = illustrious }
+	}
+
+	option = {
+		name = pmg_debug_forge.0003.e
+	}
+}

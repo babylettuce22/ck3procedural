@@ -28,6 +28,8 @@ idle = {
 					pmg_show_equipped_weapon_trigger = yes
 					any_equipped_character_artifact = {
 						artifact_type = sword
+						# Suppressed per-artifact by the toggle in the artifact details window.
+						NOT = { has_variable = gen_artifact_hide_on_portrait }
 					}
 				}
 			}
@@ -36,7 +38,7 @@ idle = {
 		}
 
 		pmg_hold_axe_idle = {
-			animation = { head = "council_marshal" torso = "council_marshal" }
+			animation = { head = "throneRoom_oneHandedPassive1_entry" torso = "throneRoom_oneHandedPassive1_entry" }
 
 			weight = {
 				base = 0
@@ -45,6 +47,8 @@ idle = {
 					pmg_show_equipped_weapon_trigger = yes
 					any_equipped_character_artifact = {
 						artifact_type = axe
+						# Suppressed per-artifact by the toggle in the artifact details window.
+						NOT = { has_variable = gen_artifact_hide_on_portrait }
 					}
 				}
 			}
@@ -62,6 +66,8 @@ idle = {
 					pmg_show_equipped_weapon_trigger = yes
 					any_equipped_character_artifact = {
 						artifact_type = mace
+						# Suppressed per-artifact by the toggle in the artifact details window.
+						NOT = { has_variable = gen_artifact_hide_on_portrait }
 					}
 				}
 			}
@@ -70,7 +76,10 @@ idle = {
 		}
 
 		pmg_hold_dagger_idle = {
-			animation = { head = "throneRoom_oneHandedPassive1_entry" torso = "throneRoom_oneHandedPassive1_entry" }
+			# Spymaster, not marshal. A pose and a pack have to be a pairing vanilla authored, and
+			# animations.txt pairs council_spymaster with itself, so this one is safe. The other two
+			# packs it appears with - hunting_knife_start_entry and assassin_entry - are male-only.
+			animation = { head = "council_spymaster" torso = "council_spymaster" }
 
 			weight = {
 				base = 0
@@ -79,11 +88,18 @@ idle = {
 					pmg_show_equipped_weapon_trigger = yes
 					any_equipped_character_artifact = {
 						artifact_type = dagger
+						# Suppressed per-artifact by the toggle in the artifact details window.
+						NOT = { has_variable = gen_artifact_hide_on_portrait }
 					}
 				}
 			}
 
-			portrait_modifier_pack = one_handed_dagger
+			# Same prop as one_handed_dagger - artifact_dagger_equipped_prop on props_right, already
+			# gated on an equipped dagger - so the weapon still lands in the right hand and the
+			# entity override still applies. This pack carries female_prop_fix_additive but not
+			# fat_additive or dwarf_additive, which one_handed_dagger did; vanilla ships it that way
+			# and uses it on its own council portraits, so it is a known quantity rather than a gap.
+			portrait_modifier_pack = council_spymaster
 		}
 
 		pmg_hold_spear_idle = {
@@ -96,11 +112,13 @@ idle = {
 					pmg_show_equipped_weapon_trigger = yes
 					any_equipped_character_artifact = {
 						artifact_type = spear
+						# Suppressed per-artifact by the toggle in the artifact details window.
+						NOT = { has_variable = gen_artifact_hide_on_portrait }
 					}
 				}
 			}
 
-			portrait_modifier_pack = two_handed_spear
+			portrait_modifier_pack = throneRoom_two_handed_passive_1
 		}
 
 		pmg_hold_hammer_idle = {
@@ -113,6 +131,8 @@ idle = {
 					pmg_show_equipped_weapon_trigger = yes
 					any_equipped_character_artifact = {
 						artifact_type = hammer
+						# Suppressed per-artifact by the toggle in the artifact details window.
+						NOT = { has_variable = gen_artifact_hide_on_portrait }
 					}
 				}
 			}
@@ -462,19 +482,6 @@ idle = {
 			portrait_modifier_pack = one_handed_sword
 		}
 
-		character_murchad = {
-			animation = { head = "emotion_thinking_entry" torso = "emotion_thinking_entry" }
-			portrait_modifier = {
-				animations = AI_rational_decal
-			}
-			weight = {
-				base = 0
-				modifier = {
-					add = 5000
-					this = character:83355
-				}
-			}
-		}
 
 		shepherd_with_sheep = {
 			animation = { head = "herder" torso = "herder" }
@@ -493,51 +500,8 @@ idle = {
 			}
 		}
 
-		character_robert = {
-			animation = { head = "council_marshal" torso = "council_marshal" }
-			weight = {
-				base = 0
-				modifier = {
-					add = 5000
-					this = character:1128
-				}
-			}
-			portrait_modifier_pack = one_handed_sword
-		}
 
-		character_henry = {
-			animation = { head = "council_marshal" torso = "council_marshal" }
-			weight = {
-				base = 0
-				modifier = {
-					add = 5000
-					OR = {
-						this = character:easteregg_henry_of_skalitz
-						this = character:easteregg_henry_kobyla
-						this = character:easteregg_henry_kobyla_late
-					}
-				}
-			}
-			portrait_modifier_pack = long_swords
-		}
 
-		character_yahya = {
-			animation = { head = "chessCocky1_entry" torso = "chessCocky1_entry" }
-			portrait_modifier = {
-				animations_props = fp2_chess_piece_prop_left_hand
-				animations = fat_additive
-				animations = dwarf_additive
-				animations = female_prop_fix_additive
-				animations = child_additive
-			}
-			weight = {
-				base = 0
-				modifier = {
-					add = 5000
-					this = character:3924
-				}
-			}
-		}
 
 		camp_purpose_mercenaries = {
 			animation = { head = "marshal_shield" torso = "marshal_shield" }
@@ -596,7 +560,6 @@ idle = {
 					add = 5000
 					is_ruler = yes
 					age >= 10
-					NOT = { this = character:41702 }
 					NOR = {
 						has_trait = blind
 						has_trait = maimed
@@ -1388,10 +1351,6 @@ idle = {
 					should_use_fat_dwarf_animation = no
 					NOT = { has_trait = pregnant }
 				}
-				modifier = {
-					add = -100
-					this = character:7757
-				}
 			}
 			portrait_modifier = {
 				animations = AI_rational_decal
@@ -1670,13 +1629,6 @@ idle = {
 					should_use_fat_animation = no
 					should_use_fat_dwarf_animation = no
 					NOT = { has_trait = pregnant }
-				}
-				modifier = {
-					add = 5000
-					OR = {
-						this = character:7757
-						this = character:41702
-					}
 				}
 			}
 			portrait_modifier = {

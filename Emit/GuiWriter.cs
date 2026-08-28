@@ -1,4 +1,4 @@
-using Ck3MapGen.GameGui;
+﻿using Ck3MapGen.GameGui;
 
 namespace Ck3MapGen.Emit;
 
@@ -44,18 +44,229 @@ namespace Ck3MapGen.Emit;
 /// </summary>
 public static class GuiWriter
 {
-    public static void WriteAll(string modDir, string gameDir)
+    /// <param name="societies">Whether the society prototype is shipping. Gates the HUD tab, and
+    /// nothing else here — a tab pointing at a panel whose scripted_guis were not copied would be
+    /// a button that silently does nothing. See <see cref="PatchHudTabs"/>.</param>
+    public static void WriteAll(string modDir, string gameDir, bool societies = false)
     {
         PatchCountyView(modDir, gameDir);
         PatchCharacterWindow(modDir, gameDir);
         PatchTitleWindow(modDir, gameDir);
         PatchCouncilWindow(modDir, gameDir);
         PatchBookmarkTab(modDir, gameDir);
+        PatchArtifactDetailsWindow(modDir, gameDir);
+        PatchInventoryWindow(modDir, gameDir);
+
+        if (societies) PatchHudTabs(modDir, gameDir);
         // The windows this project authors itself live in Emit/GuiWindows. Called from here so a
         // --gui-only run still emits them; the ones that need generator data are called from
         // ContentWriter instead, because this method has none.
+
         ArtifactIndex.Write(modDir);
     }
+
+    // ===========================================================================================
+    // The HUD tab column
+    // ===========================================================================================
+
+    /// <summary>
+    /// Adds the society tab to the column of buttons down the right of the HUD, under Intrigue.
+    ///
+    /// <code>
+    /// Related base files:
+    ///   Societies/common/scripted_guis/00_society_panel_guis.txt   society_panel_toggle, _window
+    ///   Societies/gui/gen_society_panel.gui                        the panel this opens
+    ///   Societies/gfx/interface/skinned/hud_maintab/maintab_gen_society.dds  the icon
+    ///   Societies/localization/english/society_l_english.yml       SOCIETY_TAB_BUTTON
+    /// </code>
+    ///
+    /// ---- The tab cannot be a game view, and does not need to be ----
+    ///
+    /// Vanilla's tabs are <c>onclick = "[ToggleGameViewData('intrigue_window', GetPlayer.GetID)]"</c>
+    /// with <c>down = "[IsGameViewOpen('intrigue_window')]"</c>. Those view names — 43 of them
+    /// across every vanilla <c>.gui</c> — are registered in the engine. No file under
+    /// <c>common/</c> defines them, and each arrives with its own C++ data context
+    /// (<c>CharacterWindow</c>, <c>ActivityPlanner</c>, <c>TitleViewWindow</c>), so a mod cannot
+    /// add one. A tab naming an unknown view resolves to nothing and logs nothing.
+    ///
+    /// So this drives a scripted_gui instead, which costs the two things a registered view would
+    /// have given for free: the panel does not close when another view opens, and the engine does
+    /// not remember its position. Everything else survives — the button is the same
+    /// <c>widget_hud_main_tab</c> in the same column, its lit state is honest because
+    /// <c>society_panel_toggle</c> and the panel's own X button write the same variable, and
+    /// Escape closes it because <c>close_window</c> is an ordinary widget attribute rather than a
+    /// privilege of engine views.
+    ///
+    /// ---- Why this is gated and the rest of the set is not ----
+    ///
+    /// Everything else about societies is hand-kept in <c>BaseFilesToCopy/Societies</c> and copied
+    /// verbatim. This is the one piece that cannot be, because it edits a vanilla file. The
+    /// consequence is worth knowing: a <c>--static-only --societies</c> run ships the panel and
+    /// its decision but NOT this tab, because that mode never reaches this writer. The decision is
+    /// the fallback door for exactly that reason.
+    /// </summary>
+    private static void PatchHudTabs(string modDir, string gameDir)
+    {
+        var doc = GuiDocument.Open(gameDir, "gui", "gui", "hud.gui");
+        if (doc is null) return;
+
+        var player = GuiScope.Root("GetPlayer");
+        var toggle = new ScriptedGui("society_panel_toggle", player);
+        var open = new ScriptedGui("society_panel_window", player);
+
+        // Under Intrigue, which is where a player looks for anything conspiratorial, and above
+        // Factions. Anchored on the tab rather than on the vbox that holds it: the vbox is one of
+        // several unnamed ones in this file and an anchor that cannot name itself is an anchor
+        // that can drift onto the wrong match.
+        doc.Widget("intrigue tab", "tab_intrigue").InsertAfter(SocietyTab(toggle, open));
+
+        doc.Ship(modDir);
+
+        PatchRightSidebarBackdrop(modDir, gameDir, open);
+    }
+
+    /// <summary>
+    /// Lets vanilla's right-hand backdrop appear for the society panel as well as for its own
+    /// windows — the dark strip that runs the full height of the screen under the tab column.
+    ///
+    /// <code>
+    /// Related base files:
+    ///   Societies/common/scripted_guis/00_society_panel_guis.txt   society_panel_window
+    ///   Societies/gui/gen_society_panel.gui                        the panel it backs
+    /// </code>
+    ///
+    /// The panel showed bare map down its right-hand edge where every other right-side window has
+    /// a shoulder, and the reason is structural rather than a matter of pixels. Vanilla's main-tab
+    /// windows do not draw that strip themselves; <c>sidebar_background_right</c> in
+    /// <c>hud_sidebars.gui</c> does, as a 60-wide, full-height widget of stacked
+    /// <c>Background_Area_Dark</c> and <c>Mask_Rough_Edges</c> backgrounds. It is gated on
+    ///
+    /// <code>
+    ///   visible = "[And( IsRightWindowOpen, Not( IsGameViewOpen('struggle') ) )]"
+    /// </code>
+    ///
+    /// and <c>IsRightWindowOpen</c> is true only for a registered game view, so it never appeared
+    /// for us.
+    ///
+    /// Widening that condition beats reimplementing it. The alternative was copying sixty lines of
+    /// layered masks and pattern textures into our own file, where they would drift from vanilla's
+    /// on the next art pass; this way the strip stays whatever Paradox says it is and the edit is
+    /// one term. The <c>struggle</c> exclusion is preserved untouched — that window supplies its
+    /// own and would double up.
+    ///
+    /// ---- This was written once, reverted, and restored, which is worth recording ----
+    ///
+    /// The first attempt looked like it did nothing, and it was withdrawn as a wrong guess. It was
+    /// not wrong; it was early. At that point the panel had no layer declared anywhere and was
+    /// drawing ABOVE the HUD, so the strip rendered correctly and was then covered by the very
+    /// window it was meant to sit beside. Only once <c>layer = windows_layer</c> moved onto the
+    /// panel's host — putting it under the HUD, where vanilla's windows live — could the strip be
+    /// seen at all. A patch that is invisible because of draw order looks exactly like a patch that
+    /// does not work.
+    /// </summary>
+    private static void PatchRightSidebarBackdrop(string modDir, string gameDir, ScriptedGui open)
+    {
+        var doc = GuiDocument.Open(gameDir, "gui", "gui", "hud_sidebars.gui");
+        if (doc is null) return;
+
+        doc.Widget("right sidebar backdrop", "sidebar_background_right")
+            .Set("visible", GuiExpr.Raw(
+                "And( Or( IsRightWindowOpen, " + open.IsShown().Inner + " ), "
+                + "Not( IsGameViewOpen('struggle') ) )"))
+            // ---- And lifted off the bottom layer, which is the second half of the fix ----
+            //
+            // The whole `hud_sidebars` container sits on `layer = bottom_bottom`, the lowest there
+            // is. That is fine for vanilla because opening a real view also HIDES the HUD pieces
+            // that would otherwise sit in front of the strip — a good many of them carry their own
+            // `IsRightWindowOpen` checks. None of that happens for us, so those pieces stayed
+            // visible and drew over the shoulder.
+            //
+            // Rather than chase every one of them, the strip moves up to the layer our panel is
+            // already on. It keeps the same relationship to the panel that it has to vanilla's
+            // windows — the strip is 60 wide at the far right and the window's own 40px right
+            // margin leaves it showing — while clearing the HUD it was sitting underneath.
+            //
+            // Naming a layer on a nested widget normally reparents it and breaks its anchoring;
+            // it is safe here because this widget positions itself with `parentanchor = top|right`
+            // against a full-screen parent, and the layer root is also full-screen, so the anchor
+            // resolves to the same corner either way.
+            //
+            // `top` and not `windows_layer`, which was the first try and was not high enough: the
+            // map-mode buttons run down the same right-hand edge and kept drawing over the strip.
+            // They live in hud.gui, whose containers sit on `bottom`, `hud_layer` and `top`, so
+            // anything below `top` loses to at least one of them. Vanilla never has to reckon with
+            // this because opening a real view hides those buttons — `map_modes_debug` carries
+            // `Not( IsRightWindowOpen )` for exactly that reason — and nothing hides them for us.
+            .Set("layer", "top");
+
+        doc.Ship(modDir);
+    }
+
+    /// <summary>
+    /// One tab, built as vanilla builds its own: a <c>widget_hud_main_tab</c> whose entire content
+    /// is a <c>blockoverride</c> of the <c>maintab_button</c> block the template declares.
+    ///
+    /// The <c>visible</c> sits on the widget and the rest inside the override, matching
+    /// <c>tab_council</c> and <c>tab_factions</c> — those put their own visibility on the outside
+    /// too, because the template's block is the button and the widget is whether there is a button.
+    /// </summary>
+    private static GuiNode SocietyTab(ScriptedGui toggle, ScriptedGui open)
+    {
+        var button = GuiBuilder.BlockOverride("maintab_button")
+            .Quoted("texture", "gfx/interface/skinned/hud_maintab/maintab_gen_society.dds");
+
+        // Close whatever else is occupying the right-hand slot, then open ours.
+        //
+        // The engine makes its own views mutually exclusive, and our panel is not one of them —
+        // it cannot be, because the 43 view names are registered in C++ and nothing under common/
+        // adds to them. Left alone, clicking the society tab while Decisions is up leaves both on
+        // screen overlapping, which is the one way this reads as bolted on rather than built in.
+        //
+        // `CloseGameView( 'name' )` is the way back. It is an ordinary datafunction vanilla calls
+        // in a dozen places, it takes a view name, and closing a view that is not open is a no-op
+        // — so this is a list of "not this one too", not a state machine.
+        //
+        // A widget may carry several `onclick` lines and all of them fire, which is what makes
+        // this possible at all: the tab does not have to choose between closing and opening.
+        //
+        // The list is exactly the views the tab column itself opens, read out of hud.gui rather
+        // than guessed, plus the ones reachable from the same column further down. Views that
+        // live elsewhere on screen are deliberately absent: closing the outliner or a tooltip
+        // because somebody looked at the society would be worse than the overlap.
+        foreach (string view in RightHandViews)
+            button.OnClick($"[CloseGameView( '{view}' )]");
+
+        button
+            .OnClick(toggle.Execute())
+            .Tooltip("SOCIETY_TAB_BUTTON")
+            // Lit while the panel is up. Reads the panel's own open state rather than a state
+            // of its own, so the X button, Escape and the decision all leave it correct.
+            .Quoted("down", open.IsShown().ToString());
+
+        return GuiBuilder.Of("widget_hud_main_tab")
+            .Name("tab_gen_society")
+            // Members only. The same question the decision asks, so a character who cannot take
+            // the decision has no tab either rather than a tab onto an empty panel.
+            .Visible(toggle.IsShown())
+            .Gap()
+            .Add(button);
+    }
+
+    /// <summary>
+    /// The game views that share the right-hand slot with the society panel.
+    ///
+    /// Taken from the <c>ToggleGameView</c> and <c>ToggleGameViewData</c> calls in vanilla's own
+    /// <c>hud.gui</c>, which is the only honest source for "what the tab column opens" — the set
+    /// is not documented anywhere and guessing it would mean either missing one, and leaving a
+    /// window overlapping ours, or naming a view that does not exist.
+    /// </summary>
+    private static readonly string[] RightHandViews =
+    [
+        "my_realm", "military", "council_window", "court_window", "intrigue_window",
+        "factions_window", "decisions", "activity_list_window", "situations",
+        "government_administration", "manage_tax_slots", "domicile", "struggle", "diarchy",
+        "legends", "epidemics", "task_contract", "house_aspiration_window",
+    ];
 
     // ===========================================================================================
     // The county window
@@ -242,6 +453,226 @@ public static class GuiWriter
                     .MaxWidth(320)
                     .Align("center")
                     .Text(text));
+
+    // ===========================================================================================
+    // The artifact details window
+    // ===========================================================================================
+
+    /// <summary>
+    /// Adds a "show this artifact on my portrait" toggle to vanilla's artifact details window.
+    ///
+    /// The button is spliced in beside vanilla's own <c>reforge</c>, which puts it inside an
+    /// <c>hbox</c> already gated on <c>[Artifact.GetOwner.IsLocalPlayer]</c> — so it inherits the
+    /// right visibility without this project taking responsibility for it.
+    ///
+    /// A <c>.gui</c> cannot write a variable, so the click lands in a scripted_gui
+    /// (<c>gen_artifact_portrait_toggle</c>) and the *state* is read back from a second one
+    /// (<c>gen_artifact_portrait_hidden</c>) whose only job is to answer the question. Both take
+    /// <c>Artifact.MakeScope</c>, which was confirmed against a <c>dump_data_types</c> dump rather
+    /// than assumed — there is no vanilla gui file that scopes a scripted_gui to an artifact, and a
+    /// wrong datafunction name fails silently past ck3-tiger.
+    ///
+    /// Offered on every artifact, not just weapons. The variable it sets is read only by the weapon
+    /// idle items in <c>zz_procedural_weapon_idle.txt</c>, so on a crown or a book the toggle is
+    /// simply inert — which is cheaper and less surprising than a button that appears and vanishes
+    /// depending on what the artifact happens to be.
+    /// </summary>
+    private static void PatchArtifactDetailsWindow(string modDir, string gameDir)
+    {
+        var doc = GuiDocument.Open(gameDir, "gui", "gui", "window_artifact_details.gui");
+        if (doc is null) return;
+
+        var scope = GuiScope.Root("Artifact");
+        var toggle = new ScriptedGui("gen_artifact_portrait_toggle", scope);
+        var hidden = new ScriptedGui("gen_artifact_portrait_hidden", scope);
+
+        doc.Widget("reforge button", "reforge").InsertAfter(PortraitToggle(toggle, hidden));
+
+        doc.Ship(modDir);
+    }
+
+    /// <summary>
+    /// The toggle itself: one round button carrying two mutually exclusive icons.
+    ///
+    /// Two icons rather than one that changes texture, because a <c>.gui</c> picks between widgets
+    /// with <c>visible</c> far more readably than it picks between textures, and the pair reads as
+    /// what it is — the crossed-out icon is exactly the state the query scripted_gui reports.
+    /// </summary>
+    private static GuiNode PortraitToggle(ScriptedGui toggle, ScriptedGui hidden)
+        => GuiBuilder.Of("button_round", "gen_artifact_portrait_toggle")
+            .Size(30, 30)
+            .OnClick(toggle.Execute())
+            .Tooltip(GuiExpr.Raw("[SelectLocalization( " + hidden.IsShown().ToString().Trim('[', ']')
+                + ", 'GEN_ARTIFACT_PORTRAIT_HIDDEN_DESC', 'GEN_ARTIFACT_PORTRAIT_SHOWN_DESC' )]"))
+            .Add(
+                GuiBuilder.Of("button_icon_highlight", "gen_artifact_portrait_on")
+                    .Visible(hidden.IsHidden())
+                    .ParentAnchor("center")
+                    .Size(20, 20)
+                    .Texture("gfx/interface/icons/flat_icons/knight.dds"),
+
+                GuiBuilder.Of("button_icon_highlight", "gen_artifact_portrait_off")
+                    .Visible(hidden.IsShown())
+                    .ParentAnchor("center")
+                    .Size(20, 20)
+                    .Texture("gfx/interface/icons/flat_icons/hide_ui.dds"));
+
+    // ===========================================================================================
+    // The inventory window
+    // ===========================================================================================
+
+    /// <summary>
+    /// Hangs a portrait panel off the left edge of the inventory window, showing the whole character
+    /// rather than the bust every other portrait in the game shows.
+    ///
+    /// The inventory is the one window whose entire subject is what a character is wearing, and
+    /// vanilla answers it with a static silhouette — <c>character_paperdoll.dds</c> — ringed by slot
+    /// icons. Nothing on that panel is the character. A crown they have equipped is being drawn on
+    /// their head by the portrait system already, and is shown here as a picture of a crown.
+    ///
+    /// A first attempt put the render behind the slots, in place of the silhouette. It worked, and
+    /// it was wrong: those slots are anchored to sit over a diagram, so the crown slot lands on the
+    /// character's face and the armor slot on their chest. The character is the subject and wants a
+    /// frame of their own — so vanilla's column is left exactly as Paradox wrote it, and the
+    /// portrait becomes a panel beside the window.
+    ///
+    /// ---- Why an icon and not a portrait widget ----
+    ///
+    /// Not <c>portrait_body_large</c>, which is what a panel like this would normally reach for.
+    /// That type renders through <c>camera_body</c> and masks itself with
+    /// <c>portrait_mask_body.dds</c>, and between them the character fades out around the hips — a
+    /// bust, which is the one thing this panel must not be.
+    ///
+    /// Vanilla does have a full-body shot, in the ruler designer's <c>full_body</c> view, and it is
+    /// not a portrait widget at all: a plain <c>icon</c> carrying a portrait texture rendered through
+    /// <c>camera_ruler_designer</c>, with no mask over it. That camera is <c>camera_body</c> pulled
+    /// back from a radius of 335 to 390 and aimed lower, at -32 rather than -22. What follows is
+    /// that recipe.
+    ///
+    /// The camera is ours rather than vanilla's, though, and only because vanilla has none that
+    /// fits: of every front-on camera it ships, exactly four sit between radius 300 and 420, and
+    /// none of them is both closer than the ruler designer's and aimed low enough to keep a pair of
+    /// feet in frame. So <c>gen_camera_inventory_body</c> is <c>camera_ruler_designer</c> with two
+    /// numbers moved — radius 390 to 355 for the zoom, and <c>look_at</c> -32 to -38 so the zoom
+    /// crops headroom instead of ankles. Both are documented where they live, which is the one file
+    /// this feature needs beyond the <c>.gui</c>.
+    ///
+    /// The icon's 260x440 is not a guess either. It is the ruler designer's 650x1100 to three
+    /// decimal places, and the ratio is the framing: the texture is rendered at whatever
+    /// <c>PdxGetWidgetScreenSize</c> reports, so the camera fits the body to the shape it is handed
+    /// and a wider box crops the legs off again.
+    ///
+    /// The animation asked for is <c>idle</c>, which is the key
+    /// <c>zz_procedural_weapon_idle.txt</c> replaces — so an equipped weapon is in the character's
+    /// hand here for the same reason it is in their hand on the map.
+    ///
+    /// ---- Escaping the window ----
+    ///
+    /// A child draws outside its window only when the child asks and the window allows, so
+    /// <c>allow_outside</c> is set in both places. That is <c>window_domicile.gui</c>'s pattern for
+    /// the bookmark tabs down its left edge; the inventory window has simply never had a reason to
+    /// permit it before.
+    ///
+    /// <code>
+    /// Related base files:
+    ///   Core/gfx/portraits/cameras/zz_gen_portrait_cameras.txt   gen_camera_inventory_body,
+    ///                                                             gen_camera_inventory_body_wide
+    ///   Core/common/scripted_guis/00_gen_inventory_pose_guis.txt  gen_inventory_wide_pose
+    ///   Core/gfx/portraits/portrait_animations/zz_procedural_weapon_idle.txt
+    ///                                                             pmg_hold_spear_idle, whose
+    ///                                                             trigger the query above copies
+    ///
+    /// No scripted_gui, no variable and no localisation: the panel's one string is the
+    /// character's own name, read live.
+    ///
+    /// Related generated files, written elsewhere:
+    ///   Core/gfx/portraits/portrait_animations/zz_procedural_weapon_idle.txt   the weapon in hand
+    /// </code>
+    ///
+    /// The geometry below is pure <c>.gui</c> and so answers to the console's <c>reload gui</c>,
+    /// tunable against a running game. The camera does not: it is read at game start, so a change
+    /// to the zoom costs a full run and a restart where a change to the frame costs neither.
+    /// </summary>
+    private static void PatchInventoryWindow(string modDir, string gameDir)
+    {
+        var doc = GuiDocument.Open(gameDir, "gui", "gui", "window_inventory.gui");
+        if (doc is null) return;
+
+        doc.Unique("inventory window layer",
+                n => !n.IsBlock && n.Key == "layer" && n.Value == "middle")
+            .InsertAfter(GuiNode.Leaf("allow_outside", "yes"));
+
+        doc.Widget("inventory window", "inventory_view").Append(BodyPanel());
+
+        doc.Ship(modDir);
+    }
+
+    /// <summary>
+    /// The panel itself: a framed box to the left of the window, the character's name over a
+    /// full-body render of them.
+    ///
+    /// The offset is not the gap. <c>Window_Background</c> carries <c>margin = { -23 -17 }</c>, so
+    /// the inventory window paints its frame inset from the bounds this is positioned against and
+    /// roughly 27 pixels of the measured distance are the window's own padding rather than space
+    /// between the two. 288 against a 300-wide panel therefore overlaps the window slightly on
+    /// paper and still reads as a small gap on screen. Anything that looks like arithmetic here is
+    /// really a reading off a screenshot.
+    ///
+    /// The height is the icon plus the name plus the margins, added up rather than measured, so it
+    /// is the first number to distrust if the frame sits loose around what is inside it.
+    /// </summary>
+    private static GuiNode BodyPanel()
+        => GuiBuilder.Widget("gen_inventory_body_panel")
+            .Gapped()
+            .DataContext("[InventoryView.GetCharacter]")
+            .ParentAnchor("vcenter|left")
+            .Position(-288, 0)
+            .Size(300, 500)
+            .AllowOutside()
+            .Using("Window_Background_Subwindow")
+
+            .Gap().Add(GuiBuilder.VBox()
+                .Margin(12, 12)
+                .Spacing(6)
+
+                .Add(GuiBuilder.Of("text_label_center")
+                        .ExpandingH()
+                        .MaxWidth(260)
+                        .Text(GuiExpr.Raw("Character.GetNameNoTooltip")),
+
+                    GuiBuilder.Icon("gen_inventory_body_render")
+                        .Gapped()
+                        .Size(260, 440)
+                        .Texture("[Character.GetPortrait( 'environment_body', "
+                            + BodyCamera() + ", 'idle', "
+                            + "PdxGetWidgetScreenSize( PdxGuiWidget.Self ) )]")));
+
+    /// <summary>
+    /// Which camera the panel renders through, decided per character at draw time.
+    ///
+    /// Every weapon the mod forges is held on a one-handed idle except the spear, which
+    /// <c>zz_procedural_weapon_idle.txt</c> puts on <c>throneRoom_twoHandedPassive1_entry</c>. That
+    /// pose plants the shaft out to the side, and an arm's length of it falls outside a frame that
+    /// fits a sword comfortably. Widening the frame for everyone would shrink every other character
+    /// to buy room only one pose uses, so the frame is chosen instead of compromised.
+    ///
+    /// <c>Select_CString</c> is what makes that expressible: it returns one of two strings and is
+    /// nested inside <c>GetPortrait</c>'s camera argument, which is the same shape vanilla uses in
+    /// <c>hud.gui</c> to pick an interaction key inside <c>SendPlayerInteraction</c>.
+    ///
+    /// The condition is a scripted_gui rather than a datafunction chain because the question is
+    /// "would the spear item win the animation weight", and the only honest way to ask that is to
+    /// repeat its trigger. That copy is the fragile part of this feature and is called out at both
+    /// ends — see the header of <c>00_gen_inventory_pose_guis.txt</c>.
+    /// </summary>
+    private static string BodyCamera()
+    {
+        var wide = new ScriptedGui("gen_inventory_wide_pose",
+            GuiScope.Root("InventoryView.GetCharacter"));
+
+        return "Select_CString( " + wide.IsShown().ToString().Trim('[', ']')
+            + ", 'gen_camera_inventory_body_wide', 'gen_camera_inventory_body' )";
+    }
 
     // ===========================================================================================
     // The title window

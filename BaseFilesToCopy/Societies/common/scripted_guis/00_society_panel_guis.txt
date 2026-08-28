@@ -1,0 +1,327 @@
+﻿# The society panel: everything the window asks the script layer.
+#
+# =====================================================================================
+#  Why a window needs this many entries
+# =====================================================================================
+#
+# A .gui file cannot run a trigger. It can only ask a scripted_gui whether something is true and
+# draw accordingly, so every question the panel wants to ask the world has to exist here first as
+# a named entry. That is why there is one per rung rather than a comparison in the window: the
+# window has no way to compare a number to 25.
+#
+# The names below are a contract with gui/gen_society_panel.gui in both directions and NEITHER
+# side fails loudly. A .gui naming a scripted_gui that does not exist logs nothing and evaluates
+# false, so a rename here does not break the window, it just makes part of it never appear.
+
+
+# =====================================================================================
+#  Open state
+# =====================================================================================
+#
+# One entry answering both directions on purpose -- the window's `visible` asks IsShown, the close
+# button in its header runs Execute. Two entries could drift into disagreeing about what "open"
+# means, and the failure mode of that is a window with no way out of it.
+#
+# The open state is a character variable rather than a GUI VariableSystem flag because a DECISION
+# has to be able to set it, and a decision's effect cannot reach the GUI layer at all. When the
+# HUD tab arrives it will toggle this same variable, so the tab and the decision cannot disagree
+# about whether the panel is up.
+society_panel_window = {
+	scope = character
+
+	is_shown = {
+		has_variable = society_panel_open
+	}
+
+	effect = {
+		remove_variable = society_panel_open
+	}
+}
+
+
+# =====================================================================================
+#  The HUD tab's toggle
+# =====================================================================================
+#
+# A separate entry from the one above, and the difference is the whole reason it exists:
+# `society_panel_window` is a CLOSE (its effect only ever removes the variable), which is right
+# for the window's own X button. A tab has to do both.
+#
+# ---- Why the tab cannot use the engine's own toggle ----
+#
+# Vanilla's tabs call `ToggleGameViewData('intrigue_window', GetPlayer.GetID)` and read their lit
+# state back with `IsGameViewOpen`. Those 43 view names are registered in the engine -- there is no
+# data file that defines them, and each arrives with its own C++ data context -- so a mod cannot
+# add one. A tab naming an unknown view would resolve to nothing, silently, which is this
+# project's most expensive class of bug.
+#
+# So the tab drives this instead, and reads `society_panel_window.IsShown` for its `down` state.
+# The decision sets the same variable, so the two doors cannot disagree about whether the panel
+# is up, and closing from the X leaves the tab correctly unlit.
+#
+# ---- is_shown is the tab's visibility, not a guard on the effect ----
+#
+# The .gui asks this entry's IsShown for whether to draw the tab at all, which is why the
+# membership test lives here rather than in the effect. A non-member has no tab, exactly as a
+# non-member has no decision and no rite -- the fifth place membership gates something.
+society_panel_toggle = {
+	scope = character
+
+	is_shown = {
+		has_trait = society_member
+	}
+
+	effect = {
+		if = {
+			limit = { has_variable = society_panel_open }
+			remove_variable = society_panel_open
+		}
+		else = {
+			set_variable = {
+				name = society_panel_open
+				value = yes
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  The roster
+# =====================================================================================
+#
+# Rebuilt from the window's own `_show` state rather than from the decision that opens it, so the
+# list is current whenever the panel is on screen and reopening re-reads the world instead of
+# appending a second copy of it.
+#
+# ---- A character variable list, not a global one ----
+#
+# `GetGlobalVariable` type-checks, passes ck3-tiger and then resolves to NOTHING in game -- it has
+# cost this project a full generate-launch-screenshot cycle once already. What vanilla actually
+# writes, 117 times, is `MakeScope.Var`, and script lists reach a datamodel as
+# `<scope>.MakeScope.GetList( 'name' )`. So the roster lives on the player as a variable list and
+# the window reads it off `GetPlayer`. It is per-player data anyway.
+#
+# ---- Who is on it ----
+#
+# The same reachable sets the invite rule walks, plus the player. That is deliberate: the panel
+# should show the society you can actually act on, and a roster listing members you can neither
+# invite nor recognise would be a roster that disagrees with the guest list for reasons the
+# player cannot see. When the generated version keeps a real world-wide roster this becomes one
+# walk over it and the two lists converge properly.
+society_panel_gather = {
+	scope = character
+
+	is_shown = {
+		always = yes
+	}
+
+	effect = {
+		clear_variable_list = society_roster
+
+		# Self first, so the player is always the top row and can see their own rung beside
+		# everybody else's without hunting for it.
+		if = {
+			limit = { has_trait = society_member }
+
+			save_scope_as = society_rostered
+
+			add_to_variable_list = {
+				name = society_roster
+				target = scope:society_rostered
+			}
+		}
+
+		every_courtier = {
+			limit = {
+				this != root
+				has_trait = society_member
+			}
+
+			save_scope_as = society_rostered
+
+			root = {
+				add_to_variable_list = {
+					name = society_roster
+					target = scope:society_rostered
+				}
+			}
+		}
+
+		every_vassal_or_below = {
+			limit = { has_trait = society_member }
+
+			save_scope_as = society_rostered
+
+			root = {
+				add_to_variable_list = {
+					name = society_roster
+					target = scope:society_rostered
+				}
+			}
+		}
+
+		every_close_or_extended_family_member = {
+			limit = {
+				this != root
+				has_trait = society_member
+			}
+
+			save_scope_as = society_rostered
+
+			root = {
+				add_to_variable_list = {
+					name = society_roster
+					target = scope:society_rostered
+				}
+			}
+		}
+
+		liege ?= {
+			if = {
+				limit = { has_trait = society_member }
+
+				save_scope_as = society_rostered
+
+				root = {
+					add_to_variable_list = {
+						name = society_roster
+						target = scope:society_rostered
+					}
+				}
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  The rungs
+# =====================================================================================
+#
+# One entry per rung, each true for exactly one band of the track, so the window can draw four
+# labelled pips and one rank name by asking four yes/no questions. There is no way to do this in
+# the .gui itself -- a window can ask a scripted_gui whether something holds, and cannot compare
+# 40 to 25.
+#
+# The bands are the trait's own breakpoints from 00_society_traits.txt (25/50/75/100) and the
+# `NOT` on each upper edge is what makes them exclusive, so exactly one name is ever visible. Get
+# that wrong and the panel shows two rank names stacked on top of each other, which is the tell.
+#
+# `has_trait_xp` needs the `track =` line on a multi-track trait. Without it the comparison
+# silently reads the wrong pool -- it does not error, it just answers about something else.
+#
+# Rung 0 is the unproven: sworn, but not yet anything. It has no modifiers and cannot convene a
+# rite. Naming it rather than leaving a blank is the honest version -- a new member IS somewhere
+# in the society, and the panel saying nothing at all reads as the panel being broken.
+society_panel_rank_0 = {
+	scope = character
+
+	is_shown = {
+		has_trait = society_member
+
+		NOT = {
+			has_trait_xp = {
+				trait = society_member
+				track = society_rank
+				value >= 25
+			}
+		}
+	}
+}
+
+society_panel_rank_1 = {
+	scope = character
+
+	is_shown = {
+		has_trait_xp = {
+			trait = society_member
+			track = society_rank
+			value >= 25
+		}
+
+		NOT = {
+			has_trait_xp = {
+				trait = society_member
+				track = society_rank
+				value >= 50
+			}
+		}
+	}
+}
+
+society_panel_rank_2 = {
+	scope = character
+
+	is_shown = {
+		has_trait_xp = {
+			trait = society_member
+			track = society_rank
+			value >= 50
+		}
+
+		NOT = {
+			has_trait_xp = {
+				trait = society_member
+				track = society_rank
+				value >= 75
+			}
+		}
+	}
+}
+
+society_panel_rank_3 = {
+	scope = character
+
+	is_shown = {
+		has_trait_xp = {
+			trait = society_member
+			track = society_rank
+			value >= 75
+		}
+
+		NOT = {
+			has_trait_xp = {
+				trait = society_member
+				track = society_rank
+				value >= 100
+			}
+		}
+	}
+}
+
+society_panel_rank_4 = {
+	scope = character
+
+	is_shown = {
+		has_trait_xp = {
+			trait = society_member
+			track = society_rank
+			value >= 100
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Powers
+# =====================================================================================
+#
+# CK2's society screen listed every power the society had and greyed the ones your rank had not
+# reached, which is most of what made the ladder feel like it led somewhere -- you could see the
+# thing you could not do yet. This is the same question for the one power this prototype has.
+#
+# It duplicates the threshold in 00_society_rite_activity.txt rather than reading it from there,
+# because there is nowhere shared to put it. If one moves and the other does not, the panel will
+# promise a rite the planner refuses -- so they are commented as a pair on both sides.
+society_panel_can_hold_rite = {
+	scope = character
+
+	is_shown = {
+		has_trait_xp = {
+			trait = society_member
+			track = society_rank
+			value >= 50
+		}
+	}
+}

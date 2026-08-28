@@ -1,4 +1,4 @@
-using Ck3MapGen.Core;
+﻿using Ck3MapGen.Core;
 using Ck3MapGen.MapGen;
 
 namespace Ck3MapGen.AppGUI;
@@ -70,7 +70,14 @@ public static class MapModes
     /// <summary>Does a pending edit of these aspects change what this pick kind paints?</summary>
     public static bool Repaints(MapPick kind, Emit.WorldAspect touched) => kind switch
     {
-        MapPick.Title or MapPick.Realm => touched.HasFlag(Emit.WorldAspect.TitleColors),
+        MapPick.Title => touched.HasFlag(Emit.WorldAspect.TitleColors),
+
+        // Nothing an edit can touch. The Realms view used to paint each realm in the colour of the
+        // title it is named after, and so followed a recolour; it takes its hues from
+        // <see cref="RealmPalette"/> now, which reads the shape of the realm tree and not one
+        // title's colour. Who holds what is not editable, so this render never goes stale.
+        MapPick.Realm => false,
+
         MapPick.Culture => touched.HasFlag(Emit.WorldAspect.Cultures),
         _ => touched.HasFlag(Emit.WorldAspect.Faiths),
     };
@@ -159,7 +166,7 @@ public static class MapModes
             { Pick = (MapPick.Title, "e") },
 
         // --- World ----------------------------------------------------------------------------
-        new("Realms", "World", (r, w) => PreviewRenderer.RenderRealms(r, w?.Realms, w?.Wilderness))
+        new("Realms", "World", (r, w) => PreviewRenderer.RenderRealms(r, RealmGraph.Build(w, r), w?.Wilderness))
         {
             AfterWrite = true,
             // Realm, not Title: the colours show whole de facto realms, so a click resolves to the

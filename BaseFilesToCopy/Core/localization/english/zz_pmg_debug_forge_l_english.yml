@@ -1,0 +1,40 @@
+﻿l_english:
+ # Debug forge event. See BaseFilesToCopy/Core/events/zz_pmg_debug_forge_events.txt.
+ #
+ # No square brackets anywhere in here on purpose: they are datafunction syntax in localisation, so
+ # a bracketed aside is parsed as a call and eats the line.
+
+ pmg_debug_forge.0001.t:0 "Debug: Forge a Weapon"
+ pmg_debug_forge.0001.desc:0 "Mint a weapon artifact through the game's own creation path, equip it, and force it onto the portrait.\n\nThis is the same route an inspiration, a tournament prize or an adventurer's find takes, so what appears is what a player would actually earn. A toast afterwards reports whether the artifact picked up a forged look on creation, or fell back to the default.\n\nSpear has no parts library, and hammer is cut into the mace library rather than having its own. Both are offered so their fallbacks can be seen."
+
+ pmg_debug_forge.0001.a:0 "A sword"
+ pmg_debug_forge.0001.b:0 "A dagger"
+ pmg_debug_forge.0001.c:0 "An axe"
+ pmg_debug_forge.0001.d:0 "A mace"
+ pmg_debug_forge.0001.e:0 "A hammer, which borrows the mace pool"
+ pmg_debug_forge.0001.f:0 "A spear, which has no pool at all"
+ pmg_debug_forge.0001.g:0 "Nothing for now"
+
+ pmg_debug_forge.0001.indexed:0 "Forged look assigned on creation"
+ pmg_debug_forge.0001.unindexed:0 "No forged look: wearing the default"
+ pmg_debug_forge.0001.armor:0 "Armour minted and equipped"
+
+ pmg_debug_forge.0002.t:0 "Debug: Forge Armour"
+ pmg_debug_forge.0002.desc:0 "Mint an armour artifact of a chosen type, equip it, and wear it.\n\nEach of the six types is painted from its own palette, so minting two of different types on the same character is how you tell whether the material is doing its job. The garment itself is chosen by your culture and stays fixed to whoever created the piece, so handing one to a ruler of another culture should not change how it looks."
+ pmg_debug_forge.0002.a:0 "Plate, which should read as bright polished steel"
+ pmg_debug_forge.0002.b:0 "Mail, which should read as darker and greyer"
+ pmg_debug_forge.0002.c:0 "Scale, which should read as bronze"
+ pmg_debug_forge.0002.d:0 "Lamellar, which should read as lacquered red over metal"
+ pmg_debug_forge.0002.e:0 "Laminar, which should read as pale banded leather"
+ pmg_debug_forge.0002.f:0 "Brigandine, which should read as dark leather with bright rivets"
+ pmg_debug_forge.0002.g:0 "Nothing for now"
+ pmg_debug_forge.0002.h:0 "Wear the hand-modelled test piece"
+ pmg_debug_forge.0002.i:0 "Take the hand-modelled test piece off"
+ pmg_debug_forge.0003.t:0 "Debug: Forge Armour by Rarity"
+ pmg_debug_forge.0003.desc:0 "Mint a MAIL artifact at a chosen rarity, equip it, and wear it.\n\nRarity picks the surface finish while the type keeps picking the colour, so these four are the same armour made better and better: rough iron, then steel, then polished. Type is held constant so only one thing changes between them. Mint two on the same character and compare."
+ pmg_debug_forge.0003.a:0 "Common, which should read as rough dark iron"
+ pmg_debug_forge.0003.b:0 "Masterwork, which should read as plain steel"
+ pmg_debug_forge.0003.c:0 "Famed, which should read as polished"
+ pmg_debug_forge.0003.d:0 "Illustrious, polished as well but richer in the palette"
+ pmg_debug_forge.0003.e:0 "Nothing for now"
+ pmg_debug_forge.0003.toast:0 "Armour forged at the chosen rarity"

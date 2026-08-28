@@ -144,8 +144,14 @@ public static class FlatmapWriter
         string flatMapDir = Path.Combine(modDir, "gfx", "map", "terrain", "flat_maps");
         Directory.CreateDirectory(flatMapDir);
 
-        DdsWriter.WriteBgra(Path.Combine(flatMapDir, "flatmap.dds"), w, h, pixels);
-        DdsWriter.WriteBgra(Path.Combine(flatMapDir, "flatmap_tgp.dds"), w, h, pixels);
+        // The two files are the same picture — CK3 wants a terrain-gameplay-plane copy alongside
+        // the flat map, and this generator has never drawn them differently. Encoding `pixels`
+        // twice produced two byte-identical files at forty megabytes each; copying the first is
+        // the same result for half the writing. If the TGP variant ever grows a look of its own
+        // this goes back to a second WriteBgra.
+        string flatmap = Path.Combine(flatMapDir, "flatmap.dds");
+        DdsWriter.WriteBgra(flatmap, w, h, pixels);
+        File.Copy(flatmap, Path.Combine(flatMapDir, "flatmap_tgp.dds"), overwrite: true);
 
         Console.WriteLine($"  flatmap: rendered illuminated flatmaps ({w}x{h})");
 

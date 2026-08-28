@@ -1,0 +1,434 @@
+﻿# The society's powers. Rank 1.
+#
+# =====================================================================================
+#  Why powers are interactions
+# =====================================================================================
+#
+# A CK2 society power is six things: a rank gate, a currency cost, a cooldown, a target, an
+# effect, and a risk. CK3 hands four of those to a character_interaction for free and fights
+# you on the other two, which is why this file exists rather than a panel full of buttons:
+#
+#   FREE     the target             -- the chosen character IS scope:recipient
+#   FREE     the cooldown           -- `cooldown`, `cooldown_against_recipient`, `category_cooldown`
+#   FREE     failure explanations   -- is_valid_showing_failures_only greys and says why
+#   FREE     the AI using it        -- ai_targets / ai_potential / ai_will_do
+#   BY HAND  the currency           -- see below
+#   BY HAND  the rank gate          -- has_trait_xp, asserted twice, see below
+#
+# The two "by hand" rows are the whole of the extra work, and they are the same two lines in
+# every power that follows. Nothing else in CK3 gives targeting away this cheaply: a scheme
+# does, but a scheme is a process with a duration and a discovery roll, which is right for a
+# power that should be resisted and wrong for one that resolves the moment it is used.
+#
+# =====================================================================================
+#  Currency is not a thing CK3 has
+# =====================================================================================
+#
+# An interaction's `cost` block accepts exactly `{ piety prestige gold renown }`. There is no
+# way to declare a resource. Dark Power is therefore a plain character variable -- set on
+# joining by society_swear_in_effect, read by the panel -- and any power that SPENDS it must
+#
+#   check it   in is_valid_showing_failures_only, inside a custom_tooltip so the button greys
+#              with a readable reason rather than vanishing
+#   deduct it  in on_accept, by hand
+#
+# Rank 1 happens to carry both halves of that economy, which is the reason it is the right place
+# to start rather than an accident of CK2's ordering:
+#
+#   Sacrifice  +40 and up   the only tap besides the rite's +60 on completion
+#   Abduct     -100         the first drain, and so the first proof the pool actually empties
+#
+# A currency with no source cannot be tested and a currency with no sink cannot be balanced. Rank
+# 2 is where the drains start outnumbering the taps, and none of it is checkable until both of
+# the above exist.
+#
+# =====================================================================================
+#  How these get in front of the player
+# =====================================================================================
+#
+# Every power here carries `filter_tags = { society_power }`. That tag costs nothing now and
+# settles the open question later, because all three candidate surfaces read the SAME
+# interaction definitions:
+#
+#   right-click a character       works today, no further work, no GUI
+#   a button on the society panel ToggleFilteredCharacterInteractionMenu( Character.Self,
+#                                 'society_power' ) -- the eight vanilla windows that do this
+#                                 include window_court.gui:830 and window_faith.gui:735
+#   a coloured tab of its own     a new common/character_interaction_categories entry
+#
+# The third is the one to be careful of. That database opens with "DO NOT LEAVE GAPS IN index OR
+# THE GAME WILL CRASH", vanilla occupies 0-14 contiguously, so ours would have to claim 15 --
+# and so would every other mod that wants a tab. filter_tags needs no index and cannot collide.
+#
+# A decisions category cannot host any of this: decisions and interactions are separate
+# databases, and a decision has no recipient to point at.
+
+# =====================================================================================
+#  SACRIFICE TO SATAN                                                          (rank 1)
+# =====================================================================================
+#
+# CK2: sacrifice a prisoner, gain Dark Power scaled by who they were.
+#
+# The prisoner does not get a vote, so `auto_accept = yes` -- the interaction is the actor
+# deciding, and there is no negotiation to model. Same reasoning as society_offer_oath_interaction
+# next door, for a much colder reason.
+#
+# ---- Why the effects run before the death ----
+#
+# `death` invalidates scope:recipient for everything after it. The reward is read off the victim,
+# so the reading has to finish first. This ordering bug does not error -- it silently scores every
+# sacrifice as if the victim were a landless nobody -- so the order below is load-bearing.
+#
+# ---- What this deliberately does NOT do ----
+#
+# No tyranny, no dread, no prisoner-family opinion hit. Vanilla's execute_prisoner_interaction
+# applies all three explicitly; the `death` effect itself applies none of them. That is the right
+# default here: with death_society_sacrifice carrying `public_knowledge = no`, nobody can attach
+# the killing to the killer, and charging tyranny for a crime no one can name would be the
+# mechanics contradicting the fiction. When the secret type arrives, EXPOSURE is what should cost
+# tyranny -- all at once, retroactively, which is also how it should feel.
+#
+# No child sacrifice, though CK2 had it and paid best for it. `is_adult = yes` on the recipient,
+# matching torture_interaction's own gate. It also keeps the reward formula honest: a youth
+# bonus that tops out at "child" is a different design conversation than a difficulty curve.
+
+society_sacrifice_interaction = {
+	# The society's own header, not vanilla's Imprisonment block. The trade is deliberate and
+	# worth stating: a player who right-clicks a prisoner looking for things to do to prisoners
+	# will no longer find this among them. That is the point -- a sacrifice is not an
+	# imprisonment action that happens to be sinister, it is society business that happens to
+	# need a prisoner -- and the header is a few rows further down the same menu, so nothing is
+	# actually hidden from a member.
+	category = interaction_category_society
+	filter_tags = { society_power }
+
+	# Vanilla's icon. A society set that ships no character_interactions art gets the raw key on
+	# the button otherwise, and ck3-tiger is the only thing that would tell us.
+	icon = icon_dead
+
+	interface_priority = 60
+	common_interaction = no
+
+	desc = society_sacrifice_interaction_desc
+
+	auto_accept = yes
+
+	# The brake on this is Visibility, not the clock -- prisoners are scarce and the meter is
+	# what should make a member think twice. The year is here so that a court with a full
+	# dungeon cannot empty it into the pool in an afternoon.
+	cooldown = { years = 1 }
+
+	# The membership line is deliberately duplicated between here and `is_available` below, which
+	# is against what _character_interactions.info advises -- "avoid putting here triggers that
+	# only test actor state, put those in is_available instead, this will make AI faster".
+	#
+	# The reason to ignore that here: is_available is documented as controlling whether the
+	# interaction is AVAILABLE, and an unavailable interaction that still renders greyed would
+	# put the word "Sacrifice" on a non-member's prison menu. That is the one outcome this whole
+	# set exists to prevent -- an outsider learning the society exists by being shown a door they
+	# cannot open. is_shown is the only block that is unambiguously absence rather than refusal,
+	# so the guarantee lives here and the performance hint lives below.
+	is_shown = {
+		scope:actor = { has_trait = society_member }
+
+		scope:recipient = {
+			is_imprisoned_by = scope:actor
+			is_adult = yes
+		}
+	}
+
+	# Membership asserted a second time, as everywhere else in this set: is_shown is evaluated
+	# when the menu is built, and a character can lose the trait between that and the button.
+	# The rite's activity file carries the same double-check for the same reason.
+	#
+	# No rank line. Rank 1 is every member, so a has_trait_xp gate here would read as "value >= 0"
+	# and mean nothing. The rank-2 powers are where that line starts earning its place, and this
+	# is what it will look like:
+	#
+	#   custom_tooltip = {
+	#       text = society_power_requires_standing_tt
+	#       scope:actor = { has_trait_xp = { trait = society_member track = society_rank value >= 25 } }
+	#   }
+	is_valid_showing_failures_only = {
+		custom_tooltip = {
+			text = society_power_requires_membership_tt
+			scope:actor = { has_trait = society_member }
+		}
+
+		scope:actor = { is_available = yes }
+	}
+
+	# Sadists and zealots are told this is here. Everyone else has to go looking.
+	is_highlighted = {
+		scope:actor = {
+			OR = {
+				has_trait = sadistic
+				has_trait = zealous
+			}
+		}
+	}
+
+	on_accept = {
+		scope:actor = {
+			# ---- 1. Read the victim, while there is still a victim to read ----
+			#
+			# The society values a sacrifice by what the world would have missed. Rank first,
+			# because a duke is the loudest thing anyone in this set can kill; devotion second,
+			# on CK2's logic that the point is whose god you are taking them from; youth last
+			# and smallest, since the adult gate above already removes the extreme of it.
+			#
+			# No number is shown to the player. The tooltip says "in proportion to what they
+			# were", the panel meter moves, and the society does not publish its rates -- which
+			# is the voice, and also means this can be retuned without touching localisation.
+			change_variable = {
+				name = society_dark_power
+				add = {
+					value = 40
+
+					if = {
+						limit = { scope:recipient = { highest_held_title_tier >= tier_county } }
+						add = 20
+					}
+
+					if = {
+						limit = { scope:recipient = { highest_held_title_tier >= tier_duchy } }
+						add = 30
+					}
+
+					if = {
+						limit = { scope:recipient = { has_trait = zealous } }
+						add = 30
+					}
+
+					if = {
+						limit = { scope:recipient = { age < 25 } }
+						add = 20
+					}
+				}
+			}
+
+			custom_tooltip = society_sacrifice_gain_tt
+
+			# ---- 2. What it costs the actor ----
+			#
+			# A killing in your own dungeon is quiet. It is not invisible: there were hands
+			# involved besides yours, and every one of them is a person who now knows.
+			change_variable = {
+				name = society_visibility
+				add = 10
+			}
+
+			add_trait_xp = {
+				trait = society_member
+				track = society_rank
+				value = 5
+			}
+
+			stress_impact = {
+				compassionate = major_stress_impact_gain
+				forgiving = medium_stress_impact_gain
+				craven = minor_stress_impact_gain
+				sadistic = medium_stress_impact_loss
+			}
+		}
+
+		# ---- 3. Only now ----
+		scope:recipient = {
+			death = {
+				killer = scope:actor
+				death_reason = death_society_sacrifice
+			}
+		}
+	}
+
+	# ---- The AI ----
+	#
+	# Deliberately narrow. An AI member with a prisoner should occasionally do this; it should
+	# not be the reason every dungeon on the map empties. `ai_recipients = prisoners` is the same
+	# list execute_prisoner_interaction uses, and the base of 0 means the modifiers below have to
+	# argue the AI into it rather than talk it out.
+	# `is_available` and not `ai_potential`. The two do the same job and ck3-tiger reports the
+	# older name as deprecated -- vanilla still carries plenty of `ai_potential`, which is why it
+	# was written that way here, but new script should not add more of them.
+	is_available = {
+		has_trait = society_member
+	}
+
+	ai_targets = {
+		ai_recipients = prisoners
+	}
+
+	ai_frequency_by_tier = {
+		barony = 120
+		county = 60
+		duchy = 60
+		kingdom = 60
+		empire = 60
+		hegemony = 60
+	}
+
+	ai_will_do = {
+		base = 0
+
+		modifier = {
+			add = 30
+			scope:actor = { has_trait = sadistic }
+		}
+
+		modifier = {
+			add = 20
+			scope:actor = { has_relation_rival = scope:recipient }
+		}
+
+		# The society's own arithmetic: somebody worth more is worth more.
+		modifier = {
+			add = 20
+			scope:recipient = { highest_held_title_tier >= tier_duchy }
+		}
+
+		# Compassion is the one trait that should keep a member's hands clean even inside the
+		# society. ai_compassion is 0-100ish, so the -1 multiplier is a real veto at the top end.
+		ai_value_modifier = {
+			ai_compassion = -1
+		}
+
+		# Kin, and people the actor has no quarrel with, are not raw material. Without this the
+		# AI sacrifices captured relatives, which reads as a bug long before it reads as evil.
+		modifier = {
+			factor = 0
+			scope:actor = { is_close_or_extended_family_of = scope:recipient }
+		}
+	}
+}
+
+# =====================================================================================
+#  ATTEMPT TO ABDUCT                                                          (rank 1)
+# =====================================================================================
+#
+# CK2: spend Dark Power, try to take somebody. This is the set's FIRST spender, and therefore
+# the first place the hand-rolled currency has to behave like a currency.
+#
+# ---- The three lines every future spending power repeats ----
+#
+#   1. is_valid_showing_failures_only    a custom_tooltip wrapping the `var:` comparison, so the
+#                                        button greys with a readable reason. CK3 will not do
+#                                        this for us; `cost` accepts only gold/piety/prestige/
+#                                        renown and there is no way to add to that list.
+#   2. on_accept                         change_variable with a NEGATIVE add. There is no
+#                                        `subtract_variable`.
+#   3. the price stated in loc           because the tooltip in (1) is the only place the player
+#                                        ever sees a number.
+#
+# The guard in (1) is not optional politeness. Without it the variable goes negative and stays
+# there, and every later power silently becomes unaffordable with no message explaining why.
+#
+# ---- Why the charge is here and not in the scheme ----
+#
+# A scheme has no cost block at all. The commitment the player is making is the button press, so
+# that is where it is charged. The consequence is that abandoning the scheme does not refund --
+# which is the CK2 behaviour anyway, and is stated in the description so it is not a surprise.
+#
+# ---- Why this does not duplicate vanilla's abduct button ----
+#
+# It points at `society_abduct`, our own scheme (see common/schemes/scheme_types/), not at
+# vanilla's. A character with the Kidnapper perk AND membership will see two abduction entries,
+# which is correct: they are two different routes with two different costs, and the vanilla one
+# does not charge Dark Power.
+
+society_abduct_interaction = {
+	# Out of the Hostile block for the same reason as the sacrifice above. Note this one keeps
+	# `scheme = society_abduct` regardless -- the scheme's own `category = hostile` is a
+	# different field in a different database (it selects hostile-scheme resistance and speed
+	# modifiers) and is unaffected by which menu header the starter button sits under.
+	category = interaction_category_society
+	filter_tags = { society_power }
+
+	icon = icon_scheme_abduct
+	interface_priority = 55
+	common_interaction = no
+
+	send_name = START_SCHEME
+	scheme = society_abduct
+
+	desc = society_abduct_interaction_desc
+
+	auto_accept = yes
+
+	# Same reasoning as the sacrifice above: the membership line is duplicated into is_available
+	# for the AI's sake, but is_shown is what guarantees a non-member never sees the word.
+	is_shown = {
+		scope:actor = { has_trait = society_member }
+
+		scope:actor != scope:recipient
+
+		NOT = { scope:recipient = { is_imprisoned_by = scope:actor } }
+	}
+
+	is_available = {
+		has_trait = society_member
+	}
+
+	is_valid_showing_failures_only = {
+		custom_tooltip = {
+			text = society_power_requires_membership_tt
+			scope:actor = { has_trait = society_member }
+		}
+
+		# THE CURRENCY CHECK. `var:` on an unset variable is an error, not a zero -- hence the
+		# exists guard first. society_swear_in_effect sets it on joining, so a member always has
+		# it; the guard is for the character who somehow has the trait without the meters, which
+		# the debug events can produce.
+		custom_tooltip = {
+			text = society_abduct_cost_tt
+
+			scope:actor = {
+				exists = var:society_dark_power
+				var:society_dark_power >= 100
+			}
+		}
+
+		scope:actor = {
+			can_start_scheme = {
+				type = society_abduct
+				target_character = scope:recipient
+			}
+		}
+	}
+
+	on_accept = {
+		scope:actor = {
+			change_variable = {
+				name = society_dark_power
+				add = -100
+			}
+
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = society_abduct_started_toast
+
+				left_icon = scope:actor
+				right_icon = scope:recipient
+
+				begin_scheme_basic_effect = {
+					SCHEME_TYPE = society_abduct
+					TARGET_TYPE = target_character
+					TARGET_SCOPE = scope:recipient
+				}
+			}
+		}
+	}
+
+	# The AI is kept off this one entirely for now. An AI member spending a pool it has no other
+	# use for, on a scheme it will not follow up, produces abductions nobody asked for and a
+	# stream of hostile-scheme discovery events across the map. It goes back in when the AI has
+	# a reason to want a prisoner -- which is the sacrifice above, and is a later pass.
+	#
+	# The way to do this is a zero `ai_will_do` and NO `ai_targets` block, not `ai_potential`
+	# (deprecated) and not `is_available` (which the .info says governs availability "for the
+	# actor, both AI and player" -- an `always = no` there would take the button off the player
+	# too). With no ai_targets the AI never assembles a candidate list in the first place; the
+	# zero base is the belt to that suspenders.
+	ai_will_do = {
+		base = 0
+	}
+}

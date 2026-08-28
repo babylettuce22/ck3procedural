@@ -38,6 +38,15 @@
 # economy is at fault.
 
 activity_society_rite = {
+	# ---- Where it sits in the planner ----
+	#
+	# Its own foldable category, not the generic "Activities" pile -- defined in
+	# common/activities/activity_group_types/00_society_activity_groups.txt beside the six
+	# vanilla groups. Without this line the field defaults to `activities` and the rite lands
+	# among the hunts. The group empties and hides itself for a non-member, so this is also
+	# the quietest of the four places membership shows through.
+	activity_group_type = society
+
 	# ---- Gate one: who knows it exists ----
 	#
 	# A non-member does not see this in the planner. That is the property the whole prototype
@@ -74,6 +83,24 @@ activity_society_rite = {
 	# Vanilla's witch ritual makes the same double check for the same reason.
 	can_always_plan = no
 
+	# ---- Gate two: who may convene one ----
+	#
+	# Seeing the rite and being allowed to call one are different questions, and CK2 answered
+	# them differently too: every member could attend, but the powers that summoned the society
+	# were rank-gated, and the top rung's powers were the reason to climb at all.
+	#
+	# So the membership tooltip below is no longer the interesting line -- `is_shown` already
+	# demanded the trait, so it can only fire if you lose it between planning and starting. The
+	# standing requirement is what this block is now for: a first-year initiate can be invited to
+	# a rite by somebody senior, and cannot call one.
+	#
+	# 50 is the second of the track's four breakpoints (25/50/75/100). Deliberately not the top:
+	# a gate only the Grandmaster passes makes the rite unreachable in a single lifetime, and the
+	# point of the rung is to be climbed to, not admired. `has_trait_xp` needs the `track =` line
+	# on a multi-track trait -- without it the comparison silently reads the wrong pool.
+	#
+	# There is no way to reach 50 by playing yet, because nothing but the rite itself grants
+	# Standing. That is what society.9002 is for; see the note on it in events/society_events.txt.
 	can_start_showing_failures_only = {
 		is_available_adult = yes
 
@@ -82,6 +109,16 @@ activity_society_rite = {
 		custom_tooltip = {
 			text = society_rite_requires_membership_tt
 			has_trait = society_member
+		}
+
+		custom_tooltip = {
+			text = society_rite_requires_standing_tt
+
+			has_trait_xp = {
+				trait = society_member
+				track = society_rank
+				value >= 50
+			}
 		}
 	}
 
@@ -254,13 +291,12 @@ activity_society_rite = {
 	# "will be appended to the main rules and insert their priority, so they should not be in the
 	# above list" -- so this is a move, not an addition.
 	guest_invite_rules = {
+		# Two categories, matching the shape vanilla's witch ritual uses for the same job. This
+		# is a preference, not a requirement -- an earlier note here claimed a single rule broke
+		# the guest window, which was wrong. See the top of 00_society_invite_rules.txt.
 		rules = {
-			1 = activity_invite_rule_society_members
-
-			# TEMPORARY control group -- see the note at the bottom of
-			# 00_society_invite_rules.txt. Remove both this line and the rule once the guest tab
-			# is known to fill.
-			2 = activity_invite_rule_society_debug
+			1 = activity_invite_rule_society_court
+			2 = activity_invite_rule_society_abroad
 		}
 	}
 
@@ -323,11 +359,25 @@ activity_society_rite = {
 	# rite is how a member climbs. 8 to everyone who came, 12 more to whoever convened it,
 	# against rungs at 25/50/75/100 -- so attending is worth something, hosting is worth
 	# roughly twice as much, and neither is a shortcut to the top of a society.
+	# ---- Dark Power ----
+	#
+	# CK2's demon worshippers ran on a currency called Dark Power, earned by missions, sacrifices
+	# and the society's own gatherings, and spent on its powers. Nothing spends it here yet -- the
+	# rite is free -- so this is the income side arriving first, on purpose: the panel has a meter
+	# for it, and a meter that never moves is indistinguishable from a broken one.
+	#
+	# The host takes more than a guest for the same reason he takes more Standing. Convening it is
+	# the work; attending it is turning up.
 	on_complete = {
 		add_trait_xp = {
 			trait = society_member
 			track = society_rank
 			value = 8
+		}
+
+		change_variable = {
+			name = society_dark_power
+			add = 60
 		}
 
 		if = {
@@ -337,6 +387,11 @@ activity_society_rite = {
 				trait = society_member
 				track = society_rank
 				value = 12
+			}
+
+			change_variable = {
+				name = society_dark_power
+				add = 40
 			}
 		}
 	}

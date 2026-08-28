@@ -21,6 +21,16 @@ public sealed class DynastyDef
     public required string NameKey { get; init; }
     public required string LocalizedName { get; init; }
     public required string CultureKey { get; init; }
+
+    /// <summary>
+    /// The house that is this dynasty under another name — the senior line, not a branch off it.
+    ///
+    /// Every ancestor of the dynasty is written into this rather than into whatever house their
+    /// descendant ended up in, because a cadet's father was born before the cadet branch was: put
+    /// him in it and the branch has a member a generation older than itself, and CK3 reads a
+    /// house's age off its earliest member, so the branch dates from before the line it broke from.
+    /// </summary>
+    public required string MainHouseKey { get; init; }
 }
 
 public sealed class DynastyHouseDef
@@ -30,6 +40,16 @@ public sealed class DynastyHouseDef
     public required string LocalizedName { get; init; }
     public required string DynastyId { get; init; }
     public string? Prefix { get; init; }
+
+    /// <summary>
+    /// A branch off a dynasty someone else founded, rather than that dynasty's own main line.
+    ///
+    /// Decides only which seed the house's coat of arms is rolled from. A cadet is rolled from its
+    /// own key and comes out unlike the line it broke from, which is the point of one; a main house
+    /// is rolled from its dynasty's and comes out identical, because it is that dynasty under
+    /// another name and two shields for one family is just a bug with a story.
+    /// </summary>
+    public bool IsCadet { get; init; }
 }
 
 public sealed class HistoricalCharacter
@@ -254,7 +274,8 @@ public sealed class PrehistoryMap
                     NameKey = houseNameKey,
                     LocalizedName = houseName,
                     DynastyId = liegeDynastyId,
-                    Prefix = prefix
+                    Prefix = prefix,
+                    IsCadet = true
                 };
                 map.CharacterHouseMap[county] = houseKey;
             }
@@ -277,16 +298,17 @@ public sealed class PrehistoryMap
 
         string dynId = $"gen_dynasty_{county.Index}";
         string dynNameKey = $"dynn_gen_{county.Index}";
+        string houseKey = $"house_gen_{county.Index}";
 
         map.Dynasties[dynId] = new DynastyDef
         {
             Id = dynId,
             NameKey = dynNameKey,
             LocalizedName = dynName,
-            CultureKey = culture.Key
+            CultureKey = culture.Key,
+            MainHouseKey = houseKey
         };
 
-        string houseKey = $"house_gen_{county.Index}";
         string? prefix = CulturePrefix(culture.Key);
 
         map.Houses[houseKey] = new DynastyHouseDef
@@ -312,6 +334,23 @@ public sealed class PrehistoryMap
     {
         var names = female ? culture.FemaleNames : culture.MaleNames;
         return names.Count > 0 ? names[rng.Int(0, names.Count - 1)] : female ? "Nullberta" : "Nullbert";
+    }
+
+    /// <summary>
+    /// The senior house of whatever dynasty this county's ruler belongs to.
+    ///
+    /// Not the same as the ruler's own house, and the difference is the whole point: a cadet holds
+    /// a branch, but the father he inherited from belonged to the line the branch came off. Writing
+    /// that father into the branch is what dated three houses in every generated world to before
+    /// the house they descend from.
+    /// </summary>
+    private static string MainHouseOf(PrehistoryMap map, Title county)
+    {
+        string dynastyId = map.CharacterDynastyMap[county];
+
+        return map.Dynasties.TryGetValue(dynastyId, out var dynasty)
+            ? dynasty.MainHouseKey
+            : map.CharacterHouseMap[county];
     }
 
     private static string? CulturePrefix(string cultureKey)
@@ -372,7 +411,7 @@ public sealed class PrehistoryMap
                 Name = topParentName,
                 Female = topFemale,
                 DynastyId = map.CharacterDynastyMap[topLiege],
-                DynastyHouseKey = map.CharacterHouseMap[topLiege],
+                DynastyHouseKey = MainHouseOf(map, topLiege),
                 CultureKey = culture.Key,
                 FaithKey = faith.Key,
                 BirthDate = $"{topParentBirth}.{topRng.Int(1, 12)}.{topRng.Int(1, 28)}",
@@ -444,7 +483,7 @@ public sealed class PrehistoryMap
                     Name = kinParentName,
                     Female = kinFemale,
                     DynastyId = map.CharacterDynastyMap[kinCounty],
-                    DynastyHouseKey = map.CharacterHouseMap[kinCounty],
+                    DynastyHouseKey = MainHouseOf(map, kinCounty),
                     CultureKey = kinCulture.Key,
                     FaithKey = kinFaith.Key,
                     BirthDate = $"{kinParentBirth}.{kinRng.Int(1, 12)}.{kinRng.Int(1, 28)}",
@@ -481,7 +520,7 @@ public sealed class PrehistoryMap
                 Name = parentName,
                 Female = female,
                 DynastyId = map.CharacterDynastyMap[county],
-                DynastyHouseKey = map.CharacterHouseMap[county],
+                DynastyHouseKey = MainHouseOf(map, county),
                 CultureKey = culture.Key,
                 FaithKey = faith.Key,
                 BirthDate = $"{parentBirth}.{fRng.Int(1, 12)}.{fRng.Int(1, 28)}",
@@ -665,7 +704,8 @@ public sealed class PrehistoryMap
                         Id = spouseDynasty,
                         NameKey = nobleNameKey,
                         LocalizedName = nobleDynName,
-                        CultureKey = spouseCulture.Key
+                        CultureKey = spouseCulture.Key,
+                        MainHouseKey = spouseHouse
                     };
                     map.Houses[spouseHouse] = new DynastyHouseDef
                     {

@@ -1,0 +1,45 @@
+# Per-artifact "show this on my portrait" toggle.
+#
+# The button lives in vanilla's artifact details window, spliced in beside reforge/destroy by
+# Emit/GuiWriter.cs. A .gui cannot set a variable, so the click has to land in a scripted_gui --
+# these two are that landing point.
+#
+# Two rather than one, because a button needs to both *act* and *show its state*, and a
+# scripted_gui's is_shown is what a .gui can ask about. The toggle carries the effect; the query
+# carries nothing but the condition, so the button can pick its icon from it.
+#
+# scope = artifact: the window's datacontext is the artifact, and Artifact.MakeScope is what the
+# .gui passes (verified against a dump_data_types dump -- Artifact.MakeScope returns Scope).
+#
+# The variable is read by gfx/portraits/portrait_animations/zz_procedural_weapon_idle.txt, whose
+# weapon idle items skip an artifact carrying it. Setting it on an artifact that never rendered --
+# a crown, a book, an unequipped blade -- does nothing at all, which is why the button is offered
+# on every artifact rather than only the ones it can affect.
+
+gen_artifact_portrait_toggle = {
+	scope = artifact
+
+	is_shown = { always = yes }
+	is_valid = { always = yes }
+
+	effect = {
+		if = {
+			limit = { has_variable = gen_artifact_hide_on_portrait }
+			remove_variable = gen_artifact_hide_on_portrait
+		}
+		else = {
+			set_variable = gen_artifact_hide_on_portrait
+		}
+	}
+}
+
+# Pure query: shown exactly when the artifact is suppressed. Drives the button's icon and tooltip.
+gen_artifact_portrait_hidden = {
+	scope = artifact
+
+	is_shown = {
+		has_variable = gen_artifact_hide_on_portrait
+	}
+
+	is_valid = { always = yes }
+}

@@ -466,6 +466,29 @@ public sealed class MapConfig : CustomTypeDescriptor
     public int StruggleMinTension { get; set; } = 8;
 
     /// <summary>
+    /// How many distinct forged looks each weapon kind gets — swords, daggers, axes and maces, so
+    /// the world writes four times this many.
+    ///
+    /// **It costs disk, and icons dominate.** One weapon is roughly 1.4 MB: a 251 KB mesh, a 262 KB
+    /// recolour mask, and a 922 KB inventory icon that is 60% of the total because
+    /// <see cref="Io.DdsWriter"/> writes no block compression. Eight per kind is about 45 MB;
+    /// sixteen is about 90 MB, and adds a few seconds to generation.
+    ///
+    /// **A bigger pool spreads looks across cultures, not within one.** Weapons the game itself
+    /// creates are dressed by <see cref="Emit.ForgedVisualOverrides"/>, which gates on culture and
+    /// rarity — so a single culture gets one look per rarity, four in total, however large the pool
+    /// is. Raising this gives *other* realms weapons that differ from yours. Widening what one
+    /// culture shows needs another axis in that file, not more looks here.
+    ///
+    /// The pool is also capped by what the parts libraries can actually build: combinations are
+    /// deduplicated, so a kind whose library yields fewer distinct assemblies than this simply
+    /// stops early rather than repeating itself.
+    /// </summary>
+    [Category("02 World State")]
+    [Description("Distinct procedurally forged looks per weapon kind (sword, dagger, axe, mace). Costs about 1.4 MB of meshes and icons each. Raising it varies weapons ACROSS cultures; a single culture still shows one look per rarity.")]
+    public int WeaponPoolSizePerKind { get; set; } = 8;
+
+    /// <summary>
     /// Whether the mod ships the wilderness and colonisation system.
     ///
     /// Gates the <c>Wilderness</c> file set in BaseFilesToCopy — the government, holdings,
@@ -1158,6 +1181,14 @@ public sealed class MapConfig : CustomTypeDescriptor
     public double HoldingScale { get; set; } = 1.0;
 
     /// <summary>
+    /// PROTOTYPE — the whole feature is <see cref="Emit.CityScatterWriter"/>, this flag and one
+    /// call site, on its own Rng stream, so turning it off changes nothing else in the output.
+    /// </summary>
+    [Category("06 Map Objects")]
+    [Description("Scatters small suburb models around settled holdings, sized by development and styled by the local culture, so towns grow visible outskirts and no two look alike. PROTOTYPE - the placements are baked at generation and do not change in-game. Turning it off removes them completely and affects nothing else.")]
+    public bool EnableCityScatter { get; set; } = true;
+
+    /// <summary>
     /// Whether the map table keeps its clutter — the candles, goblets, coins, chess pieces and
     /// ground props that dress vanilla's four tabletops.
     ///
@@ -1326,6 +1357,72 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Category("7 Height scale")]
     [Description("Extra zoom steps of 3D terrain before the map goes flat to the paper map, past vanilla's own handoff. The zoom ladder is about 15% a step, so 5 is roughly 1.7x vanilla's share of the world visible as terrain — worth having because vanilla's framing was authored for a map twice as wide. The map-table fades move with it automatically. Lower it if terrain at far zoom looks mushy or costs frames; 0 is vanilla's own handoff.")]
     public int FlatMapHandoffBias { get; set; } = 5;
+
+    /// <summary>
+    /// Whether the flat-map handoff is pulled in on maps below vanilla's size by the terrain
+    /// detail those maps cannot supply.
+    ///
+    /// <see cref="FlatMapHandoffBias"/> and CompatibilityWriter's scaled zoom ladder between them
+    /// make a zoom-step *index* frame the same share of the map at any size, which is right for
+    /// every visibility index that rides on the ladder. It is not right for the handoff, because
+    /// what the handoff decides is how much 3D terrain the player is shown, and terrain has a
+    /// detail budget that framing knows nothing about.
+    ///
+    /// The budget is countable. Heightmap pixels per world unit is invariant at 2 on every map size
+    /// — the heightmap is twice the province map and <c>WORLD_EXTENTS_X</c> is the province width
+    /// less one — so the finest node the engine will render is 32 world units everywhere, which is
+    /// the <c>NodeScale 256</c> measurement recorded in <see cref="Emit.CompatibilityWriter"/>. The
+    /// world, though, shrinks with <see cref="MapScale"/>. So the octaves of LOD between "one vertex
+    /// per texel" and "the whole map in one node" are <c>log2(world width / 32)</c>, and every
+    /// halving of the map costs one:
+    ///
+    ///     heightmap   world   MapScale   octaves
+    ///         18432    9215      1.000      8.17
+    ///         12288    6143      0.667      7.58
+    ///          8192    4095      0.444      7.00
+    ///          6144    3071      0.333      6.58
+    ///          4096    2047      0.222      6.00
+    ///
+    /// A feature survives pulling back until it fits inside one node, so it dies
+    /// <c>log2(1/MapScale)</c> octaves earlier on a smaller map — which is the terrain visibly
+    /// flattening on zoom-out that this setting exists for. Nothing can put those octaves back
+    /// except more pixels. What can be done is to stop handing the player terrain that has run out
+    /// of them, which is what pulling the handoff in does.
+    ///
+    /// Applied in <see cref="Emit.CompatibilityWriter.HandoffOffset"/> and nowhere else, for the
+    /// same reason the bias is: the flat map and the map-table layer fades are a pair, and both
+    /// come through <see cref="Emit.CompatibilityWriter.ScaleZoomStep"/>. Correcting one alone
+    /// opens a window of zoom where the tabletop is drawn under 3D terrain.
+    ///
+    /// Identity at and above vanilla's size. Extra pixels beyond vanilla's are deliberately not
+    /// spent pushing terrain further out — <see cref="FlatMapHandoffBias"/> is the knob for that,
+    /// and a correction that ran both ways would fight it.
+    ///
+    /// The trade is real, it is the whole reason this is a setting, and it is why the setting is
+    /// **off**: this shows *less* of a small map as terrain, not more. At the default bias the
+    /// handoff lands at 23.4% of the world's width at vanilla size, 13.4% at 8192 — vanilla's own
+    /// framing — and 8.5% at 4096. It stops at CompatibilityWriter's MinFlatMapZoomStep, so a very
+    /// small <see cref="Width"/> cannot take 3D terrain away entirely.
+    ///
+    /// So do not reach for this if the complaint is "terrain stops too soon when I zoom out" — it
+    /// makes that strictly worse, and it was briefly on by default in error for exactly that
+    /// misreading. <see cref="FlatMapHandoffBias"/> is the setting for that complaint, and it is
+    /// size-independent: the ladder is scaled, so the *index* that means "terrain all the way to
+    /// maximum zoom" is 34 on every map, which is a bias of 13.
+    ///
+    /// What this is for is the opposite preference — a player who would rather be handed the paper
+    /// map than a smeared one. The detail shortfall it corrects for is real either way; which side
+    /// of it you want is taste, and neither side is a fix. Only <see cref="Width"/> is.
+    ///
+    /// Note that <see cref="ScaleReliefWithMapSize"/> pulls against this. Left off, small-map slopes
+    /// are 1/<see cref="MapScale"/> steeper in world units, and that over-steepening is masking part
+    /// of the fade; turning it on to fix floating props flattens the masking too. The two artefacts
+    /// share one knob and it does not have a setting that fixes both.
+    /// </summary>
+    [Category("7 Height scale")]
+    [AdvancedSetting]
+    [Description("Hands off to the paper map EARLIER on maps smaller than vanilla's, by the terrain detail those maps cannot supply — so it shows less of the map as terrain, not more. Off by default. If terrain stops too soon when you zoom out, this is the wrong setting: raise Flat Map Handoff Bias instead (13 keeps terrain to maximum zoom on any map size). Turn this on only if you would rather see the paper map than smeared terrain at far zoom.")]
+    public bool ScaleHandoffToDetail { get; set; }
 
     /// <summary>
     /// Whether land relief shrinks with map size, so slopes come out the same in *world units* at
@@ -1946,7 +2043,7 @@ public sealed class MapConfig : CustomTypeDescriptor
 
     [Category("11 Rulers")]
     [Description("Enable Nomadic horde realms across steppes and arid plains (requires nomadic DLC; safely degrades to Tribal/Clan if DLC is absent).")]
-    public bool EnableNomadHordes { get; set; } = true;
+    public bool EnableNomadHordes { get; set; } = false;
 
     [Category("11 Rulers")]
     [AzgaarIncompat("Governments come from each state's own form and type — a horde is one because Azgaar " +

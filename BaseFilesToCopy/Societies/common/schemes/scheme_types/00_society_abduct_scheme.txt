@@ -1,0 +1,394 @@
+﻿# Taking somebody. The society's version.
+#
+# =====================================================================================
+#  Why this is a new scheme and not vanilla's
+# =====================================================================================
+#
+# `abduct` already exists and does exactly this, and we cannot have it. Its own file opens with
+#
+#   allow = {
+#       OR = {
+#           has_perk = kidnapper_perk
+#           domicile ?= { has_domicile_parameter = camp_unlocks_abduct_scheme }
+#           AND = { any_character_struggle = { ... unlocks_abduct_for_all ... } }
+#       }
+#       ...
+#   }
+#
+# -- three hardcoded unlocks and no fourth door. `can_start_scheme = { type = abduct }` returns
+# false for a society member who has none of them, so an interaction pointed at vanilla's scheme
+# would be permanently greyed with a reason the player cannot act on. The only ways to reach it
+# are to override abduct_scheme.txt wholesale, which puts a vanilla file in this hand-kept set
+# and quietly goes stale the next time PDX touches it, or to declare our own. This is our own.
+#
+# =====================================================================================
+#  What it borrows anyway, and why that is safe
+# =====================================================================================
+#
+# Almost everything below the `allow` block is vanilla's, on purpose. Three borrowings are worth
+# defending because they look like they should break and do not:
+#
+#   on_action = abduct_ongoing        Its trigger is `exists = scope:scheme` and nothing else --
+#                                     it does not ask what kind of scheme. Vanilla's own
+#                                     `overthrow_regent` (diarch_schemes.txt:176) fires it from a
+#                                     scheme that is not abduct, which is the precedent.
+#
+#   abduct_scheme_prep_effect         Routes the critical moment to scheme_critical_moments.1061,
+#                                     which routes to abduct_outcome.0001. Neither checks
+#                                     scheme_type. So we inherit the entire abduction resolution
+#                                     -- the roll, the outcome events, the imprisonment -- for
+#                                     one line, and write no events of our own.
+#
+#   agent_thug / muscle / footpad     Vanilla agent types. Nothing about them is abduct-specific.
+#
+# What we do NOT inherit is the large body of vanilla content that gates on `scheme_type = abduct`
+# -- hunt events, court events, the marshal and spymaster task events, ~15 sites in all. A
+# society abduction will not be interrupted by the hunt that would have interrupted vanilla's.
+# That is a real loss and it is the price of not overriding a vanilla file. It is also invisible
+# in a way worth writing down, because "my scheme never gets the flavour events" is the kind of
+# thing that reads as a bug three months from now.
+#
+# =====================================================================================
+#  Where the society's own rules live
+# =====================================================================================
+#
+# Two, and only two, and both are in `allow`:
+#
+#   membership          the gate this whole set is about
+#   no duke or above    CK2's own restriction on the power. The society takes people the world
+#                       will not miss loudly; a captured duke is a war, not a sacrifice.
+#
+# The Dark Power cost is NOT here. A scheme has no cost block, and the moment of commitment is
+# the moment the player presses the button -- so the charge lives in society_abduct_interaction
+# in 00_society_powers.txt, checked and deducted there. Consequence worth knowing: abandoning
+# the scheme does not refund it.
+
+society_abduct = {
+	# Basic Setup
+	skill = intrigue
+	desc = "society_abduct_desc"
+	success_desc = "society_abduct_success_desc"
+	discovery_desc = "society_abduct_discovery_desc"
+	icon = icon_scheme_abduct
+	illustration = "gfx/interface/illustrations/event_scenes/corridor.dds"
+	category = hostile
+	target_type = character
+	is_secret = yes
+	maximum_breaches = 5
+	cooldown = { years = 10 }
+
+	# Parameters -- vanilla's abduct numbers, unchanged. This should be exactly as hard as
+	# kidnapping normally is; the society's contribution is access to it, not an advantage at it.
+	speed_per_skill_point = t2_spsp_owner_value
+	speed_per_target_skill_point = t2_spsp_target_value
+	base_progress_goal = t2_base_phase_length_value
+	maximum_secrecy = 85
+	base_maximum_success = t2_base_max_success_value
+	phases_per_agent_charge = 1
+	success_chance_growth_per_skill_point = t2_scgpsp_value
+
+	allow = {
+		# ---- The society's two rules ----
+		custom_tooltip = {
+			text = society_power_requires_membership_tt
+			has_trait = society_member
+		}
+
+		custom_tooltip = {
+			text = society_abduct_no_great_lords_tt
+			scope:target = { highest_held_title_tier < tier_duchy }
+		}
+
+		# ---- Vanilla's hygiene, kept verbatim ----
+		is_adult = yes
+		is_playable_character = yes
+		is_imprisoned = no
+	}
+
+	valid = {
+		is_playable_character = yes
+		is_ruler = yes
+		is_incapable = no
+
+		# Your own children need the trait that makes that thinkable. Vanilla's rule, and the
+		# society does not suspend it -- a member is still whoever they were before they joined.
+		custom_description = {
+			text = abduct_own_children_block
+			object = scope:target
+
+			trigger_if = {
+				limit = { is_parent_of = scope:target }
+				has_trait_with_flag = can_murder_own_children
+			}
+		}
+
+		scope:target = {
+			is_imprisoned = no
+			is_hostage = no
+			exists = location
+			in_diplomatic_range = scope:owner
+		}
+
+		trigger_if = {
+			limit = { has_variable = no_scheming_allowed_var }
+			custom_tooltip = {
+				text = no_scheming_allowed_var_tt
+				var:no_scheming_allowed_var != scope:target
+			}
+		}
+	}
+
+	# Agents -- vanilla's lists and thresholds.
+	agent_leave_threshold = -25
+	agent_join_chance = {
+		base = 0
+
+		ai_agent_join_chance_basic_suite_modifier = yes
+		ai_agent_join_chance_hostile_grievous_modifier = yes
+	}
+	# ---- Only the sworn may help ----
+	#
+	# `valid_agent` runs with the CANDIDATE as root (vanilla uses `this` that way in
+	# coerce_contribution_scheme.txt:72) and gates both halves of recruitment: the AI's decision
+	# to join, and the list the player is offered by the invite-agent window. One line does both.
+	#
+	# This is the CK2 behaviour and it is the point of belonging to something: the society's
+	# reach is its membership, not its host's address book. It also closes a hole the rest of the
+	# set would otherwise leave wide open -- without it a member could staff a society abduction
+	# entirely with people who have never heard of the society, which makes the secrecy the whole
+	# prototype is built around decorative.
+	agent_groups_owner_perspective = { courtiers guests scripted_relations }
+
+	valid_agent = {
+		is_valid_agent_standard_trigger = yes
+
+		has_trait = society_member
+	}
+
+	# `agent_groups_target_character_perspective` is REMOVED, not merely filtered. It draws
+	# candidates from around the TARGET -- their courtiers and vassals -- and those people are
+	# essentially never sworn to the abductor's society, so with the filter above the group can
+	# only ever return nobody.
+	#
+	# Leaving it in would be worse than useless: `agent_groups_target_character_perspective_value`
+	# in odds_prediction estimates the odds from the SIZE of the declared groups, not from who
+	# actually passes valid_agent. A dead group left declared would inflate the predicted odds
+	# the player is shown against a pool that cannot produce a single agent. So the group and its
+	# odds term come out together, and they have to stay together -- removing one without the
+	# other is the bug this note exists to prevent.
+	#
+	# Side effect worth knowing: this also retires the ck3-tiger warning about that value
+	# expecting `scope:target` to be a landed title. That warning was a false positive on a line
+	# copied from vanilla; it disappears here because the line is genuinely no longer wanted, not
+	# because it was ever right.
+	odds_prediction = {
+		add = hostile_scheme_base_odds_prediction_target_is_char_value
+		add = odds_skill_contribution_intrigue_value
+		add = agent_groups_owner_perspective_value
+		min = 0
+	}
+
+	# Vanilla's abduct chances, minus the modifiers that are about content we do not inherit
+	# (the escape tunnel, the tournament tailor, the sponsored inspiration). What is kept is
+	# everything that describes how hard the target is to reach.
+	base_success_chance = {
+		base = 0
+		scheme_type_skill_success_chance_modifier = { SKILL = INTRIGUE }
+
+		hostile_scheme_base_chance_modifier = yes
+
+		apply_calculated_scheme_success_chance_adjustments_modifier = yes
+
+		house_feud_hostile_scheme_success_modifier = yes
+
+		first_valid = {
+			modifier = { # Foreign rulers are very hard to take
+				add = -75
+				desc = "sway_foreign_target"
+				scope:target = {
+					is_ruler = yes
+					scope:target.top_liege != scope:owner.top_liege
+				}
+			}
+			modifier = { # Foreign subjects less so
+				add = -40
+				desc = "sway_foreign_target"
+				scope:target = {
+					is_foreign_court_or_pool_guest = no
+					scope:target.top_liege != scope:owner.top_liege
+				}
+			}
+			modifier = { # Rulers are harder than their households
+				add = -50
+				desc = "FABRICATE_HOOK_RULER_TARGET"
+				scope:target = {
+					is_ruler = yes
+					scope:target.top_liege = scope:owner.top_liege
+				}
+			}
+		}
+
+		first_valid = {
+			modifier = {
+				add = -500
+				desc = "SCHEME_AT_WAR"
+				scope:target = { is_at_war_with = scope:owner }
+			}
+			modifier = {
+				add = -350
+				desc = "SCHEME_AT_WAR_WITH_LIEGE"
+				scope:target = {
+					is_playable_character = no
+					this != top_liege
+					any_liege_or_above = { is_at_war_with = scope:owner }
+				}
+			}
+			modifier = {
+				add = -250
+				desc = "SCHEME_AT_WAR_WITH_LIEGE"
+				scope:target = {
+					is_playable_character = yes
+					this != top_liege
+					any_liege_or_above = { is_at_war_with = scope:owner }
+				}
+			}
+		}
+
+		diarch_scheming_within_realm_bonus_modifier = yes
+	}
+
+	base_secrecy = {
+		add = secrecy_base_value
+		add = countermeasure_apply_secrecy_maluses_value
+	}
+
+	on_start = {
+		set_variable = {
+			name = apply_countermeasures
+			value = flag:calculating
+		}
+		add_scheme_starting_opportunities_intrigue_effect = yes
+
+		# The society's own bookkeeping. Starting this is not the same act as being caught at it,
+		# so the charge is small.
+		#
+		# It used to be 5, justified as "every agent asked is a person who now knows something".
+		# That reasoning died the moment agents were restricted to sworn members above -- an
+		# agent now already knows, by definition, and charging exposure for telling a secret to
+		# someone who is keeping it would be the mechanics arguing with the fiction.
+		#
+		# What survives is the act itself: an abduction attempt is a thing people notice happened,
+		# whoever carried it out. That is the 3. The 2 that came off is the mechanical reward for
+		# accepting the member-only restriction, and it should stay proportionate -- if the agent
+		# filter is ever relaxed, this goes back up with it.
+		#
+		# Deliberately on_start and not on discovery: discovery is vanilla's machinery and we do
+		# not own a hook in it, so a cost that only landed when caught would usually never land.
+		scheme_owner = {
+			change_variable = {
+				name = society_visibility
+				add = 3
+			}
+		}
+
+		# Fallback agents, for a scheme begun from script rather than the scheme window.
+		if = {
+			limit = {
+				scheme_owner = { NOT = { has_variable = agents_added } }
+			}
+			add_agent_slot = agent_thug
+			add_agent_slot = agent_thug
+			add_agent_slot = agent_muscle
+			add_agent_slot = agent_footpad
+			add_agent_slot = agent_lookout
+		}
+	}
+
+	# The borrowed resolution. abduct_scheme_prep_effect is what points the critical moment at
+	# abduct_outcome.0001 -- take this line out and the scheme runs forever without ever
+	# resolving, which is the loudest way this file can fail and the quietest to misdiagnose.
+	on_phase_completed = {
+		suppress_scheme_follow_up_event_till_input_given_effect = yes
+		abduct_scheme_prep_effect = yes
+		cap_schemes_and_fire_reminders_effect = yes
+	}
+
+	on_hud_click = { abduct_scheme_prep_effect = yes }
+
+	on_semiyearly = {
+		if = {
+			limit = { scheme_owner = { is_ai = yes } }
+			abduct_scheme_prep_effect = yes
+			purge_ai_scheme_slots_effect = yes
+		}
+	}
+
+	on_monthly = {
+		hostile_scheme_monthly_discovery_chance_effect = yes
+
+		if = {
+			limit = { NOT = { exists = scope:discovery_event_happening } }
+			scheme_owner = {
+				trigger_event = {
+					on_action = abduct_ongoing
+					days = { 1 30 }
+				}
+			}
+		}
+	}
+
+	on_invalidated = {
+		scheme_target_character = { save_scope_as = target }
+		scheme_owner = { save_scope_as = owner }
+
+		if = {
+			limit = { scope:target = { is_alive = no } }
+			scope:owner = {
+				send_interface_toast = {
+					title = society_abduct_invalidated_title
+					left_icon = scope:target
+					custom_description_no_bullet = {
+						object = scope:target
+						text = scheme_target_died
+					}
+				}
+			}
+		}
+		else_if = {
+			limit = {
+				scope:target = {
+					is_imprisoned = yes
+					imprisoner != scope:owner
+				}
+			}
+			scope:target.imprisoner = { save_scope_as = other_imprisoner }
+			scope:owner = {
+				send_interface_toast = {
+					title = society_abduct_invalidated_title
+					left_icon = scope:target
+					right_icon = scope:other_imprisoner
+					custom_description_no_bullet = {
+						subject = scope:other_imprisoner
+						object = scope:target
+						text = scheme_target_imprisoned_by_other
+					}
+				}
+			}
+		}
+		else_if = {
+			limit = {
+				scope:target = { NOT = { in_diplomatic_range = scope:owner } }
+			}
+			scope:owner = {
+				send_interface_toast = {
+					title = society_abduct_invalidated_title
+					left_icon = scope:target
+					custom_description_no_bullet = {
+						object = scope:target
+						text = scheme_target_not_in_diplomatic_range
+					}
+				}
+			}
+		}
+	}
+}

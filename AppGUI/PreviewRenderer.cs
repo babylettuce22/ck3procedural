@@ -231,130 +231,49 @@ public static class PreviewRenderer
     private static Image RenderTitles(GenerationResult result, string targetTier)
         => RenderTitles(result.Provinces, result.ProvinceOrder, result.BaronyCount, result.LandCount, result.Titles, targetTier);
 
-    public static Image RenderRealms(GenerationResult result, MapGen.RealmMap? realms, MapGen.WildernessMap? wilderness)
-    {
-        if (realms is null) return RenderTitles(result, "c");
-        var map = result.Provinces;
-        var order = result.ProvinceOrder;
-        int width = map.Width, height = map.Height;
-        int baronyCount = result.BaronyCount, landCount = result.LandCount;
-        var counties = Titles.Flatten(result.Titles).Where(t => t.Tier == "c").ToList();
-
-        var primaryOf = new Dictionary<Title, Title>();
-        foreach (var (title, holder) in realms.HolderCounty)
-        {
-            if (!primaryOf.TryGetValue(holder, out var best)
-                || Emit.HistoryWriter.Rank(title) > Emit.HistoryWriter.Rank(best))
-                primaryOf[holder] = title;
-        }
-
-        var colour = new (byte R, byte G, byte B)[counties.Count];
-        var wild = new bool[counties.Count];
-
-        for (int c = 0; c < counties.Count; c++)
-        {
-            var county = counties[c];
-            if (wilderness?.Contains(county) == true) { wild[c] = true; continue; }
-            var holder = realms.HolderCounty.GetValueOrDefault(county, county);
-            colour[c] = TopLiege(realms, primaryOf, holder).Color;
-        }
-
-        var countyOf = new int[baronyCount + 1];
-        Array.Fill(countyOf, NoCounty);
-        for (int c = 0; c < counties.Count; c++)
-            foreach (var barony in counties[c].Children)
-                if (barony.ProvinceId >= 1 && barony.ProvinceId <= baronyCount)
-                    countyOf[barony.ProvinceId] = c;
-
-        int At(int i)
-        {
-            int id = order[map.Label[i]];
-            return id <= baronyCount ? countyOf[id] : id <= landCount ? Impassable : Water;
-        }
-
-        bool Edge(int i, int county)
-        {
-            int x = i % width, y = i / width;
-            return (x + 1 < width && Differs(At(i + 1), county))
-                || (y + 1 < height && Differs(At(i + width), county));
-
-            bool Differs(int other, int here)
-            {
-                if (other == here) return false;
-                if (other < 0 || here < 0) return true;
-                return wild[other] != wild[here] || colour[other] != colour[here];
-            }
-        }
-
-        return Downsample(width, height,
-            i =>
-            {
-                int c = At(i);
-                if (c == Water) return ((byte)38, (byte)62, (byte)96);
-                if (c == Impassable) return ((byte)92, (byte)92, (byte)100);
-                if (c == NoCounty) return ((byte)255, (byte)0, (byte)255);
-                if (Edge(i, c)) return ((byte)22, (byte)24, (byte)28);
-                return wild[c] ? ((byte)168, (byte)120, (byte)48) : colour[c];
-            },
-            i =>
-            {
-                int c = At(i);
-                return c >= 0 && Edge(i, c) ? 1 : 0;
-            });
-    }
-
     /// <summary>
-    /// The title at the top of the realm a holder belongs to.
+    /// The de facto political map: every county in the colour of the realm that ultimately holds
+    /// it, wilderness aside.
     ///
-    /// The walk has to change hands at every step, not just follow <see cref="RealmMap.Liege"/>.
-    /// That table maps a holder's primary title to the de jure title <em>above</em> it, and the
-    /// title above is frequently not anybody's primary — a duchy held by a king whose primary is
-    /// the kingdom is a liege that is itself no key in the table. Following the titles alone stops
-    /// there, one rung short, and paints the county in that duchy's colour.
-    ///
-    /// On an Azgaar map that is the difference between a country and its pieces: the export's
-    /// states end up shattered across several colours, so the realm map reads as if the import had
-    /// never happened. Champsia painted 29 realms where 15 existed, with 109 of 367 counties in the
-    /// wrong one.
-    ///
-    /// So each step resolves the liege title to the character holding it — its seat county — and
-    /// resumes from that character's own primary title, which is a key again. The visited set
-    /// guards the general case rather than an observed cycle: this runs on a half-built world every
-    /// time a preview is drawn, and a render is not the place to hang.
+    /// Both the walk to the top of a realm and the colour it arrives at used to be worked out here.
+    /// The walk is <see cref="RealmGraph.PathFromTop"/> now — it was always the same derivation,
+    /// and having it twice is what the graph exists to stop — and the colour is
+    /// <see cref="RealmPalette"/>, for reasons that class states.
     /// </summary>
-    private static Title TopLiege(MapGen.RealmMap realms, Dictionary<Title, Title> primaryOf, Title holder)
+    public static Image RenderRealms(GenerationResult result, RealmGraph? graph, MapGen.WildernessMap? wilderness)
     {
-        var seat = holder;
-        var visited = new HashSet<Title>();
+        if (graph is null) return RenderTitles(result, "c");
 
-        while (visited.Add(seat))
-        {
-            var primary = primaryOf.GetValueOrDefault(seat, seat);
-            if (!realms.Liege.TryGetValue(primary, out var lord)) return primary;
-            if (!realms.HolderCounty.TryGetValue(lord, out var lordSeat) || lordSeat == seat) return lord;
+        var counties = Titles.Flatten(result.Titles).Where(t => t.Tier == "c").ToList();
+        var palette = new RealmPalette(graph, counties);
 
-            seat = lordSeat;
-        }
-
-        return primaryOf.GetValueOrDefault(seat, seat);
+        return RenderByCounty(result, wilderness,
+            county => palette.Colour(graph.PathFromTop(graph.SeatOfCounty(county))[0]));
     }
 
     /// <summary>
     /// The realms view focused on one ruler: their realm painted by its structure, the rest of the
     /// world receding to grey.
     ///
-    /// Inside the focused realm, each direct vassal's subtree wears that vassal's primary-title
-    /// colour — the next level of the hierarchy down, exactly what a click on the unfocused view
-    /// was showing one level up. The ruler's personal demesne is their own colour lifted toward
-    /// white, so "held directly" and "held through a vassal" separate at a glance. Everything
-    /// outside keeps a ghost of its realm colour rather than flat grey, because the question a
-    /// focus answers is "what is this realm made of", and answering it while erasing where the
-    /// realm *sits* would throw away the context that makes the answer readable.
+    /// Inside the focused realm, each direct vassal's subtree wears that vassal's own colour — the
+    /// next level of the hierarchy down, exactly what a click on the unfocused view was showing one
+    /// level up. The ruler's personal demesne is their own colour lifted toward white, so "held
+    /// directly" and "held through a vassal" separate at a glance. Everything outside keeps a ghost
+    /// of its realm colour rather than flat grey, because the question a focus answers is "what is
+    /// this realm made of", and answering it while erasing where the realm *sits* would throw away
+    /// the context that makes the answer readable.
+    ///
+    /// The vassal colours come from <see cref="RealmPalette"/> rather than from primary titles for
+    /// the reason that class gives, and it bites hardest here: a ruler's vassals are mostly titled
+    /// by de jure children of his own title, so their title colours were shades of his and of each
+    /// other's — the one comparison this frame exists to make was the one the palette was worst at.
     /// </summary>
     public static Image RenderRealmsFocused(GenerationResult result, RealmGraph graph,
         MapGen.WildernessMap? wilderness, Title focusSeat)
     {
-        var focusColour = graph.Primary(focusSeat).Color;
+        var counties = Titles.Flatten(result.Titles).Where(t => t.Tier == "c").ToList();
+        var palette = new RealmPalette(graph, counties);
+        var focusColour = palette.Colour(focusSeat);
 
         // Wilderness recedes with the rest of the unfocused world — at its usual orange it would
         // be the loudest thing on a frame whose whole point is that one realm is loudest.
@@ -372,7 +291,7 @@ public static class PreviewRenderer
             if (at < 0)
             {
                 // Outside the focused realm: its own realm colour, three quarters of the way to grey.
-                var (r, g, b) = graph.Primary(path[0]).Color;
+                var (r, g, b) = palette.Colour(path[0]);
                 return Dim(r, g, b);
             }
 
@@ -382,7 +301,7 @@ public static class PreviewRenderer
                 return Lift(focusColour.R, focusColour.G, focusColour.B);
             }
 
-            return graph.Primary(path[at + 1]).Color;
+            return palette.Colour(path[at + 1]);
         });
 
         static (byte, byte, byte) Dim(byte r, byte g, byte b)

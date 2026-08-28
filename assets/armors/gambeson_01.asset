@@ -1,0 +1,49 @@
+# Form-fitting base layer, DERIVED FROM THE BODY MESH.
+#
+# Built by copying male_body.mesh, offsetting every vertex 0.5 along its own normal,
+# and deleting the hand and foot vertices. Because it shares the body's topology and
+# vertex order, all six blend shapes below are the body's own morph deltas applied
+# vertex-for-vertex - not hand sculpts. It cannot clip the body by construction, so it
+# needs no shrink_* tags either.
+#
+# Textures baked from ambientCG Fabric063 (CC0), box-projected in object space and
+# baked into the body's map1 layout.
+#
+# NOTE ON SHADER: this uses plain portrait_attachment, NOT the _pattern_ variant.
+# The pattern shader samples a pattern_mask and a variation; supplying neither renders
+# the piece black. To recolour this procedurally, add a portrait_accessory block with
+# pattern_mask + variation and switch the shader back.
+
+pdxmesh = {
+	name = "gambeson_01_mesh"
+	file = "gambeson_01.mesh"
+
+	blend_shape = { id = "gambeson_01_bs_fat"		type = "blendshapes/gambeson_01_bs_fat_1.mesh" }
+	blend_shape = { id = "gambeson_01_bs_gaunt"		type = "blendshapes/gambeson_01_bs_gaunt_1.mesh" }
+	blend_shape = { id = "gambeson_01_bs_muscular"	type = "blendshapes/gambeson_01_bs_muscular_1.mesh" }
+	blend_shape = { id = "gambeson_01_bs_old"		type = "blendshapes/gambeson_01_bs_old_1.mesh" }
+	blend_shape = { id = "gambeson_01_bs_dwarf"		type = "blendshapes/gambeson_01_bs_dwarf_1.mesh" }
+	blend_shape = { id = "gambeson_01_bs_infant"	type = "blendshapes/gambeson_01_bs_infant.mesh" }
+
+	meshsettings = {
+		name = "gambeson_01Shape"
+		index = 0
+		texture_diffuse = "gambeson_01_diffuse.dds"
+		texture_normal = "gambeson_01_normal.dds"
+		texture_specular = "gambeson_01_properties.dds"
+		shader = "portrait_attachment"
+		shader_file = "gfx/FX/jomini/portrait.shader"
+	}
+}
+
+entity = {
+	name = "gambeson_01_entity"
+	pdxmesh = "gambeson_01_mesh"
+
+	attribute = { name = "bs_body_fat_1"		blend_shape = "gambeson_01_bs_fat" }
+	attribute = { name = "bs_body_gaunt_1"		blend_shape = "gambeson_01_bs_gaunt" }
+	attribute = { name = "bs_body_muscular_1"	blend_shape = "gambeson_01_bs_muscular" }
+	attribute = { name = "bs_body_old_1"		blend_shape = "gambeson_01_bs_old" }
+	attribute = { name = "bs_body_dwarf_1"		blend_shape = "gambeson_01_bs_dwarf" }
+	attribute = { name = "bs_body_infant_1"		blend_shape = "gambeson_01_bs_infant" }
+}

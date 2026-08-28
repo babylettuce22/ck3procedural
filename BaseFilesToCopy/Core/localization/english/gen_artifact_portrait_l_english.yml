@@ -1,0 +1,8 @@
+﻿l_english:
+ # The "show on portrait" toggle in the artifact details window.
+ # See BaseFilesToCopy/Core/common/scripted_guis/00_gen_artifact_portrait_guis.txt.
+
+ GEN_ARTIFACT_PORTRAIT_SHOWN:0 "Shown on Portrait"
+ GEN_ARTIFACT_PORTRAIT_SHOWN_DESC:0 "This artifact is drawn in your character's hands when it is equipped and the pose allows it.\n\nClick to hide it."
+ GEN_ARTIFACT_PORTRAIT_HIDDEN:0 "Hidden from Portrait"
+ GEN_ARTIFACT_PORTRAIT_HIDDEN_DESC:0 "This artifact is kept out of your character's portrait even while equipped.\n\nClick to show it again."

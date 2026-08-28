@@ -1,0 +1,386 @@
+﻿namespace Ck3MapGen.Emit;
+
+using Ck3MapGen.Core;
+using Ck3MapGen.Io;
+using Ck3MapGen.MapGen;
+using System.IO;
+
+/// <summary>
+/// Forges weapons out of harvested parts and puts them in the mod behind a test decision.
+///
+/// **Deliberately a cul-de-sac.** Procedural mesh assembly is new and may not survive, so nothing
+/// else in the pipeline depends on it: forged weapons are *not* mixed into the artifact pool that
+/// <see cref="MapGen.ArtifactMap"/> hands out, and <see cref="WeaponAssets"/> does not know they
+/// exist. Everything this feature emits comes from <c>Emit/ArtifactForge/</c>, so removing it means
+/// deleting that folder and its two calls in <see cref="ContentWriter"/>. What is left behind is
+/// <c>Io/PdxMesh.cs</c> and <c>MapGen/WeaponForge.cs</c>, which stay put deliberately: the first is
+/// the <c>.mesh</c> format itself and will be wanted for map objects, the second is mesh assembly
+/// with no weapon-specific knowledge in it. Both are libraries, not part of this feature.
+///
+/// Keeping them out of the artifact pool is also what makes them testable. A forged weapon dropped
+/// into the general pool would land on one ruler somewhere among fifty artifacts, and confirming it
+/// rendered would mean hunting for it. Instead each one gets a decision that mints it, equips it,
+/// and forces it to show — so the loop is: take decision, look at portrait.
+///
+/// The step is a no-op when the parts library is absent, so a checkout without
+/// <c>assets/weaponparts/</c> still generates a complete map.
+/// </summary>
+public static class WeaponForgeStep
+{
+    /// <summary>
+    /// The parts library, one file per weapon type.
+    ///
+    /// Deliberately not a fallback chain any more. Earlier libraries were kept as fallbacks so a
+    /// checkout with an older cut still forged, but that turned into a trap once recolouring
+    /// existed: a library without UV2 would still assemble weapons and then pattern them against a
+    /// UV set that is not there, which is a silent visual fault rather than a missing feature.
+    /// One canonical file, and a capability check on what it contains, is the honest arrangement.
+    /// </summary>
+    public static readonly string[] PartsRelPaths =
+    [
+        "weaponparts/sword_parts.mesh",
+    ];
+
+    /// <summary>
+    /// One parts library per weapon kind. The **file** declares the kind, which is why families
+    /// inside it need no type prefix in their names.
+    ///
+    /// A kind listed here whose file is absent is simply skipped; a kind whose file exists but
+    /// yields no usable family is reported, because that means the cut and the code disagree and
+    /// silence would read as "no library".
+    /// </summary>
+    public static readonly (string Kind, string RelPath, string Icon)[] PartsLibraries =
+    [
+        ("sword",  "weaponparts/sword_parts.mesh",  "artifact_sword.dds"),
+        ("dagger", "weaponparts/dagger_parts.mesh", "artifact_dagger.dds"),
+        ("axe",    "weaponparts/axe_parts.mesh",    "artifact_axe.dds"),
+        ("mace",   "weaponparts/mace_parts.mesh",   "artifact_mace.dds"),
+        ("spear",  "weaponparts/spear_parts.mesh",  "artifact_spear.dds"),
+    ];
+
+    /// <summary>
+    /// Families whose parts may only ever be combined with their own, in either role.
+    ///
+    /// This is the escape hatch for a part that is *correct on its own terms* and simply cannot host
+    /// a foreign neighbour — not for one that merely looks unusual, and not a substitute for fixing
+    /// a bad cut in Blender.
+    ///
+    /// <c>ep1_indian_mace_01_a</c> earns it: its haft is a cone that widens toward the head socket,
+    /// measuring <b>4.25</b> units of radius at the join against a library median of <b>1.68</b>. Any
+    /// foreign head is bored for a shaft half that thick, so it sits on the cone visibly floating
+    /// rather than seated. Its own head is cut to match, so the family stays in the pool and simply
+    /// only ever forges as a pure weapon.
+    ///
+    /// The measurement that finds these: haft radius sampled within 3 units of its own
+    /// <c>socket_head</c>, compared against the rest of the library. A family more than about twice
+    /// the median is worth looking at in Blender before it is listed here.
+    /// </summary>
+    private static readonly HashSet<string> SelfOnlyFamilies =
+        new(StringComparer.OrdinalIgnoreCase) { "ep1_indian_mace_01_a" };
+
+    /// <summary>
+    /// Whether a lead/base pair may be forged. A self-only family is allowed opposite itself and
+    /// nothing else, which is symmetric: it can neither donate to nor borrow from a stranger.
+    /// </summary>
+    private static bool MayCombine(string lead, string baseFamily)
+        => string.Equals(lead, baseFamily, StringComparison.OrdinalIgnoreCase)
+            || (!SelfOnlyFamilies.Contains(lead) && !SelfOnlyFamilies.Contains(baseFamily));
+
+    /// <summary>
+    /// The families from <paramref name="bases"/> that may supply the body for
+    /// <paramref name="lead"/>.
+    ///
+    /// Can be empty, and the caller must handle that: a self-only family is allowed opposite itself
+    /// alone, so one that donates a lead but has no body of its own — a blade cut from a weapon
+    /// whose hilt was not kept — has nothing it may pair with. Returning the lead unconditionally
+    /// would hand back a family that cannot fill the remaining slots.
+    /// </summary>
+    private static List<string> Compatible(IReadOnlyList<string> bases, string lead)
+        => SelfOnlyFamilies.Contains(lead)
+            ? [.. bases.Where(f => string.Equals(f, lead, StringComparison.OrdinalIgnoreCase))]
+            : [.. bases.Where(f => !SelfOnlyFamilies.Contains(f))];
+
+    /// <summary>
+    /// How many icons are rendered at once.
+    ///
+    /// Capped well below the core count because each render is memory-hungry rather than long: a
+    /// 960x960 supersampled pass holds depth, diffuse, specular and rim buffers plus the composite,
+    /// which is roughly 65 MB while it runs. Letting sixteen of those go at once would ask for a
+    /// gigabyte to save a second or two on work that is already a small share of generation.
+    ///
+    /// Results are collected into a pre-sized array by index, so parallelism cannot reorder the
+    /// catalogue rows or the decision list — both are read back in order afterwards.
+    /// </summary>
+    private static readonly ParallelOptions IconParallel =
+        new() { MaxDegreeOfParallelism = Math.Min(Environment.ProcessorCount, 6) };
+
+    /// <summary>
+    /// Fewest looks a kind may be asked for, whatever the config says.
+    ///
+    /// A pool of zero would forge nothing and leave the artifact map pointing at looks that do not
+    /// exist, so the setting is clamped rather than trusted.
+    /// </summary>
+    private const int MinPoolSizePerKind = 1;
+
+    /// <summary>
+    /// Forges the world's pool of sword looks and returns catalogue rows for them.
+    ///
+    /// This is the step that takes procedural weapons out of the test cul-de-sac: the rows returned
+    /// here replace the vanilla sword entries in <see cref="WeaponAssets"/> for this world, so an
+    /// ordinary generated sword artifact wears a mesh that has never existed before. The meshes and
+    /// their <c>.asset</c> files are written here too; only the artifact visual is left to
+    /// <see cref="ArtifactWriter.WriteVisuals"/>, which owns that file.
+    ///
+    /// Returns an empty list when there is no parts library, or when no family in it has a full set
+    /// of textured parts — and an empty list is a *supported* answer, not a failure. The caller
+    /// falls back to the vanilla catalogue, so a checkout with no <c>assets/weaponparts/</c> still
+    /// generates a complete world with ordinary swords in it.
+    /// </summary>
+    public static IReadOnlyList<WeaponAsset> ForgeWeaponPools(
+        string modDir, string gameDir, Rng rng, int poolSizePerKind)
+    {
+        int poolSize = Math.Max(MinPoolSizePerKind, poolSizePerKind);
+        var built = new List<(ForgedWeapon Weapon, string Kind, string StockIcon)>();
+
+        foreach (var (kind, relPath, icon) in PartsLibraries)
+        {
+            string? path = Locate(relPath);
+            if (path is null) continue;
+
+            var schema = WeaponSchema.For(kind);
+            built.AddRange(ForgeOneKind(kind, icon, WeaponForge.LoadParts(path, schema), schema, rng, poolSize));
+        }
+
+        if (built.Count == 0) return [];
+
+        // Order matters: colours are decided first, because a weapon's icon is a tinted copy of the
+        // stock one and cannot be written until its colour is known.
+        var forged = built.Select(b => b.Weapon).ToList();
+        var recolour = ForgedWeaponRecolour.Write(modDir, forged, rng, "pool");
+        ForgedWeaponWriter.WriteAll(modDir, forged, recolour);
+
+        // Falls back to the stock icon whenever there is no colour to apply or the source cannot be
+        // read — an icon that does not match the model is far better than none.
+        var icons = new string[built.Count];
+
+        Parallel.For(0, built.Count, IconParallel, i =>
+            icons[i] = IconFor(modDir, gameDir, built[i].Weapon, built[i].Kind, built[i].StockIcon, recolour));
+
+        var rows = new List<WeaponAsset>();
+
+        for (int i = 0; i < built.Count; i++)
+        {
+            rows.Add(new WeaponAsset($"{built[i].Weapon.Name}_visuals", built[i].Kind,
+                ForgedWeaponWriter.EntityName(built[i].Weapon.Name), icons[i]));
+        }
+
+        return rows;
+    }
+
+    private static List<(ForgedWeapon Weapon, string Kind, string StockIcon)> ForgeOneKind(
+        string kind, string icon, IReadOnlyList<WeaponPart> parts, WeaponSchema schema, Rng rng,
+        int poolSize)
+    {
+
+        // Only families whose parts are fully textured can be drawn at all; an untextured one
+        // renders as a hole in the portrait. Filtering here rather than at assembly keeps every
+        // combination below valid by construction.
+        var textured = parts
+            .Where(p => p.HasTextures)
+            .GroupBy(p => p.Family)
+            .OrderBy(g => g.Key, StringComparer.Ordinal)
+            .ToList();
+
+        // A family is judged against the role it is being drawn for, not against the whole schema.
+        //
+        // The two roles need different things. A lead supplies exactly one part - the blade, the
+        // head - so a family cut from a weapon whose hilt was not worth keeping is a perfectly good
+        // lead with nothing else. A base supplies everything the lead does not, so it does need the
+        // full set. Requiring all four slots of both roles was the old rule, and it discarded any
+        // partial family outright and without a word: a blade-only cut simply never appeared.
+        var nonLead = schema.Required.Where(s => s != schema.Lead).ToList();
+
+        var leadFamilies = textured
+            .Where(g => g.Any(p => p.Slot == schema.Lead))
+            .Select(g => g.Key)
+            .ToList();
+
+        var baseFamilies = textured
+            .Where(g => nonLead.All(s => g.Any(p => p.Slot == s)))
+            .Select(g => g.Key)
+            .ToList();
+
+        if (leadFamilies.Count == 0 || baseFamilies.Count == 0)
+        {
+            Console.WriteLine($"  forged weapons: {kind} library has no family that can supply a "
+                + $"{(leadFamilies.Count == 0 ? schema.Lead.ToString().ToLowerInvariant() : "body")}"
+                + " from textured parts - none forged");
+            return [];
+        }
+
+        // Worth naming, because a partial family is invisible in every other way: it never forges a
+        // weapon on its own, only ever lends its lead to someone else's body.
+        var leadOnly = leadFamilies.Where(f => !baseFamilies.Contains(f)).ToList();
+
+        if (leadOnly.Count > 0)
+        {
+            Console.WriteLine($"  forged weapons: {kind} lead-only "
+                + $"({schema.Lead.ToString().ToLowerInvariant()} donors, no body) — "
+                + string.Join(", ", leadOnly));
+        }
+
+        // Said out loud because it silently shrinks the combination space: a family restricted here
+        // contributes one pure weapon instead of pairing with the other nine, and a pool that looks
+        // thin is otherwise very hard to trace back to this list.
+        var restricted = leadFamilies.Concat(baseFamilies).Distinct()
+            .Where(SelfOnlyFamilies.Contains).ToList();
+
+        if (restricted.Count > 0)
+        {
+            Console.WriteLine($"  forged weapons: {kind} restricted to self-only — "
+                + string.Join(", ", restricted));
+        }
+
+        var made = new List<(ForgedWeapon, string, string)>();
+
+        // Combinations are deduplicated so a small library cannot hand the same weapon out twice
+        // under two names. With one family that means a pool of one, which is correct.
+        var seen = new HashSet<string>();
+
+        for (int attempt = 0; attempt < poolSize * 8 && made.Count < poolSize; attempt++)
+        {
+            // One family supplies the anchor and its neighbours, another supplies the business
+            // end -- a blade on a foreign hilt, a head on a foreign haft. Two reasons, and the
+            // second is the surprising one: a hilt whose parts came off the same weapon looks
+            // deliberate, and because parts of one family never share atlas texels, keeping it
+            // coherent is also what lets the recolour step tint the parts separately. Measured on
+            // the sword library, a coherent hilt yields 2+ distinct colours 81% of the time
+            // against 42% for a free-for-all.
+            string leadFamily = leadFamilies[rng.Int(0, leadFamilies.Count - 1)];
+
+            // Drawn from the families this lead may actually pair with, rather than drawn freely and
+            // then rejected: a rejected pair would still consume one of the attempt budget's slots,
+            // so a library with several self-only families could quietly under-fill its pool.
+            var bases = Compatible(baseFamilies, leadFamily);
+            if (bases.Count == 0) continue;
+
+            string baseFamily = bases[rng.Int(0, bases.Count - 1)];
+
+            var chosen = SelectParts(parts, schema, leadFamily, baseFamily);
+            if (chosen is null) continue;
+            string signature = string.Join("|", chosen.Select(p => p.Name));
+            if (!seen.Add(signature)) continue;
+
+            string name = $"gen_forged_{kind}_{made.Count + 1:00}";
+            made.Add((WeaponForge.Assemble(name, chosen, schema), kind, icon));
+        }
+
+        return made;
+    }
+
+    private static WeaponPart PickPart(IEnumerable<WeaponPart> parts, string family, WeaponPartSlot slot)
+        => parts.First(p => p.Family == family && p.Slot == slot && p.HasTextures);
+
+    /// <summary>
+    /// The icon for a forged weapon: a render of its own geometry where that is proven, and a tint
+    /// of the stock icon everywhere else.
+    ///
+    /// **Every kind with a parts library renders.** <see cref="ForgedWeaponRender"/> follows
+    /// vanilla's own two compositions: a bladed weapon is framed on the hilt with the blade cropped
+    /// off the bottom, and a hafted one is the mirror — head at the top, haft cropped — which is
+    /// what <c>artifact_axe.dds</c> and <c>artifact_mace.dds</c> do. Spear and hammer have no parts
+    /// library and fall back to the vanilla catalogue before ever reaching here, so the tint path
+    /// below now only covers a weapon whose render genuinely failed.
+    /// </summary>
+    private static string IconFor(
+        string modDir, string gameDir, ForgedWeapon weapon, string kind, string stock,
+        ForgedRecolour? recolour)
+    {
+        if (recolour is not { } r) return stock;
+
+        if (r.PartColour.TryGetValue(weapon.Name, out var partColours)
+            && ForgedWeaponRender.Write(modDir, gameDir, weapon, WeaponSchema.For(kind), kind, partColours) is { } drawn)
+        {
+            return drawn;
+        }
+
+        return r.PrimaryColour.TryGetValue(weapon.Name, out var colour)
+            ? ForgedWeaponIcon.Write(modDir, gameDir, weapon.Name, stock, colour) ?? stock
+            : stock;
+    }
+
+    /// <summary>
+    /// Locates the parts library, or null if this checkout has none.
+    ///
+    /// Probed the same way <see cref="FlatmapWriter"/> finds its parchment: the assets folder is
+    /// copied beside the built exe, but a <c>dotnet run</c> from the repo resolves it from the
+    /// working directory instead.
+    /// </summary>
+    private static string? FindParts()
+    {
+        foreach (string relPath in PartsRelPaths)
+        {
+            if (Locate(relPath) is { } found) return found;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Resolves one library path, or null if this checkout has none.
+    ///
+    /// Probed the same way <see cref="FlatmapWriter"/> finds its parchment: the assets folder is
+    /// copied beside the built exe, but a <c>dotnet run</c> from the repo resolves it from the
+    /// working directory instead.
+    /// </summary>
+    private static string? Locate(string relPath)
+    {
+        string rel = relPath.Replace('/', Path.DirectorySeparatorChar);
+
+        string[] candidates =
+        [
+            Path.Combine(AppContext.BaseDirectory, "assets", rel),
+            Path.Combine(Directory.GetCurrentDirectory(), "assets", rel),
+            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "assets", rel),
+        ];
+
+        foreach (string c in candidates)
+        {
+            string full = Path.GetFullPath(c);
+            if (File.Exists(full)) return full;
+        }
+
+        return null;
+    }
+
+
+    /// <summary>
+    /// Picks one part per slot: <paramref name="lead"/> supplies the business end (the last link in
+    /// the schema's chain — a blade, an axe head), <paramref name="baseFamily"/> supplies the anchor
+    /// and everything else.
+    ///
+    /// Two families rather than one per slot, and the second reason is the surprising one: a hilt
+    /// whose parts came off the same weapon looks deliberate, and because parts of one family never
+    /// share atlas texels, keeping it coherent is also what lets the recolour step tint the parts
+    /// separately — 2+ distinct colours 81% of the time against 42% for a free-for-all.
+    ///
+    /// Returns null when a **required** slot is missing. An **optional** slot that is missing is
+    /// simply skipped: half the vanilla axes have no butt cap, and a capless axe is a whole axe.
+    /// </summary>
+    private static List<WeaponPart>? SelectParts(
+        IReadOnlyList<WeaponPart> parts, WeaponSchema schema, string lead, string baseFamily)
+    {
+        var chosen = new List<WeaponPart>();
+
+        foreach (var slot in schema.AllSlots)
+        {
+            string from = slot == schema.Lead ? lead : baseFamily;
+            var part = parts.FirstOrDefault(p => p.Family == from && p.Slot == slot);
+
+            if (part is not null) chosen.Add(part);
+            else if (!schema.Optional.Contains(slot)) return null;
+        }
+
+        return chosen;
+    }
+}

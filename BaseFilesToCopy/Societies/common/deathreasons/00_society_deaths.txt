@@ -1,0 +1,31 @@
+﻿# What a sacrifice is recorded as.
+#
+# =====================================================================================
+#  Why this is not one of vanilla's
+# =====================================================================================
+#
+# `death_sacrificed_to_gods` exists and is the obvious pick, and it is wrong here for one
+# reason that is easy to misread. From common/deathreasons/_death_reasons.info:
+#
+#   public_knowledge = yes/no    # If set to yes, everybody knows the KILLER. Default = no
+#
+# It does not control whether the manner of death is known -- it controls whether the map knows
+# who did it. Every vanilla sacrifice and execution reason is `public_knowledge = yes`, because
+# in vanilla those are things a ruler does openly and answers for. A society that meets where it
+# will not be counted cannot use any of them: the first sacrifice would tell every character in
+# the world who the murderer was, which is a strange fate for the whole set's secrecy premise.
+#
+# So this is the same act with the attribution taken off. The death still shows in the character
+# history and the family still knows they died; what nobody gets is the name.
+#
+# The `_killer` line is not dead weight. `public_knowledge = no` means the killer is not
+# broadcast, not that the killer is unknowable -- anyone who does learn it (a witness, and
+# eventually a secret) sees that string instead of the plain one.
+
+death_society_sacrifice = {
+	public_knowledge = no
+
+	# Vanilla's murder icon. A society-specific one would need a .dds under the path in
+	# DEATH_REASON_ICON_PATH, and there is nothing to draw yet that a knife does not already say.
+	icon = "death_murder.dds"
+}

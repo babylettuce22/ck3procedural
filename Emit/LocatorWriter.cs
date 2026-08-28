@@ -75,8 +75,15 @@ public static class LocatorWriter
     private static readonly string[] LayerFiles =
         ["layers.txt", "game_object_layers.txt", "effect_layers.txt"];
 
+    /// <param name="anchors">
+    /// Taken rather than computed because <see cref="CityScatterWriter"/> needs the same set, and
+    /// <see cref="ProvinceAnchor.Compute"/> is a slope field and a distance transform at full
+    /// province resolution — a second of the run on a large map, paid twice for one answer. The
+    /// caller computes it once; that both writers see the identical points is now structural
+    /// rather than a property of Compute being deterministic.
+    /// </param>
     public static void WriteAll(string modDir, string gameDir, ProvinceMap provinces,
-        int[] order, int landCount, float[] provinceElevation, Config.MapConfig cfg)
+        int[] order, int landCount, ProvinceAnchor.Anchors anchors, Config.MapConfig cfg)
     {
         string dir = Path.Combine(modDir, "gfx", "map", "map_object_data");
         Directory.CreateDirectory(dir);
@@ -89,8 +96,6 @@ public static class LocatorWriter
 
         // Not the province seed: that is wherever the partitioner started growing, which is as
         // likely to be a coastline pixel as anything else. See ProvinceAnchor.
-        var anchors = ProvinceAnchor.Compute(provinces, provinceElevation, cfg);
-
         int seaCount = provinces.Count - landCount;
         foreach (var kind in Kinds)
         {

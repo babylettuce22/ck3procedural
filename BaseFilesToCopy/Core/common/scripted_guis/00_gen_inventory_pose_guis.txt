@@ -1,0 +1,35 @@
+# "Is this character holding a weapon that needs a wider frame?"
+#
+# Pure query, no effect. Read by gui/window_inventory.gui -- patched by Emit/GuiWriter.cs --
+# which uses it to pick between gen_camera_inventory_body and its _wide variant for the
+# full-body panel beside the inventory window.
+#
+# The condition below is a DELIBERATE COPY of the weight modifier on pmg_hold_spear_idle in
+# gfx/portraits/portrait_animations/zz_procedural_weapon_idle.txt, and the copy is the point:
+# the camera has to widen exactly when that item wins the animation weight, because that item
+# is what puts the character on the two-handed pose the wide camera exists for. If a condition
+# is added there -- another two-handed weapon, a new suppression flag -- it has to be added
+# here too, or the pose and the frame disagree and a spear goes back to clipping.
+#
+# Both halves of that disagreement are silent. An animation item that loses its weight logs
+# nothing, and a .gui asking a scripted_gui that does not exist just gets false.
+#
+# scope = character: the panel's datacontext is InventoryView.GetCharacter, and the .gui passes
+# GuiScope.SetRoot( InventoryView.GetCharacter.MakeScope ).End.
+
+gen_inventory_wide_pose = {
+	scope = character
+
+	is_shown = {
+		pmg_show_equipped_weapon_trigger = yes
+		any_equipped_character_artifact = {
+			artifact_type = spear
+			# Suppressed per-artifact by the toggle in the artifact details window. A spear the
+			# player has hidden is not being rendered, so the pose is the default one and the
+			# tighter camera is the right one.
+			NOT = { has_variable = gen_artifact_hide_on_portrait }
+		}
+	}
+
+	is_valid = { always = yes }
+}

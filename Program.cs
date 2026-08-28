@@ -28,6 +28,13 @@ public static class Program
         bool fitHeightmap = false;
         bool allowUnverifiedSize = false;
 
+        // Tri-state on purpose. The debug PNGs cost about a tenth of a full run — six seconds on a
+        // 9216x4608 map — and a run that is writing a mod almost never wants them, but a run with
+        // no --mod has nothing else to show for itself, so the default has to depend on that.
+        // null means "nobody said"; --debug-images / --no-debug-images say it, and so does --out,
+        // which in this path exists for no other purpose.
+        bool? debugImages = null;
+
         for (int i = 0; i < args.Length; i++)
         {
             switch (args[i])
@@ -67,6 +74,18 @@ public static class Program
 
                 case "--out" when i + 1 < args.Length:
                     outDir = args[++i];
+                    debugImages ??= true;
+                    break;
+
+                // The debug PNGs — elevation, terrain, provinces, climate, drainage, rivers. Off
+                // by default on a run that writes a mod, because nothing downstream reads them and
+                // they are the fourth-largest phase in the run.
+                case "--debug-images":
+                    debugImages = true;
+                    break;
+
+                case "--no-debug-images":
+                    debugImages = false;
                     break;
 
                 // Emit the mod itself. Defaults to the launcher's mod folder when given no value,
@@ -160,6 +179,14 @@ public static class Program
                         System.Globalization.CultureInfo.InvariantCulture);
                     break;
 
+                // Exposed on the command line as well as in the GUI because it is the one weapon
+                // setting worth sweeping: it trades disk against variety, and comparing two sizes
+                // means two runs.
+                case "--weapon-pool" when i + 1 < args.Length:
+                    cfg.WeaponPoolSizePerKind = int.Parse(args[++i],
+                        System.Globalization.CultureInfo.InvariantCulture);
+                    break;
+
                 // The two halves of the calendar. Separate flags because they answer separate
                 // questions — what year the world says it is, and how advanced it is — and the
                 // whole point of splitting them is that one can move without the other.
@@ -225,11 +252,25 @@ public static class Program
                     cfg.ScaleReliefWithMapSize = false;
                     break;
 
+                // Kill switch for the city-scatter prototype. See MapConfig.EnableCityScatter.
+                case "--no-city-scatter":
+                    cfg.EnableCityScatter = false;
+                    break;
+
                 // Extra zoom steps of 3D terrain before the map goes flat to the paper map. See
                 // MapConfig.FlatMapHandoffBias; 0 is vanilla's own handoff.
                 case "--flat-map-bias" when i + 1 < args.Length:
                     cfg.FlatMapHandoffBias = int.Parse(args[++i],
                         System.Globalization.CultureInfo.InvariantCulture);
+                    break;
+
+                // Pulls the flat-map handoff in on maps below vanilla's size by the terrain LOD
+                // octaves they cannot supply. See MapConfig.ScaleHandoffToDetail. Off by default
+                // because it shows *less* of a small map as terrain; it is here so the trade can be
+                // compared headlessly on one binary against --flat-map-bias, which is the lever for
+                // the opposite preference.
+                case "--detail-handoff":
+                    cfg.ScaleHandoffToDetail = true;
                     break;
 
                 // The packer's tile step, in heightmap pixels: 32, 64 or 128, or 0 to choose by map
@@ -458,7 +499,10 @@ public static class Program
             FrontendWriter.WriteFrontend(modDir, options.GameDir);
 
             // 2. Write/patch in-game views (county view, character view, title view)
-            GuiWriter.WriteAll(modDir, options.GameDir);
+            //
+            // --societies here as well as on a full run: the HUD tab is a .gui edit, so it is one
+            // of the things --gui-only exists to iterate on without regenerating a world.
+            GuiWriter.WriteAll(modDir, options.GameDir, cfg.EnableSocieties);
 
             return 0;
         }
@@ -478,6 +522,8 @@ public static class Program
                 "       [--mod [name|dir]] [--game dir]");
             Console.Error.WriteLine(
                 "       [--seed n] [--out dir]");
+            Console.Error.WriteLine(
+                "       [--debug-images | --no-debug-images]  debug PNGs; default is on only when no --mod is written");
             Console.Error.WriteLine(
                 "       [--normalize-heightmap | --shift-heightmap [source sea level 0-255]]");
             Console.Error.WriteLine(
@@ -508,7 +554,8 @@ public static class Program
         {
             var result = Generator.Generate(options);
             if (modDir is not null) Generator.WriteMod(result, options, modDir);
-            Core.Stage.Time("debug images", () => Generator.WriteDebugImages(result, outDir, scale));
+            if (debugImages ?? modDir is null)
+                Core.Stage.Time("debug images", () => Generator.WriteDebugImages(result, outDir, scale));
             Core.Stage.Report();
         }
         catch (Exception ex) when (modDir is not null)

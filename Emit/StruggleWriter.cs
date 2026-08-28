@@ -69,9 +69,10 @@ public static class StruggleWriter
     ///
     /// A new key rather than a vanilla one. <see cref="CompatibilityWriter.WriteGeographicalRegions"/>
     /// re-declares every vanilla region key against generated titles so that hardcoded script keeps
-    /// resolving, but the members it gives them are arbitrary — one county each, or an even slice of
-    /// the province list for the graphical ones. Those keys therefore describe nowhere, and a
-    /// struggle pointed at one would cover nowhere.
+    /// resolving, but the members it gives them serve other masters — one arbitrary county each,
+    /// or, for the graphical ones, whatever provinces share an architecture style. None of those
+    /// keys describes a *place* on this map, and a struggle pointed at one would cover somewhere
+    /// arbitrary.
     ///
     /// Written into the same directory, which is safe because the filename is ours: that directory
     /// is blanked from vanilla's filenames and then rewritten under those same filenames, so a name
@@ -574,11 +575,16 @@ public static class StruggleWriter
     /// <summary>
     /// What taking an ending is worth.
     ///
-    /// Three things, in ascending order of how long they last: a one-off in prestige and renown, a
-    /// permanent character modifier, and twenty years of growth on the ender's own counties inside
-    /// the region. The last is the only one that marks the map rather than the man, and it is the
-    /// reason a finished struggle leaves a visibly better-off region behind rather than simply
-    /// disappearing out of the interface.
+    /// Four things, in ascending order of how long they last: a one-off in prestige and renown, a
+    /// per-outcome one-off in the currency that outcome was won in, a permanent character modifier,
+    /// and a stretch of years on the counties of the region — <see cref="StruggleMap.Aftermath"/>
+    /// on the ender's own ground and <see cref="StruggleMap.Settlement"/> on everybody else's.
+    ///
+    /// The last pair is the only part that marks the map rather than the man, and it is why the
+    /// four endings are distinguishable after the fact: a region held down by one crown, a region
+    /// that agreed to stop pushing its border, a region that stopped counting itself as two
+    /// peoples and a region under a foreigner's garrison do not look alike, and until this was
+    /// split per outcome they all wore the same "the struggle is over" county modifier.
     /// </summary>
     private static string Reward(StruggleEndingDef ending, GeneratedStruggle s)
     {
@@ -590,36 +596,63 @@ public static class StruggleWriter
 
         switch (ending.Kind)
         {
+            // Dread, because a region that watched one claimant outlast all the others has learned
+            // something about him that outlives the struggle it learned it in.
             case StruggleEnding.Dominance:
                 b.Inline("dynasty", "add_dynasty_prestige = 5000");
+                b.Field("add_dread", "25");
                 break;
+
+            // The one settlement nobody had to be beaten into, and the only one that ends with the
+            // ender's own house materially better off rather than merely more respected: the levies
+            // that were standing against the border go home and the tax comes in.
             case StruggleEnding.StatusQuo:
                 b.Inline("dynasty", "add_dynasty_prestige = 3000");
+                b.Field("add_gold", "500");
                 break;
+
             case StruggleEnding.Concord:
                 b.Inline("dynasty", "add_dynasty_prestige = 3000");
                 b.Field("add_piety_level", "1");
                 break;
 
             // Paid as dominance is paid, because it is dominance done from outside — and in renown
-            // rather than piety, since nothing about walking into somebody else's quarrel and
-            // ending it by force recommends itself to anybody's god.
+            // and dread rather than piety, since nothing about walking into somebody else's quarrel
+            // and ending it by force recommends itself to anybody's god.
             default:
                 b.Inline("dynasty", "add_dynasty_prestige = 5000");
+                b.Field("add_dread", "25");
                 break;
         }
 
         b.Inline("add_character_modifier", $"modifier = {ending.Modifier}");
 
+        string years = StruggleMap.AftermathYears(ending.Kind).ToString();
+
+        // Two passes over the same region, split on whether the county answers to the ender. The
+        // `exists = holder` guard is not decoration: a region can contain an unheld county, and
+        // reading `holder.top_liege` on one logs an error every time either limit is evaluated.
         using (b.Block("every_county_in_region"))
         {
             b.Field("region", s.RegionKey);
-            b.Inline("limit", "holder.top_liege = root");
+            b.Inline("limit", "exists = holder holder.top_liege = root");
 
             using (b.Block("add_county_modifier"))
             {
-                b.Field("modifier", StruggleMap.PeaceDividend);
-                b.Field("years", "20");
+                b.Field("modifier", StruggleMap.Aftermath(ending.Kind));
+                b.Field("years", years);
+            }
+        }
+
+        using (b.Block("every_county_in_region"))
+        {
+            b.Field("region", s.RegionKey);
+            b.Inline("limit", "exists = holder NOT = { holder.top_liege = root }");
+
+            using (b.Block("add_county_modifier"))
+            {
+                b.Field("modifier", StruggleMap.Settlement(ending.Kind));
+                b.Field("years", years);
             }
         }
 
@@ -631,15 +664,29 @@ public static class StruggleWriter
     ///
     /// Their keys carry no struggle in them on purpose: the reward for mastering a region is the
     /// same reward whichever region it was, and giving each struggle its own copy would multiply
-    /// the definitions without changing a single number in them.
+    /// the definitions without changing a single number in them. They are keyed by *outcome*
+    /// instead, and that is the axis the variety lives on — twelve definitions, three per ending:
+    /// what the ender keeps, what their own counties become, and what the rest of the region
+    /// becomes. No two endings share any of the three.
+    ///
+    /// Each character modifier is built to be recognisable without reading the numbers: dominance
+    /// rules by weight and fear, the status quo pays in coin and defensibility, concord in piety
+    /// and reach, and the foothold in garrisons on ground that is not yours. The county pairs
+    /// follow the same reading — see <see cref="StruggleMap.Aftermath"/>.
     /// </summary>
     private static void WriteEndingModifiers(string modDir)
     {
         string text =
             $$"""
               # Rewards for ending a generated struggle. Keyed by outcome, not by struggle:
-              # mastering one region is worth what mastering another is.
+              # mastering one region is worth what mastering another is. Three per outcome —
+              # what the ender keeps, what their counties become, what the region becomes.
 
+              # =========================================================================
+              # What the ender keeps. Permanent.
+              # =========================================================================
+
+              # Won by outlasting every other claimant, and the region knows it.
               {{StruggleMap.Modifier(StruggleEnding.Dominance)}} = {
               	icon = martial_positive
 
@@ -647,16 +694,26 @@ public static class StruggleWriter
               	different_culture_opinion = -5
               	monthly_county_control_growth_add = 0.5
               	monthly_prestige_gain_mult = 0.15
+              	dread_baseline_add = 10
+              	knight_effectiveness_mult = 0.1
               }
 
+              # The only settlement nobody had to be beaten into. It pays in the things a ruler who
+              # has stopped spending on a border gets back: coin, standing armies he can afford,
+              # and ground that is expensive to attack.
               {{StruggleMap.Modifier(StruggleEnding.StatusQuo)}} = {
               	icon = stewardship_positive
 
               	vassal_opinion = 10
               	monthly_prestige_gain_mult = 0.15
               	defender_advantage = 10
+              	monthly_income_mult = 0.1
+              	army_maintenance_mult = -0.1
+              	stewardship = 2
               }
 
+              # Made the peoples of a region into one another's kin, which is a reputation that
+              # travels further than the region does.
               {{StruggleMap.Modifier(StruggleEnding.Concord)}} = {
               	icon = diplomacy_positive
 
@@ -664,6 +721,8 @@ public static class StruggleWriter
               	different_culture_opinion = 15
               	monthly_piety_gain_mult = 0.15
               	diplomacy = 2
+              	diplomatic_range_mult = 0.25
+              	enemy_hostile_scheme_success_chance_add = -10
               }
 
               # The outsider's. Everything it grants is about holding ground that is not yours by
@@ -676,14 +735,94 @@ public static class StruggleWriter
               	different_culture_opinion = -10
               	garrison_size = 0.15
               	monthly_prestige_gain_mult = 0.15
+              	dread_baseline_add = 10
+              	levy_reinforcement_rate = 0.15
               }
 
-              # Left on the ender's own counties inside the region for twenty years.
-              {{StruggleMap.PeaceDividend}} = {
+              # =========================================================================
+              # What the ender's own counties in the region become.
+              # =========================================================================
+
+              # Held, not loved. Garrisoned ground that answers quickly and resents it.
+              {{StruggleMap.Aftermath(StruggleEnding.Dominance)}} = {
+              	icon = martial_positive
+
+              	monthly_county_control_growth_add = 0.5
+              	levy_size = 0.15
+              	garrison_size = 0.15
+              	county_opinion_add = -5
+              }
+
+              # A border nobody is pushing any more is a border you can build behind.
+              {{StruggleMap.Aftermath(StruggleEnding.StatusQuo)}} = {
               	icon = county_modifier_development_positive
 
               	development_growth_factor = 0.25
               	county_opinion_add = 10
+              	defender_holding_advantage = 10
+              	hostile_raid_time = 0.5
+              }
+
+              # The only one that is unambiguously good for the people living on it.
+              {{StruggleMap.Aftermath(StruggleEnding.Concord)}} = {
+              	icon = county_modifier_opinion_positive
+
+              	development_growth_factor = 0.4
+              	county_opinion_add = 15
+              	tax_mult = 0.1
+              	build_speed = -0.1
+              }
+
+              # An occupied third of somebody else's region. It holds because it is held.
+              {{StruggleMap.Aftermath(StruggleEnding.Foothold)}} = {
+              	icon = martial_mixed
+
+              	monthly_county_control_growth_add = 0.5
+              	garrison_size = 0.25
+              	county_opinion_add = -15
+              	levy_size = -0.1
+              }
+
+              # =========================================================================
+              # What the rest of the region becomes — the counties the ender does not hold.
+              # The neighbours still have to live in whatever was ended.
+              # =========================================================================
+
+              # The fighting stopped, which is worth something, under a crown that is not theirs,
+              # which is worth rather less.
+              {{StruggleMap.Settlement(StruggleEnding.Dominance)}} = {
+              	icon = county_modifier_opinion_negative
+
+              	development_growth_factor = 0.1
+              	county_opinion_add = -10
+              	hostile_raid_time = 0.25
+              }
+
+              # Nobody won, so nobody lost, and every county in the region gets the same quiet.
+              {{StruggleMap.Settlement(StruggleEnding.StatusQuo)}} = {
+              	icon = county_modifier_development_positive
+
+              	development_growth_factor = 0.2
+              	county_opinion_add = 5
+              	hostile_raid_time = 0.5
+              }
+
+              # Concord is the one ending whose neighbours do about as well out of it as its author.
+              {{StruggleMap.Settlement(StruggleEnding.Concord)}} = {
+              	icon = county_modifier_development_positive
+
+              	development_growth_factor = 0.3
+              	county_opinion_add = 10
+              	travel_danger = -10
+              }
+
+              # A foreigner settled the argument. The argument is settled.
+              {{StruggleMap.Settlement(StruggleEnding.Foothold)}} = {
+              	icon = county_modifier_opinion_negative
+
+              	development_growth_factor = 0.1
+              	county_opinion_add = -10
+              	levy_size = -0.1
               }
 
               """;
@@ -938,7 +1077,19 @@ public static class StruggleWriter
         loc.Add(StruggleMap.Modifier(StruggleEnding.StatusQuo), "Keeper of the Peace");
         loc.Add(StruggleMap.Modifier(StruggleEnding.Concord), "Reconciler of Peoples");
         loc.Add(StruggleMap.Modifier(StruggleEnding.Foothold), "Conqueror from Without");
-        loc.Add(StruggleMap.PeaceDividend, "The Struggle Is Over");
+
+        // The county pair. Named per outcome for the same reason they are defined per outcome: the
+        // one thing a player sees on the map after a struggle closes should say which of the four
+        // things happened, not merely that something did.
+        loc.Add(StruggleMap.Aftermath(StruggleEnding.Dominance), "Held by One Crown");
+        loc.Add(StruggleMap.Aftermath(StruggleEnding.StatusQuo), "Behind a Settled Border");
+        loc.Add(StruggleMap.Aftermath(StruggleEnding.Concord), "One People Now");
+        loc.Add(StruggleMap.Aftermath(StruggleEnding.Foothold), "Under Foreign Rule");
+
+        loc.Add(StruggleMap.Settlement(StruggleEnding.Dominance), "Someone Else's Victory");
+        loc.Add(StruggleMap.Settlement(StruggleEnding.StatusQuo), "Nobody Won");
+        loc.Add(StruggleMap.Settlement(StruggleEnding.Concord), "Kin Across the Border");
+        loc.Add(StruggleMap.Settlement(StruggleEnding.Foothold), "The Foreigner's Peace");
 
         loc.Write(Path.Combine(modDir, "localization", "english", "gen_struggles_l_english.yml"));
     }

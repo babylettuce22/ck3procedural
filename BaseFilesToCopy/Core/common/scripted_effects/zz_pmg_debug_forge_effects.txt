@@ -1,0 +1,109 @@
+﻿# Shared body of the debug forge event's options. See BaseFilesToCopy/Core/events/
+# zz_pmg_debug_forge_events.txt.
+#
+# One effect rather than six copies: every option differs only in which weapon-type flag it passes,
+# and the interesting part -- create it, equip it, then report which look it actually got -- is
+# identical. Six copies of that is six places to forget to update.
+
+pmg_debug_forge_weapon_effect = {
+	# hidden_effect, so the option's TOOLTIP does not evaluate any of this.
+	#
+	# Without it CK3 walks the whole body every time the tooltip is built - which is continuously,
+	# while hovering - and each pass reports scope:newly_created_artifact as undefined, because the
+	# artifact is only created when the option is actually taken. That produced 55,740 log lines from
+	# this one event and an error.log of 23 MB, which buries everything genuinely worth reading.
+	hidden_effect = {
+		# The game's own creation path, the same one inspirations and tournament prizes take. OWNER
+		# and CREATOR both being root means the weapon reads as self-made, which is fine for a
+		# diagnostic and avoids needing a courtier to exist.
+		create_artifact_weapon_effect = {
+			OWNER = root
+			CREATOR = root
+			SET_WEAPON_TYPE = $TYPE$
+		}
+
+		scope:newly_created_artifact = {
+			# Creation does not equip. Without this the model is never drawn on the portrait, and
+			# the weapon sits in the inventory looking like the render failed.
+			equip_artifact_to_owner_replace = yes
+		}
+
+		# Reports whether the artifact carries a forged-look index. The answer is currently always
+		# no, and the logs showed why: the visual is resolved INSIDE create_artifact, so nothing
+		# that runs afterwards can influence which look it picks. Kept as a live check, because it
+		# is the one line that will change the moment the selection is driven by something readable
+		# at creation time.
+		if = {
+			limit = { scope:newly_created_artifact = { has_variable = gen_forge_index } }
+			send_interface_toast = {
+				type = msg_artifact_gained
+				title = pmg_debug_forge.0001.indexed
+				right_icon = scope:newly_created_artifact
+			}
+		}
+		else = {
+			send_interface_toast = {
+				type = msg_artifact_gained
+				title = pmg_debug_forge.0001.unindexed
+				right_icon = scope:newly_created_artifact
+			}
+		}
+	}
+}
+
+# Armour counterpart, for testing the portrait-modifier probe in gfx/portraits/portrait_modifiers/
+# zz_pmg_armor_probe.txt. Same route the game uses - coronation gifts and tournament prizes both
+# call this effect - so what appears is what a player would earn.
+#
+# TYPE is passed explicitly rather than left to the game. Every vanilla caller uses flag:no and
+# lets the effect choose, which is useless for testing: the armour forge gives each of the six
+# types its own palette, and telling plate from mail means minting one of each on purpose.
+pmg_debug_forge_armor_effect = {
+	hidden_effect = {
+		create_artifact_armor_effect = {
+			OWNER = root
+			CREATOR = root
+			SET_ARMOR_TYPE = $TYPE$
+		}
+
+		scope:newly_created_artifact = {
+			equip_artifact_to_owner_replace = yes
+		}
+
+		send_interface_toast = {
+			type = msg_artifact_gained
+			title = pmg_debug_forge.0001.armor
+			right_icon = scope:newly_created_artifact
+		}
+	}
+}
+
+
+# Mints an armour artifact of a fixed TYPE at a chosen RARITY, so the rarity axis can be tested
+# on its own. Rarity is normally DERIVED from quality and wealth rather than chosen, but
+# set_artifact_rarity is a real engine effect and vanilla uses it directly on an artifact scope
+# (prelude_events.txt:5526, ep2_locale_events.txt:6831), so it can simply be overwritten after
+# creation.
+#
+# Type is held constant on purpose. The forge varies the SURFACE by rarity and the PALETTE by type,
+# so changing both at once would leave you unable to say which axis moved.
+pmg_debug_forge_rarity_effect = {
+	hidden_effect = {
+		create_artifact_armor_effect = {
+			OWNER = root
+			CREATOR = root
+			SET_ARMOR_TYPE = $TYPE$
+		}
+
+		scope:newly_created_artifact = {
+			set_artifact_rarity = $RARITY$
+			equip_artifact_to_owner_replace = yes
+		}
+	}
+
+	send_interface_toast = {
+		title = pmg_debug_forge.0003.toast
+		left_icon = root
+		right_icon = scope:newly_created_artifact
+	}
+}

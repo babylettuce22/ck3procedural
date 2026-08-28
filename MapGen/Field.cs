@@ -94,7 +94,26 @@ internal static class Field
         return hi;
     }
 
-    /// <summary>Separable box blur, repeated to approximate a gaussian. Edges clamp.</summary>
+    /// <summary>
+    /// Separable box blur, repeated to approximate a gaussian. Edges clamp.
+    ///
+    /// Every output pixel sums its window from -radius to +radius in that order, and still does:
+    /// the window sums are floats, so reordering them changes the last bits of the answer. The
+    /// obvious speedup — a running sum carried along the row, which would make this O(1) per pixel
+    /// instead of O(radius) — is exactly that reordering, and it is not academic here. This blur
+    /// feeds the climate model's relief field and the province partitioner's cost field, so a
+    /// one-ulp change moves rainfall, then drainage, then the rivers and every province border
+    /// downstream of them. That is the same class of drift the advection sweep in
+    /// <see cref="ClimateModel"/> was made sequential to stop.
+    ///
+    /// What is fixed instead is the two things that made it slow without being part of the
+    /// arithmetic. The interior of each row — every pixel whose whole window is in bounds, which
+    /// at radius 70 on a 4608-wide map is 97% of them — is summed without the per-sample bounds
+    /// test. And the vertical pass now walks source *rows* rather than source columns: it used to
+    /// stride `width` floats per sample and miss cache on nearly every one, where this accumulates
+    /// whole rows into a scratch buffer, adding them in the same -radius..+radius order each
+    /// output pixel saw before.
+    /// </summary>
     public static float[] Blur(float[] src, int width, int height, int radius, int passes)
     {
         var a = (float[])src.Clone();
@@ -105,39 +124,66 @@ internal static class Field
             Parallel.For(0, height, y =>
             {
                 int row = y * width;
-                for (int x = 0; x < width; x++)
+
+                // Where the window stops hanging off an end. Both collapse to the same point when
+                // the row is narrower than the window, which leaves every pixel to the clamped
+                // path below — still covered exactly once.
+                int interiorFrom = Math.Min(radius, width);
+                int interiorTo = Math.Max(interiorFrom, width - radius);
+
+                for (int x = 0; x < interiorFrom; x++) b[row + x] = ClampedRow(a, row, x, width, radius);
+
+                int full = 2 * radius + 1;
+                for (int x = interiorFrom; x < interiorTo; x++)
                 {
                     float sum = 0;
-                    int n = 0;
-                    for (int d = -radius; d <= radius; d++)
-                    {
-                        int xx = x + d;
-                        if (xx < 0 || xx >= width) continue;
-                        sum += a[row + xx];
-                        n++;
-                    }
-                    b[row + x] = sum / n;
+                    int from = row + x - radius, to = row + x + radius;
+                    for (int i = from; i <= to; i++) sum += a[i];
+                    b[row + x] = sum / full;
                 }
+
+                for (int x = interiorTo; x < width; x++) b[row + x] = ClampedRow(a, row, x, width, radius);
             });
-            Parallel.For(0, width, x =>
+
+            Parallel.For(0, height, () => new float[width], (y, _, acc) =>
             {
-                for (int y = 0; y < height; y++)
+                Array.Clear(acc, 0, width);
+
+                // d outermost, x innermost. Per output pixel the summands still arrive in
+                // -radius..+radius order — the loops are only interleaved across x — so this is
+                // the same sum, read sequentially instead of down a column.
+                int n = 0;
+                for (int d = -radius; d <= radius; d++)
                 {
-                    float sum = 0;
-                    int n = 0;
-                    for (int d = -radius; d <= radius; d++)
-                    {
-                        int yy = y + d;
-                        if (yy < 0 || yy >= height) continue;
-                        sum += b[yy * width + x];
-                        n++;
-                    }
-                    a[y * width + x] = sum / n;
+                    int yy = y + d;
+                    if (yy < 0 || yy >= height) continue;
+
+                    int source = yy * width;
+                    for (int x = 0; x < width; x++) acc[x] += b[source + x];
+                    n++;
                 }
-            });
+
+                int target = y * width;
+                for (int x = 0; x < width; x++) a[target + x] = acc[x] / n;
+                return acc;
+            }, _ => { });
         }
 
         return a;
+
+        static float ClampedRow(float[] a, int row, int x, int width, int radius)
+        {
+            float sum = 0;
+            int n = 0;
+            for (int d = -radius; d <= radius; d++)
+            {
+                int xx = x + d;
+                if (xx < 0 || xx >= width) continue;
+                sum += a[row + xx];
+                n++;
+            }
+            return sum / n;
+        }
     }
 
     /// <summary>

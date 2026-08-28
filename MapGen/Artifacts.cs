@@ -153,7 +153,7 @@ public sealed class ArtifactMap
                 List<Title> counties, CultureMap cultures, FaithMap faiths,
                 RealmMap realms, WildernessMap wilderness, PrehistoryMap prehistory,
                 WorldCenterMap? worldCenters, Dictionary<Title, int>? development,
-                MapConfig cfg, Rng rng)
+                MapConfig cfg, Rng rng, IReadOnlyList<WeaponAsset>? forgedWeapons = null)
     {
         var map = new ArtifactMap();
         var legendaryLogs = new List<string>();
@@ -276,7 +276,7 @@ public sealed class ArtifactMap
                 }
 
                 var look = Compose(
-                    category, rarity, culture, faith, primaryTitle, firstName, taken, artRng);
+                    category, rarity, culture, faith, primaryTitle, firstName, taken, artRng, forgedWeapons);
 
                 // Redraw the category rather than fill a slot twice. The draw is per-artifact and
                 // knows nothing about its siblings, so a ruler with three or four pieces can roll
@@ -293,7 +293,7 @@ public sealed class ArtifactMap
                         headline: i == 0, holy: sacred.Contains(county), artRng);
 
                     look = Compose(
-                        category, rarity, culture, faith, primaryTitle, firstName, taken, artRng);
+                        category, rarity, culture, faith, primaryTitle, firstName, taken, artRng, forgedWeapons);
                 }
 
                 // Still nowhere to put it, so this ruler simply owns less. An emperor draws four
@@ -386,7 +386,7 @@ public sealed class ArtifactMap
                     var (quality, wealth) = Roll(rarity, artRng);
 
                     var look = Compose(
-                        category, rarity, culture, faith, primaryTitle, firstName, taken, artRng);
+                        category, rarity, culture, faith, primaryTitle, firstName, taken, artRng, forgedWeapons);
 
                     // A hall has one throne. The relic sits on a pedestal, of which there are four,
                     // so only the throne can collide here — but it is checked the same way rather
@@ -850,7 +850,8 @@ public sealed class ArtifactMap
 
     private static ArtifactLook Compose(
         ArtifactCategory category, ArtifactRarity rarity, Culture culture, Faith faith,
-        Title primaryTitle, string firstName, HashSet<string> taken, Rng rng)
+        Title primaryTitle, string firstName, HashSet<string> taken, Rng rng,
+        IReadOnlyList<WeaponAsset>? forgedWeapons)
     {
         bool legendary = rarity == ArtifactRarity.Illustrious;
 
@@ -860,7 +861,7 @@ public sealed class ArtifactMap
                 return Sovereign(legendary, culture, primaryTitle, firstName, taken, rng);
 
             case ArtifactCategory.MartialRelics:
-                return Martial(legendary, culture, primaryTitle, firstName, taken, rng);
+                return Martial(legendary, culture, primaryTitle, firstName, taken, rng, forgedWeapons);
 
             case ArtifactCategory.SacredScriptures:
                 return Sacred(legendary, culture, faith, primaryTitle, firstName, taken, rng);
@@ -1214,7 +1215,7 @@ public sealed class ArtifactMap
 
     private static ArtifactLook Martial(
         bool legendary, Culture culture, Title primaryTitle, string firstName,
-        HashSet<string> taken, Rng rng)
+        HashSet<string> taken, Rng rng, IReadOnlyList<WeaponAsset>? forgedWeapons)
     {
         var (fields, clause) = legendary ? Signature(MartialFlourishes, MartialBase, rng) : (null, "");
         string place = primaryTitle.Name;
@@ -1241,8 +1242,24 @@ public sealed class ArtifactMap
                 fields);
         }
 
-        string[] weapons = { "sword", "axe", "mace", "spear", "dagger" };
-        string weaponKind = weapons[rng.Int(0, weapons.Length - 1)];
+        // Kinds come from the asset catalogue rather than a literal list, so a kind can never be
+        // rolled that has no look to wear. Every kind there resolves to at least one entity.
+        var weapons = WeaponAssets.Kinds;
+        string weaponKind = weapons[rng.Int(0, weapons.Count - 1)];
+
+        // The concrete look: a specific icon and a specific 3D entity, which is what the portrait
+        // draws once the artifact is equipped. See WeaponAssets for how to point one at custom art.
+        // A kind with forged meshes in this world wears those instead of the catalogue: the pool
+        // replaces the vanilla rows rather than joining them, so a generated blade is a shape that
+        // has never existed before rather than one of eight stock models. Kinds with no parts
+        // library, and every kind on a checkout with none at all, still come from the catalogue.
+        var forgedOfKind = forgedWeapons?.Where(a => a.Kind == weaponKind).ToList();
+
+        var looks = forgedOfKind is { Count: > 0 }
+            ? forgedOfKind
+            : WeaponAssets.ForKind(weaponKind);
+
+        var look = looks[rng.Int(0, looks.Count - 1)];
 
         string weaponName = weaponKind switch
         {
@@ -1268,8 +1285,10 @@ public sealed class ArtifactMap
         // crown is just a word.
         var blades = new List<string>(BladeNouns) { weaponName };
 
+        // Type stays the bare kind — it decides the inventory slot and which idle animation item
+        // fires. Only the visual is specialised.
         return new ArtifactLook(
-            weaponKind, weaponKind, "martial", "prowess_positive",
+            weaponKind, look.VisualKey, "martial", "prowess_positive",
             legendary
                 ? Claim(taken, LegendaryName(culture, primaryTitle, blades, true, true, taken, rng), place, firstName)
                 : Claim(taken, PickFree(weaponBank, taken, rng), place, firstName),

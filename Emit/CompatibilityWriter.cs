@@ -456,6 +456,26 @@ public static partial class CompatibilityWriter
                           $"(vanilla 9090 x 4696, 5000,2300, 33, 21)");
 
         if (!cfg.VanillaCamera)
+        {
+            int shortfall = DetailShortfallSteps(cfg);
+            int worldWidth = cfg.ProvinceWidth - 1;
+            Console.WriteLine($"  camera: terrain LOD {LodOctaves(cfg):F2} octaves "
+                              + $"({worldWidth} world units / {FinestNodeWorldUnits:F0}-unit finest node, "
+                              + $"vanilla 8.17); handoff bias {cfg.FlatMapHandoffBias:+0;-0;0} "
+                              + (cfg.ScaleHandoffToDetail
+                                  ? $"{shortfall:+0;-0;0} detail = {HandoffOffset(cfg):+0;-0;0} steps"
+                                  : "steps, detail correction OFF")
+                              + $", terrain to {ladder[flatStep] * 100.0 / worldWidth:F1}% of world width "
+                              + "(vanilla 23.4% at this bias)");
+
+            if (cfg.ScaleHandoffToDetail && shortfall != 0
+                && cfg.FlatMapHandoffBias + shortfall < MinFlatMapZoomStep - VanillaFlatMapZoomStep)
+                Console.WriteLine($"  camera: detail correction floored at step {MinFlatMapZoomStep} "
+                                  + "— this map is small enough that the correction would have removed "
+                                  + "3D terrain outright");
+        }
+
+        if (!cfg.VanillaCamera)
             Console.WriteLine($"  camera: zoom ladder scaled to {ladder[0]}..{ladder[^1]} world units "
                               + $"(vanilla {ZoomSteps[0]}..{ZoomSteps[^1]}), so every vanilla "
                               + "zoom-step index — visibility ranges, pan-to, flat map — frames the "
@@ -472,9 +492,10 @@ public static partial class CompatibilityWriter
 
     /// <summary>
     /// A zoom-ladder index authored against vanilla's map, moved onto this one — which, now that
-    /// <see cref="ScaledZoomSteps"/> moves the ladder itself, is just
-    /// <see cref="MapConfig.FlatMapHandoffBias"/> and nothing else. An index already means the same
-    /// share of the map in view here that it means in vanilla.
+    /// <see cref="ScaledZoomSteps"/> moves the ladder itself, is just <see cref="HandoffOffset"/>:
+    /// the author's <see cref="MapConfig.FlatMapHandoffBias"/> and the detail correction. An index
+    /// already means the same share of the map in view here that it means in vanilla, so nothing
+    /// about *framing* is left to do; the correction is about how much detail is behind that frame.
     ///
     /// It used to convert the index to a camera height, scale that, and find the nearest step back.
     /// That reproduced vanilla's *framing* while leaving vanilla's absolute heights in place, which
@@ -488,7 +509,89 @@ public static partial class CompatibilityWriter
     internal static int ScaleZoomStep(int step, Config.MapConfig cfg)
         => step < 0 || step >= ZoomSteps.Length || cfg.VanillaCamera
             ? step
-            : Math.Clamp(step + cfg.FlatMapHandoffBias, 0, ZoomSteps.Length - 1);
+            : Math.Clamp(step + HandoffOffset(cfg), 0, ZoomSteps.Length - 1);
+
+    /// <summary>
+    /// How many zoom steps of the ladder one octave of terrain LOD is worth, read off the ladder
+    /// itself rather than hardcoded so it cannot drift from it.
+    ///
+    /// The ladder is geometric — 70 to 6500 over 34 gaps is 1.142 a step — and the engine's terrain
+    /// LOD is geometric in the same variable, since node size tracks camera height at a roughly
+    /// constant screen-space error. So the two are commensurable and this is the conversion: 5.20
+    /// steps per doubling.
+    /// </summary>
+    private static readonly double StepsPerOctave =
+        (ZoomSteps.Length - 1) * Math.Log(2) / Math.Log((double)ZoomSteps[^1] / ZoomSteps[0]);
+
+    /// <summary>
+    /// The world-unit size of the finest terrain node the engine will render, on every map size.
+    ///
+    /// Not a choice and not scalable: heightmap pixels per world unit is invariant at 2, a node
+    /// carries a fixed vertex count, and the engine stops refining once that lands one vertex on
+    /// each texel. Measured in game as <c>NodeScale 256</c> — see <see cref="ScaledZoomSteps"/>,
+    /// which records the capture and the wrong theory it replaced.
+    /// </summary>
+    private const double FinestNodeWorldUnits = 32.0;
+
+    /// <summary>
+    /// Floor on the handoff step, so that a very small <see cref="Config.MapConfig.Width"/> cannot
+    /// drive the detail correction far enough to remove 3D terrain from the game outright.
+    ///
+    /// 15 is vanilla's <c>NTerrainCulling.REALM_COLOR_MAP_FULLY_ZOOM_STEP</c> — the step at which
+    /// the realm colour fill finishes covering the map. Terrain still reads through that fill, so
+    /// this is not a claim that nothing is lost below 15; it is that 15 is the last step vanilla
+    /// itself treats as a change in what the map is for, which makes it a defensible place to stop
+    /// rather than an invented one.
+    ///
+    /// At the default bias it is reached exactly at a 4096 heightmap and binds from 3072 down —
+    /// MapScale 0.167 and below, which is a 1536-wide province map. The build log says so when it
+    /// binds, because at that point the handoff is no longer the number the correction asked for.
+    /// </summary>
+    internal const int MinFlatMapZoomStep = 15;
+
+    /// <summary>
+    /// The whole offset applied to a vanilla zoom-step index by the handoff pair: the author's
+    /// <see cref="Config.MapConfig.FlatMapHandoffBias"/>, plus the detail correction when
+    /// <see cref="Config.MapConfig.ScaleHandoffToDetail"/> is on.
+    ///
+    /// One offset, computed once and added to every index that comes through
+    /// <see cref="ScaleZoomStep"/> — which is what keeps FLAT_MAP_ZOOM_STEP and MapTableWriter's
+    /// layer fades on the same frame. That is also why the floor is applied to the *offset* and not
+    /// to the result: flooring the result would silently push a layer authored at a low step up to
+    /// 15 and break the pair it exists to protect. Vanilla only ever authors the map-table layers
+    /// at 21, so today the two are the same arithmetic, but the offset form stays correct if that
+    /// changes.
+    ///
+    /// The correction is the octaves of terrain LOD this map does not have, converted to steps.
+    /// Octaves available are <c>log2(worldWidth / 32)</c>, so the shortfall against vanilla is
+    /// <c>log2(MapScale)</c> — already negative below vanilla size, and clamped to zero at and
+    /// above it because extra pixels are not a reason to push terrain further out than the author
+    /// asked for. See <see cref="Config.MapConfig.ScaleHandoffToDetail"/> for the derivation.
+    /// </summary>
+    internal static int HandoffOffset(Config.MapConfig cfg)
+    {
+        if (cfg.VanillaCamera) return 0;
+
+        int offset = cfg.FlatMapHandoffBias + DetailShortfallSteps(cfg);
+        return Math.Max(offset, MinFlatMapZoomStep - VanillaFlatMapZoomStep);
+    }
+
+    /// <summary>
+    /// The detail correction on its own, in zoom steps and never positive. Separate from
+    /// <see cref="HandoffOffset"/> only so the build log can report the two halves apart.
+    /// </summary>
+    internal static int DetailShortfallSteps(Config.MapConfig cfg)
+        => !cfg.ScaleHandoffToDetail || cfg.VanillaCamera
+            ? 0
+            : (int)Math.Round(StepsPerOctave * Math.Log2(Math.Min(1.0, cfg.MapScale)));
+
+    /// <summary>
+    /// Octaves of terrain LOD this map has between one vertex per heightmap texel and the whole
+    /// world in a single node. Reporting only — <see cref="DetailShortfallSteps"/> works from the
+    /// ratio against vanilla, not from this.
+    /// </summary>
+    internal static double LodOctaves(Config.MapConfig cfg)
+        => Math.Log2((cfg.ProvinceWidth - 1) / FinestNodeWorldUnits);
 
     /// <summary>
     /// Re-declares every vanilla empire, kingdom, duchy and holy-order title as a landless
@@ -1212,8 +1315,17 @@ public static partial class CompatibilityWriter
     /// block is no better — it parses but never registers in CGeographicalRegionDatabase, which
     /// breaks the geographical_region trigger and the region-derived modifiers, surfacing as a
     /// baffling "Unexpected token" error in an unrelated file. Every region needs a member.
+    ///
+    /// The *graphical* regions additionally decide what holdings look like: the engine's asset
+    /// selection ranks graphical_regions above graphical_cultures, and vanilla's background wall
+    /// buildings (99_background_graphics_buildings.txt) filter on region alone at the base tiers.
+    /// So each generated province is assigned the graphical region its county culture's
+    /// building_gfx belongs to — the round-robin split this replaced dealt provinces to the seven
+    /// regions by index, which dressed neighbouring baronies of one culture in walls from three
+    /// continents.
     /// </summary>
-    public static void WriteGeographicalRegions(string modDir, string gameDir, List<Title> empires)
+    public static void WriteGeographicalRegions(string modDir, string gameDir, List<Title> empires,
+        CultureMap cultures)
     {
         string source = Path.Combine(gameDir, "map_data", "geographical_regions");
         string destination = Path.Combine(modDir, "map_data", "geographical_regions");
@@ -1240,13 +1352,44 @@ public static partial class CompatibilityWriter
         }
 
         // Every province must belong to exactly one graphical region or CK3 complains about it
-        // individually, so split them evenly across the graphical keys.
+        // individually. Assignment follows each county's culture so the style the engine resolves
+        // at region level is the same one the culture's own building_gfx declares.
         var graphicalProvinces = new Dictionary<string, List<int>>();
         if (graphical.Count > 0)
         {
+            var known = graphical.Select(r => r.Key).ToHashSet(StringComparer.Ordinal);
+            string fallback = known.Contains("graphical_western")
+                ? "graphical_western" : graphical[0].Key;
             foreach (var region in graphical) graphicalProvinces[region.Key] = [];
-            for (int i = 0; i < provinceIds.Count; i++)
-                graphicalProvinces[graphical[i % graphical.Count].Key].Add(provinceIds[i]);
+
+            int unmapped = 0;
+            foreach (var county in counties)
+            {
+                // BuildingGfx is the culture file's whole value — a brace-list fallback chain
+                // like "{ caucasian_building_gfx byzantine_building_gfx }" with the culture's own
+                // style first — so walk its tokens in order and take the first that maps. A chain
+                // of unknowns (a hand-edited culture, or a future DLC's) lands on the fallback.
+                string? key = Regex.Matches(cultures.For(county).BuildingGfx, @"\w+")
+                    .Select(m => GraphicalRegionByGfx.GetValueOrDefault(m.Value))
+                    .FirstOrDefault(k => k is not null && known.Contains(k));
+                if (key is null)
+                {
+                    key = fallback;
+                    unmapped++;
+                }
+                foreach (var barony in county.Children)
+                    if (barony.Tier == "b" && barony.ProvinceId > 0)
+                        graphicalProvinces[key].Add(barony.ProvinceId);
+            }
+            if (unmapped > 0)
+                Console.WriteLine($"  geographical regions: {unmapped} counties' building_gfx " +
+                                  $"had no graphical region mapping, sent to {fallback}");
+
+            // A region no culture mapped to must still register — script references every key —
+            // so an empty one drops to the same one-county fallback the non-graphical regions use.
+            foreach (string empty in graphicalProvinces.Where(kv => kv.Value.Count == 0)
+                                                       .Select(kv => kv.Key).ToList())
+                graphicalProvinces.Remove(empty);
         }
 
         int written = 0;
@@ -1295,9 +1438,51 @@ public static partial class CompatibilityWriter
             ParadoxText.WriteBom(Path.Combine(destination, fileName), b.ToString());
         }
 
+        // Every barony must have landed in some graphical region: one the engine misses is one
+        // "no visual geographical region" error per province, so a shortfall is worth shouting.
+        int assigned = graphicalProvinces.Values.Sum(p => p.Count);
+        if (graphical.Count > 0 && assigned != provinceIds.Count)
+            Console.WriteLine($"  geographical regions: WARNING {provinceIds.Count - assigned} " +
+                              $"of {provinceIds.Count} provinces in no graphical region");
+
+        string spread = string.Join(", ", graphicalProvinces.OrderByDescending(kv => kv.Value.Count)
+            .Select(kv => $"{kv.Key.Replace("graphical_", "")} {kv.Value.Count}"));
         Console.WriteLine($"  re-declared {written} geographical regions " +
-                          $"({graphical.Count} graphical covering {provinceIds.Count} provinces)");
+                          $"({graphical.Count} graphical: {spread})");
     }
+
+    /// <summary>
+    /// The graphical region whose architecture family each vanilla building_gfx belongs to,
+    /// taken from where vanilla's own region lists put that style's homeland — which settles the
+    /// non-obvious ones: Tibet and all of southeast Asia sit under graphical_india, Iberia under
+    /// graphical_mediterranean, the Emishi's Hokkaido under graphical_east_asia. All 20 values in
+    /// vanilla's culture files as of 1.18 are here; a value that is not (or whose region the
+    /// scanned files no longer declare) falls back to graphical_western at the call site.
+    /// </summary>
+    private static readonly Dictionary<string, string> GraphicalRegionByGfx =
+        new(StringComparer.Ordinal)
+        {
+            ["western_building_gfx"] = "graphical_western",
+            ["norse_building_gfx"] = "graphical_western",
+            ["east_slavic_building_gfx"] = "graphical_western",
+            ["mediterranean_building_gfx"] = "graphical_mediterranean",
+            ["byzantine_building_gfx"] = "graphical_mediterranean",
+            ["caucasian_building_gfx"] = "graphical_mediterranean",
+            ["iberian_building_gfx"] = "graphical_mediterranean",
+            ["mena_building_gfx"] = "graphical_mena",
+            ["arabic_group_building_gfx"] = "graphical_mena",
+            ["berber_group_building_gfx"] = "graphical_mena",
+            ["african_building_gfx"] = "graphical_mena",
+            ["iranian_building_gfx"] = "graphical_mena",
+            ["indian_building_gfx"] = "graphical_india",
+            ["tibetan_building_gfx"] = "graphical_india",
+            ["southeast_asian_building_gfx"] = "graphical_india",
+            ["steppe_building_gfx"] = "graphical_steppe",
+            ["chinese_building_gfx"] = "graphical_east_asia",
+            ["japanese_building_gfx"] = "graphical_east_asia",
+            ["emishi_building_gfx"] = "graphical_east_asia",
+            ["amuric_building_gfx"] = "graphical_siberia",
+        };
 
     /// <summary>
     /// Finds top-level `key = {` blocks and reports whether each declares generate_modifiers.

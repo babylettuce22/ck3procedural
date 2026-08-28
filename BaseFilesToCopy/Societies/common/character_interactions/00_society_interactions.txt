@@ -30,7 +30,15 @@
 # a free attempt.
 
 society_offer_oath_interaction = {
-	category = interaction_category_friendly
+	# Moved out of the Friendly block when the society got its own header, because a menu that
+	# groups the society's business but leaves its recruiting elsewhere is a worse grouping than
+	# none. Only members ever see this -- `is_shown` demands the trait -- so it cannot leak.
+	#
+	# It does NOT take `filter_tags = { society_power }`, and the distinction is worth keeping:
+	# the CATEGORY means "this is society business", the TAG means "this is a power". Offering
+	# the oath is the first, not the second, and a Powers menu that opens with a recruiting
+	# button misrepresents what the rank ladder is gating.
+	category = interaction_category_society
 	icon = icon_scheme_convert_to_witchcraft
 	interface_priority = 50
 

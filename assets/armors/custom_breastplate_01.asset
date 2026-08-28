@@ -1,0 +1,27 @@
+# Custom armour test piece.
+# Source: "A breastplate - a prop", Museum of the Academy of Fine Arts in Krakow,
+# digitised by RDW MIC / Virtual Malopolska. Licence: CC0 Public Domain.
+# Decimated 261856 -> 6002 tris, de-tilted 18.28 deg, weighted to male_body_rig_01.
+
+pdxmesh = {
+	name = "custom_breastplate_01_mesh"
+	file = "custom_breastplate_01.mesh"
+
+	meshsettings = {
+		name = "custom_breastplate_01Shape"
+		index = 0
+		texture_diffuse = "custom_breastplate_01_diffuse.dds"
+		texture_normal = "custom_breastplate_01_normal.dds"
+		texture_specular = "custom_breastplate_01_properties.dds"
+		shader = "portrait_attachment_pattern_alpha_to_coverage"
+		shader_file = "gfx/FX/jomini/portrait.shader"
+	}
+}
+
+entity = {
+	name = "custom_breastplate_01_entity"
+	pdxmesh = "custom_breastplate_01_mesh"
+
+	default_state = "idle"
+	state = { name = "idle" state_time = 0 }
+}

@@ -1,0 +1,951 @@
+================================================================================
+ADDING NEW WEAPON PARTS  (swords, daggers, axes, maces)
+================================================================================
+Written 2026-08-26, extended 2026-08-27 to cover axes and maces and to fold in
+the generator-side contract. Everything here was measured on this machine while
+building the four libraries, not inferred from documentation.
+
+Renamed 2026-08-27 from for_future_sword_parts.txt - it started as a sword-only
+guide and now covers all four weapon classes.
+
+Read section 0 first. Sections 1-8 are the procedure. Sections 9B and 11 are the
+traps that have actually bitten us, each with the symptom you would see.
+
+Working files:  C:\Users\caelo\Documents\Blender\ck3\ck3_artifact_swords.blend
+                                                        ck3_artifact_daggers.blend
+                                                        ck3_artifacts_axes.blend
+                                                        ck3_artifact_maces.blend
+Outputs:        assets/weaponparts/sword_parts.mesh
+                                   dagger_parts.mesh
+                                   axe_parts.mesh
+                                   mace_parts.mesh
+
+Legacy - never export to these, they are kept only as history:
+                sword_parts_raw.mesh        (original bbox-aligned path)
+                sword_parts_socketed.mesh   (sockets but no UV2, superseded)
+
+CONFIRMED WORKING 2026-08-26: sockets + UV2 + textures together are enough for
+the generator to recolour assembled weapons procedurally in game.
+
+================================================================================
+0. THE FOUR CONTRACTS
+================================================================================
+Break any of these and the failure is silent or misleading, not a clean error.
+
+  A. NAMING     mesh datablock is exactly  <family>_<slot>Shape
+                slots are exactly: blade, guard, grip, pommel
+                Export reads obj.data.name, NOT the object name.
+
+  B. SOCKETS    6 empties per family, named <family>_<slot>_socket_<target>
+                A mating pair MUST sit at the identical point.
+
+  C. TEXTURES   All three maps resolve to real files on disk, sourced from the
+                weapon's .asset (never from the .mesh). See section 5.
+
+  D. GEOMETRY   Never move, rotate or scale part geometry. Only add empties.
+                The assembler translates and nothing else; it does not transform
+                normals or tangents, so any baked rotation gives wrong lighting.
+
+  E. UV2        Exactly two UV layers, "map1" (untouched) then "map2" (new), in
+                that order. map2 is a world-space box projection at ONE global
+                scale shared by the whole library. See section 5B.
+
+  F. THE GENERATOR NEVER SEES BLENDER. It assembles in C# from the .mesh alone,
+     so NAMING IS THE ENTIRE CONTRACT and every failure below is silent:
+       - a family missing a REQUIRED slot is dropped from the pool, no message;
+       - a shape whose suffix matches no slot is skipped without comment;
+       - suffix matching is case-insensitive;
+       - PARENTING DOES NOT SURVIVE EXPORT. No parent or transform data is
+         written, so the NAME is the only thing binding a socket to its part.
+         Rename a part and you must rename its locators in the same pass.
+
+  G. UV2 IS CHECKED BATCH-WIDE. ONE part missing map2 disables recolouring for
+     ALL generated weapons and their rendered icons, not just its own family.
+     The run prints a line saying so, but the damage is far wider than the cause.
+     This is the cheapest thing to get wrong and the most expensive to miss.
+
+Contract D refined 2026-08-27 (additive repair): D forbids MOVING, ROTATING or
+SCALING existing geometry. ADDING faces to repair a visually broken part is
+permitted, provided (a) no existing vertex moves and (b) the part's bbox is
+unchanged - those two conditions are exactly what keeps its sockets valid. Done
+once so far: ep1_western_hammer_01_a_head, see section 11.
+
+Family names must be globally unique AND humanly distinct. The C# side matches
+families exactly (no substring matching), so a typo fails loudly - but two
+families a reader confuses is still a bug. Seven of the current fourteen contain
+"western". Before exporting, print the family list and read it.
+
+
+================================================================================
+0B. SLOT TAXONOMY BY WEAPON CLASS
+================================================================================
+Two families of layout. The ANCHOR is the part the hand holds and the part every
+other part is placed relative to; the LEAD is the business end.
+
+  class          slots                              anchor   lead
+  -------------  ---------------------------------  -------  ------
+  sword, dagger  blade guard grip pommel            grip     blade
+                 ALL FOUR REQUIRED
+  axe, mace      head haft [cap]                    haft     head
+                 head+haft required, cap OPTIONAL
+
+`cap` is genuinely optional - half the vanilla axes have no butt cap, and
+forcing one produces a degenerate part. See section 3.
+
+SOCKETS - one per side of every join, so a pair is TWO empties at ONE point:
+
+  bladed (6 per family)          hafted (4, or 6 with a cap)
+    grip:   socket_guard           haft: socket_head
+            socket_pommel                socket_cap    (only if it has a cap)
+    guard:  socket_grip            head: socket_haft
+            socket_blade           cap:  socket_haft
+    pommel: socket_grip
+    blade:  socket_guard
+
+  Chain, bladed:  grip -> guard -> blade,  grip -> pommel
+  Chain, hafted:  haft -> head,            haft -> cap
+
+Names: shapes are <family>_<slot>Shape on the MESH DATABLOCK; locators are
+<family>_<slot>_socket_<target> on the OBJECT. The family is literally
+everything before _<slot>Shape, so all parts of one weapon must share a
+byte-identical prefix.
+
+================================================================================
+1. PICK THE RIGHT SOURCE MESH
+================================================================================
+Use the *portrait* variant. Always.
+
+  GOOD  gfx/models/artifacts/weapons/<name>_portrait.mesh
+  GOOD  gfx/models/artifacts/props/**/<name>_portrait.mesh
+  BAD   gfx/models/artifacts/artifacts/<name>.mesh
+
+The non-portrait meshes are display-stand models. tgp_japanese_sword_01_a.mesh
+imports the katana PLUS ep1_western_weaponrack_01 as a second object. The
+portrait variant is the bare weapon.
+
+Find candidates with:
+  find "<CK3>/game/gfx/models/artifacts" -ipath "*portrait*" -iname "*sword*.mesh"
+
+NAME YOUR SEARCH PATTERNS EXHAUSTIVELY. A first spear sweep used spear/lance/
+pike/glaive/halberd/javelin/trident/naginata/yari and MISSED the glaive entirely,
+because vanilla calls it "polearm". The conclusion "no portrait variant exists"
+was wrong and would have cost the best spear in the set. When a search comes back
+empty, suspect the pattern before you suspect the game. Cross-check by grepping
+the .asset files for shader = "portrait_attachment" instead of guessing filenames.
+
+A NON-PORTRAIT SOURCE IS SOMETIMES USABLE. ep2_lance_01_a has no portrait variant
+but lives in props/, imports bare (no rack) and is already on the +Y convention,
+so it was taken. Probe before rejecting: import it and look at what came in.
+
+RE-ORIENTING A SOURCE IS ALLOWED, AT IMPORT ONLY. tgp_chinese_polearm_01 is
+authored along Z instead of Y. Rotating a whole source once, BEFORE cutting, with
+transform_apply(rotation=True), is safe: a pure rotation has determinant +1 so
+winding is preserved, normals rotate with the mesh, and tangents are recomputed
+from UVs at export. This does NOT contradict contract D, which forbids rotating
+PARTS after authoring, where a rotated part would no longer match its neighbours.
+In the end no rotation was needed - the _02 portrait variant is already correct -
+and staying byte-faithful to vanilla is the better outcome when you have the choice.
+
+
+================================================================================
+2. IMPORT
+================================================================================
+  bpy.ops.io_pdx_mesh.import_mesh(filepath=PATH, chk_mesh=True, chk_skel=True,
+                                  chk_locs=True, chk_joinmats=True)
+
+Then clean up what came in with it:
+
+  * weapons/*.mesh import THREE objects: _LOD0, _LOD1, _LOD2. Keep LOD0, delete
+    the other two. The .mesh on disk remains the real backup.
+  * Some props import locator empties (portrait_prop_western_sword_02.mesh
+    brings 24 named PropSetUpScene*). Delete them - they are exporter rig
+    leftovers and would pollute the locator namespace.
+  * Purge orphans afterwards or stale materials accumulate.
+
+Copy the LOD0 object into the sword_original_backup collection, suffixed
+_ORIGINAL, before cutting. That collection is excluded from every export.
+
+
+================================================================================
+3. CUT INTO PARTS
+================================================================================
+The PDX exporter never welds components, so parts are already separate islands.
+Nearly every sword is 15-40 loose parts.
+
+Procedure:
+  1. Separate by loose parts (mesh.separate type='LOOSE').
+  2. For each island compute the centroid along Y (Y is the blade axis in
+     Blender; tip at negative Y, pommel at positive Y).
+  3. Classify with THREE cut planes on that centroid:
+        blade  <  c1  <=  guard  <  c2  <=  grip  <  c3  <=  pommel
+  4. Join each group, name it <family>_<slot>, set data.name to that + "Shape".
+  5. Assert total faces out == total faces in. This catches a dropped island.
+  6. LOOK AT IT. Colour the four parts differently, set viewport shading to
+     Object colour, and view from RIGHT orthographic. Every mistake found so far
+     was found this way, not by numbers.
+
+Read c1/c2/c3 off the island table per sword - they are not universal. Dump each
+island's face count, Y range and X/Z width, then pick planes in the gaps.
+
+WHEN A SWORD CANNOT BE CUT
+  Some hilts are modelled as ONE island spanning guard+grip (talwar-style, with
+  a disc pommel and integral knuckle guard). Loose-part splitting cannot
+  separate those. Do not force it with a bisect - that creates new geometry and
+  changes topology. Exclude the sword from the library instead.
+
+CUTTING A HAFTED WEAPON (axe, mace)
+  Three slots means TWO cut planes on island centroid Y:
+      head  <  c1  <=  haft  <  c2  <=  cap
+  Read c1/c2 off the island table as for swords. Two extra rules:
+
+  1. A LONG, ROUND-SECTIONED ISLAND IS THE HAFT wherever its centroid falls.
+     Some hafts are modelled in SEGMENTS that interleave with the head, so the
+     lower segment's centroid sits deep in head territory and a pure centroid
+     rule files it as head. Override with:
+         y_extent > 20 and 0.7 < zw/xw < 1.5  ->  haft
+     Verified safe across all 8 axes and 10 maces: it catches exactly the
+     segmented hafts (mena axe, mena/african/steppe/byzantine maces) and never
+     grabs a head, because heads are Z-wide (ratio 3-25) or short.
+
+  1B. THE OVERRIDE ABOVE IS AXE/MACE ONLY - DO NOT USE IT ON SPEARS.
+     ep1_western_spear_01_a's blade is FOUR islands each 29.44 units long with a
+     near-circular section (xw 1.58, zw 1.56, ratio 0.99). It satisfies
+     "y_extent > 20 and 0.7 < ratio < 1.5" perfectly and would be filed as haft.
+     Spear blades are long and round; axe heads are short and Z-wide. The
+     heuristic encodes an axe-shaped assumption and does not transfer.
+     Spears were cut with pure centroid planes and needed no override.
+
+  2. A SUB-0.1-THICK END DISC IS NOT A CAP. It is the flat face closing the
+     haft tube. Fold it into the haft and let the family be two-slot.
+     Measured: northern axe 12 faces / 0.075 thick, steppe axe 14 / 0.086.
+     Shipping those as `cap` gives a degenerate part with a meaningless socket
+     cross-section. Half the vanilla axes genuinely have no butt cap.
+
+PARTS THAT RUN ALONGSIDE OTHER PARTS
+  Knuckle-bows, langets and side-rings belong to the GUARD functionally but sit
+  along the grip's whole length, so a centroid rule files them under grip. Move
+  them to the guard explicitly. This matters for socket placement - see 4.
+
+
+================================================================================
+4. PLACE THE SOCKETS
+================================================================================
+Six empties per family:
+
+  grip    socket_guard    socket_pommel
+  guard   socket_grip     socket_blade
+  blade   socket_guard
+  pommel  socket_grip
+
+The grip is the anchor; everything is placed relative to it.
+Chain: grip -> guard -> blade, and grip -> pommel.
+Rule: A's socket_B aligns onto B's socket_A, so a mating pair sits at ONE point.
+
+--- DEPTH (Y) ------------------------------------------------------------------
+Anchor the join to the TERMINATING part's end face, then push in by half the
+overlap:
+
+  guard <-> blade   blade terminates at its ymax   -> yj = blade.ymax - d/2
+  grip  <-> guard   grip  terminates at its ymin   -> yj = grip.ymin  + d/2
+  grip  <-> pommel  grip  terminates at its ymax   -> yj = grip.ymax  - d/2
+  haft  <-> head    haft  terminates at its ymin   -> yj = haft.ymin  + d/2
+  haft  <-> cap     haft  terminates at its ymax   -> yj = haft.ymax  - d/2
+
+THE PRINCIPLE, AND THE BUG IT PREVENTS (added 2026-08-27):
+
+  ANCHOR ON THE ROD'S END - the part that passes THROUGH - NEVER on the
+  FITTING'S END - the part with the cavity.
+
+  join              rod    fitting   anchored on
+  ----------------  -----  --------  ------------
+  guard <-> blade   blade  guard     blade's top    (the tang)
+  grip  <-> guard   grip   guard     grip's base
+  grip  <-> pommel  grip   pommel    grip's top
+  haft  <-> cap     haft   cap       haft's top
+  haft  <-> head    haft   head      haft's TIP   <-- was inverted, see below
+
+Only ONE join in the whole set ever had rod and fitting the wrong way round:
+axe/mace haft<->head, first authored anchored on the HEAD's top. Because head
+mounting depth varies enormously between families - measured 0.51 to 30.80 on
+axes, 0.00 to 26.42 on maces - a foreign head then sat metres off. Re-anchoring
+on the haft tip took the cross-family seating error from mean 9.03 / worst 29.55
+down to mean 0.19 / worst 0.75 on axes, improving all 56 pairs and regressing
+none. Swords and daggers were already rod-anchored and needed no change.
+
+HOW TO TELL YOU HAVE IT RIGHT. Ask "does a FOREIGN rod's end land where this
+fitting's own rod ended?" - the fitting owns the cavity, so its expectation is
+what governs. Measured across all four libraries after the fix, worst case:
+swords 0.95, daggers 1.00, axes 0.75, maces 1.00. Anything over ~1.5 is wrong.
+
+Do NOT measure it the other way round ("does the rod get ITS native seating?").
+That asks the wrong question and reports false alarms - it flagged swords at
+worst 4.85 when they were in fact correct.
+
+where d = the bbox overlap between the two parts, CAPPED at
+
+  d = min(raw_overlap, 2.0, 0.10 * terminating_part_length)
+
+The cap is the important part. A part that runs alongside another (that
+knuckle-bow again) produces a huge bbox overlap that is not a mating surface.
+Without the cap, ep1_mena_sword_01_a's grip<->guard socket landed at Y +1.74 -
+the middle of the handle, 4.15 units from where it belongs. Genuine joins are
+interleaves of 0.03-2.1 units and are unaffected by the cap.
+
+Do NOT place the socket on the outer face. The overlap is deliberate - the
+tang runs through the guard - and preserving it is what stops assembled weapons
+showing seams.
+
+--- CENTRING (X and Z) ---------------------------------------------------------
+CORRECTED 2026-08-26 - the earlier version of this rule shipped a bug in
+axe_parts.mesh. Read the whole subsection.
+
+  A socket marks WHERE THE TWO PARTS PHYSICALLY MEET. For a part that the other
+  one passes THROUGH, that is the AXIAL PART'S AXIS at the join height - NOT the
+  centroid of the terminating part's cross-section.
+
+Slice the AXIAL part at the join plane, collect where edges cross it, take the
+centre of that. The axial part is the slender one - the grip, the haft, the
+blade's tang - not the wide fitting it passes through.
+
+WHY IT MATTERS. Take the cross-section of the wrong member and the socket lands
+in the middle of that member's profile. For a sword this is invisible: both a
+grip and a guard are centred on the weapon axis, so the two definitions coincide.
+For an AXE HEAD they do not - the head hangs off one side of the haft, so its
+cross-section centre sits out in the blade. Measured error on the first axe
+export: head sockets 0.95 to 15.64 units off the haft axis.
+
+SELF-REBUILD CANNOT CATCH THIS. Both members of the pair get the same wrong
+point, so they still coincide and drift stays exactly 0.0. It only appears when
+you mix families - an african head on a northern haft landed ~13 units aside.
+
+Pick the axial member by SMALLEST LATERAL BBOX EXTENT, not by longest span.
+ep1_african_axe_01_a's head has a long socket collar that makes it span further
+along the axis than its own haft, so "longest" picks the wrong one.
+
+For curved parts, use the axial part's section AT THE JOIN HEIGHT, not its
+overall bbox centre. On the curved hafts (african, northern, chinese, western)
+the two differ by up to 0.56 units.
+
+This is the whole point of the exercise. Correctly centred sockets remove a
+part's X/Z offset automatically - tgp_japanese_sword_01_a's blade sits entirely
+off-axis (X spans -0.873..-0.264) and sockets fix it without re-modelling.
+
+BEVEL TRAP: cut faces are often bevelled or capped, so the cross-section exactly
+AT the join plane can be a shrunken ring or nearly degenerate, and its centre is
+wrong. Sample at increasing depth into the part and take the first slice whose
+area is >= 90% of the maximum seen. Report which joins needed it.
+  - fired on 8 of 14 swords, 14 of 42 joins
+  - worst: ep1_western_sword_04_a grip<->guard, section at the join plane was
+    0.8% of full extent
+  - on the katana, skipping it misplaced a socket by 2.27 units, which reads as
+    "the model is a bit off" rather than as a bug
+
+--- FLOAT32 ---------------------------------------------------------------------
+Blender stores locations as float32, so a value read back differs from the
+Python float you set by up to ~6e-07. That is storage, not movement. What
+matters is that BOTH sockets of a pair are written from the SAME source value,
+so they round identically and the translation is exactly zero. Never compute the
+two halves of a pair independently.
+
+
+================================================================================
+5. TEXTURES  (the .asset is authoritative - never the .mesh)
+================================================================================
+Three families once exported with empty texture names. An untextured weapon does
+not read as "missing texture" on a CK3 portrait - it reads as a HOLE PUNCHED
+THROUGH THE CHARACTER.
+
+--- WHERE THE NAMES COME FROM ---------------------------------------------------
+Find the .asset declaring your mesh, then the pdxmesh block whose
+  file = "<your mesh>.mesh"
+then the meshsettings block for the LOD0 shape. Take:
+
+  texture_diffuse  -> diffuse
+  texture_normal   -> normal
+  texture_specular -> the "_properties.dds" file    (note: properties, not spec)
+
+TRAP 1 - the ep1_* weapons have no .asset beside them. They are declared in one
+shared file: gfx/models/artifacts/weapons/ep1_artifacts_weapons_portrait.asset
+
+TRAP 2 - a single .asset often declares SEVERAL entities. Brace-match the
+pdxmesh block and match its `file =` field. Do not grep for the first
+texture_diffuse: in ep2_western_longsword_01_a.asset the first one belongs to
+ep1_western_weaponrack_01.
+
+TRAP 3 - a weapon may be textured from a COMPLETELY DIFFERENT asset. The .mesh
+then names a texture that lives in another folder, the importer cannot find it,
+and you get a material whose image has an empty filepath - which exports as "".
+ep1_northern_sword_01_a is textured with portrait_prop_fp1_marshal_sword_01_*.
+This is why you go to the .asset and never trust the .mesh.
+
+--- SLOT MAPPING (counter-intuitive) --------------------------------------------
+The exporter walks three Principled BSDF inputs:
+
+    Base Color  ->  diff  ->  texture_diffuse
+    Roughness   ->  spec  ->  texture_specular   <-- the _properties.dds file
+    Normal      ->  n     ->  texture_normal
+
+THE PROPERTIES MAP GOES IN THE ROUGHNESS SLOT. Anywhere else and it is silently
+not exported. Intermediate nodes are fine - the exporter follows the first
+linked input upstream until it hits an Image Texture, so a Normal Map node in
+the chain is no problem.
+
+Set normal and properties images to Non-Color; diffuse to sRGB.
+
+--- DO NOT COPY THE .dds FILES --------------------------------------------------
+Only the basename is exported (os.path.split(filepath)[1]). Point each Image
+Texture node straight at the real file in the CK3 game folder. CK3 resolves
+textures globally by filename. The image datablock just needs a real, resolvable
+filepath.
+
+--- REUSE THE PDX MATERIAL ------------------------------------------------------
+Only meshes with a PDX material are exported (it carries a "shader" custom
+property). Rewire the node tree of the EXISTING material; do not create a fresh
+one, or the part silently vanishes from the export.
+
+
+================================================================================
+5B. UV SET 2  (map2) - material space for procedural recolouring
+================================================================================
+This is what makes the generator's colour variations work. It is additive:
+geometry, map1, materials, sockets and names all stay exactly as they are.
+
+A SOURCE CAN SHIP MORE THAN TWO UV SETS. ep2_lance_01_a imported with map1, map2
+AND map3. Writing the projection into "map2" left map3 in place, and the exporter
+maps layers IN ORDER to u0,u1,u2 - so the file would have carried a third stream.
+map3 turned out to be a duplicate of map1 and was deleted. ASSERT the layer list
+is exactly ["map1","map2"] per part; do not merely check that map2 exists.
+
+--- THE THING EVERYONE GETS BACKWARDS -------------------------------------------
+Verified by reading the shader, not by guessing:
+  jomini/gfx/FX/jomini/portrait_accessory_variation.fxh
+  (note: under the jomini\ install root, NOT game\gfx\FX\jomini\)
+
+  line 130:  float4 Mask = PdxTex2D( PatternMask, Input.UV0 );
+  line 144:  ApplyPattern( Input.UV1, GetPatternDesc(...), ... );
+
+and in jomini/gfx/FX/jomini/portrait.shader the vertex input declares UV0, then
+UV1 (gated on PDX_MESH_UV1), then UV2. So:
+
+  pattern_mask  (which channel applies where)  is sampled in UV0 = map1
+  pattern swatch (the gold/bronze tiling)      is sampled in UV1 = map2
+
+Diffuse/normal/properties also sample UV0, which is consistent - map1 is the
+atlas. DO NOT try to encode "which material am I" by placing map2 islands in
+quadrant regions; nothing reads map2 when sampling the mask. Channel selection
+is decided by where a part's existing MAP1 islands fall.
+
+Consequence for mixed-family weapons: within one family the four slots occupy
+disjoint map1 regions (measured: zero collisions across all 14 sword families),
+so a single-family weapon masks perfectly. Across families roughly half of
+slot-pairs overlap in map1, so a mask must be generated per assembled weapon
+from the four parts actually chosen.
+
+--- HOW TO AUTHOR map2 ----------------------------------------------------------
+map2 is a projection for TILING a material swatch. Different rules from map1:
+
+  * Even texel density matters; packing does not. Overlapping islands are fine.
+    Distortion is the enemy, wasted space is not.
+  * Islands may sit anywhere, including outside 0-1. There are no regions.
+  * Density MUST match across every part and every family, because the swatch
+    scale comes from one shared pattern_layout. A family at twice the density
+    shows visibly finer grain.
+
+DO NOT use Smart UV Project, and do not use cube_project with scale_to_bounds.
+Both rescale each island to fill 0-1, which gives every part a DIFFERENT
+density - the exact failure this rule exists to prevent.
+
+Use a pure world-space box projection at one global constant:
+
+  SCALE = 20.0      # world units per 1.0 UV - shared by the ENTIRE library
+
+  for each face: pick the dominant axis of the face normal, take the other two
+  world coords as (u,v), divide both by SCALE.
+
+    axis X: (u,v) = ( y, z) if n.x > 0 else (-y, z)
+    axis Y: (u,v) = (-x, z) if n.y > 0 else ( x, z)
+    axis Z: (u,v) = ( x, y) if n.z > 0 else ( x,-y)
+
+Because map2 is literally world-coordinate / SCALE, density cannot drift. Verify
+by measuring peak UV-per-world-unit per part: every part should land on 1/SCALE
+(0.05). Small shortfalls just mean a part has no face perfectly square to an
+axis. Measured spread across the sword library: 0.04921-0.05000.
+
+Side benefit: parts meeting at a join have continuous map2, so a swatch flows
+across the seam.
+
+--- MECHANICS -------------------------------------------------------------------
+  * map2 must be SECOND in uv_layers. The exporter maps layers in order to
+    u0, u1, u2 - second becomes u1, which is CK3's "UV-set 2".
+  * Keep map1 as active_render.
+  * THE EXPORTER FLIPS V. Blender v -0.283..0.283 becomes file v 0.717..1.283,
+    i.e. file_v = 1 - blender_v. U passes through unchanged. Author
+    pattern_layout offsets against the FILE values, not Blender's.
+
+--- FOR OTHER WEAPON TYPES ------------------------------------------------------
+Same SCALE, always. A dagger, axe or mace authored at a different scale will
+tile at a visibly different grain from the swords under one shared layout.
+
+
+================================================================================
+6. AUDIT BEFORE EVERY EXPORT
+================================================================================
+Must print ALL OK. Anything else ships an invisible weapon.
+
+import bpy, os
+SLOTS = [("Base Color","diff"), ("Roughness","spec"), ("Normal","n")]
+
+def resolve(mat, bsdf_input):
+    nt = getattr(mat, "node_tree", None)
+    if not nt: return None
+    out = next((n for n in nt.nodes if n.type=="OUTPUT_MATERIAL"
+                and n.inputs["Surface"].is_linked), None)
+    if not out: return None
+    root = out.inputs["Surface"].links[0].from_node
+    if bsdf_input not in root.inputs or not root.inputs[bsdf_input].is_linked:
+        return None
+    node = root.inputs[bsdf_input].links[0].from_node
+    while node.type != "TEX_IMAGE":
+        nxt = next((i for i in node.inputs if i.is_linked), None)
+        if not nxt: return None
+        node = nxt.links[0].from_node
+    if node.image is None: return None
+    return node.image.filepath_from_user() or None      # "" counts as failure
+
+bad = 0
+for obj in sorted(bpy.data.objects, key=lambda o: o.name):
+    if obj.type != "MESH" or obj.name.endswith("_ORIGINAL"): continue
+    for mat in obj.data.materials:
+        if mat is None:
+            print("FAIL %s: no material" % obj.name); bad += 1; continue
+        got = {s: resolve(mat, i) for i, s in SLOTS}
+        missing = [s for s, v in got.items() if not v]
+        if missing:
+            print("FAIL %s: missing %s" % (obj.name, ", ".join(missing))); bad += 1
+        else:
+            n = {s: os.path.basename(v) for s, v in got.items()}
+            print("ok   %s: %s | %s | %s" % (obj.name, n["diff"], n["n"], n["spec"]))
+print("\n" + ("ALL OK" if bad == 0 else "%d PART(S) WILL EXPORT UNTEXTURED" % bad))
+
+Also confirm every referenced image actually exists on disk - a filepath can be
+non-empty and still point at nothing.
+
+And assert the UV contract, which the texture audit does not cover:
+
+  assert all([l.name for l in o.data.uv_layers] == ["map1", "map2"] for o in parts)
+
+Wrong order is silent: the exporter maps layers positionally, so a reversed pair
+writes the atlas UV into u1 and the projection into u0 - textures and swatch both
+land in the wrong space, and nothing errors.
+
+
+================================================================================
+7. EXPORT
+================================================================================
+Select the 4*N part objects AND the 6*N socket empties. Exclude *_ORIGINAL.
+
+  bpy.ops.io_pdx_mesh.export_mesh(
+      filepath=OUT, chk_mesh=True, chk_skel=False,
+      chk_locs=True,              # REQUIRED - without it you get no sockets
+      chk_selected=True, chk_plain_txt=False)
+
+Note the properties are chk_*, not exp_*.
+
+TWO WAYS THE EXPORT ITSELF FAILS:
+
+  * N-GONS ABORT IT.  "Tangent space can only be computed for tris/quads,
+    aborting" - the exporter calls calc_tangents(), which needs tris or quads.
+    bmesh.ops.holes_fill() turns a 30-edge ring into ONE n-gon, so ALWAYS
+    triangulate after filling:
+        bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts)>4])
+    Assert it before every export:
+        assert not any(len(p.vertices) > 4 for o in parts for p in o.data.polygons)
+
+  * THE ADDON CAN BE DISABLED and the operator simply vanishes:
+    'Calling operator "bpy.ops.io_pdx_mesh.export_mesh" error, could not be
+    found'. Re-enable in Python rather than hunting through preferences:
+        import addon_utils
+        addon_utils.enable("bl_ext.user_default.io_pdx_mesh",
+                           default_set=True, persistent=True)
+Assert before exporting: no "_ORIGINAL" in the selection; counts are 4N and 6N;
+every obj.data.name == obj.name + "Shape".
+
+Answers to questions that were once open, all verified by dumping the file:
+  * chk_selected=True DOES filter locators by selection.
+  * A locator is stored under its OBJECT name.
+  * Locator `p` is a world position. We do not parent empties to parts, so no
+    parent-space ambiguity arises. Keep it that way.
+  * Axis swap: Blender Y (blade axis) becomes file Z. Shapes and locators are
+    swapped identically, so if you read both through the same importer they stay
+    consistent and need no correction.
+
+
+================================================================================
+8. VERIFY - THE TEST THAT MATTERS
+================================================================================
+Reassembling a weapon from its own parts, using its sockets, must reproduce the
+original weapon's bounds EXACTLY. Drift must be 0.0, not "small".
+
+Do this by reading the exported FILE, not Blender state - it exercises the same
+path LoadParts uses. Reader: scratchpad/pdxmesh.py, plus regress.py.
+
+  python regress.py <scratchpad> <path to sword_parts_socketed.mesh>
+
+Expect: shapes=4N, locators=6N, families=N, and "ALL EXACT".
+
+If one family drifts, its socket pair is not at a single point. If ALL drift,
+something moved geometry - check contract D.
+
+
+================================================================================
+9. KNOWN QUIRK - SHADER MISMATCH (low priority, recolouring works regardless)
+================================================================================
+All 14 sword .asset files specify  shader = "portrait_attachment", but only 6 of
+14 families carry that in the exported library. The other 8 say "standard",
+inherited from the material embedded in their .mesh - the same "the .mesh lies,
+the .asset is authoritative" defect as the textures, in the shader field:
+
+  portrait_attachment : african, byzantine, northern, longsword_01_a,
+                        longsword_01_b, chinese
+  standard            : mena, steppe, western_01_a, western_02_a, western_03_a,
+                        western_04_a, prop_western_sword_02, japanese
+
+Deliberately left alone. The per-part shader is not what decides rendering here:
+the emitter sets the assembled weapon's shader (it moved to
+portrait_attachment_pattern for the pattern system), so this field is inert on
+the parts. Both ep1_western_sword_01_a and tgp_japanese_sword_01_a are in the
+"standard" group and render correctly in game.
+
+Worth normalising only if the emitter ever starts trusting the per-part value.
+It is one line per material - mat["shader"] = "portrait_attachment" - plus a
+re-export.
+
+The daggers have the SAME split, and worse - three values instead of two. All 9
+dagger .asset files say portrait_attachment, but the exported parts carry:
+
+  court               : ep1_indian, ep1_mena, ep1_western, tgp_japanese
+  portrait_attachment : ep2_hunting_knife, fp2_iberian_muslim
+  standard            : prop_afr_spymaster, prop_western, tgp_chinese
+
+"court" comes from the court-scene variants of those meshes. Same reasoning
+applies: the emitter sets the assembled weapon's shader, so the per-part value
+is inert. Do not chase it unless that changes.
+
+
+================================================================================
+9B. TRAPS THAT COST REAL TIME - CHECK THESE
+================================================================================
+1. OBJECT HIDE vs COLLECTION HIDE are different flags, and select_set() fails
+   SILENTLY on an object-level-hidden object. Clear BOTH:
+
+       o.hide_viewport = False      # the monitor icon
+       o.hide_set(False)            # the eye icon  <-- easy to forget
+
+   This cost one bad dagger export: ep2_hunting_knife's four parts were
+   eye-hidden, never entered the selection, and chk_selected dropped them.
+   The file had 32 shapes instead of 36 and nothing errored.
+
+2. ASSERT ON THE SELECTION, NOT ON COLLECTION MEMBERSHIP. The pre-flight above
+   passed because it counted objects in collections. Count what is actually
+   selected, which is what chk_selected exports:
+
+       sel = [o for o in bpy.context.selected_objects if o.type == 'MESH']
+       assert len(sel) == 4 * n_families
+
+3. ALWAYS re-parse the exported file and count shapes. Every silent-drop bug so
+   far was caught here and nowhere else.
+
+3B. RUN THE SOCKET-AXIS CHECK. Self-rebuild is NOT sufficient - it passes with
+   both sides of a pair wrong by the same amount (see section 4 centring). The
+   check that does catch it, and generalises to any future weapon class:
+
+     For every socket pair, measure the LATERAL distance from the socket to the
+     AXIAL member's axis at the join. If it is more than ~1.5 units, the socket
+     is measuring the wrong thing.
+
+   Two things the checker itself must get right, both learned the hard way:
+     * pick the axial member by smallest LATERAL BBOX EXTENT (not longest span);
+     * sample the axial member PAST the bevel, using the same >=90%-of-max-extent
+       rule that placed the socket. Sampling at the raw join plane produced a
+       false FLAG on ep1_western_sword_04_a grip<->guard: the grip's slice there
+       is 8 points wide with its centre 1.62 off, but 0.02 further in it is 48
+       points and dead on the socket.
+
+   Script: scratchpad/socket_axis_check.py - reads a .mesh, needs no Blender.
+   Current state: swords worst 0.088, daggers 0.486, axes 1.113. All clean.
+
+4. Source meshes come with junk to delete before cutting: LOD1/LOD2 (note BOTH
+   "_LOD1" and "_LOD_0" spellings exist), PropSetUpScene* locator empties, and
+   whole extra objects (weapon racks). The LOD tag is not always a SUFFIX -
+   ep2_northern_mace_01_a's objects are named
+   "..._portrait_LOD_1_ep2_northern_mace_01_a_po", so match _LOD_?[12](_|$),
+   not _LOD_?[12]$.
+
+5. ASSERT THE UV LAYER LIST, NOT JUST ITS PRESENCE:
+       assert [l.name for l in o.data.uv_layers] == ["map1","map2"]
+   A source with three UV sets otherwise ships a stray u2 (see 5B).
+
+6. FILTER TO type == 'MESH' WHEN SELECTING BY NAME PREFIX. Socket empties share
+   the family prefix, so a set comprehension over o.data.materials dies with
+   "NoneType has no attribute materials" - empties have no data.
+
+7. THE SOCKET-AXIS CHECKER MUST SAMPLE PAST THE BEVEL, using the same
+   >=90%-of-max-extent rule that placed the socket. Sampling at the raw join
+   plane produced TWO false positives on spears: ep1_mena_spear_01_a:head read
+   1.586 off-axis (the raw slice there is a 1.26 x 0.13 sliver) and
+   ep1_western_spear_01_a:cap read "no section" (the plane is exactly the haft's
+   end). Re-measured with the correct sampler, all 13 spear sockets are 0.000.
+
+
+================================================================================
+10. CURRENT LIBRARIES
+================================================================================
+sword_parts.mesh    22 families + 1 blade-only, 89 shapes, 133 locators, ~5.0 MB
+dagger_parts.mesh    9 families, 36 shapes,  54 locators, ~1.4 MB
+axe_parts.mesh       8 families, 20 shapes,  24 locators, ~1.7 MB
+mace_parts.mesh     10 families, 27 shapes,  34 locators, ~1.8 MB
+spear_parts.mesh     8 families, 21 shapes,  26 locators, ~1.5 MB
+
+All five carry sockets + map1 + map2 + full textures. Every complete family in
+every library reassembles from its own sockets with drift exactly 0.0, and all
+five pass the socket-axis check (worst: swords 0.104, daggers 0.486, axes 1.113,
+maces 0.804, spears 0.000).
+
+Shape/locator counts are NOT a fixed multiple of the family count. `cap` is
+optional on hafted weapons and a family may be incomplete. Axes: 4 of 8 have a
+cap. Maces: 7 of 10. Spears: 5 of 8. Swords: one family (fp3_sassanian) is a
+lone blade. Assert against the actual per-family slot inventory.
+
+AN INCOMPLETE FAMILY STILL NEEDS ITS SOCKETS. fp3_sassanian_sword_01_a is a
+blade with no guard, so it was first exported with ZERO locators - reasoning that
+with no guard there was no pair to author. That was wrong. Sockets are authored
+in pairs only so SELF-rebuild can be tested; the actual mating is CROSS-family, so
+a donor blade seats onto some other family's guard using that guard's
+guard_socket_blade against its own blade_socket_guard. The blade always needs its
+socket. With no same-family partner there is no overlap to measure, so its depth
+was set to the library MEDIAN for that join (1.221, range 0.013-2.000), which
+minimises the worst case against an unknown partner: predicted seating error mean
+0.360 / worst 0.604 against all 22 guards. Do NOT author the reciprocal
+guard_socket_blade - sassanian has no guard and can never be the guard donor.
+
+DAGGERS - 9 families:
+  ep1_indian_dagger_01_a          prop_afr_spymaster_dagger_01
+  ep1_mena_dagger_01_a            prop_western_dagger_01
+  ep1_western_dagger_01_a         tgp_chinese_dagger_01_a
+  ep2_hunting_knife_01_a          tgp_japanese_dagger_01_a
+  fp2_iberian_muslim_dagger_01_a
+
+Two dagger sources were REJECTED, and the reasons generalise:
+
+  tgp_gyerim_ro_dagger_01_a - the model is a SHEATHED dagger. What the cut
+    produces as "blade" is a scabbard, and the "guard" is the scabbard throat.
+    Tell-tale in the island table: evenly spaced ring islands along the length
+    of the "blade". Blades do not have bands wrapped around them; scabbards do.
+
+  prop_fp1_spymasters_dagger_01 - has NO GUARD. Between blade and grip there is
+    only a 2-face sliver. Shipping that as a guard slot would put a degenerate
+    part in the library and give it a meaningless socket cross-section. If
+    guardless weapons are ever wanted, they need a 3-slot taxonomy, not a fake
+    guard.
+
+DAGGER CAVEATS, all deliberate:
+  * tgp_japanese_dagger_01_a's pommel is a 16-face flat end cap (a minimal
+    kashira). Valid, but refitting it onto another dagger contributes almost
+    nothing visually.
+  * prop_afr_spymaster_dagger_01 has two protruding pegs about 9 units up the
+    grip, near the pommel. They are classified as grip, which is correct - a
+    guard sits adjacent to the blade, and this dagger's guard is the collar at
+    the blade junction. Expect the pegs to look odd on a refitted weapon.
+
+SWORDS - 14 families, ~2.6 MB before UV2:
+
+  ep1_african_sword_01_a        ep1_western_sword_03_a
+  ep1_byzantine_sword_01_a      ep1_western_sword_04_a
+  ep1_mena_sword_01_a           ep2_western_longsword_01_a
+  ep1_northern_sword_01_a       ep2_western_longsword_01_b
+  ep1_steppe_sword_01_a         prop_western_sword_02
+  ep1_western_sword_01_a        tgp_chinese_sword_01_a
+  ep1_western_sword_02_a        tgp_japanese_sword_01_a
+
+Naming convention: the source asset stem, minus the "portrait" decoration.
+  ep1_african_sword_01_a_portrait.mesh   -> ep1_african_sword_01_a
+  portrait_prop_western_sword_02.mesh    -> prop_western_sword_02
+
+Note ep1_western_sword_02_a and prop_western_sword_02 are DIFFERENT swords from
+different source files (1222 vs 448 tris). Do not merge them.
+
+ep2_western_longsword_01_a and _01_b have identical topology and face counts but
+genuinely different vertex positions (verified by hashing) - vanilla ships both.
+They are not duplicates.
+
+AXES - 8 families:
+  ep1_african_axe_01_a          ep1_northern_axe_01_a
+  ep1_indian_axe_01_a           ep1_steppe_axe_01_a
+  ep1_mediterranean_axe_01_a    ep1_western_axe_01_a
+  ep1_mena_axe_01_a             tgp_chinese_axe_01_a
+
+  With a cap: african, indian, mena, chinese.
+  Two-slot (head+haft): mediterranean, northern, steppe, western.
+
+MACES - 10 families (8 maces + 2 hammers, same head/haft/cap layout):
+  ep1_african_mace_01_a         ep1_western_mace_01_a
+  ep1_byzantine_mace_01_a       ep1_mena_hammer_01_a
+  ep1_indian_mace_01_a          ep1_western_hammer_01_a
+  ep1_mena_mace_01_a            ep2_northern_mace_01_a
+  ep1_steppe_mace_01_a          ep2_northern_mace_01_b
+
+  Two-slot (head+haft): mena_mace, northern_mace_01_a, northern_mace_01_b.
+
+MACE CAVEATS, all deliberate:
+  * ep2_northern_mace_01_a and _01_b are GEOMETRICALLY IDENTICAL - same vertex
+    hash, same 1164 polys. Unlike the longsword a/b pair, which are genuinely
+    different. They are kept because their textures differ; if the pattern
+    system makes texture variety redundant, _01_b is the first thing to prune.
+    Their source .mesh files ALSO name _01_b's shapes after _01_a, so the
+    rename to <family>_<slot>Shape is what keeps them distinct in one library.
+  * ep1_indian_mace_01_a is SELF-ONLY (section 11): fattest haft in the library
+    at 8.51, and a flat butt-joint head with no bore.
+  * ep1_western_hammer_01_a_head carries an added collar (section 13). It is
+    the one part in any library that is not byte-identical to vanilla.
+
+LOD SPELLING VARIES. Filters must handle BOTH "_LOD1" and "_LOD_1", and the tag
+is not always a suffix: the northern maces import as
+"ep2_northern_mace_01_a_portrait_LOD_1_ep2_northern_mace_01_a_po", with the LOD
+tag MID-NAME. Match r"_LOD_?[12](_|$)", not r"_LOD_?[12]$".
+
+================================================================================
+11. JOIN RADIUS - WHICH PARTS CAN ACTUALLY MIX
+================================================================================
+Sockets align parts correctly; they cannot make a thin rod fill a wide bore.
+A part whose join radius is far from the library norm will LOOK wrong even
+though every check passes.
+
+MEASURE, per family: the anchor's cross-section extent at its own socket.
+
+  library   anchor  median join dia   outlier
+  --------  ------  ----------------  ------------------------------------
+  maces     haft    ~3.37             ep1_indian_mace_01_a  8.51  (2.5x)
+  axes      haft    ~3.15             none beyond ~1.7x
+  swords    grip    ~2.7              none significant
+  daggers   grip    ~2.2              none significant
+
+RULE OF THUMB: if a new anchor measures much over TWICE the library median at
+its own socket, every foreign lead bored for a normal shaft will float on it.
+Say so when you add it. ep1_indian_mace_01_a is restricted to self-only in code
+for exactly this reason - its haft is a cone that widens toward the head.
+
+A SECOND, INDEPENDENT AXIS OF INCOMPATIBILITY - mounting style. Measure the
+lead's own mount depth (how far the anchor penetrates it):
+
+  * ep1_indian_mace_01_a's head has NO cross-section at its own join plane -
+    a flat BUTT joint, zero interpenetration, where every other mace head has
+    a bore the haft seats into. Two independent reasons to keep it self-only.
+  * fp2_iberian_muslim_dagger_01_a's guard genuinely swallows 7.61 units of
+    blade against <=0.46 for every other dagger. It survives because the join
+    is rod-anchored (section 4), but it is the first place a scheme change
+    would show.
+
+Distinguish GENUINE deep mounting from a bbox artifact by testing ENCLOSURE at
+the join plane: does the fitting's cross-section CONTAIN the rod's? If they sit
+side by side instead, the overlap is a part running ALONGSIDE (a knuckle-bow)
+and the cap in section 4 already handles it correctly.
+  ep1_mena_sword_01_a grip<->guard raw 9.32 = ALONGSIDE, spurious.
+  fp2_iberian_muslim_dagger guard<->blade raw 7.61 = GENUINE.
+
+
+================================================================================
+12. WHAT "DONE" LOOKS LIKE - GENERATOR-SIDE DIAGNOSTICS
+================================================================================
+After exporting, the generator run prints one line per library. A new family is
+working when it appears in forged weapons WITHOUT any of these:
+
+  no <anchor> found for weapon family <name>   missing the held part  (HARD)
+  no sockets on <part>                         locators missing/misnamed (HARD)
+  skipped ... no textures on <family>          one of diff/n/spec empty
+  parts library has no UV2                     BATCH-WIDE, kills recolouring
+
+The first two are hard errors and name the family. The third drops one family.
+The FOURTH is the dangerous one - it is triggered by a single bad part and
+disables recolouring for every generated weapon and icon (contract G).
+
+Ping the code side after exporting; the join-radius measurement in section 11
+can be re-run across all four libraries in about a minute.
+
+
+================================================================================
+13. ADDITIVE REPAIR - WHEN A PART IS VISUALLY BROKEN
+================================================================================
+Done once: ep1_western_hammer_01_a_head.
+
+SYMPTOM. The head read as two disconnected lumps - a pick and a hammer face
+with a gap between them. The gap was not empty: it was filled by the HAFT. The
+head's only geometry there was 32 verts sitting at EXACTLY the haft's footprint
+(x +-1.575, z -2.266..1.935) - thin caps coplanar with the haft surface, so they
+z-fought and contributed nothing. Invisible while both parts share a texture;
+obvious once the pattern system recolours head and haft differently.
+
+FIX. A 6-quad collar enclosing the haft through the gap band:
+      collar  x +-1.72   y -41.62..-38.64   z -2.78..2.98
+      haft    x +-1.575                     z -2.585..2.76
+Overlap into BOTH neighbours (pick z>=2.44, face z<=-2.27) so it merges rather
+than butts. A first attempt at z -2.45..2.60 left thin haft slivers showing at
+the silhouette edges - size the collar to enclose the anchor's FULL extent.
+
+THE TWO CONDITIONS THAT KEEP IT LEGAL (contract D):
+  * no existing vertex moves;
+  * the part's bbox is unchanged - verify before and after.
+Both held here (122 -> 128 faces, bbox identical), so the socket, which derives
+from the haft axis, did not move and self-rebuild stayed exact.
+
+Also: quads only, map1 UVs copied from the nearest existing vertex of the SAME
+part so the new faces sample that part's own texture, map2 recomputed from the
+world projection at 20.0. Reuse the existing PDX material - a fresh one has no
+"shader" property and the part silently vanishes from the export.
+
+
+================================================================================
+14. SPEARS AND POLEARMS
+================================================================================
+8 families, hafted taxonomy (head / haft / cap), haft is the anchor.
+
+  3-slot: ep1_african_spear_01_a   ep1_indian_spear_01_a
+          ep1_western_spear_01_a   ep2_lance_01_a
+          tgp_chinese_polearm_02
+  2-slot: ep1_mena_spear_01_a      ep2_boar_spear_01_a
+          ep2_boar_spear_01_b
+
+WHAT IS DIFFERENT ABOUT SPEARS
+  * They are LONG - 192 to 266 units against 78-130 for swords - and the shaft
+    is almost free of geometry. Heads routinely hold 70-93% of the faces
+    (ep1_mena_spear_01_a: 708 of 764). A head-heavy split is normal here, not a
+    misclassification. Verify by eye, not by face ratio.
+  * The dense part of a spear "head" is the COLLAR / binding just below the
+    blade, not the blade. Classify the collar with the head - it is the socket
+    the shaft seats into, and cutting between blade and collar leaves a part
+    that cannot mount to anything.
+  * The axe "long round island -> haft" override MUST BE OFF. See section 3, 1B.
+
+REJECTED, AND WHY IT GENERALISES
+  tgp_chinese_polearm_01 - the court/display model. Bundles
+    ep1_western_weaponrack_01 AND is authored along Z. Superseded by the _02
+    portrait variant, which is bare and already on +Y.
+  ep2_lance_01_b - byte-identical geometry to _01_a (same vertex hash), differing
+    only in texture. Same situation as ep2_northern_mace_01_b. With recolouring
+    now procedural, a texture-only twin adds no silhouette variety. Trivial to
+    reinstate if the texture variant is ever wanted.
+
+  Compare ep2_boar_spear_01_a vs _01_b: same poly AND vertex counts, DIFFERENT
+  hashes - genuinely different geometry, both kept. Always hash before assuming
+  an a/b pair is a duplicate, and always hash before assuming it is not.
+
+MIXING CAVEAT - ep2_lance_01_a IS AN OUTLIER AT BOTH ENDS
+  Its head is a 248-face tip that reads as a bare point on another shaft, and its
+  "cap" is a 628-face vamplate + grip + butt assembly, not a small ferrule. Both
+  are honest mappings of unusual geometry. Expect them to look extreme in a mix;
+  neither is a defect.
+
+TEXTURES
+  tgp_chinese_polearm_02's maps live in the _01 model's folder
+  (artifacts/ep4/tgp_chinese_polearm/), with the diffuse from _02 but the normal
+  and properties from _01. Another instance of section 5: go to the .asset, and
+  never assume the textures sit beside the mesh or share its name.

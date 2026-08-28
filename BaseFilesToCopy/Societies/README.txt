@@ -1,4 +1,4 @@
-Societies -- the static prototype for the society system.
+﻿Societies -- the static prototype for the society system.
 
 WHAT THIS SET IS FOR
 --------------------
@@ -17,12 +17,53 @@ WHAT IS IN IT
 -------------
   common/traits/00_society_traits.txt                              membership, and the ladder
   common/activities/activity_types/00_society_rite_activity.txt    the rite
+  common/activities/activity_group_types/00_society_activity_groups.txt  its planner category
   common/activities/intents/00_society_intents.txt                 why anyone attends
   common/activities/guest_invite_rules/00_society_invite_rules.txt who the planner offers
   common/character_interactions/00_society_interactions.txt        the recruiter's half
+  common/character_interactions/00_society_powers.txt              the powers (rank 1)
+  common/deathreasons/00_society_deaths.txt                        what a sacrifice reads as
+  common/schemes/scheme_types/00_society_abduct_scheme.txt          taking somebody
+  common/character_interaction_categories/01_society_interaction_category.txt  its menu header
   common/opinion_modifiers/00_society_opinions.txt                 what refusing costs
+  common/scripted_guis/00_society_panel_guis.txt                   what the panel may ask
+  common/decisions/00_society_panel_decision.txt                   the way into the panel
+  gui/gen_society_panel.gui                                        the panel
+  gui/scripted_widgets/gen_society_panel.txt                       what instantiates it
+  gfx/interface/skinned/hud_maintab/maintab_gen_society.dds        the tab icon
   events/society_events.txt                                        the approach, and the rite
   localization/english/society_l_english.yml                       every string the above needs
+
+THE PANEL
+---------
+CK2's society screen showed four things at once: which society you were in, what rank you held,
+how much of its currency you had, and the FULL list of its powers with the ones above your rank
+greyed rather than hidden. The last is what made the ladder mean anything, so this panel draws
+all five rungs always and lights the one you hold.
+
+Two doors, one latch. The HUD tab under Intrigue is the main one; the "Take Stock of the Society"
+decision is the fallback. Both set the same `society_panel_open` variable, the tab lights from it,
+the window's X clears it, and Escape clears it through the X.
+
+THE TAB IS THE ONE PIECE OF THIS FEATURE THAT IS NOT IN THIS FOLDER. It edits vanilla's
+gui/hud.gui, which only the generator can do -- Emit/GuiWriter.cs PatchHudTabs, gated on
+MapConfig.EnableSocieties. So a `--static-only --societies` run ships everything here and no tab,
+because that mode never reaches GuiWriter; use `--gui-only --societies` to add it, or a full run.
+That asymmetry is why the decision stays.
+
+Why the tab is not a game view: vanilla's tabs call `ToggleGameViewData('intrigue_window', ...)`,
+and those 43 view names are registered in the ENGINE. Nothing under common/ defines them and each
+has a C++ data context behind it, so a mod cannot add one, and a tab naming an unknown view
+resolves to nothing without logging. The society tab drives the society_panel_toggle scripted_gui
+instead. What that costs: the panel does not close when another view opens, and the engine does
+not remember its position. What it does not cost: placement, art, the lit state, or Escape --
+`close_window` is an ordinary widget attribute, not a privilege of engine views.
+
+Two meters on it are real but barely fed yet. Dark Power is CK2's demon-worshipper currency and
+arrives from the rite; Visibility is CK2's exposure mechanic, +5 when somebody accepts the oath
+and +15 when they refuse, on the theory that a person who said no is a person who knows and owes
+you nothing. Nothing spends either yet. Visibility is what the secret's discovery chance will
+read when the secret arrives.
 
 THE THREE GATES
 ---------------
@@ -68,11 +109,22 @@ HOW TO TEST IT
   3. "Hold the Rite" is now in your activity planner. It is NOT in the planner of any
      character without the trait -- switch to one and confirm, because that is the property
      the whole set exists to demonstrate.
-  4. Open the guest list. The "Sworn Members" tab arrives UNTICKED -- tick it, and it fills with
-     members and nobody else, however large your court is. It was `defaults` at first, which
-     pre-ticked it and made the guest list look like something that filled itself in; see the
-     note above guest_invite_rules for why that is the wrong key for a rite.
+  4. Open the guest list. Two tabs -- "Sworn in Our Court" and "Sworn Elsewhere" -- both arriving
+     UNTICKED. Tick them and they fill with members and nobody else, however large your court is.
+     They were one rule under `defaults` at first, which pre-ticked it and made the guest list
+     look like something that filled itself in; see the note above guest_invite_rules for why
+     `defaults` is the wrong key for a rite.
   5. Start it, then complete it. Every attendee gains 8 Standing; the host gains 20.
+  6. Open the panel, from the tab under Intrigue or from the "Take Stock of the Society" decision.
+     It should name your rung, light that one row of the five, show both meters, mark the rite
+     Available or "Standing 50", and list every member it can see with their own rung beside them
+     -- each row's rung asked of THAT character, not of you.
+  7. Check the tab behaves: it is absent entirely for a non-member, lit while the panel is up,
+     unlit after closing with the X or with Escape, and it toggles rather than only opening.
+
+If the rite is greyed for want of Standing, press society.9002 twice. It is +25 a press, which
+walks the breakpoints one at a time so the modifiers arriving and the tooltip turning green are
+both visible; a single jump to the top would show neither.
 
 Use "Offer the Oath" on any other courtier to grow the membership -- it fires the same
 society.0001 at them with you as the recruiter, so there is one set of odds in the set rather
@@ -88,9 +140,11 @@ room, but nor can they discover who was. That is the next piece, and it is where
 the most for free: vanilla's `secret_witch` already has discovery, blackmail hooks and
 exposure, and a society membership secret is the same shape.
 
-No currency, no rank gates, and no cost on the rite. All three are one line each in the
-activity, and they are left out so that a misbehaving rite is unambiguously the membership
-plumbing's fault rather than a new economy's.
+No cost on the rite, and nothing that SPENDS either meter. Dark Power and Visibility both
+accumulate and neither is ever consumed, so they are honest counters rather than an economy.
+The rank gate exists now -- the rite needs Standing 50, which is the second breakpoint -- and
+society.9002 is the bootstrapping answer to it, since the rite is the only thing that grants
+Standing and you cannot hold one until you have some.
 
 No on_action. The approach fires by hand from the console today; eventually it rolls yearly
 against the traits the society recruits for, which is one small file and no change to

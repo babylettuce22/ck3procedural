@@ -138,8 +138,8 @@ public sealed class GeneratedStruggle
 
     /// <summary>The geographical region declared for it. Its own key, in its own file: the vanilla
     /// region keys are re-declared against generated titles by
-    /// <see cref="Emit.CompatibilityWriter.WriteGeographicalRegions"/> and carry arbitrary members,
-    /// so none of them describes anywhere in particular.</summary>
+    /// <see cref="Emit.CompatibilityWriter.WriteGeographicalRegions"/> with members chosen for
+    /// script compatibility and building style, so none of them describes a place.</summary>
     public required string RegionKey { get; init; }
 
     /// <summary>The kingdom the struggle was seeded on. Not written anywhere — the region is
@@ -506,9 +506,42 @@ public sealed class StruggleMap
     /// <summary>The permanent character modifier each ending leaves its taker.</summary>
     public static string Modifier(StruggleEnding ending) => $"gen_struggle_ending_{Token(ending)}";
 
-    /// <summary>The county modifier every ending leaves on the ender's own ground in the region —
-    /// the peace dividend, and the only lasting mark a finished struggle makes on the map.</summary>
-    public const string PeaceDividend = "gen_struggle_peace_dividend";
+    /// <summary>
+    /// The county modifier an ending leaves on the ender's *own* ground inside the region.
+    ///
+    /// One per outcome rather than one shared "the struggle is over", because the ground is where
+    /// the difference between the four settlements is actually visible. A region taken by force is
+    /// garrisoned and sullen; a region that talked itself out of the quarrel is prosperous and
+    /// fond of its lord. A single modifier for all four made every ending read the same on the map
+    /// however different the decision that produced it was.
+    /// </summary>
+    public static string Aftermath(StruggleEnding ending) => $"gen_struggle_aftermath_{Token(ending)}";
+
+    /// <summary>
+    /// The county modifier the same ending leaves on everyone *else's* ground in the region.
+    ///
+    /// The counterpart to <see cref="Aftermath"/>, and the half that makes a finished struggle a
+    /// regional event rather than a private prize: the neighbours who did not end it still have to
+    /// live in whatever was ended, and what that is worth to them differs by outcome — concord is
+    /// good for everybody, an outsider's conquest is good for nobody but the outsider.
+    /// </summary>
+    public static string Settlement(StruggleEnding ending) => $"gen_struggle_settlement_{Token(ending)}";
+
+    /// <summary>
+    /// How long both county modifiers last, in years.
+    ///
+    /// Varied on the same logic as their contents: a peace held down by one crown lasts as long as
+    /// that crown's attention, a border everybody has agreed to stop pushing lasts longer, and
+    /// peoples who have stopped counting each other as separate do not start again in a lifetime.
+    /// The outsider's is the shortest — it is the settlement with the fewest people invested in it.
+    /// </summary>
+    public static int AftermathYears(StruggleEnding ending) => ending switch
+    {
+        StruggleEnding.Dominance => 25,
+        StruggleEnding.StatusQuo => 40,
+        StruggleEnding.Concord => 60,
+        _ => 15,
+    };
 
     /// <summary>
     /// How much of the region an outsider has to hold to close it from outside. Vanilla's figure
