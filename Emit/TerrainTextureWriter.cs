@@ -1252,11 +1252,17 @@ public static class TerrainTextureWriter
                 return localUsed;
             }, localUsed => { lock (gate) for (int i = 0; i < 256; i++) if (localUsed[i]) used[i] = true; });
 
-            Reconcile(index, intensity, width, height);
-            ScatterWeights(index, intensity, width, height, 0.3);
+            Core.Stage.Detail("  · reconcile + scatter", () =>
+            {
+                Reconcile(index, intensity, width, height);
+                ScatterWeights(index, intensity, width, height, 0.3);
+            });
 
-            WriteTga(Path.Combine(dir, "detail_index.tga"), width, height, index);
-            WriteTga(Path.Combine(dir, "detail_intensity.tga"), width, height, intensity);
+            Core.Stage.Detail("  · detail tga encode", () =>
+            {
+                WriteTga(Path.Combine(dir, "detail_index.tga"), width, height, index);
+                WriteTga(Path.Combine(dir, "detail_intensity.tga"), width, height, intensity);
+            });
         }
 
         used[TerrainPalette.Unused] = false;
@@ -1310,37 +1316,22 @@ public static class TerrainTextureWriter
             });
 
             int softening = Math.Max(1, (int)Math.Round(cfg.Scaled(ColormapSoftening)));
-            SmoothColormap(colormap, colormapLand, width, height, softening);
+            Core.Stage.Detail("  · colormap smooth",
+                () => SmoothColormap(colormap, colormapLand, width, height, softening));
             ToVanillaEnvelope(colormap, colormapLand, width, height);
 
-            DdsWriter.WriteBgra(Path.Combine(dir, "colormap.dds"), width, height, colormap);
+            Core.Stage.Detail("  · colormap encode",
+                () => DdsWriter.WriteBgra(Path.Combine(dir, "colormap.dds"), width, height, colormap));
         }
 
-        {
-            var flatmap = new byte[(long)width * height * 4];
-            Parallel.For(0, height, y =>
-            {
-                int py = Math.Clamp((int)((long)y * pHeight / height), 0, pHeight - 1);
-                long row = (long)y * width * 4;
-                for (int x = 0; x < width; x++)
-                {
-                    int px = Math.Clamp((int)((long)x * pWidth / width), 0, pWidth - 1);
-                    var (pr, pg, pb) = terrain[py * pWidth + px] == TerrainClass.Sea
-                        ? (172, 164, 138)
-                        : (214, 195, 155);
-                    long o = row + x * 4;
-                    flatmap[o] = (byte)pb; flatmap[o + 1] = (byte)pg; flatmap[o + 2] = (byte)pr;
-                    flatmap[o + 3] = 255;
-                }
-            });
+        // No flat map here. This used to render a flat parchment — sea one shade, land another —
+        // into gfx/map/terrain/flat_maps, and FlatmapWriter overwrote both files with the
+        // illuminated version a few phases later, every run. Eighty megabytes written to be
+        // discarded, and worse than wasted: BookmarkWriter reads flatmap.dds back off disk for the
+        // bookmark background, so the two writers racing over one path is a correctness hazard the
+        // moment anything here stops being strictly sequential. FlatmapWriter owns the file.
 
-            string flatDir = Path.Combine(dir, "flat_maps");
-            Directory.CreateDirectory(flatDir);
-            DdsWriter.WriteBgra(Path.Combine(flatDir, "flatmap.dds"), width, height, flatmap);
-            DdsWriter.WriteBgra(Path.Combine(flatDir, "flatmap_tgp.dds"), width, height, flatmap);
-        }
-
-        Console.WriteLine($"  terrain: colormap + flatmap {width}x{height}");
+        Console.WriteLine($"  terrain: colormap {width}x{height}");
     }
 
     private static double Selector(SimplexNoise field, double x, double y)

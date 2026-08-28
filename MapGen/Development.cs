@@ -58,9 +58,16 @@ public static class Development
     /// on it scored well on a scale built for temperate farmland. Ranking asks "how good is this
     /// county *for this world*", which is the question that survives a change of climate settings.
     ///
-    /// The rank curve is shaped to vanilla's own 867 distribution, measured over the 3,827 counties
-    /// that set one: mass between 0 and 16, median near 8, a thin tail to 60 — a handful of
-    /// Constantinoples above a great many backwaters.
+    /// The rank curve is shaped to vanilla's own 867 distribution. Measured from
+    /// <c>history/titles</c>: of 4,669 county titles, 973 set development at all and the rest are
+    /// implicitly 0. Among those that set one the median is 6, p90 is 12, and the ordinary map tops
+    /// out at 20 — ten counties sit there. Exactly three counties in the world stand above it:
+    /// Chang'an at 30, Rome and Constantinople at 25.
+    ///
+    /// The tail to 60 that this comment used to cite is 1178's, not 867's; vanilla's peak moves
+    /// 30 → 40 → 60 across its three bookmarks, which is what the era bonus below is imitating.
+    /// Counties above the ordinary top are world centres, placed by
+    /// <see cref="MapConfig.WorldCenterDevPeak"/> rather than by the curve.
     /// </summary>
     public static Dictionary<Title, int> ForCounties(List<Title> counties,
         TerrainClass[] provinceTerrain, MapConfig cfg, Rng rng, WorldCenterMap? worldCenters = null)
@@ -102,19 +109,71 @@ public static class Development
         double yearsPassed = cfg.EraYear - 867;
         double yearDevBonus = yearsPassed / 50.0; // Subtracts 1 dev level per 50 years prior to 867
 
+        double baseLevel = cfg.DevelopmentBase + yearDevBonus;
+
+        // The top of the ordinary curve: what the best-ranked county gets before world centres are
+        // considered, since the rank curve reaches exactly 1 at rank 1. Vanilla's equivalent is 20.
+        double ordinaryTop = baseLevel + cfg.DevelopmentSpread * cfg.DevelopmentScale;
+
+        // A world centre is placed at the top of the world, not above it.
+        //
+        // This used to be a flat +32 on top of whatever the curve gave, which put the five centres
+        // of a default map at development 44-55 while the rest of it topped out at 22. Vanilla's
+        // whole 867 map peaks at 30 in one county and has three above 20 in total, so the boost was
+        // writing five 1178-era metropolises into a world dated 867.
+        //
+        // Now the best-scoring centre is placed at the peak and the others step down linearly
+        // toward a little above the ordinary top — the shape vanilla has, of one great city, a few
+        // near-peers, and then the pack. The peak rides the era bonus with everything else, so a
+        // late-era world still has centres that stand clear of its own richer baseline.
+        double centreFloor = ordinaryTop + 2;
+        double peak = Math.Max(cfg.WorldCenterDevPeak + yearDevBonus, centreFloor);
+        int centreCount = worldCenters?.Centers.Count ?? 0;
+
+        // How much of the map sets no development at all. Capped below 1 so there is always a
+        // settled part for the curve to describe, however the knob is set.
+        double bareShare = Math.Clamp(cfg.DevelopmentBareShare, 0.0, 0.95);
+
         var result = new Dictionary<Title, int>(scored.Count);
         for (int i = 0; i < scored.Count; i++)
         {
             double rank = scored.Count == 1 ? 1.0 : i / (double)(scored.Count - 1);
-            double curved = Math.Pow(rank, cfg.DevelopmentSkew);
 
-            double baseLevel = cfg.DevelopmentBase + yearDevBonus;
-            int level = (int)Math.Round(baseLevel + curved * cfg.DevelopmentSpread * cfg.DevelopmentScale);
-
-            // Boost World Centers to make them true metropolises
-            if (worldCenters is not null && worldCenters.IsCenter(scored[i].County))
+            int level;
+            if (rank < bareShare)
             {
-                level += cfg.WorldCenterDevBoost;
+                // Bare. Outside the development system rather than at the bottom of it, which is
+                // the distinction vanilla draws: a tribal periphery sets no development at all, and
+                // HistoryWriter writes nothing for a level of 0.
+                //
+                // Deliberately NOT lifted by the era bonus. A bare county in a more advanced world
+                // is still a bare county — vanilla's own bare share is flat across its bookmarks at
+                // 80%, 78% and 77%, while the counties that do set development rise from a median
+                // of 6 to 16. Advancement deepens the settled part of the map; it does not colonise
+                // the rest of it.
+                level = Math.Max(0, cfg.DevelopmentBase);
+            }
+            else
+            {
+                // The settled part of the world, re-ranked among itself so the curve spans it fully
+                // instead of spending most of its range on counties that are bare anyway.
+                double settled = bareShare >= 1.0 ? 1.0 : (rank - bareShare) / (1.0 - bareShare);
+                double curved = Math.Pow(Math.Clamp(settled, 0.0, 1.0), cfg.DevelopmentSkew);
+
+                // Still reaches exactly 1 at rank 1, so the cut redistributes the curve without
+                // lowering the top of it — ordinaryTop above stays the map's ceiling either way.
+                level = (int)Math.Round(baseLevel + curved * cfg.DevelopmentSpread * cfg.DevelopmentScale);
+            }
+
+            int centreRank = worldCenters?.RankOf(scored[i].County) ?? -1;
+            if (centreRank >= 0)
+            {
+                double t = centreCount <= 1 ? 0.0 : centreRank / (double)(centreCount - 1);
+                int target = (int)Math.Round(peak - t * (peak - centreFloor));
+
+                // Raises, never lowers. A centre that is also the best land on the map keeps the
+                // curve's answer if that is already the higher of the two.
+                level = Math.Max(level, target);
             }
 
             result[scored[i].County] = Math.Clamp(level, 0, 100);

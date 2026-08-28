@@ -101,6 +101,10 @@ HOW TO TEST IT
      toasts how many were sworn. A zero means the court is empty or all children, which is a
      different fault from the guest list being broken. Everything below can be done without it,
      one courtier at a time, which is why it exists.
+  0b. In the console: event society.9003
+     Grants 100 Dark Power, which is exactly the cost of one abduction. Nothing else in the set
+     grants any except the rite and the sacrifice, so without this, testing a power that SPENDS
+     meant arranging two or three killings first.
   1. In the console:  event society.0001
      Somebody in your court turns out to have been a member the whole time and makes the
      offer. Accept, and you hold the Society Member trait with Standing at 10.
@@ -129,9 +133,15 @@ both visible; a single jump to the top would show neither.
 Use "Offer the Oath" on any other courtier to grow the membership -- it fires the same
 society.0001 at them with you as the recruiter, so there is one set of odds in the set rather
 than two that can drift apart. The interaction is auto_accept and the decision is taken inside
-the event by the person asked, so the two toasts in society.0001's options are the only report
-the recruiter gets: "<name> Is Sworn" or "<name> Refused". Without them the button appears to do
-nothing, which is exactly how it was first reported.
+the event by the person asked, so without something reporting back, the button appears to do
+nothing -- which is exactly how it was first reported. That report is now an event rather than a
+toast: society.0002 on acceptance, society.0003 on refusal.
+
+society.0003 is the one worth pressing twice. A refusal leaves somebody walking around knowing
+what they were asked, and it is the only place in the set where the player is asked what to do
+about that -- pay to make the memory convenient, recovering 10 of the 15 exposure, or let them
+carry it. Both options charge the opinion hit and the full +15 first, via
+society_oath_refused_effect, so the tooltips show the whole sum rather than half of it.
 
 WHAT IS DELIBERATELY MISSING
 ----------------------------

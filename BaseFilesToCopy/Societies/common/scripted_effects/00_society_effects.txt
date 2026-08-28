@@ -48,3 +48,27 @@ society_swear_in_effect = {
 		}
 	}
 }
+
+# What a refusal costs, regardless of what the recruiter does about it.
+#
+# Called from BOTH options of society.0003 rather than from that event's immediate block, and the
+# reason is visibility in the UI sense rather than the mechanic's: effects in an `immediate` block
+# do not render anywhere, so a player would see the option tooltips promise a gold cost and a -10
+# exposure while the +15 and the opinion hit arrived silently underneath. Duplicated onto both
+# options they show up in both tooltips, and the arithmetic the player is shown is the arithmetic
+# that happens.
+#
+# ROOT is the recruiter; scope:society_answerer is the person who refused.
+society_oath_refused_effect = {
+	add_opinion = {
+		target = scope:society_answerer
+		modifier = society_refused_the_oath_opinion
+	}
+
+	# Three times what acceptance costs. Somebody who joined has the same reasons as you to say
+	# nothing; somebody who refused has none, and is still standing there.
+	change_variable = {
+		name = society_visibility
+		add = 15
+	}
+}

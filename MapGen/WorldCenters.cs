@@ -88,9 +88,20 @@ public sealed class WorldCenter
 public sealed class WorldCenterMap
 {
     public List<WorldCenter> Centers { get; } = [];
-    private readonly HashSet<Title> _centerCounties = [];
+    private readonly Dictionary<Title, int> _centerRank = [];
 
-    public bool IsCenter(Title county) => _centerCounties.Contains(county);
+    public bool IsCenter(Title county) => _centerRank.ContainsKey(county);
+
+    /// <summary>
+    /// Where a county stands among the world's centres — 0 for the greatest, or -1 if it is not a
+    /// centre at all.
+    ///
+    /// <see cref="Centers"/> is filled in descending <see cref="WorldCenter.GeographicScore"/>
+    /// order, so this is the order the sites were chosen in and not an arbitrary one.
+    /// <see cref="Development.ForCounties"/> reads it to decide how far each centre stands above
+    /// the ordinary map, which needs them ranked and not merely identified.
+    /// </summary>
+    public int RankOf(Title county) => _centerRank.TryGetValue(county, out int rank) ? rank : -1;
 
 
     public static WorldCenterMap Build(
@@ -196,8 +207,8 @@ public sealed class WorldCenterMap
                 GeographicScore = score
             };
 
+            map._centerRank[county] = map.Centers.Count;
             map.Centers.Add(center);
-            map._centerCounties.Add(county);
         }
 
         Console.WriteLine($"  world centers: {map.Centers.Count} great metropolises established across the realm");

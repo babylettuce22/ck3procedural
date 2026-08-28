@@ -28,6 +28,23 @@ Credit line to reproduce verbatim wherever this is shared:
 > by DevonLux (https://sketchfab.com/DevonLux) licensed under CC-BY-4.0
 > (http://creativecommons.org/licenses/by/4.0/)
 
+### Executioner Sword
+- author: Leon Steiner — https://sketchfab.com/Leon.Steiner
+- source: https://sketchfab.com/3d-models/executioner-sword-de8e451fa6014d7e9ea3d5386f4893a0
+- licence: CC-BY-4.0 — http://creativecommons.org/licenses/by/4.0/
+- commercial use: allowed
+- used for: `weaponparts/sword_parts.mesh` — family `cc_executioner_sword_01`, all four slots.
+  Textures converted from the supplied 4096x8192 JPEG/PNG to 1024x2048 DXT5 in
+  `weaponparts/textures/`. Geometry is unmodified apart from a uniform rescale (x0.49436)
+  and a PCA rotation onto the library's +Y axis convention.
+
+Credit line to reproduce verbatim wherever this is shared:
+
+> This work is based on "Executioner Sword"
+> (https://sketchfab.com/3d-models/executioner-sword-de8e451fa6014d7e9ea3d5386f4893a0)
+> by Leon Steiner (https://sketchfab.com/Leon.Steiner) licensed under CC-BY-4.0
+> (http://creativecommons.org/licenses/by/4.0/)
+
 ---
 
 ## CC0 — no obligation, recorded for provenance

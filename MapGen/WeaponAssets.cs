@@ -36,7 +36,16 @@ namespace Ck3MapGen.MapGen;
 /// </param>
 /// <param name="Entity">Entity name as declared in an <c>.asset</c> file.</param>
 /// <param name="Icon">Icon filename, resolved under <c>gfx/interface/icons/artifact/</c>.</param>
-public readonly record struct WeaponAsset(string VisualKey, string Kind, string Entity, string Icon);
+/// <param name="Tier">
+/// The rarity band this look is reserved for, or null for a look that fits any band.
+///
+/// Forged looks carry a tier so an illustrious sword can be given treatment a common one is not —
+/// see <see cref="Emit.WeaponForgeStep"/>, which decides the split. The vanilla rows below carry
+/// none, deliberately: they are the fallback for a checkout with no parts library, and grading art
+/// that already exists would only shrink the choice without making any band look better.
+/// </param>
+public readonly record struct WeaponAsset(
+    string VisualKey, string Kind, string Entity, string Icon, ArtifactRarity? Tier = null);
 
 /// <summary>
 /// The catalogue of weapon looks the generator can hand out.
@@ -86,6 +95,41 @@ public static class WeaponAssets
     /// <summary>Every look filed under one weapon kind, in catalogue order.</summary>
     public static IReadOnlyList<WeaponAsset> ForKind(string kind) =>
         _byKind.TryGetValue(kind, out var list) ? list : [];
+
+    /// <summary>
+    /// The looks a weapon of this rarity may wear, out of a pool for one kind.
+    ///
+    /// An untiered pool — the vanilla catalogue — is returned whole, so a checkout with no parts
+    /// library behaves exactly as it did before tiers existed.
+    ///
+    /// A tiered pool cannot be assumed to hold every band. <c>WeaponForgeStep.TierPlan</c> hands
+    /// out at most one band per look, so a pool of two covers two of the four, and a library too
+    /// small or too self-restricted to fill its pool covers fewer still. The search therefore walks
+    /// outward from the wanted band, **downward first**: a famed sword with no famed look should
+    /// borrow from the masterworks rather than put on the world's legendary blade. Returning the
+    /// whole pool on a miss would do the opposite by including the top band, which is the one case
+    /// worth protecting.
+    /// </summary>
+    public static IReadOnlyList<WeaponAsset> AtTier(IReadOnlyList<WeaponAsset> looks, ArtifactRarity tier)
+    {
+        if (!looks.Any(l => l.Tier is not null)) return looks;
+
+        for (int distance = 0; distance <= BandCount; distance++)
+        {
+            var down = looks.Where(l => l.Tier == (ArtifactRarity)((int)tier - distance)).ToList();
+            if (down.Count > 0) return down;
+
+            if (distance == 0) continue;
+
+            var up = looks.Where(l => l.Tier == (ArtifactRarity)((int)tier + distance)).ToList();
+            if (up.Count > 0) return up;
+        }
+
+        return looks;
+    }
+
+    /// <summary>How many rarity bands a pool can be split across.</summary>
+    public static int BandCount { get; } = Enum.GetValues<ArtifactRarity>().Length;
 
     /// <summary>The weapon kinds the catalogue can actually dress, in catalogue order.</summary>
     public static IReadOnlyList<string> Kinds { get; } =

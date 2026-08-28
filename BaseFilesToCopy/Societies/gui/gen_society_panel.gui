@@ -90,31 +90,57 @@ types gen_society_panel {
 
 		visible = "[And( Not( IsPauseMenuShown ), And( Or( Not( IsObserver ), GetPlayer.IsValid ), IsDefaultGUIMode ) )]"
 
+		# ---- Clicking away does NOT close this, and that was a deliberate retreat ----
+		#
+		# The engine closes its own views on an outside click. That is view handling, not a widget
+		# property -- there is no `close_on_click_outside` anywhere in vanilla's gui folder -- so a
+		# modded window cannot ask for it.
+		#
+		# What CAN be built is vanilla's own popup shape, from jomini_achievements_window.gui: a
+		# full-screen `button_normal` declared before the window, catching every click the window did
+		# not. It was built, and it worked, and it was removed, because a full-screen button is a real
+		# interactive widget and occludes far more than the click it wants:
+		#
+		#   * a click sound where vanilla is silent      -- fixable, `clicksound = ""`
+		#   * right-clicks going nowhere                  -- fixable, `filter_mouse = left`
+		#   * the map's debug tooltip not appearing       -- NOT fixable; hover is occluded regardless
+		#
+		# The third one is the one that decided it. `filter_mouse` governs button events and does not
+		# release hover, so the catcher blankets the map with a dead zone for as long as the panel is
+		# open. A window that quietly breaks map hover is a worse tell than one that needs Escape.
+		#
+		# Three ways out remain: the X, Escape (`shortcut = "close_window"` on the close button), and
+		# the tab, which toggles. That is enough. Do not re-add the catcher without solving hover.
+
 		gen_society_panel_window = {}
 	}
 
 	# =====================================================================================
-	#  A right-side panel, copied from the struggle window
+	#  A right-side panel, shaped exactly like intrigue / council / court
 	# =====================================================================================
 	#
-	# This was a centred, movable popup. It is now shaped like the windows the tab column opens --
-	# intrigue, council, court -- and the model is `gui/window_struggle.gui` specifically, because
-	# struggle is the one main-tab window that does NOT depend on being a registered game view for
-	# its chrome.
+	# THE THING THAT TOOK LONGEST TO SEE: a vanilla main-tab window has no background of its own.
+	# It is a transparent shell. window_council.gui declares parentanchor, layer, movable and a
+	# size template, and its first `background` is 250 lines down inside the content.
 	#
-	# The others are transparent. Their dark panel comes from `sidebar_background_right` in
-	# hud_sidebars.gui, which is gated on
+	# The frame everybody thinks belongs to those windows is drawn by `sidebar_background_right`
+	# in hud_sidebars.gui, whose last child is
 	#
-	#     visible = "[And( IsRightWindowOpen, Not( IsGameViewOpen('struggle') ) )]"
+	#     margin_widget = { size = { 100% 100% }  margin_right = 40  using = Window_Background }
 	#
-	# `IsRightWindowOpen` is true only for an engine view, so that backdrop will never appear for
-	# us -- and the second half of that condition is the tell: struggle is excluded from the shared
-	# backdrop precisely because it carries `using = Window_Background` itself. That makes it the
-	# only vanilla right-side window whose look is reproducible by a mod, and we already used the
-	# same background template when this was a popup, so nothing about the frame changes.
+	# So that one widget supplies BOTH the 60-wide shoulder at the right AND the panel behind
+	# every main-tab window, and it is gated on `IsRightWindowOpen` -- true only for a registered
+	# game view, which is why none of it appeared for us.
 	#
-	# The numbers are struggle's, not invented: 687 wide against Window_Size_MainTab's 655, shown
-	# at x=42 to clear the tab column, hidden at x=75 so it slides right as it fades.
+	# This panel spent several rounds carrying `using = Window_Background` itself and being tuned
+	# by hand -- 687 wide, then 655, then 610 -- to make a second frame line up with the first.
+	# Once GuiWriter patches the backdrop's condition to include this panel, that second frame is
+	# not needed and cannot be made to fit: it is drawn at whatever width we pick, over a vanilla
+	# one that is always 655 with a -35 right bleed. Hence a transparent shell and vanilla's own
+	# size template, which is what "replicate them exactly" actually means here.
+	#
+	# Everything below is window_council.gui's arrangement: the same anchor, the same templates,
+	# and the same margin_widget/widget pair around the content.
 	type gen_society_panel_window = window {
 		name = "gen_society_panel_window"
 		allow_outside = yes
@@ -130,33 +156,7 @@ types gen_society_panel {
 		# out from under its parent and `parentanchor = top|right` stops resolving against the
 		# full-screen host. Declared on the host, the panel inherits the layer without leaving its
 		# parent, and both the anchor and the draw order come out right.
-		# ---- Vanilla's own main-tab measurements, by template rather than by number ----
-		#
-		# This was struggle's 687 wide shown at x=42, and those numbers are not general: struggle
-		# is 32px wider than the standard 655 and pushed 42 further right so its decorative bleed
-		# runs off the edge while its CONTENT still lines up with everything else. Copied onto a
-		# plain Window_Background panel that just makes the panel too wide and too far right, which
-		# is why the tab column's icons ended up sitting on top of it.
-		#
-		# Window_Size_MainTab is 655 x 100%, Window_Position_MainTab is { 0 0 } and the Hide
-		# variant is { 40 0 } -- flush to the right edge when shown, sliding right as it fades.
-		# Intrigue, council and court all use exactly these three, so using the templates rather
-		# than their values means this panel keeps matching them if Paradox ever retunes the column.
-		# Window_Size_Sidebar (610) rather than Window_Size_MainTab (655), and the 45px difference
-		# is not arbitrary -- it is about the width of the tab column.
-		#
-		# The MainTab width is correct for the windows it was written for, and those are
-		# TRANSPARENT: intrigue, council and court draw no frame of their own, so nothing of theirs
-		# is visible under the column and their nominal right edge running beneath it costs
-		# nothing. This panel carries `Window_Background`, so its frame is drawn all the way to
-		# that edge and reappears from under the column as a sliver on the right.
-		#
-		# Narrowing is the fix rather than moving: shifting a 655-wide panel left would widen its
-		# footprint on screen and push the content away from the column it belongs to. Both values
-		# are vanilla templates from gui/shared/windows.gui, so this stays a choice between two of
-		# their numbers rather than one of ours.
-		using = Window_Size_Sidebar
-		using = Window_Background
+		using = Window_Size_MainTab
 
 		# ---- Two conditions, and the second is how the OTHER windows close this one ----
 		#
@@ -207,408 +207,381 @@ types gen_society_panel {
 			on_start = "[GetScriptedGui('society_panel_window').Execute( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
 		}
 
-		vbox = {
-			using = Window_Margins
+		# Vanilla's own main-tab body, copied structurally rather than approximated.
+		# window_council.gui:31 -- the same three margins, the same nested full-size widget.
+		margin_widget = {
+			size = { 100% 100% }
+			margin_top = 30
+			margin_bottom = 25
+			margin_right = 13
 
-			# Window_Margins gives 18 top and 20 bottom, which was right for a popup floating in
-			# the middle of the screen and is not right for a panel that is now 100% of the screen
-			# tall: at 18 the header sits under the top HUD strip and the roster runs into the
-			# date bar. Struggle solves the same problem with a margin_widget at `margin = { -10 26 }`
-			# wrapped around its content; these two lines are that vertical inset applied directly,
-			# which avoids re-indenting the entire panel to gain a wrapper that does nothing else.
-			#
-			# Left and right stay as Window_Margins set them. The MainTab variant of the template
-			# exists but is wrong here -- its margin_right = 50 is measured to clear the tab column
-			# from a full-width container, and this window is already inset past the column by its
-			# own position.
-			margin_top = 40
-			margin_bottom = 45
-
-			spacing = 6
-
-			header_standard = {
-				layoutpolicy_horizontal = expanding
-
-				blockoverride "header_text" {
-					text = "SOCIETY_PANEL_TITLE"
-				}
-
-				# ---- Escape closes it, same as every engine window ----
-				#
-				# `close_window` is an ordinary widget attribute, not a privilege of the engine's
-				# own views: gui/shortcuts.shortcuts binds it to ESCAPE and 74 vanilla widgets
-				# declare it, including modding-facing ones like the tournament contest selector.
-				#
-				# This matters more than it looks. Our panel can never be a registered game view,
-				# so it does not get the engine's view handling for free -- and Escape not working
-				# is the single loudest way a modded window announces that it is a modded window.
-				# One line buys most of the difference back.
-				blockoverride "button_close" {
-					datacontext = "[GetScriptedGui( 'society_panel_window' )]"
-					onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
-					shortcut = "close_window"
-				}
-			}
-
-			text_multi = {
-				layoutpolicy_horizontal = expanding
-				max_width = 650
-				text = "SOCIETY_PANEL_BLURB"
-			}
-
-			# =============================================================================
-			#  Standing -- the rung you hold
-			# =============================================================================
-			#
-			# Five stacked labels in the same slot, exactly one of which is visible. The bands in
-			# the scripted_guis are exclusive, so if two ever appear at once the bands have been
-			# broken and the panel says so by drawing both names on top of each other.
-			hbox = {
-				layoutpolicy_horizontal = expanding
-				spacing = 8
-
-				background = {
-					texture = "gfx/interface/component_masks/mask_brushed.dds"
-					color = { 0.2 0.2 0.31 0.45 }
-				}
+			widget = {
+				size = { 100% 100% }
 
 				vbox = {
-					layoutpolicy_horizontal = expanding
-					margin = { 10 3 }
-					spacing = 0
+					using = Window_Margins
 
-					text_single = {
+					spacing = 6
+
+					header_standard = {
 						layoutpolicy_horizontal = expanding
-						align = left
-						default_format = "#weak"
-						text = "SOCIETY_PANEL_STANDING_LABEL"
-					}
 
-					text_single = {
-						align = left
-						default_format = "#high"
-						text = "SOCIETY_RANK_0"
-						visible = "[GetScriptedGui('society_panel_rank_0').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
-					}
-
-					text_single = {
-						align = left
-						default_format = "#high"
-						text = "SOCIETY_RANK_1"
-						visible = "[GetScriptedGui('society_panel_rank_1').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
-					}
-
-					text_single = {
-						align = left
-						default_format = "#high"
-						text = "SOCIETY_RANK_2"
-						visible = "[GetScriptedGui('society_panel_rank_2').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
-					}
-
-					text_single = {
-						align = left
-						default_format = "#high"
-						text = "SOCIETY_RANK_3"
-						visible = "[GetScriptedGui('society_panel_rank_3').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
-					}
-
-					text_single = {
-						align = left
-						default_format = "#high"
-						text = "SOCIETY_RANK_4"
-						visible = "[GetScriptedGui('society_panel_rank_4').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
-					}
-				}
-
-				# The two meters. CK2 put its currency at the top of the screen and its exposure
-				# nowhere -- visibility was invisible, which is thematic and also meant you could
-				# not play around it. Both are on the panel here for that reason.
-				#
-				# Each value gets its own widget rather than being concatenated into a label:
-				# mixing a literal with a [datafunction] in `text` routes the whole line through
-				# the localizer and logs one Unlocalized-text error per line per load.
-				# Label and value on ONE line each, rather than four stacked labels.
-				#
-				# The stacked version was four rows tall and the strip had to be tall enough to
-				# hold it, which is where most of the block's height was going. Two rows of
-				# label-then-number say the same thing in half the space, and read better besides:
-				# the number is next to its name instead of under it.
-				vbox = {
-					margin = { 10 3 }
-					spacing = 0
-
-					hbox = {
-						spacing = 6
-
-						text_single = {
-							default_format = "#weak"
-							text = "SOCIETY_PANEL_DARK_POWER_LABEL"
+						blockoverride "header_text" {
+							text = "SOCIETY_PANEL_TITLE"
 						}
 
-						text_single = {
-							default_format = "#high"
-							text = "[GetPlayer.MakeScope.Var('society_dark_power').GetValue|0]"
+						# ---- Escape closes it, same as every engine window ----
+						#
+						# `close_window` is an ordinary widget attribute, not a privilege of the engine's
+						# own views: gui/shortcuts.shortcuts binds it to ESCAPE and 74 vanilla widgets
+						# declare it, including modding-facing ones like the tournament contest selector.
+						#
+						# This matters more than it looks. Our panel can never be a registered game view,
+						# so it does not get the engine's view handling for free -- and Escape not working
+						# is the single loudest way a modded window announces that it is a modded window.
+						# One line buys most of the difference back.
+						blockoverride "button_close" {
+							datacontext = "[GetScriptedGui( 'society_panel_window' )]"
+							onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+							shortcut = "close_window"
 						}
 					}
 
-					hbox = {
-						spacing = 6
-
-						text_single = {
-							default_format = "#weak"
-							text = "SOCIETY_PANEL_VISIBILITY_LABEL"
-						}
-
-						text_single = {
-							default_format = "#high"
-							text = "[GetPlayer.MakeScope.Var('society_visibility').GetValue|0]"
-						}
-					}
-				}
-			}
-
-			# =============================================================================
-			#  The ladder
-			# =============================================================================
-			#
-			# All five rungs on one line, always drawn. The one you hold is lit; the rest are
-			# #weak. Still the part of CK2's screen worth copying most directly -- the rungs you
-			# have not earned are shown, not hidden, so the ladder reads as something to climb.
-			#
-			# It was a five-row block with a "THE LADDER" header and a "you are here" marker down
-			# the right. That spent about a third of the panel restating what the Standing line
-			# above already says, and the marker existed only because the rows were too far apart
-			# to see which was lit. A single row needs neither: the bold one IS the marker, and
-			# the whole ladder now costs one line instead of seven.
-			#
-			# What went with it are the `_ROW` loc keys -- the rung names carried a trailing
-			# description each ("Unproven -- sworn, and nothing more than that yet"). Those do not
-			# fit on one line and their content belongs on the rungs' tooltips if it comes back.
-			#
-			# Each chip is a pair of stacked labels rather than one label with a conditional
-			# format, because a widget's `visible` is the only conditional a .gui has.
-			hbox = {
-				layoutpolicy_horizontal = expanding
-				margin = { 10 0 }
-				spacing = 14
-
-				gen_society_rung_chip = {
-					blockoverride "chip_lit" {
-						text = "SOCIETY_RANK_0"
-						visible = "[GetScriptedGui('society_panel_rank_0').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
-					}
-					blockoverride "chip_dim" {
-						text = "SOCIETY_RANK_0"
-						visible = "[Not( GetScriptedGui('society_panel_rank_0').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]"
-					}
-				}
-
-				gen_society_rung_chip = {
-					blockoverride "chip_lit" {
-						text = "SOCIETY_RANK_1"
-						visible = "[GetScriptedGui('society_panel_rank_1').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
-					}
-					blockoverride "chip_dim" {
-						text = "SOCIETY_RANK_1"
-						visible = "[Not( GetScriptedGui('society_panel_rank_1').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]"
-					}
-				}
-
-				gen_society_rung_chip = {
-					blockoverride "chip_lit" {
-						text = "SOCIETY_RANK_2"
-						visible = "[GetScriptedGui('society_panel_rank_2').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
-					}
-					blockoverride "chip_dim" {
-						text = "SOCIETY_RANK_2"
-						visible = "[Not( GetScriptedGui('society_panel_rank_2').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]"
-					}
-				}
-
-				gen_society_rung_chip = {
-					blockoverride "chip_lit" {
-						text = "SOCIETY_RANK_3"
-						visible = "[GetScriptedGui('society_panel_rank_3').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
-					}
-					blockoverride "chip_dim" {
-						text = "SOCIETY_RANK_3"
-						visible = "[Not( GetScriptedGui('society_panel_rank_3').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]"
-					}
-				}
-
-				gen_society_rung_chip = {
-					blockoverride "chip_lit" {
-						text = "SOCIETY_RANK_4"
-						visible = "[GetScriptedGui('society_panel_rank_4').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
-					}
-					blockoverride "chip_dim" {
-						text = "SOCIETY_RANK_4"
-						visible = "[Not( GetScriptedGui('society_panel_rank_4').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]"
-					}
-				}
-			}
-
-			# =============================================================================
-			#  Powers
-			# =============================================================================
-			#
-			# One row for the one power this prototype has. The row is always present and changes
-			# colour, rather than appearing when you qualify -- see the ladder note above for why.
-			text_single = {
-				layoutpolicy_horizontal = expanding
-				align = left
-				default_format = "#weak"
-				text = "SOCIETY_PANEL_POWERS_HEADER"
-			}
-
-			hbox = {
-				layoutpolicy_horizontal = expanding
-				spacing = 8
-				margin = { 10 6 }
-
-				background = {
-					texture = "gfx/interface/component_masks/mask_brushed.dds"
-					color = { 0.2 0.2 0.31 0.45 }
-				}
-
-				text_single = {
-					layoutpolicy_horizontal = expanding
-					align = left
-					text = "SOCIETY_PANEL_POWER_RITE"
-				}
-
-				text_single = {
-					align = right
-					default_format = "#green"
-					text = "SOCIETY_PANEL_POWER_AVAILABLE"
-					visible = "[GetScriptedGui('society_panel_can_hold_rite').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
-				}
-
-				text_single = {
-					align = right
-					default_format = "#red"
-					text = "SOCIETY_PANEL_POWER_LOCKED"
-					visible = "[Not( GetScriptedGui('society_panel_can_hold_rite').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]"
-				}
-			}
-
-			# =============================================================================
-			#  The roster
-			# =============================================================================
-			#
-			# Read off a CHARACTER variable list on the player, not a global one. Script lists
-			# reach a datamodel as `<scope>.MakeScope.GetList( 'name' )`, and inside `item` the
-			# entry is converted back with `Scope.Char` -- NOT `Scope.Character`, which is the
-			# plausible-looking long name that resolves to nothing and takes the whole row's text
-			# with it while logging absolutely nothing.
-			text_single = {
-				layoutpolicy_horizontal = expanding
-				align = left
-				default_format = "#weak"
-				text = "SOCIETY_PANEL_ROSTER_HEADER"
-			}
-
-			scrollbox = {
-				layoutpolicy_horizontal = expanding
-				layoutpolicy_vertical = expanding
-
-				blockoverride "scrollbox_content" {
-					vbox = {
+					text_multi = {
 						layoutpolicy_horizontal = expanding
-						spacing = 4
-						datamodel = "[GetPlayer.MakeScope.GetList( 'society_roster' )]"
+						max_width = 650
+						text = "SOCIETY_PANEL_BLURB"
+					}
 
-						item = {
+					# =============================================================================
+					#  Standing -- the rung you hold
+					# =============================================================================
+					#
+					# Five stacked labels in the same slot, exactly one of which is visible. The bands in
+					# the scripted_guis are exclusive, so if two ever appear at once the bands have been
+					# broken and the panel says so by drawing both names on top of each other.
+					hbox = {
+						layoutpolicy_horizontal = expanding
+						spacing = 8
+
+						background = {
+							texture = "gfx/interface/component_masks/mask_brushed.dds"
+							color = { 0.2 0.2 0.31 0.45 }
+						}
+
+						# Just the word, and no longer a vbox around it.
+						#
+						# It used to hold the label plus five stacked labels naming the rung you hold,
+						# exactly one visible. That was the same fact the ladder line now states -- the
+						# lit rung IS your standing -- so the panel was printing it twice, once as a
+						# word on its own row and once in bold in the row below.
+						#
+						# NOT expanding, deliberately: this is a fixed-width caption and the chips beside
+						# it are what should absorb the leftover width. Making both expanding would split
+						# the strip in half and strand the rungs in the middle of it.
+						text_single = {
+							margin = { 10 3 }
+							align = left
+							default_format = "#weak"
+							text = "SOCIETY_PANEL_STANDING_LABEL"
+						}
+
+						# =============================================================================
+						#  The ladder
+						# =============================================================================
+						#
+						# All five rungs on one line, always drawn. The one you hold is lit; the rest are
+						# #weak. Still the part of CK2's screen worth copying most directly -- the rungs you
+						# have not earned are shown, not hidden, so the ladder reads as something to climb.
+						#
+						# It was a five-row block with a "THE LADDER" header and a "you are here" marker down
+						# the right. That spent about a third of the panel restating what the Standing line
+						# above already says, and the marker existed only because the rows were too far apart
+						# to see which was lit. A single row needs neither: the bold one IS the marker, and
+						# the whole ladder now costs one line instead of seven.
+						#
+						# What went with it are the `_ROW` loc keys -- the rung names carried a trailing
+						# description each ("Unproven -- sworn, and nothing more than that yet"). Those do not
+						# fit on one line and their content belongs on the rungs' tooltips if it comes back.
+						#
+						# Each chip is a pair of stacked labels rather than one label with a conditional
+						# format, because a widget's `visible` is the only conditional a .gui has.
+						hbox = {
+							layoutpolicy_horizontal = expanding
+							margin = { 10 0 }
+							spacing = 14
+
+							gen_society_rung_chip = {
+								blockoverride "chip_lit" {
+									text = "SOCIETY_RANK_0"
+									visible = "[GetScriptedGui('society_panel_rank_0').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+								}
+								blockoverride "chip_dim" {
+									text = "SOCIETY_RANK_0"
+									visible = "[Not( GetScriptedGui('society_panel_rank_0').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]"
+								}
+							}
+
+							gen_society_rung_chip = {
+								blockoverride "chip_lit" {
+									text = "SOCIETY_RANK_1"
+									visible = "[GetScriptedGui('society_panel_rank_1').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+								}
+								blockoverride "chip_dim" {
+									text = "SOCIETY_RANK_1"
+									visible = "[Not( GetScriptedGui('society_panel_rank_1').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]"
+								}
+							}
+
+							gen_society_rung_chip = {
+								blockoverride "chip_lit" {
+									text = "SOCIETY_RANK_2"
+									visible = "[GetScriptedGui('society_panel_rank_2').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+								}
+								blockoverride "chip_dim" {
+									text = "SOCIETY_RANK_2"
+									visible = "[Not( GetScriptedGui('society_panel_rank_2').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]"
+								}
+							}
+
+							gen_society_rung_chip = {
+								blockoverride "chip_lit" {
+									text = "SOCIETY_RANK_3"
+									visible = "[GetScriptedGui('society_panel_rank_3').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+								}
+								blockoverride "chip_dim" {
+									text = "SOCIETY_RANK_3"
+									visible = "[Not( GetScriptedGui('society_panel_rank_3').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]"
+								}
+							}
+
+							gen_society_rung_chip = {
+								blockoverride "chip_lit" {
+									text = "SOCIETY_RANK_4"
+									visible = "[GetScriptedGui('society_panel_rank_4').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+								}
+								blockoverride "chip_dim" {
+									text = "SOCIETY_RANK_4"
+									visible = "[Not( GetScriptedGui('society_panel_rank_4').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]"
+								}
+							}
+						}
+
+						# The two meters. CK2 put its currency at the top of the screen and its exposure
+						# nowhere -- visibility was invisible, which is thematic and also meant you could
+						# not play around it. Both are on the panel here for that reason.
+						#
+						# Each value gets its own widget rather than being concatenated into a label:
+						# mixing a literal with a [datafunction] in `text` routes the whole line through
+						# the localizer and logs one Unlocalized-text error per line per load.
+						# Label and value on ONE line each, rather than four stacked labels.
+						#
+						# The stacked version was four rows tall and the strip had to be tall enough to
+						# hold it, which is where most of the block's height was going. Two rows of
+						# label-then-number say the same thing in half the space, and read better besides:
+						# the number is next to its name instead of under it.
+						vbox = {
+							margin = { 10 3 }
+							spacing = 0
+
 							hbox = {
-								datacontext = "[Scope.Char]"
-								layoutpolicy_horizontal = expanding
-								spacing = 10
+								spacing = 6
 
-								background = {
-									texture = "gfx/interface/component_masks/mask_brushed.dds"
-									color = { 0.2 0.2 0.31 0.45 }
+								text_single = {
+									default_format = "#weak"
+									text = "SOCIETY_PANEL_DARK_POWER_LABEL"
 								}
 
-								# No datacontext of its own: the hbox above already carries the
-								# character, and a widget inherits its parent's. Vanilla always
-								# writes one because its portraits sit next to an unrelated
-								# context; ours does not, and the fewer datafunction names in a
-								# file the fewer chances to write one that resolves to nothing.
-								portrait_head_small = {
+								text_single = {
+									default_format = "#high"
+									text = "[GetPlayer.MakeScope.Var('society_dark_power').GetValue|0]"
+								}
+							}
+
+							hbox = {
+								spacing = 6
+
+								text_single = {
+									default_format = "#weak"
+									text = "SOCIETY_PANEL_VISIBILITY_LABEL"
 								}
 
-								vbox = {
-									layoutpolicy_horizontal = expanding
-
-									text_single = {
-										layoutpolicy_horizontal = expanding
-										align = left
-										default_format = "#high"
-										text = "[Character.GetName]"
-									}
-
-									# Rulers only. A courtier has no primary title, and asking for one
-									# anyway does not render blank -- it renders "None of", because
-									# the name is built from a template that gets as far as the
-									# possessive before discovering there is no title to possess.
-									# A landless member's row is name and rung, which is all there
-									# is to say about them.
-									#
-									# `Character.IsRuler` rather than a has-title test: 14 vanilla
-									# uses, and it is the same question.
-									text_single = {
-										layoutpolicy_horizontal = expanding
-										align = left
-										default_format = "#weak"
-										visible = "[Character.IsRuler]"
-										text = "[Character.GetPrimaryTitle.GetNameNoTooltip]"
-									}
-								}
-
-								# Their rung, asked of THEM rather than of the player -- the scope
-								# the scripted_gui is rooted at is what decides whose standing is
-								# being reported, and rooting these at GetPlayer by copy-paste
-								# would draw the player's rank on every row.
-								vbox = {
-
-									text_single = {
-										align = right
-										text = "SOCIETY_RANK_0"
-										visible = "[GetScriptedGui('society_panel_rank_0').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
-									}
-
-									text_single = {
-										align = right
-										text = "SOCIETY_RANK_1"
-										visible = "[GetScriptedGui('society_panel_rank_1').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
-									}
-
-									text_single = {
-										align = right
-										text = "SOCIETY_RANK_2"
-										visible = "[GetScriptedGui('society_panel_rank_2').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
-									}
-
-									text_single = {
-										align = right
-										text = "SOCIETY_RANK_3"
-										visible = "[GetScriptedGui('society_panel_rank_3').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
-									}
-
-									text_single = {
-										align = right
-										text = "SOCIETY_RANK_4"
-										visible = "[GetScriptedGui('society_panel_rank_4').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
-									}
+								text_single = {
+									default_format = "#high"
+									text = "[GetPlayer.MakeScope.Var('society_visibility').GetValue|0]"
 								}
 							}
 						}
 					}
-				}
 
-				blockoverride "scrollbox_empty" {
-					visible = "[IsDataModelEmpty( GetPlayer.MakeScope.GetList( 'society_roster' ) )]"
-					text = "SOCIETY_PANEL_ROSTER_EMPTY"
+					# =============================================================================
+					#  Powers
+					# =============================================================================
+					#
+					# One row for the one power this prototype has. The row is always present and changes
+					# colour, rather than appearing when you qualify -- see the ladder note above for why.
+					# margin_top on top of the vbox's own spacing = 6. With the rungs now living inside
+					# the strip above, this header is the first thing under it and 6px let the two
+					# read as one block -- POWERS sat level with the rung names rather than beneath
+					# them. A little air is what separates "the strip" from "what is under it".
+					text_single = {
+						layoutpolicy_horizontal = expanding
+						margin_top = 8
+						align = left
+						default_format = "#weak"
+						text = "SOCIETY_PANEL_POWERS_HEADER"
+					}
+
+					hbox = {
+						layoutpolicy_horizontal = expanding
+						spacing = 8
+						margin = { 10 6 }
+
+						background = {
+							texture = "gfx/interface/component_masks/mask_brushed.dds"
+							color = { 0.2 0.2 0.31 0.45 }
+						}
+
+						text_single = {
+							layoutpolicy_horizontal = expanding
+							align = left
+							text = "SOCIETY_PANEL_POWER_RITE"
+						}
+
+						text_single = {
+							align = right
+							default_format = "#green"
+							text = "SOCIETY_PANEL_POWER_AVAILABLE"
+							visible = "[GetScriptedGui('society_panel_can_hold_rite').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+						}
+
+						text_single = {
+							align = right
+							default_format = "#red"
+							text = "SOCIETY_PANEL_POWER_LOCKED"
+							visible = "[Not( GetScriptedGui('society_panel_can_hold_rite').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]"
+						}
+					}
+
+					# =============================================================================
+					#  The roster
+					# =============================================================================
+					#
+					# Read off a CHARACTER variable list on the player, not a global one. Script lists
+					# reach a datamodel as `<scope>.MakeScope.GetList( 'name' )`, and inside `item` the
+					# entry is converted back with `Scope.Char` -- NOT `Scope.Character`, which is the
+					# plausible-looking long name that resolves to nothing and takes the whole row's text
+					# with it while logging absolutely nothing.
+					text_single = {
+						layoutpolicy_horizontal = expanding
+						align = left
+						default_format = "#weak"
+						text = "SOCIETY_PANEL_ROSTER_HEADER"
+					}
+
+					scrollbox = {
+						layoutpolicy_horizontal = expanding
+						layoutpolicy_vertical = expanding
+
+						blockoverride "scrollbox_content" {
+							vbox = {
+								layoutpolicy_horizontal = expanding
+								spacing = 4
+								datamodel = "[GetPlayer.MakeScope.GetList( 'society_roster' )]"
+
+								item = {
+									hbox = {
+										datacontext = "[Scope.Char]"
+										layoutpolicy_horizontal = expanding
+										spacing = 10
+
+										background = {
+											texture = "gfx/interface/component_masks/mask_brushed.dds"
+											color = { 0.2 0.2 0.31 0.45 }
+										}
+
+										# No datacontext of its own: the hbox above already carries the
+										# character, and a widget inherits its parent's. Vanilla always
+										# writes one because its portraits sit next to an unrelated
+										# context; ours does not, and the fewer datafunction names in a
+										# file the fewer chances to write one that resolves to nothing.
+										portrait_head_small = {
+										}
+
+										vbox = {
+											layoutpolicy_horizontal = expanding
+
+											text_single = {
+												layoutpolicy_horizontal = expanding
+												align = left
+												default_format = "#high"
+												text = "[Character.GetName]"
+											}
+
+											# Rulers only. A courtier has no primary title, and asking for one
+											# anyway does not render blank -- it renders "None of", because
+											# the name is built from a template that gets as far as the
+											# possessive before discovering there is no title to possess.
+											# A landless member's row is name and rung, which is all there
+											# is to say about them.
+											#
+											# `Character.IsRuler` rather than a has-title test: 14 vanilla
+											# uses, and it is the same question.
+											text_single = {
+												layoutpolicy_horizontal = expanding
+												align = left
+												default_format = "#weak"
+												visible = "[Character.IsRuler]"
+												text = "[Character.GetPrimaryTitle.GetNameNoTooltip]"
+											}
+										}
+
+										# Their rung, asked of THEM rather than of the player -- the scope
+										# the scripted_gui is rooted at is what decides whose standing is
+										# being reported, and rooting these at GetPlayer by copy-paste
+										# would draw the player's rank on every row.
+										vbox = {
+
+											text_single = {
+												align = right
+												text = "SOCIETY_RANK_0"
+												visible = "[GetScriptedGui('society_panel_rank_0').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
+											}
+
+											text_single = {
+												align = right
+												text = "SOCIETY_RANK_1"
+												visible = "[GetScriptedGui('society_panel_rank_1').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
+											}
+
+											text_single = {
+												align = right
+												text = "SOCIETY_RANK_2"
+												visible = "[GetScriptedGui('society_panel_rank_2').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
+											}
+
+											text_single = {
+												align = right
+												text = "SOCIETY_RANK_3"
+												visible = "[GetScriptedGui('society_panel_rank_3').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
+											}
+
+											text_single = {
+												align = right
+												text = "SOCIETY_RANK_4"
+												visible = "[GetScriptedGui('society_panel_rank_4').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
+											}
+										}
+									}
+								}
+							}
+						}
+
+						blockoverride "scrollbox_empty" {
+							visible = "[IsDataModelEmpty( GetPlayer.MakeScope.GetList( 'society_roster' ) )]"
+							text = "SOCIETY_PANEL_ROSTER_EMPTY"
+						}
+					}
 				}
 			}
 		}

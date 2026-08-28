@@ -147,59 +147,36 @@ society.0001 = {
 			value = 10
 		}
 
-		# The recruiter is credited for the introduction, guarded because the third branch
-		# above can fail on a ruler with an empty court.
-		#
-		# ---- The toast is not decoration; it is the only thing the recruiter ever sees ----
+		# ---- The recruiter's half ----
 		#
 		# `society_offer_oath_interaction` is auto_accept, so clicking it sends this event to the
 		# RECIPIENT and returns. When the recipient is AI -- which is every courtier a player will
 		# ever try this on -- the whole decision happens off-screen against the ai_chance block
-		# below, and the actor is told nothing at all. Offering the oath looked like a button that
-		# did nothing, and roughly half the time the only evidence it had worked was a trait
-		# appearing on somebody else's character sheet.
+		# below, and the actor would be told nothing at all. Offering the oath looked like a button
+		# that did nothing, and half the time the only evidence it had worked was a trait appearing
+		# on somebody else's character sheet.
 		#
-		# The XP grant sits INSIDE the toast for the same reason vanilla puts effects there: an
-		# effect inside a send_interface_toast block renders in the toast's body, so the recruiter
-		# is told what the introduction earned them in the same breath as whether it landed.
+		# This was a toast for a while, which fixed the silence and nothing else. A toast cannot
+		# hold a decision, and both answers to an oath deserve one: acceptance is the society
+		# growing by a person the recruiter now vouches for, and refusal leaves somebody walking
+		# around knowing what they were asked. Those are events. See society.0002 and .0003.
 		#
-		# Fired unconditionally rather than only at players. An AI recruiter receives a toast
-		# nobody looks at, which costs nothing, and gating on `is_ai = no` would mean the mechanic
-		# behaved differently depending on who was watching it.
+		# `save_scope_as` before the trigger_event, not inside it: ROOT here is the person who was
+		# asked, and the recruiter's event needs to know who answered. Scopes saved in this effect
+		# chain ride along into the triggered event -- the same mechanism the interaction uses to
+		# hand `society_recruiter` down to this event in the first place.
+		#
+		# Guarded because the recruiter-finding branches above can all fail on a ruler with an
+		# empty court. Fired for AI recruiters too: an AI receiving an event it resolves against
+		# ai_chance costs nothing, and gating on `is_ai = no` would make the mechanic behave
+		# differently depending on who was watching it.
 		if = {
 			limit = { exists = scope:society_recruiter }
 
+			save_scope_as = society_answerer
+
 			scope:society_recruiter = {
-				send_interface_toast = {
-					type = event_toast_effect_good
-					title = society_oath_accepted_toast
-					left_icon = root
-
-					add_trait_xp = {
-						trait = society_member
-						track = society_rank
-						value = 5
-					}
-
-					# ---- Visibility ----
-					#
-					# Straight out of CK2, including the number: recruiting cost +5 visibility
-					# there, and accumulated visibility is what got you found out. It is the
-					# mechanic worth copying most directly out of that system, because it makes
-					# exposure a thing the player is spending rather than a die nobody sees --
-					# every use of the society is a small, visible, permanent risk.
-					#
-					# Charged on ACCEPTANCE only, and that is the interesting asymmetry: a
-					# refusal is charged in the other option instead, and more heavily, because
-					# a person who said no is a person who knows and owes you nothing.
-					#
-					# Nothing consumes visibility yet. When the secret arrives this is what its
-					# discovery chance reads.
-					change_variable = {
-						name = society_visibility
-						add = 5
-					}
-				}
+				trigger_event = society.0002
 			}
 		}
 
@@ -284,32 +261,22 @@ society.0001 = {
 	option = {
 		name = society.0001.b
 
-		# Toasted for the same reason the accepting branch is -- see the note there. A refusal is
-		# the outcome the recruiter most needs to be told about, because it is the one that leaves
-		# somebody walking around knowing what they were asked, and a player who is not told has
-		# no reason to treat that person any differently afterwards.
+		# Handed to the recruiter as an event, for the reason in the accepting branch -- and more
+		# so here. A refusal is the outcome that most needs a decision attached to it, because it
+		# is the one that leaves a person walking around knowing what they were asked. Told only
+		# by a toast, the player has no reason and no opportunity to treat them differently
+		# afterwards, and the +15 exposure is a number arriving out of nowhere.
+		#
+		# The opinion and the exposure themselves live in society.0003 rather than here, so that
+		# they render on the option the recruiter actually picks instead of vanishing into an
+		# immediate block nobody sees.
 		if = {
 			limit = { exists = scope:society_recruiter }
 
+			save_scope_as = society_answerer
+
 			scope:society_recruiter = {
-				send_interface_toast = {
-					type = event_toast_effect_bad
-					title = society_oath_refused_toast
-					left_icon = root
-
-					add_opinion = {
-						target = root
-						modifier = society_refused_the_oath_opinion
-					}
-
-					# Three times what acceptance costs -- see the note in the other option.
-					# Someone who joined has the same reasons as you to say nothing; someone who
-					# refused has none, and is still standing there.
-					change_variable = {
-						name = society_visibility
-						add = 15
-					}
-				}
+				trigger_event = society.0003
 			}
 		}
 
@@ -319,6 +286,160 @@ society.0001 = {
 			modifier = {
 				add = 40
 				has_trait = zealous
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  THE ANSWER -- society.0002 and society.0003
+# =====================================================================================
+#
+# The recruiter's half of the approach. society.0001 is what happens to the person being asked;
+# these two are what happens to the person who asked, and until now that was a toast.
+#
+# ---- Why the split into two events rather than one with a triggered_desc ----
+#
+# Because the two answers are not the same KIND of moment. Acceptance is an acknowledgement: the
+# thing worked, the society is one larger, there is nothing to decide. Refusal is a decision --
+# somebody now knows and owes you nothing -- and a single event cannot offer two options in one
+# branch and one in the other. Splitting them is the only way the refusal gets a choice without
+# the acceptance growing a pointless button.
+#
+# ---- ROOT and scope:society_answerer ----
+#
+# Both fire AT the recruiter, so ROOT is the recruiter and `scope:society_answerer` is the person
+# who gave the answer. That is the reverse of society.0001, where ROOT is the one being asked --
+# worth holding onto when reading the prose, because both events talk about "us" and the "us"
+# changes hands between files.
+
+society.0002 = {
+	type = character_event
+	title = society.0002.t
+	desc = society.0002.desc
+
+	theme = secret
+
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+
+	right_portrait = {
+		character = scope:society_answerer
+		animation = personality_bold
+	}
+
+	# One option, because there is nothing to decide -- but the effects live on it rather than in
+	# an immediate block so that the recruiter can see what the introduction earned before
+	# clicking, which is the whole reason this stopped being a toast.
+	option = {
+		name = society.0002.a
+
+		add_trait_xp = {
+			trait = society_member
+			track = society_rank
+			value = 5
+		}
+
+		# ---- Visibility ----
+		#
+		# Straight out of CK2, including the number: recruiting cost +5 visibility there, and
+		# accumulated visibility is what got you found out. It is the mechanic worth copying most
+		# directly out of that system, because it makes exposure a thing the player is spending
+		# rather than a die nobody sees -- every use of the society is a small, permanent risk.
+		#
+		# Charged on acceptance as well as refusal, and that is the asymmetry worth keeping: this
+		# is 5 and the refusal is 15, because somebody who joined has the same reasons as you to
+		# say nothing, and somebody who refused has none.
+		#
+		# Nothing consumes visibility yet. When the secret arrives this is what its discovery
+		# chance reads.
+		change_variable = {
+			name = society_visibility
+			add = 5
+		}
+	}
+}
+
+# ---- Refusal ----
+#
+# The one place in this set where a player is asked what to do about somebody who knows. Both
+# options call society_oath_refused_effect, which carries the opinion hit and the +15 exposure:
+# that is the part that happens regardless, and putting it in a shared effect called from both
+# options means it renders on both tooltips instead of disappearing into an immediate block.
+#
+# The choice on top of it is what the payment buys back. Buying silence is not a guarantee and is
+# not written as one -- it recovers 10 of the 15, which is the honest amount for money spent on a
+# person who has already demonstrated they will say no to you.
+society.0003 = {
+	type = character_event
+	title = society.0003.t
+	desc = society.0003.desc
+
+	theme = secret
+
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+
+	right_portrait = {
+		character = scope:society_answerer
+		animation = disapproval
+	}
+
+	# ---- Pay ----
+	#
+	# Gated on affording it rather than hidden, so a recruiter without the coin is told what they
+	# cannot do. `medium_gold_value` is vanilla's own scaling constant, so the price tracks the
+	# era and the ruler's tier instead of being a number that stops meaning anything by 1200.
+	option = {
+		name = society.0003.a
+
+		trigger = {
+			gold >= medium_gold_value
+		}
+
+		society_oath_refused_effect = yes
+
+		remove_short_term_gold = medium_gold_value
+
+		change_variable = {
+			name = society_visibility
+			add = -10
+		}
+
+		ai_chance = {
+			base = 50
+
+			modifier = {
+				add = 30
+				has_trait = paranoid
+			}
+
+			modifier = {
+				add = -30
+				has_trait = greedy
+			}
+		}
+	}
+
+	# ---- Do nothing ----
+	#
+	# Always available, and deliberately the cheaper-looking one. It is not the safe option, it is
+	# the one that leaves the exposure where it landed.
+	option = {
+		name = society.0003.b
+
+		society_oath_refused_effect = yes
+
+		ai_chance = {
+			base = 50
+
+			modifier = {
+				add = 40
+				has_trait = trusting
 			}
 		}
 	}
@@ -1046,6 +1167,43 @@ society.9002 = {
 				trait = society_member
 				track = society_rank
 				value = 25
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  society.9003 -- DEBUG: 100 Dark Power
+# =====================================================================================
+#
+# The currency's own missing rung, and the reason it is missing is worth stating: nothing in this
+# set grants Dark Power except the rite (+60, +100 to the host) and the sacrifice (+40 and up).
+# Both are slow, and the sacrifice needs a prisoner, so testing anything that SPENDS meant
+# arranging two or three killings first. society_abduct_interaction costs exactly 100, so one
+# press of this covers one abduction and the pool lands back at zero -- which is the state worth
+# testing, not a bottomless pool that hides every affordability check.
+#
+# Membership first, same as 9002, and for the same reason: society_swear_in_effect is what
+# initialises the variable, and change_variable against an unset variable is the
+# "used but is never set" error, not a zero. Pressing this on a non-member has to work.
+society.9003 = {
+	type = character_event
+	hidden = yes
+
+	immediate = {
+		if = {
+			limit = { NOT = { has_trait = society_member } }
+			society_swear_in_effect = yes
+		}
+
+		send_interface_toast = {
+			type = event_toast_effect_good
+			title = society_debug_dark_power_toast
+			left_icon = root
+
+			change_variable = {
+				name = society_dark_power
+				add = 100
 			}
 		}
 	}

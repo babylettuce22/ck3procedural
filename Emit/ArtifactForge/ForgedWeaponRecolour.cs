@@ -155,8 +155,18 @@ public static class ForgedWeaponRecolour
     /// makes the variety more legible rather than less — a gilded sword and a blackened one differ
     /// in a way a player can name, where two random four-colour weapons just differ.
     /// </summary>
+    /// <param name="Weights">
+    /// How often this finish is drawn, one weight per rarity band in <see cref="ArtifactRarity"/>
+    /// order.
+    ///
+    /// This is what makes a forged weapon's band visible with no new art: gilt fittings are the
+    /// signal a player already reads as *expensive*, so gilded climbs from 1 to 7 across the bands
+    /// while plain falls from 8 to 1. Nothing is ever zero. A plain illustrious weapon is a real
+    /// thing — vanilla's own Excalibur is deliberately common rarity — and a band whose column
+    /// summed to zero would silently fall through <see cref="PickWeighted"/> to the last row.
+    /// </param>
     private sealed record Finish(
-        string Name, int Weight,
+        string Name, int[] Weights,
         (Material M, int W)[] Edge,
         (Material M, int W)[] Fitting,
         (Material M, int W)[] Handle)
@@ -167,31 +177,34 @@ public static class ForgedWeaponRecolour
             PartRole.Fitting => Fitting,
             _ => Handle,
         };
+
+        public int WeightAt(ArtifactRarity tier) => Weights[(int)tier];
     }
 
+    //                                    common  masterwork  famed  illustrious
     private static readonly Finish[] Finishes =
     [
-        new("plain", 5,
+        new("plain", [8, 4, 1, 1],
             Edge:    [(GreySteel, 5), (PolishedSteel, 3), (DarkIron, 3), (BrownedSteel, 1)],
             Fitting: [(IronFitting, 5), (SteelFitting, 3), (BronzeFitting, 2)],
             Handle:  [(DarkLeather, 4), (Walnut, 4), (TanLeather, 3), (AshWood, 2)]),
 
-        new("fine", 4,
+        new("fine", [4, 7, 6, 3],
             Edge:    [(PolishedSteel, 5), (BrightSteel, 4), (GreySteel, 2)],
             Fitting: [(SteelFitting, 4), (Silver, 4), (Brass, 2), (IronFitting, 1)],
             Handle:  [(DarkLeather, 4), (OxbloodLeather, 3), (Walnut, 3), (BlackLeather, 2)]),
 
-        new("gilded", 2,
+        new("gilded", [1, 3, 7, 7],
             Edge:    [(BrightSteel, 5), (PolishedSteel, 4)],
             Fitting: [(Gilt, 5), (Brass, 4), (Silver, 2)],
             Handle:  [(OxbloodLeather, 4), (BlackLeather, 3), (Bone, 2), (Ebony, 2)]),
 
-        new("dark", 3,
+        new("dark", [4, 4, 4, 3],
             Edge:    [(BlackenedSteel, 4), (BluedSteel, 4), (DarkIron, 3)],
             Fitting: [(BlackenedIron, 5), (IronFitting, 3), (Copper, 1)],
             Handle:  [(BlackLeather, 4), (Ebony, 4), (DarkLeather, 3)]),
 
-        new("archaic", 2,
+        new("archaic", [3, 2, 3, 5],
             Edge:    [(BronzeEdge, 5), (DarkIron, 2), (BrownedSteel, 2)],
             Fitting: [(BronzeFitting, 5), (Copper, 3), (Verdigris, 2)],
             Handle:  [(AshWood, 4), (Walnut, 3), (TanLeather, 3), (Bone, 2)]),
@@ -243,8 +256,15 @@ public static class ForgedWeaponRecolour
     /// artifact pool and the FORGE TEST decisions — call this, and a shared filename would mean
     /// whichever ran second silently deleted the other's variations.
     /// </param>
+    /// <param name="tiers">
+    /// The rarity band each weapon was forged for, keyed by <see cref="ForgedWeapon.Name"/>. It
+    /// decides which finish the weapon is likely to draw — see <c>Finish.Weights</c>. A weapon
+    /// missing from the map falls back to <see cref="ArtifactRarity.Common"/>, which is the old
+    /// behaviour rather than a failure.
+    /// </param>
     public static ForgedRecolour? Write(
-        string modDir, IReadOnlyList<ForgedWeapon> weapons, Rng rng, string fileTag)
+        string modDir, IReadOnlyList<ForgedWeapon> weapons, Rng rng, string fileTag,
+        IReadOnlyDictionary<string, ArtifactRarity> tiers)
     {
         if (weapons.Count == 0) return null;
 
@@ -269,7 +289,8 @@ public static class ForgedWeaponRecolour
         foreach (var w in weapons)
         {
             var groups = GroupByOverlap(w.Parts);
-            var (finish, materials) = PickMaterials(groups, rng);
+            var tier = tiers.TryGetValue(w.Name, out var t) ? t : ArtifactRarity.Common;
+            var (finish, materials) = PickMaterials(groups, tier, rng);
 
             WriteMask(Path.Combine(modelDir, $"{w.Name}_mask.dds"), groups, w.Parts);
             WritePalette(Path.Combine(modelDir, $"{w.Name}_palette.dds"), materials);
@@ -498,11 +519,16 @@ public static class ForgedWeaponRecolour
     /// Reusing the material is the point. Two channels may hold the same colour, so a guard and a
     /// pommel in matching brass costs nothing and is what a real weapon looks like — the old code's
     /// draw-without-replacement guaranteed they differed, which is precisely the wrong guarantee.
+    ///
+    /// <paramref name="tier"/> only reweights the finish draw; it never picks one outright, and it
+    /// touches nothing below the finish. A band is meant to shift the odds of a weapon looking
+    /// expensive, not to make every illustrious blade gilt and every common one iron — the pool is
+    /// small enough that a hard rule would read as two swords rather than a range.
     /// </summary>
     private static (Finish Finish, List<Material> Materials) PickMaterials(
-        List<MaskGroup> groups, Rng rng)
+        List<MaskGroup> groups, ArtifactRarity tier, Rng rng)
     {
-        var finish = PickWeighted(Finishes, f => f.Weight, rng);
+        var finish = PickWeighted(Finishes, f => f.WeightAt(tier), rng);
         var byRole = new Dictionary<PartRole, Material>();
         var picked = new List<Material>();
 

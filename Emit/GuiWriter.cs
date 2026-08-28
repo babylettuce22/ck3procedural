@@ -120,6 +120,10 @@ public static class GuiWriter
         // that can drift onto the wrong match.
         doc.Widget("intrigue tab", "tab_intrigue").InsertAfter(SocietyTab(toggle, open));
 
+        // Everything vanilla hides for its own right-hand windows, hidden for ours too.
+        Console.WriteLine("  gui: hud.gui — widened "
+            + WidenRightWindowChecks(doc, open) + " IsRightWindowOpen check(s)");
+
         doc.Ship(modDir);
 
         PatchRightSidebarBackdrop(modDir, gameDir, open);
@@ -164,6 +168,48 @@ public static class GuiWriter
     /// seen at all. A patch that is invisible because of draw order looks exactly like a patch that
     /// does not work.
     /// </summary>
+    /// <summary>
+    /// Rewrites every <c>IsRightWindowOpen</c> in a document to
+    /// <c>Or( IsRightWindowOpen, &lt;the society panel is open&gt; )</c>, and returns how many it
+    /// changed.
+    ///
+    /// This is the general form of a problem that kept arriving one widget at a time — the tab
+    /// column's own background plates showing through the panel, the outliner sitting on top of
+    /// it, the map-mode row drawing over the shoulder. Each looked like its own bug and each had
+    /// the same cause: vanilla hides that widget when a right-hand window opens, asks
+    /// <c>IsRightWindowOpen</c> to find out, and that datafunction is true only for a registered
+    /// game view. Our panel is not one and never can be, so every one of those widgets stayed up.
+    ///
+    /// Patching them individually was the wrong shape of fix — three anonymous <c>background</c>
+    /// blocks inside <c>main_tabs</c> have no names to anchor on, and the list was never going to
+    /// be complete, because the next one only shows up when somebody notices it in a screenshot.
+    /// Rewriting the question instead covers all of them at once, including the ones nobody has
+    /// looked at yet, and keeps saying whatever Paradox's own condition says around it.
+    ///
+    /// Safe against the obvious objection: the substituted expression contains no
+    /// <c>IsRightWindowOpen</c> of its own, so this cannot nest into itself. And it deliberately
+    /// rewrites POSITIVE uses too — <c>hud_notification_templates.gui</c> shrinks a panel's
+    /// max_height when a right window is open, which our panel should also do.
+    /// </summary>
+    private static int WidenRightWindowChecks(GuiDocument doc, ScriptedGui open)
+    {
+        string ours = open.IsShown().Inner;
+        int changed = 0;
+
+        foreach (var node in doc.Nodes())
+        {
+            if (node.IsBlock || node.Value is null) continue;
+            if (!node.Value.Contains("IsRightWindowOpen")) continue;
+
+            node.SetValue(node.Value.Replace(
+                "IsRightWindowOpen", $"Or( IsRightWindowOpen, {ours} )"));
+
+            changed++;
+        }
+
+        return changed;
+    }
+
     private static void PatchRightSidebarBackdrop(string modDir, string gameDir, ScriptedGui open)
     {
         var doc = GuiDocument.Open(gameDir, "gui", "gui", "hud_sidebars.gui");
@@ -172,32 +218,16 @@ public static class GuiWriter
         doc.Widget("right sidebar backdrop", "sidebar_background_right")
             .Set("visible", GuiExpr.Raw(
                 "And( Or( IsRightWindowOpen, " + open.IsShown().Inner + " ), "
-                + "Not( IsGameViewOpen('struggle') ) )"))
-            // ---- And lifted off the bottom layer, which is the second half of the fix ----
-            //
-            // The whole `hud_sidebars` container sits on `layer = bottom_bottom`, the lowest there
-            // is. That is fine for vanilla because opening a real view also HIDES the HUD pieces
-            // that would otherwise sit in front of the strip — a good many of them carry their own
-            // `IsRightWindowOpen` checks. None of that happens for us, so those pieces stayed
-            // visible and drew over the shoulder.
-            //
-            // Rather than chase every one of them, the strip moves up to the layer our panel is
-            // already on. It keeps the same relationship to the panel that it has to vanilla's
-            // windows — the strip is 60 wide at the far right and the window's own 40px right
-            // margin leaves it showing — while clearing the HUD it was sitting underneath.
-            //
-            // Naming a layer on a nested widget normally reparents it and breaks its anchoring;
-            // it is safe here because this widget positions itself with `parentanchor = top|right`
-            // against a full-screen parent, and the layer root is also full-screen, so the anchor
-            // resolves to the same corner either way.
-            //
-            // `top` and not `windows_layer`, which was the first try and was not high enough: the
-            // map-mode buttons run down the same right-hand edge and kept drawing over the strip.
-            // They live in hud.gui, whose containers sit on `bottom`, `hud_layer` and `top`, so
-            // anything below `top` loses to at least one of them. Vanilla never has to reckon with
-            // this because opening a real view hides those buttons — `map_modes_debug` carries
-            // `Not( IsRightWindowOpen )` for exactly that reason — and nothing hides them for us.
-            .Set("layer", "top");
+                + "Not( IsGameViewOpen('struggle') ) )"));
+
+        // NO layer override. Two were tried — `windows_layer`, then `top` — because HUD pieces
+        // were drawing in front of the strip, and both were treating a symptom.
+        //
+        // The strip was fighting the panel's own `using = Window_Background`, which drew a second
+        // frame on a higher layer over the top of this one. With the panel a transparent shell, as
+        // vanilla's main-tab windows are, this widget is the only frame there is and vanilla's own
+        // `bottom_bottom` is the correct layer for it — the same layer it uses for intrigue and
+        // council, which do not have this problem.
 
         doc.Ship(modDir);
     }

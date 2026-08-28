@@ -2600,6 +2600,7 @@ public sealed class MainForm : Form
         _cancellation = new CancellationTokenSource();
         Stage.Begin();
         RunLog.Begin();
+        ConsoleFork.Install();
         Stage.Cancellation = _cancellation.Token;
 
         var clock = Stopwatch.StartNew();

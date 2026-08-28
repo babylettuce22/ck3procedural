@@ -161,11 +161,12 @@
  society_offer_oath_interaction:0 "Offer the Oath"
  society_offer_oath_interaction_desc:0 "Say it out loud to [recipient.GetTitledFirstNameNoTooltip], and find out what [recipient.GetSheHe] does with it."
 
- # The two toasts are the recruiter's only account of what happened. The interaction is
- # auto_accept and the decision is taken inside society.0001 by whoever was asked, so without
- # these the button reports nothing at all — see the notes on both options in the event file.
- society_oath_accepted_toast:0 "[ROOT.Char.GetTitledFirstName] Is Sworn"
- society_oath_refused_toast:0 "[ROOT.Char.GetTitledFirstName] Refused"
+ # The recruiter's account of what happened used to be two toasts defined here. It is now
+ # society.0002 and society.0003 — the interaction is still auto_accept and the decision is still
+ # taken inside society.0001 by whoever was asked, but the recruiter gets an event with the
+ # answer in it rather than a line that scrolls past. The toast keys are deleted rather than left
+ # in place: an unreferenced loc key is invisible to ck3-tiger and to the game, so it survives
+ # indefinitely and reads as live text to whoever edits this file next.
 
  # --- The approach, from the other side ------------------------------------------------------
 
@@ -174,6 +175,22 @@
  society.0001.desc_alone:0 "The approach comes, and it comes badly — a note with no hand on it, left where only we would find it, describing a body with no name and asking whether we would care to be counted among it.\n\nThere is nobody to ask about it. Whoever wrote it is not in this court, or is and is not going to say so."
  society.0001.a:0 "Say yes. Quietly."
  society.0001.b:0 "Refuse — and remember the face."
+
+ # --- The answer, from the recruiter's side ----------------------------------------------------
+ #
+ # ROOT is the RECRUITER in both of these, and scope:society_answerer is the person who answered.
+ # That is the reverse of society.0001 above, where ROOT is the one being asked — so the "we" in
+ # these two strings is the person who did the asking, and the same word means the other party
+ # eight lines up. Worth checking against before editing either.
+
+ society.0002.t:0 "Sworn"
+ society.0002.desc:0 "[society_answerer.GetTitledFirstName] says yes the way people do when they have already decided and are waiting to be asked — no questions, no conditions, and no pause anywhere it belonged.\n\nThat is the part worth thinking about later. For now there is one more of us than there was this morning, and [society_answerer.GetSheHe] will be told the rest of it slowly, the way we all were."
+ society.0002.a:0 "Good. Nothing else changes today."
+
+ society.0003.t:0 "The One Who Said No"
+ society.0003.desc:0 "[society_answerer.GetTitledFirstName] says no, and says it kindly, which is the worst of the available answers. A hard no is a person who wants the subject closed. A kind one is a person who has decided to be generous about something they now know.\n\n[society_answerer.GetSheHe] will not go to a priest tonight. Tonight [society_answerer.GetSheHe] will decide [society_answerer.GetSheHe] misheard. It is the week after, and the year after, that we have no answer for."
+ society.0003.a:0 "Make it worth [society_answerer.GetHerHis] while to have misheard."
+ society.0003.b:0 "Nothing. Let [society_answerer.GetHerHim] carry it."
 
  # --- The rite ---------------------------------------------------------------------------------
  #
@@ -212,6 +229,7 @@
  # children, which is a different fault from the guest list being broken.
  society_debug_sworn_toast:0 "#bold [ROOT.Char.MakeScope.Var('society_debug_sworn').GetValue|0]#! courtiers sworn into the society"
  society_debug_standing_toast:0 "Standing raised. Two presses from a fresh induction clears the rite's threshold of 50."
+ society_debug_dark_power_toast:0 "Dark Power granted. One press buys exactly one abduction and leaves the pool empty."
 
  # --- Opinion --------------------------------------------------------------------------------
 

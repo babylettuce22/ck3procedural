@@ -69,14 +69,18 @@ public static class ForgedVisualOverrides
     ];
 
     /// <summary>
-    /// Rarity, low to high. Four buckets that multiply whatever the culture axis gives.
+    /// Rarity multiplies whatever the culture axis gives, and is worth having because the culture
+    /// axis alone can be very thin: cultures are generated, and one measured seed held seven, six of
+    /// which shared a single <c>unit_gfx</c>. Rarity is the axis that guarantees a player sees more
+    /// than one look for their own people.
     ///
-    /// Worth having because the culture axis alone can be very thin. Cultures are generated, and a
-    /// world may hold only a handful — one measured seed had seven, six of which shared a single
-    /// <c>unit_gfx</c>. Rarity is the axis that guarantees a player sees more than one look for their
-    /// own people.
+    /// The bands are <see cref="ArtifactRarity"/> itself rather than a list of their own. They used
+    /// to be a private array of strings, which was harmless while every forged look was
+    /// interchangeable — the rarity axis then only had to *differ*, not to mean anything. It stopped
+    /// being harmless when the pool gained bands of its own: a second, independent notion of rarity
+    /// here would hand a tournament-prize common sword the look forged for the world's legendaries.
     /// </summary>
-    private static readonly string[] Rarities = ["common", "masterwork", "famed", "illustrious"];
+    private static string Band(ArtifactRarity tier) => tier.ToString().ToLowerInvariant();
 
     /// <summary>
     /// Emits the override. Does nothing when no weapons were forged, so a run with no parts
@@ -112,8 +116,8 @@ public static class ForgedVisualOverrides
             var pool = byKind[kind];
 
             b.Blank();
-            b.Comment($"{visual} <- {kind} pool: {cultureKeys.Count} culture(s) x {Rarities.Length} "
-                + $"rarities over {pool.Count} look(s)");
+            b.Comment($"{visual} <- {kind} pool: {cultureKeys.Count} culture(s) x "
+                + $"{WeaponAssets.BandCount} rarities over {pool.Count} look(s)");
 
             using (b.Block(visual))
             {
@@ -134,10 +138,15 @@ public static class ForgedVisualOverrides
     /// own four rarities do not run into the next culture's block, and walks up until it finds one
     /// that is coprime. Falls back to 1 for a pool too small to stride at all, which reduces to
     /// stepping one look per culture — the best available when there is barely a pool.
+    ///
+    /// It is now handed a **band** rather than the whole pool, and most bands are small enough to
+    /// take the fallback. That is correct rather than a loss: the stride existed to stop the four
+    /// rarities of one culture colliding with the next culture's, and bands that no longer share a
+    /// number line cannot collide in the first place.
     /// </summary>
     private static int Stride(int poolCount)
     {
-        for (int k = Rarities.Length + 1; k < poolCount; k++)
+        for (int k = WeaponAssets.BandCount + 1; k < poolCount; k++)
         {
             if (Gcd(k, poolCount) == 1) return k;
         }
@@ -153,25 +162,23 @@ public static class ForgedVisualOverrides
     {
         for (int c = 0; c < cultureKeys.Count; c++)
         {
-            for (int r = 0; r < Rarities.Length; r++)
+            for (int r = 0; r < WeaponAssets.BandCount; r++)
             {
-                // Culture picks a starting look, rarity steps along from there.
+                // Rarity picks the band, culture picks a look within it.
                 //
-                // The stride is what makes a big pool worth paying for. Two obvious formulas both
-                // waste it:
+                // Rarity used to be a step *along* the flat pool, which was reasonable while the
+                // looks were interchangeable and is wrong now that they are not: it would dress a
+                // common tournament prize in whatever look happened to sit at that index, including
+                // one forged for the illustrious band. Asking the pool for the band instead makes
+                // this agree with the artifact map, which selects the same way.
                 //
-                //   c * 4 + r   every culture's block starts at a multiple of four, so with eight
-                //               looks cultures 0, 2 and 4 come out identical.
-                //   c + r       starts only ever span cultures + rarities - 1, so a pool of
-                //               sixteen against seven cultures reaches ten looks and no more.
-                //
-                // A stride coprime to the pool size spreads the starts across all of it, and the
-                // four rarities then run consecutively from each start, so they stay distinct.
-                //
-                // The wrap still matters: a pool can be shorter than the combination count, because
-                // deduplication caps it at the number of distinct part combinations and a library
-                // with one family yields one look.
-                var pick = pool[(c * Stride(pool.Count) + r) % pool.Count];
+                // Within a band the stride still earns its keep, for the reason it always did: a
+                // formula like c % count marches cultures through the band one at a time, while a
+                // stride coprime to its size spreads the starts across the whole of it. The wrap
+                // matters because a band can be a single look — deduplication caps the pool at the
+                // number of distinct part combinations, and a library with one family yields one.
+                var band = WeaponAssets.AtTier(pool, (ArtifactRarity)r);
+                var pick = band[(c * Stride(band.Count)) % band.Count];
 
                 using (b.Block(field))
                 {
@@ -184,7 +191,7 @@ public static class ForgedVisualOverrides
                         b.Field("culture", $"culture:{cultureKeys[c]}");
 
                         using (b.Block("scope:artifact"))
-                            b.Field("rarity", Rarities[r]);
+                            b.Field("rarity", Band((ArtifactRarity)r));
                     }
 
                     b.Field("reference", icon ? pick.Icon : pick.Entity);

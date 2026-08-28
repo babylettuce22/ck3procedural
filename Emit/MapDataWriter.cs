@@ -61,15 +61,21 @@ public static class MapDataWriter
         string dir = Path.Combine(modDir, "map_data");
         Directory.CreateDirectory(dir);
 
-        WriteProvincesPng(Path.Combine(dir, "provinces.png"), provinces, order);
-        WriteDefinitionCsv(Path.Combine(dir, "definition.csv"), provinces, order);
+        Core.Stage.Detail("  · provinces.png",
+            () => WriteProvincesPng(Path.Combine(dir, "provinces.png"), provinces, order));
+        Core.Stage.Detail("  · definition.csv",
+            () => WriteDefinitionCsv(Path.Combine(dir, "definition.csv"), provinces, order));
 
-        if (drainage != null)
-            WriteRiversPng(Path.Combine(dir, "rivers.png"), cfg, provinces, drainage);
-        else
-            WriteRiversPng(Path.Combine(dir, "rivers.png"), cfg, provinces, null!);
+        Core.Stage.Detail("  · rivers.png", () =>
+        {
+            if (drainage != null)
+                WriteRiversPng(Path.Combine(dir, "rivers.png"), cfg, provinces, drainage);
+            else
+                WriteRiversPng(Path.Combine(dir, "rivers.png"), cfg, provinces, null!);
+        });
 
-        var shipped = WriteHeightmap(dir, cfg, writePacked, provinces, order, landCount, terra);
+        var shipped = Core.Stage.Detail("  · heightmap",
+            () => WriteHeightmap(dir, cfg, writePacked, provinces, order, landCount, terra));
         WriteDefaultMap(Path.Combine(dir, "default.map"), provinces.Count, baronyCount, landCount, riverCount);
         WriteStubs(dir);
 
@@ -133,7 +139,17 @@ public static class MapDataWriter
                 $"{string.Join(", ", missing)}. CK3 logs nothing for a missing map_data file; " +
                 "the load stops with a core spinning.");
 
-        var empty = Directory.GetFiles(dir, "*", SearchOption.AllDirectories)
+        // TopDirectoryOnly, and it is not a narrowing: the only subdirectory this mod ever puts
+        // under map_data is geographical_regions, and nothing has created it yet when this runs —
+        // BlankVanillaData, CompatibilityWriter and StruggleWriter all populate it later. So the
+        // recursive flag was scanning a tree with no subdirectories in it.
+        //
+        // Worth being explicit about, because the recursion is not merely useless here, it is a
+        // hazard: those three writers create their files by truncating, so every one of them is
+        // momentarily zero bytes, and a scan that ran beside them would fail the run at random.
+        // That is what stands between this check and map_data being written concurrently with the
+        // rest of the mod.
+        var empty = Directory.GetFiles(dir, "*", SearchOption.TopDirectoryOnly)
                              .Where(f => new FileInfo(f).Length == 0)
                              .Select(Path.GetFileName)
                              .ToList();
@@ -348,33 +364,12 @@ public static class MapDataWriter
             }
         });
 
-        for (int y = 0; y < height; y++)
-            for (int x = 0; x < width; x++)
-            {
-                Relax(landDistUnits, full, true, y, x, -1, 0, Orthogonal);
-                Relax(landDistUnits, full, true, y, x, -1, -1, Diagonal);
-                Relax(landDistUnits, full, true, y, x, 0, -1, Orthogonal);
-                Relax(landDistUnits, full, true, y, x, 1, -1, Diagonal);
-
-                Relax(waterDistUnits, full, false, y, x, -1, 0, Orthogonal);
-                Relax(waterDistUnits, full, false, y, x, -1, -1, Diagonal);
-                Relax(waterDistUnits, full, false, y, x, 0, -1, Orthogonal);
-                Relax(waterDistUnits, full, false, y, x, 1, -1, Diagonal);
-            }
-
-        for (int y = height - 1; y >= 0; y--)
-            for (int x = width - 1; x >= 0; x--)
-            {
-                Relax(landDistUnits, full, true, y, x, 1, 0, Orthogonal);
-                Relax(landDistUnits, full, true, y, x, 1, 1, Diagonal);
-                Relax(landDistUnits, full, true, y, x, 0, 1, Orthogonal);
-                Relax(landDistUnits, full, true, y, x, -1, 1, Diagonal);
-
-                Relax(waterDistUnits, full, false, y, x, 1, 0, Orthogonal);
-                Relax(waterDistUnits, full, false, y, x, 1, 1, Diagonal);
-                Relax(waterDistUnits, full, false, y, x, 0, 1, Orthogonal);
-                Relax(waterDistUnits, full, false, y, x, -1, 1, Diagonal);
-            }
+        // Two chamfer transforms that only ever shared a loop: neither one reads or writes the
+        // other's array, so running them side by side changes nothing about either. Each field
+        // still sees its own sweeps in the same order, which is the part that must not move.
+        Parallel.Invoke(
+            () => Chamfer(landDistUnits, targetLand: true),
+            () => Chamfer(waterDistUnits, targetLand: false));
 
         var landDist = new byte[full.Length];
         var waterDist = new byte[full.Length];
@@ -391,16 +386,53 @@ public static class MapDataWriter
 
         return (landDist, waterDist);
 
-        void Relax(ushort[] distArray, ushort[] srcFull, bool targetLand, int y, int x, int dx, int dy, int cost)
+        // One field's forward and backward sweeps.
+        //
+        // Sequential over rows, and it has to stay that way: cell (x, y) is fed by distances this
+        // same sweep already lowered at (x - 1, y) and along row y - 1. Handing rows to threads
+        // reads values that are still being written — a data race in the array that decides where
+        // the shelf and the coastal cliffs go.
+        void Chamfer(ushort[] dist, bool targetLand)
         {
-            long target = (long)y * width + x;
-            if ((srcFull[target] > WaterLevel16) != targetLand) return;
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                {
+                    long target = (long)y * width + x;
+                    if ((full[target] > WaterLevel16) != targetLand) continue;
 
+                    Relax(dist, targetLand, target, y, x, -1, 0, Orthogonal);
+                    Relax(dist, targetLand, target, y, x, -1, -1, Diagonal);
+                    Relax(dist, targetLand, target, y, x, 0, -1, Orthogonal);
+                    Relax(dist, targetLand, target, y, x, 1, -1, Diagonal);
+                }
+
+            for (int y = height - 1; y >= 0; y--)
+                for (int x = width - 1; x >= 0; x--)
+                {
+                    long target = (long)y * width + x;
+                    if ((full[target] > WaterLevel16) != targetLand) continue;
+
+                    Relax(dist, targetLand, target, y, x, 1, 0, Orthogonal);
+                    Relax(dist, targetLand, target, y, x, 1, 1, Diagonal);
+                    Relax(dist, targetLand, target, y, x, 0, 1, Orthogonal);
+                    Relax(dist, targetLand, target, y, x, -1, 1, Diagonal);
+                }
+        }
+
+        // The target's own class is tested once per pixel by the caller rather than eight times
+        // here, and the horizontal wrap — two modulos on every one of a few hundred million calls —
+        // now only runs on the two edge columns, which are the only places x ± 1 can leave the row.
+        // Neither changes which candidates are compared or in what order.
+        void Relax(ushort[] distArray, bool targetLand, long target, int y, int x, int dx, int dy, int cost)
+        {
             int yy = y + dy;
             if (yy < 0 || yy >= height) return;
-            int xx = ((x + dx) % width + width) % width;
+
+            int xx = x + dx;
+            if ((uint)xx >= (uint)width) xx = (xx + width) % width;
+
             long from = (long)yy * width + xx;
-            if ((srcFull[from] > WaterLevel16) != targetLand) return;
+            if ((full[from] > WaterLevel16) != targetLand) return;
 
             int candidate = distArray[from] + cost;
             if (candidate < distArray[target]) distArray[target] = (ushort)candidate;
@@ -418,7 +450,8 @@ public static class MapDataWriter
         // Fast plunge curve matching vanilla 3-4 pixel shelf
         const int shelfReach = 7;
 
-        var (landDistance, waterDistance) = MeasureCoastDistances(full, width, height, Math.Max(shelfReach, landReach));
+        var (landDistance, waterDistance) = Core.Stage.Detail("        · coast distances",
+            () => MeasureCoastDistances(full, width, height, Math.Max(shelfReach, landReach)));
 
         var source = (ushort[])full.Clone();
 
@@ -559,9 +592,10 @@ public static class MapDataWriter
     public static ushort[] ShippedHeightmap(MapConfig cfg, ProvinceMap provinces, int[] order,
         int landCount, MapGen.TerrainData terra)
     {
-        var full = ElevationTo16(terra.Elevation, cfg);
-        ForceCoastlineToMatchProvinces(full, cfg, provinces, order, landCount);
-        ShapeCoastline(full, cfg);
+        var full = Core.Stage.Detail("      · to 16-bit", () => ElevationTo16(terra.Elevation, cfg));
+        Core.Stage.Detail("      · match provinces",
+            () => ForceCoastlineToMatchProvinces(full, cfg, provinces, order, landCount));
+        Core.Stage.Detail("      · shape coastline", () => ShapeCoastline(full, cfg));
         return full;
     }
 
@@ -570,11 +604,12 @@ public static class MapDataWriter
     private static ushort[] WriteHeightmap(string dir, MapConfig cfg, bool writePacked,
         ProvinceMap provinces, int[] order, int landCount, MapGen.TerrainData terra)
     {
-        var full = ShippedHeightmap(cfg, provinces, order, landCount, terra);
-
+        var full = Core.Stage.Detail("    · coastline + shaping",
+            () => ShippedHeightmap(cfg, provinces, order, landCount, terra));
 
         ReportHypsometry(full);
-        PngWriter.WriteGray16(Path.Combine(dir, "heightmap.png"), cfg.Width, cfg.Height, full);
+        Core.Stage.Detail("    · heightmap.png encode",
+            () => PngWriter.WriteGray16(Path.Combine(dir, "heightmap.png"), cfg.Width, cfg.Height, full));
 
         if (!writePacked)
         {
@@ -589,14 +624,17 @@ public static class MapDataWriter
         }
 
         int tileStep = HeightmapPacker.TileStepFor(cfg);
-        var packing = HeightmapPacker.Pack(full, cfg.Width, cfg.Height, cfg.HeightmapSagBudget,
-                                           tileStep, cfg.BalanceNeighbourLods);
+        var packing = Core.Stage.Detail("    · pack atlas",
+            () => HeightmapPacker.Pack(full, cfg.Width, cfg.Height, cfg.HeightmapSagBudget,
+                                       tileStep, cfg.BalanceNeighbourLods));
 
-
-        PngWriter.WriteGray16(Path.Combine(dir, "packed_heightmap.png"),
-            packing.PackedWidth, packing.PackedHeight, packing.Packed);
-        PngWriter.WriteRgba8(Path.Combine(dir, "indirection_heightmap.png"),
-            packing.TilesX, packing.TilesY, packing.Indirection);
+        Core.Stage.Detail("    · packed + indirection encode", () =>
+        {
+            PngWriter.WriteGray16(Path.Combine(dir, "packed_heightmap.png"),
+                packing.PackedWidth, packing.PackedHeight, packing.Packed);
+            PngWriter.WriteRgba8(Path.Combine(dir, "indirection_heightmap.png"),
+                packing.TilesX, packing.TilesY, packing.Indirection);
+        });
 
         ReportPacking(packing);
 

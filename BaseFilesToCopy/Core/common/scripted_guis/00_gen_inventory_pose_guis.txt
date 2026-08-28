@@ -1,4 +1,4 @@
-# "Is this character holding a weapon that needs a wider frame?"
+﻿# "Is this character holding a weapon that needs a wider frame?"
 #
 # Pure query, no effect. Read by gui/window_inventory.gui -- patched by Emit/GuiWriter.cs --
 # which uses it to pick between gen_camera_inventory_body and its _wide variant for the

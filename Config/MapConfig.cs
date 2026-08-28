@@ -486,7 +486,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// </summary>
     [Category("02 World State")]
     [Description("Distinct procedurally forged looks per weapon kind (sword, dagger, axe, mace). Costs about 1.4 MB of meshes and icons each. Raising it varies weapons ACROSS cultures; a single culture still shows one look per rarity.")]
-    public int WeaponPoolSizePerKind { get; set; } = 8;
+    public int WeaponPoolSizePerKind { get; set; } = 16;
 
     /// <summary>
     /// Whether the mod ships the wilderness and colonisation system.
@@ -1793,6 +1793,39 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Description("Development every county gets regardless of its terrain — the floor for the poorest backwater.")]
     public int DevelopmentBase { get; set; } = 0;
 
+    /// <summary>
+    /// The share of the world's counties that have no development of their own — the curve starts
+    /// above them rather than running down through them.
+    ///
+    /// Vanilla does not spread development thinly over every county: at 867 only 973 of its 4,669
+    /// counties set it at all and the other 80% are left at 0, because a tribal or nomadic
+    /// periphery is not a poor version of a settled county, it is a place the mechanic does not
+    /// describe yet. Ranking every county against every other produced the opposite — a smooth
+    /// gradient with nothing at the bottom of it.
+    ///
+    /// These sit at <see cref="DevelopmentBase"/> and do NOT take the era bonus, so they are a flat
+    /// share of the map rather than an early-world feature that advancement grows out of. That is
+    /// vanilla's own behaviour and it is worth being explicit about, because the intuition runs the
+    /// other way: its bare share is 80% at 867, 78% at 1066 and 77% at 1178 — essentially flat —
+    /// while the counties that do set development climb from a median of 6 to 16. Advancement
+    /// deepens the settled part of the map instead of colonising the rest of it.
+    ///
+    /// Raising Advancement Year still thins the tribes out, just not through this: it lifts the
+    /// settled curve past the <c>avgDev</c> gates in <see cref="MapGen.Governments"/> and drops
+    /// <c>timeNomadFactor</c>. Those are the levers that turn a tribal world feudal.
+    ///
+    /// Default is well below vanilla's 0.78 deliberately, and the reason is a coupling rather than
+    /// timidity: <see cref="MapGen.Governments"/> gates feudal-versus-tribal on a realm's *average*
+    /// development, which counts bare counties as poor ones. A bare periphery therefore reads as a
+    /// poor realm and pushes the map toward tribal. Measured over three seeds at Advancement Year
+    /// 900: at 0.25 the government mix barely moves and the median lands at 5 against vanilla's 6,
+    /// while at 0.45 one seed lost 34 of its 35 feudal counties to tribal. Going the whole way to
+    /// vanilla's share needs that average to ignore bare counties first.
+    /// </summary>
+    [Category("9 Development")]
+    [Description("The share of counties that set no development at all, as vanilla leaves its tribal and nomadic periphery. Vanilla's own share is about 0.78 and is flat across its three bookmarks; the default here is lower because these counties drag their realm's average down and the government gates read it. 0 spreads development thinly over every county instead.")]
+    public double DevelopmentBareShare { get; set; } = 0.25;
+
     /// <summary>How much development the very best terrain adds on top of the base.</summary>
     [Category("9 Development")]
     [Description("How much development the best possible terrain adds on top of the base. Vanilla's 867 median is about 8 and its mass runs to 16.")]
@@ -1817,9 +1850,19 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Description("Added to a county's terrain score if any of its baronies reaches the sea, because a coast is a road when roads are bad.")]
     public double DevelopmentCoastBonus { get; set; } = 0.12;
 
+    /// <summary>
+    /// Development of the single greatest city in the world, before the era bonus. Not a bonus:
+    /// the target the first world centre is placed at, with the rest stepping down toward the top
+    /// of the ordinary curve.
+    ///
+    /// Vanilla's own 867 map is the calibration. Of its 4,669 county titles, 973 set development
+    /// at all and exactly three sit above the ordinary top of 20: Chang'an at 30, Rome and
+    /// Constantinople at 25. A world centre is meant to be one of those three, not a tier above
+    /// them — which is what the flat +32 boost this replaced was producing.
+    /// </summary>
     [Category("9 Development")]
-    [Description("Bonus development granted to World Center metropolises.")]
-    public int WorldCenterDevBoost { get; set; } = 32;
+    [Description("Development of the greatest city in the world. Vanilla 867 tops out at 30 (Chang'an), with Rome and Constantinople at 25 and the rest of the map at 20 or under; later world centres step down from this toward the top of the ordinary curve. Rises with the era alongside the rest of development.")]
+    public int WorldCenterDevPeak { get; set; } = 30;
 
 
     // =========================================================================

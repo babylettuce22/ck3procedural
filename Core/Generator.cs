@@ -264,19 +264,46 @@ public static class Generator
 
         Emit.ModWriter.WriteDescriptors(modDir, options.ModName);
 
-        // The array comes back so the scatter passes can read the surface the game will
-        // actually render; see ContentWriter.
-        var shippedHeightmap = Stage.Time("map_data (heightmap, provinces, rivers)",
+        // map_data runs beside the first half of the content instead of in front of it. The two are
+        // within milliseconds of each other in length and they share almost nothing: map_data takes
+        // no Rng and keeps no mutable statics, nothing downstream reads definition.csv,
+        // provinces.png, rivers.png or the heightmap back off disk, and the one directory both
+        // sides touch — map_data/geographical_regions — is written only by the content half. What
+        // used to make that unsafe was AssertMapDataComplete scanning map_data recursively for
+        // zero-byte files while the content half was creating some; see the note there.
+        //
+        // Detail rather than Time: this span overlaps the content phases, and Stage sums the
+        // un-nested spans against the wall clock to report what is unaccounted for. Counting both
+        // sides of an overlap drives that remainder negative.
+        ushort[]? shippedHeightmap = null;
+        var mapDataBranch = ConsoleFork.Start(() =>
+            shippedHeightmap = Stage.Detail("map_data (heightmap, provinces, rivers)",
                     () => Emit.MapDataWriter.WriteAll(modDir, cfg, result.Provinces, result.ProvinceOrder,
                         result.BaronyCount, result.LandCount, result.RiverCount, options.WritePacked,
-                        result.Terra, result.Drainage));
+                        result.Terra, result.Drainage)));
 
-        var written = Emit.ContentWriter.WriteAll(
-                            modDir, options.GameDir, cfg, result.Provinces, result.ProvinceOrder,
-                            result.BaronyCount, result.LandCount,
-                            result.RiverCount, result.Titles, result.Terra, result.Terrain, rng,
-                            shippedHeightmap,
-                            options.WriteHistory, result.Drainage, result.Azgaar);
+        Emit.WrittenContent written;
+        try
+        {
+            written = Emit.ContentWriter.WriteAll(
+                                modDir, options.GameDir, cfg, result.Provinces, result.ProvinceOrder,
+                                result.BaronyCount, result.LandCount,
+                                result.RiverCount, result.Titles, result.Terra, result.Terrain, rng,
+                                () =>
+                                {
+                                    mapDataBranch.JoinAndReplay();
+                                    return shippedHeightmap!;
+                                },
+                                options.WriteHistory, result.Drainage, result.Azgaar);
+        }
+        finally
+        {
+            // The content half can throw before it ever asks for the heightmap, and map_data is a
+            // live thread writing into the same mod folder. Left running, it would still be writing
+            // while the caller reports a failed run — and, in the GUI, while the user starts the
+            // next one into the same directory. A no-op when the call above already joined.
+            mapDataBranch.JoinAndReplay();
+        }
 
         Stage.Time("watermark", () => ApplyWatermark(modDir, cfg));
 

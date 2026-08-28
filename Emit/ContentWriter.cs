@@ -17,14 +17,20 @@ public static class ContentWriter
     /// The handful of things a later edit needs — see <see cref="WrittenContent"/>. Ignored by the
     /// command line, which writes once and exits.
     /// </returns>
-    /// <param name="shippedHeightmap">The heightmap <see cref="MapDataWriter.WriteAll"/> just
-    /// wrote. The scatter passes need it, and it is required rather than optional on purpose: the
-    /// bug it fixes was a scatter quietly reading a surface the game never renders, and a default
-    /// would let that back in with no compile error to catch it.</param>
+    /// <param name="shippedHeightmap">The heightmap <see cref="MapDataWriter.WriteAll"/> wrote.
+    /// The scatter passes need it, and it is required rather than optional on purpose: the bug it
+    /// fixes was a scatter quietly reading a surface the game never renders, and a default would
+    /// let that back in with no compile error to catch it.
+    ///
+    /// Asked for rather than handed over, because map_data may still be writing it on another
+    /// thread when this method starts. It is read at exactly one place — the rendered heightmap,
+    /// which comes after the terrain textures and masks — so by the time this is called the work
+    /// behind it has had eleven seconds to finish, and the caller decides whether that is a join
+    /// or just a field read.</param>
     public static WrittenContent WriteAll(string modDir, string gameDir, MapConfig cfg,
             ProvinceMap provinces, int[] order, int baronyCount, int landCount, int riverCount,
             List<Title> empires, TerrainData terra, TerrainClassifier.Result classified, Rng rng,
-            ushort[] shippedHeightmap,
+            Func<ushort[]> shippedHeightmap,
             bool writeHistory = true, MapGen.Drainage? drainage = null,
             MapGen.AzgaarImport? azgaar = null)
     {
@@ -294,10 +300,11 @@ public static class ContentWriter
                 () => InteractionWriter.PatchMarriageInteractions(modDir, gameDir));
         }
 
-        // Full-resolution heightmap elevation passed to detail texture generator
-        Core.Stage.Time("terrain textures", () => TerrainTextureWriter.WriteAll(modDir, cfg, terrain,
-            classified.Climate, terra.Elevation, rng));
-
+        // These two come before the split below rather than in either half of it, because both
+        // halves need them: the history branch reads `flatmap` for the struggle art and reads
+        // flatmap.dds back off disk for the bookmark background, and neither can be racing the
+        // writer that produces them. Neither takes the shared Rng, so hoisting them past the
+        // terrain textures leaves that stream's order untouched.
         Core.Stage.Time("map graphics", () => MapGraphicsWriter.WriteAll(modDir, gameDir, cfg, provinces, order, landCount));
 
         // Kept rather than dropped: StruggleArt cuts each struggle's window background out of this
@@ -305,6 +312,33 @@ public static class ContentWriter
         // parchment twice.
         var flatmap = Core.Stage.Time("flatmap", () => FlatmapWriter.WriteAll(
             modDir, cfg, provinces, order, landCount, provinceElevation, provinceTerrain));
+
+        // Everything from here to the holding models is the raster and scatter half of the run:
+        // about eighteen seconds on a large map, and it shares nothing with the history half that
+        // follows. It writes gfx/map/terrain and gfx/map/map_object_data; history writes common,
+        // history, localization, gui and gfx/interface. It owns the shared Rng — terrain textures
+        // draws from it and so do the four scatter writers, in this order — and the history half
+        // never touches that instance, every part of it seeding its own stream from cfg.Seed.
+        //
+        // So it runs on its own thread while the main one gets on with the history. Its console
+        // output is collected rather than printed, and replayed at the join in the order the
+        // phases used to run in; see ConsoleFork for why the log order is worth the trouble.
+        // Asked for here rather than where it is used, and this is the join with map_data when the
+        // caller runs that concurrently. Here because it is the last point on the main thread
+        // before the two branches start: joining inside the raster branch would work, but it would
+        // bury map_data's console block — the river audit, the coastline report, the packing
+        // figures — in the middle of that branch's output. This puts it between the content
+        // section and the branches, where it reads as its own phase.
+        //
+        // It costs about nothing: map_data and the content section above are within milliseconds
+        // of each other in length, so by the time this runs the branch has essentially finished.
+        var shipped = shippedHeightmap();
+
+        var rasterBranch = Core.ConsoleFork.Start(() =>
+        {
+        // Full-resolution heightmap elevation passed to detail texture generator
+        Core.Stage.Time("terrain textures", () => TerrainTextureWriter.WriteAll(modDir, cfg, terrain,
+            classified.Climate, terra.Elevation, rng));
 
         Core.Stage.Time("terrain masks", () => TerrainMaskWriter.WriteAll(modDir, gameDir, cfg));
 
@@ -323,7 +357,7 @@ public static class ContentWriter
         var renderedElevation = Core.Stage.Time("rendered heightmap", () =>
             HeightmapSource.ToSimulationScale(
                 HeightmapPacker.Reconstruct(
-                    shippedHeightmap, cfg.Width, cfg.Height, cfg.HeightmapSagBudget,
+                    shipped, cfg.Width, cfg.Height, cfg.HeightmapSagBudget,
                     HeightmapPacker.TileStepFor(cfg), cfg.BalanceNeighbourLods), cfg));
 
         // renderedElevation for all three, not terra.Elevation: every one of them seeds from
@@ -339,6 +373,7 @@ public static class ContentWriter
             holdings, development, cultures, provinces, order, anchors, renderedElevation));
         Core.Stage.Time("map table", () => MapTableWriter.WriteAll(modDir, cfg));
         Core.Stage.Time("holding models", () => HoldingModelWriter.WriteAll(modDir, gameDir, cfg));
+        });
 
         // Null with --no-history, like Realms: rulers only exist once the history phase decides them,
         // and prehistory is kept beside them because re-emitting a ruler means re-emitting the
@@ -354,10 +389,23 @@ public static class ContentWriter
         int artifactCount = 0;
         int struggleCount = 0;
 
-        // --- AFTER (clean and unified) ---
+        // The other half of the split. Runs on this thread while the raster branch runs on its
+        // own; its output is collected the same way and replayed second, which is the order these
+        // two printed in when they were sequential.
+        //
+        // Detail rather than Time on the span itself: Stage sums the un-nested spans against the
+        // wall clock to say what is unaccounted for, and a span overlapping another one would be
+        // counted twice and drive that remainder negative — the exact failure the nesting
+        // distinction exists to prevent. The raster branch holds the wall time for this stretch;
+        // this one is reported beside it rather than added to it.
+        var historyLog = new StringWriter();
+        try
+        {
+        Core.ConsoleFork.CaptureInto(historyLog, () =>
+        {
         if (writeHistory)
         {
-            Core.Stage.Time("history and bookmarks", () =>
+            Core.Stage.Detail("history and bookmarks", () =>
             {
                 prehistory = Core.Stage.Time("prehistory", () => PrehistoryMap.Build(
                     counties, provinces, order, landCount, realms, cultures, faiths,
@@ -385,15 +433,15 @@ public static class ContentWriter
                 // from this pool, so the pool has to exist first. One pool per weapon kind that has
                 // a parts library; kinds without one fall back to the stock catalogue, which is a
                 // supported answer rather than a failure.
-                var forgedWeapons = WeaponForgeStep.ForgeWeaponPools(
-                    modDir, gameDir, new Rng(cfg.Seed ^ 0x5A0D), cfg.WeaponPoolSizePerKind);
+                var forgedWeapons = Core.Stage.Detail("  · weapon forge", () => WeaponForgeStep.ForgeWeaponPools(
+                    modDir, gameDir, new Rng(cfg.Seed ^ 0x5A0D), cfg.WeaponPoolSizePerKind));
 
-                var artifacts = MapGen.ArtifactMap.Build(
+                var artifacts = Core.Stage.Detail("  · artifacts", () => MapGen.ArtifactMap.Build(
                     counties, cultures, faiths, realms, wilderness, prehistory,
-                    worldCenters, development, cfg, new Rng(cfg.Seed ^ 0x4A1F), forgedWeapons);
+                    worldCenters, development, cfg, new Rng(cfg.Seed ^ 0x4A1F), forgedWeapons));
 
                 ArtifactWriter.WriteTemplates(modDir);
-                ArtifactWriter.WriteVisuals(modDir, forgedWeapons);
+                Core.Stage.Detail("  · artifact visuals", () => ArtifactWriter.WriteVisuals(modDir, forgedWeapons));
 
                 // Dresses weapons the *game* creates - inspirations, tournament prizes, adventurer
                 // finds - from the same pool. Without it every player-earned weapon would be vanilla
@@ -405,9 +453,9 @@ public static class ContentWriter
                 // Armour, which needs no geometry at all: a vanilla war garment already carries the
                 // mask and variation hooks a forged weapon does, so a look is a palette and some
                 // text. Culture picks the garment, the artifact's type picks the material.
-                ArmorForgeStep.WriteAll(modDir, gameDir,
+                Core.Stage.Detail("  · armour forge", () => ArmorForgeStep.WriteAll(modDir, gameDir,
                     [.. cultures.Cultures.Select(c => c.Key)],
-                    cultures.Cultures.ToDictionary(c => c.Key, c => c.ClothingGfx, StringComparer.Ordinal));
+                    cultures.Cultures.ToDictionary(c => c.Key, c => c.ClothingGfx, StringComparer.Ordinal)));
 
                 // Hand-modelled pieces from assets/armors, worn from a debug flag. After the forge
                 // above, because that is what splices the gene template both of them rely on.
@@ -423,20 +471,31 @@ public static class ContentWriter
                         forgedWeapons.GroupBy(a => a.Kind)
                             .Select(g => $"{g.Count()} {g.Key}(s)"))
                         + " in the artifact pool");
+
+                    // The band split is printed because it is the one part of the forge a config
+                    // change can quietly move: raise WeaponPoolSizePerKind and it widens, drop it
+                    // below four and bands start sharing looks. Neither shows in the emitted files
+                    // without opening them. Counted across every kind rather than per kind, since a
+                    // library that under-fills its pool gets a shorter ladder than its neighbours.
+                    Console.WriteLine("    bands: " + string.Join(", ",
+                        forgedWeapons.Where(a => a.Tier is not null)
+                            .GroupBy(a => a.Tier!.Value)
+                            .OrderBy(g => g.Key)
+                            .Select(g => $"{g.Count()} {g.Key.ToString().ToLowerInvariant()}")));
                 }
 
-                var bookmarkResult = BookmarkWriter.WriteAll(
+                var bookmarkResult = Core.Stage.Detail("  · bookmarks", () => BookmarkWriter.WriteAll(
                     modDir, gameDir, cfg, provinces, order, empires,
                     realms, development, cultures, faiths, governments, wilderness, prehistory,
-                    rulers, azgaar);
+                    rulers, azgaar));
 
                 // Kept for the editor: re-emitting a ruler means re-emitting the bookmark that
                 // describes him, and the cast is the record of who that is.
                 bookmarks = bookmarkResult.Cast;
 
-                HistoryWriter.WriteAll(
+                Core.Stage.Detail("  · character history", () => HistoryWriter.WriteAll(
                     modDir, cfg, empires, realms, development,
-                    cultures, ethnicities, faiths, governments, wilderness, prehistory, rulers);
+                    cultures, ethnicities, faiths, governments, wilderness, prehistory, rulers));
 
                 // Last of the history block, because it reads everything the rest of it decided.
                 // Inside the block rather than beside it: with --no-history there are no houses, no
@@ -458,14 +517,32 @@ public static class ContentWriter
                 // name does not exist until the line above has run.
                 ChronicleWriter.WriteAll(modDir, chronicle, struggles, empires);
 
-                StruggleWriter.WriteAll(modDir, gameDir, cfg, struggles, flatmap, provinces, order);
+                Core.Stage.Detail("  · struggle art",
+                    () => StruggleWriter.WriteAll(modDir, gameDir, cfg, struggles, flatmap, provinces, order));
                 struggleCount = struggles.Struggles.Count;
 
                 WarWriter.WriteAll(modDir, prehistory);
-                PortraitWriter.WriteAll(modDir, gameDir, bookmarkResult.PortraitRequests, ethnicities, cfg.Seed);
+                Core.Stage.Detail("  · portraits", () => PortraitWriter.WriteAll(
+                    modDir, gameDir, bookmarkResult.PortraitRequests, ethnicities, cfg.Seed));
             });
         }
         else Console.WriteLine("  history: SKIPPED (--no-history)");
+        });
+        }
+        finally
+        {
+            // In a finally because the raster branch is a live thread writing into the mod folder:
+            // if the history half throws, letting the exception past this point would leave that
+            // thread still running while the caller reports a failed run and, in the GUI, while the
+            // user starts another one into the same directory. Joined even on the way out.
+            //
+            // Before the static files on purpose: StaticFileWriter skips any target written during
+            // this run, which is a question about files both branches are still creating until
+            // this line. And the log goes out in phase order rather than in whatever order the two
+            // threads happened to reach it.
+            rasterBranch.JoinAndReplay();
+            Console.Write(historyLog.ToString());
+        }
 
         List<string> sets = [StaticFileWriter.Core];
         if (cfg.EnableWilderness) sets.Add(StaticFileWriter.Wilderness);
@@ -522,8 +599,10 @@ public static class ContentWriter
         for (int i = 0; i < provinces.Count; i++)
             if (!provinces.Seeds[i].IsLand && provinces.Seeds[i].IsMajorRiver) riverCount++;
 
+        // Still takes the array: this overload is for callers that already hold one — the editor
+        // harness re-emitting part of a world — and have no branch to wait on.
         return WriteAll(modDir, gameDir, cfg, provinces, order, baronyCount, landCount, riverCount,
-            empires, terra, classified, rng, shippedHeightmap, writeHistory);
+            empires, terra, classified, rng, () => shippedHeightmap, writeHistory);
     }
 
     /// <summary>
@@ -789,7 +868,7 @@ public static class ContentWriter
         var levels = development.Values.OrderBy(v => v).ToList();
         Console.WriteLine($"  development: min {levels[0]}, median {levels[levels.Count / 2]}, " +
                           $"p90 {levels[(int)(levels.Count * 0.9)]}, max {levels[^1]} " +
-                          $"(vanilla 867: median 8, mass 0-16)");
+                          $"(vanilla 867 counties that set one: median 6, p90 12, ordinary top 20, peak 30)");
     }
 
     /// <returns>The holding written for every barony, by province id — see
@@ -807,8 +886,9 @@ public static class ContentWriter
     /// StartYear, because a fictional calendar can put the same era at any number.
     ///
     /// The wealth around it. Development is the generator's own measure of how much a place could
-    /// afford, and it is already boosted at world centres, so this asks whether the county is rich
-    /// even by that standard.
+    /// afford, and every centre is already placed at the top of the world by
+    /// <see cref="MapGen.Development.ForCounties"/>, so this asks whether the county is rich even
+    /// by the standard of the other centres.
     ///
     /// And who holds it. A tribal or nomadic realm builds differently — not worse, but a permanent
     /// monument in stone is a settled people's answer, and a horde's capital having a finished
@@ -819,7 +899,7 @@ public static class ContentWriter
     /// which is the more interesting world to be handed.
     /// </summary>
     private static int StartingWonderTier(
-        GeneratedWonder wonder, Dictionary<Title, int> development, int medianDevelopment,
+        GeneratedWonder wonder, Dictionary<Title, int> development, int ordinaryTopDevelopment,
         GovernmentMap governments, MapConfig cfg, Rng rng)
     {
         int score = 0;
@@ -832,22 +912,26 @@ public static class ContentWriter
         else if (era >= 850) score += 1;
 
         // Wealth RELATIVE to the world, which is the only way this term says anything. Absolute
-        // thresholds were tried first and were worthless: WorldCenterDevBoost is 32, so every
-        // world centre lands at development 35-53 against a world median of 9, and any fixed
-        // threshold below 35 scores all of them identically. What varies — and what a monument
+        // thresholds were tried first and were worthless: every centre is rich by construction, so
+        // any fixed number scores all of them identically. What varies — and what a monument
         // actually reflects — is how far above its neighbours a place stands.
+        //
+        // Measured against the best ORDINARY county rather than the world median, because the
+        // median moves with the era and the centre band moves with it, so the ratio to the median
+        // drifts down as the world gets richer and the bands would have to be retuned per era. The
+        // top of the ordinary curve moves in step with the centres instead, which keeps this
+        // stable: a centre runs about 1.1x to 1.35x the best ordinary county at any era.
         double ratio = development.GetValueOrDefault(wonder.County)
-                     / (double)Math.Max(1, medianDevelopment);
+                     / (double)Math.Max(1, ordinaryTopDevelopment);
 
-        // Bands chosen from the measured spread rather than from what "rich" sounds like. With the
-        // boost applied a centre sits at development 35-53 against a median of 9, so the whole
-        // population lands between ratio 3.9 and 5.8 — thresholds at 2 or 3 score every centre
-        // identically and the term does no work. These split that range into thirds, so the
-        // question being asked is "exceptional among world centres", which is the only question
-        // with an answer that varies.
-        if (ratio >= 5.5) score += 3;
-        else if (ratio >= 4.5) score += 2;
-        else if (ratio >= 3.5) score += 1;
+        // Bands chosen from that measured spread rather than from what "rich" sounds like. With
+        // Development.ForCounties placing centres between ordinaryTop + 2 and WorldCenterDevPeak,
+        // the default five land at roughly 1.09, 1.14, 1.23, 1.27 and 1.36 — so these thirds split
+        // the population instead of scoring it all the same. The question being asked is
+        // "exceptional among world centres", which is the only one with an answer that varies.
+        if (ratio >= 1.30) score += 3;
+        else if (ratio >= 1.20) score += 2;
+        else if (ratio >= 1.10) score += 1;
 
         switch (governments.For(wonder.County))
         {
@@ -892,11 +976,19 @@ public static class ContentWriter
         var counts = new Dictionary<string, int>();
         var holdings = new Dictionary<int, string>();
 
-        // The world's ordinary level of wealth, for the wonder roll below to measure its centres
-        // against. Median rather than mean: development has a long tail — the centres themselves
-        // are in it — and a mean would be dragged up by exactly the counties being judged.
-        var devLevels = development.Values.OrderBy(v => v).ToList();
-        int medianDevelopment = devLevels.Count == 0 ? 1 : devLevels[devLevels.Count / 2];
+        // The richest county that is NOT a world centre, for the wonder roll below to measure its
+        // centres against. The counties being judged are excluded on purpose: the yardstick has to
+        // be the world they stand above, and every centre is placed above the ordinary curve by
+        // construction, so leaving them in would measure them partly against themselves.
+        //
+        // The world median was the yardstick before and drifts with the era — see
+        // StartingWonderTier — whereas this moves in step with the centres and keeps the bands
+        // meaningful at any start date.
+        int ordinaryTopDevelopment = development
+            .Where(kv => !worldCenters.IsCenter(kv.Key))
+            .Select(kv => kv.Value)
+            .DefaultIfEmpty(1)
+            .Max();
 
         // Four spaces again, matching landed_titles above.
         var b = new JominiBuilder(JominiStyle.Spaced);
@@ -936,7 +1028,7 @@ public static class ContentWriter
                     {
                         // How far up its own ladder this wonder already is on the start date.
                         int built = StartingWonderTier(
-                            wonder, development, medianDevelopment, governments, cfg,
+                            wonder, development, ordinaryTopDevelopment, governments, cfg,
                             new Rng(barony.ProvinceId ^ 0x5C0E));
 
                         // The slot is declared either way. Without it a world that rolled "not yet

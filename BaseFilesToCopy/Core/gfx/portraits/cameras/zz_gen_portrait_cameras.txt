@@ -1,4 +1,4 @@
-# Generated-mod camera for the inventory window's full-body portrait panel.
+﻿# Generated-mod camera for the inventory window's full-body portrait panel.
 #
 # Cameras are a database keyed on the top-level name and merged across every file in this
 # folder -- vanilla itself ships two, portrait_cameras.txt and shop_cameras.txt -- so a new

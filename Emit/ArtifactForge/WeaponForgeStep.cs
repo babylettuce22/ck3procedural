@@ -123,6 +123,87 @@ public static class WeaponForgeStep
     private const int MinPoolSizePerKind = 1;
 
     /// <summary>
+    /// How a pool is split across the four rarity bands, weighted by how many artifacts of each
+    /// band a world actually contains.
+    ///
+    /// Measured on seed 4242 over a 4096x2048 map: <b>26 common, 15 masterwork, 6 famed, 2
+    /// illustrious</b> out of 49 artifacts. Weighting by that rather than splitting evenly puts the
+    /// looks where they will be seen — but the more useful measurement is the other one from that
+    /// run: the whole world held **20 weapon artifacts across five kinds** (3 swords, 3 daggers,
+    /// 4 axes, 4 maces, 6 spears). A pool of eight per kind was never close to being exhausted, so
+    /// reserving five of those eight for the upper bands costs a world nothing in repetition and
+    /// buys every band a look of its own.
+    /// </summary>
+    private static readonly int[] BandWeights = [26, 15, 6, 2];
+
+    /// <summary>
+    /// Which band each look in a pool of <paramref name="count"/> is forged for, in band order.
+    ///
+    /// Scales with the pool size rather than assuming one: every band gets at least one look as
+    /// soon as there are bands to go round, and the surplus is shared out by
+    /// <see cref="BandWeights"/> using largest-remainder, so 8 becomes 3/2/2/1 and 16 becomes
+    /// 7/5/2/2 without either being written down anywhere.
+    ///
+    /// Below four looks the bands cannot all be covered, and which ones to drop is a judgement:
+    /// common is kept because it is most of every world, illustrious because it is the one a player
+    /// stops to look at, and the middle two are given up first. The bands left uncovered are not
+    /// left unserved — <see cref="WeaponAssets.AtTier"/> walks outward to the nearest one that
+    /// exists.
+    /// </summary>
+    private static ArtifactRarity[] TierPlan(int count)
+    {
+        if (count <= 0) return [];
+
+        int bands = WeaponAssets.BandCount;
+
+        if (count < bands)
+        {
+            ArtifactRarity[] priority =
+            [
+                ArtifactRarity.Common,
+                ArtifactRarity.Illustrious,
+                ArtifactRarity.Famed,
+                ArtifactRarity.Masterwork,
+            ];
+
+            return [.. priority.Take(count).OrderBy(t => (int)t)];
+        }
+
+        var counts = new int[bands];
+        var fraction = new double[bands];
+        int surplus = count - bands;
+        int totalWeight = BandWeights.Sum();
+
+        for (int i = 0; i < bands; i++)
+        {
+            double share = surplus * (double)BandWeights[i] / totalWeight;
+            counts[i] = 1 + (int)share;
+            fraction[i] = share - (int)share;
+        }
+
+        for (int placed = counts.Sum(); placed < count; placed++)
+        {
+            int best = 0;
+            for (int i = 1; i < bands; i++)
+            {
+                if (fraction[i] > fraction[best]) best = i;
+            }
+
+            counts[best]++;
+            fraction[best] = -1;
+        }
+
+        var plan = new List<ArtifactRarity>(count);
+
+        for (int i = 0; i < bands; i++)
+        {
+            for (int n = 0; n < counts[i]; n++) plan.Add((ArtifactRarity)i);
+        }
+
+        return [.. plan];
+    }
+
+    /// <summary>
     /// Forges the world's pool of sword looks and returns catalogue rows for them.
     ///
     /// This is the step that takes procedural weapons out of the test cul-de-sac: the rows returned
@@ -140,12 +221,18 @@ public static class WeaponForgeStep
         string modDir, string gameDir, Rng rng, int poolSizePerKind)
     {
         int poolSize = Math.Max(MinPoolSizePerKind, poolSizePerKind);
-        var built = new List<(ForgedWeapon Weapon, string Kind, string StockIcon)>();
+        var built = new List<(ForgedWeapon Weapon, string Kind, string StockIcon, ArtifactRarity Tier)>();
+
+        // Where each library was actually resolved from, so ForgedWeaponTextures probes the same
+        // checkout rather than guessing at it a second time.
+        var partsDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var (kind, relPath, icon) in PartsLibraries)
         {
             string? path = Locate(relPath);
             if (path is null) continue;
+
+            if (Path.GetDirectoryName(path) is { } dir) partsDirs.Add(dir);
 
             var schema = WeaponSchema.For(kind);
             built.AddRange(ForgeOneKind(kind, icon, WeaponForge.LoadParts(path, schema), schema, rng, poolSize));
@@ -156,8 +243,14 @@ public static class WeaponForgeStep
         // Order matters: colours are decided first, because a weapon's icon is a tinted copy of the
         // stock one and cannot be written until its colour is known.
         var forged = built.Select(b => b.Weapon).ToList();
-        var recolour = ForgedWeaponRecolour.Write(modDir, forged, rng, "pool");
+        var tiers = built.ToDictionary(b => b.Weapon.Name, b => b.Tier);
+        var recolour = ForgedWeaponRecolour.Write(modDir, forged, rng, "pool", tiers);
         ForgedWeaponWriter.WriteAll(modDir, forged, recolour);
+
+        // Any texture the game does not already provide has to travel with the mod. Detected by
+        // absence from the game's own index rather than by a naming convention, and fatal when a
+        // texture is found nowhere - see ForgedWeaponTextures.
+        ForgedWeaponTextures.Ship(modDir, gameDir, partsDirs, forged);
 
         // Falls back to the stock icon whenever there is no colour to apply or the source cannot be
         // read — an icon that does not match the model is far better than none.
@@ -171,13 +264,13 @@ public static class WeaponForgeStep
         for (int i = 0; i < built.Count; i++)
         {
             rows.Add(new WeaponAsset($"{built[i].Weapon.Name}_visuals", built[i].Kind,
-                ForgedWeaponWriter.EntityName(built[i].Weapon.Name), icons[i]));
+                ForgedWeaponWriter.EntityName(built[i].Weapon.Name), icons[i], built[i].Tier));
         }
 
         return rows;
     }
 
-    private static List<(ForgedWeapon Weapon, string Kind, string StockIcon)> ForgeOneKind(
+    private static List<(ForgedWeapon Weapon, string Kind, string StockIcon, ArtifactRarity Tier)> ForgeOneKind(
         string kind, string icon, IReadOnlyList<WeaponPart> parts, WeaponSchema schema, Rng rng,
         int poolSize)
     {
@@ -241,13 +334,13 @@ public static class WeaponForgeStep
                 + string.Join(", ", restricted));
         }
 
-        var made = new List<(ForgedWeapon, string, string)>();
+        var recipes = new List<List<WeaponPart>>();
 
         // Combinations are deduplicated so a small library cannot hand the same weapon out twice
         // under two names. With one family that means a pool of one, which is correct.
         var seen = new HashSet<string>();
 
-        for (int attempt = 0; attempt < poolSize * 8 && made.Count < poolSize; attempt++)
+        for (int attempt = 0; attempt < poolSize * 8 && recipes.Count < poolSize; attempt++)
         {
             // One family supplies the anchor and its neighbours, another supplies the business
             // end -- a blade on a foreign hilt, a head on a foreign haft. Two reasons, and the
@@ -271,8 +364,29 @@ public static class WeaponForgeStep
             string signature = string.Join("|", chosen.Select(p => p.Name));
             if (!seen.Add(signature)) continue;
 
-            string name = $"gen_forged_{kind}_{made.Count + 1:00}";
-            made.Add((WeaponForge.Assemble(name, chosen, schema), kind, icon));
+            recipes.Add(chosen);
+        }
+
+        // Bands are handed out after the loop rather than inside it, because the pool can
+        // under-fill: a small or heavily self-restricted library runs out of distinct combinations
+        // long before the attempt budget does. Planning against the *requested* size and taking
+        // bands off the front would then drop whichever bands fell past the end — and those are the
+        // rare ones, so a thin library would lose its illustrious look and keep every common.
+        // Planning against what was actually forged degrades in the right direction instead.
+        var plan = TierPlan(recipes.Count);
+        var made = new List<(ForgedWeapon, string, string, ArtifactRarity)>(recipes.Count);
+        var band = new Dictionary<ArtifactRarity, int>();
+
+        for (int i = 0; i < recipes.Count; i++)
+        {
+            var tier = plan[i];
+            band[tier] = band.GetValueOrDefault(tier) + 1;
+
+            // The band is in the name so every file this weapon owns -- mesh, asset, mask, palette,
+            // icon, visual key -- says which band it was forged for. Numbering restarts per band,
+            // and the pair is unique because a look holds exactly one band.
+            string name = $"gen_forged_{kind}_{tier.ToString().ToLowerInvariant()}_{band[tier]:00}";
+            made.Add((WeaponForge.Assemble(name, recipes[i], schema), kind, icon, tier));
         }
 
         return made;

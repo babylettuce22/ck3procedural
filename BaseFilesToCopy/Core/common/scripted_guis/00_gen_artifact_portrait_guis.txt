@@ -1,4 +1,4 @@
-# Per-artifact "show this on my portrait" toggle.
+﻿# Per-artifact "show this on my portrait" toggle.
 #
 # The button lives in vanilla's artifact details window, spliced in beside reforge/destroy by
 # Emit/GuiWriter.cs. A .gui cannot set a variable, so the click has to land in a scripted_gui --

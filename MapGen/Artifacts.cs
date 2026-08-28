@@ -861,7 +861,7 @@ public sealed class ArtifactMap
                 return Sovereign(legendary, culture, primaryTitle, firstName, taken, rng);
 
             case ArtifactCategory.MartialRelics:
-                return Martial(legendary, culture, primaryTitle, firstName, taken, rng, forgedWeapons);
+                return Martial(rarity, culture, primaryTitle, firstName, taken, rng, forgedWeapons);
 
             case ArtifactCategory.SacredScriptures:
                 return Sacred(legendary, culture, faith, primaryTitle, firstName, taken, rng);
@@ -1214,9 +1214,11 @@ public sealed class ArtifactMap
     }
 
     private static ArtifactLook Martial(
-        bool legendary, Culture culture, Title primaryTitle, string firstName,
+        ArtifactRarity rarity, Culture culture, Title primaryTitle, string firstName,
         HashSet<string> taken, Rng rng, IReadOnlyList<WeaponAsset>? forgedWeapons)
     {
+        bool legendary = rarity == ArtifactRarity.Illustrious;
+
         var (fields, clause) = legendary ? Signature(MartialFlourishes, MartialBase, rng) : (null, "");
         string place = primaryTitle.Name;
 
@@ -1255,9 +1257,17 @@ public sealed class ArtifactMap
         // library, and every kind on a checkout with none at all, still come from the catalogue.
         var forgedOfKind = forgedWeapons?.Where(a => a.Kind == weaponKind).ToList();
 
-        var looks = forgedOfKind is { Count: > 0 }
+        var pool = forgedOfKind is { Count: > 0 }
             ? forgedOfKind
             : WeaponAssets.ForKind(weaponKind);
+
+        // The forged pool is split across the rarity bands, so a common sword draws only from the
+        // looks forged as common ones and a legendary one draws only from the top of the pool.
+        // This is the seam the whole tiering exists for: everything a band is given — its finish
+        // today, decals and glow later — reaches the game through this one line. The vanilla
+        // catalogue carries no bands and comes back whole, so a checkout with no parts library is
+        // unaffected.
+        var looks = WeaponAssets.AtTier(pool, rarity);
 
         var look = looks[rng.Int(0, looks.Count - 1)];
 

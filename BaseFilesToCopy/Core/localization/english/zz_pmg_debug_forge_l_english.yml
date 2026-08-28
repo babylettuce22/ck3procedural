@@ -5,7 +5,7 @@
  # a bracketed aside is parsed as a call and eats the line.
 
  pmg_debug_forge.0001.t:0 "Debug: Forge a Weapon"
- pmg_debug_forge.0001.desc:0 "Mint a weapon artifact through the game's own creation path, equip it, and force it onto the portrait.\n\nThis is the same route an inspiration, a tournament prize or an adventurer's find takes, so what appears is what a player would actually earn. A toast afterwards reports whether the artifact picked up a forged look on creation, or fell back to the default.\n\nSpear has no parts library, and hammer is cut into the mace library rather than having its own. Both are offered so their fallbacks can be seen."
+ pmg_debug_forge.0001.desc:0 "Mint a weapon artifact through the game's own creation path, equip it, and force it onto the portrait.\n\nThis is the same route an inspiration, a tournament prize or an adventurer's find takes, so what appears is what a player would actually earn. A toast afterwards reports which rarity it rolled, and whether the artifact picked up a forged look on creation.\n\nThe rarity is rolled evenly across all four bands rather than left to the game, which lands on the same band almost every time. Rarity is what the visual override reads, so this is the axis that changes which forged look you get: take the same option four times and you should see up to four different weapons of that type. Getting past four means a character of another culture, since the override picks on culture as well.\n\nSpear has no parts library, and hammer is cut into the mace library rather than having its own. Both are offered so their fallbacks can be seen."
 
  pmg_debug_forge.0001.a:0 "A sword"
  pmg_debug_forge.0001.b:0 "A dagger"
@@ -18,6 +18,11 @@
  pmg_debug_forge.0001.indexed:0 "Forged look assigned on creation"
  pmg_debug_forge.0001.unindexed:0 "No forged look: wearing the default"
  pmg_debug_forge.0001.armor:0 "Armour minted and equipped"
+
+ pmg_debug_forge.0001.common:0 "Rolled COMMON: the plainest look of its type"
+ pmg_debug_forge.0001.masterwork:0 "Rolled MASTERWORK"
+ pmg_debug_forge.0001.famed:0 "Rolled FAMED"
+ pmg_debug_forge.0001.illustrious:0 "Rolled ILLUSTRIOUS: the richest look of its type"
 
  pmg_debug_forge.0002.t:0 "Debug: Forge Armour"
  pmg_debug_forge.0002.desc:0 "Mint an armour artifact of a chosen type, equip it, and wear it.\n\nEach of the six types is painted from its own palette, so minting two of different types on the same character is how you tell whether the material is doing its job. The garment itself is chosen by your culture and stays fixed to whoever created the piece, so handing one to a ruler of another culture should not change how it looks."

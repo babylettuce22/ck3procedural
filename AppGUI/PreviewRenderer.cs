@@ -412,9 +412,10 @@ public static class PreviewRenderer
     ///
     /// On a generated one it cannot be. Cultures and world centers are built inside
     /// <see cref="Emit.ContentWriter.WriteAll"/>, so before one has run the development here is
-    /// missing <see cref="MapConfig.WorldCenterDevBoost"/> and the governments are missing their
-    /// heritage and wonder inputs. What that costs is almost entirely administrative realms:
-    /// without the boost a realm's average development stays under the <c>avgDev &gt;= 11</c> gate
+    /// missing the world-centre placement at <see cref="MapConfig.WorldCenterDevPeak"/> and the
+    /// governments are missing their heritage and wonder inputs. What that costs is almost entirely
+    /// administrative realms: without it a realm's average development stays under the
+    /// <c>avgDev &gt;= 11</c> gate
     /// in <see cref="MapGen.Governments.Build"/>, and with no world centers there is no imperial
     /// wonder to waive it, so the counties that would have been administrative fall through to
     /// clan and feudal.

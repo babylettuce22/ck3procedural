@@ -550,6 +550,11 @@ public static class Program
 
         Core.Stage.Begin();
         Core.RunLog.Begin();
+
+        // After RunLog, so the router sits outside its tee: a branch's collected output is replayed
+        // through Console at the join and therefore reaches proctool.txt in replay order, not in
+        // the order two threads produced it.
+        Core.ConsoleFork.Install();
         try
         {
             var result = Generator.Generate(options);

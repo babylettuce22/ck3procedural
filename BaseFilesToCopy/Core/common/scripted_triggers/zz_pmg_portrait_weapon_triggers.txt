@@ -1,4 +1,4 @@
-# Gate for showing an equipped weapon artifact on the idle portrait.
+﻿# Gate for showing an equipped weapon artifact on the idle portrait.
 # Referenced by gfx/portraits/portrait_animations/zz_procedural_weapon_idle.txt.
 #
 # Shows by default. This used to require portrait_wear_armor_trigger, mirroring AGOT, so that a

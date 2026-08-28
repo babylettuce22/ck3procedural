@@ -13,6 +13,48 @@ pmg_debug_forge_weapon_effect = {
 	# artifact is only created when the option is actually taken. That produced 55,740 log lines from
 	# this one event and an error.log of 23 MB, which buries everything genuinely worth reading.
 	hidden_effect = {
+		# Rarity is rolled HERE, before creation, and that placement is the whole point.
+		#
+		# The visual override in common/artifacts/visuals gates each forged look on the artifact's
+		# rarity, and CK3 resolves a visual INSIDE create_artifact -- so set_artifact_rarity on the
+		# finished artifact recolours the frame and leaves the model exactly as it was. Left to
+		# itself the vanilla path lands on the same band nearly every time, which meant this event
+		# could only ever show one look per weapon type however many times it was taken.
+		#
+		# Two vanilla effects make the band steerable, both in
+		# common/scripted_effects/00_ep1_artifact_creation_effects.txt: get_artifact_quality_effect
+		# and get_artifact_wealth_effect each open with `if = { limit = { NOT = { exists =
+		# scope:quality } } }`, so a value saved before the call survives it untouched. Nothing on
+		# the creation path moves either number afterwards -- the decoration effects only set
+		# feature groups, and change_artifact_quality_effect belongs to reforging.
+		#
+		# Rarity is DERIVED from quality + wealth against ARTIFACT_THRESHOLD_MASTERWORK = 50,
+		# _FAMED = 130 and _ILLUSTRIOUS = 180 in 00_defines.txt. The pairs below sum to 32, 90, 154
+		# and 192, each sitting clear of the thresholds either side, and they are the midpoints of
+		# the bands MapGen/Artifacts.cs rolls for generated artifacts.
+		#
+		# Even weights, deliberately not a world-realistic spread: a real world is roughly
+		# 26/15/6/2 across the four bands, which would make illustrious one click in twenty-five.
+		# This event exists to reach every band in a few clicks.
+		random_list = {
+			25 = {
+				save_scope_value_as = { name = quality value = 16 }
+				save_scope_value_as = { name = wealth value = 16 }
+			}
+			25 = {
+				save_scope_value_as = { name = quality value = 45 }
+				save_scope_value_as = { name = wealth value = 45 }
+			}
+			25 = {
+				save_scope_value_as = { name = quality value = 77 }
+				save_scope_value_as = { name = wealth value = 77 }
+			}
+			25 = {
+				save_scope_value_as = { name = quality value = 96 }
+				save_scope_value_as = { name = wealth value = 96 }
+			}
+		}
+
 		# The game's own creation path, the same one inspirations and tournament prizes take. OWNER
 		# and CREATOR both being root means the weapon reads as self-made, which is fine for a
 		# diagnostic and avoids needing a courtier to exist.
@@ -26,6 +68,42 @@ pmg_debug_forge_weapon_effect = {
 			# Creation does not equip. Without this the model is never drawn on the portrait, and
 			# the weapon sits in the inventory looking like the render failed.
 			equip_artifact_to_owner_replace = yes
+		}
+
+		# Which band the weapon actually came out in -- read back off the artifact rather than
+		# echoed from the branch above, so a pair that ever drifts over a threshold reports the
+		# band the player is really looking at. Tested highest-first, which is right whether the
+		# trigger is an equality or a floor.
+		if = {
+			limit = { scope:newly_created_artifact = { rarity = illustrious } }
+			send_interface_toast = {
+				type = msg_artifact_gained
+				title = pmg_debug_forge.0001.illustrious
+				right_icon = scope:newly_created_artifact
+			}
+		}
+		else_if = {
+			limit = { scope:newly_created_artifact = { rarity = famed } }
+			send_interface_toast = {
+				type = msg_artifact_gained
+				title = pmg_debug_forge.0001.famed
+				right_icon = scope:newly_created_artifact
+			}
+		}
+		else_if = {
+			limit = { scope:newly_created_artifact = { rarity = masterwork } }
+			send_interface_toast = {
+				type = msg_artifact_gained
+				title = pmg_debug_forge.0001.masterwork
+				right_icon = scope:newly_created_artifact
+			}
+		}
+		else = {
+			send_interface_toast = {
+				type = msg_artifact_gained
+				title = pmg_debug_forge.0001.common
+				right_icon = scope:newly_created_artifact
+			}
 		}
 
 		# Reports whether the artifact carries a forged-look index. The answer is currently always

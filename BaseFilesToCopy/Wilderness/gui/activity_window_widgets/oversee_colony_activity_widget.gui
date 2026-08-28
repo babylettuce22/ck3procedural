@@ -1,4 +1,4 @@
-vbox = {
+﻿vbox = {
 	name = "oversee_colony_activity_widget"
 	layoutpolicy_horizontal = expanding
 	layoutpolicy_vertical = preferred
