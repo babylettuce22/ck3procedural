@@ -1,0 +1,482 @@
+# The errand's chain.
+#
+# =====================================================================================
+#  The shape, and where it comes from
+# =====================================================================================
+#
+# Four beats on a timer, fired from the activity's phase block, in the shape vanilla's hunt uses
+# (hunt.txt:5138 -- start / outcome-start / complication / outcome-end). Ours:
+#
+#   errand.0001   day  1   THE SETTING OUT   what we told people we were doing
+#   errand.0010   day 14   THE QUARRY        we find them
+#   errand.0020   day 21   THE COMPLICATION  something is wrong
+#   errand.0030   day 28   THE OUTCOME       the only place the triad is paid
+#
+#   errand.0002           the guest's single beat
+#   errand.0100           the corruption notification, fired from society_corrupt_soul_effect
+#
+# =====================================================================================
+#  The rule this file exists to keep
+# =====================================================================================
+#
+# ONLY errand.0030 PAYS. Every other event in the chain is prose and a decision that changes what
+# 0030 does -- none of them touch Dark Power, Visibility or corruption directly.
+#
+# The reason is that CK2's missions paid on completion as a single triad, and a chain that pays
+# out at three separate beats is one where the player cannot tell what earned what, and where
+# abandoning halfway is more profitable than finishing. The beats set a flag; the outcome reads
+# the flags and pays once.
+#
+# =====================================================================================
+#  Reading the quarry
+# =====================================================================================
+#
+#   scope:activity = { has_activity_option = { category = society_errand_quarry option = X } }
+#
+# Every event that varies by quarry uses first_valid on that, in the order devout -> highborn ->
+# unmissed, with unmissed as the bare fallback so a missing option cannot produce an empty desc.
+#
+# scope:activity is read with ?= throughout. An event fired from the DebugPanel runs outside any
+# activity, and without the guard every one of these throws "Undefined event target" per read --
+# the same lesson the rite's events already carry.
+
+namespace = errand
+
+# =====================================================================================
+#  errand.0001 -- THE SETTING OUT
+# =====================================================================================
+#
+# No decision. This is the establishing beat, and it is the one place the errand states what it
+# is in the player's own voice before anything has gone wrong.
+errand.0001 = {
+	type = character_event
+	title = errand.0001.t
+
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					scope:activity ?= {
+						has_activity_option = { category = society_errand_quarry option = errand_quarry_devout }
+					}
+				}
+				desc = errand.0001.desc_devout
+			}
+			triggered_desc = {
+				trigger = {
+					scope:activity ?= {
+						has_activity_option = { category = society_errand_quarry option = errand_quarry_highborn }
+					}
+				}
+				desc = errand.0001.desc_highborn
+			}
+			desc = errand.0001.desc_unmissed
+		}
+	}
+
+	theme = secret
+
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+
+	option = {
+		name = errand.0001.a
+	}
+}
+
+# =====================================================================================
+#  errand.0002 -- THE GUEST'S BEAT
+# =====================================================================================
+#
+# Guests get exactly one, and it is deliberately uninformative. Somebody brought along on an
+# errand is not told what the errand is for, which is both the correct fiction and the reason
+# they are paid a flat 4 Standing in on_complete rather than a share of the outcome.
+errand.0002 = {
+	type = character_event
+	title = errand.0002.t
+	desc = errand.0002.desc
+
+	theme = secret
+
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+
+	right_portrait = {
+		trigger = { exists = scope:host }
+		character = scope:host
+		animation = scheme
+	}
+
+	option = {
+		name = errand.0002.a
+	}
+}
+
+# =====================================================================================
+#  errand.0010 -- THE QUARRY
+# =====================================================================================
+#
+# The first real decision, and it sets the flag the outcome reads. Both options are viable and
+# neither is the trap: taking time is safer and slower, taking them tonight is faster and worse.
+#
+# `society_errand_careful` is the flag. It is set on the host and cleared in errand.0030 -- see
+# the note there on why clearing it matters.
+errand.0010 = {
+	type = character_event
+	title = errand.0010.t
+
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					scope:activity ?= {
+						has_activity_option = { category = society_errand_quarry option = errand_quarry_devout }
+					}
+				}
+				desc = errand.0010.desc_devout
+			}
+			triggered_desc = {
+				trigger = {
+					scope:activity ?= {
+						has_activity_option = { category = society_errand_quarry option = errand_quarry_highborn }
+					}
+				}
+				desc = errand.0010.desc_highborn
+			}
+			desc = errand.0010.desc_unmissed
+		}
+	}
+
+	theme = secret
+
+	left_portrait = {
+		character = root
+		animation = disbelief
+	}
+
+	# ---- Take the time ----
+	option = {
+		name = errand.0010.a
+
+		add_character_flag = {
+			flag = society_errand_careful
+			months = 6
+		}
+
+		custom_tooltip = errand_careful_tt
+
+		ai_chance = {
+			base = 50
+
+			modifier = {
+				add = 30
+				has_trait = patient
+			}
+		}
+	}
+
+	# ---- Tonight ----
+	option = {
+		name = errand.0010.b
+
+		custom_tooltip = errand_hasty_tt
+
+		stress_impact = {
+			patient = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 50
+
+			modifier = {
+				add = 40
+				has_trait = impatient
+			}
+
+			modifier = {
+				add = 20
+				has_trait = sadistic
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  errand.0020 -- THE COMPLICATION
+# =====================================================================================
+#
+# Something is wrong, and how wrong depends on whether the player took their time at 0010. This
+# is the beat that makes the earlier choice mean something, which is the whole reason the chain
+# has four events instead of two.
+#
+# Still no payment. The option here sets or clears `society_errand_clean`, and 0030 reads it.
+errand.0020 = {
+	type = character_event
+	title = errand.0020.t
+
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { has_character_flag = society_errand_careful }
+				desc = errand.0020.desc_careful
+			}
+			desc = errand.0020.desc_hasty
+		}
+	}
+
+	theme = secret
+
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+
+	# ---- Handle it ----
+	#
+	# Available to everybody, but the careful branch is the one that comes off clean. A hasty
+	# errand can still be salvaged; it just costs the salvaging.
+	option = {
+		name = errand.0020.a
+
+		trigger = {
+			has_character_flag = society_errand_careful
+		}
+
+		add_character_flag = {
+			flag = society_errand_clean
+			months = 6
+		}
+
+		custom_tooltip = errand_clean_tt
+	}
+
+	# ---- Improvise ----
+	option = {
+		name = errand.0020.b
+
+		trigger = {
+			NOT = { has_character_flag = society_errand_careful }
+		}
+
+		stress_impact = {
+			compassionate = medium_stress_impact_gain
+			craven = minor_stress_impact_gain
+		}
+
+		custom_tooltip = errand_messy_tt
+	}
+
+	# ---- Walk away ----
+	#
+	# The abandon branch, and it is genuinely available. An errand you leave pays nothing at all,
+	# which is the point: the triad is not a tax on going out, it is what completing costs.
+	option = {
+		name = errand.0020.c
+
+		add_character_flag = {
+			flag = society_errand_abandoned
+			months = 6
+		}
+
+		custom_tooltip = errand_abandoned_tt
+
+		ai_chance = {
+			base = 10
+
+			modifier = {
+				add = 40
+				has_trait = craven
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  errand.0030 -- THE OUTCOME
+# =====================================================================================
+#
+# The only event in the chain that pays, and it pays the full CK2 triad in one call via
+# society_errand_payout_effect -- currency, visibility and corruption together, never separately.
+#
+# ---- The flags, and why they are cleared here ----
+#
+# Three flags can be standing when this fires: _careful, _clean, _abandoned. All three are cleared
+# in the immediate block before anything is paid.
+#
+# That is not tidiness. They carry `months = 6` so they expire on their own, but the errand's own
+# cooldown is three YEARS -- so without an explicit clear, a flag from an abandoned errand would
+# be long gone by the next one and everything would appear to work. The failure only shows up if
+# the cooldown is ever shortened, or if a second errand is started by console during testing, at
+# which point the previous run's flags silently decide this run's payout. Clearing them here makes
+# the event self-contained regardless of what ran before it.
+#
+# ---- The ladder ----
+#
+#   unmissed   80 Dark Power,  4 exposure
+#   highborn  140 Dark Power,  8 exposure
+#   devout    200 Dark Power, 14 exposure
+#
+# CK2's flat 1:2:3 currency ratio, rescaled to this set's economy (the rite pays 60, an abduction
+# costs 100). Exposure climbs faster than pay on purpose: the devout quarry is 2.5x the money and
+# 3.5x the exposure, so the best-paying errand is a worse deal per point of risk than the worst.
+# That is CK2's own shape -- the expensive missions were expensive because somebody looks for a
+# missing priest.
+#
+# A clean errand halves the exposure. Nothing reduces the corruption roll, and nothing should:
+# doing it well is not the same as not having done it.
+errand.0030 = {
+	type = character_event
+	title = errand.0030.t
+
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { has_character_flag = society_errand_abandoned }
+				desc = errand.0030.desc_abandoned
+			}
+			triggered_desc = {
+				trigger = { has_character_flag = society_errand_clean }
+				desc = errand.0030.desc_clean
+			}
+			desc = errand.0030.desc_messy
+		}
+	}
+
+	theme = secret
+
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+
+	immediate = {
+		# Snapshot the flags, then clear them. Read from the saved values below rather than from
+		# the flags themselves, so the clearing cannot race the reading.
+		if = {
+			limit = { has_character_flag = society_errand_abandoned }
+			save_scope_value_as = { name = errand_abandoned value = yes }
+		}
+
+		if = {
+			limit = { has_character_flag = society_errand_clean }
+			save_scope_value_as = { name = errand_clean value = yes }
+		}
+
+		remove_character_flag = society_errand_careful
+		remove_character_flag = society_errand_clean
+		remove_character_flag = society_errand_abandoned
+	}
+
+	# ---- Walked away ----
+	option = {
+		name = errand.0030.a
+
+		trigger = {
+			exists = scope:errand_abandoned
+		}
+
+		custom_tooltip = errand_no_payment_tt
+
+		stress_impact = {
+			ambitious = minor_stress_impact_gain
+		}
+	}
+
+	# ---- Paid, cleanly ----
+	option = {
+		name = errand.0030.b
+
+		trigger = {
+			NOT = { exists = scope:errand_abandoned }
+			exists = scope:errand_clean
+		}
+
+		# Half exposure, full pay. See the ladder note above.
+		if = {
+			limit = {
+				scope:activity ?= {
+					has_activity_option = { category = society_errand_quarry option = errand_quarry_devout }
+				}
+			}
+			society_errand_payout_effect = { DARK_POWER = 200  VISIBILITY = 7 }
+		}
+		else_if = {
+			limit = {
+				scope:activity ?= {
+					has_activity_option = { category = society_errand_quarry option = errand_quarry_highborn }
+				}
+			}
+			society_errand_payout_effect = { DARK_POWER = 140  VISIBILITY = 4 }
+		}
+		else = {
+			society_errand_payout_effect = { DARK_POWER = 80  VISIBILITY = 2 }
+		}
+	}
+
+	# ---- Paid, messily ----
+	option = {
+		name = errand.0030.c
+
+		trigger = {
+			NOR = {
+				exists = scope:errand_abandoned
+				exists = scope:errand_clean
+			}
+		}
+
+		if = {
+			limit = {
+				scope:activity ?= {
+					has_activity_option = { category = society_errand_quarry option = errand_quarry_devout }
+				}
+			}
+			society_errand_payout_effect = { DARK_POWER = 200  VISIBILITY = 14 }
+		}
+		else_if = {
+			limit = {
+				scope:activity ?= {
+					has_activity_option = { category = society_errand_quarry option = errand_quarry_highborn }
+				}
+			}
+			society_errand_payout_effect = { DARK_POWER = 140  VISIBILITY = 8 }
+		}
+		else = {
+			society_errand_payout_effect = { DARK_POWER = 80  VISIBILITY = 4 }
+		}
+	}
+}
+
+# =====================================================================================
+#  errand.0100 -- WHAT IT TOOK
+# =====================================================================================
+#
+# The corruption notification, fired three days after society_corrupt_soul_effect rolls a change.
+# Delayed rather than immediate because the change should land after the errand's own outcome has
+# been read and dismissed -- CK2 did the same thing, and the delay is most of why the mechanic
+# reads as consequence rather than as a second line on the same receipt.
+#
+# Fired ONLY when something actually changed. The no-op branch of the roll does not fire it, so
+# this event arriving always means a trait moved.
+#
+# Deliberately option-less beyond the acknowledgement: the character does not get to decide how
+# they feel about it, which is the whole idea.
+errand.0100 = {
+	type = character_event
+	title = errand.0100.t
+	desc = errand.0100.desc
+
+	theme = secret
+
+	left_portrait = {
+		character = root
+		animation = disbelief
+	}
+
+	option = {
+		name = errand.0100.a
+	}
+}

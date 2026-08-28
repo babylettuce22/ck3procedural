@@ -67,8 +67,243 @@ society_oath_refused_effect = {
 
 	# Three times what acceptance costs. Somebody who joined has the same reasons as you to say
 	# nothing; somebody who refused has none, and is still standing there.
+	society_visibility_gain_effect = { VALUE = 15 }
+}
+
+# =====================================================================================
+#  Exposure, told to the player
+# =====================================================================================
+#
+# Every place the society raises or lowers Visibility goes through one of these two, and the
+# reason is that `change_variable` is completely silent. It renders nothing on an option tooltip,
+# nothing in an effect list, and nothing on screen -- so the player was being charged the single
+# most important resource in the set by a mechanic they could only detect by watching a number on
+# a panel they had to open themselves.
+#
+# Three things happen here, and all three are needed:
+#
+#   save_scope_value_as   so the tooltip can name the amount. This is why there is ONE tooltip key
+#                         instead of one per value -- the loc reads [scope:society_visibility_delta]
+#                         rather than having the number baked into the string.
+#   custom_tooltip        the BEFORE. Renders on the option, so the player reads the cost while
+#                         deciding rather than discovering it afterwards.
+#   send_interface_toast  the AFTER. Renders once it has happened, and states the new TOTAL, which
+#                         the tooltip cannot -- a delta is only meaningful against a running sum,
+#                         and the sum is the thing that eventually gets you caught.
+#
+# The toast is inside a hidden_effect so it does not appear a second time in the tooltip. Without
+# that, an option reads its own consequence twice and the player reasonably concludes it costs
+# double.
+society_visibility_gain_effect = {
+	save_scope_value_as = {
+		name = society_visibility_delta
+		value = $VALUE$
+	}
+
 	change_variable = {
 		name = society_visibility
-		add = 15
+		add = $VALUE$
 	}
+
+	custom_tooltip = society_visibility_rises_tt
+
+	hidden_effect = {
+		send_interface_toast = {
+			type = event_toast_effect_bad
+			title = society_visibility_toast
+			left_icon = root
+		}
+	}
+}
+
+# The mirror. Kept as a separate effect rather than a negative VALUE so the tooltip can be worded
+# as a reduction -- "rises by -10" is the kind of thing that ships.
+society_visibility_loss_effect = {
+	save_scope_value_as = {
+		name = society_visibility_delta
+		value = $VALUE$
+	}
+
+	change_variable = {
+		name = society_visibility
+		subtract = $VALUE$
+	}
+
+	custom_tooltip = society_visibility_falls_tt
+
+	hidden_effect = {
+		send_interface_toast = {
+			type = event_toast_effect_good
+			title = society_visibility_toast
+			left_icon = root
+		}
+	}
+}
+
+# =====================================================================================
+#  Soul corruption
+# =====================================================================================
+#
+# CK2's third meter, and the one that gave the devil-worshipper society its actual character.
+# Dark Power was what you earned and Visibility was what it cost you politically. Corruption was
+# what it cost you PERSONALLY: every use of the society rolled a chance to strip a virtue or add
+# a vice, so a long-serving member slowly stopped being the person who joined.
+#
+# Ported from CK2's minor_soul_corruption_effect, keeping the two properties that made it work:
+#
+#   1. REMOVING A VIRTUE IS TWICE AS LIKELY AS ADDING A VICE. CK2 weighted these 10 against 5.
+#      That asymmetry is why corruption reads as erosion rather than as possession -- you notice
+#      you have stopped being kind long before you notice you have become cruel.
+#
+#   2. EACH CHANGE IS ONE-SHOT. CK2 flagged every individual transition so it could not repeat.
+#      Without that, a character with no virtues left keeps rolling "lose a virtue", the meter
+#      appears to do nothing, and the mechanic silently stops mattering exactly when it should
+#      matter most. The `has_character_flag` guards below are that, and they are load-bearing.
+#
+# CK2's trait names map onto CK3's directly: kind -> compassionate, just -> just,
+# cruel -> callous/sadistic, arbitrary -> arbitrary, deceitful -> deceitful. Where CK3 splits a
+# CK2 trait into a mild and a severe form the mild one is used, because this is erosion.
+#
+# `random_list` weights are read as a proportion of the total, so a branch zeroed by its modifier
+# hands its share to the others -- a character who has already lost every virtue rolls a vice
+# with certainty rather than rolling nothing.
+society_corrupt_soul_effect = {
+	custom_tooltip = society_corruption_tt
+
+	hidden_effect = {
+		random_list = {
+			# ---- Lose compassion ----
+			10 = {
+				trigger = {
+					has_trait = compassionate
+					NOT = { has_character_flag = society_corruption_lost_compassion }
+				}
+
+				add_character_flag = society_corruption_lost_compassion
+				remove_trait = compassionate
+
+				trigger_event = { id = errand.0100 days = 3 }
+			}
+
+			# ---- Lose justice ----
+			10 = {
+				trigger = {
+					has_trait = just
+					NOT = { has_character_flag = society_corruption_lost_just }
+				}
+
+				add_character_flag = society_corruption_lost_just
+				remove_trait = just
+
+				trigger_event = { id = errand.0100 days = 3 }
+			}
+
+			# ---- Lose generosity ----
+			10 = {
+				trigger = {
+					has_trait = generous
+					NOT = { has_character_flag = society_corruption_lost_generous }
+				}
+
+				add_character_flag = society_corruption_lost_generous
+				remove_trait = generous
+
+				trigger_event = { id = errand.0100 days = 3 }
+			}
+
+			# ---- Gain callousness ----
+			5 = {
+				trigger = {
+					NOR = {
+						has_trait = callous
+						has_trait = sadistic
+						has_trait = compassionate
+					}
+					NOT = { has_character_flag = society_corruption_gained_callous }
+				}
+
+				add_character_flag = society_corruption_gained_callous
+				add_trait = callous
+
+				trigger_event = { id = errand.0100 days = 3 }
+			}
+
+			# ---- Gain arbitrariness ----
+			5 = {
+				trigger = {
+					NOR = {
+						has_trait = arbitrary
+						has_trait = just
+					}
+					NOT = { has_character_flag = society_corruption_gained_arbitrary }
+				}
+
+				add_character_flag = society_corruption_gained_arbitrary
+				add_trait = arbitrary
+
+				trigger_event = { id = errand.0100 days = 3 }
+			}
+
+			# ---- Gain deceit ----
+			5 = {
+				trigger = {
+					NOR = {
+						has_trait = deceitful
+						has_trait = honest
+					}
+					NOT = { has_character_flag = society_corruption_gained_deceitful }
+				}
+
+				add_character_flag = society_corruption_gained_deceitful
+				add_trait = deceitful
+
+				trigger_event = { id = errand.0100 days = 3 }
+			}
+
+			# ---- Nothing, this time ----
+			#
+			# Deliberately present and deliberately small. A mechanic that fires every single time
+			# is a tax, and a tax gets budgeted for; one that USUALLY fires is a risk, and a risk
+			# gets thought about. It is also the only branch left once every other one is flagged
+			# out, which is what stops a fully-corrupted character throwing a silent no-op.
+			10 = {
+				trigger = { always = yes }
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  What an errand pays
+# =====================================================================================
+#
+# The CK2 triad in one call, so that no future errand outcome can pay one axis and forget the
+# others. That was the discipline in CK2's own mission blocks -- currency, visibility and
+# corruption always arrived together -- and it is the thing most likely to be lost the third time
+# somebody adds an outcome event in a hurry.
+#
+# DARK_POWER is passed rather than baked because the quarry decides it. CK2's ladder was a flat
+# 1:2:3 (100/200/300 currency); ours keeps the ratio and rescales to this set's economy, where
+# the rite pays 60 and an abduction costs 100 --
+#
+#     unmissed  80    highborn  140    devout  200
+#
+# Visibility is passed for the same reason and runs the other way up the same ladder.
+society_errand_payout_effect = {
+	add_trait_xp = {
+		trait = society_member
+		track = society_rank
+		value = 10
+	}
+
+	change_variable = {
+		name = society_dark_power
+		add = $DARK_POWER$
+	}
+
+	custom_tooltip = society_errand_paid_tt
+
+	society_visibility_gain_effect = { VALUE = $VISIBILITY$ }
+
+	society_corrupt_soul_effect = yes
 }

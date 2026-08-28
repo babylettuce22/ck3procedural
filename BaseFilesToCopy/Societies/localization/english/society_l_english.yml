@@ -93,6 +93,21 @@
  society_rite_requires_membership_tt:0 "Must be a sworn member of the society"
  society_rite_requires_standing_tt:0 "Must have standing enough to be listened to — #bold 50#! or better"
 
+ # --- Exposure ----------------------------------------------------------------------------------
+ #
+ # Two tooltips and one toast, shared by every place the society raises or lowers Visibility.
+ #
+ # ONE key per direction rather than one per amount: society_visibility_gain_effect saves the
+ # figure as a scope value first, so the string reads it rather than having it baked in (bare name, NOT scope: -- that is a loc parse error). Add a new
+ # power that costs 7 exposure and nothing here needs touching.
+ #
+ # The tooltip is the BEFORE and names the delta; the toast is the AFTER and names the TOTAL. Both
+ # are needed and they are not redundant — a delta means nothing without the running sum, and the
+ # sum is the number that eventually gets a member caught.
+ society_visibility_rises_tt:0 "#bold Exposure#! rises by #bold [society_visibility_delta|0]#!"
+ society_visibility_falls_tt:0 "#bold Exposure#! falls by #bold [society_visibility_delta|0]#!"
+ society_visibility_toast:0 "Exposure now stands at #bold [ROOT.Char.MakeScope.Var('society_visibility').GetValue|0]#!"
+
  # --- The powers ------------------------------------------------------------------------------
  #
  # `_filter_tag_desc` is the header the filtered interaction menu shows above this group. The
@@ -188,7 +203,7 @@
  society.0002.a:0 "Good. Nothing else changes today."
 
  society.0003.t:0 "The One Who Said No"
- society.0003.desc:0 "[society_answerer.GetTitledFirstName] says no, and says it kindly, which is the worst of the available answers. A hard no is a person who wants the subject closed. A kind one is a person who has decided to be generous about something they now know.\n\n[society_answerer.GetSheHe] will not go to a priest tonight. Tonight [society_answerer.GetSheHe] will decide [society_answerer.GetSheHe] misheard. It is the week after, and the year after, that we have no answer for."
+ society.0003.desc:0 "[society_answerer.GetTitledFirstName] says no, and says it kindly, which is the worst of the available answers. A hard no is a person who wants the subject closed. A kind one is a person who has decided to be generous about something they now know.\n\n[society_answerer.GetSheHe] will not go to [society_answerer.GetFaith.PriestMale] tonight. Tonight [society_answerer.GetSheHe] will decide [society_answerer.GetSheHe] misheard. It is the week after, and the year after, that we have no answer for."
  society.0003.a:0 "Make it worth [society_answerer.GetHerHis] while to have misheard."
  society.0003.b:0 "Nothing. Let [society_answerer.GetHerHim] carry it."
 

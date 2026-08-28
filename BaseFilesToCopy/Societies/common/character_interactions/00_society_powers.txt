@@ -213,10 +213,7 @@ society_sacrifice_interaction = {
 			#
 			# A killing in your own dungeon is quiet. It is not invisible: there were hands
 			# involved besides yours, and every one of them is a person who now knows.
-			change_variable = {
-				name = society_visibility
-				add = 10
-			}
+			society_visibility_gain_effect = { VALUE = 10 }
 
 			add_trait_xp = {
 				trait = society_member

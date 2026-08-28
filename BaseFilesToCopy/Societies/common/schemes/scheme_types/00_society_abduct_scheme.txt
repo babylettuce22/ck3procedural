@@ -285,10 +285,7 @@ society_abduct = {
 		# Deliberately on_start and not on discovery: discovery is vanilla's machinery and we do
 		# not own a hook in it, so a cost that only landed when caught would usually never land.
 		scheme_owner = {
-			change_variable = {
-				name = society_visibility
-				add = 3
-			}
+			society_visibility_gain_effect = { VALUE = 3 }
 		}
 
 		# Fallback agents, for a scheme begun from script rather than the scheme window.

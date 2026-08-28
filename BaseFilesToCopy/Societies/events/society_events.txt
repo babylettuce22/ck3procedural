@@ -355,10 +355,7 @@ society.0002 = {
 		#
 		# Nothing consumes visibility yet. When the secret arrives this is what its discovery
 		# chance reads.
-		change_variable = {
-			name = society_visibility
-			add = 5
-		}
+		society_visibility_gain_effect = { VALUE = 5 }
 	}
 }
 
@@ -405,10 +402,7 @@ society.0003 = {
 
 		remove_short_term_gold = medium_gold_value
 
-		change_variable = {
-			name = society_visibility
-			add = -10
-		}
+		society_visibility_loss_effect = { VALUE = 10 }
 
 		ai_chance = {
 			base = 50
