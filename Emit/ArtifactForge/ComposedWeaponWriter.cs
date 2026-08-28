@@ -1,4 +1,4 @@
-namespace Ck3MapGen.Emit;
+﻿namespace Ck3MapGen.Emit;
 
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
@@ -6,7 +6,14 @@ using System.IO;
 
 /// <summary>One emitted pairing: which pieces it names, and the entity an artifact visual points at.</summary>
 public sealed record ComposedLook(
-    string Kind, string LeadFamily, string BaseFamily, string EntityName);
+    string Kind, string LeadFamily, string BaseFamily, string Name)
+{
+    /// <summary>The entity an artifact visual points at.</summary>
+    public string EntityName => $"{Name}_entity";
+
+    /// <summary>The artifact visual key this pairing is catalogued under.</summary>
+    public string VisualKey => $"{Name}_visuals";
+}
 
 /// <summary>Everything one weapon kind contributes, with each piece already built exactly once.</summary>
 public sealed record ComposedKind(
@@ -61,9 +68,17 @@ public static class ComposedWeaponWriter
     public static string LeadMeshName(string family) => $"gen_lead_{family}";
     public static string LeadEntityName(string family) => $"{LeadMeshName(family)}_entity";
 
+    /// <summary>
+    /// The stem every name for one pairing derives from — its entity, and the artifact visual that
+    /// points at it. Kept as one function so the two cannot drift apart, and so a visual key does
+    /// not end up spelling <c>_entity_visuals</c> by appending to a name that already said entity.
+    /// </summary>
+    public static string PairName(string lead, string baseFamily)
+        => $"gen_wpn_{lead}__{baseFamily}";
+
     /// <summary>Entity for one pairing — what an artifact visual's <c>asset</c> field names.</summary>
     public static string PairEntityName(string lead, string baseFamily)
-        => $"gen_wpn_{lead}__{baseFamily}_entity";
+        => $"{PairName(lead, baseFamily)}_entity";
 
     /// <summary>
     /// Writes every piece and every pairing, and returns one row per pairing.
@@ -115,7 +130,8 @@ public static class ComposedWeaponWriter
                 {
                     if (!mayCombine(leadFamily, baseFamily)) continue;
 
-                    string entity = PairEntityName(leadFamily, baseFamily);
+                    string pair = PairName(leadFamily, baseFamily);
+                    string entity = $"{pair}_entity";
 
                     b.Append($"entity = {{\n\tname = \"{entity}\"\n");
                     b.Append($"\tpdxmesh = \"{BaseMeshName(baseFamily)}\"\n");
@@ -123,7 +139,7 @@ public static class ComposedWeaponWriter
                         + $"{{ {F(at[0])} {F(at[1])} {F(at[2])} }} }}\n");
                     b.Append($"\tattach = {{ \"{LeadLocator}\" = \"{LeadEntityName(leadFamily)}\" }}\n}}\n\n");
 
-                    looks.Add(new ComposedLook(kind.Kind, leadFamily, baseFamily, entity));
+                    looks.Add(new ComposedLook(kind.Kind, leadFamily, baseFamily, pair));
                 }
             }
         }

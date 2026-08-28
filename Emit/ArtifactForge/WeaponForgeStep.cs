@@ -351,7 +351,7 @@ public static class WeaponForgeStep
                 var look = ordered[i];
 
                 rows.Add(new WeaponAsset(
-                    $"{look.EntityName}_visuals", look.Kind, look.EntityName,
+                    look.VisualKey, look.Kind, look.EntityName,
                     icons.GetValueOrDefault(look.Kind, "artifact_sword.dds"), plan[i]));
             }
         }

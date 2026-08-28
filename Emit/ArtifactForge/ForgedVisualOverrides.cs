@@ -156,6 +156,18 @@ public static class ForgedVisualOverrides
 
     private static int Gcd(int a, int b) => b == 0 ? a : Gcd(b, a % b);
 
+    /// <summary>
+    /// How many looks one culture/rarity cell offers the engine to choose between.
+    ///
+    /// **The icon list deliberately does not get this.** <c>icon</c> and <c>asset</c> are two
+    /// independent lists and the engine rolls each separately, so offering several of both would
+    /// decorrelate them and hand a weapon one blade's thumbnail over another blade's model. One icon
+    /// per cell keeps the pair honest. That costs nothing today because composed looks all share
+    /// their kind's stock icon, and it is the reason to gate a future rendered icon on the lead
+    /// rather than on the pairing.
+    /// </summary>
+    private const int LooksPerCell = 16;
+
     private static void Entries(
         JominiBuilder b, string field, IReadOnlyList<WeaponAsset> pool,
         IReadOnlyList<string> cultureKeys, bool icon)
@@ -178,23 +190,41 @@ public static class ForgedVisualOverrides
                 // matters because a band can be a single look — deduplication caps the pool at the
                 // number of distinct part combinations, and a library with one family yields one.
                 var band = WeaponAssets.AtTier(pool, (ArtifactRarity)r);
-                var pick = band[(c * Stride(band.Count)) % band.Count];
+                int start = (c * Stride(band.Count)) % band.Count;
 
-                using (b.Block(field))
+                // How many looks this cell offers. CK3 "picks a random valid one" among the entries
+                // whose triggers pass (common/artifacts/visuals/_visuals.info), which vanilla itself
+                // relies on -- the chest visual gives its _a and _b variants identical triggers and
+                // lets the engine choose. One entry per cell therefore meant a character saw exactly
+                // one look per band for the whole game, which is what made the debug forge repeat
+                // itself however many times it was taken.
+                //
+                // Capped rather than handed the whole band. A band can hold hundreds of pairings now
+                // that a pairing costs only text, and emitting every one into every culture's cell
+                // would multiply this file by the pool size for variety no player can perceive past
+                // the first dozen.
+                int offered = icon ? 1 : Math.Min(LooksPerCell, band.Count);
+
+                for (int n = 0; n < offered; n++)
                 {
-                    using (b.Block("trigger"))
+                    var pick = band[(start + n) % band.Count];
+
+                    using (b.Block(field))
                     {
-                        // Root is the owner, and at creation that is the character the weapon is
-                        // being made for. Vanilla prefers the creator's culture and falls back to
-                        // the owner's; here the two are the same at the only moment this is read,
-                        // so the simpler test is also the accurate one.
-                        b.Field("culture", $"culture:{cultureKeys[c]}");
+                        using (b.Block("trigger"))
+                        {
+                            // Root is the owner, and at creation that is the character the weapon is
+                            // being made for. Vanilla prefers the creator's culture and falls back to
+                            // the owner's; here the two are the same at the only moment this is read,
+                            // so the simpler test is also the accurate one.
+                            b.Field("culture", $"culture:{cultureKeys[c]}");
 
-                        using (b.Block("scope:artifact"))
-                            b.Field("rarity", Band((ArtifactRarity)r));
+                            using (b.Block("scope:artifact"))
+                                b.Field("rarity", Band((ArtifactRarity)r));
+                        }
+
+                        b.Field("reference", icon ? pick.Icon : pick.Entity);
                     }
-
-                    b.Field("reference", icon ? pick.Icon : pick.Entity);
                 }
             }
         }
