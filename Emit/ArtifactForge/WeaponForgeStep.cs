@@ -217,6 +217,148 @@ public static class WeaponForgeStep
     /// falls back to the vanilla catalogue, so a checkout with no <c>assets/weaponparts/</c> still
     /// generates a complete world with ordinary swords in it.
     /// </summary>
+    /// <summary>
+    /// Builds every pairing the libraries can make, as shared pieces plus one entity each.
+    ///
+    /// **This is the composed replacement for <see cref="ForgeWeaponPools"/>**, and the difference
+    /// is what a pairing costs. The pool path merges each weapon into its own <c>.mesh</c>, so the
+    /// catalogue can only be as large as the binary art you are willing to write; here the base
+    /// assembly and the lead are each written once and a pairing is a few lines of text, so the
+    /// catalogue is every combination the libraries admit — 861 of them on the current cut, from 115
+    /// meshes.
+    ///
+    /// **Colour is not applied here yet.** Every piece goes out on the plain shader with its source
+    /// textures, deliberately: composed geometry and procedural recolour failed together during the
+    /// attach probes in ways that looked identical, and separating them is the only way a fault in
+    /// one is not read as a fault in the other. The recolour belongs on the base entity, which is
+    /// the root and the only part that can carry it.
+    ///
+    /// Returns an empty list when there is no parts library, which is a supported answer: the caller
+    /// falls back to the vanilla catalogue.
+    /// </summary>
+    public static IReadOnlyList<WeaponAsset> ComposeWeaponCatalogue(
+        string modDir, string gameDir)
+    {
+        var kinds = new List<ComposedKind>();
+        var partsDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var materials = new List<ForgedMaterial>();
+        var allParts = new List<WeaponPart>();
+        var icons = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var (kind, relPath, icon) in PartsLibraries)
+        {
+            string? path = Locate(relPath);
+            if (path is null) continue;
+
+            if (Path.GetDirectoryName(path) is { } dir) partsDirs.Add(dir);
+
+            icons[kind] = icon;
+            var schema = WeaponSchema.For(kind);
+            var parts = WeaponForge.LoadParts(path, schema);
+            allParts.AddRange(parts);
+
+            // Same classification the pool path uses: a lead needs only its own slot, since a blade
+            // cut from a weapon whose hilt was not kept is still a perfectly good blade; a base needs
+            // every other slot, because it supplies all of them.
+            var nonLead = schema.Required.Where(s => s != schema.Lead).ToList();
+
+            var families = parts
+                .Where(p => p.HasTextures)
+                .GroupBy(p => p.Family)
+                .OrderBy(g => g.Key, StringComparer.Ordinal)
+                .ToList();
+
+            var bases = new List<(string, WeaponBase)>();
+            var leads = new List<(string, WeaponPiece)>();
+
+            foreach (var family in families)
+            {
+                if (nonLead.All(s => family.Any(p => p.Slot == s)))
+                {
+                    var built = WeaponForge.BuildBase(
+                        ComposedWeaponWriter.BaseMeshName(family.Key),
+                        [.. family.Where(p => p.Slot != schema.Lead)], schema);
+
+                    // A base that cannot seat a lead would emit a locator at the origin and hang the
+                    // blade through the grip, so it is dropped and named rather than shipped.
+                    if (built.LeadMountable) bases.Add((family.Key, built));
+                    else Console.WriteLine($"  composed weapons: {family.Key} has no socket for a "
+                        + $"{schema.Lead.ToString().ToLowerInvariant()} - dropped as a base");
+                }
+
+                if (family.FirstOrDefault(p => p.Slot == schema.Lead) is { } leadPart)
+                {
+                    var built = WeaponForge.BuildLead(
+                        ComposedWeaponWriter.LeadMeshName(family.Key), leadPart, schema);
+
+                    if (built is not null) leads.Add((family.Key, built));
+                    else Console.WriteLine($"  composed weapons: {family.Key} "
+                        + $"{schema.Lead.ToString().ToLowerInvariant()} carries no socket toward its "
+                        + "mount - dropped as a lead");
+                }
+            }
+
+            if (bases.Count == 0 || leads.Count == 0)
+            {
+                Console.WriteLine($"  composed weapons: {kind} has no forgeable pairing - skipped");
+                continue;
+            }
+
+            materials.AddRange(bases.SelectMany(b => b.Item2.Piece.Materials));
+            materials.AddRange(leads.SelectMany(l => l.Item2.Materials));
+            kinds.Add(new ComposedKind(kind, bases, leads));
+        }
+
+        if (kinds.Count == 0) return [];
+
+        var looks = ComposedWeaponWriter.WriteAll(modDir, kinds, MayCombine);
+        ForgedWeaponTextures.Ship(modDir, gameDir, partsDirs, materials, allParts);
+
+        int meshes = kinds.Sum(k => k.Bases.Count + k.Leads.Count);
+
+        Console.WriteLine($"  composed weapons: {looks.Count} pairings from {meshes} shared meshes "
+            + $"across {kinds.Count} kind(s)");
+
+        return BuildCatalogue(looks, icons);
+    }
+
+    /// <summary>
+    /// Catalogue rows for every pairing, tier-banded per kind.
+    ///
+    /// Banding is per kind rather than across the whole catalogue so each kind keeps a full spread —
+    /// otherwise a kind with many pairings would monopolise the rare bands and a small one would sit
+    /// entirely in the common band, which is what <see cref="WeaponAssets.AtTier"/>'s outward walk
+    /// then has to paper over.
+    ///
+    /// The icon is the kind's stock one for now. That is the piece composition does not shrink: an
+    /// icon belongs to a pairing, so rendering them is the one cost that still scales with the
+    /// product. Gating the icon on the lead alone would cut it to one per blade, and a visual's
+    /// <c>icon</c> is a separate trigger list from its <c>asset</c>, so that is available whenever
+    /// the render cost is worth paying.
+    /// </summary>
+    private static List<WeaponAsset> BuildCatalogue(
+        IReadOnlyList<ComposedLook> looks, IReadOnlyDictionary<string, string> icons)
+    {
+        var rows = new List<WeaponAsset>(looks.Count);
+
+        foreach (var byKind in looks.GroupBy(l => l.Kind))
+        {
+            var ordered = byKind.ToList();
+            var plan = TierPlan(ordered.Count);
+
+            for (int i = 0; i < ordered.Count; i++)
+            {
+                var look = ordered[i];
+
+                rows.Add(new WeaponAsset(
+                    $"{look.EntityName}_visuals", look.Kind, look.EntityName,
+                    icons.GetValueOrDefault(look.Kind, "artifact_sword.dds"), plan[i]));
+            }
+        }
+
+        return rows;
+    }
+
     public static IReadOnlyList<WeaponAsset> ForgeWeaponPools(
         string modDir, string gameDir, Rng rng, int poolSizePerKind)
     {
@@ -250,7 +392,8 @@ public static class WeaponForgeStep
         // Any texture the game does not already provide has to travel with the mod. Detected by
         // absence from the game's own index rather than by a naming convention, and fatal when a
         // texture is found nowhere - see ForgedWeaponTextures.
-        ForgedWeaponTextures.Ship(modDir, gameDir, partsDirs, forged);
+        ForgedWeaponTextures.Ship(modDir, gameDir, partsDirs,
+            [.. forged.SelectMany(w => w.Materials)], [.. forged.SelectMany(w => w.Parts)]);
 
         // Falls back to the stock icon whenever there is no colour to apply or the source cannot be
         // read — an icon that does not match the model is far better than none.

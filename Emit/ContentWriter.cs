@@ -433,8 +433,8 @@ public static class ContentWriter
                 // from this pool, so the pool has to exist first. One pool per weapon kind that has
                 // a parts library; kinds without one fall back to the stock catalogue, which is a
                 // supported answer rather than a failure.
-                var forgedWeapons = Core.Stage.Detail("  · weapon forge", () => WeaponForgeStep.ForgeWeaponPools(
-                    modDir, gameDir, new Rng(cfg.Seed ^ 0x5A0D), cfg.WeaponPoolSizePerKind));
+                var forgedWeapons = Core.Stage.Detail("  · weapon forge",
+                    () => WeaponForgeStep.ComposeWeaponCatalogue(modDir, gameDir));
 
                 var artifacts = Core.Stage.Detail("  · artifacts", () => MapGen.ArtifactMap.Build(
                     counties, cultures, faiths, realms, wilderness, prehistory,

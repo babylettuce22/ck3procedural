@@ -1,4 +1,4 @@
-namespace Ck3MapGen.Emit;
+﻿namespace Ck3MapGen.Emit;
 
 using Ck3MapGen.MapGen;
 using System.IO;
@@ -58,21 +58,28 @@ public static class ForgedWeaponTextures
     /// resolved them, and a second guess could pick a different checkout.
     /// </param>
     /// <returns>The number of textures copied.</returns>
+    /// <param name="materials">
+    /// Every material the emitted <c>.asset</c> files will declare. Taken as a flat list rather than
+    /// as weapons because the composed path has no whole weapons to hand — its geometry is shared
+    /// pieces, and a pairing owns no textures of its own.
+    /// </param>
+    /// <param name="parts">
+    /// The parts behind those materials, used only to name the family at fault when a texture
+    /// cannot be found. Attribution is a diagnostic, so an empty list degrades the message rather
+    /// than breaking the check.
+    /// </param>
     public static int Ship(
         string modDir, string gameDir, IEnumerable<string> partsDirs,
-        IReadOnlyList<ForgedWeapon> weapons)
+        IReadOnlyList<ForgedMaterial> materials, IReadOnlyList<WeaponPart> parts)
     {
         // Every texture name the emitted .assets will contain.
         var needed = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var weapon in weapons)
+        foreach (var m in materials)
         {
-            foreach (var m in weapon.Materials)
+            foreach (string name in new[] { m.Diffuse, m.Normal, m.Specular })
             {
-                foreach (string name in new[] { m.Diffuse, m.Normal, m.Specular })
-                {
-                    if (!string.IsNullOrWhiteSpace(name)) needed.Add(name);
-                }
+                if (!string.IsNullOrWhiteSpace(name)) needed.Add(name);
             }
         }
 
@@ -117,7 +124,7 @@ public static class ForgedWeaponTextures
                 + string.Join(", ", copied));
         }
 
-        if (missing.Count > 0) Fail(missing, weapons, supplied.Count);
+        if (missing.Count > 0) Fail(missing, materials, parts, supplied.Count);
 
         return copied.Count;
     }
@@ -127,27 +134,29 @@ public static class ForgedWeaponTextures
     /// the fix is always one of three things and the message should say which.
     /// </summary>
     private static void Fail(
-        List<string> missing, IReadOnlyList<ForgedWeapon> weapons, int suppliedCount)
+        List<string> missing, IReadOnlyList<ForgedMaterial> materials,
+        IReadOnlyList<WeaponPart> parts, int suppliedCount)
     {
         foreach (string name in missing)
         {
             // Attribute by the part's own diffuse where we can; a weapon list is the fallback,
             // since normal/specular are not exposed per part.
-            var families = weapons
-                .SelectMany(w => w.Parts)
+            var families = parts
                 .Where(p => string.Equals(p.Diffuse, name, StringComparison.OrdinalIgnoreCase))
                 .Select(p => p.Family)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
+            // Attribute by the part's own diffuse where we can. A normal or specular map is not
+            // exposed per part, so the fallback names the diffuse that travels with it - which is
+            // what points at the family whose export is short a file.
             string blamed = families.Count > 0
                 ? "family " + string.Join(", ", families)
-                : "weapon(s) " + string.Join(", ", weapons
-                    .Where(w => w.Materials.Any(m =>
-                        string.Equals(m.Normal, name, StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(m.Specular, name, StringComparison.OrdinalIgnoreCase)))
-                    .Select(w => w.Name)
+                : "alongside " + string.Join(", ", materials
+                    .Where(m => string.Equals(m.Normal, name, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(m.Specular, name, StringComparison.OrdinalIgnoreCase))
+                    .Select(m => m.Diffuse)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .OrderBy(n => n, StringComparer.OrdinalIgnoreCase));
 
