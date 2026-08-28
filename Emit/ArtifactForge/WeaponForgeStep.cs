@@ -236,8 +236,25 @@ public static class WeaponForgeStep
     /// Returns an empty list when there is no parts library, which is a supported answer: the caller
     /// falls back to the vanilla catalogue.
     /// </summary>
+    /// <summary>
+    /// The pseudo-weapon a base family's finish is worked out under, one per rarity band.
+    ///
+    /// The recolour machinery takes a set of parts and returns a mask plus a palette, and a base
+    /// assembly is a set of parts — so it transfers whole, with the base standing in for a weapon.
+    /// One entry per band because the finish is *keyed on* the band: an illustrious weapon's
+    /// fittings come out gilded and a common one's plain, which is the thematic payoff of the
+    /// palette landing on the fittings rather than the blade.
+    ///
+    /// The mask that comes back is identical across the four bands of one family — same parts, same
+    /// UV layout — so three of every four are redundant. They are small, and deduplicating them
+    /// would mean teaching the recolour to separate mask from palette, which is a change to working
+    /// code for a few hundred kilobytes.
+    /// </summary>
+    public static string BaseLookName(string family, ArtifactRarity tier)
+        => $"{ComposedWeaponWriter.BaseMeshName(family)}_{tier.ToString().ToLowerInvariant()}";
+
     public static IReadOnlyList<WeaponAsset> ComposeWeaponCatalogue(
-        string modDir, string gameDir)
+        string modDir, string gameDir, Rng rng)
     {
         var kinds = new List<ComposedKind>();
         var partsDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -311,7 +328,17 @@ public static class WeaponForgeStep
 
         if (kinds.Count == 0) return [];
 
-        var looks = ComposedWeaponWriter.WriteAll(modDir, kinds, MayCombine);
+        // Pairings first, because the tier plan is what decides which finish each one wears, and the
+        // finishes cannot be written until the bands are known.
+        var pairings = ComposedWeaponWriter.Plan(kinds, MayCombine);
+        var catalogue = BuildCatalogue(pairings, icons);
+        var tierOf = catalogue.ToDictionary(
+            r => r.VisualKey[..^"_visuals".Length], r => r.Tier ?? ArtifactRarity.Common,
+            StringComparer.Ordinal);
+
+        var recolour = Recolour(modDir, kinds, rng);
+        var looks = ComposedWeaponWriter.WriteAll(
+            modDir, kinds, MayCombine, tierOf, recolour, BaseLookName);
         ForgedWeaponTextures.Ship(modDir, gameDir, partsDirs, materials, allParts);
 
         int meshes = kinds.Sum(k => k.Bases.Count + k.Leads.Count);
@@ -319,7 +346,97 @@ public static class WeaponForgeStep
         Console.WriteLine($"  composed weapons: {looks.Count} pairings from {meshes} shared meshes "
             + $"across {kinds.Count} kind(s)");
 
-        return BuildCatalogue(looks, icons);
+        return catalogue;
+    }
+
+    /// <summary>
+    /// Works out a finish for every base family in every rarity band, or null when the library
+    /// cannot be patterned at all.
+    ///
+    /// **Only the base is recoloured, and that is forced rather than chosen.** The pairing root is
+    /// the base assembly, and an attached child receives no <c>portrait_accessory</c> binding, so
+    /// the lead cannot carry a palette however it is declared. It keeps the textures it was cut
+    /// with — which for a blade or an axe head means steel, and reads correctly.
+    /// </summary>
+    private static ForgedRecolour? Recolour(
+        string modDir, IReadOnlyList<ComposedKind> kinds, Rng rng)
+    {
+        var stand = new List<ForgedWeapon>();
+        var tiers = new Dictionary<string, ArtifactRarity>(StringComparer.Ordinal);
+
+        foreach (var kind in kinds)
+        {
+            var schema = WeaponSchema.For(kind.Kind);
+
+            foreach (var (family, built) in kind.Bases)
+            {
+                foreach (var tier in Enum.GetValues<ArtifactRarity>())
+                {
+                    string look = BaseLookName(family, tier);
+
+                    stand.Add(new ForgedWeapon(
+                        look, built.Piece.ShapeName, built.Piece.Root, built.Piece.Materials,
+                        built.Parts));
+
+                    tiers[look] = tier;
+                }
+            }
+        }
+
+        if (ForgedWeaponRecolour.Write(modDir, stand, rng, "composed", tiers) is not { } raw)
+            return null;
+
+        return ShareMasks(modDir, kinds, raw);
+    }
+
+    /// <summary>
+    /// Points all four bands of a base family at one mask file and removes the duplicates.
+    ///
+    /// A mask is derived from geometry — which parts overlap in UV0 — so the four bands of one
+    /// family produce **byte-identical** files. Measured before this existed: 232 masks at 256 KB
+    /// each, 58 MB, of which three quarters were copies. Sharing takes it to 14.5 MB and changes
+    /// nothing on screen, because only the variation differs between bands.
+    ///
+    /// The duplicates are written and then deleted rather than never written. The recolour owns mask
+    /// generation and emits one per entry; teaching it to share a mask between entries means
+    /// separating mask from palette inside 800 lines of working code, for a saving this gets
+    /// directly. The write is a few hundred milliseconds of a ten-second run.
+    /// </summary>
+    private static ForgedRecolour ShareMasks(
+        string modDir, IReadOnlyList<ComposedKind> kinds, ForgedRecolour raw)
+    {
+        var shared = new Dictionary<string, string>(StringComparer.Ordinal);
+        int removed = 0;
+
+        foreach (var kind in kinds)
+        {
+            foreach (var (family, _) in kind.Bases)
+            {
+                string keep = raw.MaskFor(BaseLookName(family, ArtifactRarity.Common));
+
+                foreach (var tier in Enum.GetValues<ArtifactRarity>())
+                {
+                    string look = BaseLookName(family, tier);
+                    string own = raw.MaskFor(look);
+                    shared[look] = keep;
+
+                    if (string.Equals(own, keep, StringComparison.Ordinal)) continue;
+
+                    string path = Path.Combine(modDir, own.Replace('/', Path.DirectorySeparatorChar));
+
+                    if (File.Exists(path))
+                    {
+                        File.Delete(path);
+                        removed++;
+                    }
+                }
+            }
+        }
+
+        Console.WriteLine($"  composed weapons: {shared.Count - removed} mask(s) shared across "
+            + $"{WeaponAssets.BandCount} bands, {removed} duplicate(s) removed");
+
+        return raw with { MaskByWeapon = shared };
     }
 
     /// <summary>

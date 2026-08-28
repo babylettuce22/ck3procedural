@@ -434,7 +434,7 @@ public static class ContentWriter
                 // a parts library; kinds without one fall back to the stock catalogue, which is a
                 // supported answer rather than a failure.
                 var forgedWeapons = Core.Stage.Detail("  · weapon forge",
-                    () => WeaponForgeStep.ComposeWeaponCatalogue(modDir, gameDir));
+                    () => WeaponForgeStep.ComposeWeaponCatalogue(modDir, gameDir, new Rng(cfg.Seed ^ 0x5A0D)));
 
                 var artifacts = Core.Stage.Detail("  · artifacts", () => MapGen.ArtifactMap.Build(
                     counties, cultures, faiths, realms, wilderness, prehistory,

@@ -59,6 +59,13 @@ public static class ComposedWeaponWriter
     /// the attach probes. <see cref="CustomArmorStep"/> enforces the same rule for armour.
     /// </summary>
     private const string PlainShader = "portrait_attachment";
+
+    /// <summary>
+    /// The base's shader when it is recoloured. Safe here and nowhere else: every entity that uses a
+    /// base pdxmesh is a pairing root, and every pairing root declares the accessory the pattern
+    /// stage needs. The lead never gets this, because an attached child's accessory is never bound.
+    /// </summary>
+    private const string PatternShader = "portrait_attachment_pattern";
     private const string ShaderFile = "gfx/FX/jomini/portrait.shader";
 
     /// <summary>Locator the lead hangs from. One name, because a base attaches exactly one lead.</summary>
@@ -81,6 +88,29 @@ public static class ComposedWeaponWriter
         => $"{PairName(lead, baseFamily)}_entity";
 
     /// <summary>
+    /// Every pairing the kinds admit, without writing anything.
+    ///
+    /// Split out from <see cref="WriteAll"/> because the tier plan is built from this list and the
+    /// finishes are keyed on the tier, so the pairings have to be known before the assets that wear
+    /// them can be written. Both walk the families in the same order, so the two agree by
+    /// construction rather than by a shared sort.
+    /// </summary>
+    public static List<ComposedLook> Plan(
+        IReadOnlyList<ComposedKind> kinds, Func<string, string, bool> mayCombine)
+    {
+        var looks = new List<ComposedLook>();
+
+        foreach (var kind in kinds)
+            foreach (var (baseFamily, _) in kind.Bases)
+                foreach (var (leadFamily, _) in kind.Leads)
+                    if (mayCombine(leadFamily, baseFamily))
+                        looks.Add(new ComposedLook(
+                            kind.Kind, leadFamily, baseFamily, PairName(leadFamily, baseFamily)));
+
+        return looks;
+    }
+
+    /// <summary>
     /// Writes every piece and every pairing, and returns one row per pairing.
     ///
     /// <paramref name="mayCombine"/> is the caller's compatibility rule — the same one that keeps a
@@ -88,7 +118,9 @@ public static class ComposedWeaponWriter
     /// rejects are never written, so the returned rows are exactly what the catalogue may offer.
     /// </summary>
     public static List<ComposedLook> WriteAll(
-        string modDir, IReadOnlyList<ComposedKind> kinds, Func<string, string, bool> mayCombine)
+        string modDir, IReadOnlyList<ComposedKind> kinds, Func<string, string, bool> mayCombine,
+        IReadOnlyDictionary<string, ArtifactRarity> tierOf, ForgedRecolour? recolour = null,
+        Func<string, ArtifactRarity, string>? baseLookName = null)
     {
         string dir = Path.Combine(modDir, ModelDir.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(dir);
@@ -108,13 +140,13 @@ public static class ComposedWeaponWriter
             foreach (var (family, built) in kind.Bases)
             {
                 PdxMesh.Write(Path.Combine(dir, $"{BaseMeshName(family)}.mesh"), built.Piece.Root);
-                WritePdxMesh(b, built.Piece, BaseMeshName(family));
+                WritePdxMesh(b, built.Piece, BaseMeshName(family), patterned: recolour is not null);
             }
 
             foreach (var (family, built) in kind.Leads)
             {
                 PdxMesh.Write(Path.Combine(dir, $"{LeadMeshName(family)}.mesh"), built.Root);
-                WritePdxMesh(b, built, LeadMeshName(family));
+                WritePdxMesh(b, built, LeadMeshName(family), patterned: false);
 
                 // The lead's own entity, referenced by every pairing that uses it. Plain shader and
                 // no accessory: see PlainShader.
@@ -135,6 +167,25 @@ public static class ComposedWeaponWriter
 
                     b.Append($"entity = {{\n\tname = \"{entity}\"\n");
                     b.Append($"\tpdxmesh = \"{BaseMeshName(baseFamily)}\"\n");
+
+                    // The accessory lives on the pairing rather than on the shared base mesh, which
+                    // is what lets one set of geometry wear a different finish per rarity band: the
+                    // mask is the base's own and identical across bands, and only the variation
+                    // changes. The lead never gets one -- an attached child's accessory is never
+                    // bound, so declaring it there would be a lie that renders as an unbound
+                    // sampler.
+                    if (recolour is not null && baseLookName is not null
+                        && tierOf.TryGetValue(pair, out var tier))
+                    {
+                        string look = baseLookName(baseFamily, tier);
+
+                        b.Append("\tgame_data = {\n\t\tportrait_entity_user_data = {\n");
+                        b.Append("\t\t\tportrait_accessory = {\n");
+                        b.Append($"\t\t\t\tpattern_mask = \"{recolour.MaskFor(look)}\"\n");
+                        b.Append($"\t\t\t\tvariation = \"{recolour.VariationFor(look)}\"\n");
+                        b.Append("\t\t\t}\n\t\t}\n\t}\n");
+                    }
+
                     b.Append($"\tlocator = {{ name = \"{LeadLocator}\" position = "
                         + $"{{ {F(at[0])} {F(at[1])} {F(at[2])} }} }}\n");
                     b.Append($"\tattach = {{ \"{LeadLocator}\" = \"{LeadEntityName(leadFamily)}\" }}\n}}\n\n");
@@ -156,7 +207,8 @@ public static class ComposedWeaponWriter
     /// <see cref="ForgedWeaponWriter"/> documents, and the reason
     /// <see cref="WeaponPiece.Materials"/> is an ordered list rather than a set.
     /// </summary>
-    private static void WritePdxMesh(System.Text.StringBuilder b, WeaponPiece piece, string meshName)
+    private static void WritePdxMesh(
+        System.Text.StringBuilder b, WeaponPiece piece, string meshName, bool patterned)
     {
         b.Append($"pdxmesh = {{\n\tname = \"{meshName}\"\n\tfile = \"{meshName}.mesh\"\n");
 
@@ -168,7 +220,7 @@ public static class ComposedWeaponWriter
             b.Append($"\t\ttexture_diffuse = \"{m.Diffuse}\"\n");
             b.Append($"\t\ttexture_normal = \"{m.Normal}\"\n");
             b.Append($"\t\ttexture_specular = \"{m.Specular}\"\n");
-            b.Append($"\t\tshader = \"{PlainShader}\"\n");
+            b.Append($"\t\tshader = \"{(patterned ? PatternShader : PlainShader)}\"\n");
             b.Append($"\t\tshader_file = \"{ShaderFile}\"\n\t}}\n");
         }
 

@@ -44,7 +44,13 @@ public sealed record WeaponPiece(
 /// False when the join to the lead is missing a socket on one side, which makes the locator a guess.
 /// Reported rather than emitted, because the result is a blade floating beside its hilt.
 /// </param>
-public sealed record WeaponBase(WeaponPiece Piece, float[] LeadLocator, bool LeadMountable);
+/// <param name="Parts">
+/// The parts merged into <paramref name="Piece"/>, kept because the recolour reads their map1 (UV0)
+/// footprints to work out which of them can be coloured independently. Placement shifts geometry
+/// only, never UVs, so these are the atlas coordinates the merged base actually uses.
+/// </param>
+public sealed record WeaponBase(
+    WeaponPiece Piece, float[] LeadLocator, bool LeadMountable, IReadOnlyList<WeaponPart> Parts);
 
 /// <summary>
 /// One pairing: which base, which lead, and nothing else. Both pieces are shared, so a pairing costs
@@ -508,7 +514,8 @@ public static class WeaponForge
             locator = [socket[0] + shift[0], socket[1] + shift[1], socket[2] + shift[2]];
         }
 
-        return new WeaponBase(BuildPiece(name, baseParts, shifts), locator, mountable);
+        return new WeaponBase(
+            BuildPiece(name, baseParts, shifts), locator, mountable, baseParts);
     }
 
     /// <summary>
