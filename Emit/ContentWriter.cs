@@ -446,9 +446,9 @@ public static class ContentWriter
                 // pairings, a thumbnail belongs to exactly one — so only the upper bands get drawn
                 // and everything else keeps its kind's stock art.
                 var forgedWeapons = Core.Stage.Detail("  · weapon icons",
-                    () => WeaponForgeStep.RenderChosenIcons(modDir, gameDir, composed,
+                    () => WeaponForgeStep.FinishTopArtifacts(modDir, gameDir, composed,
                         artifacts.AllArtifacts.Select(a => (a.Visuals, a.Rarity)),
-                        ArtifactRarity.Masterwork));
+                        ArtifactRarity.Famed, ArtifactRarity.Masterwork, new Rng(cfg.Seed ^ 0x4E17)));
 
                 ArtifactWriter.WriteTemplates(modDir);
                 Core.Stage.Detail("  · artifact visuals", () => ArtifactWriter.WriteVisuals(modDir, forgedWeapons));

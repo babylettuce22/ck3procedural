@@ -79,6 +79,24 @@ public static class WeaponForgeStep
         new(StringComparer.OrdinalIgnoreCase) { "ep1_indian_mace_01_a" };
 
     /// <summary>
+    /// Lead families too ostentatious for an ordinary weapon, reserved for the rarest bands.
+    ///
+    /// Deliberately **empty for now**. The mechanism is here because the judgement it encodes is
+    /// about art rather than code — a blade either looks like a king's or it does not — and the
+    /// answer will arrive with the blades, not with a rewrite. Adding a name is the whole change.
+    ///
+    /// It narrows where a family appears without costing a pairing: <see cref="BuildCatalogue"/>
+    /// sorts these to the back of their kind, and bands are handed out in ascending order, so a
+    /// fancy blade takes the top bands first and spills down through famed if there are more of them
+    /// than top-band slots. Nothing is ever dropped.
+    ///
+    /// Distinct from <see cref="SelfOnlyFamilies"/>, which is about geometry that cannot mate. This
+    /// is about geometry that mates perfectly well and should simply be rarer.
+    /// </summary>
+    private static readonly HashSet<string> FancyLeadFamilies =
+        new(StringComparer.OrdinalIgnoreCase) { };
+
+    /// <summary>
     /// Whether a lead/base pair may be forged. A self-only family is allowed opposite itself and
     /// nothing else, which is symmetric: it can neither donate to nor borrow from a stranger.
     /// </summary>
@@ -364,85 +382,156 @@ public static class WeaponForgeStep
     }
 
     /// <summary>
-    /// Renders a real icon for the pairings the world actually hands out at the given rarity or
-    /// better, and returns the catalogue with those rows repointed.
+    /// Finishes the handful of weapons a world actually hands out: a merged, fully recoloured mesh
+    /// for the rarest, and a rendered icon for a slightly wider set. Returns the catalogue with
+    /// those rows repointed.
     ///
-    /// **Why so few.** An icon is the one thing composition does not make cheap: geometry and masks
-    /// are shared between pairings, but a thumbnail belongs to exactly one. Rendering all 843 would
-    /// undo the saving for art almost none of which is ever seen — a world places 23 forged weapons.
-    /// Restricting to the upper bands renders a handful and puts them where a player is looking.
+    /// **Why the rarest get a different kind of geometry.** A composed weapon's blade is an attached
+    /// child, and an attached child never receives a <c>portrait_accessory</c> binding — so the
+    /// palette reaches the fittings and stops. Merging the whole weapon into one mesh makes it a
+    /// single root, and the recolour then covers the blade too. That is the old pool path, and it is
+    /// affordable here for exactly the reason the icons are: a world places 23 forged weapons and
+    /// only a couple at famed or better, so a handful of extra meshes buys every hero weapon in the
+    /// world a finish the other 843 pairings cannot have.
     ///
-    /// **Everything else keeps its kind's stock icon, and that is deliberate rather than a
-    /// shortfall.** Weapons the *game* creates resolve through the visual override, where a cell
-    /// offers many assets and the engine rolls <c>icon</c> and <c>asset</c> independently — so no
-    /// per-look icon there could match the model it is drawn beside. Vanilla settles the same
-    /// question the same way: its <c>chest</c> visual carries one icon over ten different assets.
+    /// Both passes share the assembly, because both need the same thing — the whole weapon in one
+    /// piece — and assembling it twice would be the only cost of keeping them apart.
     /// </summary>
-    public static IReadOnlyList<WeaponAsset> RenderChosenIcons(
+    /// <param name="merge">Rarity at which a weapon earns a merged, fully recoloured mesh.</param>
+    /// <param name="draw">Rarity at which it earns a rendered icon. Expected to be the looser of the
+    /// two, so every merged weapon also gets an icon drawn from its own colours.</param>
+    public static IReadOnlyList<WeaponAsset> FinishTopArtifacts(
         string modDir, string gameDir, ComposedCatalogue catalogue,
-        IEnumerable<(string Visuals, ArtifactRarity Rarity)> placed, ArtifactRarity from)
+        IEnumerable<(string Visuals, ArtifactRarity Rarity)> placed,
+        ArtifactRarity merge, ArtifactRarity draw, Rng rng)
     {
         if (catalogue.Recolour is not { } recolour || catalogue.Looks.Count == 0)
             return catalogue.Looks;
 
-        var wanted = placed
-            .Where(a => a.Rarity >= from)
-            .Select(a => a.Visuals)
-            .ToHashSet(StringComparer.Ordinal);
+        var rarest = new Dictionary<string, ArtifactRarity>(StringComparer.Ordinal);
 
-        if (wanted.Count == 0) return catalogue.Looks;
+        foreach (var (visuals, rarity) in placed)
+        {
+            if (rarity < draw) continue;
+
+            // A visual can be handed out more than once, so the best band it ever reached is what
+            // decides its treatment. Otherwise a look that is illustrious on one ruler could be
+            // demoted by also being masterwork on another.
+            rarest[visuals] = rarest.TryGetValue(visuals, out var seen) && seen > rarity
+                ? seen
+                : rarity;
+        }
+
+        if (rarest.Count == 0) return catalogue.Looks;
 
         var byKey = catalogue.Pairings.ToDictionary(p => p.VisualKey, StringComparer.Ordinal);
         var tierOf = catalogue.Looks.ToDictionary(
             r => r.VisualKey, r => r.Tier ?? ArtifactRarity.Common, StringComparer.Ordinal);
+        var byKind = catalogue.Kinds.ToDictionary(k => k.Kind, k => k, StringComparer.Ordinal);
 
-        var partsByKind = catalogue.Kinds.ToDictionary(k => k.Kind, k => k, StringComparer.Ordinal);
-        var drawn = new Dictionary<string, string>(StringComparer.Ordinal);
+        // Assembled once and used by both passes, because both want the same thing: the whole
+        // weapon in one piece.
+        var built = new List<(string Key, ComposedLook Look, ForgedWeapon Weapon, WeaponBase Base)>();
 
-        foreach (string key in wanted.OrderBy(k => k, StringComparer.Ordinal))
+        foreach (string key in rarest.Keys.OrderBy(k => k, StringComparer.Ordinal))
         {
             if (!byKey.TryGetValue(key, out var look)) continue;
-            if (!partsByKind.TryGetValue(look.Kind, out var kind)) continue;
+            if (!byKind.TryGetValue(look.Kind, out var kind)) continue;
 
             var schema = WeaponSchema.For(look.Kind);
-
             var baseBuilt = kind.Bases.FirstOrDefault(b => b.Family == look.BaseFamily).Built;
-            var leadPart = kind.Leads.FirstOrDefault(l => l.Family == look.LeadFamily);
-            if (baseBuilt is null || leadPart.Family is null) continue;
+            var lead = FindLead(kind, look.LeadFamily);
+            if (baseBuilt is null || lead is null) continue;
 
-            // Reassembled rather than composed: the renderer wants the whole weapon in one frame,
-            // and Assemble is still the shortest way to get it. Nothing is written -- this geometry
-            // exists only to be photographed.
-            var parts = new List<WeaponPart>(baseBuilt.Parts);
-            var lead = FindLead(kind, look.LeadFamily, schema);
-            if (lead is null) continue;
-            parts.Add(lead);
+            var parts = new List<WeaponPart>(baseBuilt.Parts) { lead };
+            string name = HeroName(look.Kind, built.Count);
 
-            var weapon = WeaponForge.Assemble(look.Name, parts, schema);
-            var colours = ColoursFor(weapon, baseBuilt, recolour,
-                BaseLookName(look.BaseFamily, tierOf.GetValueOrDefault(key, ArtifactRarity.Common)),
-                gameDir);
+            Console.WriteLine($"  composed weapons: {name} <- {look.LeadFamily} on {look.BaseFamily} "
+                + $"({rarest[key].ToString().ToLowerInvariant()})");
 
-            if (ForgedWeaponRender.Write(modDir, gameDir, weapon, schema, look.Kind, colours) is { } file)
-                drawn[key] = file;
+            built.Add((key, look, WeaponForge.Assemble(name, parts, schema), baseBuilt));
         }
 
-        Console.WriteLine($"  composed weapons: rendered {drawn.Count} icon(s) for "
-            + $"{from.ToString().ToLowerInvariant()}-and-better artifacts, "
-            + $"{catalogue.Looks.Count - drawn.Count} on stock art");
+        // ---- merged heroes ------------------------------------------------------------------
+        var heroes = built.Where(x => rarest[x.Key] >= merge).ToList();
+        ForgedRecolour? heroColour = null;
 
-        return [.. catalogue.Looks.Select(r =>
-            drawn.TryGetValue(r.VisualKey, out string? icon) ? r with { Icon = icon } : r)];
+        if (heroes.Count > 0)
+        {
+            var made = heroes.Select(h => h.Weapon).ToList();
+            var tiers = heroes.ToDictionary(
+                h => h.Weapon.Name, h => rarest[h.Key], StringComparer.Ordinal);
+
+            heroColour = ForgedWeaponRecolour.Write(modDir, made, rng, "hero", tiers);
+
+            if (heroColour is not null) ForgedWeaponWriter.WriteAll(modDir, made, heroColour);
+        }
+
+        var entity = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        if (heroColour is not null)
+        {
+            foreach (var hero in heroes)
+                entity[hero.Key] = ForgedWeaponWriter.EntityName(hero.Weapon.Name);
+        }
+
+        // ---- icons --------------------------------------------------------------------------
+        var drawn = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var (key, look, weapon, baseBuilt) in built)
+        {
+            // A hero's colours cover every part including the blade, which is the whole point of
+            // merging it. Anything else falls back to the base's finish plus a sampled lead.
+            var colours = heroColour is not null
+                    && heroColour.PartColour.TryGetValue(weapon.Name, out var full)
+                ? [.. full]
+                : ColoursFor(weapon, baseBuilt, recolour,
+                    BaseLookName(look.BaseFamily, tierOf.GetValueOrDefault(key, ArtifactRarity.Common)),
+                    gameDir);
+
+            if (ForgedWeaponRender.Write(
+                    modDir, gameDir, weapon, WeaponSchema.For(look.Kind), look.Kind, colours)
+                is { } file)
+            {
+                drawn[key] = file;
+            }
+        }
+
+        Console.WriteLine($"  composed weapons: {entity.Count} merged and fully recoloured at "
+            + $"{merge.ToString().ToLowerInvariant()}+, {drawn.Count} icon(s) at "
+            + $"{draw.ToString().ToLowerInvariant()}+, {catalogue.Looks.Count - drawn.Count} on stock art");
+
+        return [.. catalogue.Looks.Select(r => r with
+        {
+            Icon = drawn.GetValueOrDefault(r.VisualKey, r.Icon),
+            Entity = entity.GetValueOrDefault(r.VisualKey, r.Entity),
+        })];
     }
+
+    /// <summary>
+    /// Name for a merged hero weapon: short, and numbered rather than descriptive.
+    ///
+    /// Distinct from its pairing so both can exist side by side — the composed pairing stays in the
+    /// catalogue for anything the override path rolls onto an ordinary weapon, and only the artifact
+    /// that earned it points at the merged mesh.
+    ///
+    /// **Numbered because a <c>.mesh</c> node name may not reach 64 characters** (<c>PdxMesh</c>
+    /// line 202), and a pairing name is two family names joined. The first cut appended
+    /// <c>_hero</c> to the pairing and produced <c>gen_wpn_ep2_northern_mace_01_b__
+    /// ep2_northern_mace_01_b_heroShape</c> — exactly 64, and the write threw. The index is stable
+    /// because the pairings are walked in sorted key order, and the mapping is printed as it is
+    /// assigned so a file on disk can still be traced back to the families it came from.
+    /// </summary>
+    private static string HeroName(string kind, int index) => $"gen_hero_{kind}_{index:00}";
 
     /// <summary>
     /// The lead part of one family, or null when this kind's library has none.
     ///
     /// Read off <see cref="ComposedKind.Leads"/> and not off a base's parts: a base is built by
     /// excluding the lead, so searching there can only ever return nothing. It did, silently, and
-    /// the icon pass rendered zero.
+    /// the first cut of the icon pass rendered zero without failing.
     /// </summary>
-    private static WeaponPart? FindLead(ComposedKind kind, string family, WeaponSchema schema)
+    private static WeaponPart? FindLead(ComposedKind kind, string family)
     {
         foreach (var (name, _, part) in kind.Leads)
             if (string.Equals(name, family, StringComparison.Ordinal)) return part;
@@ -473,7 +562,8 @@ public static class WeaponForgeStep
 
             colours.Add(index >= 0 && index < baseColours.Count
                 ? baseColours[index]
-                : ForgedWeaponTextures.AverageColour(gameDir, part.Diffuse) ?? ((byte)150, (byte)150, (byte)155));
+                : ForgedWeaponTextures.AverageColour(gameDir, part.Diffuse)
+                    ?? ((byte)150, (byte)150, (byte)155));
         }
 
         return colours;
@@ -590,7 +680,18 @@ public static class WeaponForgeStep
 
         foreach (var byKind in looks.GroupBy(l => l.Kind))
         {
-            var ordered = byKind.ToList();
+            // Fancy leads to the back of the queue, because TierPlan hands out bands in ascending
+            // order and the last entries are therefore the rarest. A blade too ostentatious for a
+            // common weapon lands on an illustrious one instead, and the surplus spills down through
+            // famed rather than being dropped — so marking a family fancy narrows where it appears
+            // without ever costing a pairing.
+            //
+            // OrderBy is stable, so within each group the pairings keep the order Plan produced and
+            // a base family's run stays contiguous.
+            var ordered = byKind
+                .OrderBy(l => FancyLeadFamilies.Contains(l.LeadFamily) ? 1 : 0)
+                .ToList();
+
             var plan = TierPlan(ordered.Count);
 
             for (int i = 0; i < ordered.Count; i++)
