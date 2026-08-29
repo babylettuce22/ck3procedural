@@ -217,7 +217,9 @@ public sealed class ArtifactMap
             // Which of this ruler's one-of-a-kind slots are already spoken for.
             var usedSlots = new HashSet<string>(StringComparer.Ordinal);
 
-            bool isEmperor = primaryTitle.Tier == "e";
+            // A hegemon counts as an emperor here. The tier above empire is rare enough that giving
+            // it a regalia budget of its own would be one branch for one character on one map.
+            bool isEmperor = primaryTitle.Tier is "e" or "h";
             bool isKing = primaryTitle.Tier == "k";
             bool isDuke = primaryTitle.Tier == "d";
 

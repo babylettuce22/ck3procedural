@@ -114,7 +114,8 @@ public static class ContentWriter
                 ? null
                 : MapGen.AzgaarNaming.TitleNames(azgaar, empires, tierForms, map, stateGovernments);
 
-            Titles.AssignNames(empires, map, new Rng(cfg.Seed ^ 0x7171), borrowed);
+            Titles.AssignNames(empires, map, new Rng(cfg.Seed ^ 0x7171), borrowed,
+                               Titles.HegemonyOf(empires));
 
             if (borrowed is not null)
                 Console.WriteLine($"  azgaar: {borrowed.Count} of {Titles.Flatten(empires).Count()} " +
@@ -147,12 +148,21 @@ public static class ContentWriter
                     empires, development, wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17), provinces, order,
                     baronyCount, azgaar, cultures));
 
+        // After the realm pass, never during it — see Realms.CrownHegemon for why granting it any
+        // earlier would have made one ruler the liege of the whole map.
+        if (cfg.StartingHegemony) Realms.CrownHegemon(realms, empires, wilderness);
+
         var governments = Core.Stage.Time("governments", () => MapGen.Governments.Build(
             empires, counties, realms, provinceTerrain, development, cultures,
             worldCenters, cfg, new Rng(cfg.Seed ^ 0x6017), azgaar, stateGovernments));
 
         Console.WriteLine("  governments: " + string.Join(", ",
             governments.Tally(counties.Count).Select(g => $"{g.Count} {g.Government[..^11]}")));
+
+        // After the governments, never before: this brings whole kingdoms under the hegemon, and
+        // governments are decided one per realm grouped by top liege — done first, every absorbed
+        // kingdom would have been swept into the hegemon's government. See ExpandHegemonRealm.
+        if (cfg.StartingHegemony) Realms.ExpandHegemonRealm(realms, empires, wilderness);
 
         Core.Stage.Time("government overrides",
             () => GovernmentWriter.WriteNomadNaming(modDir, gameDir, counties.Any(governments.IsNomad)));
@@ -232,7 +242,8 @@ public static class ContentWriter
         {
             var decisions = FormationDecisions.Build(empires, wilderness);
             int written = DecisionsWriter.WriteAll(modDir, decisions,
-                comment: "Generated decisions. One per de jure empire, shown while it has no holder.");
+                comment: "Generated decisions. One per de jure empire, plus the hegemony above "
+                       + "them, each shown while it has no holder.");
 
             // Whether an empire is held is a runtime question and the decision asks it at runtime,
             // so every empire gets one. The start-date count is reported anyway because it is the
@@ -240,10 +251,14 @@ public static class ContentWriter
             int openAtStart = empires.Count(e => FormationDecisions.HasFormation(decisions, e)
                                               && !realms.HolderCounty.ContainsKey(e));
 
+            bool crowned = Titles.HegemonyOf(empires) is { } crown
+                        && FormationDecisions.HasFormation(decisions, crown);
+
             Console.WriteLine(written == 0
                 ? "  decisions: none (no empire with enough settled land to be worth forming)"
-                : $"  decisions: {written} empire formations of {empires.Count} empires, "
-                + $"{openAtStart} unformed at the start date");
+                : $"  decisions: {written - (crowned ? 1 : 0)} empire formations of "
+                + $"{empires.Count} empires, {openAtStart} unformed at the start date"
+                + (crowned ? ", and the hegemony above them" : ""));
         });
 
         // The world's way of war. Runs here because it is the last social layer and reads all of
@@ -470,6 +485,15 @@ public static class ContentWriter
                 // Hand-modelled pieces from assets/armors, worn from a debug flag. After the forge
                 // above, because that is what splices the gene template both of them rely on.
                 CustomArmorStep.WriteAll(modDir, gameDir);
+
+                // The bone-attachment experiment, behind its own flag and depending on nothing
+                // above: it hangs a vanilla prop off a bone to establish whether pauldrons and
+                // similar garnish are reachable at all.
+                BoneAttachProbe.WriteAll(modDir, gameDir);
+
+                // Rigid pieces hung off portrait bones - pauldrons today, any slot later. After the
+                // armour forge because it garnishes what that emits, though it depends on none of it.
+                BonePieceStep.WriteAll(modDir, gameDir, [.. cultures.Cultures.Select(c => c.Key)]);
                 ArtifactWriter.WriteModifiers(modDir, artifacts);
                 ArtifactWriter.WriteLocalisation(modDir, artifacts);
                 ArtifactWriter.WriteOnGameStart(modDir, artifacts);
@@ -631,7 +655,14 @@ public static class ContentWriter
 
         jb.Comment("Generated de jure hierarchy.");
         jb.Blank();
-        foreach (var empire in empires) Write(empire);
+
+        // When the world has a hegemony it *is* the root, and writing it writes every empire nested
+        // inside — which is all CK3 needs to read a de jure tier above empire. The prefix is the
+        // whole declaration: `tier` is documented as not for use in database definitions and appears
+        // nowhere in vanilla's own data.
+        var hegemony = Titles.HegemonyOf(empires);
+        if (hegemony is not null) Write(hegemony);
+        else foreach (var empire in empires) Write(empire);
 
         jb.Comment("Head of faith landless titles.");
         jb.Blank();
@@ -691,6 +722,24 @@ public static class ContentWriter
                 else
                 {
                     if (title.Tier == "c") jb.Field("definite_form", "no");
+
+                    if (title.Tier == "h")
+                    {
+                        // Vanilla's own shape for a hegemony: it is "the <name>", and it is never
+                        // renamed after whoever holds it. This title stands for the world rather
+                        // than for a house.
+                        jb.Field("definite_form", "yes");
+                        jb.Field("can_be_named_after_dynasty", "no");
+
+                        // Creation runs through the generated decision and nowhere else. Left open,
+                        // the title-creation UI would sell the world for 2400 gold to anyone
+                        // holding two empires — CREATE_TITLE_OR_TIER_HEGEMONY asks for no more than
+                        // that. Closing it here costs the decision nothing, because
+                        // create_title_and_vassal_change does not consult can_create.
+                        jb.Inline("can_create", "always = no");
+                        jb.Inline("can_create_on_partition", "always = no");
+                    }
+
                     foreach (var child in title.Children) Write(child);
                 }
             }
@@ -1094,7 +1143,12 @@ public static class ContentWriter
         // vanilla declares all 8,000-odd of them; re-declaring one per generated province put a
         // duplicate in the dictionary for every id the base game also uses, and CK3 resolves those
         // by load order rather than by mod. prov_<id> is the key the map actually reads.
-        foreach (var title in Titles.Flatten(empires))
+        // The hegemony stands above the empires, so flattening from them alone would leave the one
+        // title that names the whole world showing its raw key in game.
+        var named = Titles.Flatten(empires).ToList();
+        if (Titles.HegemonyOf(empires) is { } crown) named.Add(crown);
+
+        foreach (var title in named)
         {
             string name = ParadoxText.Loc(title.Name);
             loc.AddBuilt(title.Key, name);

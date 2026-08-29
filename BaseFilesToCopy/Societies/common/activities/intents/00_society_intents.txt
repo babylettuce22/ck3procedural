@@ -33,3 +33,25 @@ society_rite_intent = {
 		animation = personality_callous
 	}
 }
+
+# The errand's intent.
+#
+# Same reasoning as the rite's above, and the same single-intent shape: an errand has exactly one
+# reason to be on it, and what resolves the intent is the errand ending.
+#
+# No `is_target_valid` block, deliberately. Defining one turns the intent into a character picker
+# (see _intents.info: "if a target trigger is defined they must pick a target when used"), and the
+# picker draws from the activity's own participants -- which for this activity is the host and at
+# most two sworn members. Pointing it at them would offer the errand's quarry from the wrong list
+# entirely. The quarry is the activity's `options` choice, not an intent target.
+society_errand_intent = {
+	icon = worship_devil_intent
+
+	auto_complete = yes
+
+	on_invalidated = { trigger_event = activity_system.0090 }
+
+	ai_will_do = {
+		value = 100
+	}
+}

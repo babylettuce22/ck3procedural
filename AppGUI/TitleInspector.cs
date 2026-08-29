@@ -85,6 +85,9 @@ public sealed class TitleInspector : InspectorForm
 
     public static string TierName(Title title) => title.Tier switch
     {
+        // Without this the tier above empire falls through to the barony default, and every empire
+        // reports its de jure liege as "Barony <the world>".
+        "h" => "Hegemony",
         "e" => "Empire",
         "k" => "Kingdom",
         "d" => "Duchy",

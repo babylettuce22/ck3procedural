@@ -1,0 +1,77 @@
+﻿# What being noticed costs, before anybody can prove anything.
+#
+# =====================================================================================
+#  Straight out of CK2, including the numbers
+# =====================================================================================
+#
+# CK2 kept a per-character `visibility_value` and hung exactly two modifiers off it, in
+# common/scripted_effects/00_scripted_effects.txt's `increase_visibility_effect`:
+#
+#   at 15   under_suspicion   monthly_character_prestige = -0.5
+#   at 25   highly_suspect    monthly_character_prestige = -1, monthly_character_piety = -1
+#
+# Both `duration = -1`, so permanent once earned. These are those two, renamed into our
+# namespace and with CK3's key names (`monthly_prestige`, `monthly_piety`).
+#
+# The values are worth keeping rather than re-tuning. They are small on purpose: this is not a
+# punishment, it is a tell. The cost of being suspected is that you stop accruing the thing a
+# ruler is measured by, slowly, for as long as it lasts -- and the player who watches their
+# prestige stop climbing goes looking for why. A big number here would make the society
+# unplayable; a hidden one would make it invisible. Half a point a month is the size of a rumour.
+#
+# =====================================================================================
+#  The one thing CK3 cannot copy
+# =====================================================================================
+#
+# CK2's under_suspicion carried
+#
+#     is_visible = { OR = { is_visible_to_self_trigger = yes  same_society_as = FROM } }
+#
+# -- the modifier was hidden from everyone except its owner and their fellow members. Your court
+# saw an ordinary character; the society saw a marked one. That is the entire fiction of a secret
+# society expressed in three lines of GUI gating.
+#
+# CK3's character modifiers have no `is_visible`. There is no way to show a modifier to some
+# viewers and not others, so ours is on the character sheet for anybody who opens it.
+#
+# What replaces it is the panel. `gen_society_panel.gui`'s roster already lists every member the
+# player knows of, and it is a members-only surface by construction -- a non-member has no tab and
+# no decision to open it. Putting each member's suspicion state on that roster gives back what the
+# `is_visible` gate did: the society can see who among them is drawing attention, and nobody else
+# gets a screen that lists it.
+
+society_under_suspicion = {
+	icon = intrigue_negative
+	monthly_prestige = -0.5
+}
+
+society_highly_suspect = {
+	icon = intrigue_negative
+	monthly_prestige = -1
+	monthly_piety = -1
+}
+
+# =====================================================================================
+#  Known
+# =====================================================================================
+#
+# The third state, and the only one the meter does not give or take back. The two above are
+# suspicion and they come off when the talk dies down; this is what a member carries once the
+# secret has actually been exposed and there is nothing left to deny.
+#
+# CK2's "Known Satanist" was -30 general opinion and -20 from liege and vassals, which is a
+# realm-ending number and is meant to be -- in CK2 it typically produced revolt or revocation
+# within a few years. Ours is scaled down slightly because CK3 stacks its own consequences on
+# top: an exposed criminal secret hands the liege a strong hook and a legal reason to imprison,
+# neither of which CK2's modifier had to carry on its own.
+#
+# No duration. This one is permanent by design -- it is the outcome the whole Visibility system
+# exists to threaten, and a version that wore off in five years would make the meter a nuisance
+# rather than a risk.
+society_known_member = {
+	icon = intrigue_negative
+
+	general_opinion = -25
+	vassal_opinion = -15
+	monthly_piety = -1
+}

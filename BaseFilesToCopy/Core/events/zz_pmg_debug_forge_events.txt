@@ -120,6 +120,23 @@ pmg_debug_forge.0002 = {
 		pmg_debug_forge_armor_effect = { TYPE = flag:armor_type_brigandine }
 	}
 
+	# THE CULTURE AXIS. Everything above repaints ONE garment -- whichever war garment root's culture
+	# resolves to -- so without this the whole silhouette axis is unreachable, and the faults that
+	# live in the garment rather than in the palette cannot be seen at all. Take this, then mint the
+	# same type again and compare.
+	option = {
+		name = pmg_debug_forge.0002.j
+		pmg_debug_shift_culture_effect = yes
+		trigger_event = { id = pmg_debug_forge.0002 days = 0 }
+	}
+
+	# THE SEX AXIS. Female garments are a separate mesh set picked by the WEARER's sex, so half the
+	# emitted accessories are never touched by minting onto a male ruler.
+	option = {
+		name = pmg_debug_forge.0002.k
+		pmg_debug_forge_armor_female_effect = { TYPE = flag:armor_type_mail }
+	}
+
 	# The hand-modelled pieces from assets/armors, worn from a flag rather than from an artifact.
 	# Deliberately not artifact-gated: this exists to answer "does the mesh bind and deform", and an
 	# artifact gate would add two more things that could be the reason nothing showed.
@@ -177,5 +194,36 @@ pmg_debug_forge.0003 = {
 
 	option = {
 		name = pmg_debug_forge.0003.e
+	}
+}
+
+
+# Shows the female courtier that pmg_debug_forge_armor_female_effect just dressed.
+#
+# An event purely to get a PORTRAIT on screen: the artifact is already made and equipped by the time
+# this fires, and a toast cannot show a body. Without it the female half of the emitted accessories
+# could only be inspected by hunting the courtier down in the court view.
+#
+# She is drawn on the left at full height, and root on the right, so the male and female treatments
+# of the same culture and type sit side by side -- which is the comparison worth having, since the
+# two use different meshes on different rigs and only share a palette.
+pmg_debug_forge.0004 = {
+	type = character_event
+	title = pmg_debug_forge.0004.t
+	desc = pmg_debug_forge.0004.desc
+	theme = realm
+
+	left_portrait = {
+		character = scope:pmg_dbg_wearer
+		animation = personality_bold
+	}
+
+	right_portrait = {
+		character = root
+		animation = personality_bold
+	}
+
+	option = {
+		name = pmg_debug_forge.0004.a
 	}
 }

@@ -7,7 +7,7 @@ namespace Ck3MapGen.MapGen;
 
 public sealed class Title
 {
-    public required string Tier;      // b, c, d, k, e
+    public required string Tier;      // b, c, d, k, e, h
     public required int Index;        // ordinal within its tier
     public string Key = "";
     public string Name = "";
@@ -604,6 +604,7 @@ public static class Titles
         var empires = Wrap("e", empireClusters, c => c.Select(i => kingdoms[i]));
 
         AssignColors(empires, rng, cfg.DeJureColorCoding);
+        Crown(empires, rng);
 
         int seaLinked = seaAdjacency.Values.Sum(s => s.Count) / 2;
         Console.WriteLine($"  titles: {empires.Count} empires, {kingdoms.Count} kingdoms, " +
@@ -651,6 +652,62 @@ public static class Titles
     /// </summary>
     internal static void AssignColorsTo(List<Title> empires, Rng rng, bool deJure = true)
         => AssignColors(empires, rng, deJure);
+
+    /// <summary>
+    /// Below this many empires there is no world for a hegemony to be the hegemony *of*.
+    ///
+    /// One empire is the degenerate case the tier cannot survive: a hegemony over it is the same
+    /// realm drawn twice, and the formation decision would ask a claimant to hold the empire he
+    /// already holds.
+    /// </summary>
+    private const int MinEmpiresPerHegemony = 2;
+
+    /// <summary>
+    /// Puts one title above every empire — the world's hegemony — and returns it, or null when the
+    /// map is too small to warrant one.
+    ///
+    /// There is exactly one, and it takes every empire, because at the scale this tool generates
+    /// there is nothing else it could be. An empire averages a hundred and twenty counties, so a
+    /// full-sized world is three or four of them; carving that into competing hegemonies the way
+    /// vanilla carves Earth would produce hegemonies of one empire each. The single world-spanning
+    /// title is the only shape the land supports.
+    ///
+    /// De jure is not vassalage — CK3 makes an empire's holder a vassal only where history says
+    /// <c>liege =</c>, which is why vanilla still writes that line for titles already nested inside
+    /// <c>h_china</c>. So a hegemony nobody holds costs the starting map nothing at all: it paints
+    /// a border, answers the hardcoded references, and waits for someone to earn it.
+    /// </summary>
+    internal static Title? Crown(List<Title> empires, Rng rng)
+    {
+        if (empires.Count < MinEmpiresPerHegemony) return null;
+
+        var hegemony = new Title { Tier = "h", Index = 0 };
+
+        foreach (var empire in empires)
+        {
+            empire.Parent = hegemony;
+            hegemony.Children.Add(empire);
+        }
+
+        // A hue of its own, and deliberately *not* one the empires are shaded from. Running these
+        // empires through DistributeChildren would pull the whole map into a single colour family
+        // and erase the de jure borders the empire palette exists to draw.
+        hegemony.Color = new Hsl(rng.Float(0f, 360f), rng.Float(0.55f, 0.85f),
+                                 rng.Float(0.42f, 0.58f)).ToRgb();
+
+        return hegemony;
+    }
+
+    /// <summary>
+    /// The hegemony over a set of empires, or null when the world has none.
+    ///
+    /// Derived from the tree rather than carried alongside it: <see cref="Crown"/> parents every
+    /// empire to the same title, so any one of them can be asked. That keeps the hegemony off every
+    /// signature that already takes the empire list, and keeps it impossible for a caller to hold a
+    /// hegemony that is not the one the map was built with.
+    /// </summary>
+    public static Title? HegemonyOf(IEnumerable<Title> empires)
+        => empires.FirstOrDefault()?.Parent is { Tier: "h" } hegemony ? hegemony : null;
 
     public static void RecolorChildren(Title parent, Rng rng)
         => DistributeChildren(parent, Hsl.FromRgb(parent.Color), rng);
@@ -816,7 +873,9 @@ public static class Titles
     {
         var language = cultures.For(title).Language;
 
-        if (title.Tier == "e")
+        // A hegemony is named like an empire. It is one title standing for a whole world, and the
+        // compound form is the only one that reads as a realm rather than as a place.
+        if (title.Tier is "e" or "h")
             return language.CompoundName(rng);
 
         if (title.Tier == "k")
@@ -840,13 +899,26 @@ public static class Titles
     /// Names borrowed from an import, by title. A title listed here takes its name from the export
     /// instead of the generator; everything absent is named as usual. Null on a generated map.
     /// </param>
+    /// <param name="crown">
+    /// The hegemony standing above the roots, named after them rather than before. Naming it first
+    /// would push every other title's draw one place along the stream and rename the whole world for
+    /// the sake of a title that is only being added; taking its name last leaves every existing name
+    /// exactly where it was, so a world gains a hegemony and nothing else about it moves.
+    /// </param>
     public static void AssignNames(List<Title> roots, CultureMap cultures, Rng rng,
-        Dictionary<Title, string>? preferred = null)
+        Dictionary<Title, string>? preferred = null, Title? crown = null)
     {
         var usedKeys = new HashSet<string>(StringComparer.Ordinal);
         foreach (var root in roots) Visit(root);
+        if (crown is not null) Name(crown);
 
         void Visit(Title title)
+        {
+            Name(title);
+            foreach (var child in title.Children) Visit(child);
+        }
+
+        void Name(Title title)
         {
             string GenerateName() => Titles.GenerateName(title, cultures, rng);
 
@@ -868,8 +940,6 @@ public static class Titles
             usedKeys.Add(key);
             title.Name = name;
             title.Key = key;
-
-            foreach (var child in title.Children) Visit(child);
         }
     }
 

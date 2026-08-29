@@ -1202,3 +1202,358 @@ society.9003 = {
 		}
 	}
 }
+
+# =====================================================================================
+#  VISIBILITY -- crossing the lines, and the yearly slide back down
+# =====================================================================================
+#
+# The meter itself lives in common/scripted_effects/00_society_effects.txt. These are the four
+# things a player is told about it, plus the tick that moves it.
+#
+# All four are deliberately quiet events rather than toasts. A toast is right for "you spent 5
+# visibility doing that", which is arithmetic; crossing a threshold is not arithmetic, it is the
+# moment somebody outside the society started thinking about you, and it should stop the game for
+# a second the way any other reversal does.
+
+# ---- 15: under suspicion --------------------------------------------------------------------
+#
+# Nothing has happened yet. That is the whole content of it: nobody has accused anybody, no
+# evidence exists, and the only thing that has changed is that a question is now being asked in
+# rooms you are not in.
+society.0200 = {
+	type = character_event
+	title = society.0200.t
+	desc = society.0200.desc
+	theme = intrigue
+
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+
+	option = {
+		name = society.0200.a
+	}
+}
+
+# ---- 25: highly suspect ---------------------------------------------------------------------
+society.0201 = {
+	type = character_event
+	title = society.0201.t
+	desc = society.0201.desc
+	theme = intrigue
+
+	left_portrait = {
+		character = root
+		animation = fear
+	}
+
+	option = {
+		name = society.0201.a
+	}
+}
+
+# ---- 40: the independent ruler who stops bothering ------------------------------------------
+#
+# CK2 fired this only for independent rulers, and the restriction is the interesting part rather
+# than a limitation. A vassal at 40 has a liege to be dragged in front of; that is a story with
+# somebody else in it. An independent ruler has nobody above them, so the only person who can
+# reveal them is themselves -- and at that level of noise, continuing to deny it is a bigger lie
+# than admitting it.
+#
+# What this does NOT do is apply a consequence, because there is no secret type yet and nothing to
+# expose to. It sets the flag, says so, and stops. When the secret arrives this is where it gets
+# created already-discovered.
+society.0202 = {
+	type = character_event
+	title = society.0202.t
+	desc = society.0202.desc
+	theme = intrigue
+
+	left_portrait = {
+		character = root
+		animation = disbelief
+	}
+
+	option = {
+		name = society.0202.a
+	}
+}
+
+# ---- The liege is told, at 25 ---------------------------------------------------------------
+#
+# ROOT is the liege; scope:society_suspect is the member. Fired from
+# society_visibility_check_effect with `liege ?=`, so a member with no liege simply skips it.
+#
+# The liege is told there is something wrong and WHO, which is more than CK2 gave them -- its
+# version set a flag on the liege and left the naming to the chaplain's hunt. Ours names them
+# because there is no chaplain yet, and an event that says "something is wrong somewhere in your
+# realm" with no way to act on it is a notification nobody can use.
+#
+# No option that acts on it, deliberately. Imprisoning somebody for a rumour is the kind of thing
+# a liege should be able to do and needs a hook that does not exist yet.
+society.0203 = {
+	type = character_event
+	title = society.0203.t
+	desc = society.0203.desc
+	theme = intrigue
+
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+
+	right_portrait = {
+		trigger = { exists = scope:society_suspect }
+		character = scope:society_suspect
+		animation = worry
+	}
+
+	option = {
+		name = society.0203.a
+	}
+}
+
+# ---- The yearly tick ------------------------------------------------------------------------
+#
+# Fired at every character in the world once a year by random_yearly_everyone_pulse, so the
+# trigger has to be cheap and it has to be first. `has_trait` is about as cheap as CK3 gets, and
+# the variable check after it means a member sitting at zero costs nothing either.
+#
+# hidden_effect around the decay, not `hidden = yes` on the event: the decay calls
+# society_visibility_loss_effect, which toasts, and a toast every single year for every member
+# would bury the ones that matter. The number moves quietly; only the thresholds speak.
+society.0210 = {
+	type = character_event
+	hidden = yes
+
+	trigger = {
+		has_trait = society_member
+		has_variable = society_visibility
+		var:society_visibility >= 1
+	}
+
+	immediate = {
+		hidden_effect = {
+			society_visibility_decay_effect = yes
+		}
+	}
+}
+
+# =====================================================================================
+#  EXPOSURE -- society.0300 to society.0302
+# =====================================================================================
+#
+# What the Visibility meter has been counting toward since the first oath. Reached from the
+# secret's `on_expose` (common/secret_types/00_society_secrets.txt), which fires however the
+# secret came out -- the Spymaster's task_find_secrets, a rival's expose_secret, or a member
+# selling another.
+#
+# Deliberately hung off on_expose and not off the discovery: `task_find_secrets_reveal_selection`
+# is a first_valid list ending in an always-passing fallback, and on_actions append, so an entry
+# of ours there could never be reached. The note in the secret type has the detail.
+#
+# ROOT is the exposed member in 0300 and 0301. scope:society_exposed is saved by the secret before
+# it hands over, so both events can name the person whether or not root has changed.
+
+# ---- The exposure itself ----
+society.0300 = {
+	type = character_event
+	title = society.0300.t
+	desc = society.0300.desc
+	theme = intrigue
+
+	left_portrait = {
+		character = root
+		animation = shock
+	}
+
+	immediate = {
+		# Not conditional and not removable. The suspicion modifiers came off when the talk died
+		# down; this is the talk having arrived somewhere it cannot be taken back from.
+		add_character_modifier = society_known_member
+	}
+
+	# ---- Deny it ----
+	#
+	# Costs prestige because a denial is a public performance and the audience has already made up
+	# its mind. Buys the one thing that matters: the hunters go looking for corroboration first,
+	# which is the difference between 0301 arriving and 0301 arriving with a list.
+	option = {
+		name = society.0300.a
+
+		add_prestige = medium_prestige_loss
+
+		stress_impact = {
+			honest = medium_stress_impact_gain
+			deceitful = minor_stress_impact_loss
+		}
+
+		trigger_event = { id = society.0301 days = 30 }
+	}
+
+	# ---- Say nothing ----
+	#
+	# No cost now, and the hunters arrive sooner and better informed. Silence reads as confirmation
+	# to everyone who was already sure.
+	option = {
+		name = society.0300.b
+
+		save_scope_value_as = {
+			name = society_did_not_deny
+			value = yes
+		}
+
+		stress_impact = {
+			craven = medium_stress_impact_gain
+		}
+
+		trigger_event = { id = society.0301 days = 14 }
+	}
+}
+
+# ---- The hunters ----
+#
+# CK2's MNM.7855, "Demon/Witch-hunters have tracked you down". The event that makes the meter mean
+# something, and the one place in the set where a member is offered another member as the price of
+# their own skin.
+#
+# The naming option is the whole point of having a roster. Everything else in this set makes
+# membership an asset -- a guest list, an agent pool, a rank ladder. This is where it is a
+# liability, and where the society's own arithmetic turns on itself: the people who can help you
+# are the people you can spend.
+society.0301 = {
+	type = character_event
+	title = society.0301.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:society_did_not_deny }
+				desc = society.0301.desc_silent
+			}
+			desc = society.0301.desc
+		}
+	}
+	theme = intrigue
+
+	left_portrait = {
+		character = root
+		animation = fear
+	}
+
+	# ---- Give them a name ----
+	#
+	# Only offered if there IS a name to give. The pool is the same one the roster draws from --
+	# courtiers and vassals carrying the trait, never root -- because a society knows exactly the
+	# people it meets with and no more. There is no `society_fellow` relation in this set and this
+	# option must not invent one: membership here is a trait plus proximity, and every other
+	# member-finding block in the file (society_panel_gather, the invite rules) iterates the same
+	# two pools. One definition of "who is reachably in the society", not two.
+	#
+	# The pick is random rather than lowest-standing. Spending the newest member first would be
+	# the uglier and better story, but ordering these pools by trait XP is not something CK3 hands
+	# over cheaply, and a comment claiming an ordering the code does not do is worse than an
+	# honest coin toss.
+	option = {
+		name = society.0301.a
+
+		trigger = {
+			OR = {
+				any_courtier = {
+					this != root
+					has_trait = society_member
+				}
+				any_vassal_or_below = {
+					has_trait = society_member
+				}
+			}
+		}
+
+		# Built and then drawn from, so that one pick considers both pools together. Picking from
+		# the courtiers first and falling back to vassals would quietly make courtiers far likelier
+		# to be sold, which is a bias nobody chose.
+		every_courtier = {
+			limit = {
+				this != root
+				has_trait = society_member
+			}
+			add_to_list = society_betrayal_candidates
+		}
+
+		every_vassal_or_below = {
+			limit = { has_trait = society_member }
+			add_to_list = society_betrayal_candidates
+		}
+
+		random_in_list = {
+			list = society_betrayal_candidates
+
+			save_scope_as = society_betrayed
+
+			# They take the fall in our place. The whole exposure transfers.
+			society_visibility_gain_effect = { VALUE = 25 }
+
+			add_opinion = {
+				target = root
+				modifier = society_struck_from_the_roll_opinion
+			}
+
+			trigger_event = { id = society.0302 days = 3 }
+		}
+
+		society_visibility_loss_effect = { VALUE = 20 }
+
+		stress_impact = {
+			honest = major_stress_impact_gain
+			just = major_stress_impact_gain
+			compassionate = medium_stress_impact_gain
+		}
+	}
+
+	# ---- Buy them off ----
+	option = {
+		name = society.0301.b
+
+		trigger = {
+			gold >= major_gold_value
+		}
+
+		remove_short_term_gold = major_gold_value
+
+		society_visibility_loss_effect = { VALUE = 15 }
+	}
+
+	# ---- Give them nothing ----
+	#
+	# The only option always available, and the only one that costs nothing now. What it costs is
+	# that the exposure stands at whatever it stands at, and the meter keeps counting.
+	option = {
+		name = society.0301.c
+
+		stress_impact = {
+			brave = minor_stress_impact_loss
+			craven = medium_stress_impact_gain
+		}
+	}
+}
+
+# ---- Being named ----
+#
+# Fires at the member who was sold. They do not learn who sold them -- the opinion hit above is
+# applied silently and the prose says only that somebody did. That is the correct amount of
+# information: a society that cannot keep its own roll cannot tell you which of them broke.
+society.0302 = {
+	type = character_event
+	title = society.0302.t
+	desc = society.0302.desc
+	theme = intrigue
+
+	left_portrait = {
+		character = root
+		animation = paranoia
+	}
+
+	option = {
+		name = society.0302.a
+	}
+}

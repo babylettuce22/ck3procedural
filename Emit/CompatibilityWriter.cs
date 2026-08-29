@@ -619,6 +619,11 @@ public static partial class CompatibilityWriter
 
         var generated = Titles.Flatten(empires).Select(t => t.Key).ToHashSet(StringComparer.Ordinal);
 
+        // The hegemony stands above the empires, so flattening from them never reaches it. A shim
+        // for a key the map really generated would declare the same title twice, and the guard below
+        // would then destroy the real one out of a player's domain.
+        if (Titles.HegemonyOf(empires) is { } crown) generated.Add(crown.Key);
+
         // Paradox identifiers are not [a-z_0-9]: title keys carry hyphens and uppercase
         // (e_caspian-pontic_steppe, c_SUM_bangka-belitung, b_al-fayyum). A stricter pattern
         // silently drops keys, and every dropped key stays dangling.

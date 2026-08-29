@@ -212,8 +212,21 @@ public static class Program
                     cfg.Gender = Enum.Parse<GenderPreference>(args[++i], ignoreCase: true);
                     break;
 
+                // Which real-world looks the world's humans are drawn from; see HumanLook.
+                // Fantasy races are unaffected either way. Varied is the default.
+                case "--dominant-look" when i + 1 < args.Length:
+                    cfg.DominantLook = Enum.Parse<MapConfig.HumanLook>(args[++i], ignoreCase: true);
+                    break;
+
                 case "--no-history":
                     options.WriteHistory = false;
+                    break;
+
+                // Starts the world's hegemony already worn rather than waiting to be won. Here as
+                // well as on the config object because it is the one setting whose whole effect is
+                // a single line of title history, and diffing two runs is the fastest way to see it.
+                case "--starting-hegemony":
+                    cfg.StartingHegemony = true;
                     break;
 
                 // Hands out titles down the de jure tree instead of simulating centuries of

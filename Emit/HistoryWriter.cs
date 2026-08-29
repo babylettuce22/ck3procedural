@@ -120,6 +120,21 @@ public static class HistoryWriter
         return best;
     }
 
+    /// <summary>
+    /// Tier as a number, for <see cref="Primary"/> and everything that asks it which title stands
+    /// for a ruler.
+    ///
+    /// **The hegemony is deliberately absent, and must stay absent.** Ranking it above empire makes
+    /// it the hegemon's primary title, and `Primary` is what `Governments.TopLiege` groups realms by
+    /// and what the government cascade then reads — so a crowned hegemon's realm stopped being
+    /// scored as an empire and fell out of the administrative branch, taking 144 counties from
+    /// administrative to tribal. Faiths are built after governments and read the tribal share, so
+    /// two faiths lost their heads on top of it. None of that is what putting a title on a character
+    /// should do. Falling through to 0 leaves the hegemon represented by their empire exactly as
+    /// before, which is the whole point: the crown is additive.
+    ///
+    /// CK3 decides a real primary title at runtime and does not read this.
+    /// </summary>
     public static int Rank(Title title) => title.Tier switch
     {
         "e" => 4,
@@ -609,7 +624,13 @@ public static class HistoryWriter
         int reignStartYear = Math.Max(1, cfg.StartYear - 5);
         string titleGrantDate = $"{reignStartYear}.1.1";
 
-        foreach (var title in Titles.Flatten(empires))
+        // The hegemony stands above the empires, so flattening from them never reaches it. It is
+        // only ever in HolderCounty when the map was asked to start with one worn; unheld, the loop
+        // skips it exactly as it skips an unformed empire.
+        var all = Titles.Flatten(empires).ToList();
+        if (Titles.HegemonyOf(empires) is { } crown) all.Insert(0, crown);
+
+        foreach (var title in all)
         {
             if (wilderness.Contains(title)) continue;
             if (!realms.HolderCounty.TryGetValue(title, out var holder)) continue;

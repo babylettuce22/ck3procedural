@@ -314,20 +314,30 @@ errand.0020 = {
 # which point the previous run's flags silently decide this run's payout. Clearing them here makes
 # the event self-contained regardless of what ran before it.
 #
-# ---- The ladder ----
+# ---- The ladder, and the two axes ----
 #
-#   unmissed   80 Dark Power,  4 exposure
-#   highborn  140 Dark Power,  8 exposure
-#   devout    200 Dark Power, 14 exposure
+#   QUARRY decides the pay        unmissed 80   highborn 140   devout 200
+#   CLEANLINESS decides exposure  clean +2      messy +5
 #
-# CK2's flat 1:2:3 currency ratio, rescaled to this set's economy (the rite pays 60, an abduction
-# costs 100). Exposure climbs faster than pay on purpose: the devout quarry is 2.5x the money and
-# 3.5x the exposure, so the best-paying errand is a worse deal per point of risk than the worst.
-# That is CK2's own shape -- the expensive missions were expensive because somebody looks for a
-# missing priest.
+# The pay is CK2's flat 1:2:3 mission ratio, rescaled to this set's economy (the rite pays 60, an
+# abduction costs 100).
 #
-# A clean errand halves the exposure. Nothing reduces the corruption roll, and nothing should:
-# doing it well is not the same as not having done it.
+# The exposure is only ever 2 or 5, and that is not a simplification -- it is CK2's actual design,
+# recovered by counting its call sites rather than trusting the wiki. CK2 had exactly two increase
+# effects across 63 uses: increase_visibility_effect (+5, 28 sites) for the serious powers, and
+# increase_visibility_minor_effect (+2, 35 sites) for the cheaper ones. There was no sliding scale
+# and no per-action number. The thresholds that matter sit at 15 / 25 / 40, so a system built on
+# two step sizes stays legible: a player can count how many more errands they have before the next
+# one lands on them.
+#
+# The consequence for this file is that the quarry ladder lives ENTIRELY in the pay, and exposure
+# answers only to the decision the player actually controls -- whether it was done properly. That
+# is a better split than the one drafted first (exposure scaling with quarry as well), because it
+# makes the two decisions independent instead of both pointing the same way: pick the quarry for
+# what you need, pick your care for what you can afford to risk.
+#
+# Nothing reduces the corruption roll, and nothing should. Doing it well is not the same as not
+# having done it.
 errand.0030 = {
 	type = character_event
 	title = errand.0030.t
@@ -402,7 +412,7 @@ errand.0030 = {
 					has_activity_option = { category = society_errand_quarry option = errand_quarry_devout }
 				}
 			}
-			society_errand_payout_effect = { DARK_POWER = 200  VISIBILITY = 7 }
+			society_errand_payout_effect = { DARK_POWER = 200  VISIBILITY = 2 }
 		}
 		else_if = {
 			limit = {
@@ -410,7 +420,7 @@ errand.0030 = {
 					has_activity_option = { category = society_errand_quarry option = errand_quarry_highborn }
 				}
 			}
-			society_errand_payout_effect = { DARK_POWER = 140  VISIBILITY = 4 }
+			society_errand_payout_effect = { DARK_POWER = 140  VISIBILITY = 2 }
 		}
 		else = {
 			society_errand_payout_effect = { DARK_POWER = 80  VISIBILITY = 2 }
@@ -434,7 +444,7 @@ errand.0030 = {
 					has_activity_option = { category = society_errand_quarry option = errand_quarry_devout }
 				}
 			}
-			society_errand_payout_effect = { DARK_POWER = 200  VISIBILITY = 14 }
+			society_errand_payout_effect = { DARK_POWER = 200  VISIBILITY = 5 }
 		}
 		else_if = {
 			limit = {
@@ -442,10 +452,10 @@ errand.0030 = {
 					has_activity_option = { category = society_errand_quarry option = errand_quarry_highborn }
 				}
 			}
-			society_errand_payout_effect = { DARK_POWER = 140  VISIBILITY = 8 }
+			society_errand_payout_effect = { DARK_POWER = 140  VISIBILITY = 5 }
 		}
 		else = {
-			society_errand_payout_effect = { DARK_POWER = 80  VISIBILITY = 4 }
+			society_errand_payout_effect = { DARK_POWER = 80  VISIBILITY = 5 }
 		}
 	}
 }

@@ -185,3 +185,87 @@ pmg_debug_forge_rarity_effect = {
 		right_icon = scope:newly_created_artifact
 	}
 }
+
+
+# Moves ROOT to another culture that exists in this world, so the CULTURE axis can be reached at all.
+#
+# WHY THIS WAS THE GAP. A look is (culture x sex x type x rarity), and culture is the only one of the
+# four that picks the SILHOUETTE -- the vanilla war garment everything else is painted onto. The type
+# and rarity events below repaint one shape; without this you can never see a second shape, and the
+# faults that live in the garment rather than in the palette are unreachable. Those faults are real:
+# vanilla's war garments disagree about how much of themselves each mask channel covers, and about
+# how many UV units their second unwrap spans, so a look that is right on one culture's garment can
+# be wrong on another's.
+#
+# Culture and not the garment directly, because the forge freezes a piece against its CREATOR and
+# every event here creates with CREATOR = root. Moving root is the whole of it.
+#
+# random_independent_ruler rather than a list of culture keys: the cultures are GENERATED, their keys
+# differ per seed, and this file is static and shipped as-is. Independent rulers span the world's
+# cultures, so repeated use walks the set that actually exists -- and only that set, which is what
+# you want. It is a random walk rather than a cycle, so a culture may repeat before all are seen.
+pmg_debug_shift_culture_effect = {
+	hidden_effect = {
+		random_independent_ruler = {
+			limit = { NOT = { culture = root.culture } }
+			save_scope_as = pmg_dbg_other
+		}
+	}
+
+	if = {
+		limit = { exists = scope:pmg_dbg_other }
+		set_culture = scope:pmg_dbg_other.culture
+	}
+
+	send_interface_toast = {
+		title = pmg_debug_forge.0002.shifted
+		left_icon = root
+	}
+}
+
+
+# Mints an armour artifact of TYPE and puts it on a FEMALE courtier, then shows her.
+#
+# The female garments are a separate mesh set on a separate rig -- 37 of them against 38 male -- and
+# they are picked by the WEARER's sex, not the creator's. So every look minted onto a male ruler
+# exercises exactly half the emitted accessories, and the other half ships untested. This is the
+# cheapest way to see the other half.
+#
+# CREATOR stays root so the culture being tested is still root's: sex and culture stay independent.
+pmg_debug_forge_armor_female_effect = {
+	hidden_effect = {
+		random_courtier = {
+			limit = { is_female = yes }
+			save_scope_as = pmg_dbg_wearer
+		}
+	}
+
+	if = {
+		limit = { exists = scope:pmg_dbg_wearer }
+
+		hidden_effect = {
+			create_artifact_armor_effect = {
+				OWNER = scope:pmg_dbg_wearer
+				CREATOR = root
+				SET_ARMOR_TYPE = $TYPE$
+			}
+
+			scope:newly_created_artifact = {
+				equip_artifact_to_owner_replace = yes
+			}
+
+			trigger_event = { id = pmg_debug_forge.0004 days = 0 }
+		}
+	}
+
+	# No courtier to dress is a legitimate outcome in a small court, and silence would read as the
+	# forge having failed rather than as there being nobody to test on.
+	if = {
+		limit = { NOT = { exists = scope:pmg_dbg_wearer } }
+
+		send_interface_toast = {
+			title = pmg_debug_forge.0002.nofemale
+			left_icon = root
+		}
+	}
+}

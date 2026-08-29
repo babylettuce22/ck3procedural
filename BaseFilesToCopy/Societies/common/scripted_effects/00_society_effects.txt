@@ -113,6 +113,14 @@ society_visibility_gain_effect = {
 			title = society_visibility_toast
 			left_icon = root
 		}
+
+		# Every change re-reads the thresholds. Here rather than at the call sites because there
+		# are already eight of those and the next one added would be the one that forgot.
+		#
+		# Hidden: the check announces its own consequences through events 0200-0203, and
+		# tooltipping "and you may also cross a line" onto every action that costs visibility
+		# would say it far more often than it happens.
+		society_visibility_check_effect = yes
 	}
 }
 
@@ -137,6 +145,11 @@ society_visibility_loss_effect = {
 			title = society_visibility_toast
 			left_icon = root
 		}
+
+		# The other half of the pair above -- see the note in society_visibility_gain_effect.
+		# Falling back below a line has to come off as readily as crossing it went on, or the
+		# panel's number and the character sheet's modifier stop agreeing.
+		society_visibility_check_effect = yes
 	}
 }
 
@@ -306,4 +319,256 @@ society_errand_payout_effect = {
 	society_visibility_gain_effect = { VALUE = $VISIBILITY$ }
 
 	society_corrupt_soul_effect = yes
+}
+
+# =====================================================================================
+#  What the meter DOES: thresholds
+# =====================================================================================
+#
+# Until this existed, society_visibility was a number that went up and was displayed. CK2's
+# answer to the same problem is worth copying almost verbatim, because the interesting thing
+# about it is what it does NOT do.
+#
+# There is no discovery roll. None. The meter is entirely deterministic -- it crosses a line and
+# a modifier appears -- and the randomness lives somewhere else entirely, in the Court Chaplain's
+# `action_hunt_heretics` job, which searches the realm for anyone already carrying the worse of
+# the two modifiers. The number is legible and predictable; the danger is a person doing
+# something. That separation is why the CK2 system reads as tense rather than arbitrary, and it
+# is a better design than the discovery roll this was first going to be.
+#
+# The three lines are CK2's, unchanged:
+#
+#   15   under suspicion   -- a rumour, and a slow prestige bleed
+#   25   highly suspect    -- worse, AND the liege is told there is something in their realm
+#   40   self-reveal       -- only for independent rulers, who have no liege to hide behind
+#
+# =====================================================================================
+#  Where this deliberately departs from CK2
+# =====================================================================================
+#
+# CK2's modifiers are `duration = -1` and never come off except on exposure or leaving the
+# society. Combined with its yearly decay that produces a permanent ratchet: cross 15 once and
+# you wear it forever, even after the number falls back to 3.
+#
+# Ours re-evaluates in both directions, because we display the number. A panel that says
+# Visibility 4 beside a character sheet that says Under Suspicion is a panel the player stops
+# trusting, and the fix is one `else` rather than an explanation. Falling back below a line is
+# also the reward for having lain low, and CK2's version quietly withholds it.
+society_visibility_check_effect = {
+	if = {
+		# 40+, independent, and a ruler: nobody above you to be hidden from, so the fiction has
+		# nowhere left to go. The flag makes it once-only -- a self-reveal that fired every year
+		# would be a stuck event, not a consequence.
+		limit = {
+			var:society_visibility >= 40
+			is_independent_ruler = yes
+			NOT = { has_character_flag = society_self_revealed }
+		}
+
+		add_character_flag = society_self_revealed
+		trigger_event = { id = society.0202 days = 1 }
+	}
+
+	if = {
+		limit = { var:society_visibility >= 25 }
+
+		if = {
+			limit = { has_character_modifier = society_under_suspicion }
+			remove_character_modifier = society_under_suspicion
+		}
+
+		if = {
+			limit = { NOT = { has_character_modifier = society_highly_suspect } }
+
+			add_character_modifier = society_highly_suspect
+
+			trigger_event = { id = society.0201 days = 1 }
+
+			# The liege is told, which is the moment the mechanic stops being between the player
+			# and a number. CK2 notifies at this same threshold.
+			#
+			# The save has to happen HERE, on the member, before the scope changes to the liege --
+			# inside `liege ?= { }` root is still the member but `this` is not, and the event needs
+			# a name to put on the right-hand portrait. Saved scopes ride into a triggered event,
+			# so 0203 reads it without deriving anything.
+			save_scope_as = society_suspect
+
+			liege ?= { trigger_event = { id = society.0203 days = 1 } }
+		}
+	}
+	else_if = {
+		limit = { var:society_visibility >= 15 }
+
+		if = {
+			limit = { has_character_modifier = society_highly_suspect }
+			remove_character_modifier = society_highly_suspect
+		}
+
+		if = {
+			limit = { NOT = { has_character_modifier = society_under_suspicion } }
+
+			add_character_modifier = society_under_suspicion
+
+			trigger_event = { id = society.0200 days = 1 }
+		}
+
+		society_secret_create_effect = yes
+	}
+	else = {
+		# Back under 15. Quiet again, as far as anybody outside is concerned.
+		if = {
+			limit = { has_character_modifier = society_under_suspicion }
+			remove_character_modifier = society_under_suspicion
+		}
+
+		if = {
+			limit = { has_character_modifier = society_highly_suspect }
+			remove_character_modifier = society_highly_suspect
+		}
+
+		society_secret_remove_effect = yes
+	}
+}
+
+# =====================================================================================
+#  The yearly decay
+# =====================================================================================
+#
+# CK2's `decrease_visibility_effect`, weights and all. Called once a year from
+# common/on_action/00_society_on_actions.txt.
+#
+# The shape is the point. It is not a flat subtraction -- it is a weighted draw of -1/-2/-3/-4/-5
+# in which being good at hiding makes the bigger draws likelier. So intrigue finally has a job in
+# this system, "lie low for a few years" becomes a real strategy with a variance to it rather than
+# an arithmetic certainty, and two members who did the same things end up in different places.
+#
+# CK2's modifiers: x1.5 for schemer/deceitful/patient/paranoid, and x1.25 per intrigue breakpoint
+# at 12, 14 and 16, stacking. Ours drops `schemer` -- CK3 has no such trait -- and keeps the other
+# three, which all exist. The breakpoints are unchanged.
+society_visibility_decay_effect = {
+	if = {
+		limit = { var:society_visibility >= 1 }
+
+		random_list = {
+			50 = {
+				society_visibility_loss_effect = { VALUE = 1 }
+			}
+
+			20 = {
+				modifier = {
+					add = 10
+					OR = {
+						has_trait = deceitful
+						has_trait = patient
+						has_trait = paranoid
+					}
+				}
+				modifier = { add = 5  intrigue >= 12 }
+				modifier = { add = 5  intrigue >= 14 }
+				modifier = { add = 5  intrigue >= 16 }
+
+				society_visibility_loss_effect = { VALUE = 2 }
+			}
+
+			15 = {
+				modifier = {
+					add = 7
+					OR = {
+						has_trait = deceitful
+						has_trait = patient
+						has_trait = paranoid
+					}
+				}
+				modifier = { add = 4  intrigue >= 12 }
+				modifier = { add = 4  intrigue >= 14 }
+				modifier = { add = 4  intrigue >= 16 }
+
+				society_visibility_loss_effect = { VALUE = 3 }
+			}
+
+			10 = {
+				modifier = {
+					add = 5
+					OR = {
+						has_trait = deceitful
+						has_trait = patient
+						has_trait = paranoid
+					}
+				}
+				modifier = { add = 3  intrigue >= 14 }
+				modifier = { add = 3  intrigue >= 16 }
+
+				society_visibility_loss_effect = { VALUE = 4 }
+			}
+
+			5 = {
+				modifier = {
+					add = 3
+					OR = {
+						has_trait = deceitful
+						has_trait = patient
+						has_trait = paranoid
+					}
+				}
+				modifier = { add = 3  intrigue >= 16 }
+
+				society_visibility_loss_effect = { VALUE = 5 }
+			}
+		}
+
+		# Never below zero. `change_variable subtract` will happily go negative, and a negative
+		# meter would read as a bug on the panel and break the band comparisons underneath it.
+		if = {
+			limit = { var:society_visibility < 0 }
+
+			set_variable = {
+				name = society_visibility
+				value = 0
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  The secret, created and withdrawn by the meter
+# =====================================================================================
+#
+# Called from society_visibility_check_effect, at the same two places the suspicion modifier is
+# added and removed, so the secret and the mark can never disagree about whether a member is on
+# the board. See common/secret_types/00_society_secrets.txt for why the meter creates a secret
+# rather than being rolled against.
+#
+# ROOT is the member in both.
+
+society_secret_create_effect = {
+	# Guarded, because society_visibility_check_effect runs on every visibility change and this
+	# branch is reached repeatedly while a member sits above 15. `add_secret` does not
+	# de-duplicate -- a member who took four sacrifices in a decade would otherwise be carrying
+	# four identical secrets, each separately discoverable, which turns one exposure into four.
+	if = {
+		limit = {
+			has_trait = society_member
+			NOT = { any_secret = { secret_type = secret_society_membership } }
+		}
+
+		add_secret = {
+			type = secret_society_membership
+		}
+	}
+}
+
+# Decayed back under 15: quiet again, and there is nothing left for the Spymaster to find.
+#
+# Removing rather than leaving it is the same principle the modifiers follow -- we SHOW the number
+# on the panel, so a member reading Exposure 4 must not still be carrying a findable secret. CK2
+# could leave its mark on forever because CK2 never showed you the figure.
+#
+# The known-by list goes with it. That is deliberate and it is the generous reading: somebody who
+# lay low long enough that the talk died down gets the talk actually dying down, rather than
+# carrying a permanent record of the one year they were careless.
+society_secret_remove_effect = {
+	every_secret = {
+		limit = { secret_type = secret_society_membership }
+		remove_secret = yes
+	}
 }

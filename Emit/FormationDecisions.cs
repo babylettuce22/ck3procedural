@@ -87,8 +87,30 @@ public static class FormationDecisions
             specs.Add(Formation(empire, kingdoms, settled.Count));
         }
 
+        // The world's own formation decision, when the map is large enough to have crowned one. The
+        // same floor as an empire's: the real gate is the empire count below, and a small world that
+        // can be united at all should be able to say so.
+        if (Titles.HegemonyOf(empires) is { } hegemony)
+        {
+            int settled = Titles.Flatten([hegemony])
+                                .Count(t => t.Tier == "c" && !wilderness.Contains(t));
+
+            if (settled >= MinSettledCounties) specs.Add(Hegemony(hegemony, empires, settled));
+        }
+
         return specs;
     }
+
+    /// <summary>
+    /// The share of the world's settled counties a claimant's realm has to contain.
+    ///
+    /// Lower than an empire's supermajority because the empire titles carry most of the weight —
+    /// each one already cost its holder sixty per cent of its own de jure land — and requiring a
+    /// supermajority again on top of that would be charging twice for the same conquest. This is a
+    /// floor rather than the test: it stops the world being claimed by someone who inherited a
+    /// collection of crowns and rules very little of the ground under them.
+    /// </summary>
+    private const double HegemonyCountyShare = 0.45;
 
     /// <summary>The decision key an empire's formation decision would have, formed or not.</summary>
     private static string KeyFor(Title empire) => $"gen_form_{empire.Key}_decision";
@@ -250,16 +272,178 @@ public static class FormationDecisions
     }
 
     /// <summary>
-    /// The word this empire uses for itself.
+    /// The decision that makes one throne out of every empire on the map.
+    ///
+    /// Shaped like <see cref="Formation"/> one rung up, and gated on empire *titles* rather than on
+    /// a share of the world's ground. That is deliberate: an empire title already cost its holder a
+    /// supermajority of its own de jure counties, so counting empires counts conquest that has
+    /// already been paid for, and asks the claimant for something legible — most of the crowns —
+    /// instead of a number only the tooltip can explain.
+    /// </summary>
+    private static DecisionSpec Hegemony(Title hegemony, List<Title> empires, int settled)
+    {
+        string key = KeyFor(hegemony);
+        string title = $"title:{hegemony.Key}";
+
+        // Most of them, never fewer than two. Two is the floor because a hegemony over one empire
+        // is the same realm drawn twice — the same reason Titles.Crown refuses to build one.
+        int empireGoal = Math.Max(2, empires.Count / 2 + 1);
+        int countyGoal = Math.Max(1, (int)Math.Ceiling(settled * HegemonyCountyShare));
+
+        string empireTooltip = $"{key}_empires_tt";
+        string countyTooltip = $"{key}_counties_tt";
+        string deJureTooltip = $"{key}_de_jure_tt";
+
+        return new DecisionSpec
+        {
+            Key = key,
+            Name = $"Proclaim the {Word(hegemony)} of ${hegemony.Key}$",
+            Description = HegemonyDescription(hegemony, empires, settled),
+            SelectionTooltip = $"${hegemony.Key}$ becomes a [de_jure|E] [hegemony|E] under your rule.",
+            ConfirmText = "Let there be one throne above the rest.",
+            Pictures = [new(DecisionsWriter.RealmPicture)],
+            Group = "major",
+            Cost = HegemonyCost(settled),
+
+            // Only an emperor is ever a candidate, so only that tier pays for the check — and it is
+            // a check that walks every settled county on the map, so it pays rarely.
+            Ai = AiCheck.PerTier(barony: 0, county: 0, duchy: 0, kingdom: 0, empire: 120, hegemony: 0),
+            AiPotential = DecisionsWriter.AlwaysYes,
+            AiWillDo = DecisionsWriter.Weight(100),
+
+            IsShown = b =>
+            {
+                b.Field("is_playable_character", "yes");
+                b.Field("is_landed_or_landless_administrative", "yes");
+
+                using (b.Block("NOT")) b.Field("exists", $"{title}.holder");
+
+                // Emperors only, and no capital test beside it. The empire decisions ask whose
+                // empire this is so that a title does not appear in every neighbour's panel; a
+                // hegemony is de jure liege of the whole map, so that question has no answer here.
+                b.Field("highest_held_title_tier", "tier_empire");
+            },
+
+            IsValid = b =>
+            {
+                // Token, not Field, for the same reason as Formation: a comparison is a whole line,
+                // and `key = >= n` is a syntax error that eats the rest of the file.
+                b.Token("prestige_level >= 5");
+
+                using (b.Block("custom_tooltip"))
+                {
+                    b.Field("text", empireTooltip);
+
+                    using (b.Block("any_held_title"))
+                    {
+                        b.Token($"count >= {empireGoal}");
+                        b.Field("title_tier", "empire");
+                    }
+                }
+
+                using (b.Block("custom_tooltip"))
+                {
+                    b.Field("text", countyTooltip);
+
+                    using (b.Block(title))
+                    using (b.Block("any_de_jure_county"))
+                    {
+                        b.Token($"count >= {countyGoal}");
+                        b.Field("holder.top_liege", "root");
+                    }
+                }
+            },
+
+            IsValidShowingFailuresOnly = b =>
+            {
+                b.Field("top_liege", "this");
+                b.Field("is_available_adult", "yes");
+                b.Field("is_at_war", "no");
+            },
+
+            Effect = b =>
+            {
+                using (b.Block("create_title_and_vassal_change"))
+                {
+                    b.Field("type", "created");
+                    b.Field("save_scope_as", "title_change");
+                    b.Field("add_claim_on_loss", "no");
+                }
+
+                using (b.Block(title))
+                using (b.Block("change_title_holder"))
+                {
+                    b.Field("holder", "root");
+                    b.Field("change", "scope:title_change");
+                }
+
+                b.Field("resolve_title_and_vassal_change", "scope:title_change");
+                b.Field("set_primary_title_to", title);
+                b.Blank();
+
+                // Same repair as the empire decision, one tier up: de jure drift can walk an empire
+                // out from under the hegemony over a long game, and the title the map drew should
+                // be the title that gets proclaimed.
+                b.Field("custom_tooltip", deJureTooltip);
+
+                using (b.Block("hidden_effect"))
+                    foreach (var empire in empires)
+                        using (b.Block($"title:{empire.Key}"))
+                        using (b.Block("if"))
+                        {
+                            using (b.Block("limit"))
+                            using (b.Block("NOT"))
+                                b.Field("target_is_de_jure_liege_or_above", title);
+
+                            b.Field("set_de_jure_liege_title", title);
+                        }
+            },
+
+            ExtraLocalisation =
+            [
+                (empireTooltip, $"You hold at least #V {empireGoal}#! of the #V {empires.Count}#! "
+                              + $"[empires|E] of ${hegemony.Key}$"),
+                (countyTooltip, $"Your realm holds at least #V {countyGoal}#! of the "
+                              + $"#V {settled}#! settled [counties|E] of ${hegemony.Key}$"),
+                (deJureTooltip, $"Every [de_jure|E] [empire|E] of ${hegemony.Key}$ that has drifted "
+                              + "away returns to it"),
+            ],
+        };
+    }
+
+    /// <summary>What proclaiming the world costs. Vanilla prices a hegemony at 2400 gold.</summary>
+    private static DecisionCost HegemonyCost(int settled) => new(
+        Gold: Round50(Math.Clamp(1000 + settled * 6, 1000, 2500)),
+        Prestige: Round50(Math.Clamp(3000 + settled * 12, 3000, 6000)));
+
+    /// <summary>
+    /// The paragraph in the detail view, built from the empires the hegemony actually contains.
+    /// </summary>
+    private static string HegemonyDescription(Title hegemony, List<Title> empires, int settled)
+    {
+        string span = empires.Count >= 2
+            ? $"{empires.Count} [empires|E], from ${empires[0].Key}$ to ${empires[^1].Key}$, have "
+            + "never bowed to a single throne"
+            : $"${empires[0].Key}$ has never bowed to a throne above its own";
+
+        return $"No one has ever worn it. {span} — {settled} settled [counties|E] and no ruler "
+             + $"above the rest. Hold enough of that, and ${hegemony.Key}$ stops being a word for "
+             + "the world and becomes a [de_jure|E] title: one crown above all crowns.";
+    }
+
+    /// <summary>
+    /// The word this title uses for itself.
     ///
     /// <see cref="Title.Form"/> is set for an imported country that named its own form of state, and
     /// the flavorization written by <see cref="TitleTierWriter"/> makes the game say that word
     /// everywhere else, so the decision saying "Empire" over a Khaganate would be the one place the
-    /// map disagreed with itself. Everything without a form of its own is an Empire, which is what
-    /// vanilla's rules will render it as.
+    /// map disagreed with itself. Everything without a form of its own takes the plain word for its
+    /// rank, which is what vanilla's rules will render it as.
     /// </summary>
-    private static string Word(Title empire)
-        => string.IsNullOrWhiteSpace(empire.Form) ? "Empire" : empire.Form.Trim();
+    private static string Word(Title title)
+        => string.IsNullOrWhiteSpace(title.Form)
+            ? title.Tier == "h" ? "Hegemony" : "Empire"
+            : title.Form.Trim();
 
     /// <summary>
     /// What it costs to declare. Scaled by the empire's settled counties so that a sprawling one is

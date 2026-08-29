@@ -126,16 +126,21 @@ activity_society_errand = {
 	# Read back later with:
 	#     scope:activity = { has_activity_option = { category = society_errand_quarry option = X } }
 	#
-	# The three are CK2's own, minus the ones that were about CK2 systems we do not have. Their
-	# ordering is the pay ladder and the exposure ladder at once, which is the whole tension:
-	# the quarry that pays best is the one most likely to be missed.
+	# The three are CK2's own, minus the ones that were about CK2 systems we do not have.
+	#
+	# The quarry decides the PAY and nothing else. Exposure is decided by how carefully the errand
+	# is run (errand.0010 / .0020), not by who is taken -- see the ladder note in the events file
+	# for why. That is a deliberate split: the two decisions are made at different moments by
+	# different reasoning, and collapsing them into one axis would make the planner choice the only
+	# one that mattered.
 	options = {
 		society_errand_quarry = {
 			# ---- Someone nobody will look for ----
 			#
-			# Lowest pay, lowest exposure, worst for the soul. CK2 taught this one by making the
-			# cheapest mission the one that corrupts hardest, and it is the right lesson: the
-			# errand nobody notices is the errand you will run again, and again.
+			# The default, and the lowest paid. It is not the SAFE one -- the corruption roll is
+			# identical for all three quarries, and the exposure depends on how it is run -- it is
+			# simply the one that asks least of you to arrange. Which is the CK2 lesson worth
+			# keeping: the errand nobody notices is the errand you will run again, and again.
 			errand_quarry_unmissed = {
 				default = yes
 
@@ -223,8 +228,12 @@ activity_society_errand = {
 	is_single_location = yes
 	max_province_icons = 5
 
+	# ROOT here is the PROVINCE, not a title -- so `exists = holder` is wrong twice over: holder is
+	# a landed-title link, and a province does not have one. `has_province_owner` is the
+	# province-scope form and is all this needs; province_filter = realm has already done the
+	# narrowing, and this only has to exclude the unheld ones.
 	is_location_valid = {
-		exists = holder
+		has_province_owner = yes
 	}
 
 	province_description = {
@@ -324,8 +333,12 @@ activity_society_errand = {
 	allow_zero_guest_invites = yes
 	open_invite = no
 
+	# Indexed, not a bare list. `rules = { some_rule }` parses as a loose value and ck3-tiger
+	# rejects it -- the rite next door has the correct shape and it is numbered.
 	guest_invite_rules = {
-		rules = { activity_invite_rule_society_court }
+		rules = {
+			1 = activity_invite_rule_society_court
+		}
 	}
 
 	# The same veto as the rite. Nobody unsworn comes along on this of all things.

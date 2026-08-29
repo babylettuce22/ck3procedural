@@ -14,6 +14,23 @@ public sealed class GovernmentMap
     public const string Administrative = "administrative_government";
     public const string Nomad = "nomad_government";
 
+    /// <summary>
+    /// All Under Heaven's two portable bureaucracies — the same shape as
+    /// <see cref="Administrative"/> with a merit currency and county-tier appointments on top.
+    ///
+    /// Portable is the operative word, and it is why <c>celestial_government</c> is not here beside
+    /// them. Both of these are assigned in vanilla history by a bare <c>government =</c> line and
+    /// carry no hardcoded title anywhere; celestial's entire ministry layer hangs off
+    /// <c>tgp_has_access_to_ministry_trigger</c>, which tests <c>has_title = title:h_china</c>
+    /// literally, so on a generated map it would be a name with nothing behind it. Without the
+    /// expansion, vanilla's game-start sweep turns all three into feudal, so nothing here needs a
+    /// guard of its own.
+    /// </summary>
+    public const string Meritocratic = "meritocratic_government";
+
+    /// <inheritdoc cref="Meritocratic"/>
+    public const string SteppeAdmin = "steppe_admin_government";
+
     private readonly Dictionary<Title, string> byCounty;
     private readonly HashSet<Title> _adminRealms;
     private readonly HashSet<Title> _nomadRealms;
@@ -33,6 +50,13 @@ public sealed class GovernmentMap
     public bool IsTribal(Title county) => For(county) == Tribal;
     public bool IsAdministrative(Title county) => For(county) == Administrative;
     public bool IsNomad(Title county) => For(county) == Nomad;
+
+    /// <summary>
+    /// The bureaucracies that behave alike: one government across the whole realm, castle seats, and
+    /// noble families rather than ordinary vassals.
+    /// </summary>
+    public static bool IsAdminFamily(string government)
+        => government is Administrative or Meritocratic or SteppeAdmin;
 
     public bool IsAdminEmpire(Title title) => _adminRealms.Contains(title);
     public bool IsNomadRealm(Title title) => _nomadRealms.Contains(title);
@@ -55,6 +79,10 @@ public sealed class GovernmentMap
         Tribal => "tribal_holding",
         Republic => "city_holding",
         Theocracy => "church_holding",
+
+        // Feudal, clan and every bureaucracy — administrative, meritocratic and steppe-admin all
+        // declare primary_holding = castle_holding, so the default is the right answer for them
+        // rather than an unconsidered one.
         _ => "castle_holding",
     };
 
@@ -232,6 +260,13 @@ public static class Governments
             }
         }
 
+        // The seat of a hegemon crowned at the start date, if the world has one. Read here so the
+        // cascade below can tell that realm apart; on every other map it stays null and nothing in
+        // the loop behaves differently.
+        Title? hegemonSeat = cfg.StartingHegemony && Titles.HegemonyOf(empires) is { } crown
+            ? realms.HolderCounty.GetValueOrDefault(crown)
+            : null;
+
         // --- 4. Assign Government Realm-by-Realm with Historical Calibration ---
         foreach (var (topLiege, realmCounties) in topLiegeCounties)
         {
@@ -307,6 +342,21 @@ public static class Governments
                 realmGovernment = GovernmentMap.Feudal;
             }
 
+            // A crowned hegemon does not settle for the ordinary bureaucracy. Administrative is what
+            // the cascade above can reach; a realm that rules the world should read as something
+            // stranger, and All Under Heaven's two portable bureaucracies are exactly that at no
+            // extra cost — they need no special titles and degrade to feudal without the expansion.
+            // The steppe share picks between them for the same reason the horde clause reads it: a
+            // bureaucracy grown out of the grasslands is the Khitan one, anything else the courtly.
+            if (hegemonSeat is not null
+                && realmGovernment == GovernmentMap.Administrative
+                && realmCounties.Contains(hegemonSeat))
+            {
+                realmGovernment = steppeShare >= 0.20
+                    ? GovernmentMap.SteppeAdmin
+                    : GovernmentMap.Meritocratic;
+            }
+
             // Assign the unified government to all constituent counties
             foreach (var county in realmCounties)
             {
@@ -314,8 +364,9 @@ public static class Governments
                 var countyDomTerrain = Development.DominantTerrain(county, provinceTerrain);
                 int cLevel = development.GetValueOrDefault(county);
 
-                // 1. If realm is Nomadic or Administrative, all counties stay unified
-                if (realmGovernment is GovernmentMap.Nomad or GovernmentMap.Administrative)
+                // 1. If realm is Nomadic or any bureaucracy, all counties stay unified
+                if (realmGovernment == GovernmentMap.Nomad
+                    || GovernmentMap.IsAdminFamily(realmGovernment))
                 {
                     assigned[county] = realmGovernment;
                 }
@@ -350,7 +401,7 @@ public static class Governments
     /// <summary>Title tiers as a number, so a hierarchy can be walked biggest-first.</summary>
     private static int TierRank(string tier) => tier switch
     {
-        "e" => 4, "k" => 3, "d" => 2, "c" => 1, _ => 0,
+        "h" => 5, "e" => 4, "k" => 3, "d" => 2, "c" => 1, _ => 0,
     };
 
     private static Title TopLiege(Title county, RealmMap realms)

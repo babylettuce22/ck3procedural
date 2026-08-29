@@ -31,5 +31,62 @@ public static class ArtifactForgeFlags
     /// splices into the same gene the forge does, and half-emitting that is worse than emitting
     /// neither.
     /// </summary>
-    public static readonly bool ArmorOnPortrait = false;
+    public static readonly bool ArmorOnPortrait = true;
+
+    /// <summary>
+    /// Whether armour is painted against a mask we generate rather than vanilla's own.
+    ///
+    /// Set <c>false</c> to go back to vanilla's mask exactly: <see cref="ArmorMask"/> writes nothing,
+    /// entities name the mask they always did, and the coverage, density and material-aiming passes
+    /// all read it — so the whole feature reverses at this one line with no other edit.
+    ///
+    /// **What it buys.** Vanilla's mask marks a war garment's CLOTH and not its plates: every
+    /// visible channel measures metalness ~0.00, while 94-98% of each garment's genuinely metal
+    /// texels lie outside the mask. So with it off, a plate artifact necessarily paints its metal
+    /// onto a surcoat. With it on, the metal region is lifted out of the garment's own properties
+    /// map and given the last mask channel, and metal substances land on metal.
+    ///
+    /// **What it costs.** One 512x512 DXT5 file per distinct garment, ~260 KB each, and only for
+    /// garments that are at least 2% metal — the rest keep vanilla's mask either way.
+    ///
+    /// **OFF, on a judgement call, after seeing both in game (2026-08-28.)** It works exactly as
+    /// designed and it looks worse. The reason is in the numbers that justified it: a garment's
+    /// genuinely metal area is only **5-7%** of it (28% on the byzantine one), while vanilla's mask
+    /// covers **55-76%**. So accurate placement turns a plate artifact into a cloth robe carrying a
+    /// small correct steel cuirass, where the inaccurate version made the whole garment read as the
+    /// artifact's material. For a legendary object, dramatic beats accurate — the piece is supposed
+    /// to announce itself.
+    ///
+    /// Kept rather than deleted because the measurement behind it stands, and it is the right
+    /// mechanism for anything that wants metal specifically — a trim, a gilded edge, a second
+    /// material layered on the plates rather than replacing the garment.
+    /// </summary>
+    public static readonly bool GeneratedArmorMasks = false;
+
+    /// <summary>
+    /// Whether the bone-attachment experiment is emitted — see <see cref="BoneAttachProbe"/>.
+    ///
+    /// Answers, in one in-game session, whether a rigid piece can be hung off a portrait bone from
+    /// an accessory gene of our own: the route a pauldron on an illustrious piece would take. It
+    /// emits a debug event, a modifier group, some accessories and one new gene, and touches nothing
+    /// the artifact path uses — so it is safe to leave on, and safe to delete outright.
+    ///
+    /// Turn it off once the question is answered. It costs a gene declaration and a handful of
+    /// accessories that no shipped content refers to.
+    /// </summary>
+    public static readonly bool BoneAttachProbe = true;
+
+    /// <summary>
+    /// Whether rigid pieces are hung off portrait bones — see <see cref="BonePieceStep"/>.
+    ///
+    /// Pauldrons are the first use; the step is written around SLOTS, so a helm crest or a back
+    /// piece is a table row and a mesh rather than new code. Off means the meshes in
+    /// <c>assets/attachments</c> are simply not baked or emitted, and nothing else changes.
+    ///
+    /// This is the only route by which an artifact can add METAL to a cloth war garment, since a
+    /// garment's mask marks its cloth and not its plates — see
+    /// <see cref="ArtifactForgeFlags.GeneratedArmorMasks"/> for why painting them instead was tried
+    /// and abandoned.
+    /// </summary>
+    public static readonly bool BonePieces = true;
 }

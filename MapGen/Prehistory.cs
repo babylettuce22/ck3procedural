@@ -1061,7 +1061,7 @@ public sealed class PrehistoryMap
 
     private static int TierRank(string tier) => tier switch
     {
-        "e" => 4, "k" => 3, "d" => 2, "c" => 1, _ => 0,
+        "h" => 5, "e" => 4, "k" => 3, "d" => 2, "c" => 1, _ => 0,
     };
 
     private static void BuildInternalDrama(

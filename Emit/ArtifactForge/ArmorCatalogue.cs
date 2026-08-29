@@ -13,8 +13,18 @@ using System.Text.RegularExpressions;
 /// let a garment follow the body it is on. A hand-written entity without them renders one rigid
 /// shape that clips through any character who is not the default build.
 /// </param>
+/// <param name="MeshPath">
+/// The garment's <c>.mesh</c> on disk, or null when it could not be resolved.
+///
+/// Carried because a pattern tiles over UV1, and UV1 is NOT normalised across vanilla's garments:
+/// <c>ep2_steppe</c> spans exactly 1.00, while <c>ep2_western_era2</c> spans 3.05 and starts at
+/// -1.61. One shared layout scale therefore tiles three times denser on the western garment than on
+/// the steppe one, which is visible as a pattern that is right on some cultures and wrong on others.
+/// <see cref="ArmorForgeStep"/> reads the span from here and scales each layout by it.
+/// </param>
 public sealed record ArmorGarment(
-    string Accessory, bool Female, string Family, string SetTags, string EntityBody, string? PatternMask);
+    string Accessory, bool Female, string Family, string SetTags, string EntityBody, string? PatternMask,
+    string? MeshPath);
 
 /// <summary>
 /// Finds the war garments vanilla already ships, so armour can be recoloured without modelling
@@ -59,7 +69,7 @@ public static class ArmorCatalogue
 
         foreach (var (name, info) in wanted)
         {
-            if (!entities.TryGetValue(info.Entity, out string? body)) continue;
+            if (!entities.TryGetValue(info.Entity, out var found2)) continue;
 
             var stem = Stem.Match(name);
 
@@ -68,8 +78,9 @@ public static class ArmorCatalogue
                 name.StartsWith("f_", StringComparison.Ordinal),
                 stem.Success ? stem.Groups["fam"].Value : "western",
                 info.Tags,
-                body,
-                MaskOf(body)));
+                found2.Body,
+                MaskOf(found2.Body),
+                found2.MeshPath));
         }
 
         return [.. found.OrderBy(g => g.Accessory, StringComparer.Ordinal)];
@@ -139,9 +150,10 @@ public static class ArmorCatalogue
     /// and <c>game_data</c> blocks, so stopping at the first closing brace would truncate it and
     /// take the mesh settings with it.
     /// </summary>
-    private static Dictionary<string, string> ReadEntities(string dir, HashSet<string> names)
+    private static Dictionary<string, (string Body, string? MeshPath)> ReadEntities(
+        string dir, HashSet<string> names)
     {
-        var found = new Dictionary<string, string>(StringComparer.Ordinal);
+        var found = new Dictionary<string, (string, string?)>(StringComparer.Ordinal);
 
         foreach (string path in Directory.EnumerateFiles(dir, "*.asset", SearchOption.AllDirectories))
         {
@@ -182,13 +194,39 @@ public static class ArmorCatalogue
                     kept.Append(line.TrimEnd()).Append('\n');
                 }
 
-                found[name] = kept.ToString();
+                found[name] = (kept.ToString(), MeshBeside(path, text, kept.ToString()));
             }
 
             if (found.Count == names.Count) break;
         }
 
         return found;
+    }
+
+    /// <summary>
+    /// The <c>.mesh</c> an entity draws, resolved next to the <c>.asset</c> that declares it.
+    ///
+    /// Two hops, because the entity names a <c>pdxmesh</c> by KEY and only the <c>pdxmesh</c> block
+    /// knows the filename — they routinely differ (<c>..._01_mesh</c> against <c>..._01.mesh</c>),
+    /// so building the filename from the key by string surgery would work on most garments and
+    /// silently miss the rest.
+    /// </summary>
+    private static string? MeshBeside(string assetPath, string assetText, string entityBody)
+    {
+        string? key = Between(entityBody[Math.Max(0, entityBody.IndexOf("pdxmesh", StringComparison.Ordinal))..], '"', '"');
+        if (string.IsNullOrEmpty(key)) return null;
+
+        int at = assetText.IndexOf($"name = \"{key}\"", StringComparison.Ordinal);
+        if (at < 0) return null;
+
+        int file = assetText.IndexOf("file", at, StringComparison.Ordinal);
+        if (file < 0) return null;
+
+        string? name = Between(assetText[file..], '"', '"');
+        if (string.IsNullOrEmpty(name)) return null;
+
+        string path = Path.Combine(Path.GetDirectoryName(assetPath) ?? "", name);
+        return File.Exists(path) ? path : null;
     }
 
     private static string? MaskOf(string body)

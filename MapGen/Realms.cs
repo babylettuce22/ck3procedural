@@ -22,6 +22,9 @@ public enum LiegeOrigin
 
     /// <summary>The formation simulation put it there — homage, or the internal structure of a realm.</summary>
     Conquest,
+
+    /// <summary>Sworn to a hegemon crowned at the start date. See <see cref="Realms.ExpandHegemonRealm"/>.</summary>
+    Hegemony,
 }
 
 public sealed class RealmMap
@@ -1260,8 +1263,185 @@ public static class Realms
         }
     }
 
+    /// <summary>
+    /// Hands the world's hegemony to its greatest realm, for a map asked to start with one worn.
+    ///
+    /// Called after <see cref="Build"/> has finished rather than from inside it, and that ordering is
+    /// the whole safety of the thing. The liege pass walks every county's de jure ancestors looking
+    /// for a title somebody holds, and the hegemony is a de jure ancestor of every county there is —
+    /// present during Build, it would have made its holder the liege of the entire map in one step.
+    /// Granted afterwards it is what CK3 makes it: a claim over ground whose rulers answer to nobody.
+    ///
+    /// It goes to whoever actually rules the most ground, counted here rather than read off
+    /// <see cref="RealmMap.Greatest"/>. That list sorts by the rank of a ruler's primary title first
+    /// and only then by that title's <em>de jure</em> weight, so its head is whoever wears the
+    /// grandest crown, not whoever commands the largest realm — and with imperial titles as sparse as
+    /// <see cref="MapConfig.EmpireTitleShare"/> makes them, the grandest crown is routinely worn by
+    /// someone holding two counties inside a de jure empire that never formed. Handing such a ruler
+    /// the world reads exactly as wrong as it is.
+    /// </summary>
+    /// <returns>The hegemony, when there was one to grant and somebody to grant it to.</returns>
+    public static Title? CrownHegemon(RealmMap realms, List<Title> empires, WildernessMap wilderness)
+    {
+        if (Titles.HegemonyOf(empires) is not { } hegemony) return null;
+        if (realms.HolderCounty.ContainsKey(hegemony)) return null;
+
+        var (primaryOf, realmCounties) = RealmSizes(realms, empires, wilderness);
+        if (realmCounties.Count == 0) return null;
+
+        // Size decides it. Holding an empire only breaks a tie, so a great king outranks a titular
+        // emperor, and the seat index breaks the rest so the same world always crowns the same ruler.
+        var emperorSeats = empires
+            .Where(realms.HolderCounty.ContainsKey)
+            .Select(e => realms.HolderCounty[e])
+            .ToHashSet();
+
+        var chosen = realmCounties
+            .OrderByDescending(kv => kv.Value)
+            .ThenByDescending(kv => emperorSeats.Contains(kv.Key))
+            .ThenBy(kv => kv.Key.Index)
+            .First().Key;
+
+        realms.HolderCounty[hegemony] = chosen;
+
+        Console.WriteLine($"  hegemony: {hegemony.Name} is worn from the start by the ruler of "
+                        + $"{chosen.Name}, who rules {realmCounties[chosen]} of "
+                        + $"{realmCounties.Values.Sum()} settled counties");
+
+        return hegemony;
+    }
+
+    /// <summary>
+    /// How far ahead of the next realm a crowned hegemon has to stand.
+    ///
+    /// Merely being the largest is not enough to read as one: the biggest realm on a generated map
+    /// is routinely a quarter of the world with two kingdoms close behind it, which on the political
+    /// map looks like a strong king rather than a sovereign of everything. Twice the next realm is
+    /// the point where the hegemony stops being one power among several and starts being the thing
+    /// the map is arranged around.
+    /// </summary>
+    private const double HegemonDominance = 2.0;
+
+    /// <summary>
+    /// The share of the settled world a crowned hegemon has to actually rule.
+    ///
+    /// Standing clear of the next realm turns out not to be the same thing as looking like a
+    /// hegemon, and on the first map that difference was the whole bug: the largest realm was
+    /// already more than twice its nearest rival and still only a quarter of the map, under a de
+    /// jure hegemony that claims all of it. Nothing about that reads as a sovereign of the world.
+    /// Two fifths leaves the map plainly arranged around one throne while still leaving most of the
+    /// interesting fight — the last three fifths — un-won.
+    /// </summary>
+    private const double HegemonMinShare = 0.40;
+
+    /// <summary>
+    /// Brings realms under a crowned hegemon until nobody else is close, by homage rather than by
+    /// moving land.
+    ///
+    /// The de jure hegemony covers the whole map by construction, so a hegemon ruling a quarter of
+    /// it reads as a lie the moment a player opens the realm view — which is exactly what the first
+    /// version produced. Vassalising the largest independent neighbours is how CK3 itself states
+    /// "these kings answer to that throne", and it costs nothing but <c>liege =</c> lines: no county
+    /// changes hands, no ruler is invented, and every absorbed realm keeps its own government, its
+    /// own vassals and its own internal structure.
+    ///
+    /// **Runs after <see cref="Governments"/>, and must.** Governments are assigned one per realm,
+    /// grouped by top liege, so doing this first would sweep every absorbed kingdom into the
+    /// hegemon's government and paint a third of the world one colour. Afterwards, each of them
+    /// keeps the government it was given while answering to the hegemon — which is what a vassal
+    /// king is.
+    /// </summary>
+    /// <returns>How many realms were brought in.</returns>
+    public static int ExpandHegemonRealm(RealmMap realms, List<Title> empires, WildernessMap wilderness)
+    {
+        if (Titles.HegemonyOf(empires) is not { } hegemony) return 0;
+        if (!realms.HolderCounty.TryGetValue(hegemony, out var hegemonSeat)) return 0;
+
+        var (primaryOf, size) = RealmSizes(realms, empires, wilderness);
+        if (!size.TryGetValue(hegemonSeat, out int hegemonSize)) return 0;
+
+        // Largest first, so the fewest oaths buy the most dominance and the realms that swear are
+        // the ones whose independence was the point.
+        var others = size.Where(kv => kv.Key != hegemonSeat)
+                         .OrderByDescending(kv => kv.Value)
+                         .ThenBy(kv => kv.Key.Index)
+                         .ToList();
+
+        int total = size.Values.Sum();
+        int absorbed = 0, nextLargest = 0;
+
+        foreach (var (seat, count) in others)
+        {
+            // Both tests, and the list is descending, so once the hegemon clears this realm it
+            // clears every one after it too.
+            if (hegemonSize > HegemonDominance * count && hegemonSize >= HegemonMinShare * total)
+            {
+                nextLargest = count;
+                break;
+            }
+
+            var primary = primaryOf.GetValueOrDefault(seat, seat);
+            if (primary == hegemony || realms.Liege.ContainsKey(primary)) continue;
+
+            realms.SetLiege(primary, hegemony, LiegeOrigin.Hegemony);
+            hegemonSize += count;
+            absorbed++;
+        }
+
+        Console.WriteLine($"  hegemony: {absorbed} realm(s) swore to it — the hegemon rules "
+                        + $"{hegemonSize} of {total} settled counties "
+                        + $"({(double)hegemonSize / Math.Max(1, total):P0}), "
+                        + $"next largest {nextLargest}");
+
+        return absorbed;
+    }
+
+    /// <summary>
+    /// Every ruler's de facto realm — settled counties that ultimately answer to them, keyed by
+    /// seat — and the primary title each seat holds, which is what the walk upward follows.
+    ///
+    /// Shared by the two hegemony passes because they have to agree: one picks the largest realm and
+    /// the other measures against it, and two derivations of "how big is this realm" would sooner or
+    /// later disagree about which realm that is.
+    /// </summary>
+    private static (Dictionary<Title, Title> PrimaryOf, Dictionary<Title, int> Size)
+        RealmSizes(RealmMap realms, List<Title> empires, WildernessMap wilderness)
+    {
+        // The highest-ranked title each ruler holds, keyed by their seat — the same derivation the
+        // history writer's Primary makes, needed here to walk homage upward.
+        var primaryOf = new Dictionary<Title, Title>();
+        foreach (var (title, seat) in realms.HolderCounty)
+            if (!primaryOf.TryGetValue(seat, out var best) || Rank(title) > Rank(best))
+                primaryOf[seat] = title;
+
+        var size = new Dictionary<Title, int>();
+        foreach (var county in Titles.Flatten(empires))
+        {
+            if (county.Tier != "c" || wilderness.Contains(county)) continue;
+            if (TopSeat(county) is { } top) size[top] = size.GetValueOrDefault(top) + 1;
+        }
+
+        return (primaryOf, size);
+
+        Title? TopSeat(Title county)
+        {
+            if (!realms.HolderCounty.TryGetValue(county, out var seat)) return null;
+
+            var visited = new HashSet<Title> { seat };
+
+            while (primaryOf.GetValueOrDefault(seat, seat) is { } primary
+                   && realms.Liege.TryGetValue(primary, out var lord)
+                   && realms.HolderCounty.TryGetValue(lord, out var lordSeat)
+                   && visited.Add(lordSeat))
+                seat = lordSeat;
+
+            return seat;
+        }
+    }
+
     private static int Rank(Title title) => title.Tier switch
     {
+        "h" => 5,
         "e" => 4,
         "k" => 3,
         "d" => 2,

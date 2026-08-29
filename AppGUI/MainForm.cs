@@ -108,6 +108,10 @@ public sealed class MainForm : Form
     private readonly Button _recent = Theme.MakeButton("▾", 26);
     private readonly Button _azgaar = Theme.MakeButton("Azgaar…", 74);
 
+    // The walkthrough is also under Help and inside the welcome page, but neither is where anyone
+    // looks while staring at an Azgaar chip they don't know how to fill. One click, next to it.
+    private readonly Button _azgaarHelp = Theme.MakeButton("Azgaar?", 62);
+
     private AzgaarGuide? _guide;
     private WelcomeGuide? _welcome;
     private TabControl _tabs = null!;
@@ -416,6 +420,11 @@ public sealed class MainForm : Form
         _azgaar.Click += (_, _) => ShowAzgaarMenu();
         ApplyAzgaarChip();
 
+        // Left enabled during a run on purpose: it only opens a window to read, and a run is
+        // exactly when someone has time to read it.
+        _azgaarHelp.Click += (_, _) => ShowAzgaarGuide();
+        _tips.SetToolTip(_azgaarHelp, "How to export a map from Azgaar and import it here");
+
         _roll.Click += (_, _) => RollSeed();
         _preview.Click += async (_, _) => await PreviewAsync();
         _writeMod.Click += async (_, _) => await WriteModAsync();
@@ -663,6 +672,7 @@ public sealed class MainForm : Form
         build.Controls.Add(_browse);
         build.Controls.Add(_recent);
         build.Controls.Add(_azgaar);
+        build.Controls.Add(_azgaarHelp);
         build.Controls.Add(Separator());
         build.Controls.Add(Caption("Seed"));
         build.Controls.Add(_seed);
@@ -2886,6 +2896,7 @@ public sealed class MainForm : Form
 
     private static string TierWord(string tier) => tier switch
     {
+        "h" => "hegemony",
         "e" => "empire",
         "k" => "kingdom",
         "d" => "duchy",

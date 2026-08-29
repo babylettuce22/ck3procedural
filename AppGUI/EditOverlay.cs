@@ -96,6 +96,13 @@ public sealed class CultureEdit
     public string? ClothingGfx { get; set; }
     public string? UnitGfx { get; set; }
     public Dictionary<string, TitleVocabulary>? RealmWords { get; set; }
+
+    /// <summary>
+    /// The vanilla ethnicity this culture was moved onto, if it was — the choice, not the genes it
+    /// produced. Replaying the choice redraws the hair and eye variants, which is what makes the
+    /// edit portable; the genes themselves come off an Rng and could not be replayed.
+    /// </summary>
+    public string? Ethnicity { get; set; }
 }
 
 public sealed class FaithEdit

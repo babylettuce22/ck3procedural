@@ -59,3 +59,22 @@ public sealed class LookPresetConverter()
 // Faith
 public sealed class FaithIconConverter()
     : DynamicVocabularyConverter(v => v.FaithIcons);
+
+/// <summary>
+/// The vanilla ethnicities a human culture can be moved onto.
+///
+/// Not a <see cref="DynamicVocabularyConverter"/>, and exclusive rather than editable, which are
+/// the same decision twice: a template CK3 does not recognise is not an error but a silent
+/// fall-through to the look the culture already had, so a typed key that misses would look exactly
+/// like a pick that did nothing. The list is the generator's own
+/// <see cref="Ethnicities.HumanTemplates"/>, kept in family order rather than alphabetised so the
+/// related looks sit together in the dropdown.
+/// </summary>
+public sealed class EthnicityTemplateConverter : StringConverter
+{
+    public override bool GetStandardValuesSupported(ITypeDescriptorContext? context) => true;
+    public override bool GetStandardValuesExclusive(ITypeDescriptorContext? context) => true;
+
+    public override StandardValuesCollection GetStandardValues(ITypeDescriptorContext? context)
+        => new(Ethnicities.HumanTemplates.ToList());
+}

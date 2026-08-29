@@ -1,0 +1,40 @@
+﻿# The society's one recurring tick: visibility decays.
+#
+# =====================================================================================
+#  Why `random_yearly_everyone_pulse` and not `yearly_playable_pulse`
+# =====================================================================================
+#
+# Members are not all rulers. The court is where the first half-dozen come from -- society.9001
+# swears courtiers, and the oath interaction is easiest to use on somebody already standing in the
+# room -- so a pulse that only fires for playable characters would decay the player's meter and
+# leave every courtier's climbing forever.
+#
+# CK3 offers three shapes of per-character pulse and only one of them is right here:
+#
+#   yearly_playable_pulse          rulers only. Misses most of the membership.
+#   random_yearly_everyone_pulse   EVERY character, once a year, at a randomised point in it.
+#   five_year_everyone_pulse       every character, but five times too slow for a meter that
+#                                  moves in single digits.
+#
+# The `random_` prefix is not "sometimes". It is the timing that is randomised, so the engine
+# spreads the work across the year instead of running every character in the world through this
+# on the same tick. That is exactly what a cheap yearly sweep wants, and it has a second effect
+# worth having: two members do not decay in lockstep.
+#
+# CK2 did the same thing with `on_yearly_pulse` and MNM.70030, a hidden event whose entire body is
+# `decrease_visibility_effect = yes`. This is that, with the trigger moved onto the event so the
+# on_action stays a list of names.
+#
+# =====================================================================================
+#  Redeclaring an on_action APPENDS
+# =====================================================================================
+#
+# Naming `random_yearly_everyone_pulse` here does not replace vanilla's -- the database merges and
+# both run. That is by design and the conflicts log stays quiet about it, which is worth knowing
+# because it looks exactly like the kind of override that would break the base game.
+
+random_yearly_everyone_pulse = {
+	events = {
+		society.0210   # Visibility decays a little
+	}
+}

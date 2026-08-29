@@ -325,3 +325,50 @@ society_panel_can_hold_rite = {
 		}
 	}
 }
+
+# =====================================================================================
+#  The roster's visibility column
+# =====================================================================================
+#
+# Asked of each ROSTERED MEMBER, not of the player -- the .gui roots these at
+# `Character.MakeScope` inside the list item, the same way it roots the rank ones.
+#
+# These test the MODIFIER rather than the number, and that is the deliberate half. The panel
+# already prints the player's own visibility as a figure because the player is entitled to know
+# exactly where they stand. What one member can see of another is not a figure: it is whether
+# that person has started attracting the kind of attention the society notices. So the roster
+# reports the band, the band is the modifier, and the modifier is the same thing the rest of the
+# world can see on their character sheet.
+#
+# It also means there is one definition of "under suspicion" rather than two -- if the thresholds
+# in society_visibility_check_effect move, this follows automatically, where a `var:` comparison
+# duplicated here would quietly disagree.
+
+society_panel_suspect = {
+	scope = character
+
+	is_shown = {
+		has_character_modifier = society_under_suspicion
+	}
+}
+
+society_panel_very_suspect = {
+	scope = character
+
+	is_shown = {
+		has_character_modifier = society_highly_suspect
+	}
+}
+
+# Neither. Drawn as a quiet dash rather than left blank, so a row reads as "checked, nothing
+# there" instead of "we did not look".
+society_panel_unsuspected = {
+	scope = character
+
+	is_shown = {
+		NOR = {
+			has_character_modifier = society_under_suspicion
+			has_character_modifier = society_highly_suspect
+		}
+	}
+}

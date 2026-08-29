@@ -362,7 +362,7 @@ public static class Ethnicities
         foreach (var heritage in heritages)
         {
             var archetype = heritageArchetypes.GetValueOrDefault(heritage, RaceArchetype.Human);
-            var heritageEth = CreateEthnicity($"gen_ethnicity_{ethIndex++}", archetype, heritage.Name, cfg.RaceMode, rng);
+            var heritageEth = CreateEthnicity($"gen_ethnicity_{ethIndex++}", archetype, heritage.Name, cfg.RaceMode, cfg.DominantLook, rng);
 
             ethnicities[heritageEth.Key] = heritageEth;
             byHeritage[heritage] = heritageEth;
@@ -424,7 +424,7 @@ public static class Ethnicities
 
             if (importedRace is { } race && race != (heritageEth?.Archetype ?? RaceArchetype.Human))
             {
-                cultureEth = CreateEthnicity($"gen_ethnicity_{ethIndex++}", race, culture.Name, cfg.RaceMode, rng);
+                cultureEth = CreateEthnicity($"gen_ethnicity_{ethIndex++}", race, culture.Name, cfg.RaceMode, cfg.DominantLook, rng);
                 ethnicities[cultureEth.Key] = cultureEth;
                 usedArchetypes.Add(race);
                 if (race != RaceArchetype.Human) fantasySpent += LandCount(culture);
@@ -506,7 +506,7 @@ public static class Ethnicities
 
                 if (subArchetype != RaceArchetype.Human) fantasySpent += LandCount(culture);
 
-                cultureEth = CreateEthnicity($"gen_ethnicity_{ethIndex++}", subArchetype, culture.Name, cfg.RaceMode, rng);
+                cultureEth = CreateEthnicity($"gen_ethnicity_{ethIndex++}", subArchetype, culture.Name, cfg.RaceMode, cfg.DominantLook, rng);
                 ethnicities[cultureEth.Key] = cultureEth;
                 usedArchetypes.Add(subArchetype);
             }
@@ -569,7 +569,7 @@ public static class Ethnicities
             if (bestHost is null) break;
 
             var minorityEth = CreateEthnicity($"gen_ethnicity_{ethIndex++}", minorityRace,
-                bestHost.Name, cfg.RaceMode, rng);
+                bestHost.Name, cfg.RaceMode, cfg.DominantLook, rng);
             ethnicities[minorityEth.Key] = minorityEth;
 
             string entry = minorityEth.Variants.Count > 0
@@ -1226,16 +1226,36 @@ public static class Ethnicities
         RaceArchetype archetype,
         string name,
         FantasyRaceMode mode,
-        Rng rng)
+        HumanLook look,
+        Rng rng,
+        string? forcedTemplate = null)
     {
-        string family = archetype switch
+        // Null for humans, and that is the whole of the fantasy-race guarantee: a race's family is
+        // fixed here by the race and never consults `look`, so no setting over human appearance can
+        // reach one. Its colouring comes from its own gen_race_skin shift regardless.
+        string? raceFamily = archetype switch
         {
             RaceArchetype.Orc or RaceArchetype.Gnome => "asian",
             RaceArchetype.Deepkin => "african",
             RaceArchetype.WoodElf or RaceArchetype.HighElf => "caucasian",
             RaceArchetype.Dwarf or RaceArchetype.Giantkin => "caucasian",
-            _ => rng.Pick(["caucasian", "african", "asian", "mena"])
+            _ => null
         };
+
+        // A race picks its family and then a template inside it, exactly as this always did. A
+        // human goes the other way -- template first, family derived -- which is the only way a
+        // preset can span two families (a Mediterranean world wants byzantine and arab both) or
+        // move a template between them (papuan belongs beside its South East Asian neighbours, not
+        // beside east_african). See PickHumanLook.
+        //
+        // `forcedTemplate` is the editor's way in -- see Retemplate, the only caller that passes
+        // one, which refuses anything but a human first. It skips a draw the generation path makes,
+        // which is why nothing on the generation path may ever pass it.
+        var (family, template) = forcedTemplate is { } forced
+            ? (FamilyOf(forced), forced)
+            : raceFamily is { } fixedFamily
+                ? (fixedFamily, PickVanillaTemplate(fixedFamily, rng))
+                : PickHumanLook(look, rng);
 
         var def = new EthnicityDef
         {
@@ -1243,7 +1263,7 @@ public static class Ethnicities
             LocalizedName = archetype == RaceArchetype.Human ? name : $"{name} ({RaceName(archetype)})",
             Archetype = archetype,
             LookFamily = family,
-            BaseTemplate = PickVanillaTemplate(family, rng)
+            BaseTemplate = template
         };
 
         ApplyMorphGenes(def, archetype, mode, rng);
@@ -1271,6 +1291,187 @@ public static class Ethnicities
         "mena" => rng.Pick(["arab", "turkic", "turkic_west", "indian", "south_indian"]),
         _ => rng.Pick(["caucasian", "slavic", "byzantine", "mediterranean", "circumpolar"])
     };
+
+    /// <summary>
+    /// The vanilla templates each <see cref="HumanLook"/> preset draws from, and how heavily.
+    ///
+    /// Every key here is one this file already used above, which is deliberate rather than lazy:
+    /// a template name CK3 does not know is not an error, it is a silent fall-through to the
+    /// ethnicity's own defaults, so an invented key would quietly undo the whole setting. Widening
+    /// these lists means harvesting the install's real ethnicity keys first, the way
+    /// <c>VanillaVocabulary</c> harvests everything else.
+    ///
+    /// The weights are the point of the feature, not decoration. A flat list over one region's
+    /// templates still reads as scrambled at the culture level — it is the lean toward a couple of
+    /// dominant looks, with the rest as a minority presence, that makes a world feel like one
+    /// place.
+    /// </summary>
+    private static IReadOnlyList<(string Template, int Weight)> LookTemplates(HumanLook look) => look switch
+    {
+        HumanLook.WesternEuropean => [("caucasian", 65), ("circumpolar", 35)],
+
+        HumanLook.Mediterranean =>
+            [("mediterranean", 45), ("byzantine", 30), ("arab", 15), ("turkic_west", 10)],
+
+        HumanLook.SubSaharan => [("african", 60), ("east_african", 40)],
+
+        HumanLook.EastAsian => [("asian_han_chinese", 45), ("asian", 30), ("asian_mongol", 25)],
+
+        HumanLook.SoutheastAsian =>
+            [("asian_malay", 40), ("asian_austronesian", 35), ("papuan", 25)],
+
+        HumanLook.MixedEuropean =>
+            [("caucasian", 30), ("mediterranean", 20), ("slavic", 20), ("byzantine", 15), ("circumpolar", 15)],
+
+        HumanLook.MixedMediterranean =>
+            [("mediterranean", 30), ("arab", 20), ("african", 20), ("byzantine", 15), ("east_african", 15)],
+
+        HumanLook.MixedAsian =>
+            [("asian", 20), ("asian_han_chinese", 20), ("asian_mongol", 15), ("asian_malay", 15),
+             ("indian", 15), ("south_indian", 15)],
+
+        _ => []
+    };
+
+    /// <summary>
+    /// Which of the four colouring families a vanilla template belongs to.
+    ///
+    /// The family decides nothing but the hair and eye palettes in <see cref="ApplyColorGenes"/> —
+    /// complexion rides on the template itself, which humans inherit untouched — so this only has
+    /// to be right about colouring, not about geography.
+    ///
+    /// <c>papuan</c> sits with the Asian templates here while <see cref="PickVanillaTemplate"/>
+    /// still lists it under african, and both are correct for what they do: the fantasy path uses
+    /// that function to pick a Deepkin's base tone, where the drow's own shift overwrites the
+    /// result anyway, whereas the South East Asian preset needs papuan to colour like its
+    /// neighbours. The two blocks differ by five percentage points on one hair band regardless.
+    /// </summary>
+    private static string FamilyOf(string template) => template switch
+    {
+        "african" or "east_african" => "african",
+        "asian" or "asian_han_chinese" or "asian_mongol" or "asian_malay"
+            or "asian_austronesian" or "papuan" => "asian",
+        "arab" or "turkic" or "turkic_west" or "indian" or "south_indian" => "mena",
+        _ => "caucasian"
+    };
+
+    /// <summary>
+    /// A human's vanilla template and the colouring family that follows from it.
+    ///
+    /// <see cref="HumanLook.Varied"/> is not a preset with every template in it — it runs the
+    /// original two-step draw verbatim, family first and template inside it. That is worth the
+    /// duplication: it is the default, and a preset's single weighted draw consumes a different
+    /// number of values from the sequence, so folding Varied into the same path would give every
+    /// seed generated before this setting existed a different world.
+    /// </summary>
+    private static (string Family, string Template) PickHumanLook(HumanLook look, Rng rng)
+    {
+        if (look == HumanLook.Varied)
+        {
+            string family = rng.Pick(["caucasian", "african", "asian", "mena"]);
+            return (family, PickVanillaTemplate(family, rng));
+        }
+
+        var templates = LookTemplates(look);
+        if (templates.Count == 0) // An enum member with no table yet; behave as Varied rather than throw.
+        {
+            string family = rng.Pick(["caucasian", "african", "asian", "mena"]);
+            return (family, PickVanillaTemplate(family, rng));
+        }
+
+        string picked = PickWeighted(templates, rng);
+        return (FamilyOf(picked), picked);
+    }
+
+    /// <summary>
+    /// One weighted draw. Local rather than on <see cref="Rng"/> because it is the only weighted
+    /// pick in the generator, and it goes through <c>Int</c> so it stays seed-deterministic like
+    /// every other draw.
+    /// </summary>
+    /// <summary>
+    /// Every vanilla template a human culture may be moved onto in the editor.
+    ///
+    /// The same eighteen keys the generator draws from, in family order, because the same reason
+    /// applies: a template CK3 does not know is not rejected, it is ignored, and the culture
+    /// quietly keeps the look it had. Offering a key the install lacks would therefore produce a
+    /// dropdown entry that silently does nothing.
+    /// </summary>
+    public static IReadOnlyList<string> HumanTemplates { get; } =
+    [
+        "caucasian", "slavic", "byzantine", "mediterranean", "circumpolar",
+        "arab", "turkic", "turkic_west", "indian", "south_indian",
+        "african", "east_african",
+        "asian", "asian_han_chinese", "asian_mongol", "asian_malay", "asian_austronesian", "papuan"
+    ];
+
+    /// <summary>
+    /// Moves one culture onto a different vanilla look, leaving every other culture alone.
+    ///
+    /// **The fork is the point.** Under <c>TieRaceToHeritage</c> every culture in a heritage shares
+    /// one <see cref="EthnicityDef"/> object, so editing the definition in place would repaint the
+    /// whole heritage — the opposite of what someone retemplating a single culture is asking for.
+    /// This builds a fresh definition instead and repoints only this culture's entries.
+    /// <c>ByHeritage</c> is deliberately not touched: the siblings resolve through <c>ByCulture</c>,
+    /// where they still point at the original.
+    ///
+    /// **Humans only**, which is the whole contract with the fantasy races. A race's look is its
+    /// <c>gen_race_skin</c> shift over a base tone chosen for that race; pointing an orc at
+    /// <c>caucasian</c> would shift the base out from under the green without making the culture
+    /// human, which is a worse outcome than refusing. Non-human cultures return false unchanged.
+    ///
+    /// The key is derived from the culture rather than from a counter, so retemplating the same
+    /// culture repeatedly reuses one key instead of leaving a trail of dead definitions. The
+    /// definition it replaces is left in the map on purpose — an ethnicity nothing references is
+    /// inert in CK3, whereas pruning risks dropping one that a host culture's weighted list still
+    /// names as a minority.
+    /// </summary>
+    /// <returns>False if the culture is not human, or the template is not one CK3 has.</returns>
+    public static bool Retemplate(
+        EthnicityMap map, Culture culture, string template, FantasyRaceMode mode, Rng rng)
+    {
+        var current = map.For(culture);
+        if (current.Archetype != RaceArchetype.Human) return false;
+
+        string? match = HumanTemplates
+            .FirstOrDefault(t => string.Equals(t, template.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (match is null) return false;
+
+        var def = CreateEthnicity($"gen_ethnicity_{culture.Key}_edit", RaceArchetype.Human,
+            culture.Name, mode, HumanLook.Varied, rng, forcedTemplate: match);
+
+        Assign(map, culture, def, PickCultureVariants(def, rng));
+        return true;
+    }
+
+    /// <summary>
+    /// Points a culture at a definition. The one place a culture's three entries are written
+    /// together, so a retemplate and the revert that undoes it cannot disagree about what a
+    /// complete assignment is.
+    /// </summary>
+    public static void Assign(
+        EthnicityMap map, Culture culture, EthnicityDef def, List<(string Key, int Weight)> variants)
+    {
+        map.Ethnicities[def.Key] = def;
+        map.ByCulture[culture] = def;
+        map.ByCultureKey[culture.Key] = def;
+        map.VariantsByCulture[culture] = variants;
+    }
+
+    private static string PickWeighted(IReadOnlyList<(string Template, int Weight)> options, Rng rng)
+    {
+        int total = 0;
+        foreach (var (_, weight) in options) total += Math.Max(0, weight);
+        if (total <= 0) return options[0].Template;
+
+        int roll = rng.Int(0, total - 1);
+        foreach (var (template, weight) in options)
+        {
+            roll -= Math.Max(0, weight);
+            if (roll < 0) return template;
+        }
+
+        return options[^1].Template;
+    }
 
     /// <summary>
     /// The shape of a race, expressed only in genes CK3 actually reads.
@@ -1303,7 +1504,9 @@ public static class Ethnicities
     /// The race as a player reads it. The enum spellings go straight into a localisation string,
     /// and "HighElf" is not a word.
     /// </summary>
-    private static string RaceName(RaceArchetype archetype) => archetype switch
+    /// <summary>Public for the Cultures inspector, which reports a fantasy culture's race in place
+    /// of the vanilla template it does not have.</summary>
+    public static string RaceName(RaceArchetype archetype) => archetype switch
     {
         RaceArchetype.HighElf => "High Elf",
         RaceArchetype.WoodElf => "Wood Elf",

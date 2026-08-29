@@ -101,9 +101,10 @@ public static class GuiWriter
     ///
     /// Everything else about societies is hand-kept in <c>BaseFilesToCopy/Societies</c> and copied
     /// verbatim. This is the one piece that cannot be, because it edits a vanilla file. The
-    /// consequence is worth knowing: a <c>--static-only --societies</c> run ships the panel and
-    /// its decision but NOT this tab, because that mode never reaches this writer. The decision is
-    /// the fallback door for exactly that reason.
+    /// consequence is worth knowing, and it got sharper when the fallback decision was deleted: a
+    /// <c>--static-only --societies</c> run ships the panel but NOT this tab, because that mode
+    /// never reaches this writer — and the panel now has no other door. Use <c>--gui-only</c> or a
+    /// full run alongside it.
     /// </summary>
     private static void PatchHudTabs(string modDir, string gameDir)
     {
@@ -269,14 +270,14 @@ public static class GuiWriter
         button
             .OnClick(toggle.Execute())
             .Tooltip("SOCIETY_TAB_BUTTON")
-            // Lit while the panel is up. Reads the panel's own open state rather than a state
-            // of its own, so the X button, Escape and the decision all leave it correct.
+            // Lit while the panel is up. Reads the panel's own open state rather than a state of
+            // its own, so the X button and Escape both leave it correct.
             .Quoted("down", open.IsShown().ToString());
 
         return GuiBuilder.Of("widget_hud_main_tab")
             .Name("tab_gen_society")
-            // Members only. The same question the decision asks, so a character who cannot take
-            // the decision has no tab either rather than a tab onto an empty panel.
+            // Members only, asked of the same scripted_gui that does the toggling — so a
+            // non-member gets no tab rather than a tab onto an empty panel.
             .Visible(toggle.IsShown())
             .Gap()
             .Add(button);

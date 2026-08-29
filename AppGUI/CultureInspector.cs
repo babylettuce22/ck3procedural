@@ -169,6 +169,27 @@ public sealed class CultureInspector : InspectorForm
         }
 
         [Category("Visual Appearance")]
+        [Description("The vanilla ethnicity this culture's people are built from — their complexion, "
+                     + "and the hair and eye colours they draw from. Changing it regenerates this "
+                     + "culture's look alone: the other cultures of its heritage keep theirs, even "
+                     + "though they were generated from the same definition. Fantasy races show "
+                     + "their race here and cannot be retemplated — their colouring is their own, "
+                     + "not a vanilla ethnicity's.")]
+        [TypeConverter(typeof(EthnicityTemplateConverter))]
+        public string EthnicityTemplate
+        {
+            get
+            {
+                if (edits.Ethnicities?.For(culture) is not { } eth) return "(not written yet)";
+
+                return eth.Archetype == RaceArchetype.Human
+                    ? eth.BaseTemplate
+                    : $"({Ethnicities.RaceName(eth.Archetype)})";
+            }
+            set => edits.EditCultureEthnicity(culture, value);
+        }
+
+        [Category("Visual Appearance")]
         [Description("The clothing, armor, and headgear graphic set for portraits.")]
         [TypeConverter(typeof(ClothingGfxConverter))]
         public string ClothingGfx

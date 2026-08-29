@@ -214,6 +214,11 @@ public static class AzgaarHierarchy
         Titles.AssignColorsTo(current, rng, cfg.DeJureColorCoding);
         AzgaarColors.Apply(current, azgaar, rng, cfg.DeJureColorCoding);
 
+        // After the export has had its say, never before: the hegemony sits above every empire and
+        // takes a colour of its own, so nothing it does can reach a border Azgaar drew. It claims
+        // no state, no government and no relation — an import keeps every one of those.
+        Titles.Crown(current, rng);
+
         int kingdoms = Titles.Flatten(current).Count(t => t.Tier == "k");
         int duchies = Titles.Flatten(current).Count(t => t.Tier == "d");
         Console.WriteLine($"  titles (azgaar-constrained): {current.Count} empires, {kingdoms} kingdoms, " +

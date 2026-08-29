@@ -107,9 +107,15 @@ public sealed class WorldEdits
         public void Capture(EditOverlay into)
         {
             var c = Target;
+
+            // Carried across the replacement below. The look is a separate snapshot on the same
+            // culture (see EthnicitySnapshot) and may already have written its field here.
+            string? ethnicity = into.Cultures.TryGetValue(c.Key, out var existing) ? existing.Ethnicity : null;
+
             into.Cultures[c.Key] = new CultureEdit
             {
                 Generated = Name,
+                Ethnicity = ethnicity,
                 Name = !string.Equals(c.Name, Name, StringComparison.Ordinal) ? c.Name : null,
                 Color = c.Color != Color ? [c.Color.R, c.Color.G, c.Color.B] : null,
                 Ethos = c.Ethos != Ethos ? c.Ethos : null,
@@ -129,6 +135,50 @@ public sealed class WorldEdits
             => a.Count == b.Count
             && a.All(kv => b.TryGetValue(kv.Key, out var words) && words == kv.Value);
     }
+
+    /// <summary>
+    /// A culture's look, which is a second independent edit on the same object.
+    ///
+    /// It cannot be folded into <see cref="CultureSnapshot"/>, because what changes is not a field
+    /// on the culture — it is which <see cref="EthnicityDef"/> the map points at, and the culture
+    /// itself is untouched. It therefore needs its own entry in <c>_originals</c>, and it cannot be
+    /// keyed on the culture: that key is already the culture snapshot's, and the second write would
+    /// silently evict the first, taking every pending rename and recolour with it. Hence
+    /// <see cref="EthnicityKey"/>.
+    /// </summary>
+    private sealed record EthnicitySnapshot(
+        Culture Target, EthnicityMap Map, EthnicityDef Def, List<(string Key, int Weight)> Variants)
+        : ISnapshot
+    {
+        // By reference, not by template name: a retemplate always mints a fresh definition, and two
+        // definitions naming the same vanilla template are still different looks once their hair
+        // and eye variants have been redrawn.
+        public bool Differs() => !ReferenceEquals(Map.For(Target), Def);
+
+        public void Restore() => MapGen.Ethnicities.Assign(Map, Target, Def, Variants);
+
+        /// <summary>
+        /// Merges into the culture's overlay entry rather than replacing it, so this and
+        /// <see cref="CultureSnapshot.Capture"/> can both run in either order without one
+        /// discarding the other's fields. <c>Generated</c> is left alone when an entry already
+        /// exists — the culture snapshot is the only one that knows the pre-rename name.
+        /// </summary>
+        public void Capture(EditOverlay into)
+        {
+            if (!into.Cultures.TryGetValue(Target.Key, out var edit))
+                into.Cultures[Target.Key] = edit = new CultureEdit { Generated = Target.Name };
+
+            // The chosen template, never the resulting gene blocks: the variants are redrawn from
+            // an Rng, so a captured output would not replay. Replaying the choice regenerates them.
+            edit.Ethnicity = Map.For(Target).BaseTemplate;
+        }
+    }
+
+    /// <summary>
+    /// The <c>_originals</c> key for a culture's look, distinct from the culture itself so the two
+    /// snapshots coexist. A record, so a fresh instance looks up the one already stored.
+    /// </summary>
+    private sealed record EthnicityKey(Culture Culture);
 
     private sealed record FaithSnapshot(Faith Target, string Name, (double R, double G, double B) Color,
         string Icon, List<string> Tenets) : ISnapshot
@@ -283,10 +333,16 @@ public sealed class WorldEdits
 
     public int EditedCount => _originals.Values.Count(s => s.Differs());
 
+    // A culture carries two independent snapshots — its own fields, and the look the map points at
+    // — so both of these have to ask about the second one as well, or a culture whose only change
+    // is its ethnicity reads as unedited and offers no revert.
     public bool WasEdited(object target)
-        => _originals.TryGetValue(target, out var snapshot) && snapshot.Differs();
+        => (_originals.TryGetValue(target, out var snapshot) && snapshot.Differs())
+        || (target is Culture c && _originals.TryGetValue(new EthnicityKey(c), out var eth) && eth.Differs());
 
-    public bool CanRevert(object target) => _originals.ContainsKey(target);
+    public bool CanRevert(object target)
+        => _originals.ContainsKey(target)
+        || (target is Culture c && _originals.ContainsKey(new EthnicityKey(c)));
 
     public void Attach(GenerationResult result, WrittenContent written, string modDir)
     {
@@ -373,6 +429,46 @@ public sealed class WorldEdits
     {
         string checkedName = Checked(name);
         Apply(culture, () => Snapshot(culture), () => culture.Name = checkedName, WorldAspect.Cultures);
+    }
+
+    /// <summary>The generated looks, for the inspector's dropdown. Null before a world is attached.</summary>
+    public EthnicityMap? Ethnicities => _written?.Ethnicities;
+
+    /// <summary>
+    /// Moves one culture onto a different vanilla look.
+    ///
+    /// Only this culture: <see cref="MapGen.Ethnicities.Retemplate"/> forks a fresh definition
+    /// rather than editing the shared one, so the heritage siblings that pointed at the same object
+    /// keep the look they were generated with.
+    ///
+    /// A fresh seed each time, like <see cref="RecolorChildren"/> — the hair and eye variants are
+    /// drawn inside the template's own palette, so reusing one seed would hand back the same
+    /// distribution and make a second pick on the same template look like it had done nothing.
+    ///
+    /// Silently does nothing for a non-human culture or a template CK3 lacks; the inspector does
+    /// not offer either, and this is the backstop for the overlay replay, which can carry a
+    /// template into a world whose cultures came out differently.
+    /// </summary>
+    public void EditCultureEthnicity(Culture culture, string template)
+    {
+        if (Ethnicities is not { } map) return;
+        if (map.For(culture).Archetype != RaceArchetype.Human) return;
+
+        // Snapshotted before the change and only if it lands, so a refused retemplate leaves no
+        // revert entry claiming an edit that never happened.
+        var before = map.For(culture);
+        var beforeVariants = new List<(string Key, int Weight)>(map.VariantsFor(culture));
+
+        var rng = new Rng(Random.Shared.Next(1, int.MaxValue));
+        var mode = _result?.Config.RaceMode ?? Config.MapConfig.FantasyRaceMode.HumanOnly;
+        if (!MapGen.Ethnicities.Retemplate(map, culture, template, mode, rng)) return;
+
+        var key = new EthnicityKey(culture);
+        if (!_originals.ContainsKey(key))
+            _originals[key] = new EthnicitySnapshot(culture, map, before, beforeVariants);
+
+        _pending |= WorldAspect.Ethnicities;
+        Changed?.Invoke(WorldAspect.Ethnicities);
     }
 
     public void EditFaith(Faith faith, Action<Faith> change)
@@ -579,6 +675,12 @@ public sealed class WorldEdits
                 }
 
                 if (edit.RealmWords is { } words) EditCultureWords(culture, c => c.RealmWords = new(words));
+
+                // Last, and deliberately after the rename: EditCultureEthnicity names the new
+                // definition after the culture's current name. It no-ops if this world made the
+                // culture non-human, which is the right outcome — the race is the world's to
+                // decide and an overlay may not override it.
+                if (edit.Ethnicity is { } ethnicity) EditCultureEthnicity(culture, ethnicity);
             })) { missed++; continue; }
             applied++;
         }
@@ -660,6 +762,15 @@ public sealed class WorldEdits
 
     public void Revert(object target)
     {
+        // Reverting a culture takes its look with it. The two are separate entries so that neither
+        // evicts the other, but to the person clicking Revert on a culture they are one edit.
+        if (target is Culture culture) RevertOne(new EthnicityKey(culture));
+
+        RevertOne(target);
+    }
+
+    private void RevertOne(object target)
+    {
         if (!_originals.TryGetValue(target, out var snapshot)) return;
 
         var aspects = AspectsOf(target);
@@ -691,6 +802,7 @@ public sealed class WorldEdits
     {
         Title => WorldAspect.TitleNames | WorldAspect.TitleColors | WorldAspect.TitleWords,
         Culture => WorldAspect.Cultures | WorldAspect.TitleWords,
+        EthnicityKey => WorldAspect.Ethnicities,
         Faith or Religion => WorldAspect.Faiths,
         Ruler => WorldAspect.Rulers,
         _ => WorldAspect.None,

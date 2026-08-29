@@ -307,8 +307,182 @@
  SOCIETY_RANK_4_ROW:0 "Inner Circle (100) — #bold +2#! Intrigue, #bold +1#! Learning, #bold +10#! Dread"
 
  # --- The way in ------------------------------------------------------------------------------
+ #
+ # There is one door now: the HUD tab under Intrigue. The "Take Stock of the Society" decision and
+ # its four keys are gone.
+ #
+ # It existed as a fallback for the window in which the tab did not, because the tab needs a patch
+ # to vanilla's gui/hud.gui and only the generator can write one — so a `--static-only --societies`
+ # run shipped a panel with no way to open it. The tab works, and a second door into the same
+ # window is a decisions-panel entry that duplicates a button four pixels away.
 
- society_panel_decision:0 "Take Stock of the Society"
- society_panel_decision_desc:0 "Sit down and work out, from what we have been told and what we have guessed, how far in we actually are and who else is in with us."
- society_panel_decision_tooltip:0 "Open the society panel."
- society_panel_decision_confirm:0 "Take stock"
+ # --- The errand -------------------------------------------------------------------------------
+ #
+ # CK2's devil-worshipper missions, as an activity. The register is the same as everything else
+ # here: nobody is cackling, the work is work, and the horror is that it is routine.
+ #
+ # NO hardcoded religious nouns. The devout quarry is described through
+ # [ROOT.Char.GetFaith.PriestMale], so a procgen faith supplies its own word for what is being
+ # taken. Writing "priest" here would be the same bug as the one fixed in society.0003.
+
+ activity_society_errand:0 "The Errand"
+ activity_society_errand_name:0 "The Errand"
+ activity_society_errand_owner:0 "Sent by [ROOT.Char.GetTitledFirstName]"
+ activity_society_errand_selection_tooltip:0 "Go out and bring the society back something it can use. The society does not ask twice and does not ask in writing."
+ activity_society_errand_host_desc:0 "We go, and we answer for what comes back with us."
+ activity_society_errand_guest_desc:0 "Two, at most. Anyone sworn. Nobody who is not."
+ activity_society_errand_guest_help_text:0 "Members within reach. An errand does not need a retinue and is worse for having one."
+ activity_society_errand_destination_selection:0 "Where are we going?"
+ activity_society_errand_predicted_cost:0 "Nothing in coin. It is paid for afterwards, out of what is left of you."
+ activity_society_errand_conclusion_desc:0 "We came back. Not everything did."
+ activity_society_errand_desc:0 "The society does not hold land, levy taxes or keep books. What it has instead is a standing list of things it needs done, and the understanding that a member who has never done one of them is a member in name.\n\nAn errand is a month away from home with a plausible reason attached — an inspection, a shrine, a relative who is unwell. Nobody who waves us off is lied to exactly. They are simply told the part that will hold up if anyone asks."
+ TRAVEL_NAME_FOR_activity_society_errand:0 "The Errand"
+ activity_society_errand_province_desc:0 "Far enough that we are not known, close enough that being away a month raises nothing."
+
+ society_errand_intent:0 "See It Done"
+ society_errand_intent_desc:0 "There is one reason to be out here and it is not written down anywhere."
+ society_errand_phase:0 "The Errand"
+ society_errand_phase_desc:0 "Four weeks. Most of it is travelling, and the travelling is the part we will be able to describe afterwards."
+
+ # --- The quarry, chosen in the planner --------------------------------------------------------
+ #
+ # Named as decisions rather than as victims. The society's language for this is procedural on
+ # purpose — it is easier to send somebody on an errand than to send them to kill a man.
+
+ society_errand_quarry:0 "What We Are Going For"
+ errand_quarry_unmissed:0 "Someone Nobody Will Look For"
+ errand_quarry_unmissed_desc:0 "The safest of the three and the one that costs the most in the end. There is always somebody at the edge of a town whose absence is an administrative matter. #bold Pays least. Noticed least.#!"
+ errand_quarry_highborn:0 "Someone With a Name"
+ errand_quarry_highborn_desc:0 "Harder to reach, harder to move, and there will be people whose profession is asking where they went. #bold Pays well. Will be looked for.#!"
+ errand_quarry_devout:0 "Someone Who Believes"
+ errand_quarry_devout_desc:0 "The society pays best for these and does not explain why. A missing [ROOT.Char.GetFaith.PriestMale] is not looked for by a family. #bold Pays most. Exposes most.#!"
+
+ # --- The chain --------------------------------------------------------------------------------
+
+ errand.0001.t:0 "The Setting Out"
+ errand.0001.desc_unmissed:0 "The reason we gave for leaving is thin and nobody examined it, which is its own small lesson about how much of our life is taken on trust.\n\nWe are going somewhere we are not known, to find somebody whose absence will be a matter for a clerk rather than a family. The society was specific about that and about nothing else. Where, and who exactly, is ours to solve."
+ errand.0001.desc_highborn:0 "The reason we gave for leaving is a good one, carefully built, and it will hold for about five weeks. That is the shape of the whole errand: everything is fine until it is suddenly and completely not.\n\nSomeone with a name. Someone with people. The society was specific that it wanted the difficulty, which means the difficulty is the point and not an obstacle to it."
+ errand.0001.desc_devout:0 "The reason we gave for leaving is a pilgrimage, which is very nearly true and will be remembered as true by everyone we told.\n\nSomeone who believes. The society did not say why and we did not ask, and somewhere in the not-asking is the exact moment we stopped being a person who would have found this remarkable."
+ errand.0001.a:0 "Ride."
+
+ errand.0002.t:0 "Along For It"
+ errand.0002.desc:0 "[host.GetTitledFirstName] has not said where we are going and has not said what for, and the correct thing to do — the thing that is understood without being explained — is to not ask either question.\n\nSo we ride, and we carry what we are handed, and at some point in the next month we will be asked to hold something or stand somewhere, and we will do it, and that will be our part."
+ errand.0002.a:0 "Ask nothing."
+
+ errand.0010.t:0 "Found"
+ errand.0010.desc_unmissed:0 "It takes nine days, which is eight days longer than expected, because the difficulty is not finding somebody nobody will miss — it is being certain. Twice we were wrong. Twice somebody turned out to have a sister two towns over.\n\nThe third has nobody. We have watched long enough to be sure of it, and the watching has been the worst part so far, because a person you are certain about is a person you have paid attention to."
+ errand.0010.desc_highborn:0 "Easier to find than the last one and immeasurably harder to approach. They travel with four people, two of whom are competent, and they keep no schedule we can rely on.\n\nThere is a window. There is always a window. The question is whether we take the first one we are offered or wait for a better one, knowing that every day we wait is a day we are here, being seen."
+ errand.0010.desc_devout:0 "They are exactly where they were always going to be, doing exactly what they were always going to be doing, and that is what makes this one different from the others. A person with a routine is not difficult to take.\n\nThey are also kind to us. Twice. Without being asked, and without knowing who we are, which is a thing we will be carrying home regardless of how the rest of this goes."
+ errand.0010.a:0 "Take the time. Do it properly."
+ errand.0010.b:0 "Tonight. Before we think about it any more."
+
+ errand.0020.t:0 "The Part Nobody Plans"
+ errand.0020.desc_careful:0 "Something goes wrong, because something always does, and the difference is that we have time to notice it going wrong rather than discovering it afterwards.\n\nA week of watching bought us the two hours we need now. It is not a rescue. It is the ordinary, unglamorous business of having been careful, and it is why the society sends people who can wait."
+ errand.0020.desc_hasty:0 "Something goes wrong immediately, and there is no margin in the plan to absorb it, because we did not build one.\n\nThere is a witness. Not a good one — tired, half-lit, unsure — but a person who saw something and will keep turning it over. We can improvise around this. Improvising is how the rest of the night will go now, and improvised work is the kind that gets remembered by somebody."
+ errand.0020.a:0 "Use the time we bought."
+ errand.0020.b:0 "Improvise. It will hold."
+ errand.0020.c:0 "Stop. Go home with nothing."
+
+ errand_careful_tt:0 "The errand will go #bold cleanly#! — half the exposure"
+ errand_hasty_tt:0 "The errand will be #bold messy#! — full exposure"
+ errand_clean_tt:0 "Nothing will be traced back"
+ errand_messy_tt:0 "Somebody saw. #bold Full exposure.#!"
+ errand_abandoned_tt:0 "The errand pays #bold nothing#!"
+ errand_no_payment_tt:0 "No payment. Nothing was brought back."
+ society_errand_paid_tt:0 "The society settles up — #bold Dark Power#! and #bold Standing#! gained"
+
+ errand.0030.t:0 "Home"
+ errand.0030.desc_clean:0 "Five weeks away, and the account of it we give at home is almost entirely true — which is the mark of an errand done properly. The lie is not in what we say but in the shape of what we leave out.\n\nThe society settles up without ceremony. There is no praise and no acknowledgement of what it cost, and both absences are deliberate: this was work, we were asked to do it, and we did it. The next one will simply be assumed."
+ errand.0030.desc_messy:0 "Five weeks away, and we are home, and we got what we went for, and there is a person somewhere behind us still turning over something they half-saw.\n\nThe society settles up in full. It does not deduct for the witness and it does not mention them, which is worse than being told off — it means the witness is now our problem, and has been reclassified, quietly, as a thing we will be handling later."
+ errand.0030.desc_abandoned:0 "We came home with nothing, and nobody has said anything about it.\n\nThat is the entire response. No summons, no reprimand, no question. Whatever was going to be asked of us next is simply not asked, and we will not know for some time whether that is mercy or arithmetic."
+ errand.0030.a:0 "Nothing was brought back."
+ errand.0030.b:0 "Take payment."
+ errand.0030.c:0 "Take payment. Deal with the witness later."
+
+ # --- Corruption -------------------------------------------------------------------------------
+ #
+ # Fired three days after a trait actually moves, never on the no-op branch — so this arriving
+ # always means something changed. Written to read correctly whichever direction the roll went,
+ # since one event covers both losing a virtue and gaining a vice.
+
+ society_corruption_tt:0 "This will #bold change#! us"
+ errand.0100.t:0 "A Thing We Used To Do"
+ errand.0100.desc:0 "It is a small thing, and it happens at home, weeks later, over something that does not matter.\n\nThere was a way we would have handled it a year ago — a thing we would have said, or not said, or noticed. We do not handle it that way. We notice that we do not handle it that way, briefly, the way you notice a room has been rearranged, and then we get on with the afternoon.\n\nThe society did not ask for this and would not have thought to. It is simply what the work does to whoever does it."
+ errand.0100.a:0 "It is not important."
+
+ # --- Visibility: the thresholds ---------------------------------------------------------------
+ #
+ # Three lines, at 15 / 25 / 40, copied from CK2's own numbers. The voice rule for all of these:
+ # nothing has been PROVEN at any point. Suspicion is not evidence and the society is not caught —
+ # what changes is only how many people are thinking about you, which is why none of these events
+ # has an option that does anything. There is nothing yet to do.
+
+ society_under_suspicion:0 "Under Suspicion"
+ society_under_suspicion_desc:0 "Something about this one does not add up, and enough people have said so that it has stopped being one person's idea."
+ society_highly_suspect:0 "Highly Suspect"
+ society_highly_suspect_desc:0 "It is no longer a question of whether there is something to find. It is a question of who finds it, and what they want for keeping it quiet."
+
+ society.0200.t:0 "A Question Being Asked"
+ society.0200.desc:0 "Nothing has happened. That is the difficulty in describing it.\n\nA conversation stops when we enter a room and starts again a beat too late. A servant we have had for years takes the long way past our door. Somebody has asked somebody else a question about us, and been careful enough not to ask us.\n\nThere is nothing to answer and nobody to answer it to."
+ society.0200.a:0 "Then we give them nothing further."
+
+ society.0201.t:0 "It Has a Name Now"
+ society.0201.desc:0 "The thing being said about us has hardened. It is no longer a question that trails off — it is a sentence somebody finishes, and it is being finished in front of people who repeat it.\n\nOur [ROOT.Char.GetLiege.GetTitledFirstNameNoTooltip] will hear it if [ROOT.Char.GetLiege.GetSheHe] has not already. Not from us."
+ society.0201.a:0 "Let them prove a word of it."
+
+ society.0202.t:0 "No Point Denying It"
+ society.0202.desc:0 "There is a threshold past which a denial costs more than the thing being denied. We passed it some time ago and have been paying for the pretence ever since.\n\nWe answer to nobody, which is the only reason this is a decision and not a sentence. Better to be the one who says it."
+ society.0202.a:0 "Say it, then."
+
+ # ROOT is the liege; scope:society_suspect is the member being talked about.
+ society.0203.t:0 "Something in Our Realm"
+ society.0203.desc:0 "It reaches us the way these things do — third-hand, from somebody with no reason to invent it and no evidence worth the name.\n\n[society_suspect.GetTitledFirstName] is spoken of carefully now, by people who were not careful about [society_suspect.GetHerHim] a year ago. Nobody will say what it is they think [society_suspect.GetSheHe] has done.\n\nWe are told. That is all, for the moment."
+ society.0203.a:0 "Note it, and watch."
+
+ # --- Exposure: the secret, and what comes for it ----------------------------------------------
+ #
+ # The end the whole Visibility system has been counting toward. ROOT is the exposed member in
+ # 0300 and 0301; in 0302 ROOT is the person who was sold, and they are NOT told by whom.
+ #
+ # Paragraph breaks here are the two-character escape, not real line breaks. A CK3 loc entry is
+ # ONE line: a real newline inside the quotes ends the entry early, and the parser reads the next
+ # paragraph as a malformed key -- four warnings per entry, and no prose in game.
+
+ secret_society_membership:0 "Sworn to Something"
+ secret_society_membership_desc:0 "[ROOT.Char.GetFirstNameNoTooltip] belongs to a body that meets where it will not be counted, and has done for longer than anyone outside it would guess."
+ secret_society_membership_type_desc:0 "Membership of a body that keeps no roll and meets where it will not be counted."
+ secret_society_membership_tooltip_desc:0 "Sworn to something that does not put its name to things."
+
+ society_known_member:0 "Known"
+ society_known_member_desc:0 "There is nothing left to find out. What remains is what everybody intends to do about it."
+
+ society.0300.t:0 "Out"
+ society.0300.desc:0 "It is not a rumour any more, and there is no version of the next year in which it becomes one again.\n\nSomebody has said it plainly, to somebody who wrote it down, and the writing has been read. Every careful year we spent is now a list of things that look worse for having been careful.\n\nWhat is left is not whether they know. It is what we say in the weeks before somebody comes to ask."
+ society.0300.a:0 "Deny it. Loudly, and to the wrong people first."
+ society.0300.b:0 "Say nothing. Let them build it themselves."
+
+ society.0301.t:0 "They Come to Ask"
+ society.0301.desc:0 "Three of them, and only one does the talking. They are not soldiers and they are not clergy, and the distinction stops mattering at about the second question.\n\nThey have our denial written down alongside everything it contradicts. They are not here to establish whether. They are here to be given somebody, and they have the patience of men who usually are."
+ society.0301.desc_silent:0 "Three of them, and only one does the talking. They are not soldiers and they are not clergy, and the distinction stops mattering at about the second question.\n\nWe said nothing when it broke, and silence turns out to be a thing that can be quoted. They arrive already certain, ahead of schedule, and with fewer questions than we had prepared answers for."
+ society.0301.a:0 "Give them a name that is not ours."
+ society.0301.b:0 "Buy the visit short."
+ society.0301.c:0 "Give them nothing at all."
+
+ # ROOT is the betrayed member. Deliberately never names who sold them -- see the note on 0302.
+ society.0302.t:0 "Our Name, in Someone Else's Mouth"
+ society.0302.desc:0 "They arrive knowing things about us that only the sworn could have told them, and they are not shy about how recently they learned it.\n\nSomebody sat where we have sat, was asked what we would have been asked, and answered. We are not told which of them. We will go on standing in rooms with all of them, and we will not know."
+ society.0302.a:0 "Then we learn nothing from it except the lesson."
+
+ # --- Visibility on the roster -----------------------------------------------------------------
+ #
+ # What one member can see of another's exposure. Not a number: the panel prints the player's own
+ # visibility to the point because they are entitled to know exactly where they stand, but you
+ # learn somebody else's from how people have started talking about them. Three states, matching
+ # the two modifiers and their absence.
+ #
+ # Deliberately short — this sits in a narrow right-hand column under the member's rung, beside a
+ # portrait, and anything longer wraps or elides.
+
+ SOCIETY_ROSTER_UNSUSPECTED:0 "unremarked"
+ SOCIETY_ROSTER_SUSPECT:0 "spoken of"
+ SOCIETY_ROSTER_VERY_SUSPECT:0 "spoken of openly"

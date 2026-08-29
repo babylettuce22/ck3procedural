@@ -88,7 +88,20 @@ SWATCHES = {
     # kept near vanilla's, which looked right for leather; metalness stays 0.
     'gen_leather': (242, 122, 0, 122, 0.16),
 
-    # ---- surfaces for armour ------------------------------------------------------------
+    # ---- ORPHANED: these four were the armour surfaces, and armour no longer uses them ----
+    #
+    # Nothing references gen_cloth, gen_lacquer, gen_iron_rough or gen_steel_polished any more.
+    # ArmorForgeStep now names VANILLA material swatches (chainmail_plain_01, lamellar_metal_01,
+    # metal_scales_01, leather_plain_01, ...) instead, because a swatch's normal map and AO
+    # REPLACE the garment's own inside the mask - so a flat swatch does not restate the armour in
+    # a new material, it sands the armour smooth. Measured, as the standard deviation of the
+    # DXT5nm normal's G and A channels: every swatch below scores 0.00 relief and AO 1.00 +- 0.00,
+    # against chainmail_plain_01's 69.5 and 0.49 +- 0.22.
+    #
+    # Kept, not deleted, because they cost a few KB and the flat-colour reasoning below is still
+    # exactly right for WEAPONS - a blade is a hard rigid surface with no weave to lose, which is
+    # why gen_steel and gen_leather are still live there. Do not wire these back into armour.
+    #
     # The palette says what colour a region is; the swatch says what it is MADE of, because
     # roughness and metalness live here rather than in the palette. Two regions can share a
     # colour and still read as different substances, which is the whole point: a brigandine is

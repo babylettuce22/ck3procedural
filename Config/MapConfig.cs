@@ -374,6 +374,24 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Description("Shatter the world: no empires, kingdoms, or duchies exist at start. Every count is an independent ruler.")]
     public bool ShatteredWorld { get; set; } = false;
 
+    /// <summary>
+    /// Whether the hegemony above every empire is worn by somebody at the start date.
+    ///
+    /// Off, and the world is the ordinary one: the title exists, paints its border, and waits for a
+    /// player or the AI to earn it through the formation decision. On, the greatest realm on the map
+    /// already holds it, and the world starts under a universal claim.
+    ///
+    /// It is a claim and not an army. CK3 makes an empire's holder a vassal only where history says
+    /// <c>liege =</c>, and this hands out no such line, so the empires below stay exactly as
+    /// independent as they were — which is the point. What changes is that one ruler is rightful
+    /// sovereign over ground they do not hold, and everyone else can see it.
+    /// </summary>
+    [Category("02 World State")]
+    [DisplayName("Starting Hegemony")]
+    [Description("Start the world's hegemony already held by its greatest realm, instead of leaving it "
+               + "as an unclaimed title to be won. De jure only: the empires beneath it stay independent.")]
+    public bool StartingHegemony { get; set; } = false;
+
     [Category("02 World State")]
     [DisplayName("Gender Preference")]
     [TypeConverter(typeof(GenderPreferenceConverter))]
@@ -2213,6 +2231,63 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Category("14 Fantasy/Ethnicities")]
     [Description("Enable procedural fantasy racial phenotypes (Elves, Dwarves, Orcs, Giants, Deepkin, etc.).")]
     public bool EnableFantasyEthnicities { get; set; } = false;
+
+    /// <summary>
+    /// Which real-world looks the world's HUMANS are drawn from.
+    ///
+    /// This is the only knob over human appearance, and it touches nothing else. A generated
+    /// human ethnicity inherits from one vanilla ethnicity — <c>caucasian</c>, <c>asian_malay</c>,
+    /// <c>east_african</c> and so on — and that inheritance is the whole of its complexion, because
+    /// humans deliberately emit no <c>skin_color</c> of their own. Left at <see cref="HumanLook.Varied"/>
+    /// the pick is uniform across all four look families, which is why an unconfigured world reads
+    /// as ethnically scrambled: neighbouring cultures inside one heritage can land on opposite sides
+    /// of the planet. A preset narrows the draw to one region's templates instead.
+    ///
+    /// **Fantasy races are not affected, by construction.** A race's look family is fixed in
+    /// <c>Ethnicities.CreateEthnicity</c> on a separate switch arm that never consults this, and its
+    /// colouring comes from its own <c>gen_race_skin</c> shift rather than from a vanilla template.
+    /// So a Sub-Saharan world's elves stay exactly the elves a Varied world would have produced.
+    ///
+    /// Per-culture exceptions are an edit, not a setting: the Cultures inspector can retemplate one
+    /// culture without disturbing its heritage siblings. This decides the world's default, not its
+    /// uniformity.
+    /// </summary>
+    public enum HumanLook
+    {
+        /// <summary>
+        /// Every look family, uniformly. The original behaviour, and the default so that a seed
+        /// generated before this setting existed still generates the same world.
+        /// </summary>
+        Varied,
+
+        /// <summary>Northern and western Europe — the Norse, Irish, English, French end.</summary>
+        WesternEuropean,
+
+        /// <summary>The Mediterranean basin, both shores: Iberian and Italian through Greek to Levantine and Maghrebi.</summary>
+        Mediterranean,
+
+        /// <summary>Sub-Saharan Africa, west and east.</summary>
+        SubSaharan,
+
+        /// <summary>China, Korea, Japan and the steppe.</summary>
+        EastAsian,
+
+        /// <summary>Maritime and mainland South East Asia, out into the Pacific.</summary>
+        SoutheastAsian,
+
+        /// <summary>All of Europe rather than one corner of it — Atlantic to Urals, north to south.</summary>
+        MixedEuropean,
+
+        /// <summary>A Mediterranean world with a real African share rather than a coastal trace.</summary>
+        MixedMediterranean,
+
+        /// <summary>Asia broadly — East, South East and South together.</summary>
+        MixedAsian
+    }
+
+    [Category("14 Fantasy/Ethnicities")]
+    [Description("Which real-world looks the world's humans are drawn from. Varied picks uniformly across every look family, which is what makes an unconfigured world read as ethnically scrambled; a preset narrows the draw to one region's vanilla templates, so a Historical Western Europe world is peopled by Norse, Irish, English and French looks throughout. Affects HUMANS only — fantasy races keep their own colouring either way. A single culture can be moved off the preset afterwards in the Cultures inspector without disturbing the rest of its heritage.")]
+    public HumanLook DominantLook { get; set; } = HumanLook.Varied;
 
     [Category("14 Fantasy/Ethnicities")]
     [Description("Race distribution mode across the generated world.")]

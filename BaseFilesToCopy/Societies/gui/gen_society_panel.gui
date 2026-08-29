@@ -571,6 +571,61 @@ types gen_society_panel {
 												text = "SOCIETY_RANK_4"
 												visible = "[GetScriptedGui('society_panel_rank_4').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
 											}
+
+											# ---- How exposed they are, under their rung ----
+											#
+											# The society's own answer to the thing it most needs
+											# to know about its members. A roster that lists who
+											# is in it is a curiosity; one that lists who among
+											# them is drawing attention is a thing you act on --
+											# it is who you stop inviting to rites, and who you
+											# stop being seen with.
+											#
+											# It also gives back what CK3 took away. CK2's
+											# under_suspicion modifier carried
+											# `is_visible = { ... same_society_as = FROM }`, so
+											# only fellow members could see the mark. CK3 has no
+											# per-viewer modifier visibility, so ours is public on
+											# the character sheet -- but this panel is
+											# members-only by construction, and putting the mark
+											# here restores the half of the fiction that a
+											# members-only view of it existed at all.
+											#
+											# NOT the raw number, unlike the player's own meter at
+											# the top of this panel. You know your own exposure to
+											# the point; you know somebody else's by how people
+											# have started talking about them. The band is what
+											# one member can honestly see of another.
+											#
+											# Dark Power is deliberately absent from this column.
+											# What another member has saved up is nobody's
+											# business, and unlike suspicion it produces no
+											# outward sign for anyone to have noticed.
+											text_single = {
+												align = right
+												default_format = "#weak"
+												text = "SOCIETY_ROSTER_UNSUSPECTED"
+												visible = "[GetScriptedGui('society_panel_unsuspected').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
+											}
+
+											text_single = {
+												align = right
+												# `#V`, then `#X` for the worse band. Both are in vanilla's
+												# tag set -- the full list of valid single-letter
+												# formats is A D E F G I L M N P S T V X Z, and #Y,
+												# which this reached for first, is not among them. An
+												# unknown format tag does not error; it prints.
+												default_format = "#V"
+												text = "SOCIETY_ROSTER_SUSPECT"
+												visible = "[GetScriptedGui('society_panel_suspect').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
+											}
+
+											text_single = {
+												align = right
+												default_format = "#X"
+												text = "SOCIETY_ROSTER_VERY_SUSPECT"
+												visible = "[GetScriptedGui('society_panel_very_suspect').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
+											}
 										}
 									}
 								}

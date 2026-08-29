@@ -17,6 +17,8 @@ WHAT IS IN IT
 -------------
   common/traits/00_society_traits.txt                              membership, and the ladder
   common/activities/activity_types/00_society_rite_activity.txt    the rite
+  common/activities/activity_types/00_society_errand_activity.txt  the errand (CK2 missions)
+  events/society_errand_events.txt                                 the errand's four-beat chain
   common/activities/activity_group_types/00_society_activity_groups.txt  its planner category
   common/activities/intents/00_society_intents.txt                 why anyone attends
   common/activities/guest_invite_rules/00_society_invite_rules.txt who the planner offers
@@ -25,9 +27,10 @@ WHAT IS IN IT
   common/deathreasons/00_society_deaths.txt                        what a sacrifice reads as
   common/schemes/scheme_types/00_society_abduct_scheme.txt          taking somebody
   common/character_interaction_categories/01_society_interaction_category.txt  its menu header
+  common/secret_types/00_society_secrets.txt                       being findable
+  common/modifiers/00_society_modifiers.txt                        suspicion, and being known
   common/opinion_modifiers/00_society_opinions.txt                 what refusing costs
   common/scripted_guis/00_society_panel_guis.txt                   what the panel may ask
-  common/decisions/00_society_panel_decision.txt                   the way into the panel
   gui/gen_society_panel.gui                                        the panel
   gui/scripted_widgets/gen_society_panel.txt                       what instantiates it
   gfx/interface/skinned/hud_maintab/maintab_gen_society.dds        the tab icon
@@ -41,15 +44,18 @@ how much of its currency you had, and the FULL list of its powers with the ones 
 greyed rather than hidden. The last is what made the ladder mean anything, so this panel draws
 all five rungs always and lights the one you hold.
 
-Two doors, one latch. The HUD tab under Intrigue is the main one; the "Take Stock of the Society"
-decision is the fallback. Both set the same `society_panel_open` variable, the tab lights from it,
-the window's X clears it, and Escape clears it through the X.
+One door: the HUD tab under Intrigue. It sets `society_panel_open`, the tab lights from it, the
+window's X clears it, and Escape clears it through the X.
+
+There was a second -- a "Take Stock of the Society" decision -- kept as a fallback for the window in
+which the tab did not exist. It is gone. A decisions-panel entry that opens the same window as a
+button four pixels away is a duplicate, not a fallback.
 
 THE TAB IS THE ONE PIECE OF THIS FEATURE THAT IS NOT IN THIS FOLDER. It edits vanilla's
 gui/hud.gui, which only the generator can do -- Emit/GuiWriter.cs PatchHudTabs, gated on
 MapConfig.EnableSocieties. So a `--static-only --societies` run ships everything here and no tab,
 because that mode never reaches GuiWriter; use `--gui-only --societies` to add it, or a full run.
-That asymmetry is why the decision stays.
+Shipping the set without ever running GuiWriter now means a panel with no way to open it.
 
 Why the tab is not a game view: vanilla's tabs call `ToggleGameViewData('intrigue_window', ...)`,
 and those 43 view names are registered in the ENGINE. Nothing under common/ defines them and each
@@ -59,11 +65,14 @@ instead. What that costs: the panel does not close when another view opens, and 
 not remember its position. What it does not cost: placement, art, the lit state, or Escape --
 `close_window` is an ordinary widget attribute, not a privilege of engine views.
 
-Two meters on it are real but barely fed yet. Dark Power is CK2's demon-worshipper currency and
-arrives from the rite; Visibility is CK2's exposure mechanic, +5 when somebody accepts the oath
-and +15 when they refuse, on the theory that a person who said no is a person who knows and owes
-you nothing. Nothing spends either yet. Visibility is what the secret's discovery chance will
-read when the secret arrives.
+Both meters are real and both now terminate. Dark Power is CK2's demon-worshipper currency: it
+arrives from the rite and from sacrifice, and abduction spends it. Visibility is CK2's exposure
+mechanic -- +5 when somebody accepts the oath, +15 when they refuse, on the theory that a person
+who said no is a person who knows and owes you nothing.
+
+Visibility does NOT feed a discovery chance, which an earlier note here promised and which would
+have been the wrong mechanic. See EXPOSURE below: it decides whether a secret exists for the
+Spymaster to find, and the finding is vanilla's.
 
 THE THREE GATES
 ---------------
@@ -119,7 +128,7 @@ HOW TO TEST IT
      look like something that filled itself in; see the note above guest_invite_rules for why
      `defaults` is the wrong key for a rite.
   5. Start it, then complete it. Every attendee gains 8 Standing; the host gains 20.
-  6. Open the panel, from the tab under Intrigue or from the "Take Stock of the Society" decision.
+  6. Open the panel from the tab under Intrigue.
      It should name your rung, light that one row of the five, show both meters, mark the rite
      Available or "Standing 50", and list every member it can see with their own rung beside them
      -- each row's rung asked of THAT character, not of you.
@@ -142,6 +151,28 @@ what they were asked, and it is the only place in the set where the player is as
 about that -- pay to make the memory convenient, recovering 10 of the 15 exposure, or let them
 carry it. Both options charge the opinion hit and the full +15 first, via
 society_oath_refused_effect, so the tooltips show the whole sum rather than half of it.
+
+EXPOSURE, AND WHAT VISIBILITY IS FOR
+------------------------------------
+Visibility used to be a number that went up and never did anything. It now terminates:
+
+  15   society_under_suspicion    -0.5 prestige, and a SECRET is created
+  25   society_highly_suspect     -1 prestige, -1 piety, and the liege is told
+  40   independent rulers stop denying it, once
+
+The secret is the point. CK2's danger was not a discovery roll -- it was the Court Chaplain
+running a JOB, hunting for people already carrying the mark. CK3 has that job: the Spymaster's
+task_find_secrets. So the meter does not roll against anything; it decides whether there is
+anything on the board for that job to find. Being found is entirely vanilla's, and society.0300
+to 0302 are what arrives afterwards.
+
+society.0301 is where the roster finally costs something. Everything else in this set makes
+membership an asset -- a guest list, an agent pool, a rank ladder. Here a member is offered
+another member as the price of their own skin, and the one who is sold is never told by whom.
+
+Decay below 15 removes the secret again, matching the modifiers. That is deliberate and departs
+from CK2, whose marks were permanent: we SHOW the number, so a panel reading Exposure 4 beside a
+findable secret is a panel the player stops trusting.
 
 WHAT IS DELIBERATELY MISSING
 ----------------------------

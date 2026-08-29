@@ -38,6 +38,12 @@ public enum WorldAspect
     /// word — common/flavorization and its localisation.
     /// </summary>
     TitleWords = 32,
+
+    /// <summary>
+    /// Which vanilla look a culture's people wear — common/ethnicities, and the cultures file that
+    /// names the variants. Humans only; a culture's race is fixed at generation.
+    /// </summary>
+    Ethnicities = 64,
 }
 
 /// <summary>
@@ -71,6 +77,17 @@ public static class WorldOverwrite
         {
             yield return "00_generated_cultures.txt";
             yield return "gen_cultures_l_english.yml";
+        }
+
+        if (aspects.HasFlag(WorldAspect.Ethnicities))
+        {
+            yield return "99_generated_ethnicities.txt";
+            yield return "gen_ethnicities_l_english.yml";
+
+            // A retemplate mints new variant keys, and the cultures file is what names them, so it
+            // is rewritten even when nothing about the culture itself changed. Named once when a
+            // culture edit is pending too.
+            if (!aspects.HasFlag(WorldAspect.Cultures)) yield return "00_generated_cultures.txt";
         }
 
         if (aspects.HasFlag(WorldAspect.Faiths))
@@ -135,6 +152,18 @@ public static class WorldOverwrite
             CultureWriter.WriteLocalisation(modDir, written.Cultures);
         }
 
+        // The ethnicity file whole, plus the cultures file — a retemplated culture points at
+        // variant keys that only exist in the rewritten ethnicity file, so shipping one without the
+        // other leaves the culture naming ethnicities CK3 cannot resolve. Only when the culture
+        // aspect did not already write it.
+        if (aspects.HasFlag(WorldAspect.Ethnicities))
+        {
+            EthnicityWriter.WriteAll(modDir, written.Ethnicities);
+
+            if (!aspects.HasFlag(WorldAspect.Cultures))
+                CultureWriter.WriteCultures(modDir, written.Cultures, written.Ethnicities);
+        }
+
         // WriteAll covers the faith localisation as well, so a faith edit subsumes the rewrite a
         // title rename would otherwise need. Only when it did not run does that have to happen
         // separately — holy site names are read live off the county title.
@@ -191,6 +220,14 @@ public static class WorldOverwrite
         if (aspects.HasFlag(WorldAspect.TitleWords))
             Console.WriteLine("  a culture's realm words apply to every realm whose top liege is of "
                               + "that culture; a title's own word outranks them");
+
+        if (aspects.HasFlag(WorldAspect.Ethnicities))
+        {
+            Console.WriteLine("  only the retemplated cultures change — their heritage siblings keep "
+                              + "the look they were generated with");
+            Console.WriteLine("  characters already in a save keep their rolled appearance; the new "
+                              + "look applies to a new game");
+        }
 
         Console.WriteLine("  CK3 caches these — restart the game, not just the mod, to see it");
     }
