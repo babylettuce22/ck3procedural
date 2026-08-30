@@ -16,6 +16,30 @@ wilderness_government = {
 		legitimacy = no
 		deny_powerful_vassal = yes
 		buildings = no
+
+		# ---- The only lever found for keeping the dummies off the character-selection screen ----
+		#
+		# There is no `playable = no`. The government schema has no playability field at all —
+		# confirmed against _governments.info and against every field name in ck3.exe's string pool,
+		# which carries the undocumented ones (realm_mask_offset, vassal_contract_group,
+		# blocked_subject_courts) and nothing playability-shaped.
+		#
+		# The genuinely unplayable governments are republic, theocracy, mercenary and holy_order.
+		# (Not herder, whatever its loc says: common/playable_difficulty_infos ships
+		# `pdi_herder_to_nomad`, a start-screen warning that only makes sense if herders are
+		# offered.) Those four share exactly one property that no playable government has, and it is
+		# a PAIR, not a single rule: `rulers_should_have_dynasty` off AND this rule off. Governments
+		# with only the second — administrative, celestial, steppe_admin, meritocratic — are
+		# playable; herder has only the first and is playable. We had only the first.
+		#
+		# This is a correlation over 18 government types, not a documented mechanism, and the engine
+		# makes the call so nothing in script can confirm it. If the dummies are still selectable
+		# after this, the gate is hardcoded to those four vanilla keys and no custom government can
+		# be made unplayable — the lever then has to be somewhere other than the government.
+		#
+		# It earns its place either way: a wilderness or ruins holder can no longer inherit from a
+		# dynastic ruler, which is a second lock on top of the `wilderness` trait.
+		inherit_from_dynastic_government = no
 	}
 
 	# The engine populates a landed ruler's court on its own — commanders, guests, a royal court if

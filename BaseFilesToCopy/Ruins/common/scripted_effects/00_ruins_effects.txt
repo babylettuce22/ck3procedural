@@ -1,0 +1,411 @@
+﻿# County ruination: the counter, the collapse, and the housekeeping around the second dummy.
+#
+# ---- The shape ----
+#
+#   shocks       on_action hooks stamp points on a county the moment something happens to it, and
+#                put it on a watchlist
+#   the tick     once a year, ONLY the counties on that watchlist are re-read
+#   the fall     at the threshold, gen_ruin_county_effect hands the county to the ruins dummy
+#
+# The watchlist is the reason this is affordable. A generated map has upward of a thousand counties
+# and a yearly sweep over all of them, each running half a dozen triggers, is a cost paid every year
+# of every game for an event that fires perhaps twice. Counties get onto the list by having
+# something happen to them — a siege, an occupation, a looting — and come off it when they are
+# healthy again, so the pulse walks a handful of entries or none at all.
+#
+# ---- The dummy ----
+#
+# Ruined counties go to gen_ruins_holder, NOT to the wilderness dummy, and the two are otherwise
+# identical: same `wilderness` trait, same `wilderness_government`. The difference is which titular
+# kingdom each holds, because a realm takes its name from its holder's primary title and ground
+# somebody used to farm should not be labelled "the Wilds". See MapGen/Wilderness.cs.
+#
+# Both are found by title rather than by trait anywhere it matters, because the trait now matches
+# two characters — see the note in abandon_county_effect.
+
+# =====================================================================================
+#  Game start
+# =====================================================================================
+
+# Sets up the ruins dummy and stamps the stones onto whatever the generator seeded.
+#
+# Reached through `title:k_gen_ruins.holder` and not through `every_ruler`, and that is not a style
+# choice. The usual world starts with RuinsShare at zero, so the ruins dummy begins holding nothing
+# but a landless titular kingdom — which means it is not a ruler, and `every_ruler` walks straight
+# past it. The wilderness set's own game-start pass has the same blind spot for the same reason.
+#
+# Runs after the lobby rather than during history load: adding buildings to a holding history is
+# still assembling errors. That is why wilderness_on_game_start exists too.
+gen_ruins_setup_on_start_effect = {
+	title:k_gen_ruins.holder ?= {
+		# ---- Only when the wilderness pass will have missed it ----
+		#
+		# wilderness_on_game_start runs `every_ruler` over anything with the trait, and both dummies
+		# have it — so a ruins dummy holding counties is already covered, and calling the setup again
+		# here would run wilderness_seed_province_effect over its provinces a SECOND time.
+		#
+		# That is not a duplicate-building bug: every arm of wilderness_seed_obstacle_effect guards
+		# with `NOT = { has_building = X }`. It is worse than one. Two passes quietly give a seeded
+		# ruins county up to six obstacles where a wilderness county gets two or three, so ruins
+		# would be several times harder to reclaim for a reason stated nowhere, and the difference
+		# would change if the two on_actions were ever ordered differently.
+		#
+		# `is_landed` decides it, and decides it the same way whichever on_action runs first, because
+		# landedness comes from history rather than from either pass. Landless is the usual case: the
+		# default world seeds no ruins at all, and then this is the ONLY thing that sets the dummy up.
+		if = {
+			limit = { is_landed = no }
+
+			# clear_traits, the wilderness and incapable traits, the court swept, any artifact
+			# destroyed. The `wilderness` trait is what makes it immortal and faceless, so this is
+			# not optional decoration.
+			wilderness_setup_on_start_effect = yes
+		}
+
+		# Every county this dummy holds gets stones on it, with no holding-type test in the way.
+		#
+		# The guard used to be `has_holding_type = wilderness_holding`, and it was wrong in the one
+		# direction that matters: a seeded ruins county with anything else on its capital province —
+		# another mod, a hand edit, a future change to how the generator writes unsettled provinces —
+		# would come out held by the ruins dummy with NO ruin standing on it. A county in the ruins
+		# realm that has no ruins is the one state this system must never ship, because everything
+		# downstream reads the BUILDING, not the holder: gen_county_has_ruins_trigger, the promotion
+		# gate, and the discovery event all see an ordinary empty county.
+		#
+		# `gen_ruins_place_effect` is idempotent, so the only remaining test is the useful one.
+		every_held_title = {
+			limit = { tier = tier_county }
+
+			title_province ?= {
+				# An even coin between the two rungs — see gen_ruins_place_effect. What is left
+				# standing is about what was built here, not about how long ago it emptied.
+				gen_ruins_place_effect = yes
+			}
+		}
+	}
+}
+
+# PROVINCE scope. Puts a ruin on this province if there is not one already, an even coin between the
+# two spawn rungs.
+#
+# The one place in the mod that chooses a rung, so no caller can drift from any other on what a ruin
+# looks like when it appears. Every caller gets the same coin: a county seeded at generation and a
+# county that falls in play are equally likely to leave a big ruin or a small one. Size here is what
+# was standing, not how long ago it fell.
+#
+# ---- The weights are LITERAL, and must stay that way ----
+#
+# This took parameters once — `gen_ruins_place_effect = { LARGE = 30  SMALL = 70 }` — with `$LARGE$`
+# and `$SMALL$` in the weight position of the arms below. **Macro substitution does not happen in a
+# `random_list` weight**, which is a key rather than a value, and the result was not an error: every
+# seeded county in the world came out with the *second* arm, `ruins_small`, and nothing said why.
+# ck3-tiger does not catch it and neither does error.log.
+#
+# `wilderness_seed_obstacle_effect` in the Wilderness set is the working precedent for this whole
+# shape and it uses plain integers. Follow it. If a caller ever genuinely needs different odds, pass
+# the ROLL in — `random_list` arms can carry a `trigger` — or write a second effect; do not put a
+# macro back in the weight.
+#
+# `random_list` rather than a `random` with a chance, because `random` has no else branch: a roll
+# that failed would leave the province with NO ruin on it, which is the exact failure this effect
+# exists to prevent. A list always picks exactly one arm.
+#
+# Idempotent, and that matters more than it looks. It runs over every ruins county at every game
+# start — including counties that fell in a previous session and were saved — so a second call must
+# not stack a second rung or quietly promote a half-cleared ruin back to a whole one. `ruins_cleared`
+# is in the guard for that reason: a ruin somebody is in the middle of finishing off is still a ruin.
+gen_ruins_place_effect = {
+	if = {
+		limit = {
+			NOR = {
+				has_building = ruins_large
+				has_building = ruins_small
+				has_building = ruins_cleared
+			}
+		}
+
+		random_list = {
+			50 = { add_building = ruins_large }
+			50 = { add_building = ruins_small }
+		}
+	}
+}
+
+# The ruins dummy's share of the yearly court sweep.
+#
+# wilderness_yearly_cleanup already does this for every character the engine calls a ruler, and it
+# will pick up the ruins dummy the moment it holds a county. This exists for the rest of the time:
+# a landless titular-kingdom holder is invisible to `every_ruler` but is NOT invisible to vanilla's
+# AI coronation pass, which will cheerfully forge it a crown it can never use.
+gen_ruins_cleanup_effect = {
+	title:k_gen_ruins.holder ?= {
+		every_courtier_or_guest = {
+			death = { death_reason = death_vanished }
+		}
+
+		every_character_artifact = {
+			destroy_artifact = this
+		}
+	}
+}
+
+# =====================================================================================
+#  The counter
+# =====================================================================================
+
+# County (title) scope on $COUNTY$. Adds $POINTS$ of decay and puts the county on the watchlist.
+#
+# Called from the on_action hooks the moment the thing happens, rather than inferred from its
+# aftermath a year later. A siege lifted in March leaves no trace a December sweep could read, and
+# it should leave one: somebody still burned the place.
+#
+# No veto check here on purpose. Points accumulate on any county at all, including ones that can
+# never fall, because the counter is also what the warning event and the debug readout are reading —
+# and a county that is being ground down but is structurally protected is a thing worth being able
+# to see. The veto is asked once, at the moment of falling, in gen_ruin_tick_county_effect.
+gen_ruin_shock_effect = {
+	$COUNTY$ ?= {
+		save_temporary_scope_as = gen_shocked
+
+		if = {
+			limit = { NOT = { has_variable = ruin_decay } }
+			set_variable = { name = ruin_decay value = 0 }
+		}
+
+		change_variable = { name = ruin_decay add = $POINTS$ }
+
+		if = {
+			limit = {
+				NOT = {
+					is_target_in_global_variable_list = {
+						name = gen_ruin_watchlist
+						target = scope:gen_shocked
+					}
+				}
+			}
+			add_to_global_variable_list = {
+				name = gen_ruin_watchlist
+				target = scope:gen_shocked
+			}
+		}
+	}
+}
+
+# County (title) scope. One county's yearly reading. The whole mechanic is in here.
+#
+# Order matters and is not arbitrary: the reading happens first, the threshold is tested second, and
+# only then is this year's development recorded for next year to compare against. Stamping the
+# development first would make `development_level < var:ruin_last_dev` compare a number to itself
+# and the trajectory signal would never fire once.
+gen_ruin_tick_county_effect = {
+	if = {
+		limit = { NOT = { has_variable = ruin_decay } }
+		set_variable = { name = ruin_decay value = 0 }
+	}
+
+	# ---- This year ----
+	if = {
+		limit = { gen_ruin_is_suffering_trigger = yes }
+		change_variable = { name = ruin_decay add = gen_ruin_decay_yearly }
+	}
+	else = {
+		change_variable = { name = ruin_decay subtract = gen_ruin_decay_recovery }
+
+		if = {
+			limit = { gen_ruin_is_recovering_trigger = yes }
+			change_variable = { name = ruin_decay subtract = gen_ruin_decay_relief }
+		}
+	}
+
+	# The counter never goes negative. Without this a county that is fine for fifty years banks
+	# fifty years of credit, and then survives a war it should not have.
+	if = {
+		limit = { var:ruin_decay < 0 }
+		set_variable = { name = ruin_decay value = 0 }
+	}
+
+	# ---- Has it fallen? ----
+	#
+	# The event does the collapsing, not this effect, so that the holder is looking at a window when
+	# it happens. It needs to be told WHICH county, and an event inherits the scopes saved where it
+	# was fired from — hence the save on this side of the trigger_event rather than a rediscovery on
+	# the other, which could only guess.
+	if = {
+		limit = {
+			var:ruin_decay >= gen_ruin_decay_threshold
+			gen_ruin_can_fall_trigger = yes
+		}
+
+		save_scope_as = gen_ruin_target
+		holder ?= { trigger_event = gen_ruins.0010 }
+	}
+
+	# ---- Has it been warned? ----
+	#
+	# Once. The flag is what stops a county sitting between the warning and the threshold from
+	# sending the same letter every year until it either falls or recovers, and it is cleared below
+	# when the county drops off the watchlist — so a county that recovers and later starts failing
+	# again is warned again, which is right.
+	else_if = {
+		limit = {
+			var:ruin_decay >= gen_ruin_decay_warning
+			NOT = { has_variable = ruin_warned }
+			gen_ruin_can_fall_trigger = yes
+		}
+
+		set_variable = { name = ruin_warned value = yes }
+
+		save_scope_as = gen_ruin_target
+		holder ?= { trigger_event = gen_ruins.0001 }
+	}
+
+	# ---- Remember this year's development, for next year ----
+	#
+	# Last, and after the reading above rather than before it. Stamped first, the trajectory arm of
+	# gen_ruin_is_suffering_trigger would be comparing this year's development against itself and
+	# could never once be true.
+	set_variable = { name = ruin_last_dev value = development_level }
+
+	# ---- Off the list ----
+	#
+	# A county back at zero has nothing left to measure and should not be walked again next year.
+	# This is what keeps the pulse's cost proportional to how much of the world is actually on fire.
+	#
+	# After the stamp, not before it. Forgetting a county and then immediately writing a variable
+	# back onto it leaves state on a county nobody is watching — harmless, but it makes "forget"
+	# mean two different things depending on who called it.
+	if = {
+		limit = { var:ruin_decay <= 0 }
+		gen_ruin_forget_county_effect = { COUNTY = this }
+	}
+}
+
+# County (title) scope on $COUNTY$. Takes a county off the watchlist and forgets everything the
+# counter knew about it. Not the collapse — the opposite; this is what recovery looks like.
+#
+# `=` rather than `?=` on the parameter, unlike its neighbours here. Two of its three callers pass
+# `this` from inside a county scope, and `this ?= { ... }` is not a shape that appears anywhere in
+# vanilla; every caller already knows it has a county, so the guard buys nothing and the plain form
+# is the one proven against the engine.
+gen_ruin_forget_county_effect = {
+	$COUNTY$ = {
+		save_temporary_scope_as = gen_forgotten
+
+		remove_list_global_variable = {
+			name = gen_ruin_watchlist
+			target = scope:gen_forgotten
+		}
+
+		if = { limit = { has_variable = ruin_decay }    remove_variable = ruin_decay }
+		if = { limit = { has_variable = ruin_warned }   remove_variable = ruin_warned }
+		if = { limit = { has_variable = ruin_last_dev } remove_variable = ruin_last_dev }
+	}
+}
+
+# =====================================================================================
+#  The fall
+# =====================================================================================
+
+# County (title) scope on $COUNTY$. The county stops being anybody's.
+#
+# Built on abandon_county_effect rather than beside it. That effect already knows how to take a
+# county apart correctly — revoke the title, wipe development, strip every non-capital holding, put
+# the capital back to a wilderness holding and seed it with obstacles — and a second implementation
+# of that would be a second thing to keep in step with the colonisation flow. What is added here is
+# the two things that make a ruin different from wilderness: it goes to the OTHER dummy, and the
+# stones are still standing on it.
+#
+# The order is forced. The memory has to be taken before the teardown, because the teardown is what
+# removes the holder; the re-seat has to come after, because abandon_county_effect hands the county
+# to the wilderness dummy on its way through.
+gen_ruin_county_effect = {
+	$COUNTY$ ?= {
+		# ---- What the ground will remember ----
+		#
+		# Read once, by wilderness_ruins.0001, whenever somebody finally clears the stones — which
+		# may be a century from now or never. Stored on the title because the title is the only
+		# thing in this transaction that is guaranteed to still exist by then.
+		set_variable = { name = ruin_former_culture value = culture }
+		set_variable = { name = ruin_former_faith value = faith }
+		set_variable = { name = ruin_fell_year value = current_year }
+	}
+
+	abandon_county_effect = { COUNTY = $COUNTY$ }
+
+	$COUNTY$ ?= {
+		# ---- Hand it to the ruins dummy ----
+		#
+		# abandon_county_effect has just given it to the wilderness one. Moving it again costs a
+		# second title transfer and is worth it: the alternative is teaching that effect about a
+		# dummy that does not exist on most maps.
+		if = {
+			limit = { exists = title:k_gen_ruins.holder }
+
+			hidden_effect = {
+				create_title_and_vassal_change = {
+					type = revoked
+					save_scope_as = change
+				}
+				change_title_holder = {
+					holder = title:k_gen_ruins.holder
+					change = scope:change
+					take_baronies = yes
+				}
+				resolve_title_and_vassal_change = scope:change
+			}
+		}
+
+		# ---- The stones ----
+		#
+		# On the capital province, which is the one barony abandon_county_effect keeps. Both spawn
+		# rungs carry `flag = obstacle`, so this county cannot be promoted out of a colony again
+		# until somebody has worked all the way down to `ruins_cleared` — and that construction is
+		# the only thing that can remove a ruin, which is what lets the discovery event be trusted
+		# to fire.
+		#
+		# The same even coin the seeded counties get. What a county leaves behind when it falls is
+		# about what was standing in it — a walled town leaves a big ruin, a handful of steadings
+		# leaves foundations — and neither the mechanic nor the player knows which this was, so it
+		# is a roll rather than a rule.
+		title_province ?= {
+			gen_ruins_place_effect = yes
+		}
+
+		# The counter has done its job and the county is no longer a candidate for anything. Leaving
+		# the variables on would have the next tick reading decay on a county nobody holds.
+		gen_ruin_forget_county_effect = { COUNTY = this }
+	}
+}
+
+# =====================================================================================
+#  Debug
+# =====================================================================================
+
+# County (title) scope on $COUNTY$. Drives the counter straight to a chosen point without waiting
+# for a war, so every rung of the ladder can be reached in one sitting.
+#
+# Sets rather than adds, and deliberately does not clear `ruin_warned`: setting a county to the
+# warning point twice in a row SHOULD produce one letter, and being able to confirm that is half of
+# what this is for.
+gen_ruin_debug_set_effect = {
+	$COUNTY$ ?= {
+		save_temporary_scope_as = gen_debug_target
+
+		set_variable = { name = ruin_decay value = $POINTS$ }
+
+		if = {
+			limit = {
+				NOT = {
+					is_target_in_global_variable_list = {
+						name = gen_ruin_watchlist
+						target = scope:gen_debug_target
+					}
+				}
+			}
+			add_to_global_variable_list = {
+				name = gen_ruin_watchlist
+				target = scope:gen_debug_target
+			}
+		}
+	}
+}

@@ -64,19 +64,6 @@ public static class ArtifactForgeFlags
     public static readonly bool GeneratedArmorMasks = false;
 
     /// <summary>
-    /// Whether the bone-attachment experiment is emitted — see <see cref="BoneAttachProbe"/>.
-    ///
-    /// Answers, in one in-game session, whether a rigid piece can be hung off a portrait bone from
-    /// an accessory gene of our own: the route a pauldron on an illustrious piece would take. It
-    /// emits a debug event, a modifier group, some accessories and one new gene, and touches nothing
-    /// the artifact path uses — so it is safe to leave on, and safe to delete outright.
-    ///
-    /// Turn it off once the question is answered. It costs a gene declaration and a handful of
-    /// accessories that no shipped content refers to.
-    /// </summary>
-    public static readonly bool BoneAttachProbe = true;
-
-    /// <summary>
     /// Whether rigid pieces are hung off portrait bones — see <see cref="BonePieceStep"/>.
     ///
     /// Pauldrons are the first use; the step is written around SLOTS, so a helm crest or a back

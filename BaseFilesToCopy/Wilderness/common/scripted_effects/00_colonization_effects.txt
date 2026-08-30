@@ -924,8 +924,26 @@ abandon_county_effect = {
 	$COUNTY$ = {
 		save_scope_as = abandoned
 
+		# `has_title` as well as the trait, and the title is what does the work.
+		#
+		# With the Ruins set shipping there are TWO dummies wearing `wilderness` — the same trait
+		# and the same government on purpose, because thirty-odd triggers here and one portrait
+		# modifier find their holder by it. What separates them is which titular kingdom each holds,
+		# since a realm is named after its holder's primary title and "the Wilds" is the wrong label
+		# for ground somebody used to farm.
+		#
+		# Without this line the trait alone matched both and the pick was a coin flip: half the
+		# counties abandoned by a failed colony would have been filed under the ruins.
+		#
+		# k_gen_wilderness is written by the generator (MapGen/Wilderness.cs) and exists on every map
+		# that ships this set, so naming it here is safe. k_gen_ruins deliberately is NOT named
+		# anywhere in this file set — it only exists when the Ruins set ships, and a trigger that
+		# named a title the database has never heard of would be an error on every other map.
 		random_ruler = {
-			limit = { has_trait = wilderness }
+			limit = {
+				has_trait = wilderness
+				has_title = title:k_gen_wilderness
+			}
 			save_scope_as = wilderness_holder
 		}
 

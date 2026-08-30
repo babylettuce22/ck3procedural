@@ -1546,30 +1546,57 @@ public static class ArmorForgeStep
 
                     b.Inline("outfit_tags", "military_outfit");
 
+                    // TWO WAYS TO MATCH, AND THE WEIGHTS ARE WHAT ORDER THEM.
+                    //
+                    // Gating on the creator alone means an artifact with NO creator matches nothing
+                    // and is never worn. That is not an edge case: **62% of vanilla's own 665
+                    // create_artifact blocks set no creator at all**, so most armour the game hands
+                    // out through inspirations, tournaments and events was silently invisible. Our
+                    // own startup artifacts had the same hole until they began naming a maker.
+                    //
+                    // The fallback is the artifact's OWNER, which on a portrait is the character
+                    // being drawn. That reintroduces the problem the creator gate exists to prevent -
+                    // a stolen piece re-dressing itself in the thief's colours - so the two are
+                    // weighted rather than OR'd: with `selection_behavior = max` the group applies
+                    // its heaviest entry, so a creator match at 1000 beats an owner match at 600 and
+                    // a piece with a known maker still keeps its own look. Only a piece with no
+                    // maker at all falls through to the wearer.
+                    //
+                    // Expressed as two modifiers rather than one OR because `exists = creator`
+                    // appears nowhere in vanilla and is not worth relying on; separate weights say
+                    // the same thing in a form vanilla demonstrably uses.
                     using (b.Block("weight"))
                     {
                         b.Field("base", 0);
 
-                        using (b.Block("modifier"))
+                        foreach (bool byCreator in new[] { true, false })
                         {
-                            b.Field("add", 1000);
-                            b.Field("is_female", look.Female ? "yes" : "no");
-
-                            using (b.Block("any_equipped_character_artifact"))
+                            using (b.Block("modifier"))
                             {
-                                b.Field("artifact_type", look.Type);
-                                b.Field("rarity", look.Rarity);
+                                b.Field("add", byCreator ? 1000 : 600);
+                                b.Field("is_female", look.Female ? "yes" : "no");
 
-                                // Written by hand because `?=` is one token and Block would put the
-                                // builder's " = " separator inside it. The safe form matters: an
-                                // artifact with no creator - anything made before history - would
-                                // otherwise throw on every portrait that evaluates this.
-                                b.Raw($"{b.IndentAt(b.Depth)}creator ?= {{\n");
-                                b.Raw($"{b.IndentAt(b.Depth + 1)}culture = culture:{look.Culture}\n");
-                                b.Raw($"{b.IndentAt(b.Depth)}}}\n");
+                                using (b.Block("any_equipped_character_artifact"))
+                                {
+                                    b.Field("artifact_type", look.Type);
+                                    b.Field("rarity", look.Rarity);
 
-                                using (b.Block("NOT"))
-                                    b.Field("has_variable", "gen_artifact_hide_on_portrait");
+                                    // Written by hand because `?=` is one token and Block would put
+                                    // the builder's " = " separator inside it. The safe form matters
+                                    // for its own sake too: an artifact with no creator would
+                                    // otherwise throw on every portrait that evaluates this.
+                                    //
+                                    // The owner link is `artifact_owner`, not `owner` - vanilla's
+                                    // artifact triggers use that name throughout.
+                                    string link = byCreator ? "creator" : "artifact_owner";
+
+                                    b.Raw($"{b.IndentAt(b.Depth)}{link} ?= {{\n");
+                                    b.Raw($"{b.IndentAt(b.Depth + 1)}culture = culture:{look.Culture}\n");
+                                    b.Raw($"{b.IndentAt(b.Depth)}}}\n");
+
+                                    using (b.Block("NOT"))
+                                        b.Field("has_variable", "gen_artifact_hide_on_portrait");
+                                }
                             }
                         }
                     }

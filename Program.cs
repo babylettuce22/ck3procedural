@@ -185,6 +185,16 @@ public static class Program
                         System.Globalization.CultureInfo.InvariantCulture);
                     break;
 
+                // Heightmap pixels per world unit. See MapConfig.ProvinceDownscale; 2 is vanilla's
+                // ratio and what this generator used to hardcode, 1 is what every total conversion
+                // ships. On the command line because it changes world size, barony count, terrain
+                // detail and camera framing at once, and the only way to judge that trade is to
+                // generate the same heightmap both ways.
+                case "--province-downscale" when i + 1 < args.Length:
+                    cfg.ProvinceDownscale = double.Parse(args[++i],
+                        System.Globalization.CultureInfo.InvariantCulture);
+                    break;
+
                 // Exposed on the command line as well as in the GUI because it is the one weapon
                 // setting worth sweeping: it trades disk against variety, and comparing two sizes
                 // means two runs.
@@ -255,6 +265,24 @@ public static class Program
                 // BaseFilesToCopy/Societies/README.txt.
                 case "--societies":
                     cfg.EnableSocieties = true;
+                    break;
+
+                // Ruination, off by default because it can take a county away from a player. The
+                // headless loop is the only way to see the collapse path without a GUI run.
+                case "--ruins":
+                    cfg.EnableRuins = true;
+                    break;
+
+                // Share of counties that start already ruined. Separate from --ruins on purpose:
+                // the usual setting is the system on and this at zero, so the world starts whole.
+                case "--ruins-share" when i + 1 < args.Length:
+                    if (double.TryParse(args[++i],
+                            System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out double ruinsShare))
+                    {
+                        cfg.EnableRuins = true;
+                        cfg.RuinsShare = Math.Clamp(ruinsShare, 0.0, 1.0);
+                    }
                     break;
 
                 // Ship only heightmap.png and let -mapeditor's repack build the packed/indirection
@@ -470,6 +498,13 @@ public static class Program
             if (cfg.EnableWilderness)
             {
                 sets.Add(Ck3MapGen.Emit.StaticFileWriter.Wilderness);
+
+                // Never on its own: every file in the Ruins set references the wilderness
+                // government, its buildings or its colonisation flow.
+                if (cfg.EnableRuins)
+                {
+                    sets.Add(Ck3MapGen.Emit.StaticFileWriter.Ruins);
+                }
             }
             if (cfg.EnableFantasyEthnicities && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly)
             {

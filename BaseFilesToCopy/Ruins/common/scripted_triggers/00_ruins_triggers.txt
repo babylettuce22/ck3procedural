@@ -1,0 +1,137 @@
+﻿# Which counties may fall, and which are suffering enough to be moving toward it.
+#
+# The two questions are kept apart on purpose and the split is the safety design of this whole
+# system. `gen_ruin_can_fall_trigger` is an ABSOLUTE veto: a county it refuses can never be ruined
+# by the yearly pulse no matter how badly it is doing, because ruining it would break something
+# structural that no amount of suffering justifies. `gen_ruin_is_suffering_trigger` is the opposite
+# kind of question — a reading of how this year went, with no vetoes in it at all.
+#
+# The debug tools deliberately bypass the first and report the second, which is what makes it
+# possible to test the collapse on a county the pulse would never choose.
+
+# =====================================================================================
+#  The vetoes
+# =====================================================================================
+
+# County (title) scope. Nothing that happens in a game may ruin a county this refuses.
+#
+# Every clause is here because ruining such a county breaks something the player cannot repair, not
+# because it would be unfair. Fairness is the warning event's job.
+gen_ruin_can_fall_trigger = {
+	# Somebody has to be holding it for there to be anything to lose. This also excludes wilderness
+	# and colonies in one line: is_settled_county_trigger is false for both holding types.
+	is_settled_county_trigger = yes
+	exists = holder
+
+	# ---- Would unland a character ----
+	#
+	# A ruler whose last county falls is not a ruler any more. CK3 will either turn them into a
+	# landless wanderer or delete them, and if that ruler was somebody's liege the realm below them
+	# comes apart with no war and no explanation.
+	NOT = { holder.capital_county = this }
+
+	holder = {
+		any_held_title = {
+			tier = tier_county
+			count >= 2
+		}
+	}
+
+	# ---- Would orphan a de jure title ----
+	#
+	# A duchy, kingdom or empire whose de jure capital county is held by nobody cannot be created:
+	# the creation check wants the capital in the claimant's realm and it never will be again. That
+	# is a title permanently removed from the game by a random event, which is not a thing this
+	# system is allowed to do.
+	NOT = { this = duchy.title_capital_county }
+	NOT = { this = kingdom.title_capital_county }
+	NOT = { this = empire.title_capital_county }
+
+	# ---- Would destroy generated content ----
+	#
+	# A world centre's wonder stands on its county's CAPITAL barony (Emit/ContentWriter.cs writes the
+	# special_building_slot there), which is the one barony a collapse keeps — but keeps as a
+	# wilderness holding, with the slot on it and nobody able to build in it ever again. AGOT hit the
+	# same wall and wrote agot_citadel_transfer_effect to move the Citadel out of the way first;
+	# refusing the county outright is the cheaper answer and loses nothing worth having.
+	title_province ?= {
+		has_special_building = no
+		has_special_building_slot = no
+	}
+
+	# Somebody's sacred ground. A faith whose holy site falls into the wilderness loses the site for
+	# good, and generated faiths are given between three and five — losing one is a real hole.
+	is_holy_site = no
+}
+
+# =====================================================================================
+#  The reading
+# =====================================================================================
+
+# County (title) scope. Is this county having a bad enough year to gain decay?
+#
+# Used by the yearly pulse to decide whether to add or subtract, and read by the debug panel so the
+# answer can be seen on a county that is NOT going to fall — the veto above and this are independent
+# and the tooling has to be able to show that.
+#
+# Nothing here is a development threshold. See the note at the top of 00_ruins_values.txt.
+gen_ruin_is_suffering_trigger = {
+	OR = {
+		# Whoever claims it is not the one holding it. The clearest single statement in the game
+		# that a county's ruler does not control it.
+		AND = {
+			exists = county_controller
+			exists = holder
+			NOT = { county_controller = holder }
+		}
+
+		# Control gone. Not "low" — a county at 20 control is one nobody is administering.
+		county_control < 20
+
+		# The people in it want somebody else.
+		county_opinion < -40
+
+		# Plague. Reachable only with the relevant content installed; on a base-game install the list
+		# is simply empty and this arm contributes nothing rather than erroring.
+		any_county_province_epidemic = { count >= 1 }
+
+		# It is getting poorer. The one signal that means the same thing at every development level,
+		# and the reason the counter measures a trajectory rather than a floor. The variable is
+		# stamped each year by gen_ruin_tick_county_effect; on the first tick it does not exist yet
+		# and this arm is simply false.
+		AND = {
+			has_variable = ruin_last_dev
+			development_level < var:ruin_last_dev
+		}
+	}
+}
+
+# County (title) scope. Is this county having a good enough year to give points back faster?
+gen_ruin_is_recovering_trigger = {
+	county_control >= 50
+
+	OR = {
+		NOT = { has_variable = ruin_last_dev }
+		development_level >= var:ruin_last_dev
+	}
+}
+
+# County (title) scope. Are the stones standing here?
+#
+# Asks the BUILDING, not the holder. A ruined county that has since been colonised is still a county
+# with ruins in it — the settlement holding carries the building across, and clearing it is a job the
+# new owner has to finish. Asking the holder instead would answer no the moment somebody claimed it.
+#
+# Any rung counts, `ruins_cleared` included. That rung is a construction in progress, not a finished
+# state: it only exists while somebody is working, and it deletes itself in its own on_complete. A
+# county in the middle of that still has a ruin in it and still fails the promotion gate, so a
+# trigger that answered no there would disagree with the flag the engine is actually reading.
+gen_county_has_ruins_trigger = {
+	title_province ?= {
+		OR = {
+			has_building = ruins_large
+			has_building = ruins_small
+			has_building = ruins_cleared
+		}
+	}
+}

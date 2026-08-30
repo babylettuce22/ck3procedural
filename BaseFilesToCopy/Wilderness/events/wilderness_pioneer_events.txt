@@ -120,10 +120,18 @@ wilderness_pioneer.0001 = {
 
 		# Phrased as "not none" rather than "at least one", because count = 0 is the only form of
 		# this test the rest of the system uses and the only one proven against the engine here.
+		#
+		# `clearable_obstacle`, NOT `obstacle`. The two differ by exactly one building: `ruins` is in
+		# the way but cannot be chopped down, because the ladder in
+		# wilderness_clear_hardest_obstacle_effect works by NAME and ruins are deliberately not in
+		# it. Asking the wider flag here would offer this option on a county whose only blocker was
+		# ruins, and pioneer_clear_one_obstacle_effect would then find nothing to remove and say
+		# nothing about it — a silent no-op offered by the trigger that promised the work. See the
+		# two-flag note at the top of common/buildings/00_wilderness_buildings.txt.
 		trigger = {
 			scope:stake = {
 				title_province ?= {
-					NOT = { has_building_with_flag = { flag = obstacle count = 0 } }
+					NOT = { has_building_with_flag = { flag = clearable_obstacle count = 0 } }
 				}
 			}
 		}

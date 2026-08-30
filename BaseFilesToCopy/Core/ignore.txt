@@ -1,1 +1,30 @@
 descriptor.mod
+
+# Pattern swatches that no emitter names any more.
+#
+# These four were the ARMOUR surfaces, back when armour was recoloured against flat colour chips of
+# our own. It is not painted that way now: a swatch's normal map and ambient occlusion REPLACE the
+# garment's inside the mask, so a flat swatch sands the armour smooth instead of restating it in a
+# new material. ArmorForgeStep names vanilla's own material swatches instead - chainmail_plain_01,
+# lamellar_metal_01, metal_scales_01 and the rest - which carry real relief.
+#
+# Kept in the repo rather than deleted, because the flat-colour reasoning is still exactly right for
+# WEAPONS: a blade is a hard rigid surface with no weave to lose, which is why gen_steel and
+# gen_leather are still live and are deliberately NOT listed here. Ignored rather than removed so
+# they stop riding along in every generated mod while remaining one line away from returning.
+#
+# Verified before listing: grepping the emitters for each name shows only gen_steel and gen_leather
+# referenced, both by ForgedWeaponRecolour. Ignoring a swatch something still names would fail
+# silently - the variation would point at a texture the mod does not ship.
+gen_cloth_masks.dds
+gen_cloth_normal.dds
+gen_cloth_properties.dds
+gen_iron_rough_masks.dds
+gen_iron_rough_normal.dds
+gen_iron_rough_properties.dds
+gen_lacquer_masks.dds
+gen_lacquer_normal.dds
+gen_lacquer_properties.dds
+gen_steel_polished_masks.dds
+gen_steel_polished_normal.dds
+gen_steel_polished_properties.dds

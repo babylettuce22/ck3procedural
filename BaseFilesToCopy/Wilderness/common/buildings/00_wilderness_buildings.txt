@@ -11,6 +11,29 @@
 # knows the names below, it only ever asks `has_building_with_flag = { flag = obstacle count = 0 }`.
 # Adding a seventh blocker therefore needs no change anywhere else in this system.
 #
+# ---- Two flags, because "in the way" and "a pioneer can chop it down" are different ----
+#
+# The six natural blockers carry `clearable_obstacle` as well. `obstacle` still means what it always
+# meant — this is in the way, promotion waits — and every promotion gate still asks only for that.
+# `clearable_obstacle` means something narrower: a pioneer or the Warden's council task can be sent
+# at this and will remove it.
+#
+# They were one flag until the ruins ladder became a blocker, and that is what forced them apart.
+# Ruins are in the way, so they must count for `obstacle`; but
+# `wilderness_clear_hardest_obstacle_effect` removes things BY NAME from a fixed ladder, so a pioneer
+# sent at a county whose only blocker was a ruin would have found nothing to do and reported nothing
+# — a silent no-op, chosen by a trigger that said there was work there. And adding the ruins rungs to
+# that ladder is worse, not better: it would strip the building without going through
+# `ruins_cleared`'s `on_complete`, so the discovery event that hangs off it would be skipped in
+# exactly the case somebody went looking.
+#
+# So the pioneer's targeting asks `clearable_obstacle` and the ladder stays as it is. The invariant
+# that buys is worth stating: **every removal of a ruin goes through `ruins_cleared.on_complete`**,
+# which is the only reason an event can be hung there and trusted to fire.
+#
+# A further NATURAL blocker wants both flags. Something that blocks but cannot be chopped — a
+# flooded ford, a curse — wants `obstacle` alone, like the ruins rungs.
+#
 # The `x_cleared` half must NOT carry it, and this was originally wrong. When both halves had the
 # flag the count could never reach zero — upgrading a blocker replaced an obstacle with another
 # obstacle — so `county_obstacles_cleared_trigger` was false forever and no colony could be
@@ -110,6 +133,7 @@ beast_dens = {
 	next_building = beast_dens_cleared
 	type_icon = "icon_building_hunting_grounds.dds"
 	flag = obstacle
+	flag = clearable_obstacle
 	ai_value = { base = -100 }
 }
 
@@ -152,6 +176,7 @@ bandit_camps = {
 	next_building = bandit_camps_cleared
 	type_icon = "icon_building_warcamps.dds"
 	flag = obstacle
+	flag = clearable_obstacle
 	ai_value = { base = -100 }
 }
 
@@ -198,6 +223,7 @@ dense_growth = {
 	next_building = dense_growth_cleared
 	type_icon = "icon_building_logging_camps.dds"
 	flag = obstacle
+	flag = clearable_obstacle
 	ai_value = { base = -100 }
 }
 
@@ -248,6 +274,7 @@ flooded_lands = {
 	next_building = flooded_lands_cleared
 	type_icon = "icon_building_waterworks.dds"
 	flag = obstacle
+	flag = clearable_obstacle
 	ai_value = { base = -100 }
 }
 
@@ -295,6 +322,7 @@ scree_slopes = {
 	next_building = scree_slopes_cleared
 	type_icon = "icon_building_hill_forts.dds"
 	flag = obstacle
+	flag = clearable_obstacle
 	ai_value = { base = -100 }
 }
 
@@ -342,6 +370,7 @@ killing_cold = {
 	next_building = killing_cold_cleared
 	type_icon = "icon_building_hillside_grazing.dds"
 	flag = obstacle
+	flag = clearable_obstacle
 	ai_value = { base = -100 }
 }
 
@@ -369,56 +398,135 @@ killing_cold_cleared = {
 
 
 # =====================================================================================
-#  Ruins — a county feature, NOT one of the six obstacles
+#  Ruins — a three-rung ladder, and the only obstacle nobody can simply chop down
 # =====================================================================================
 #
-# Somebody built here before, and whatever happened to them is the point. This uses the same
-# pair-and-`next_building` shape as the obstacles above, for the same reason: clearing it becomes
-# a real construction job with a cost, a timer and a queue entry, for free.
+# Somebody built here before, and whatever happened to them is the point.
 #
-# It deliberately does NOT carry `flag = obstacle`, and that is the whole difference:
+#     ruins_large  ->  ruins_small  ->  ruins_cleared  ->  (nothing)
 #
-#   * It is not seeded by the generator, so a county that acquires ruins from an event would
-#     otherwise gain a promotion blocker that nothing in the colonisation flow expects. With no
-#     flag, `county_obstacles_cleared_trigger` ignores it and no colony can be soft-locked by it.
-#   * `wilderness_clear_hardest_obstacle_effect` clears obstacles by NAME, from a fixed list of
-#     six. Ruins are not in it, so a pioneer or a council task can never strip the ruins out from
-#     under an event chain that was counting on them still being there.
+# Three rungs rather than the two-step pair the natural blockers use, because the middle rung is
+# worth something on its own. Clearing a wolf den is one job with one outcome; taking a ruined town
+# apart is years of work in which the place is steadily less of a problem well before it is gone.
+# `ruins_small` is that halfway state: the same obstacle, most of the malus lifted, one job left.
 #
-# If ruins should ever gate promotion after all, that is one line — add `flag = obstacle` to
-# `ruins` — plus a matching entry in `wilderness_clear_hardest_obstacle_effect`.
+# ---- Which rung a ruin starts on ----
 #
-# `ruins_cleared` removes itself on completion like the other cleared halves, so it costs no
-# permanent building slot. Its `on_complete` is the intended hook for the discovery event: what
-# was found under the stones is decided there, not by the building's modifiers.
+# Both `ruins_large` and `ruins_small` are spawn states, and neither is constructible from nothing.
+# The Ruins file set is what chooses, in gen_ruins_place_effect, and it is an even coin: a county
+# seeded at generation and a county that falls in play are equally likely to come out on either rung.
+#
+# So the rung reads as what was STANDING here rather than as how long ago it emptied — a walled town
+# leaves a big ruin whenever it fell, a handful of steadings leaves foundations. The ladder below
+# then turns that into how much work is left: two construction jobs from large, one from small.
+#
+# ---- The flags ----
+#
+# `ruins_large` and `ruins_small` both carry `flag = obstacle` and NOT `flag = clearable_obstacle`,
+# and that pair of facts is the whole of what makes ruins different from a wolf den:
+#
+#   * `obstacle` means a county with ANY rung standing cannot be promoted out of a colony. That is
+#     the point of the flag here — the discovery event talks about silence and no signs of life, and
+#     none of that survives a bustling town having been raised around the stones first. BOTH rungs
+#     carry it, because a half-cleared ruin is still a ruin.
+#   * NOT `clearable_obstacle` means a pioneer cannot be sent at either, and the Warden's council
+#     task will not touch them, because `wilderness_clear_hardest_obstacle_effect` clears by NAME
+#     from a fixed ladder of six and no rung of this one is in it.
+#
+# That leaves exactly one route down the ladder — somebody building the next rung and waiting — and
+# it is the invariant the whole system rests on: **`ruins_cleared` is the only way for a ruin to
+# leave a province, and completing it fires the event.** Put any rung into the clearing ladder and a
+# pioneer strips it silently, taking the discovery with it.
+#
+# `ruins_cleared` removes itself on completion like the other cleared halves, so a finished county
+# carries no permanent building slot for having once been a ruin.
 
-ruins = {
-	# Placed by script or by event, never built.
+ruins_large = {
+	# Placed by script, never built. Nothing upgrades INTO this rung.
 	can_construct = { always = no }
 	can_construct_potential = { always = no }
 
 	county_modifier = {
 		# Peasants will not settle next to it and will not go near it after dark.
-		county_opinion_add = -5
-		development_growth_factor = -0.10
-		travel_danger = 20
+		county_opinion_add = -10
+		development_growth_factor = -0.20
+		travel_danger = 40
 	}
 
 	province_modifier = {
 		# Dressed stone already cut and lying where it fell. Robbing it out is cheaper than
 		# quarrying — which is exactly why nobody has ever bothered to look underneath.
-		build_gold_cost = -0.10
+		build_gold_cost = -0.15
+	}
+
+	next_building = ruins_small
+	type_icon = "icon_megalith.dds"
+
+	# In the way, but not something a work party can be pointed at — see the two-flag note at the
+	# top of this file. `clearable_obstacle` is deliberately absent.
+	flag = obstacle
+	ai_value = { base = -100 }
+}
+
+# The middle rung. Reached two ways: built as the upgrade out of ruins_large, or placed directly by
+# script on a ruin meant to start old.
+#
+# CONSTRUCTIBLE, unlike ruins_large, and that is what makes the ladder work at all: `next_building`
+# still honours the target's own can_construct, so a rung nothing may build is a rung nothing may
+# climb to. `add_building` ignores can_construct entirely, so the script-placed route is unaffected
+# by the guard below.
+#
+# `has_building = ruins_large` is what stops it being offered as a fresh build on a province with no
+# ruin on it. During the upgrade the old building is still standing, so the test is true exactly
+# when it should be and false everywhere else.
+ruins_small = {
+	construction_time = slow_construction_time
+	cost = { gold = wilderness_clear_cost_dear }
+
+	can_construct = {
+		wilderness_can_clear_obstacle_trigger = yes
+		has_building = ruins_large
+	}
+	can_construct_potential = {
+		wilderness_can_clear_obstacle_trigger = yes
+		has_building = ruins_large
+	}
+
+	# Most of the malus lifted, which is the reason this rung exists rather than being folded into
+	# one long job to nothing. The walls are down and carted off; what is left is foundations, a
+	# cellar or two, and a reputation.
+	county_modifier = {
+		county_opinion_add = -3
+		development_growth_factor = -0.05
+		travel_danger = 10
+	}
+
+	province_modifier = {
+		build_gold_cost = -0.05
 	}
 
 	next_building = ruins_cleared
 	type_icon = "icon_megalith.dds"
-	ai_value = { base = -100 }
+
+	# Still in the way. Promotion still waits.
+	flag = obstacle
+
+	ai_value = {
+		base = 150
+		modifier = {
+			add = 1000
+			scope:holder ?= { is_colonist_trigger = yes }
+		}
+	}
 }
 
 ruins_cleared = {
 	construction_time = standard_construction_time
 	cost = { gold = wilderness_clear_cost_standard }
 
+	# No `has_building` guard here, unlike ruins_small above, and the asymmetry is deliberate: this
+	# rung is only ever reachable as ruins_small's next_building — no other building's ladder ends
+	# at it — so the upgrade path is already the only path and a second guard would say nothing.
 	can_construct = { wilderness_can_clear_obstacle_trigger = yes }
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
@@ -431,9 +539,28 @@ ruins_cleared = {
 			}
 		}
 	on_complete = {
-		# Reuses the obstacle toast so clearing ruins announces itself the same way everything
-		# else in the holding does. A future discovery event fires from here.
-		wilderness_obstacle_cleared_effect = yes
+		# The discovery. Modelled on the wonder capstone in Core/events/gen_wonder_events.txt, and
+		# for the same reason: what the player did is the same in every case, so one static event
+		# serves every ruin on every map.
+		#
+		# Fires HERE and only here, at the bottom of the ladder, however the county reached it —
+		# whether it started large and was worked down over two construction jobs, or started small
+		# and took one. What was under the stones does not depend on how big the pile was.
+		#
+		# on_complete runs in PROVINCE scope. Both scopes are saved HERE rather than rediscovered in
+		# the event, because the event is a static file that knows nothing about which ruin fired it
+		# — being able to name the county is the whole reason it can say more than "it".
+		#
+		# No toast beside it. The obstacle toast that used to be here was announcing the same act a
+		# second time, and an event window plus a toast for one thing reads as a double-fire.
+		#
+		# `?=` on the holder, not `=`. A wilderness county is held by a dummy that cannot build, so
+		# in practice somebody real is always here — but a scope that resolves to nothing would take
+		# the whole on_complete down with it, including the remove_building below.
+		save_scope_as = gen_ruins_site
+		county ?= { save_scope_as = gen_ruins_county }
+		county.holder ?= { trigger_event = wilderness_ruins.0001 }
+
 		remove_building = ruins_cleared
 	}
 }

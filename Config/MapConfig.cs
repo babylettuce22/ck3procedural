@@ -535,11 +535,13 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// with a placeholder name, joined through an event that has to be fired from the console.
     /// Nothing in the set is generated and nothing generated depends on it, so switching it on
     /// changes no other part of a map.
-    /// </summary>
+    /// </summary> 
+    /// HIDING FOR THIS BUILD
+    [HideInGenerator]
     [Category("02 World State")]
     [DisplayName("Societies (prototype)")]
     [Description("Ship the hand-written society prototype: one membership trait with a rank ladder, one rite only members can see, hold or be invited to, and the approach event that makes the first member. Nothing about it is generated yet — the society has a placeholder name and is joined by firing 'event society.0001' from the console. Off by default. See BaseFilesToCopy/Societies/README.txt.")]
-    public bool EnableSocieties { get; set; } = true;
+    public bool EnableSocieties { get; set; } = false;
 
     // =========================================================================
     // 03 Provinces
@@ -555,10 +557,24 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// <c>tiny</c> covered 1/81 of the pixels it covered at <c>vanilla</c> — below
     /// <see cref="MinProvincePixels"/>, where CK3 cannot derive a centroid and crashes without
     /// logging. Fixing the *area* instead makes the count fall out of the map size.
+    ///
+    /// The default is 1.25 rather than vanilla's own density, and it is the other half of
+    /// <see cref="ProvinceDownscale"/>. That setting now spends the whole heightmap on world size,
+    /// so a 9216-wide source becomes a 9216-wide world — vanilla's province map exactly, and
+    /// vanilla's ~11,000 baronies with it. That is a lot of title, character and history generation
+    /// per run, and 1.25 takes about a third off it (10,964 to ~7,000) while leaving the raster and
+    /// the camera alone.
+    ///
+    /// It is deliberately *this* knob that carries the compensation and not the raster. Both shrink
+    /// the barony count, but shrinking the province map also shrinks the world, which re-steepens
+    /// every slope by 1/MapScale and puts the camera corrections back. This only makes counties
+    /// larger. The visible cost is that map furniture — holdings, city scatter, trees — is authored
+    /// at vanilla's absolute size and does not scale with a county, so at 1.25 it reads about 20 %
+    /// small against one; <see cref="HoldingScale"/> is the lever if that lands badly.
     /// </summary>
     [Category("03 Provinces")]
-    [Description("How large a barony is, relative to vanilla's. 2 makes each one twice as wide and therefore a quarter as numerous; the whole title hierarchy follows, because MapGen.Titles clusters by counts rather than by area. This is the only knob for map granularity. Province counts used to be given directly, which meant a map kept the same number of provinces at every resolution and so a barony at tiny cove...")]
-    public double CountyScale { get; set; } = 1.0;
+    [Description("How large a barony is, relative to vanilla's. 2 makes each one twice as wide and therefore a quarter as numerous; the whole title hierarchy follows. The default 1.25 is the counterweight to ProvinceDownscale: that setting spends the heightmap on world size, which on a 9216-wide source would otherwise give vanilla's full ~11,000 baronies, and this takes about a third off. Raise it for fewer, larger counties; 1.0 is vanilla's own density. Map furniture does not scale with a county, so above ~1.25 holdings start reading small — see HoldingScale.")]
+    public double CountyScale { get; set; } = 1.25;
 
     /// <summary>
     /// Average land province area in province-map pixels, at <see cref="CountyScale"/> 1.
@@ -1552,7 +1568,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// </summary>
     [Category("7 Height scale")]
     [Description("What the highest land pixel becomes, on the 0-255 scale. 191 is vanilla's own highest; vanilla never uses the top of the range. Raise towards 255 for a more dramatic map — this is the knob that decides how flat the result reads.")]
-    public double LandTop { get; set; } = 225;
+    public double LandTop { get; set; } = 255;
 
     /// <summary>
     /// How far the terrain CK3 draws may depart — in *either* direction — from the heightmap it
@@ -2218,6 +2234,51 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Description("Share of generated faiths with one holy site out in unclaimed wilderness — a grove or peak nobody holds. Gives a reason to want one particular wilderness county rather than any of them. Never the faith's primary site.")]
     public double WildernessHolySiteShare { get; set; } = 0.15;
 
+    /// <summary>
+    /// Whether a settled county can fall back out of civilisation.
+    ///
+    /// Gates the <c>Ruins</c> file set — a second dummy holder, the decay counter that decides a
+    /// county is dying, the collapse itself, and the discovery event when somebody digs the stones
+    /// out again. Off by default because it is the one system here that can take something away
+    /// from the player without being asked to.
+    ///
+    /// Requires <see cref="EnableWilderness"/>. Ruins are unsettled counties with a history, so
+    /// they are held under the same government, marked with the same trait, and reclaimed through
+    /// the same colonisation flow; without that flow there is nothing for a ruin to be. The two are
+    /// ANDed everywhere rather than this one silently implying the other, so a mod configured with
+    /// ruins on and wilderness off ships neither half instead of a broken one.
+    /// </summary>
+    /// HIDING FOR THIS BUILD
+    [HideInGenerator]
+    [Category("12 Wilderness")]
+    [Description("Let settled counties collapse back into wilderness when they are dying — repeated sacking, plague, lost control — leaving ruins that have to be cleared before the land can be settled again. Requires the wilderness system. Off by default: it can take a county away from a player.")]
+    public bool EnableRuins { get; set; } = false;
+
+    /// <summary>
+    /// Share of counties that start already ruined.
+    ///
+    /// Zero by default, and that is the intended setting rather than a disabled feature: with
+    /// <see cref="EnableRuins"/> on and this at zero the world begins whole and ruins are something
+    /// that HAPPENS, which is the version of the mechanic that has a story in it. Raising it seeds
+    /// a fallen age instead — ground somebody held before the bookmark and does not hold now.
+    ///
+    /// Placed unlike wilderness, and deliberately so. Wilderness is scored — hostile ground, map
+    /// edges, away from the middle of a kingdom — because unsettled land has to look like land
+    /// nobody wanted. A ruin is the opposite claim: somebody wanted it enough to build there, so it
+    /// belongs wherever people are, including the middle of a settled kingdom. Ruins are therefore
+    /// drawn uniformly from every county the wilderness pass did not take, with no terrain bias, no
+    /// edge bias, no realm-interior avoidance and no clumping — a lone ruined county surrounded by
+    /// settled land reads as a story, where a lone WILD county reads as a generation fault.
+    ///
+    /// A fraction of the whole map, not of the wilderness, so it means the same thing at any
+    /// <see cref="WildernessShare"/>.
+    /// </summary>
+    /// HIDING FOR THIS BUILD
+    [HideInGenerator]
+    [Category("12 Wilderness")]
+    [Description("Share of counties that start as ruins — held by nobody, with the stones of whoever was there before still standing. Unlike wilderness these are scattered anywhere, including inside settled kingdoms. 0 means the world starts whole and ruins only ever happen in play.")]
+    public double RuinsShare { get; set; } = 0.0;
+
     // HIGHLY WIP //
 
     public enum FantasyRaceMode
@@ -2348,19 +2409,83 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Browsable(false)]
     public double PixelSize => (double)Height / WorldHeight;
 
-    // --- Province map. CK3's provinces.png and rivers.png are half the heightmap resolution
-    // (vanilla: heightmap 18432x9216, provinces 9216x4608). ---
-    //
-    // Half resolution is right, and it was checked: the shapes in game not matching this raster is
-    // not a resolution problem. CK3 draws land at *county* level, so the player sees the union of
-    // a county's baronies and never a barony on its own — which is why sea zones and impassable
-    // mountains, the two kinds with no county above them, are the two kinds that do line up.
-    // The ragged shapes come from Titles.Cluster, not from here.
+    /// <summary>
+    /// How many heightmap pixels go to one province pixel, on each axis — and therefore to one
+    /// world unit, because camera space *is* province space.
+    ///
+    /// This is the single knob that decides how much world a given heightmap becomes, and it used
+    /// to be welded at vanilla's 2. Vanilla is the outlier: measured 2026-08-28, every total
+    /// conversion on this machine ships 1 — AGOT 9216x6144 source and provinces, Elder Kings 2
+    /// 8256x5504, Legacy of Valyria 9216x6144. Only the base game spends four heightmap pixels per
+    /// world unit.
+    ///
+    /// Welding it at 2 conflated two independent things: how much terrain detail a map has, and how
+    /// big its world is. A 9216-wide heightmap became a 4608-wide world at MapScale 0.5 — which is
+    /// the map size where land sag was measured at 1.8x vanilla's p90, because a smaller world
+    /// resamples the same relief into fewer pixels and steepens every slope by 1/MapScale. The same
+    /// file at 1 is a 9216-wide world: vanilla's province map exactly, MapScale 1, no steepening,
+    /// and every correction in CompatibilityWriter reduced to a no-op.
+    ///
+    /// The default is 1: spend the whole heightmap on world size. A 9216-wide source then becomes a
+    /// 9216-wide world, which is vanilla's province map exactly — MapScale 1, no slope steepening,
+    /// and every correction in CompatibilityWriter inert. The barony count that comes with it is
+    /// vanilla's too, and <see cref="CountyScale"/> is what trims that rather than this.
+    ///
+    /// <b>Whole numbers only, and that is a constraint rather than a preference.</b>
+    /// <see cref="MapGen.Raster.ProvinceBlock"/> is the single definition of how the two rasters line
+    /// up, and it box-averages an integer number of heightmap pixels per province pixel. A
+    /// fractional ratio does not round there, it truncates: 1.25 on a 9216 heightmap gives a 7372
+    /// province map, <c>9216 / 7372</c> is 1 in integer arithmetic, and the whole partition is then
+    /// derived from the top-left 7372x3686 *crop* while the engine stretches the full heightmap over
+    /// the world. Terrain slides left of its own borders, further the further right you look. That
+    /// shipped once, on 2026-08-28, and <see cref="EffectiveProvinceDownscale"/> is why it cannot
+    /// again. Fractional ratios need ProvinceBlock to resample rather than block-average first.
+    ///
+    /// Not a claim that the province raster should match the heightmap shape for shape. That was
+    /// checked separately and remains true: CK3 draws land at *county* level, so the player sees the
+    /// union of a county's baronies and never a barony on its own — which is why sea zones and
+    /// impassable mountains, the two kinds with no county above them, are the two kinds that do line
+    /// up. Ragged shapes come from Titles.Cluster, not from here.
+    /// </summary>
+    [Category("01 General")]
+    [Description("Heightmap pixels per province pixel, and so per world unit. 1 (the default) makes the world as large as the heightmap allows — what AGOT and Elder Kings 2 ship — and on a 9216-wide heightmap gives vanilla's own province map. 2 is vanilla's ratio: the finest terrain per county, but half the world and steeper slopes. Whole numbers only; anything else is rounded, because the raster sampler averages a whole number of heightmap pixels per province pixel. Use CountyScale, not this, to trim the barony count.")]
+    public double ProvinceDownscale { get; set; } = 1.0;
+
+    /// <summary>
+    /// <see cref="ProvinceDownscale"/> as actually applied: a whole number, never below 1, and never
+    /// small enough to take the province raster past vanilla's own width.
+    ///
+    /// Rounded to nearest and then floored by the cap, so a value asked for is honoured where it can
+    /// be and only ever moves in the safe direction. Below 1 there is nothing to gain — a province
+    /// map larger than the heightmap upsamples detail that is not there — and the cap is
+    /// <c>ceil(Width / 9216)</c> because that is the smallest whole divisor that keeps the raster at
+    /// or under vanilla's.
+    ///
+    /// The cap is on the *divisor* rather than on the width so both axes move together. Capping
+    /// width alone would stretch the world's aspect away from the heightmap it was drawn from, which
+    /// is a silent CK3 failure rather than an error.
+    /// </summary>
     [Browsable(false)]
-    public int ProvinceWidth => Width / 2;
+    public int EffectiveProvinceDownscale => Math.Max(
+        Math.Max((int)Math.Round(Math.Max(ProvinceDownscale, 1.0)), 1),
+        (int)Math.Ceiling((double)Width / ReferenceProvinceWidth));
+
+    /// <summary>
+    /// Whether <see cref="EffectiveProvinceDownscale"/> had to move off what was asked for — the
+    /// build log says so, because the barony count and the world size both follow it.
+    /// </summary>
+    [Browsable(false)]
+    public bool ProvinceDownscaleAdjusted =>
+        Math.Abs(EffectiveProvinceDownscale - ProvinceDownscale) > 1e-9;
 
     [Browsable(false)]
-    public int ProvinceHeight => Height / 2;
+    public int ProvinceWidth => EvenDown(Width / EffectiveProvinceDownscale);
+
+    [Browsable(false)]
+    public int ProvinceHeight => EvenDown(Height / EffectiveProvinceDownscale);
+
+    /// <summary>Rounds down to even — the loader rejects odd raster dimensions.</summary>
+    private static int EvenDown(int v) => v - (v & 1);
 
     // --- Map scale ---
     //

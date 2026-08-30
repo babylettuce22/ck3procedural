@@ -399,10 +399,13 @@ public static partial class CompatibilityWriter
             : $$"""
 
                 	# The ladder scaled onto this map, because every zoom-step *index* in the game rides on
-                	# it — the two dozen *_VISIBLE_ZOOM_STEPS, MAX_PAN_TO_ZOOM_STEP, WATER_BORDERS_ZOOM_STEP,
-                	# the flat-map handoff. Left at vanilla's absolute heights on a smaller map, all of them
-                	# frame the wrong share of the zoom. The near end is floored so the camera cannot end up
-                	# inside the ground.
+                	# it — MAX_PAN_TO_ZOOM_STEP, WATER_BORDERS_ZOOM_STEP, the flat-map handoff. Left at
+                	# vanilla's absolute heights on a smaller map, all of them frame the wrong share of the
+                	# zoom. The near end is floored so the camera cannot end up inside the ground.
+                	#
+                	# The *_VISIBLE_ZOOM_STEPS ranges are the exception and are rewritten further down
+                	# instead: what they gate is fixed-size objects on fixed-size provinces, which want the
+                	# camera height held rather than the share of the map.
                 	ZOOM_STEPS = { {{string.Join(" ", ladder)}} }
                 	ZOOM_AUDIO_PARAMETER_SCALE = {{(VanillaZoomAudioScale / cfg.MapScale).ToString("F4", Invariant)}}
                 """;
@@ -421,6 +424,11 @@ public static partial class CompatibilityWriter
         // full length even though the max row only changes at its near end.
         string minTilt = string.Join(" ", VanillaMinTilt.Select(v => Math.Max(v - TiltWidening, MinTiltFloor)));
         string maxTilt = string.Join(" ", VanillaMaxTilt.Select(v => Math.Min(v + TiltWidening, MaxTiltCeiling)));
+
+        // Armies, holdings and banners, moved back onto the camera heights vanilla draws them at
+        // and then carried out to this map's handoff. Without this the bias buys 3D terrain that
+        // nothing stands on. Empty under VanillaCamera.
+        string entityBlocks = EntityVisibilityDefines(cfg, flatStep);
 
         ParadoxText.WriteBom(Path.Combine(dir, "zz_generated_graphics.txt"),
             $$"""
@@ -442,7 +450,7 @@ public static partial class CompatibilityWriter
               	ZOOM_STEPS_MIN_TILT = { {{minTilt}} }
               	ZOOM_STEPS_MAX_TILT = { {{maxTilt}} }
               }
-
+              {{entityBlocks}}
               """);
 
         if (cfg.VanillaCamera)
@@ -460,7 +468,7 @@ public static partial class CompatibilityWriter
             int shortfall = DetailShortfallSteps(cfg);
             int worldWidth = cfg.ProvinceWidth - 1;
             Console.WriteLine($"  camera: terrain LOD {LodOctaves(cfg):F2} octaves "
-                              + $"({worldWidth} world units / {FinestNodeWorldUnits:F0}-unit finest node, "
+                              + $"({worldWidth} world units / {FinestNodeWorldUnits(cfg):F0}-unit finest node, "
                               + $"vanilla 8.17); handoff bias {cfg.FlatMapHandoffBias:+0;-0;0} "
                               + (cfg.ScaleHandoffToDetail
                                   ? $"{shortfall:+0;-0;0} detail = {HandoffOffset(cfg):+0;-0;0} steps"
@@ -478,8 +486,22 @@ public static partial class CompatibilityWriter
         if (!cfg.VanillaCamera)
             Console.WriteLine($"  camera: zoom ladder scaled to {ladder[0]}..{ladder[^1]} world units "
                               + $"(vanilla {ZoomSteps[0]}..{ZoomSteps[^1]}), so every vanilla "
-                              + "zoom-step index — visibility ranges, pan-to, flat map — frames the "
+                              + "zoom-step index — pan-to, water borders, flat map — frames the "
                               + $"same share of the map it does there{(ladder[0] == MinNearZoomHeight ? "; near end floored" : "")}");
+
+        if (!cfg.VanillaCamera)
+        {
+            int unitCull = ShiftEntityStep(VanillaUnitCullStep, cfg, flatStep);
+            Console.WriteLine("  entities: zoom indices matched back onto vanilla's camera heights "
+                              + $"({EntityHeightMatchSteps(cfg):+0;-0;0} steps at the army cutoff), then "
+                              + $"{cfg.FlatMapHandoffBias:+0;-0;0} out to the handoff — army "
+                              + $"meshes fade to nothing by step {unitCull} ({ladder[unitCull]} world "
+                              + $"units, vanilla 15/787), banners to "
+                              + $"{ShiftEntityStep(VanillaUnitIconStep, cfg, flatStep)} (vanilla 16), "
+                              + $"holdings to {ShiftEntityStep(VanillaHoldingCullStep, cfg, flatStep)} "
+                              + $"(vanilla 8), flat map at {flatStep} (vanilla 21)");
+        }
+
         Console.WriteLine($"  surround: inner rect {innerRect} (vanilla 500.0 1000.0 500.0 3700.0)");
         Console.WriteLine($"  camera: tilt widened {TiltWidening} deg, "
                           + $"closest step {Math.Max(VanillaMinTilt[0] - TiltWidening, MinTiltFloor)}"
@@ -524,14 +546,30 @@ public static partial class CompatibilityWriter
         (ZoomSteps.Length - 1) * Math.Log(2) / Math.Log((double)ZoomSteps[^1] / ZoomSteps[0]);
 
     /// <summary>
-    /// The world-unit size of the finest terrain node the engine will render, on every map size.
+    /// The world-unit size of the finest terrain node the engine will render.
     ///
-    /// Not a choice and not scalable: heightmap pixels per world unit is invariant at 2, a node
-    /// carries a fixed vertex count, and the engine stops refining once that lands one vertex on
-    /// each texel. Measured in game as <c>NodeScale 256</c> — see <see cref="ScaledZoomSteps"/>,
-    /// which records the capture and the wrong theory it replaced.
+    /// A node carries a fixed vertex count and the engine stops refining once that lands one vertex
+    /// on each texel, so the node's size in *texels* is fixed and its size in world units is that
+    /// divided by the texels a world unit has. Measured in game as <c>NodeScale 256</c> at vanilla's
+    /// two heightmap pixels per world unit, which is where the 32 comes from — see
+    /// <see cref="ScaledZoomSteps"/>, which records the capture and the wrong theory it replaced.
+    ///
+    /// It used to be a constant, on the reasoning that heightmap pixels per world unit was invariant
+    /// at 2. <see cref="Config.MapConfig.ProvinceDownscale"/> is exactly that quantity and is now a
+    /// setting, so the constant became false the moment it moved off 2: fewer texels per world unit
+    /// is a coarser floor on terrain, proportionally.
+    ///
+    /// Vanilla's ratio still gives vanilla's 32. The one thing this does not model is packer tile
+    /// size, which also sets texels per node and which the packer picks from heightmap width — so
+    /// treat this as the ratio-only correction rather than a full LOD model. It feeds
+    /// <see cref="LodOctaves"/>, which is reporting, and <see cref="DetailShortfallSteps"/>, which is
+    /// off by default.
     /// </summary>
-    private const double FinestNodeWorldUnits = 32.0;
+    private static double FinestNodeWorldUnits(Config.MapConfig cfg)
+        => 32.0 * VanillaHeightmapPixelsPerWorldUnit / cfg.EffectiveProvinceDownscale;
+
+    /// <summary>Vanilla's heightmap-to-province ratio: 18432 wide over a 9216-wide province map.</summary>
+    private const double VanillaHeightmapPixelsPerWorldUnit = 2.0;
 
     /// <summary>
     /// Floor on the handoff step, so that a very small <see cref="Config.MapConfig.Width"/> cannot
@@ -591,7 +629,347 @@ public static partial class CompatibilityWriter
     /// ratio against vanilla, not from this.
     /// </summary>
     internal static double LodOctaves(Config.MapConfig cfg)
-        => Math.Log2((cfg.ProvinceWidth - 1) / FinestNodeWorldUnits);
+        => Math.Log2((cfg.ProvinceWidth - 1) / FinestNodeWorldUnits(cfg));
+
+    // -------------------------------------------------------------------------------------
+    // Map entity visibility
+    //
+    // Everything below exists because the scaled ladder is right for terrain and wrong for
+    // everything standing on it, and those two have to be corrected separately.
+    //
+    // Terrain is drawn from a quadtree that scales with the map, so a zoom-step *index* is the
+    // meaningful unit there and ScaledZoomSteps moves the heights to keep it meaningful. Armies,
+    // holdings, forts and banners are not: they are fixed-size objects sitting on provinces that
+    // are also a fixed size, because BaronyPixels is set from CountyScale and not from MapScale.
+    // A half-width map does not have smaller counties, it has fewer of them.
+    //
+    // So an army mesh looks right at the camera height vanilla looks at it from, on any map. Once
+    // the ladder is pulled in by MapScale, the index that used to mean that height no longer does,
+    // and every index-gated entity fires while the camera is still 1/MapScale too close — which is
+    // the "armies vanish while I am still zoomed in" complaint. The fix is to move those indices
+    // back onto vanilla's heights.
+    //
+    // This is not the height-to-index conversion that ScaleZoomStep's docstring records as the
+    // mistake this area was built on. That one left the ladder at vanilla's heights and moved the
+    // handoff, which broke terrain. This leaves the ladder scaled and moves the entities, which is
+    // the other half of the same observation.
+    //
+    // AGOT is the check on all of it. Its province map is 9216 wide — vanilla's own width, only
+    // taller — so its world is vanilla-sized in camera units even though its heightmap is half
+    // vanilla's resolution. It keeps all 28 visibility ranges, both scale ramps and the handoff at
+    // vanilla's values, which is exactly what everything here reduces to at MapScale 1.
+    // -------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Vanilla's <c>NUnitGraphics.UNIT_SCALE_PER_ZOOM_STEP</c> and
+    /// <c>NTravelRouteGraphics.UNIT_SCALE_PER_ZOOM_STEP</c>, which are the same twenty numbers.
+    ///
+    /// The army mesh grows as the camera pulls back — 1.0 up to 2.8 at step 11, which is the engine
+    /// keeping a unit readable rather than letting it shrink with distance — and then falls to
+    /// nothing over four steps. The fall is exactly linear off the peak, which is why
+    /// <see cref="StretchedRamp"/> can rebuild the tail from the peak alone and still reproduce
+    /// these numbers byte for byte when nothing needs moving.
+    ///
+    /// Twenty entries against a thirty-five step ladder. The array is re-emitted at full ladder
+    /// length rather than trusting whatever the engine does past the end of a short one.
+    /// </summary>
+    private static readonly double[] VanillaUnitScaleRamp =
+    [
+        1.0, 1.0, 1.1, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4, 2.6, 2.8, 2.1, 1.4, 0.7,
+        0.0, 0.0, 0.0, 0.0, 0.0
+    ];
+
+    /// <summary>
+    /// Vanilla's <c>NHoldingGraphics.PROVINCE_GRAPICS_SCALE_PER_ZOOM_STEP</c> — the same curve for
+    /// the 3D holding models, peaking at step 7 and cut to nothing at 8. Vanilla's spelling of
+    /// GRAPICS, which has to be reproduced or the key is simply a different key.
+    /// </summary>
+    private static readonly double[] VanillaHoldingScaleRamp =
+    [
+        1.0, 1.0, 1.1, 1.2, 1.4, 1.6, 1.8, 2.0, 0.0
+    ];
+
+    /// <summary>
+    /// The step at which vanilla's army mesh reaches zero scale, and the anchor every other entity
+    /// index is moved against. One anchor for the whole table, so the shift is rigid and the
+    /// orderings vanilla authored — forts before straits before units — survive it.
+    /// </summary>
+    private const int VanillaUnitCullStep = 15;
+
+    /// <summary>Where vanilla stops drawing the army banner, and the holding model.</summary>
+    private const int VanillaUnitIconStep = 16;
+    private const int VanillaHoldingCullStep = 8;
+
+    /// <summary>
+    /// Every zoom-step range in vanilla's <c>NMapIcon</c>, verbatim.
+    ///
+    /// Copied whole rather than filtered down to the units, because they are a set: HOLDING hands
+    /// off to HOLDING_SMALL at 4/5 and UNIT to UNIT_NEUTRAL at 8, so moving one bound of a pair and
+    /// not the other does not shorten a range, it overlaps two icons or opens a gap where neither
+    /// draws. The same trap as the flat map and the map-table fades, and it is avoided the same
+    /// way: one offset applied to the whole table.
+    ///
+    /// COMBAT_PREDICITON is vanilla's typo and is reproduced. A zero lower bound means "from the
+    /// closest zoom" rather than a measured step, so it is left alone;
+    /// CONTRACT_AND_DOMICILE_FLAT_MAP is keyed to the flat map rather than to the entities, so it
+    /// travels with <see cref="ScaleZoomStep"/> instead, and its -1 is the format's "no upper
+    /// bound".
+    /// </summary>
+    private static readonly (string Key, int Min, int Max, bool FlatMapKeyed)[] VanillaMapIconRanges =
+    [
+        ("FORT_VISIBLE_ZOOM_STEPS", 0, 9, false),
+        ("STRAITS_VISIBLE_ZOOM_STEPS", 0, 12, false),
+        ("HOLDING_VISIBLE_ZOOM_STEPS", 0, 4, false),
+        ("HOLDING_SMALL_VISIBLE_ZOOM_STEPS", 5, 8, false),
+        ("REALM_CAPITAL_VISIBLE_ZOOM_STEPS", 0, 21, false),
+        ("TITLE_CAPITAL_VISIBLE_ZOOM_STEPS", 0, 16, false),
+        ("RULER_OBJECTIVE_ADVICE_ZOOM_STEPS", 0, 16, false),
+        ("DYNASTY_HOUSES_VISIBLE_ZOOM_STEPS", 5, 10, false),
+        ("RALLY_POINT_VISIBLE_ZOOM_STEPS", 0, 8, false),
+        ("UNIT_VISIBLE_ZOOM_STEPS", 0, 16, false),
+        ("UNIT_NEUTRAL_VISIBLE_ZOOM_STEPS", 0, 8, false),
+        ("COMBAT_VISIBLE_ZOOM_STEPS", 0, 16, false),
+        ("COMBAT_NEUTRAL_VISIBLE_ZOOM_STEPS", 0, 8, false),
+        ("COMBAT_PREDICITON_VISIBLE_ZOOM_STEPS", 0, 8, false),
+        ("COUNCIL_TASK_VISIBLE_ZOOM_STEPS", 0, 8, false),
+        ("PROVINCE_VISIBLE_ZOOM_STEPS", 0, 19, false),
+        ("COURT_LANGUAGE_VISIBLE_ZOOM_STEPS", 0, 19, false),
+        ("MAA_ORIGIN_VISIBLE_ZOOM_STEPS", 0, 19, false),
+        ("UNIQUE_BUILDINGS_VISIBLE_ZOOM_STEPS", 0, 19, false),
+        ("ACTIVITY_VISIBLE_ZOOM_STEPS", 0, 20, false),
+        ("CONTRACT_AND_DOMICILE_FLAT_MAP_VISIBLE_ZOOM_STEPS", 20, -1, true),
+        ("ADMIN_PROVINCE_VISIBLE_ZOOM_STEPS", 0, 22, false),
+        ("CONFEDERATIONS_VISIBLE_ZOOM_STEPS", 0, 19, false),
+        ("RADIANCE_VALUE_VISIBLE_ZOOM_STEPS", 0, 10, false),
+        ("GREAT_PROJECTS_VISIBLE_ZOOM_STEPS", 0, 19, false),
+        ("GREAT_BUILDINGS_VISIBLE_ZOOM_STEPS", 0, 19, false),
+        ("NATURAL_DISASTERS_VISIBLE_ZOOM_STEPS", 0, 19, false),
+        ("DETAILED_RAID_VISIBLE_ZOOM_STEPS", 0, 16, false)
+    ];
+
+    /// <summary>Vanilla's step for swapping a raid from its simple icon to the detailed one.</summary>
+    private const int VanillaDetailedRaidStep = 9;
+
+    /// <summary>
+    /// How many rungs a vanilla zoom-step index has to move to land back on the camera height it
+    /// means in vanilla, once <see cref="ScaledZoomSteps"/> has pulled the ladder in.
+    ///
+    /// Read off the scaled ladder by nearest height rather than computed from
+    /// <see cref="StepsPerOctave"/>, even though the two agree to a rung on a clean geometric
+    /// ladder. The scaled ladder is not quite geometric — <see cref="MinNearZoomHeight"/> floors
+    /// the near end and the monotonic pass nudges steps apart behind it — and a lookup is right
+    /// against the ladder actually shipped rather than against the idealisation of it.
+    ///
+    /// The error is measured in log space because the ladder is geometric: being 100 units off at
+    /// step 3 and at step 30 are not the same mistake.
+    ///
+    /// Signed both ways on purpose. Below vanilla size the camera is too close at every index and
+    /// this is positive; above it the camera is too far and this is negative, pulling entities in
+    /// so they still leave at the size vanilla drops them at. That is not the asymmetry
+    /// <see cref="DetailShortfallSteps"/> has, and for a good reason: the detail correction is a
+    /// judgement about how much terrain is worth showing, while this is a fact about where a
+    /// fixed-size object stops being legible.
+    ///
+    /// Reported rather than applied. The match is not one number — see <see cref="NearestByHeight"/>
+    /// — and this is the value it takes at the anchor, which is what the build log wants.
+    /// </summary>
+    internal static int EntityHeightMatchSteps(Config.MapConfig cfg)
+        => cfg.VanillaCamera
+            ? 0
+            : NearestByHeight(ScaledZoomSteps(cfg), ZoomSteps[VanillaUnitCullStep]) - VanillaUnitCullStep;
+
+    /// <summary>
+    /// The rung of <paramref name="ladder"/> standing closest to a camera height.
+    ///
+    /// The error is measured in log space because a ladder of camera heights is a ladder of ratios:
+    /// being 100 units off at step 3 and at step 30 are not the same mistake.
+    ///
+    /// This is looked up per index rather than turned into one offset, and that is the whole reason
+    /// this exists instead of arithmetic on <see cref="StepsPerOctave"/>. Vanilla's ladder is not
+    /// geometric. It climbs about 1.29x a step at the near end and about 1.09x from the teens
+    /// outward, so <see cref="StepsPerOctave"/>'s 5.20 is a global average that describes neither
+    /// end: a doubling costs nearer eight rungs where the handoff and the unit cutoff live. A rigid
+    /// shift built from that average is exact at one anchor and wrong everywhere else — at half
+    /// scale it puts step 8 on vanilla's step 0, which is a unit at 1.0 scale where vanilla would
+    /// draw it at 1.4. Matching each index on its own height has no anchor to be wrong away from.
+    ///
+    /// (<see cref="DetailShortfallSteps"/> does use the average, and on the same evidence looks like
+    /// it under-corrects by about a third. It is off by default and out of scope here, but it is
+    /// the same mistake this method exists to avoid.)
+    /// </summary>
+    private static int NearestByHeight(int[] ladder, double target)
+    {
+        int best = 0;
+        double bestErr = double.MaxValue;
+
+        for (int i = 0; i < ladder.Length; i++)
+        {
+            double err = Math.Abs(Math.Log(ladder[i] / target));
+            if (err < bestErr) { bestErr = err; best = i; }
+        }
+
+        return best;
+    }
+
+    /// <summary>
+    /// One entity zoom-step index, moved onto this map's ladder: first to the rung standing at the
+    /// camera height vanilla means by it, then out again by the author's
+    /// <see cref="Config.MapConfig.FlatMapHandoffBias"/>.
+    ///
+    /// The second half is the part that answers the original complaint. The bias exists to keep 3D
+    /// terrain alive past the step vanilla gives up at, and terrain with nothing standing on it is
+    /// not what it was asked for — leaving the entities behind opens a band of exactly the bias's
+    /// width where the map is detailed and empty. The cost is that armies are drawn from further
+    /// off than vanilla ever draws them, which is the same trade the bias already makes for
+    /// terrain, taken deliberately rather than by omission.
+    ///
+    /// <see cref="DetailShortfallSteps"/> is deliberately not added here. It shortens the terrain's
+    /// reach on a low-detail map, and entities are not what looks bad on one — but where it fires it
+    /// pulls the handoff in, and the clamp below follows it down.
+    ///
+    /// Two bounds are left alone. A zero lower bound is an anchor rather than a measurement — it
+    /// spells "from as close as the camera goes" — and moving it would blind the near end. A
+    /// negative one is the format's "no bound at all".
+    ///
+    /// Anything vanilla drew before its own flat map is held at or under this map's handoff. Past
+    /// that point the terrain is gone and the icon is drawing against the paper map, which is a
+    /// different piece of art with its own rules — so the one index vanilla puts past 21 keeps its
+    /// distance from the handoff instead of being matched by height, which on a small map would
+    /// throw it to the end of the ladder and read as "always".
+    ///
+    /// On a map small enough, several of these saturate at the handoff, and vanilla's staged reveal
+    /// — forts going first, then straits, then units — collapses into one step. That is not the
+    /// clamp failing. Screen clutter is set by camera height, not by map size, so a small map simply
+    /// runs out of world before it runs out of clutter: it is already flat at the height vanilla
+    /// would have started thinning icons at, and the flat map is doing the decluttering instead.
+    /// </summary>
+    private static int ShiftEntityStep(int step, Config.MapConfig cfg, int flatStep)
+    {
+        if (cfg.VanillaCamera || step <= 0) return step;
+
+        if (step > VanillaFlatMapZoomStep)
+            return Math.Clamp(flatStep + step - VanillaFlatMapZoomStep, 0, ZoomSteps.Length - 1);
+
+        int shifted = NearestByHeight(ScaledZoomSteps(cfg), ZoomSteps[step]) + cfg.FlatMapHandoffBias;
+
+        return Math.Clamp(Math.Min(shifted, flatStep), 0, ZoomSteps.Length - 1);
+    }
+
+    /// <summary>
+    /// One of vanilla's scale ramps, resampled onto this map's ladder and re-emitted at full length.
+    ///
+    /// The body of the curve is read back by height, one index at a time: whatever vanilla draws a
+    /// unit at from 300 world units up, this map draws it at from 300 world units up too, whichever
+    /// rungs those happen to be. No bias in that half — the bias is about terrain, and a unit seen
+    /// from a given height should be the size vanilla makes it.
+    ///
+    /// The tail is the half that moves. It is stretched to reach zero at <paramref name="zeroAt"/>,
+    /// which is where the bias has pushed the cutoff, so a unit fades out over more steps rather
+    /// than over the same steps later.
+    ///
+    /// Linear off the peak because vanilla's own tail is: 2.8 at step 11 falling to zero at 15 is
+    /// 2.1, 1.4, 0.7 to three digits. At MapScale 1 with no bias every lookup is the identity and
+    /// this returns the input array, which is the test worth having — vanilla's map regenerates
+    /// vanilla's define.
+    ///
+    /// The peak is held back far enough to leave vanilla's own taper length in front of the cutoff.
+    /// Height matching alone will push it past the cutoff on a small map — the height vanilla peaks
+    /// at can sit beyond the rung where this map has already gone flat — and a peak with no room to
+    /// fall is a unit at full size in one frame and gone in the next. Keeping the taper costs a
+    /// slightly early climb, which is the cheaper of the two.
+    /// </summary>
+    private static double[] ResampledRamp(double[] vanilla, Config.MapConfig cfg, int zeroAt, int length)
+    {
+        int peak = Array.IndexOf(vanilla, vanilla.Max());
+        double peakValue = vanilla[peak];
+
+        int taper = Array.FindIndex(vanilla, peak, v => v == 0.0) is var z && z >= 0
+            ? z - peak
+            : vanilla.Length - peak;
+
+        var scaled = ScaledZoomSteps(cfg);
+        int peakAt = Math.Clamp(NearestByHeight(scaled, ZoomSteps[peak]), 0, Math.Max(0, zeroAt - taper));
+        zeroAt = Math.Clamp(zeroAt, peakAt + 1, length);
+
+        var ramp = new double[length];
+
+        for (int i = 0; i < length; i++)
+            ramp[i] = i <= peakAt ? vanilla[Math.Clamp(NearestByHeight(ZoomSteps, scaled[i]), 0, peak)]
+                : i < zeroAt ? peakValue * (zeroAt - i) / (zeroAt - peakAt)
+                : 0.0;
+
+        return ramp;
+    }
+
+    /// <summary>
+    /// The four define blocks that decide what is drawn on the map at each rung, rebuilt onto this
+    /// map's ladder. Empty under <see cref="Config.MapConfig.VanillaCamera"/>, which leaves the
+    /// ladder alone and so has nothing to correct for.
+    ///
+    /// Four blocks and not one, for the reason the camera writer already records: a define key
+    /// written into the wrong block parses, merges and governs nothing.
+    /// </summary>
+    private static string EntityVisibilityDefines(Config.MapConfig cfg, int flatStep)
+    {
+        if (cfg.VanillaCamera) return "";
+
+        string Ramp(double[] vanillaRamp, int vanillaZero) => string.Join(" ",
+            ResampledRamp(vanillaRamp, cfg, ShiftEntityStep(vanillaZero, cfg, flatStep), ZoomSteps.Length)
+                .Select(v => v.ToString("0.###", Invariant)));
+
+        var b = new JominiBuilder();
+
+        b.Comment(
+            "Map entities ride the zoom ladder the same way the flat-map handoff does, but they are\n"
+            + "fixed-size objects on fixed-size provinces, so what they want held constant is the\n"
+            + "camera height they are seen from, not the step index. Every index below is vanilla's,\n"
+            + "moved to the rung of this map's ladder standing at the same height — "
+            + $"{EntityHeightMatchSteps(cfg):+0;-0;0} steps where the army\ncutoff is, though the ladder is "
+            + "not geometric so it is not one offset everywhere — and then\n"
+            + $"{cfg.FlatMapHandoffBias:+0;-0;0} further out to follow the terrain to this map's handoff at "
+            + $"step {flatStep}.");
+        b.Blank();
+
+        using (b.Block("NUnitGraphics"))
+            b.Inline("UNIT_SCALE_PER_ZOOM_STEP", Ramp(VanillaUnitScaleRamp, VanillaUnitCullStep));
+        b.Blank();
+
+        using (b.Block("NTravelRouteGraphics"))
+            b.Inline("UNIT_SCALE_PER_ZOOM_STEP", Ramp(VanillaUnitScaleRamp, VanillaUnitCullStep));
+        b.Blank();
+
+        using (b.Block("NHoldingGraphics"))
+            b.Inline("PROVINCE_GRAPICS_SCALE_PER_ZOOM_STEP",
+                Ramp(VanillaHoldingScaleRamp, VanillaHoldingCullStep));
+        b.Blank();
+
+        using (b.Block("NMapIcon"))
+        {
+            int prevVanillaMax = int.MinValue, prevMax = 0;
+
+            foreach (var (key, min, max, flatMapKeyed) in VanillaMapIconRanges)
+            {
+                int lo = flatMapKeyed ? ScaleZoomStep(min, cfg) : ShiftEntityStep(min, cfg, flatStep);
+                int hi = flatMapKeyed ? max : ShiftEntityStep(max, cfg, flatStep);
+
+                // Where vanilla hands one icon straight to the next — HOLDING stopping at 4 and
+                // HOLDING_SMALL starting at 5 — two independent height lookups can round apart and
+                // leave a rung with neither icon on it, or with both. Adjacency in the source is the
+                // statement being made, so it outranks the second lookup. Read off vanilla's own
+                // numbers rather than by key, so a pair added in a later patch is caught too.
+                if (!flatMapKeyed && min > 0 && min == prevVanillaMax + 1)
+                    lo = Math.Min(prevMax + 1, hi);
+
+                b.Inline(key, lo.ToString(Invariant), hi.ToString(Invariant));
+                (prevVanillaMax, prevMax) = (max, hi);
+            }
+
+            b.Field("DETAILED_RAID_SIMPLE_TO_DETAILED_ZOOM_STEP",
+                ShiftEntityStep(VanillaDetailedRaidStep, cfg, flatStep));
+        }
+
+        return "\n" + b;
+    }
 
     /// <summary>
     /// Re-declares every vanilla empire, kingdom, duchy and holy-order title as a landless

@@ -1,0 +1,102 @@
+﻿# Where ruination hooks into the running game.
+#
+# Every hook below APPENDS a custom on_action to a vanilla one rather than redefining the vanilla
+# one's effect. That is the single most important compatibility rule in CK3 modding: redefining
+# `on_county_occupied = { effect = ... }` would silently delete every other mod's — and several of
+# vanilla's own — work on that action. The wilderness set says the same thing at the top of its own
+# on_action file, and for the same reason.
+
+# --- Setup ---------------------------------------------------------------------------------------
+
+on_game_start_after_lobby = {
+	on_actions = {
+		gen_ruins_on_game_start
+	}
+}
+
+gen_ruins_on_game_start = {
+	effect = {
+		gen_ruins_setup_on_start_effect = yes
+	}
+}
+
+
+# --- The shocks ----------------------------------------------------------------------------------
+#
+# Three hooks, all of which hand us `scope:county` directly. This is the half of the design that
+# makes the yearly pulse affordable: counties are put on the watchlist by having something happen to
+# them, so the pulse walks a handful of entries rather than a thousand.
+#
+# on_raid_loot_delivered is deliberately NOT among them despite being the obvious raid hook — it
+# fires when the raider gets home and carries no county at all. on_siege_looting is the one that
+# knows which ground was stripped.
+
+# root is the occupant, scope:county is the county title.
+on_county_occupied = {
+	on_actions = {
+		gen_ruins_county_occupied
+	}
+}
+
+gen_ruins_county_occupied = {
+	effect = {
+		gen_ruin_shock_effect = { COUNTY = scope:county  POINTS = gen_ruin_shock_occupied }
+	}
+}
+
+# root is the occupant, scope:county is the county title for the besieged barony.
+on_siege_completion = {
+	on_actions = {
+		gen_ruins_siege_done
+	}
+}
+
+gen_ruins_siege_done = {
+	effect = {
+		gen_ruin_shock_effect = { COUNTY = scope:county  POINTS = gen_ruin_shock_siege }
+	}
+}
+
+# root is the sieging character, scope:county is the county title for the looted barony. The worst
+# of the three: an occupation is somebody else administering the place, a looting is the place being
+# taken apart for what it is worth.
+on_siege_looting = {
+	on_actions = {
+		gen_ruins_siege_looted
+	}
+}
+
+gen_ruins_siege_looted = {
+	effect = {
+		gen_ruin_shock_effect = { COUNTY = scope:county  POINTS = gen_ruin_shock_looted }
+	}
+}
+
+
+# --- The pulse -----------------------------------------------------------------------------------
+
+yearly_global_pulse = {
+	on_actions = {
+		gen_ruins_yearly
+	}
+}
+
+# One pass over the watchlist, and the ruins dummy's own housekeeping.
+#
+# `every_in_global_list` walks a list that gen_ruin_tick_county_effect can shorten from inside the
+# loop — a county back at zero takes itself off. That is the pattern vanilla's own game_start.txt
+# uses for rd_chars_needing_regencies, removals and all, so the iteration survives it.
+#
+# The cost of this is proportional to how much of the world is currently on fire, and is zero in a
+# peaceful decade. A sweep over every county on the map would cost the same every year forever, for
+# an event that fires perhaps twice a game.
+gen_ruins_yearly = {
+	effect = {
+		every_in_global_list = {
+			variable = gen_ruin_watchlist
+			gen_ruin_tick_county_effect = yes
+		}
+
+		gen_ruins_cleanup_effect = yes
+	}
+}

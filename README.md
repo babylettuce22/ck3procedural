@@ -231,3 +231,26 @@ vocabulary.
   them. `docs/` sketches what else CK3's script layer would let a generator invent — men-at-arms,
   buildings, innovations, dynasty legacies, succession laws, and a procedural magic system with its
   own rules per world — none of which is implemented.
+
+## Credits & Attributions
+
+Most third-party assets bundled with this tool are CC0 and oblige nothing. Three are **CC-BY-4.0**,
+which does: the author must be credited wherever the work is shared. Commercial use is allowed for
+all three. The full record — sources, licences, what each was used for and how it was modified —
+is in [`BaseFilesToCopy/Core/CREDITS.md`](BaseFilesToCopy/Core/CREDITS.md), which is copied into
+every mod this tool generates so the credit travels with the work rather than staying in the repo.
+
+> This work is based on "5 Piece Platemail - MetaHuman (rigged)"
+> (https://sketchfab.com/3d-models/5-piece-platemail-metahuman-rigged-d5a36fd5d69640b29bb7e92f72f61608)
+> by DevonLux (https://sketchfab.com/DevonLux) licensed under CC-BY-4.0
+> (http://creativecommons.org/licenses/by/4.0/)
+
+> This work is based on "Executioner Sword"
+> (https://sketchfab.com/3d-models/executioner-sword-de8e451fa6014d7e9ea3d5386f4893a0)
+> by Leon Steiner (https://sketchfab.com/Leon.Steiner) licensed under CC-BY-4.0
+> (http://creativecommons.org/licenses/by/4.0/)
+
+> This work is based on "Shoulder Armor"
+> (https://sketchfab.com/3d-models/shoulder-armor-053d84b1034c429ab476778022d64ff5)
+> by ilyaballz (https://sketchfab.com/ilyaballz) licensed under CC-BY-4.0
+> (http://creativecommons.org/licenses/by/4.0/)

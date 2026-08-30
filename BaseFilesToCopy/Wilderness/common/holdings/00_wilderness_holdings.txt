@@ -17,9 +17,16 @@ wilderness_holding = {
 		scree_slopes
 		killing_cold
 
-		# Not an obstacle — see the note in 00_wilderness_buildings.txt. Listed here so an event
-		# can place ruins on a county nobody has claimed yet.
-		ruins
+		# The two spawn rungs of the ruins ladder — see the note in 00_wilderness_buildings.txt.
+		# Listed here so a ruin can stand on a county nobody has claimed yet, which is the normal
+		# state of one: a county that falls is unclaimed by definition.
+		#
+		# `ruins_cleared` is deliberately absent. The wilderness dummy cannot build (its government
+		# has `buildings = no`), so the bottom rung would be unreachable here anyway, and a ruin is
+		# only ever cleared by somebody who has claimed the ground — at which point the holding is a
+		# settlement_holding and the list below applies.
+		ruins_large
+		ruins_small
 	}
 
 	# The dummy holder is immortal and blocks inheritance anyway, but saying it here means a
@@ -43,7 +50,11 @@ settlement_holding = {
 		scree_slopes_cleared
 		killing_cold
 		killing_cold_cleared
-		ruins
+
+		# All three rungs. A colony inherits whatever rung the ground was on when it was claimed and
+		# has to work down the rest of it.
+		ruins_large
+		ruins_small
 		ruins_cleared
 		colony_timber_works_01
 		colony_timber_works_02

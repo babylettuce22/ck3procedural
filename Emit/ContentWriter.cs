@@ -486,11 +486,6 @@ public static class ContentWriter
                 // above, because that is what splices the gene template both of them rely on.
                 CustomArmorStep.WriteAll(modDir, gameDir);
 
-                // The bone-attachment experiment, behind its own flag and depending on nothing
-                // above: it hangs a vanilla prop off a bone to establish whether pauldrons and
-                // similar garnish are reachable at all.
-                BoneAttachProbe.WriteAll(modDir, gameDir);
-
                 // Rigid pieces hung off portrait bones - pauldrons today, any slot later. After the
                 // armour forge because it garnishes what that emits, though it depends on none of it.
                 BonePieceStep.WriteAll(modDir, gameDir, [.. cultures.Cultures.Select(c => c.Key)]);
@@ -580,6 +575,11 @@ public static class ContentWriter
 
         List<string> sets = [StaticFileWriter.Core];
         if (cfg.EnableWilderness) sets.Add(StaticFileWriter.Wilderness);
+
+        // ANDed, never implied. Ruins hand counties to a dummy under wilderness_government and
+        // expect the colonisation flow to be the way back, so shipping them without the wilderness
+        // set would ship a system whose every reference dangles.
+        if (cfg.EnableWilderness && cfg.EnableRuins) sets.Add(StaticFileWriter.Ruins);
         if (cfg.EnableFantasyEthnicities && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly)
             sets.Add(StaticFileWriter.Fantasy);
         if (cfg.EnableSocieties) sets.Add(StaticFileWriter.Societies);
@@ -682,7 +682,7 @@ public static class ContentWriter
             jb.Blank();
         }
 
-        var wildCapital = wilderness.Counties.FirstOrDefault();
+        var wildCapital = wilderness.Unsettled.FirstOrDefault();
         if (wildCapital is not null)
         {
             jb.Comment("The wilderness realm. Titular: it exists so unsettled land has a name.");
@@ -692,6 +692,34 @@ public static class ContentWriter
             {
                 jb.Inline("color", "108", "104", "96");
                 jb.Field("capital", wildCapital.Key);
+                jb.Field("landless", "yes");
+                jb.Field("definite_form", "yes");
+                jb.Field("ruler_uses_title_name", "no");
+            }
+
+            jb.Blank();
+        }
+
+        // Written on the SYSTEM being on, not on any county being ruined at the start date. The
+        // usual setting seeds none: the world begins whole and counties fall during play, and the
+        // one thing script cannot do at runtime is mint a landed title — so it has to be here on
+        // day one, holder and all, waiting.
+        //
+        // Its capital is whichever county comes to hand, ruined or wild. A landless titular title's
+        // capital is a de jure pointer and nothing else; it is never anybody's seat, and vanilla
+        // does exactly this with head-of-faith titles like k_orthodox.
+        var ruinCapital = wilderness.Ruins.FirstOrDefault() ?? wildCapital;
+        if (wilderness.RuinsEnabled && ruinCapital is not null)
+        {
+            jb.Comment("The ruins. A second titular realm so fallen ground is not labelled wilderness.");
+            jb.Blank();
+
+            using (jb.Block(WildernessMap.RuinsTitleKey))
+            {
+                // Darker and browner than the wilderness grey: on a realm-coloured map mode the two
+                // read as the same kind of absence, which they are, without being the same realm.
+                jb.Inline("color", "82", "72", "62");
+                jb.Field("capital", ruinCapital.Key);
                 jb.Field("landless", "yes");
                 jb.Field("definite_form", "yes");
                 jb.Field("ruler_uses_title_name", "no");
@@ -798,12 +826,16 @@ public static class ContentWriter
             // both landless and both invisible to Titles.Flatten:
             //
             //   * one duchy-tier title per faith with a head of faith;
-            //   * one kingdom-tier title, k_gen_wilderness, when there is any unsettled land.
+            //   * one kingdom-tier title, k_gen_wilderness, when there is any unsettled land;
+            //   * a second, k_gen_ruins, whenever the ruins system ships — including on a world
+            //     that starts with no ruined county at all, which is the default.
             //
             // Distinct rather than a plain count, because two faiths may name the same head and the
             // database keeps one title either way.
             Empires = all.Count(t => t.Tier == "e"),
-            Kingdoms = all.Count(t => t.Tier == "k") + (wilderness.Count > 0 ? 1 : 0),
+            Kingdoms = all.Count(t => t.Tier == "k")
+                     + (wilderness.Unsettled.Any() ? 1 : 0)
+                     + (wilderness.RuinsEnabled && wilderness.Counties.Any() ? 1 : 0),
             Duchies = all.Count(t => t.Tier == "d") + faithHeads,
             LandlessDuchies = faithHeads,
             Counties = counties.Count,

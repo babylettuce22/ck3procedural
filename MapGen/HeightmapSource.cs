@@ -593,6 +593,17 @@ public static class HeightmapSource
         Console.WriteLine($"Heightmap {Path.GetFileName(image.Path)}: {cfg.Width}x{cfg.Height}, " +
                           $"provinces {cfg.ProvinceWidth}x{cfg.ProvinceHeight}, " +
                           $"climate grid {cfg.WorldWidth}x{cfg.WorldHeight}");
+
+        // The ratio decides world size, barony count and how far the camera has to be corrected, so
+        // it is reported next to the two rasters it relates rather than left to be inferred. It is
+        // also the number that must stay whole — see MapConfig.ProvinceDownscale.
+        Console.WriteLine($"  scale: {cfg.EffectiveProvinceDownscale} heightmap px per world unit "
+                          + (cfg.ProvinceDownscaleAdjusted
+                              ? $"(asked {cfg.ProvinceDownscale:0.##}, rounded to a whole ratio"
+                                + (cfg.Width > MapConfig.ReferenceProvinceWidth * cfg.EffectiveProvinceDownscale
+                                    ? "" : "; capped at vanilla's province width") + "), "
+                              : "(vanilla 2), ")
+                          + $"world {cfg.ProvinceWidth - 1} units wide, MapScale {cfg.MapScale:F3}");
     }
 
     internal static float[] ToSimulationScale(ushort[] raw, MapConfig cfg)

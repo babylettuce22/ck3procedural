@@ -300,9 +300,14 @@ public sealed class HierarchyPlan
     /// land share and county scale.
     ///
     /// Invertible because barony area is fixed rather than barony count: the count is land pixels
-    /// over <see cref="MapConfig.BaronyPixels"/>, so the pixels needed follow directly, and the
-    /// heightmap is twice the province map on each axis. Returned at the current aspect ratio,
-    /// rounded to even numbers because the loader rejects odd ones.
+    /// over <see cref="MapConfig.BaronyPixels"/>, so the pixels needed follow directly, and
+    /// <see cref="MapConfig.ProvinceDownscale"/> converts province pixels back to heightmap ones.
+    /// Returned at the current aspect ratio, rounded to even numbers because the loader rejects odd
+    /// ones.
+    ///
+    /// The province raster is capped at vanilla's width, so a request past that cannot be bought
+    /// with a bigger heightmap — it is clamped before converting back, and the suggestion then says
+    /// the largest heightmap that still buys something.
     /// </summary>
     private (int Width, int Height)? Suggestion(MapConfig cfg, double landShare)
     {
@@ -315,8 +320,15 @@ public sealed class HierarchyPlan
         double provinceHeight = Math.Sqrt(provincePixels / aspect);
         double provinceWidth = provinceHeight * aspect;
 
-        int width = Even((int)Math.Round(provinceWidth * 2));
-        int height = Even((int)Math.Round(provinceHeight * 2));
+        if (provinceWidth > MapConfig.ReferenceProvinceWidth)
+        {
+            provinceHeight *= MapConfig.ReferenceProvinceWidth / provinceWidth;
+            provinceWidth = MapConfig.ReferenceProvinceWidth;
+        }
+
+        double divisor = cfg.EffectiveProvinceDownscale;
+        int width = Even((int)Math.Round(provinceWidth * divisor));
+        int height = Even((int)Math.Round(provinceHeight * divisor));
 
         return width <= cfg.Width && height <= cfg.Height ? null : (width, height);
 

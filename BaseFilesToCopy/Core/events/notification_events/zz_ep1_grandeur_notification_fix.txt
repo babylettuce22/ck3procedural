@@ -18,7 +18,14 @@
 # to court_grandeur_minimum_expected, which for a large realm sits well above what its starting
 # amenities support, so the value has years of travelling to do and toasts every day of it.
 #
-# This is vanilla's event verbatim apart from the added trigger line, so re-syncing it after a
+# Why the drift exists here at all, and why it is not a bug to be stamped out: this generator emits
+# court_grandeur_baseline_add of its own — 01_generated_wonders.txt at +3/+6/+8, and court relics
+# and thrones in 00_generated_artifact_modifiers.txt at +1 to +6. All of it is positive, so a court
+# holding any of it sits above what zz_court_grandeur_start.txt parks it at and rises toward its
+# real baseline over years. That rise is correct; a court with a famed throne has earned it. What
+# was wrong was narrating every single day of the journey.
+#
+# This is vanilla's event verbatim apart from the added trigger condition, so re-syncing it after a
 # patch is a diff of one file. Everything downstream of a genuine level change is unchanged.
 
 namespace = ep1_notifications
@@ -30,8 +37,20 @@ ep1_notifications.0001 = {
 	trigger = {
 		is_ai = no
 
-		# The missing branch. A fire where the level did not move is not news.
-		NOT = { scope:new_value = scope:old_value }
+		# The missing branch: a fire where the level did not move is not news.
+		#
+		# Written with two `>` rather than the obvious `NOT = { scope:new_value = scope:old_value }`,
+		# and that is the whole point of this line. Between two saved scopes `=` is ambiguous in
+		# Jomini — it is equally the syntax for entering a scope — so an equality test on two value
+		# scopes is not reliably read as a comparison, and the version that used it suppressed
+		# nothing at all. `>` carries no such ambiguity, and vanilla's own immediate block below
+		# compares these two scopes with exactly that operator, which is the proof it works on them.
+		#
+		# True only when the levels actually differ, which is the condition this event should fire on.
+		OR = {
+			scope:new_value > scope:old_value
+			scope:old_value > scope:new_value
+		}
 	}
 
 	immediate = {

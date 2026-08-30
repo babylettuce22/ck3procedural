@@ -26,6 +26,23 @@ public static class StaticFileWriter
     public const string Wilderness = "Wilderness";
 
     /// <summary>
+    /// County ruination: the decay counter, the collapse, and the discovery when the stones come
+    /// out again. Gated on <see cref="Config.MapConfig.EnableRuins"/> AND on
+    /// <see cref="Wilderness"/>, never on its own.
+    ///
+    /// It is a separate set rather than more files in <see cref="Wilderness"/> because it is a much
+    /// larger claim on a game than wilderness is: wilderness only ever says some ground was never
+    /// taken, while this can take ground away from a player who was holding it. That deserves its
+    /// own switch, and a switch is only honest if the files it governs can actually be withheld.
+    ///
+    /// It cannot stand alone. Everything here hands counties to a dummy under
+    /// <c>wilderness_government</c>, marks the ground with buildings declared in
+    /// <c>00_wilderness_buildings.txt</c>, and expects the colonisation flow to be the way back —
+    /// so without the wilderness set every file in it dangles.
+    /// </summary>
+    public const string Ruins = "Ruins";
+
+    /// <summary>
     /// The static half of the fantasy race system: the phenotype traits (including the visible
     /// Human trait), their assignment scripts, the long-lived races' fading, and the race trait
     /// icons. Gated on fantasy ethnicities being enabled, so a realistic map ships none of it —

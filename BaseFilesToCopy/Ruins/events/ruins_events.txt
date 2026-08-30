@@ -1,0 +1,481 @@
+﻿namespace = gen_ruins
+
+# Ruination, from the holder's side.
+#
+#   0001  The warning. Sent once, well before anything is lost.
+#   0010  The fall. This is the event that actually ruins the county.
+#   9000  The debug console for all of it.
+#
+# ---- Why the collapse is an event and not just an effect ----
+#
+# gen_ruin_county_effect could be called straight from the yearly tick and the county would fall
+# exactly the same way. It is fired through an event instead so that a window is on screen when it
+# happens. A county disappearing off a player's realm list with no notification is indistinguishable
+# from a bug, and the first thing anyone would do is go looking for one.
+#
+# ---- The scope every event here needs ----
+#
+#   scope:gen_ruin_target   the county. Saved by whatever fired the event, never rediscovered.
+#
+# The one exception is the debug hub, which falls back to the player's capital county when it was
+# opened from the Events tab rather than from a county. That is the same fallback shape
+# wilderness_colonization.0062 uses when it is fired without a colony.
+
+# =====================================================================================
+#  0001 — The warning
+# =====================================================================================
+#
+# Fires once per slide toward the threshold, gated by the `ruin_warned` variable in
+# gen_ruin_tick_county_effect. The county is not lost at this point and the event says so: there is
+# a year or more of margin left, and raising control is what spends it.
+#
+# No option that fixes anything. A button here that restored control would make the whole mechanic
+# a formality — the fix is the ordinary game, played in the ordinary way.
+
+gen_ruins.0001 = {
+	type = character_event
+	title = gen_ruins.0001.t
+	desc = gen_ruins.0001.desc
+	theme = realm
+	override_background = { reference = wilderness }
+
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+
+	# The debug panel's Events tab bakes a button for every shipped event and fires it at the player
+	# with nothing attached. Without this that button would open a window whose title read
+	# "[gen_ruin_target.GetName] Is Failing" with the name resolving to nothing — a half-rendered
+	# event is worse than no event, and "the button did nothing" is already documented behaviour for
+	# that tab. Use gen_ruins.9000 to reach this deliberately.
+	trigger = {
+		exists = scope:gen_ruin_target
+	}
+
+	option = {
+		name = gen_ruins.0001.a
+		add_stress = minor_stress_impact_gain
+	}
+}
+
+
+# =====================================================================================
+#  0010 — The fall
+# =====================================================================================
+
+gen_ruins.0010 = {
+	type = character_event
+	title = gen_ruins.0010.t
+	desc = gen_ruins.0010.desc
+	theme = realm
+	override_background = { reference = wilderness }
+
+	left_portrait = {
+		character = root
+		animation = grief
+	}
+
+	# Same guard as 0001, and it matters more here: this event RUINS A COUNTY in its immediate. Fired
+	# from the Events tab with no target it would either half-render or, with a fallback, quietly
+	# destroy the player's capital past every veto. Declining is the only right answer. The debug
+	# console's "Collapse it now" is the deliberate way in.
+	trigger = {
+		exists = scope:gen_ruin_target
+	}
+
+	immediate = {
+		# Before the effect, not after. gen_ruin_county_effect revokes the title, so anything asking
+		# a question about the county's holder has to ask it here.
+		if = {
+			limit = { debug_only = yes }
+			debug_log = "Ruins: county collapsed at the decay threshold"
+		}
+
+		gen_ruin_county_effect = { COUNTY = scope:gen_ruin_target }
+	}
+
+	option = {
+		name = gen_ruins.0010.a
+		add_prestige = medium_prestige_loss
+	}
+}
+
+
+# =====================================================================================
+#  9000 — Debug console
+# =====================================================================================
+#
+# One event with many options rather than many events, and that is the point: the Events tab of the
+# generated debug panel bakes one button per event, so a dozen separate debug events would be a
+# dozen buttons in a list of sixty. This is one button that opens everything.
+#
+# Every rung of the mechanic is reachable from here without waiting for a war:
+#
+#   read      what the counter currently says, and whether the vetoes would allow a fall
+#   warn      jump to the warning point — the next tick sends the letter
+#   doom      jump to the threshold — the next tick collapses it
+#   tick      run a year's evaluation right now, instead of waiting for one
+#   fall      collapse it immediately, BYPASSING the vetoes
+#   stones    place ruins at either rung without collapsing, to test the discovery path on its own
+#   clear     take the stones back off, so the same county can be used again
+#   reset     forget everything and take the county off the watchlist
+#   aim       point the console at a different county and reopen it
+#
+# `fall` bypassing the vetoes is deliberate and is the single most useful thing here. The vetoes
+# exist so the yearly pulse cannot break a de jure title or unland a ruler, and testing what the
+# collapse LOOKS like should not require first finding a county that satisfies all of them.
+#
+# ---- How it picks a county ----
+#
+# Reached from the debug panel's Events tab, which — like every button on that tab — fires the event
+# at the player with nothing else attached. So it opens on the CAPITAL county and the `aim` options
+# at the bottom move it.
+#
+# It cannot open on whatever county you happen to be looking at, and that is an engine limit rather
+# than a decision. There is no global "selected province" datafunction: the county window's province
+# lives in `HoldingView`, which appears in exactly one of vanilla's 373 .gui files — its own — and is
+# supplied by the engine to that window alone. Any button that could aim at the open county has to
+# BE on that window, which is why one briefly was. The `aim` options are what replaced it.
+
+gen_ruins.9000 = {
+	type = character_event
+	title = gen_ruins.9000.t
+	desc = {
+		desc = gen_ruins.9000.desc_open
+
+		first_valid = {
+			triggered_desc = {
+				trigger = { NOT = { exists = scope:gen_ruin_target } }
+				desc = gen_ruins.9000.desc_no_county
+			}
+			triggered_desc = {
+				trigger = {
+					scope:gen_ruin_target = { gen_county_has_ruins_trigger = yes }
+				}
+				desc = gen_ruins.9000.desc_already_ruined
+			}
+			triggered_desc = {
+				trigger = {
+					scope:gen_ruin_target = { gen_ruin_can_fall_trigger = no }
+				}
+				desc = gen_ruins.9000.desc_vetoed
+			}
+			desc = gen_ruins.9000.desc_eligible
+		}
+
+		desc = gen_ruins.9000.desc_counter
+	}
+
+	theme = realm
+	override_background = { reference = council_chamber }
+
+	left_portrait = {
+		character = root
+		animation = disbelief
+	}
+
+	immediate = {
+		# The Events-tab route arrives with no county at all. Falling back to the capital means the
+		# button does something rather than opening a window with nothing in it — and the capital is
+		# a county every player certainly has.
+		if = {
+			limit = { NOT = { exists = scope:gen_ruin_target } }
+			capital_county ?= { save_scope_as = gen_ruin_target }
+		}
+
+		# Read by the description. A county that has never been touched by the counter has no
+		# variable at all, and a description that said "0" and one that said "never measured" would
+		# be telling the player two different things.
+		if = {
+			limit = { scope:gen_ruin_target ?= { has_variable = ruin_decay } }
+			scope:gen_ruin_target = {
+				save_scope_value_as = { name = gen_ruin_decay_now value = var:ruin_decay }
+			}
+		}
+		else = {
+			save_scope_value_as = { name = gen_ruin_decay_now value = 0 }
+		}
+
+		# The two lines of the ladder, lifted into scope values so the description can print them.
+		#
+		# A .yml cannot read a script value. `[gen_ruin_decay_threshold|0]` looks like it should
+		# work and does not — localisation resolves datafunctions and scopes, and a script value is
+		# neither, so the whole bracket renders as nothing. ck3-tiger calls this out as an unknown
+		# datafunction, which is the only reason it was caught; the game says nothing at all.
+		#
+		# Printing them rather than hardcoding "14" and "24" in the string is the point: the numbers
+		# live in 00_ruins_values.txt and this readout has to follow them when they are tuned.
+		save_scope_value_as = { name = gen_ruin_warn_at value = gen_ruin_decay_warning }
+		save_scope_value_as = { name = gen_ruin_fall_at value = gen_ruin_decay_threshold }
+	}
+
+	# ---- read ----
+	#
+	# No effect at all. The description above is the readout; this is the way out of the window
+	# without changing anything, and it is first because looking should be the default.
+	option = {
+		name = gen_ruins.9000.a_read
+	}
+
+	# ---- warn ----
+	option = {
+		name = gen_ruins.9000.b_warn
+		trigger = { exists = scope:gen_ruin_target }
+
+		gen_ruin_debug_set_effect = {
+			COUNTY = scope:gen_ruin_target
+			POINTS = gen_ruin_decay_warning
+		}
+
+		custom_tooltip = gen_ruins.9000.b_warn_tt
+	}
+
+	# ---- doom ----
+	option = {
+		name = gen_ruins.9000.c_doom
+		trigger = { exists = scope:gen_ruin_target }
+
+		gen_ruin_debug_set_effect = {
+			COUNTY = scope:gen_ruin_target
+			POINTS = gen_ruin_decay_threshold
+		}
+
+		custom_tooltip = gen_ruins.9000.c_doom_tt
+	}
+
+	# ---- tick ----
+	#
+	# Runs the same evaluation the yearly pulse runs, on this county only. Pressing `doom` and then
+	# `tick` is the whole collapse path end to end, through the real code, in two clicks.
+	option = {
+		name = gen_ruins.9000.d_tick
+		trigger = { exists = scope:gen_ruin_target }
+
+		scope:gen_ruin_target = { gen_ruin_tick_county_effect = yes }
+
+		custom_tooltip = gen_ruins.9000.d_tick_tt
+	}
+
+	# ---- fall ----
+	#
+	# Straight to the effect, past gen_ruin_can_fall_trigger. Shown even on a county the vetoes
+	# refuse, because that is exactly the case worth being able to look at.
+	option = {
+		name = gen_ruins.9000.e_fall
+		trigger = {
+			exists = scope:gen_ruin_target
+			scope:gen_ruin_target = { gen_county_has_ruins_trigger = no }
+		}
+
+		gen_ruin_county_effect = { COUNTY = scope:gen_ruin_target }
+
+		custom_tooltip = gen_ruins.9000.e_fall_tt
+	}
+
+	# ---- stones, large ----
+	#
+	# The discovery path without the collapse: a county that keeps its holder and its development but
+	# has ruins standing in it. That is not a state the mechanic ever produces on its own, and it is
+	# the fastest way to reach wilderness_ruins.0001.
+	#
+	# Two options rather than one because the RUNG is the thing being tested. From large the ladder
+	# is two construction jobs; from small it is one, and only the second of them fires the event.
+	option = {
+		name = gen_ruins.9000.f_large
+		trigger = {
+			exists = scope:gen_ruin_target
+			scope:gen_ruin_target = { gen_county_has_ruins_trigger = no }
+		}
+
+		# `add_building` directly rather than through gen_ruins_place_effect, because that effect is
+		# a 50/50 coin and the whole point of these two options is to force a KNOWN rung. Guarded
+		# the same way it is, so pressing either twice cannot stack a second building.
+		scope:gen_ruin_target = {
+			title_province ?= {
+				if = {
+					limit = {
+						NOR = {
+							has_building = ruins_large
+							has_building = ruins_small
+							has_building = ruins_cleared
+						}
+					}
+					add_building = ruins_large
+				}
+			}
+		}
+
+		custom_tooltip = gen_ruins.9000.f_large_tt
+	}
+
+	# ---- stones, small ----
+	option = {
+		name = gen_ruins.9000.f_small
+		trigger = {
+			exists = scope:gen_ruin_target
+			scope:gen_ruin_target = { gen_county_has_ruins_trigger = no }
+		}
+
+		scope:gen_ruin_target = {
+			title_province ?= {
+				if = {
+					limit = {
+						NOR = {
+							has_building = ruins_large
+							has_building = ruins_small
+							has_building = ruins_cleared
+						}
+					}
+					add_building = ruins_small
+				}
+			}
+		}
+
+		custom_tooltip = gen_ruins.9000.f_small_tt
+	}
+
+	# ---- clear ----
+	#
+	# Removes whichever rung is standing, directly. This is the ONE thing nothing else in the mod
+	# does — the whole design says a ruin may only leave through ruins_cleared's on_complete. Doing
+	# it here does not weaken that: it is what lets the same county be used for a second run without
+	# reloading, and it deliberately does NOT fire the discovery event, so the two paths stay
+	# distinguishable in the log and on screen.
+	option = {
+		name = gen_ruins.9000.g_clear
+		trigger = {
+			exists = scope:gen_ruin_target
+			scope:gen_ruin_target = { gen_county_has_ruins_trigger = yes }
+		}
+
+		scope:gen_ruin_target = {
+			title_province ?= {
+				# All three, unconditionally guarded. Only one can be standing, but which one is the
+				# question this option exists to stop having to ask.
+				if = { limit = { has_building = ruins_large }   remove_building = ruins_large }
+				if = { limit = { has_building = ruins_small }   remove_building = ruins_small }
+				if = { limit = { has_building = ruins_cleared } remove_building = ruins_cleared }
+			}
+
+			if = { limit = { has_variable = ruin_former_culture } remove_variable = ruin_former_culture }
+			if = { limit = { has_variable = ruin_former_faith }   remove_variable = ruin_former_faith }
+			if = { limit = { has_variable = ruin_fell_year }      remove_variable = ruin_fell_year }
+		}
+
+		custom_tooltip = gen_ruins.9000.g_clear_tt
+	}
+
+	# ---- reset ----
+	option = {
+		name = gen_ruins.9000.h_reset
+		trigger = { exists = scope:gen_ruin_target }
+
+		gen_ruin_forget_county_effect = { COUNTY = scope:gen_ruin_target }
+
+		custom_tooltip = gen_ruins.9000.h_reset_tt
+	}
+
+	# =================================================================================
+	#  Retargeting
+	# =================================================================================
+	#
+	# Each of these picks a different county and reopens the console on it. `save_scope_as` overwrites
+	# a scope of the same name, and an event inherits the scopes saved where it was fired from, so
+	# re-firing this same event is all the retarget needs to be.
+	#
+	# This is the ONLY way the console reaches a county other than the capital — see the note at the
+	# top of this event for why it cannot simply use whatever county is open. A button on the county
+	# window could, and one briefly existed, but it put a debug control on a vanilla window every
+	# player sees when the debug decision is the front door for everything else here.
+
+	# The county already furthest along toward falling. The single most useful aim: it finds whatever
+	# the real mechanic has been quietly working on while you were not looking.
+	option = {
+		name = gen_ruins.9000.i_worst
+		trigger = {
+			any_held_title = {
+				tier = tier_county
+				has_variable = ruin_decay
+			}
+		}
+
+		# Descending is the default, and highest decay is what "worst" means here, so no negation.
+		ordered_held_title = {
+			limit = {
+				tier = tier_county
+				has_variable = ruin_decay
+			}
+			order_by = var:ruin_decay
+			max = 1
+
+			save_scope_as = gen_ruin_target
+		}
+
+		trigger_event = gen_ruins.9000
+		custom_tooltip = gen_ruins.9000.i_worst_tt
+	}
+
+	# The county with least control, whether or not the counter has ever noticed it. What the mechanic
+	# WOULD start on, as against what it already has.
+	option = {
+		name = gen_ruins.9000.j_lowest
+		trigger = {
+			any_held_title = { tier = tier_county }
+		}
+
+		# `multiply = -1`, because an `ordered_` list sorts DESCENDING and there is no flag to turn
+		# that around. Written plainly as `order_by = county_control` this option silently picked the
+		# BEST-held county in the realm and called it the worst. Vanilla negates the same way to find
+		# its `least_developed_county` in 00_accolades_scripted_effects.txt.
+		ordered_held_title = {
+			limit = { tier = tier_county }
+			order_by = {
+				value = county_control
+				multiply = -1
+			}
+			max = 1
+
+			save_scope_as = gen_ruin_target
+		}
+
+		trigger_event = gen_ruins.9000
+		custom_tooltip = gen_ruins.9000.j_lowest_tt
+	}
+
+	# Somebody else's ruin, anywhere on the map — the seeded ones, which nobody holds. The only way
+	# to look at a county the generator ruined rather than one the game did.
+	option = {
+		name = gen_ruins.9000.k_seeded
+		trigger = {
+			exists = title:k_gen_ruins.holder
+			title:k_gen_ruins.holder = {
+				any_held_title = { tier = tier_county }
+			}
+		}
+
+		title:k_gen_ruins.holder = {
+			random_held_title = {
+				limit = { tier = tier_county }
+				save_scope_as = gen_ruin_target
+			}
+		}
+
+		trigger_event = gen_ruins.9000
+		custom_tooltip = gen_ruins.9000.k_seeded_tt
+	}
+
+	# Back to where it opens by default, so a retarget is not a one-way door.
+	option = {
+		name = gen_ruins.9000.l_capital
+		trigger = {
+			exists = capital_county
+			NOT = { scope:gen_ruin_target ?= capital_county }
+		}
+
+		capital_county = { save_scope_as = gen_ruin_target }
+
+		trigger_event = gen_ruins.9000
+		custom_tooltip = gen_ruins.9000.l_capital_tt
+	}
+}

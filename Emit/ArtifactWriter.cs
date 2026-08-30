@@ -164,13 +164,37 @@ public static class ArtifactWriter
                 {
                     // Feature selection reads scope:owner — vanilla saves it before every
                     // create_artifact for exactly this reason, and errors in the log without it.
-                    //
-                    // There is deliberately no `creator` here. The maker is set by passing
-                    // `creator = <character>` as a field of create_artifact; saving a scope of that
-                    // name does nothing, which is what the old `save_scope_as = creator` line was.
-                    // This generator does not model smiths, so the artifacts have no maker and say
-                    // so, rather than appearing to have one.
                     b.Field("save_scope_as", "owner");
+
+                    // THE MAKER IS THE HOLDER'S PARENT, and it is not only flavour.
+                    //
+                    // These artifacts had no creator at all, on the reasoning that this generator
+                    // models no smiths and should not invent one. That was honest and it broke the
+                    // portraits: every armour look is gated on `creator ?= { culture = ... }`, so a
+                    // piece with no creator matches nothing and a starting armour was never worn.
+                    // The debug event minted its own with `CREATOR = root` and worked, which is why
+                    // the fault looked like it lived in the modifiers.
+                    //
+                    // A parent is the right answer rather than a convenient one: they share the
+                    // holder's culture, so the gate lands on the same look either way; they are
+                    // dead by the start date, so nothing is claimed about a living character; and an
+                    // heirloom from one's father reads as inherited rather than as something the
+                    // holder had made this morning. Falls back to the holder for a character history
+                    // gave no parent, which is the old behaviour for exactly those.
+                    using (b.Block("if"))
+                    {
+                        using (b.Block("limit")) b.Field("exists", "father");
+                        using (b.Block("father")) b.Field("save_scope_as", "gen_maker");
+                    }
+
+                    using (b.Block("else_if"))
+                    {
+                        using (b.Block("limit")) b.Field("exists", "mother");
+                        using (b.Block("mother")) b.Field("save_scope_as", "gen_maker");
+                    }
+
+                    using (b.Block("else"))
+                        b.Field("save_scope_as", "gen_maker");
 
                     foreach (var art in arts)
                     {
@@ -205,6 +229,10 @@ public static class ArtifactWriter
                             b.Field("wealth", art.Wealth);
                             b.Field("quality", art.Quality);
                             b.Field("modifier", art.Modifier);
+
+                            // A field of create_artifact, not a saved scope: `save_scope_as =
+                            // creator` does nothing at all, which is what this used to be.
+                            b.Field("creator", "scope:gen_maker");
                             b.Field("save_scope_as", "gen_new_artifact");
 
                             // The heirlooms of a world are not allowed to crumble before the

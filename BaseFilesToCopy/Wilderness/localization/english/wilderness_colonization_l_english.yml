@@ -132,12 +132,21 @@
  building_type_killing_cold:0 "Killing Cold"
  building_type_killing_cold_desc:0 "Winters that are a cause of death rather than a season."
 
- building_ruins:0 "Ruins"
- building_ruins_desc:0 "Somebody built here once. Walls to the knee, a road going nowhere, and no story of what became of them."
- building_ruins_cleared:0 "Clear the Ruins"
- building_ruins_cleared_desc:0 "Pull down what still stands, cart off the good stone, and find out what the last lot left behind."
- building_type_ruins:0 "Ruins"
- building_type_ruins_desc:0 "The remains of a settlement that failed here before yours."
+ # Three rungs, and the names have to read as a ladder because that is what the holding view shows:
+ # the standing rung, and the next one as the thing you may build. So the upper two are NOUNS (what
+ # is there) and the lower two are VERBS (the work of getting past it) — and ruins_small is both,
+ # because it is a spawn state and an upgrade at once. It is named for the work, since a player who
+ # sees it in the build menu is being offered the job rather than told what is standing.
+ building_ruins_large:0 "Ruins"
+ building_ruins_large_desc:0 "Somebody built here once, and built well. Walls still standing above head height, a gate that no longer opens onto anything, and no story of what became of them."
+ building_ruins_small:0 "Pull Down the Walls"
+ building_ruins_small_desc:0 "Bring down what is still standing and cart the good stone away. It does not make the place yours, but it stops being a place people avoid at dusk."
+ building_ruins_cleared:0 "Clear the Foundations"
+ building_ruins_cleared_desc:0 "Lift the last of the footings out of the ground, and find out what the previous lot left underneath them."
+ building_type_ruins_large:0 "Ruins"
+ building_type_ruins_large_desc:0 "The remains of a settlement that failed here before yours, still largely standing."
+ building_type_ruins_small:0 "Old Foundations"
+ building_type_ruins_small_desc:0 "Little left above ground. Enough to know somebody tried, not enough to say who."
 
  # --- The colony ---------------------------------------------------------------------------
  building_settlement_01:0 "Colony"

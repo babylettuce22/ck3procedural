@@ -49,18 +49,89 @@ public sealed class WildernessMap
     /// </summary>
     public const string TitleKey = "k_gen_wilderness";
 
+    /// <summary>
+    /// The titular kingdom the SECOND dummy holds, for the counties that were settled once.
+    ///
+    /// Its whole reason to exist is the realm name. A realm is named after its holder's primary
+    /// title, so ruins seated on the wilderness dummy would read as "the Wilderness" on the map and
+    /// in every tooltip — which is the one thing a ruin is not. A second titular kingdom, and a
+    /// second character to hold it, is the cheapest way to make the distinction the player can see.
+    ///
+    /// The dummy behind it carries the SAME <c>wilderness</c> trait and the SAME
+    /// <c>wilderness_government</c> as the first. That is not laziness: roughly thirty triggers,
+    /// effects and one portrait modifier in BaseFilesToCopy/Wilderness ask for that trait or that
+    /// government's flag, and a ruins holder wearing anything else would fail every one of them —
+    /// starting with the portrait hide, which would put a face on the map. The trait file says as
+    /// much in its own header: a second dummy can be added "without any of this knowing".
+    ///
+    /// One consequence, and it is load-bearing: two characters now answer
+    /// <c>has_trait = wilderness</c>, so anything that has to find a SPECIFIC dummy must ask which
+    /// title it holds. <c>abandon_county_effect</c> does exactly that — see the note there.
+    /// </summary>
+    public const string RuinsTitleKey = "k_gen_ruins";
+
+    /// <summary>The dummy that holds the ruins. Same trait and government as the wilderness one.</summary>
+    public const string RuinsHolderId = "gen_ruins_holder";
+
     private readonly HashSet<Title> counties;
+    private readonly HashSet<Title> ruined;
 
-    internal WildernessMap(HashSet<Title> counties) => this.counties = counties;
+    internal WildernessMap(HashSet<Title> counties) : this(counties, [], false) { }
 
-    /// <summary>Is this county unsettled?</summary>
-    public bool Contains(Title county) => counties.Contains(county);
+    internal WildernessMap(HashSet<Title> counties, HashSet<Title> ruined, bool ruinsEnabled)
+    {
+        this.counties = counties;
+        this.ruined = ruined;
+        RuinsEnabled = ruinsEnabled;
+    }
 
-    /// <summary>How many counties were left unsettled.</summary>
-    public int Count => counties.Count;
+    /// <summary>
+    /// Whether the ruins system is shipping at all, which is NOT the same question as whether any
+    /// county starts ruined.
+    ///
+    /// <see cref="Config.MapConfig.RuinsShare"/> defaults to zero and that is the intended setting:
+    /// the world begins whole and ruins are something that happens in play. The dummy and its
+    /// titular title must still exist on day one, because a county that falls in year forty needs
+    /// somewhere to go and a landed title cannot be minted at runtime. So the writers ask this,
+    /// never <c>RuinCount &gt; 0</c>.
+    ///
+    /// It lives on the map rather than being read from config at each writer because
+    /// <see cref="Emit.WorldOverwrite"/> re-runs the title writer from a stored map long after the
+    /// config that produced it is out of scope.
+    /// </summary>
+    public bool RuinsEnabled { get; }
 
-    /// <summary>Every unsettled county, for the writers that have to enumerate them.</summary>
-    public IEnumerable<Title> Counties => counties;
+    /// <summary>
+    /// Is this county unsettled — either never settled, or settled once and lost?
+    ///
+    /// True for ruins as well as wilderness, and every caller but three wants it that way. A ruined
+    /// county has no ruler, no culture of its own, no government and no holdings, so cultures,
+    /// faiths, governments, realms and the history writers all have to leave it alone for exactly
+    /// the reasons they leave wilderness alone. Folding the two together here is what stops each of
+    /// those from growing a second case it would only get wrong.
+    ///
+    /// The three that do care — the two titular titles and the title history that seats counties on
+    /// one dummy or the other — read <see cref="Unsettled"/> and <see cref="Ruins"/> instead.
+    /// </summary>
+    public bool Contains(Title county) => counties.Contains(county) || ruined.Contains(county);
+
+    /// <summary>Was this county settled once? A subset of <see cref="Counties"/>.</summary>
+    public bool IsRuin(Title county) => ruined.Contains(county);
+
+    /// <summary>How many counties nobody holds, ruins included.</summary>
+    public int Count => counties.Count + ruined.Count;
+
+    /// <summary>How many of those were somebody's once.</summary>
+    public int RuinCount => ruined.Count;
+
+    /// <summary>Every county nobody holds, for the writers that have to enumerate them.</summary>
+    public IEnumerable<Title> Counties => counties.Concat(ruined);
+
+    /// <summary>Only the counties nobody has ever held. Seated on the wilderness dummy.</summary>
+    public IEnumerable<Title> Unsettled => counties;
+
+    /// <summary>Only the counties somebody held once. Seated on the ruins dummy.</summary>
+    public IEnumerable<Title> Ruins => ruined;
 
     /// <summary>Nothing is wilderness. Used when the feature is switched off.</summary>
     public static WildernessMap Empty => new([]);
@@ -145,6 +216,62 @@ public static class Wilderness
     {
         if (!cfg.EnableWilderness || counties.Count == 0) return WildernessMap.Empty;
 
+        var wild = Choose(counties, provinces, order, landCount, provinceTerrain, development,
+                          cfg, rng, azgaar);
+
+        return SeedRuins(wild, counties, cfg, rng);
+    }
+
+    /// <summary>
+    /// Scatters the counties that start already ruined, and folds them into the wilderness map.
+    ///
+    /// Drawn uniformly from everything the wilderness pass did NOT take, and that is the whole
+    /// difference between the two placements. Wilderness is scored and grown into regions because
+    /// unsettled land has to look like land nobody wanted; a ruin makes the opposite claim —
+    /// somebody wanted this ground enough to build on it — so it belongs wherever people are, and
+    /// the terrain bias, the edge bias, the realm-interior guard and the minimum clump size are all
+    /// deliberately absent. A lone ruined county inside a settled kingdom is the point of the
+    /// feature, where a lone WILD county there would read as a generation fault.
+    ///
+    /// Running here rather than as its own pipeline stage is what makes the rest of the generator
+    /// need no changes at all. A ruin is unsettled, so realms will not seat a ruler on it, world
+    /// centres will not pick it and the province writer gives it a wilderness holding — every one of
+    /// those for free, because they all ask <see cref="WildernessMap.Contains"/> and it answers yes.
+    /// The exclusions this would otherwise have to enumerate are the ones wilderness already gets.
+    /// </summary>
+    private static WildernessMap SeedRuins(WildernessMap wild, List<Title> counties, MapConfig cfg,
+        Rng rng)
+    {
+        if (!cfg.EnableRuins) return wild;
+
+        var ruined = new HashSet<Title>();
+
+        // Rounds DOWN, so a share too small to reach one county on this map seeds none rather than
+        // silently promoting itself to one. Unlike wilderness there is no floor of one: a world
+        // that starts whole is the default and is not a broken world, because the dummy and its
+        // title are written on EnableRuins alone and stand ready with nothing on them.
+        int target = (int)(cfg.RuinsShare * counties.Count);
+        var pool = counties.Where(c => !wild.Contains(c)).ToList();
+
+        for (int i = 0; i < target && pool.Count > 0; i++)
+        {
+            int at = rng.Int(0, pool.Count - 1);
+            ruined.Add(pool[at]);
+            pool.RemoveAt(at);
+        }
+
+        Console.WriteLine(ruined.Count == 0
+            ? "  ruins: none at the start date; the system ships and the holder stands empty"
+            : $"  ruins: {ruined.Count} counties scattered "
+              + $"({(double)ruined.Count / counties.Count:P1} of the map, target {cfg.RuinsShare:P0})");
+
+        return new WildernessMap([.. wild.Unsettled], ruined, ruinsEnabled: true);
+    }
+
+    private static WildernessMap Choose(List<Title> counties, ProvinceMap provinces, int[] order,
+        int landCount, TerrainClass[] provinceTerrain, Dictionary<Title, int> development,
+        MapConfig cfg, Rng rng, AzgaarImport? azgaar = null)
+    {
         if (azgaar is not null && FromExport(counties, azgaar) is { } imported) return imported;
 
         var (neighbours, centroid) = CountyGraph(counties, provinces, order, landCount);

@@ -1,0 +1,35 @@
+﻿l_english:
+
+ # Strings for wilderness_ruins.0001, the event that fires when somebody finishes clearing a ruin.
+ #
+ # They live in their own file rather than in wilderness_colonization_l_english.yml because the
+ # event they belong to is its own concern with its own seam — see the header of
+ # events/wilderness_ruins_events.txt — and because that colonisation file is large and edited
+ # often, so a merge there should never have to think about these.
+ #
+ # The description is assembled from an opening, one of three middles, and a close. The middle is
+ # chosen by which of the county's stored memories survived, so the same event can be a memory, a
+ # recent wound or a blank depending on whether anyone alive knows what stood here.
+ #
+ # scope:ruin_culture, scope:ruin_faith and scope:ruin_fell_year are lifted out of title variables
+ # by the event's `immediate` rather than being reached from here with `MakeScope.Var(...)`. That is
+ # deliberate: a mistyped datafunction in this file renders as nothing and is reported by neither
+ # the game nor ck3-tiger, while a bad scope over there is a script error with a line number.
+
+ wilderness_ruins.0001.t:0 "Under the Stones"
+
+ wilderness_ruins.0001.desc_open:0 "The last of the fallen masonry is levered aside and carted off, and for the first time in longer than anyone can say, [gen_ruins_county.GetName] shows bare ground where the walls used to be.\n"
+
+ # Ruined in play, with a culture and faith recorded on the title when it fell.
+ wilderness_ruins.0001.desc_remembered:0 "The work gang knew whose walls these were before they started. It was a [ruin_culture.GetName] holding, and the [ruin_faith.GetName] dead were buried facing the way their faith asks. Some of the older hands worked with their hats in their hands.\n"
+
+ # Ruined in play, but nothing was recorded of who held it — only when it went.
+ wilderness_ruins.0001.desc_recent:0 "It has not been empty since [ruin_fell_year|0], and it shows. There is still thatch under the collapse, and a hearthstone with the soot on it, and nobody in the work gang wants to be the one who says out loud which winter the smoke stopped.\n"
+
+ # Seeded at generation, or placed by a hand this system does not know about. Nobody remembers.
+ wilderness_ruins.0001.desc_forgotten:0 "Nobody can tell you who built here. The stones are dressed and squared by somebody who knew the trade, laid out to a plan, and set deep — and then abandoned so completely that not even a name for the place survived to argue about.\n"
+
+ wilderness_ruins.0001.desc_close:0 "\nThe ground is yours to build on now, whatever it was before."
+
+ wilderness_ruins.0001.a:0 "Good stone. Use it."
+ wilderness_ruins.0001.b:0 "Set the foundations back as they were, and build elsewhere."

@@ -1,0 +1,92 @@
+﻿l_english:
+
+ # ---- The second dummy and its realm ----
+ #
+ # Both keys are defined in C#, not here: WildernessMap.RuinsHolderId and
+ # WildernessMap.RuinsTitleKey in MapGen/Wilderness.cs. This file and the wilderness set's
+ # equivalent are the only two places where a static file names something the generator owns, so if
+ # either constant changes these strings stop resolving and the map shows the raw key.
+ #
+ # The holder is written into history/characters with name = "ruins_holder_name" and shows up
+ # wherever a lord's name would go on a ruined county.
+ ruins_holder_name:0 "Ruins"
+
+ k_gen_ruins:0 "Ruins"
+ k_gen_ruins_adj:0 "Ruined"
+
+ # ---- 0001, the warning ----
+ #
+ # Deliberately concrete about what is wrong and what fixes it. A warning that only says "things are
+ # bad" is a warning the player cannot act on, and the whole reason this event exists a year or two
+ # ahead of the collapse is so that acting on it is still possible.
+ gen_ruins.0001.t:0 "[gen_ruin_target.GetName] Is Failing"
+ gen_ruins.0001.desc:0 "The reports out of [gen_ruin_target.GetName] have stopped being about harvests and started being about who has left.\n\nThe fields nearest the road are being worked and the rest are not. Two of the mills are down and nobody has been sent to look at them. Your reeve there writes that he can raise a tally of what is owed or he can raise men to collect it, and he no longer believes he can do both.\n\nHe is not asking for money. He is telling you that if the next few years look like the last few, there will be nothing left there to hold — and that the thing which would fix it is your #V control#! over the county, not your generosity."
+ gen_ruins.0001.a:0 "Then it will not look like the last few."
+
+ # ---- 0010, the fall ----
+ gen_ruins.0010.t:0 "[gen_ruin_target.GetName] Is Gone"
+ gen_ruins.0010.desc:0 "There was no final calamity. That is somehow the worst of it.\n\nThe last families out of [gen_ruin_target.GetName] went the way the others had gone, in ones and twos, over a season, to kin in other counties or to whatever town would take them. Somebody pulled the good timber off the roofs before they left. The rest came down on its own.\n\nWhat is left is walls, and the wood is already going. In a generation the road in will be gone too, and it will be a place people warn each other about rather than a place anyone has been.\n\nIt is not yours any more. It is not anybody's."
+ gen_ruins.0010.a:0 "We should have gone ourselves, years ago."
+
+ # ---- 9000, the debug console ----
+ #
+ # Plain and literal on purpose. A debug readout that reads like flavour is a debug readout you have
+ # to go and check the script to interpret — the same rule the wilderness set's debug strings follow.
+ gen_ruins.9000.t:0 "DEBUG — Ruination"
+
+ gen_ruins.9000.desc_open:0 "Every rung of the ruination mechanic, reachable without waiting for a war.\n\n"
+
+ gen_ruins.9000.desc_no_county:0 "#X No county.#! Opened with nothing attached, and the fallback to your capital did not resolve either — so you are landless, or your capital is somewhere this cannot reach. Use one of the #V Aim at#! options below.\n"
+
+ gen_ruins.9000.desc_already_ruined:0 "Target: #V [gen_ruin_target.GetName]#!\n#EMP Ruins are already standing here.#! It cannot fall again, but it can be cleared — build #V ruins_cleared#! in the holding view and the discovery event fires when it completes. Use #V Take the stones back off#! to reset it for another run.\n"
+
+ gen_ruins.9000.desc_vetoed:0 "Target: #V [gen_ruin_target.GetName]#!\n#X The vetoes refuse this county.#! The yearly pulse will never ruin it however high the counter goes — it is somebody's capital, or their only county, or a de jure capital, or it carries a special building or a holy site. #V Collapse it now#! bypasses this on purpose.\n"
+
+ gen_ruins.9000.desc_eligible:0 "Target: #V [gen_ruin_target.GetName]#!\n#P The vetoes allow this county to fall.#! Reaching the threshold is all that is left.\n"
+
+ # All three are SCOPE VALUES saved by the event's immediate, not script values. A .yml cannot read
+ # a script value: the bracket renders as nothing and the game reports it nowhere. ck3-tiger is the
+ # only thing that catches it, as "unknown datafunction", and it did.
+ gen_ruins.9000.desc_counter:0 "\nDecay: #V [gen_ruin_decay_now|0]#! — warning at #V [gen_ruin_warn_at|0]#!, collapse at #V [gen_ruin_fall_at|0]#!."
+
+ gen_ruins.9000.a_read:0 "Just looking. Close."
+
+ gen_ruins.9000.b_warn:0 "Set the counter to the warning point"
+ gen_ruins.9000.b_warn_tt:0 "Sets decay to the warning value and puts the county on the watchlist. The letter is sent by the next yearly tick — press #V Run a year's tick now#! to see it immediately."
+
+ gen_ruins.9000.c_doom:0 "Set the counter to the collapse threshold"
+ gen_ruins.9000.c_doom_tt:0 "Sets decay to the threshold. The next yearly tick collapses the county — IF the vetoes allow it. On a vetoed county nothing will happen, which is the intended way to test that they hold."
+
+ gen_ruins.9000.d_tick:0 "Run a year's tick now"
+ gen_ruins.9000.d_tick_tt:0 "Runs exactly the evaluation the yearly pulse runs, on this county only: score the year, move the counter, send the warning or collapse if either line is crossed, then record this year's development for next year to compare against."
+
+ gen_ruins.9000.e_fall:0 "Collapse it now"
+ gen_ruins.9000.e_fall_tt:0 "Calls the collapse directly, BYPASSING the vetoes. The county is stripped, wiped to zero development, seeded with obstacles, given ruins, and handed to the ruins holder."
+
+ gen_ruins.9000.f_large:0 "Place LARGE ruins without collapsing it"
+ gen_ruins.9000.f_large_tt:0 "Adds #V ruins_large#! and changes nothing else — the county keeps its holder, its people and its development. Two construction jobs from cleared: #V ruins_small#! first, then #V ruins_cleared#!. Only the second fires the discovery event."
+
+ gen_ruins.9000.f_small:0 "Place SMALL ruins without collapsing it"
+ gen_ruins.9000.f_small_tt:0 "Adds #V ruins_small#! — the lower rung, most of the malus already gone. One construction job from cleared, so this is the fast way to reach the discovery event."
+
+ gen_ruins.9000.g_clear:0 "Take the stones back off"
+ gen_ruins.9000.g_clear_tt:0 "Removes whichever rung is standing and does NOT fire the discovery event, so this county can be used for another run. The only place in the mod that removes a ruin any way other than finishing #V ruins_cleared#!."
+
+ gen_ruins.9000.h_reset:0 "Forget this county"
+ gen_ruins.9000.h_reset_tt:0 "Clears the decay counter, the warning flag and the remembered development, and takes the county off the watchlist. What recovery looks like."
+
+ # ---- Retargeting ----
+ #
+ # How the console reaches a county other than the capital, now that there is no button on the
+ # county window. Each reopens this same event aimed somewhere else.
+ gen_ruins.9000.i_worst:0 "Aim at my most decayed county"
+ gen_ruins.9000.i_worst_tt:0 "Reopens this console on whichever county you hold has the highest decay counter — whatever the real mechanic has been working on while you were not looking."
+
+ gen_ruins.9000.j_lowest:0 "Aim at my lowest-control county"
+ gen_ruins.9000.j_lowest_tt:0 "Reopens this console on whichever county you hold has the least [county_control|E], counter or no counter. What the mechanic would start on, as against what it already has."
+
+ gen_ruins.9000.k_seeded:0 "Aim at a ruin somebody else lost"
+ gen_ruins.9000.k_seeded_tt:0 "Reopens this console on a random county held by the ruins holder — one the generator seeded, or one that fell earlier in this game. The only way to look at a ruin you did not make."
+
+ gen_ruins.9000.l_capital:0 "Aim back at my capital"
+ gen_ruins.9000.l_capital_tt:0 "Reopens this console on your capital county, where it opens by default."

@@ -1,4 +1,4 @@
-namespace Ck3MapGen.Emit;
+﻿namespace Ck3MapGen.Emit;
 
 using Ck3MapGen.Io;
 using System.IO;
@@ -55,7 +55,10 @@ public sealed record BonePiece(string Set, BoneSlot Slot, string Source, bool Mi
 /// metal is the only way to have metal. See <see cref="ArmorMask"/> for the measurement, and for why
 /// aiming paint at the real plates was built, tried, and judged worse.
 ///
-/// **The mechanism, established by <see cref="BoneAttachProbe"/> and confirmed in game.** An
+/// **The mechanism, established by a 2x2 probe and confirmed in game (2026-08-28).** The probe hung
+/// one vanilla prop off {a new gene, vanilla's <c>props_left</c>} x {<c>bn_r_prop</c>,
+/// <c>bn_r_shoulder</c>} and has been deleted now that it answered: shoulders work, a new gene of
+/// ours merges and renders, and <c>bn_h_head_mid</c> works too. An
 /// accessory may declare <c>node = "&lt;bone&gt;"</c> to parent a RIGID entity to a bone, the way
 /// every weapon hangs off <c>bn_r_prop</c>. It is not hand-only — <c>prophet_shield</c> uses
 /// <c>bn_h_head_mid</c> — it needs no animation hook provided the modifier group is
@@ -342,7 +345,7 @@ public static class BonePieceStep
         }
 
         int meshes = 0;
-        Walk(root, "");
+        Walk(root, null);
 
         if (meshes == 0)
         {
@@ -355,7 +358,7 @@ public static class BonePieceStep
 
         // The shape is the mesh node's PARENT, and its name is what a meshsettings block has to
         // match - so the parent is threaded down rather than looked up afterwards.
-        void Walk(PdxNode node, string parent)
+        void Walk(PdxNode node, PdxNode? renameTarget)
         {
             float[] p = node.Floats("p");
 
@@ -365,8 +368,31 @@ public static class BonePieceStep
 
                 var material = node.Children.FirstOrDefault(c => c.Name == "material");
 
+                // RENAME THE SHAPE to match the piece, rather than shipping whatever the modeller's
+                // object was called.
+                //
+                // Nothing forces this - the shape name only has to agree between the .mesh and the
+                // meshsettings block that names it, and since both come from here they cannot
+                // disagree. It is worth doing because **CK3's own error messages quote the SHAPE
+                // name**, and the modeller's is neither meaningful nor stable:
+                //
+                //   [E] UV-Set: 1 in mesh 'PAULDRON_ISO_Shape.003' ... has no valid triangle
+                //
+                // `PAULDRON_ISO_Shape.003` says nothing about which set or side it is, and the .003
+                // is Blender's duplicate counter, which moves whenever the object is copied. After
+                // this the same message names `gen_piece_pauldron2_shoulder_l` and needs no lookup.
+                //
+                // A shape name is a label: nothing inside the .mesh refers to it, and the mirrored
+                // copies of one source can safely share it because meshsettings is scoped to its own
+                // pdxmesh block.
+                string shape = piece.Shapes.Count == 0
+                    ? piece.Name
+                    : $"{piece.Name}_{piece.Shapes.Count}";
+
+                if (renameTarget is not null) renameTarget.Name = shape;
+
                 piece.Shapes.Add(new PieceShape(
-                    parent,
+                    shape,
                     material?.Prop("diff")?.Text,
                     material?.Prop("n")?.Text,
                     material?.Prop("spec")?.Text));
@@ -399,10 +425,11 @@ public static class BonePieceStep
                     // ta[i + 3] is handedness, deliberately untouched.
                 }
 
+                DropDegenerateUv2(node);
                 Rebound(node, p);
             }
 
-            foreach (var kid in node.Children) Walk(kid, node.Name);
+            foreach (var kid in node.Children) Walk(kid, node);
         }
     }
 
@@ -439,6 +466,54 @@ public static class BonePieceStep
         // Swapping any two corners of each triangle restores the winding a reflection inverted.
         int[] tri = node.Ints("tri");
         for (int i = 0; i + 2 < tri.Length; i += 3) (tri[i + 1], tri[i + 2]) = (tri[i + 2], tri[i + 1]);
+    }
+
+    /// <summary>
+    /// Removes a second UV set that carries no area, which the engine complains about on every load.
+    ///
+    /// **The symptom.** CK3 logs, once per affected mesh:
+    ///
+    /// <code>
+    /// [E][pdxassetutil.cpp:556]: UV-Set: 1 in mesh '...' has no valid triangle to use when
+    /// calculating texture streaming factor. Texture streaming needs a triangle with an area.
+    /// </code>
+    ///
+    /// **The cause.** A piece isolated from a larger garment inherits that garment's second UV
+    /// layer, and cutting it out can leave the layer present but empty — measured on the pauldron cut
+    /// from the plate cuirass, every one of its 6560 triangles had exactly zero UV1 area. The engine
+    /// still tries to derive a streaming factor from it and finds nothing to measure.
+    ///
+    /// **Why dropping it is right rather than synthesising one.** UV1 exists for pattern variations,
+    /// and a bone-attached piece is drawn with plain <c>portrait_attachment</c> — it declares no
+    /// variation and no mask, so nothing ever samples the set. The proof is in the other set: the
+    /// harvested pauldron ships with no UV1 at all and draws no such error. An empty set is worse
+    /// than an absent one.
+    ///
+    /// A UV1 that carries real area is left alone, so a piece authored for a variation keeps it.
+    /// </summary>
+    private static void DropDegenerateUv2(PdxNode node)
+    {
+        float[] uv = node.Floats("u1");
+        int[] tri = node.Ints("tri");
+
+        if (uv.Length == 0 || tri.Length < 3) return;
+
+        int verts = uv.Length / 2;
+
+        for (int t = 0; t + 2 < tri.Length; t += 3)
+        {
+            int a = tri[t], b = tri[t + 1], c = tri[t + 2];
+            if (a >= verts || b >= verts || c >= verts) continue;
+
+            // Twice the triangle's UV area; any one non-degenerate face is enough to keep the set.
+            double area = Math.Abs(
+                (uv[b * 2] - uv[a * 2]) * (uv[c * 2 + 1] - uv[a * 2 + 1]) -
+                (uv[c * 2] - uv[a * 2]) * (uv[b * 2 + 1] - uv[a * 2 + 1]));
+
+            if (area > 1e-12) return;
+        }
+
+        node.Props.RemoveAll(kv => kv.Key == "u1");
     }
 
     /// <summary>Recomputes whatever bounds a node declares, from the moved positions.</summary>
@@ -743,8 +818,8 @@ public static class BonePieceStep
     /// go, and a pauldron would silently evict a sword.
     ///
     /// Declaring wholly new genes in our own file merges rather than replaces — verified in game by
-    /// <see cref="BoneAttachProbe"/>. Redeclaring an EXISTING gene here would replace it and take
-    /// every vanilla accessory in it with it.
+    /// the probe described on this class. Redeclaring an EXISTING gene here would replace it and
+    /// take every vanilla accessory in it with it.
     /// </summary>
     private static void WriteGenes(string modDir, List<BonePiece> pieces)
     {
@@ -886,9 +961,16 @@ public static class BonePieceStep
                             // rather than emitted as a trigger nothing can satisfy.
                             if (cultures.Count == 0) continue;
 
+                            // Creator first, owner as a lower-weighted fallback - the same two-way
+                            // match the armour itself uses, and for the same reason: 62% of vanilla's
+                            // own create_artifact blocks set no creator, so a creator-only gate
+                            // leaves most of the game's artifacts unable to match anything. The
+                            // weights keep a piece with a known maker looking like itself; only a
+                            // maker-less one falls through to whoever is wearing it.
+                            foreach (bool byCreator in new[] { true, false })
                             using (b.Block("modifier"))
                             {
-                                b.Field("add", 1000);
+                                b.Field("add", byCreator ? 1000 : 600);
 
                                 using (b.Block("any_equipped_character_artifact"))
                                 {
@@ -897,14 +979,18 @@ public static class BonePieceStep
                                     // Written by hand because `?=` is ONE token and Block would put
                                     // the builder's " = " separator inside it, giving `creator ? =`.
                                     // The safe form matters for its own sake too: an artifact with
-                                    // no creator - anything made before history - would otherwise
-                                    // throw on every portrait that evaluates this.
-                                    // All of it raw, and the nesting counted by hand: Raw does not
-                                    // advance the builder's depth, so a Block opened after one would
-                                    // indent as though it were a sibling of `creator` rather than a
-                                    // child. Valid script either way, but unreadable, and it reads as
-                                    // a different trigger to anyone skimming it.
-                                    b.Raw($"{b.IndentAt(b.Depth)}creator ?= {{\n");
+                                    // no creator would otherwise throw on every portrait that
+                                    // evaluates this.
+                                    //
+                                    // The nesting is counted by hand as well: Raw does not advance
+                                    // the builder's depth, so a Block opened after one would indent
+                                    // as though it were a sibling of the link rather than a child.
+                                    //
+                                    // The owner link is `artifact_owner`, not `owner` - vanilla's
+                                    // artifact triggers use that name throughout.
+                                    string link = byCreator ? "creator" : "artifact_owner";
+
+                                    b.Raw($"{b.IndentAt(b.Depth)}{link} ?= {{\n");
                                     b.Raw($"{b.IndentAt(b.Depth + 1)}OR = {{\n");
 
                                     foreach (string culture in cultures)

@@ -1,0 +1,146 @@
+﻿namespace = wilderness_ruins
+
+# What was under the stones.
+#
+# ---- Why this file is in the Wilderness set and not the Ruins set ----
+#
+# Everything that CAUSES a ruin lives in BaseFilesToCopy/Ruins, behind its own switch. This does
+# not, and the reason is a hard constraint rather than a preference: the event is named by
+# `ruins_cleared`'s `on_complete` in common/buildings/00_wilderness_buildings.txt, and a building
+# cannot be conditional. If this file could be withheld, every map with ruins switched off would
+# load a building pointing at an event that does not exist.
+#
+# The seam that leaves is a clean one. The Ruins set owns ruination — the decay, the collapse, the
+# dummy that holds what falls. This owns the other end: somebody has finished digging, and something
+# is either there or it is not. That end belongs with the building, and the building belongs with
+# the colonisation flow that clears it.
+#
+# ---- What fires it ----
+#
+# One route only, and that is load-bearing. `ruins` carries `flag = obstacle` but NOT
+# `flag = clearable_obstacle`, so no pioneer and no council task can strip it; the single way for
+# the building to leave a province is somebody constructing `ruins_cleared` over it, and that runs
+# the on_complete that sends this. See the two-flag note at the top of the buildings file.
+#
+# ---- Scopes it is given ----
+#
+#   root                 the county holder — whoever paid for the digging
+#   scope:gen_ruins_site    the PROVINCE the ruins stood on
+#   scope:gen_ruins_county  the county
+#
+# Saved by the on_complete rather than rediscovered here, because a static event cannot know which
+# ruin fired it and naming the ground is the whole reason it can say more than "it".
+#
+# ---- What it reads, and what it does not ----
+#
+# A county ruined in play carries what it used to be, stamped on the title by
+# gen_ruin_county_effect in the Ruins set: `ruin_former_culture`, `ruin_former_faith`,
+# `ruin_fell_year`. Those are read here through `has_variable` guards and nothing more, so this
+# event is correct in all three worlds it can find itself in: a county ruined in play, a county
+# seeded ruined at generation (no variables, nobody remembers), and a map with the Ruins set absent
+# entirely (also no variables — the only way to have ruins there is somebody's console).
+#
+# The find itself is deliberately still thin. What is under the stones wants an artifact, a name and
+# a rarity, and those belong to the artifact writer the way the wonder capstone's did — see the same
+# note in Core/events/gen_wonder_events.txt. This is the hook and the framing, ready for it.
+
+# =====================================================================================
+#  0001 — The digging is finished
+# =====================================================================================
+
+wilderness_ruins.0001 = {
+	type = character_event
+	title = wilderness_ruins.0001.t
+	# Three mutually exclusive middles between a fixed opening and close, in order of how much the
+	# ground remembers. The bare `desc` at the end of the first_valid is the fallback — vanilla's
+	# own shape, and better than a `trigger = { always = yes }` arm because it cannot be reordered
+	# into being unreachable.
+	desc = {
+		desc = wilderness_ruins.0001.desc_open
+
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:ruin_culture }
+				desc = wilderness_ruins.0001.desc_remembered
+			}
+			triggered_desc = {
+				trigger = { exists = scope:ruin_fell_year }
+				desc = wilderness_ruins.0001.desc_recent
+			}
+			desc = wilderness_ruins.0001.desc_forgotten
+		}
+
+		desc = wilderness_ruins.0001.desc_close
+	}
+
+	theme = stewardship_domain_focus
+	override_background = { reference = wilderness }
+
+	left_portrait = {
+		character = root
+		animation = personality_content
+	}
+
+	# No is_triggered_only and no trigger block, matching gen_wonder_events.0001: the only thing
+	# that fires this is a building's on_complete, which cannot happen twice for one ruin.
+
+	immediate = {
+		# The memory is lifted into SCOPES here and read as scopes by the desc, rather than being
+		# reached through `MakeScope.Var(...)` chains in the localisation. Both work; only one of
+		# them fails loudly. A mistyped datafunction name in a .yml renders as nothing at all and is
+		# reported by neither the game nor ck3-tiger, while a bad scope here is a script error with
+		# a line number on it.
+		#
+		# `?=` throughout: every one of these is absent on a county nobody recorded — which is every
+		# county on a map seeded with ruins at generation, and every county at all when the Ruins
+		# set is not shipping.
+		scope:gen_ruins_county ?= {
+			var:ruin_former_culture ?= { save_scope_as = ruin_culture }
+			var:ruin_former_faith   ?= { save_scope_as = ruin_faith }
+
+			if = {
+				limit = { has_variable = ruin_fell_year }
+				save_scope_value_as = { name = ruin_fell_year value = var:ruin_fell_year }
+			}
+
+			# Read once. Without this a county ruined, cleared, ruined again and cleared again would
+			# report the FIRST collapse the second time — the variables outlive the stones.
+			if = { limit = { has_variable = ruin_former_culture } remove_variable = ruin_former_culture }
+			if = { limit = { has_variable = ruin_former_faith }   remove_variable = ruin_former_faith }
+			if = { limit = { has_variable = ruin_fell_year }      remove_variable = ruin_fell_year }
+		}
+	}
+
+	# ---- Take the stone ----
+	#
+	# Prestige rather than a modifier, for the reason the wonder capstone gives: the province already
+	# carries `build_gold_cost = -0.10` for as long as the ruins stand, and that discount has just
+	# been spent by clearing them. A standing bonus here would be paying for the same act twice.
+	option = {
+		name = wilderness_ruins.0001.a
+		add_prestige = minor_prestige_gain
+	}
+
+	# ---- Leave the foundations where they lie ----
+	#
+	# Piety, and only for a character whose faith has something to say about the dead. The trigger is
+	# what makes this an option rather than decoration: an option every character always takes for a
+	# free reward is not a choice, and this one is closed to anyone the ground means nothing to.
+	option = {
+		name = wilderness_ruins.0001.b
+
+		# `can_build_megaliths` rather than anything about graves: no doctrine parameter in 1.19
+		# concerns the dead in unconsecrated ground, and a faith that raises standing stones is the
+		# one that has a reason to leave somebody else's where they fell. It also happens to be the
+		# faith whose people would recognise the stonework — `ruins` uses the megalith icon.
+		trigger = {
+			OR = {
+				faith = { has_doctrine_parameter = can_build_megaliths }
+				has_trait = zealous
+				piety_level >= medium_piety_level
+			}
+		}
+
+		add_piety = minor_piety_gain
+	}
+}

@@ -1,0 +1,60 @@
+﻿# The numbers county ruination is tuned with. All in one file so a change is a change to one line
+# and not a hunt through effects.
+#
+# ---- Why a counter and not a threshold ----
+#
+# The obvious gate is "development below N", and it is wrong. Every tribal and nomadic realm starts
+# near zero development, so an absolute floor either condemns a third of the map on day one or is
+# set so low it never fires. The number is not the problem: the QUESTION is. A level says how rich a
+# county is; ruination is about whether it is dying, and those come apart hardest exactly where this
+# has to be right — a tribal county sitting at 2 forever is healthy, and one that fell from 9 to 2 is
+# not, and no threshold can tell them apart.
+#
+# So nothing here is a level. Every point is scored against a county's own recent past or against
+# conditions that mean the same thing at any development: control lost, ground occupied, plague in
+# the province, a population that hates whoever claims to hold it. A county has to hold several of
+# those for several consecutive years before anything happens, and one good year takes points back.
+
+# ---- The ladder ------------------------------------------------------------------------------
+#
+# At GEN_RUIN_DECAY_WARNING the holder is told, in as many words, that the county is failing. At
+# GEN_RUIN_DECAY_THRESHOLD it falls.
+#
+# The gap between them is the point of having two numbers. It is not a courtesy: a county that
+# vanishes with no warning is indistinguishable from a bug, and the player has to have had a year
+# or more in which the answer was still "raise the control and it stops".
+#
+# What these two numbers buy, at the gains below:
+#
+#   neglect alone, no war        +3 a year          warned in 5 years, falls in 8
+#   besieged and looted yearly   +11 a year         warned in 2, falls in 3
+#   one bad war, then peace      +12 once, then -2  never falls; back to nothing in six years
+#
+# The last row is the one worth checking after any retune. A county that is sacked once and then
+# left alone must recover on its own, or every long game ends with the map full of holes.
+gen_ruin_decay_threshold = 24
+gen_ruin_decay_warning = 14
+
+# What a year of being in a bad way is worth on its own, before anything the war hooks add. Small,
+# because this is the arm that fires on a county nobody is actively destroying — it is losing
+# control, or losing people, or getting poorer, and the answer to all three is that it takes years.
+gen_ruin_decay_yearly = 3
+
+# What a county at rest bleeds off each year. Small on purpose — this is the reason a county that
+# was sacked once in 1080 is not still carrying points for it in 1120, and it must not be big enough
+# to cancel an ongoing occupation on its own.
+gen_ruin_decay_recovery = 2
+
+# What a good year is worth on top of that: control back above half, or development actually rising.
+# Two of these plus the drift outruns anything short of an active occupation, which is the intended
+# shape — a county somebody is genuinely holding cannot be ground down by the counter.
+gen_ruin_decay_relief = 3
+
+# ---- What the world does to a county, outside the yearly tick -----------------------------------
+#
+# Stamped by the on_action hooks the moment the thing happens, rather than inferred a year later
+# from its aftermath. A siege that is lifted in March would be invisible to a December sweep, and it
+# should not be: somebody still burned the place.
+gen_ruin_shock_occupied = 4
+gen_ruin_shock_siege = 3
+gen_ruin_shock_looted = 5

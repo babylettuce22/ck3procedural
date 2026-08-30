@@ -34,7 +34,7 @@ public static class HistoryWriter
         CoatOfArmsWriter.WriteAll(modDir, prehistory);
         WriteCharacters(modDir, cfg, cultures, ethnicities, prehistory, rulers);
         WriteHeadOfFaithCharacters(modDir, cfg, faiths, cultures, ethnicities, counties);
-        WriteWildernessHolder(modDir, cfg, wild);
+        WriteWildernessHolder(modDir, cfg, wild, wilderness);
         WriteHouseRelationsOnAction(modDir, prehistory);
         WriteTitleHistory(modDir, cfg, empires, development, realms, governments, faiths, wilderness, wild);
         WriteDynastyLocalisation(modDir, prehistory);
@@ -544,7 +544,8 @@ public static class HistoryWriter
         }
     }
 
-    private static void WriteWildernessHolder(string modDir, MapConfig cfg, List<Title> wild)
+    private static void WriteWildernessHolder(string modDir, MapConfig cfg, List<Title> wild,
+        WildernessMap wilderness)
     {
         if (wild.Count == 0) return;
 
@@ -555,25 +556,48 @@ public static class HistoryWriter
         b.Comment("The holder of every unsettled county. See MapGen/Wilderness.cs.");
         b.Blank();
 
-        using (b.Block(WildernessMap.HolderId))
-        {
-            b.Quoted("name", "wilderness_holder_name");
-            b.Field("religion", MapGen.Faiths.UnsettledFaithKey);
-            b.Field("culture", MapGen.Cultures.UnsettledKey);
-            b.Field("disallow_random_traits", "yes");
-            b.Field("sexuality", "asexual");
+        Dummy(WildernessMap.HolderId, "wilderness_holder_name");
 
-            using (b.Block($"{Math.Max(1, cfg.StartYear - 1000)}.1.1"))
-            {
-                b.Field("birth", "yes");
-                b.Field("trait", "wilderness");
-                b.Field("trait", "immortal");
-            }
-        }
-
-        b.Blank();
+        // The second dummy, on the ruins system alone rather than on any county being ruined at the
+        // start date — the usual world starts whole and the first county falls in play, by which
+        // point a character cannot be given a birth in history any more.
+        //
+        // Identical to the first in every field, and that is the design rather than a shortcut: the
+        // `wilderness` trait is what makes it immortal, unkillable, unable to inherit, unable to be
+        // schemed against, and — through gfx/portraits/portrait_modifiers — faceless. Roughly thirty
+        // triggers and effects in BaseFilesToCopy/Wilderness find their dummy by that trait, and a
+        // ruins holder wearing a different one would fail all of them at once.
+        //
+        // What separates the two is the TITLE each holds, written in landed_titles, because a realm
+        // takes its name from its holder's primary title and "the Ruins" is the only difference a
+        // player ever needs to see. The cost of two characters answering `has_trait = wilderness` is
+        // that anything looking for one specific dummy has to say which title it wants; the one
+        // place that does is abandon_county_effect, and there is a note there saying so.
+        if (wilderness.RuinsEnabled) Dummy(WildernessMap.RuinsHolderId, "ruins_holder_name");
 
         ParadoxText.WriteBom(Path.Combine(dir, "01_generated_wilderness.txt"), b.ToString());
+        return;
+
+        void Dummy(string id, string nameKey)
+        {
+            using (b.Block(id))
+            {
+                b.Quoted("name", nameKey);
+                b.Field("religion", MapGen.Faiths.UnsettledFaithKey);
+                b.Field("culture", MapGen.Cultures.UnsettledKey);
+                b.Field("disallow_random_traits", "yes");
+                b.Field("sexuality", "asexual");
+
+                using (b.Block($"{Math.Max(1, cfg.StartYear - 1000)}.1.1"))
+                {
+                    b.Field("birth", "yes");
+                    b.Field("trait", "wilderness");
+                    b.Field("trait", "immortal");
+                }
+            }
+
+            b.Blank();
+        }
     }
 
     private static void WriteHouseRelationsOnAction(string modDir, PrehistoryMap prehistory)
@@ -653,16 +677,39 @@ public static class HistoryWriter
             }
         }
 
-        // The wilderness realm and its counties, all held by the same immortal placeholder.
-        var unsettled = wild.Count > 0 ? [WildernessMap.TitleKey, .. wild.Select(c => c.Key)] : new List<string>();
+        // The two unsettled realms and their counties, each held by its own immortal placeholder.
+        //
+        // Same government for both — the difference between them is the titular title at the head
+        // of each list, which is what a realm takes its name from. Ruined counties are unsettled in
+        // every other respect and are treated as such by everything upstream of here; this is the
+        // one writer that has to know which of the two they belong to.
+        //
+        // k_gen_ruins is seated whenever the system ships, even with no ruined county under it, so
+        // a county that falls in play has a holder to be handed to. A titular title cannot be minted
+        // at runtime, and neither can a character be given a birth in history after the game starts.
+        if (wild.Count > 0)
+        {
+            var unsettled = wild.Where(c => !wilderness.IsRuin(c)).Select(c => c.Key).ToList();
+            if (unsettled.Count > 0) unsettled.Insert(0, WildernessMap.TitleKey);
 
-        foreach (string key in unsettled)
-            using (b.Block(key))
-            using (b.Block(cfg.StartDate))
+            var ruined = wilderness.RuinsEnabled
+                ? [WildernessMap.RuinsTitleKey, .. wild.Where(wilderness.IsRuin).Select(c => c.Key)]
+                : new List<string>();
+
+            Seat(unsettled, WildernessMap.HolderId);
+            Seat(ruined, WildernessMap.RuinsHolderId);
+
+            void Seat(List<string> keys, string holder)
             {
-                b.Field("holder", WildernessMap.HolderId);
-                b.Field("government", "wilderness_government");
+                foreach (string key in keys)
+                    using (b.Block(key))
+                    using (b.Block(cfg.StartDate))
+                    {
+                        b.Field("holder", holder);
+                        b.Field("government", "wilderness_government");
+                    }
             }
+        }
 
         int hofIndex = 0;
         foreach (var faith in faiths.Faiths)

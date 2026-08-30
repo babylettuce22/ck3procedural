@@ -404,6 +404,7 @@ public static class GuiWriter
                     "WILDERNESS_PROMOTE_CITY_BUTTON", "promote_colony_to_city_interaction"),
                 Promotion("wilderness_promote_temple_button",
                     "WILDERNESS_PROMOTE_TEMPLE_BUTTON", "promote_colony_to_temple_interaction"));
+
     }
 
     private static GuiBuilder Action(string name, string text)
