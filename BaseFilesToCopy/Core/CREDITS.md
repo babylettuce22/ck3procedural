@@ -38,6 +38,24 @@ Credit line to reproduce verbatim wherever this is shared:
 > by DevonLux (https://sketchfab.com/DevonLux) licensed under CC-BY-4.0
 > (http://creativecommons.org/licenses/by/4.0/)
 
+### Medieval Shoulder Pad
+- author: ViniciusMello — https://sketchfab.com/ViniciusMello
+- source: https://sketchfab.com/3d-models/medieval-shoulder-pad-5376ef05f3d3448889517d9bd0ff8421
+- licence: CC-BY-4.0 — http://creativecommons.org/licenses/by/4.0/
+- commercial use: allowed
+- used for: `attachments/pauldron3_shoulder_l.mesh` — the left pauldron of the `pauldron3` set, at
+  398 vertices the lightest of the three. The right side is reflected from the left at generation
+  time rather than shipped separately.
+  Textures converted from the supplied 1024x1024 baseColor/normal/metallicRoughness maps into CK3's
+  layouts by `PieceTextures`, from the sources kept in `attachments/textures/pauldron3_*`.
+
+Credit line to reproduce verbatim wherever this is shared:
+
+> This work is based on "Medieval Shoulder Pad"
+> (https://sketchfab.com/3d-models/medieval-shoulder-pad-5376ef05f3d3448889517d9bd0ff8421)
+> by ViniciusMello (https://sketchfab.com/ViniciusMello) licensed under CC-BY-4.0
+> (http://creativecommons.org/licenses/by/4.0/)
+
 ### Shoulder Armor
 - author: ilyaballz — https://sketchfab.com/ilyaballz
 - source: https://sketchfab.com/3d-models/shoulder-armor-053d84b1034c429ab476778022d64ff5

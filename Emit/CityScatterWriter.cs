@@ -242,7 +242,7 @@ public static class CityScatterWriter
                 // is_county_capital alone). Everything else — a plain city or church barony — is
                 // never walled by vanilla's ladder, so its outskirts may come right up to it.
                 bool walled = holdings.GetValueOrDefault(pid) == "castle_holding"
-                              || ReferenceEquals(barony, county.Children[0]);
+                              || ReferenceEquals(barony, county.Capital);
                 double inner = (walled ? RingInnerWalled : RingInnerOpen) * ringScale;
                 double outer = RingOuter * ringScale;
 

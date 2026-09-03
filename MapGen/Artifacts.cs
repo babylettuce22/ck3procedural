@@ -694,7 +694,7 @@ public sealed class ArtifactMap
         int parentDeath = parent?.DeathDate is null ? 0 : YearOf(parent.DeathDate);
         bool hasLine = parent is not null && parentDeath > parentBirth + 20;
 
-        int capital = county.Children.FirstOrDefault(b => b.Tier == "b")?.ProvinceId ?? -1;
+        int capital = county.Capital?.ProvinceId ?? -1;
 
         if (rarity <= ArtifactRarity.Common || !hasLine)
         {
@@ -1113,13 +1113,13 @@ public sealed class ArtifactMap
             // re-rolled, so disallowing compounds simply moves that weight onto the epithet forms
             // instead of skewing the whole distribution toward whatever comes first.
             string candidate =
-                  roll < 8 && bare      ? culture.Language.Word(rng, 2, 3)
-                : roll < 26             ? $"The {culture.Language.Word(rng, 2, 3)} {noun}"
+                  roll < 8 && bare      ? culture.Tongue.Word(rng, 2, 3)
+                : roll < 26             ? $"The {culture.Tongue.Word(rng, 2, 3)} {noun}"
 
                 // Reads as the possession of a figure the world remembers, which is where most
                 // real legendary names come from — and it carries an English noun, so it lands
                 // even when the invented half means nothing to the reader.
-                : roll < 38             ? $"{culture.Language.Word(rng, 2, 3)}'s {noun}"
+                : roll < 38             ? $"{culture.Tongue.Word(rng, 2, 3)}'s {noun}"
 
                 : roll < 60 && compounds ? (bare ? Compound(rng) : $"The {Compound(rng)} {noun}")
                 : roll < 78             ? $"The {rng.Pick(Epithets)} {noun}"

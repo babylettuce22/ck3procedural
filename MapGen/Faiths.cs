@@ -109,7 +109,8 @@ public static class Faiths
     public static FaithMap Build(List<Title> empires, ProvinceMap provinces, int[] order,
         int landCount, TerrainClass[] provinceTerrain, Dictionary<Title, int> development,
         GovernmentMap governments, VanillaVocabulary vocab, WildernessMap wilderness,
-        MapConfig cfg, WorldCenterMap? worldCenters, Rng rng, AzgaarImport? azgaar = null)
+        MapConfig cfg, WorldCenterMap? worldCenters, Rng rng, AzgaarImport? azgaar = null,
+        CultureMap? cultures = null)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -216,7 +217,25 @@ public static class Faiths
             if (members.Count == 0) continue;
 
             double tribalShare = TribalShare(members.Select(i => counties[i]));
-            var religion = CreateReligion(religions.Count, tribalShare, vocab, usedNames, cfg, rng);
+
+            // The faith's words come from the tongue of the people who hold most of its ground —
+            // a liturgical register of it, a little archaic — rather than from a language nobody
+            // on the map speaks. A god's name should sound like the country that prays to him.
+            Language? liturgical = null;
+            if (cultures is not null)
+            {
+                var votes = new Dictionary<Heritage, int>();
+                foreach (int i in members)
+                    if (cultures.ByCounty.TryGetValue(counties[i], out var holder))
+                        votes[holder.Heritage] = votes.GetValueOrDefault(holder.Heritage) + 1;
+
+                if (votes.Count > 0)
+                    liturgical = votes.OrderByDescending(kv => kv.Value)
+                                      .ThenBy(kv => kv.Key.Key, StringComparer.Ordinal).First().Key.Language;
+            }
+
+            var religion = CreateReligion(religions.Count, tribalShare, vocab, usedNames, cfg, rng,
+                liturgical: liturgical);
             religions.Add(religion);
 
             // Determine Faith Distribution Archetype
@@ -724,9 +743,12 @@ public static class Faiths
     /// </param>
     private static Religion CreateReligion(int index, double tribalShare, VanillaVocabulary vocab,
         HashSet<string> usedNames, MapConfig cfg, Rng rng, bool? monotheistOverride = null,
-        string[]? theismPreference = null, string? keyOverride = null)
+        string[]? theismPreference = null, string? keyOverride = null, Language? liturgical = null)
     {
-        var language = Language.Create($"religion_tongue_{keyOverride ?? index.ToString()}", rng);
+        string tongueKey = $"religion_tongue_{keyOverride ?? index.ToString()}";
+        var language = liturgical is not null
+            ? liturgical.Derive(tongueKey, rng, 0.4)
+            : Language.Create(tongueKey, rng);
         string key = keyOverride ?? $"gen_religion_{index}";
 
         double settled = 1.0 - tribalShare;
@@ -809,7 +831,7 @@ public static class Faiths
         return new Religion
         {
             Key = key,
-            Name = Unique(language.Word(rng, 2, 3), usedNames),
+            Name = UniqueFrom(() => language.Word(rng, 2, 3), usedNames),
             Language = language,
             GraphicalFaith = vocab.GraphicalFaiths.Count > 0
                 ? rng.Pick(vocab.GraphicalFaiths)
@@ -994,7 +1016,7 @@ public static class Faiths
         return new Faith
         {
             Key = $"gen_faith_{index}",
-            Name = Unique(religion.Language.Word(rng, 2, 3), usedNames),
+            Name = UniqueFrom(() => religion.Language.Word(rng, 2, 3), usedNames),
             Religion = religion,
             Color = (rng.Decimal(0.1, 0.9), rng.Decimal(0.1, 0.9), rng.Decimal(0.1, 0.9)),
             Icon = vocab.FaithIcons.Count > 0 ? rng.Pick(vocab.FaithIcons) : "germanic",
@@ -1123,6 +1145,14 @@ public static class Faiths
         }
 
         return picked;
+    }
+
+    /// <summary>A fresh draw until one is free: a collision costs a re-roll, not a numeral on the map.</summary>
+    private static string UniqueFrom(Func<string> draw, HashSet<string> used)
+    {
+        string name = draw();
+        for (int attempt = 0; attempt < 16 && used.Contains(name); attempt++) name = draw();
+        return Unique(name, used);
     }
 
     private static string Unique(string name, HashSet<string> used)

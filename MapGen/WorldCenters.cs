@@ -190,7 +190,7 @@ public sealed class WorldCenterMap
         for (int i = 0; i < chosen.Count; i++)
         {
             var (county, score, _) = chosen[i];
-            var barony = county.Children.FirstOrDefault() ?? county;
+            var barony = county.Capital ?? county;
             var culture = cultures.For(county);
             var centerRng = new Rng(county.Index ^ 0x5C07 ^ (i * 7919));
 

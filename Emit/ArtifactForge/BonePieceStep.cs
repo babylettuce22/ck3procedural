@@ -142,6 +142,20 @@ public static class BonePieceStep
     /// </summary>
     private const string Rarity = "illustrious";
 
+    /// <summary>
+    /// The artifact slot a piece garnishes.
+    ///
+    /// Armour, because these ARE armour: a pauldron belongs to the harness a character is wearing,
+    /// not to whatever else they happen to be carrying. Without this the trigger matched any
+    /// equipped illustrious artifact of the right culture, so an illustrious sword grew shoulder
+    /// plates.
+    ///
+    /// A slot rather than the six armour type names, so a DLC adding a seventh needs no edit. If a
+    /// future slot wants its own garnish — a crown with a crest — this becomes per-piece rather than
+    /// a constant.
+    /// </summary>
+    private const string Slot = "armor";
+
     public static int WriteAll(string modDir, string gameDir, IReadOnlyList<string> cultureKeys)
     {
         if (!ArtifactForgeFlags.BonePieces) return 0;
@@ -974,6 +988,16 @@ public static class BonePieceStep
 
                                 using (b.Block("any_equipped_character_artifact"))
                                 {
+                                    // THE SLOT FILTER, and leaving it out was a real bug: without
+                                    // it the trigger asks only "is any equipped artifact illustrious
+                                    // and of the right culture", so an illustrious SWORD grew
+                                    // pauldrons. Garnish has to be tied to the thing it garnishes.
+                                    //
+                                    // The slot rather than the six armour types by name: it is one
+                                    // condition instead of an OR over six, and a DLC that adds a
+                                    // seventh armour type is covered without an edit here. Vanilla
+                                    // uses `artifact_slot_type` this way in 104 places.
+                                    b.Field("artifact_slot_type", Slot);
                                     b.Field("rarity", Rarity);
 
                                     // Written by hand because `?=` is ONE token and Block would put

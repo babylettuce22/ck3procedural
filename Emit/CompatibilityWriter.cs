@@ -1708,7 +1708,7 @@ public static partial class CompatibilityWriter
     /// continents.
     /// </summary>
     public static void WriteGeographicalRegions(string modDir, string gameDir, List<Title> empires,
-        CultureMap cultures)
+        CultureMap cultures, Dictionary<string, List<Title>>? regionMembers = null)
     {
         string source = Path.Combine(gameDir, "map_data", "geographical_regions");
         string destination = Path.Combine(modDir, "map_data", "geographical_regions");
@@ -1799,7 +1799,17 @@ public static partial class CompatibilityWriter
                     if (region.Graphical) b.Field("graphical", "yes");
                     if (region.Color is not null) b.Inline("color", region.Color);
 
-                    if (graphicalProvinces.TryGetValue(key, out var provinces))
+                    if (regionMembers is not null
+                        && regionMembers.TryGetValue(key, out var members) && members.Count > 0)
+                    {
+                        // A key some generator stage has given a real meaning on this map — the
+                        // steppe sub-regions, whose lists the situation is bound to — is written
+                        // with its counties rather than a placeholder.
+                        using (b.Block("counties"))
+                            for (int i = 0; i < members.Count; i += 10)
+                                b.Token(string.Join(' ', members.Skip(i).Take(10).Select(c => c.Key)));
+                    }
+                    else if (graphicalProvinces.TryGetValue(key, out var provinces))
                     {
                         // Twenty ids to a line. These lists run to thousands of entries and one id
                         // per line would make the file unreadable and enormous.

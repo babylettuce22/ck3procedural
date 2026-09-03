@@ -200,7 +200,7 @@ public static class BookmarkWriter
         foreach (var county in counties)
         {
             if (county.Children.Count == 0) continue;
-            int capitalProvId = county.Children[0].ProvinceId;
+            int capitalProvId = county.Capital!.ProvinceId;
 
             int provX = width / 2;
             int provY = height / 2;

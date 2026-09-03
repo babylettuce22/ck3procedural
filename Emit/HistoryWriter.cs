@@ -102,9 +102,8 @@ public static class HistoryWriter
             ? names[rng.Int(0, names.Count - 1)]
             : culture.Name;
 
-        string dynasty = culture.DynastyNames.Count > 0
-            ? culture.DynastyNames[rng.Int(0, culture.DynastyNames.Count - 1)]
-            : culture.Name;
+        // Allocated, not drawn: see Culture.DynastyNameFor for why a draw here named two houses alike.
+        string dynasty = culture.DynastyNameFor(county);
 
         return (first, dynasty);
     }

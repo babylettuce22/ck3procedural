@@ -83,7 +83,7 @@ public static class GovernmentWriter
     /// braces and the closing one has to be the *matching* one. Quotes are not tracked: nothing in
     /// this file puts a brace inside a string, and a comment cannot either.
     /// </summary>
-    private static string? Block(string text, string key)
+    internal static string? Block(string text, string key)
     {
         int start = text.IndexOf($"\n{key} = {{", StringComparison.Ordinal);
         if (start < 0 && text.StartsWith($"{key} = {{", StringComparison.Ordinal)) start = 0;

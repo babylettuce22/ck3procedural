@@ -410,6 +410,9 @@ public static class Retinues
     {
         var map = new RetinueMap { Innovations = new InnovationMap() };
 
+        // One roster, one name each: seventy regiments drawn from thirty tongues will collide eventually.
+        var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         // Nothing to build against. Happens on a stub install and, more usefully, would happen on
         // a future patch that moved the files — better a roster of vanilla units than a crash.
         if (vocab.MaaArchetypes.Count == 0)
@@ -505,7 +508,7 @@ public static class Retinues
                                [], incumbent: null, floor: 0, elite: false, worldwide, vocab, rng);
 
             var regiment = Compose($"gen_maa_h{h}", profile, lead, heritage, terrain,
-                                   vocab, rng, elite: false);
+                                   vocab, rng, elite: false, usedNames);
 
             map.Regiments.Add(regiment);
             map.ByHeritage[heritage] = regiment;
@@ -543,7 +546,7 @@ public static class Retinues
                                elite: true, worldwide, vocab, rng);
 
             var regiment = Compose($"gen_maa_c{c}", profile, culture, null, terrain,
-                                   vocab, rng, elite: true, floor);
+                                   vocab, rng, elite: true, usedNames, floor);
 
             var innovation = map.Innovations.Add(new Innovation
             {
@@ -735,7 +738,7 @@ public static class Retinues
     /// innovation that hands the player a worse unit than the free one.</param>
     private static Regiment Compose(string key, Profile profile, Culture culture,
         Heritage? heritage, Dictionary<TerrainClass, int> terrain, VanillaVocabulary vocab,
-        Rng rng, bool elite, double floor = 0)
+        Rng rng, bool elite, HashSet<string> usedNames, double floor = 0)
     {
         var archetype = vocab.MaaArchetypes[profile.Archetype];
 
@@ -903,7 +906,7 @@ public static class Retinues
                 .FirstOrDefault(vocab.MaaIcons.Contains)
             ?? (vocab.MaaIcons.Count > 0 ? vocab.MaaIcons[0] : null);
 
-        Name(regiment, profile, culture, rng, elite);
+        Name(regiment, profile, culture, rng, elite, usedNames);
         return regiment;
     }
 
@@ -915,12 +918,17 @@ public static class Retinues
     /// as the thing's name. The minority that do take an English noun are there so the roster does
     /// not become a wall of unglossed invented words.
     /// </summary>
-    private static void Name(Regiment regiment, Profile profile, Culture culture, Rng rng, bool elite)
+    private static void Name(Regiment regiment, Profile profile, Culture culture, Rng rng, bool elite,
+        HashSet<string> usedNames)
     {
-        string word = culture.Language.Word(rng, 2, elite ? 3 : 2);
-        word = char.ToUpperInvariant(word[0]) + word[1..];
-
-        regiment.Name = rng.Chance(0.35) ? $"{word} {rng.Pick(profile.Nouns)}" : word;
+        string word;
+        for (int attempt = 0; ; attempt++)
+        {
+            word = culture.Tongue.Word(rng, 2, elite ? 3 : 2);
+            word = char.ToUpperInvariant(word[0]) + word[1..];
+            regiment.Name = rng.Chance(0.35) ? $"{word} {rng.Pick(profile.Nouns)}" : word;
+            if (usedNames.Add(regiment.Name) || attempt >= 12) break;
+        }
 
         string[] standing = elite
             ? ["the sworn strength of", "the picked men of", "the standing companies of"]

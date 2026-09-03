@@ -62,6 +62,16 @@ public static class ContentWriter
             Core.Stage.Time("azgaar binding",
                 () => azgaar.Bind(empires, provinces, order, baronyCount));
 
+        // Which barony is each county's seat. Before naming, because a seat may take its county's
+        // name; after the binding, because on an imported map the seat is where the chief burg is.
+        // Everything downstream reads the seat as Children[0]. See MapGen/Capitals.cs.
+        Core.Stage.Time("county seats", () =>
+        {
+            int moved = MapGen.Capitals.SeatCounties(empires, provinces, order, baronyCount, landCount,
+                provinceTerrain, drainage, azgaar);
+            Console.WriteLine($"  county seats: {moved} of {counties.Count} moved off the cluster seed");
+        });
+
         // A country's government comes from its own form, not from our terrain reasoning — the
         // difference between a Kingdom and a Most Serene Republic is the export's to state.
         var stateGovernments = azgaar is null ? null : MapGen.AzgaarGovernments.ByState(azgaar, cfg);
@@ -144,6 +154,16 @@ public static class ContentWriter
             return levels;
         });
 
+        // Which county is each duchy's capital, and up the tiers from there. After the final
+        // development pass so a world centre is its duchy's capital; nothing above county is
+        // named from its child order, so nothing is renamed by this. See MapGen/Capitals.cs.
+        Core.Stage.Time("realm capitals", () =>
+        {
+            int moved = MapGen.Capitals.SeatRealms(empires, development, provinces, order, baronyCount,
+                worldCenters, azgaar);
+            Console.WriteLine($"  realm capitals: {moved} titles above county had their capital moved");
+        });
+
         var realms = Core.Stage.Time("realms", () => Realms.Build(
                     empires, development, wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17), provinces, order,
                     baronyCount, azgaar, cultures));
@@ -169,7 +189,7 @@ public static class ContentWriter
 
         var faiths = Core.Stage.Time("faiths", () => MapGen.Faiths.Build(empires, provinces, order,
             landCount, provinceTerrain, development, governments, vocabulary, wilderness, cfg, worldCenters,
-            new Rng(cfg.Seed ^ 0x0FA1), azgaar));
+            new Rng(cfg.Seed ^ 0x0FA1), azgaar, cultures));
 
         // The Tier 1 renamer only runs when the structure is still ours. Built from the export's
         // own tree, the faiths already carry its names, and a rename by majority vote could only
@@ -211,6 +231,12 @@ public static class ContentWriter
         Core.Stage.Time("cultivation", () => MapGen.Cultivation.Apply(cfg, provinces, order,
             landCount, terrain, provinceTerrain, counties, governments, development, wilderness,
             drainage, provinceElevation, new Rng(cfg.Seed ^ 0x0FA2)));
+
+        // Where the Great Steppe situation lives. After cultivation, so it reads the ground as it
+        // will be painted; after governments, so every nomad is inside it whatever its ground —
+        // a nomad outside the situation cannot migrate. See MapGen/Steppe.cs.
+        var steppe = Core.Stage.Time("great steppe", () => MapGen.Steppe.Build(counties, provinces,
+            order, landCount, provinceTerrain, governments, new Rng(cfg.Seed ^ 0x57E9)));
 
         // The traced courses go in so each river can be named along its length rather than by the
         // latitude of its provinces — see WaterNaming.GroupRiverProvinces.
@@ -287,10 +313,14 @@ public static class ContentWriter
             CompatibilityWriter.WriteDefines(modDir, gameDir, cfg);
             CompatibilityWriter.WriteCultureEras(modDir, gameDir, cfg);
             CompatibilityWriter.WriteCalendarLocalisation(modDir, azgaar);
-            CompatibilityWriter.WriteGeographicalRegions(modDir, gameDir, empires, cultures);
+            CompatibilityWriter.WriteGeographicalRegions(modDir, gameDir, empires, cultures,
+                steppe.RegionMembers());
             CompatibilityWriter.WriteHolySites(modDir, gameDir, empires, faiths);
             CompatibilityWriter.WriteDecisionBlocks(modDir, gameDir);
         });
+
+        // After the regions it points at, and nothing reads what it writes.
+        Core.Stage.Time("great steppe files", () => SteppeWriter.WriteAll(modDir, gameDir, steppe));
 
         Core.Stage.Time("religion files", () => ReligionWriter.WriteAll(modDir, faiths));
 
@@ -751,6 +781,14 @@ public static class ContentWriter
                 {
                     if (title.Tier == "c") jb.Field("definite_form", "no");
 
+                    // Stated as vanilla states it on its own duchies and above, though the engine
+                    // would take the first county anyway: the two agree because MapGen/Capitals
+                    // put the capital first, and saying so keeps a hand edit of the order from
+                    // silently moving the seat.
+                    if (title.Tier is "d" or "k" or "e" or "h"
+                        && MapGen.Capitals.CapitalCounty(title) is { } seat)
+                        jb.Field("capital", seat.Key);
+
                     if (title.Tier == "h")
                     {
                         // Vanilla's own shape for a hegemony: it is "the <name>", and it is never
@@ -768,7 +806,9 @@ public static class ContentWriter
                         jb.Inline("can_create_on_partition", "always = no");
                     }
 
-                    foreach (var child in title.Children) Write(child);
+                    // The capital first: for a county that is the whole declaration of its seat,
+                    // since baronies carry no capital field. Write-time order only.
+                    foreach (var child in title.SeatFirst()) Write(child);
                 }
             }
         }
@@ -1095,9 +1135,12 @@ public static class ContentWriter
             string government = governments.For(county);
             bool wild = wilderness.Contains(county);
 
-            for (int i = 0; i < county.Children.Count; i++)
+            // Seat first: index zero is the capital holding, and the seat is the capital. The
+            // list itself is not reordered — see Title.Seat.
+            var baronies = county.SeatFirst().ToList();
+            for (int i = 0; i < baronies.Count; i++)
             {
-                var barony = county.Children[i];
+                var barony = baronies[i];
                 var terrain = barony.ProvinceId >= 0 && barony.ProvinceId < provinceTerrain.Length
                     ? provinceTerrain[barony.ProvinceId]
                     : TerrainClass.Plains;

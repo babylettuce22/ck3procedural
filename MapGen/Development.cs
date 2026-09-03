@@ -22,7 +22,7 @@ public static class Development
     /// How much settlement each terrain supports, 0..1. These are agricultural carrying capacity
     /// as a medieval map would read it, not beauty: a floodplain feeds a city, a mountain does not.
     /// </summary>
-    private static double Support(TerrainClass t) => t switch
+    internal static double Support(TerrainClass t) => t switch
     {
         TerrainClass.Farmlands => 1.00,
         TerrainClass.Floodplains => 0.95,

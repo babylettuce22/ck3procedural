@@ -260,8 +260,9 @@ public sealed class PrehistoryMap
                 map.CharacterDynastyMap[county] = liegeDynastyId;
 
                 var culture = cultures.For(county);
+                // Slot 2: a cadet house name that no seat's own dynasty in this culture carries.
                 string houseName = culture.DynastyNames.Count > 0
-                    ? culture.DynastyNames[vRng.Int(0, culture.DynastyNames.Count - 1)]
+                    ? culture.DynastyNameFor(county, 2)
                     : $"{culture.Name}_{county.Index}";
 
                 string houseKey = $"house_gen_{county.Index}";
@@ -293,7 +294,7 @@ public sealed class PrehistoryMap
         var cRng = new Rng(county.Index ^ 0x33A9);
 
         string dynName = culture.DynastyNames.Count > 0
-            ? culture.DynastyNames[cRng.Int(0, culture.DynastyNames.Count - 1)]
+            ? culture.DynastyNameFor(county)
             : $"{culture.Name}_{county.Index}";
 
         string dynId = $"gen_dynasty_{county.Index}";
@@ -689,8 +690,9 @@ public sealed class PrehistoryMap
                 spouseCulture = rulerCulture;
                 spouseFaith = rulerFaith;
 
+                // Slot 1: the noble house of this seat, which no seat's own dynasty is called.
                 string nobleDynName = spouseCulture.DynastyNames.Count > 1
-                    ? spouseCulture.DynastyNames[(ruler.Index + 3) % spouseCulture.DynastyNames.Count]
+                    ? spouseCulture.DynastyNameFor(ruler, 1)
                     : $"{spouseCulture.Name}court_{ruler.Index}";
 
                 spouseDynasty = $"gen_dynasty_noble_{ruler.Index}";

@@ -50,6 +50,14 @@ public sealed class Culture
     public required Heritage Heritage { get; init; }
     public Language Language => Heritage.Language;
 
+    /// <summary>
+    /// The variety of the heritage's language this culture actually speaks, and names its people,
+    /// places and houses in. A dialect of <see cref="Language"/> — same roots, a sound or a
+    /// spelling shifted — so sister cultures read as kin without being copies. The pillar CK3
+    /// sees is still the heritage's.
+    /// </summary>
+    public required Language Tongue { get; init; }
+
     public required (byte R, byte G, byte B) Color { get; set; }
     public required string Ethos { get; set; }
     public required string MartialCustom { get; set; }
@@ -90,12 +98,35 @@ public sealed class Culture
     public required List<string> FemaleNames { get; init; }
     public required List<string> DynastyNames { get; init; }
 
+    /// <summary>
+    /// The house name for the dynasty founded at <paramref name="county"/>, by allocation rather
+    /// than by draw: the county's ordinal among this culture's counties indexes the list, so no two
+    /// seats of one culture found houses of the same name. The list is sized at creation for
+    /// three <paramref name="slot"/>s per county — the seat's own dynasty, the local noble house a
+    /// ruler marries into, and a cadet house — so the slots never alias each other either.
+    ///
+    /// A random draw here was the bug: forty names shared by seventeen seats collide almost every
+    /// time, and two unrelated houses called the same thing is exactly the kind of thing a player
+    /// notices in the dynasty view.
+    /// </summary>
+    public string DynastyNameFor(Title county, int slot = 0)
+    {
+        if (DynastyNames.Count == 0) return Name;
+        int ordinal = Counties.IndexOf(county);
+        if (ordinal < 0) ordinal = county.Index;
+        int stride = Math.Max(1, Counties.Count);
+        return DynastyNames[(slot * stride + ordinal) % DynastyNames.Count];
+    }
+
     /// <summary>Localisation keys, with the words they stand for, for this culture's name grammar.</summary>
     public required string PatronymSuffixMale { get; init; }
 
     public required string PatronymSuffixFemale { get; init; }
     public required string LocationPrefix { get; init; }
     public required bool AlwaysUsePatronym { get; init; }
+
+    /// <summary>True where the patronymic goes before the father's name (ibn, mac, ap) rather than after.</summary>
+    public bool PatronymIsPrefix { get; init; }
 
     /// <summary>Counties speaking this culture at the start date.</summary>
     public List<Title> Counties { get; } = [];
@@ -284,12 +315,26 @@ public static class Cultures
         var cultures = new List<Culture>();
         var byCounty = new Dictionary<Title, Culture>();
         var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var usedDynasties = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         // Where each heritage name was first planted, for the compass qualifier below.
         var firstClaim = new Dictionary<string, (double X, double Y)>(StringComparer.OrdinalIgnoreCase);
 
         var eligibleLooks = FilterLooks(vocab.Looks, cfg.CultureAestheticsTheme);
         var lookPool = eligibleLooks.Count > 0 ? eligibleLooks : vocab.Looks;
+
+        // Which heritages border which, so a language can be born a sister of a neighbour's.
+        // Families follow geography: a tongue spreads over a frontier, not across the map.
+        var touching = new Dictionary<int, HashSet<int>>();
+        for (int i = 0; i < all.Count; i++)
+            foreach (int j in graph.Neighbours[i])
+                if (heritageOf[i] != heritageOf[j])
+                {
+                    if (!touching.TryGetValue(heritageOf[i], out var set)) touching[heritageOf[i]] = set = [];
+                    set.Add(heritageOf[j]);
+                }
+
+        var languageOf = new Dictionary<int, Language>();
 
         for (int h = 0; h < heritageTarget; h++)
         {
@@ -305,25 +350,45 @@ public static class Cultures
 
             string languageKey = $"language_gen_{heritages.Count}";
 
-            // The language's own name is generated from the corpus rather than taken from it. The
-            // corpus is called things like "Arabic" and "Nordic" — real-world labels with no place
-            // on a fantasy map's language list — and the heritage claims the export's culture name
-            // just below, which the two are meant to differ from anyway.
-            // Guarantee the first generated heritage gets the English-like language
-            var language = importedNames is not null
-                ? Language.FromNameBase(languageKey, importedNames, rng)
-                : heritages.Count == 0
-                    ? Language.CreateAnglic(languageKey, rng)
-                    : Language.Create(languageKey, rng); usedNames.Add(language.Name);
+            Language language;
+            string baseName;
 
-            // A separate word from the language's own name, because they are separate things —
-            // vanilla pairs the North Germanic heritage with the Norse language, not with the
-            // North Germanic language, and naming both the same reads as a bug.
-            string baseName =
-                imported.Exists && azgaar!.World.Culture(imported.Id)?.Name is { Length: > 0 } n
-                    && AzgaarNaming.StripParenthetical(AzgaarNaming.StripArticle(n)) is { Length: > 0 } stripped
+            if (importedNames is not null)
+            {
+                // The language's own name is generated from the corpus rather than taken from it.
+                // The corpus is called things like "Arabic" and "Nordic" — real-world labels with
+                // no place on a fantasy map's language list — and the heritage claims the export's
+                // culture name just below, which the two are meant to differ from anyway.
+                language = Language.FromNameBase(languageKey, importedNames, rng);
+                baseName = azgaar!.World.Culture(imported.Id)?.Name is { Length: > 0 } n
+                        && AzgaarNaming.StripParenthetical(AzgaarNaming.StripArticle(n)) is { Length: > 0 } stripped
                     ? stripped
                     : language.Word(rng, 2, 3);
+            }
+            else
+            {
+                // A sister of a neighbour's tongue often enough that the map has language families
+                // rather than forty unrelated inventions. The first heritage of a western world
+                // speaks the Anglic tongue, so there is always one country the reader can hear.
+                var parents = touching.TryGetValue(h, out var near)
+                    ? near.Where(languageOf.ContainsKey).Select(n => languageOf[n])
+                          .Where(l => l.Phonology is not null).OrderBy(l => l.Key, StringComparer.Ordinal).ToList()
+                    : [];
+
+                language = heritages.Count == 0 && LanguageFlavour.AnglicFirst(cfg)
+                    ? Language.CreateAnglic(languageKey, rng)
+                    : parents.Count > 0 && rng.Chance(0.45)
+                        ? Language.Create(languageKey, rng, parent: rng.Pick(parents))
+                        : Language.Create(languageKey, rng, LanguageFlavour.Pick(cfg, rng));
+
+                // The people first, then their tongue named after them — Franks, Frankish — which
+                // is the one pairing vanilla uses everywhere and the one a reader expects.
+                baseName = language.FolkName(rng);
+                language.Name = language.LanguageNameFor(baseName, rng);
+            }
+
+            usedNames.Add(language.Name);
+            languageOf[h] = language;
 
             // Centre of the heritage's ground, for the qualifier a name collision resolves to.
             double cx = 0, cy = 0;
@@ -354,7 +419,7 @@ public static class Cultures
                 if (owned.Count == 0) continue;
 
                 var culture = Create(heritage, owned, provinceTerrain, development, vocab,
-                    allowedTraditions, usedNames, cultures.Count, rng);
+                    allowedTraditions, usedNames, usedDynasties, cultures.Count, rng);
 
                 heritage.Cultures.Add(culture);
                 cultures.Add(culture);
@@ -440,6 +505,7 @@ public static class Cultures
         // that only existed inside this method.
         var usedCultureNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var usedHeritageNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var usedDynasties = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var firstClaim = new Dictionary<string, (double X, double Y)>(StringComparer.OrdinalIgnoreCase);
 
         var eligibleLooks = FilterLooks(vocab.Looks, cfg.CultureAestheticsTheme);
@@ -495,7 +561,7 @@ public static class Cultures
 
                 var source = live[id];
                 var culture = Create(heritage, owned, provinceTerrain, development, vocab,
-                                     allowedTraditions, usedCultureNames, cultures.Count, rng);
+                                     allowedTraditions, usedCultureNames, usedDynasties, cultures.Count, rng);
 
                 // The export's word for this people, and its own colour, over the generated ones.
                 // Written after Create rather than threaded through it so the character the ground
@@ -591,7 +657,7 @@ public static class Cultures
     /// is worth stating: a mountain wall the game routes armies around also stops a language, so
     /// culture borders land on it without anything here having to look for ridgelines.
     /// </summary>
-    private static RegionGrowth.Graph BuildCountyGraph(List<Title> counties, ProvinceMap provinces,
+    internal static RegionGrowth.Graph BuildCountyGraph(List<Title> counties, ProvinceMap provinces,
         int[] order, int landCount, TerrainClass[] provinceTerrain, double terrainWeight)
     {
         var countyIndex = new Dictionary<Title, int>();
@@ -669,9 +735,9 @@ public static class Cultures
     private static Culture Create(Heritage heritage, List<Title> counties,
         TerrainClass[] provinceTerrain, Dictionary<Title, int> development,
         VanillaVocabulary vocab, List<string> allowedTraditions, HashSet<string> usedNames,
-        int index, Rng rng)
+        HashSet<string> usedDynasties, int index, Rng rng)
     {
-        var language = heritage.Language;
+        var language = heritage.Language.Dialect($"{heritage.Language.Key}_d{index}", rng);
 
         // What this culture actually lives on, and how well it lives, decide its character.
         var terrainCounts = new Dictionary<TerrainClass, int>();
@@ -695,13 +761,14 @@ public static class Cultures
             : terrainCounts.OrderByDescending(kv => kv.Value)
                            .ThenBy(kv => (int)kv.Key).First().Key;
 
-        string name = Unique(language.Word(rng, 2, 3), usedNames);
+        string name = UniqueFrom(() => language.FolkName(rng), usedNames);
 
         return new Culture
         {
             Key = $"gen_culture_{index}",
             Name = name,
             Heritage = heritage,
+            Tongue = language,
             MeanDevelopment = meanDevelopment,
             Color = ((byte)rng.Int(30, 225), (byte)rng.Int(30, 225), (byte)rng.Int(30, 225)),
             Ethos = PickEthos(dominant, meanDevelopment, vocab, rng),
@@ -714,11 +781,13 @@ public static class Cultures
             UnitGfx = heritage.Look.UnitGfx,
             MaleNames = Names(language, rng, 60, male: true, usedNames: null),
             FemaleNames = Names(language, rng, 45, male: false, usedNames: null),
-            DynastyNames = Names(language, rng, 40, male: true, usedNames: null),
-            PatronymSuffixMale = Particle(language, rng),
-            PatronymSuffixFemale = Particle(language, rng),
-            LocationPrefix = Particle(language, rng),
-            AlwaysUsePatronym = rng.Chance(0.35),
+            // Three per county — see DynastyNameFor — and never fewer than the name list wants.
+            DynastyNames = Dynasties(language, rng, Math.Max(40, counties.Count * 3 + 12), usedDynasties),
+            PatronymSuffixMale = language.PatronymMale,
+            PatronymSuffixFemale = language.PatronymFemale,
+            PatronymIsPrefix = language.PatronymIsPrefix,
+            LocationPrefix = language.Particle,
+            AlwaysUsePatronym = language.PatronymMale.Length > 0 && rng.Chance(0.35),
         };
     }
 
@@ -754,6 +823,7 @@ public static class Cultures
             Key = UnsettledKey,
             Name = "Unsettled",
             Heritage = heritage,
+            Tongue = language,
             MeanDevelopment = 0,
             Color = ((byte)108, (byte)104, (byte)96),
             Ethos = PickEthos(TerrainClass.Arctic, 0, vocab, rng),
@@ -769,11 +839,12 @@ public static class Cultures
             // the one character that uses it.
             MaleNames = Names(language, rng, 8, male: true, usedNames: null),
             FemaleNames = Names(language, rng, 8, male: false, usedNames: null),
-            DynastyNames = Names(language, rng, 6, male: true, usedNames: null),
+            DynastyNames = Dynasties(language, rng, 6, new HashSet<string>(StringComparer.OrdinalIgnoreCase)),
 
-            PatronymSuffixMale = Particle(language, rng),
-            PatronymSuffixFemale = Particle(language, rng),
-            LocationPrefix = Particle(language, rng),
+            PatronymSuffixMale = language.PatronymMale,
+            PatronymSuffixFemale = language.PatronymFemale,
+            PatronymIsPrefix = language.PatronymIsPrefix,
+            LocationPrefix = language.Particle,
             AlwaysUsePatronym = false,
         };
     }
@@ -1004,11 +1075,33 @@ public static class Cultures
         return [.. result];
     }
 
-    /// <summary>A short grammatical word — a patronymic ending, or a nobiliary particle.</summary>
-    private static string Particle(Language language, Rng rng)
+    /// <summary>
+    /// Distinct house names: for a seat, for a founder, for a sign. Distinct across the whole
+    /// world, not just this list — <paramref name="used"/> is shared by every culture — because
+    /// sister cultures draw on one lexicon and would otherwise coin the same house twice.
+    /// </summary>
+    private static List<string> Dynasties(Language language, Rng rng, int count, HashSet<string> used)
     {
-        string word = language.Word(rng, 1, 1).ToLowerInvariant();
-        return word.Length > 4 ? word[..4] : word;
+        var result = new List<string>(count);
+        for (int attempt = 0; attempt < count * 10 && result.Count < count; attempt++)
+        {
+            string name = language.DynastyName(rng);
+            if (name.Length is < 4 or > 12) continue;
+            if (!used.Add(name)) continue;
+            result.Add(name);
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// A fresh draw until one is free, so a collision costs a re-roll and not a "2" on the map.
+    /// Numbering survives only for the pathological case where the language is out of words.
+    /// </summary>
+    private static string UniqueFrom(Func<string> draw, HashSet<string> used)
+    {
+        string name = draw();
+        for (int attempt = 0; attempt < 16 && used.Contains(name); attempt++) name = draw();
+        return Unique(name, used);
     }
 
     /// <summary>

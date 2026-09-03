@@ -71,8 +71,8 @@ public static class WaterNaming
 
             string baseName = imported is { Length: > 0 } && !usedNames.Contains(imported)
                 ? Unique(imported, usedNames)
-                : Unique(FindNeighborCulture(system, adjacency, byId, cultures, provinces, empires)
-                             .Language.Word(rng, 1, 2), usedNames);
+                : UniqueFrom(() => FindNeighborCulture(system, adjacency, byId, cultures, provinces, empires)
+                                       .Tongue.Word(rng, 1, 2), usedNames);
 
             Name(system, baseName, names);
         }
@@ -315,7 +315,7 @@ public static class WaterNaming
             }
             else
             {
-                string word = Unique(culture.Language.Word(rng), usedNames);
+                string word = UniqueFrom(() => culture.Tongue.Word(rng), usedNames);
                 baseName = word;
 
                 // Rolled only here. Doing it above, before the branch, would spend the same rng draw
@@ -492,6 +492,14 @@ public static class WaterNaming
         }
 
         return full;
+    }
+
+    /// <summary>A fresh draw until one is free: a collision costs a re-roll, not a numeral on the map.</summary>
+    private static string UniqueFrom(Func<string> draw, HashSet<string> used)
+    {
+        string name = draw();
+        for (int attempt = 0; attempt < 16 && used.Contains(name); attempt++) name = draw();
+        return Unique(name, used);
     }
 
     private static string Unique(string name, HashSet<string> used)

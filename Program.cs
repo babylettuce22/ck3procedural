@@ -66,6 +66,24 @@ public static class Program
                 case "--verify-compose":
                     return MapGen.WeaponComposeCheck.Run() ? 0 : 1;
 
+                // Prints sample names from the language generator and exits: every flavour, or one
+                // named flavour ("--languages Norse"), optionally with a seed and "family" to show a
+                // sister language and a dialect beside it. Needs no heightmap; runs in a second.
+                case "--languages":
+                {
+                    string? flavour = null;
+                    int probeSeed = 4242;
+                    bool family = false;
+                    while (i + 1 < args.Length && !args[i + 1].StartsWith("--"))
+                    {
+                        string arg = args[++i];
+                        if (int.TryParse(arg, out int parsed)) probeSeed = parsed;
+                        else if (arg.Equals("family", StringComparison.OrdinalIgnoreCase)) family = true;
+                        else flavour = arg;
+                    }
+                    return MapGen.LanguageProbe.Run(flavour, probeSeed, family) ? 0 : 1;
+                }
+
                 case "--static-only":
                     staticOnly = true;
                     break;
@@ -275,6 +293,12 @@ public static class Program
 
                 // Share of counties that start already ruined. Separate from --ruins on purpose:
                 // the usual setting is the system on and this at zero, so the world starts whole.
+                // Nomadic hordes on the steppe. Off by default, as in the GUI; here so a headless
+                // run can exercise the nomad paths — the Great Steppe situation above all.
+                case "--nomads":
+                    cfg.EnableNomadHordes = true;
+                    break;
+
                 case "--ruins-share" when i + 1 < args.Length:
                     if (double.TryParse(args[++i],
                             System.Globalization.NumberStyles.Float,
@@ -594,6 +618,8 @@ public static class Program
                 "       [--impassable-mask-mode snap|touch]  snap (default) cuts provinces to the paint; touch turns whole provinces");
             Console.Error.WriteLine(
                 "       [--gender historical|mixed|femaledominated]  which way the world's laws and rulers lean; historical is the default");
+            Console.Error.WriteLine(
+                "       [--nomads]  nomadic hordes on the steppe, as the GUI's Enable Nomad Hordes; off by default");
             Console.Error.WriteLine(
                 "This tool builds a CK3 mod around a heightmap: one you supply as a 16-bit PNG, or "
                 + "one produced from a CK3 Heightmap Forge preset.");

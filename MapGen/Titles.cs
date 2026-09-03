@@ -17,6 +17,33 @@ public sealed class Title
     public List<Title> Children = [];
     public Title? Parent;
 
+    /// <summary>
+    /// The child that is this title's capital: a county's seat barony, a duchy's capital county,
+    /// and so on up. Null means the first child, which is CK3's own default.
+    ///
+    /// A property rather than a reorder of <see cref="Children"/>, and that is load-bearing. Half
+    /// a dozen stages sum terrain costs and seed positions over a county's baronies in list
+    /// order, and reordering the list changed the floating-point rounding in the last bit — which
+    /// flipped ties in the culture, faith and wilderness partitions and rewrote most of the map.
+    /// Measured on 2026-09-02: 795 provinces changed culture from a reorder that touched nothing
+    /// else. So the order every stage iterates never changes; the writers put the seat first at
+    /// write time through <see cref="SeatFirst"/>. Set by <see cref="Capitals"/>.
+    /// </summary>
+    public Title? Seat;
+
+    /// <summary>The capital child — <see cref="Seat"/>, or the first child when none was chosen.</summary>
+    public Title? Capital => Seat ?? (Children.Count > 0 ? Children[0] : null);
+
+    /// <summary>The children with the capital first and the rest in their own order.</summary>
+    public IEnumerable<Title> SeatFirst()
+    {
+        var seat = Capital;
+        if (seat is null) yield break;
+        yield return seat;
+        foreach (var child in Children)
+            if (!ReferenceEquals(child, seat)) yield return child;
+    }
+
     public (byte R, byte G, byte B) Color;
 
     /// <summary>
@@ -871,28 +898,30 @@ public static class Titles
 
     public static string GenerateName(Title title, CultureMap cultures, Rng rng)
     {
-        var language = cultures.For(title).Language;
+        var culture = cultures.For(title);
+        var language = culture.Tongue;
 
-        // A hegemony is named like an empire. It is one title standing for a whole world, and the
-        // compound form is the only one that reads as a realm rather than as a place.
-        if (title.Tier is "e" or "h")
-            return language.CompoundName(rng);
-
-        if (title.Tier == "k")
+        switch (title.Tier)
         {
-            return rng.Chance(0.5)
-                ? language.CompoundName(rng)
-                : language.PlaceName(rng, language.KingdomAffixes);
+            // A realm is named after its people where the language can manage it — Francia from
+            // the Franks — and a hegemony is named like an empire: one title standing for a whole
+            // world, in the one form that reads as a realm rather than as a place.
+            case "e" or "h":
+                return language.RealmName(rng, culture.Name, 'e');
+            case "k":
+                return language.RealmName(rng, culture.Name, 'k');
+
+            // The seat usually carries its county's name, as York does. Named after the county
+            // rather than before it because parents are named first, and the echo is the point.
+            case "b":
+                if (title.Parent is { Name.Length: > 0 } county && county.Children.Count > 0
+                    && ReferenceEquals(county.Capital, title) && rng.Chance(0.55))
+                    return county.Name;
+                return language.PlaceName(rng, 'b');
+
+            default:
+                return language.PlaceName(rng, title.Tier[0]);
         }
-
-        var affixes = title.Tier switch
-        {
-            "d" => language.DuchyAffixes,
-            "c" => language.CountyAffixes,
-            _ => language.BaronyAffixes,
-        };
-
-        return language.PlaceName(rng, affixes);
     }
 
     /// <param name="preferred">
@@ -909,26 +938,41 @@ public static class Titles
         Dictionary<Title, string>? preferred = null, Title? crown = null)
     {
         var usedKeys = new HashSet<string>(StringComparer.Ordinal);
+        var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var root in roots) Visit(root);
         if (crown is not null) Name(crown);
 
         void Visit(Title title)
         {
             Name(title);
-            foreach (var child in title.Children) Visit(child);
+
+            // A county's seat is named first so that its one extra draw — the chance of taking
+            // the county's name — comes off the stream at the same point it always did, before
+            // any sibling's. Baronies have no children, so the draws a county consumes are the
+            // same whichever barony is its seat, and no name outside the county moves. Higher
+            // tiers keep list order: their children carry subtrees of unequal size, and naming
+            // the capital first would shift every draw after it.
+            var children = title.Tier == "c" ? title.SeatFirst() : title.Children;
+            foreach (var child in children) Visit(child);
         }
 
         void Name(Title title)
         {
             string GenerateName() => Titles.GenerateName(title, cultures, rng);
 
-            string name = preferred?.GetValueOrDefault(title) is { Length: > 0 } imported
-                ? imported
-                : GenerateName();
+            // A seat may carry its county's name; nothing else on the map shares a name with
+            // anything, whatever the tier. A kingdom and an empire called the same thing read as
+            // one title listed twice.
+            bool Taken(string n) => usedNames.Contains(n)
+                && !(title.Tier == "b" && title.Parent is { } county
+                     && string.Equals(county.Name, n, StringComparison.OrdinalIgnoreCase));
+
+            bool borrowed = preferred?.GetValueOrDefault(title) is { Length: > 0 };
+            string name = borrowed ? preferred![title] : GenerateName();
 
             string key = $"{title.Tier}_gen_{CleanKey(name)}_{title.Index}";
 
-            for (int attempt = 0; attempt < 24 && (name.Length < 3 || usedKeys.Contains(key)); attempt++)
+            for (int attempt = 0; attempt < 24 && (name.Length < 3 || usedKeys.Contains(key) || (!borrowed && Taken(name))); attempt++)
             {
                 name = GenerateName();
                 key = $"{title.Tier}_gen_{CleanKey(name)}";
@@ -938,35 +982,13 @@ public static class Titles
                 key = $"{title.Tier}_gen_{CleanKey(name)}_{suffix}";
 
             usedKeys.Add(key);
+            usedNames.Add(name);
             title.Name = name;
             title.Key = key;
         }
     }
 
-    private static string CleanKey(string input)
-    {
-        string cleaned = input.ToLowerInvariant().Replace(" ", "_").Replace("-", "_");
-        cleaned = RemoveDiacritics(cleaned);
-        return Regex.Replace(cleaned, "[^a-z0-9_]", "");
-    }
-
-    private static string RemoveDiacritics(string text)
-    {
-        var normalizedString = text.Normalize(System.Text.NormalizationForm.FormD);
-        var stringBuilder = new System.Text.StringBuilder(capacity: normalizedString.Length);
-
-        for (int i = 0; i < normalizedString.Length; i++)
-        {
-            char c = normalizedString[i];
-            var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(c);
-            if (unicodeCategory != UnicodeCategory.NonSpacingMark)
-            {
-                stringBuilder.Append(c);
-            }
-        }
-
-        return stringBuilder.ToString().Normalize(System.Text.NormalizationForm.FormC);
-    }
+    private static string CleanKey(string input) => Core.Ascii.Fold(input, keepSeparators: true);
 
     public static IEnumerable<Title> Flatten(IEnumerable<Title> roots)
     {

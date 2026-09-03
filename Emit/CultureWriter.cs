@@ -216,9 +216,15 @@ public static class CultureWriter
                 b.Quoted("dynasty_of_location_prefix", $"dynnp_{culture.Key}");
                 b.Blank();
 
-                b.Quoted("patronym_suffix_male", $"dynnpat_suf_{culture.Key}_male");
-                b.Quoted("patronym_suffix_female", $"dynnpat_suf_{culture.Key}_female");
-                if (culture.AlwaysUsePatronym) b.Field("always_use_patronym", "yes");
+                // A language without a patronymic (Latin, German) simply has none: CK3 then
+                // names by dynasty alone, which is what those cultures do in vanilla too.
+                if (culture.PatronymSuffixMale.Length > 0)
+                {
+                    string kind = culture.PatronymIsPrefix ? "prefix" : "suffix";
+                    b.Quoted($"patronym_{kind}_male", $"dynnpat_suf_{culture.Key}_male");
+                    b.Quoted($"patronym_{kind}_female", $"dynnpat_suf_{culture.Key}_female");
+                    if (culture.AlwaysUsePatronym) b.Field("always_use_patronym", "yes");
+                }
                 b.Blank();
 
                 b.Field("pat_grf_name_chance", "40");
@@ -240,30 +246,8 @@ public static class CultureWriter
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_name_lists.txt"), b.ToString());
     }
-    private static string CleanKey(string input)
-    {
-        string cleaned = input.ToLowerInvariant().Replace(" ", "_").Replace("-", "_");
-        cleaned = RemoveDiacritics(cleaned);
-        return Regex.Replace(cleaned, "[^a-z0-9_]", "");
-    }
+    private static string CleanKey(string input) => Core.Ascii.Fold(input, keepSeparators: true);
 
-    private static string RemoveDiacritics(string text)
-    {
-        var normalizedString = text.Normalize(System.Text.NormalizationForm.FormD);
-        var stringBuilder = new System.Text.StringBuilder(capacity: normalizedString.Length);
-
-        for (int i = 0; i < normalizedString.Length; i++)
-        {
-            char c = normalizedString[i];
-            var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(c);
-            if (unicodeCategory != UnicodeCategory.NonSpacingMark)
-            {
-                stringBuilder.Append(c);
-            }
-        }
-
-        return stringBuilder.ToString().Normalize(System.Text.NormalizationForm.FormC);
-    }
     /// <summary>
     /// What each culture has already worked out by the start date.
     ///
@@ -552,8 +536,10 @@ public static class CultureWriter
             entries[$"mercenary_company_{culture.Key}"] = $"{culture.Name} Company";
 
             entries[$"dynnp_{culture.Key}"] = culture.LocationPrefix + " ";
-            entries[$"dynnpat_suf_{culture.Key}_male"] = culture.PatronymSuffixMale;
-            entries[$"dynnpat_suf_{culture.Key}_female"] = culture.PatronymSuffixFemale;
+            // A prefix patronymic is a separate word ("ibn Yusuf"); a suffix is glued on ("Sigurdsson").
+            string pad = culture.PatronymIsPrefix ? " " : "";
+            entries[$"dynnpat_suf_{culture.Key}_male"] = culture.PatronymSuffixMale + pad;
+            entries[$"dynnpat_suf_{culture.Key}_female"] = culture.PatronymSuffixFemale + pad;
 
             // Apply the "cul_" prefix to character names in the localization file
             foreach (string name in culture.MaleNames) entries[$"cul_{CleanKey(name)}"] = name;

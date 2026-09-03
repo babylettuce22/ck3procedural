@@ -85,6 +85,42 @@ of the installed game's own regiments of the same archetype and rearranged insid
 generated unit is a variant of a vanilla one rather than a guess at one — and a balance patch to CK3
 moves the generated roster with it.
 
+## Languages and names
+
+Every name on a generated map — people, houses, baronies up to empires, cultures, faiths, gods,
+rivers — comes out of one language per heritage, built in `MapGen/Language.cs` from three parts:
+
+- **A phonology** (`Phonology.cs`): which sounds the language has and how often, what shapes a
+  syllable may take, which consonant clusters are legal, and how a seam between two morphemes is
+  mended. Words are held as phoneme lists until the very end, then spelled once by the language's
+  own orthography, so /k/ is "c" everywhere in one tongue and "k" everywhere in its neighbour.
+- **A lexicon** (`Lexicon.cs`): a root for every concept a place or person is named from (hill,
+  ford, wolf, bright…), the elements personal names are compounded of, the place-words each title
+  tier ends in, and the grammar words a CK3 name list needs (patronymic, "of").
+- **A flavour** (`LanguageFlavour.cs`): the family resemblance a language is born into. Seventeen
+  presets — Anglic, Norse, Germanic, Latinate, Hellenic, Slavic, Desert, Celtic, Steppe, Finnic,
+  Sanskritic, Iberic, Insular, Savanna, and the fantasy Sylvan, Dwarven and Harsh — each carrying
+  real name elements and place-words that are then fed through the same jittered machinery, which
+  is what makes them come out bastardised rather than borrowed. The culture-look theme chooses the
+  pool; fantasy flavours join it when fantasy ethnicities are on.
+
+Languages come in families. A heritage's tongue is often born a sister of a neighbour's (shared
+roots, a few sounds shifted through the whole stock), and every culture speaks a dialect of its
+heritage's language, so sister cultures read as kin without being copies. Kingdoms are named after
+their people where the language can manage it, a county seat usually carries its county's name,
+and a faith's words come from a liturgical register of the tongue spoken where it holds most
+ground. Every emitted name passes a filter for accidental English and for stutters.
+
+To hear a flavour without generating a world:
+
+```
+dotnet run -- --languages Norse 4242 family
+```
+
+prints sample names of every kind for that flavour, its sister language and a dialect; omit the
+name for all seventeen. An Azgaar import still names from the export's own Markov name bases, as
+before.
+
 ## Importing an Azgaar map
 
 An Azgaar Fantasy Map Generator export (`--azgaar`, or the Azgaar tab) is an **adjunct, never a
@@ -234,9 +270,9 @@ vocabulary.
 
 ## Credits & Attributions
 
-Most third-party assets bundled with this tool are CC0 and oblige nothing. Three are **CC-BY-4.0**,
+Most third-party assets bundled with this tool are CC0 and oblige nothing. Four are **CC-BY-4.0**,
 which does: the author must be credited wherever the work is shared. Commercial use is allowed for
-all three. The full record — sources, licences, what each was used for and how it was modified —
+all four. The full record — sources, licences, what each was used for and how it was modified —
 is in [`BaseFilesToCopy/Core/CREDITS.md`](BaseFilesToCopy/Core/CREDITS.md), which is copied into
 every mod this tool generates so the credit travels with the work rather than staying in the repo.
 
@@ -253,4 +289,9 @@ every mod this tool generates so the credit travels with the work rather than st
 > This work is based on "Shoulder Armor"
 > (https://sketchfab.com/3d-models/shoulder-armor-053d84b1034c429ab476778022d64ff5)
 > by ilyaballz (https://sketchfab.com/ilyaballz) licensed under CC-BY-4.0
+> (http://creativecommons.org/licenses/by/4.0/)
+
+> This work is based on "Medieval Shoulder Pad"
+> (https://sketchfab.com/3d-models/medieval-shoulder-pad-5376ef05f3d3448889517d9bd0ff8421)
+> by ViniciusMello (https://sketchfab.com/ViniciusMello) licensed under CC-BY-4.0
 > (http://creativecommons.org/licenses/by/4.0/)
