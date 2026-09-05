@@ -986,6 +986,18 @@ public sealed class MapConfig : CustomTypeDescriptor
     public double SeaBridgePixelsAtVanilla { get; set; } = 110;
 
     /// <summary>
+    /// How wide a strait or river an army may still march across, in *vanilla* province pixels.
+    /// This is the map_data/adjacencies.csv threshold — a real crossing, drawn on the map and
+    /// blockable by a fleet — and so much narrower than the realm bridge above: vanilla crosses
+    /// the Øresund and the Bosporus, about 10 px, and the Sicilian narrows at 25, but never the
+    /// Strait of Dover at 30. Zero declares no crossings at all. See MapGen/Crossings.cs.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("04 Titles")]
+    [Description("How wide a strait or major river an army may march across, in vanilla province pixels. Vanilla reference: the Øresund about 10 px, Messina 25, and Dover at 30 is not crossable. 0 declares no crossings.")]
+    public double StraitPixelsAtVanilla { get; set; } = 28;
+
+    /// <summary>
     /// How deep inside its province a holding, army or siege model must stand, as a fraction of
     /// the deepest point that province has. 0 lets a model sit on the border; 1 pins it to the
     /// single deepest pixel and leaves flatness no say.
@@ -1881,6 +1893,11 @@ public sealed class MapConfig : CustomTypeDescriptor
 
     /// <summary>Added to a county's terrain score if any of its baronies reaches the sea.</summary>
     [Category("9 Development")]
+    [AzgaarIncompat("Counties are ranked on how many people the export puts on them, and Azgaar's " +
+                    "own suitability model already counts a harbour, so the terrain score this " +
+                    "adds to is not what development is read from. The rest of the development " +
+                    "settings still apply: the export decides the order, the curve below decides " +
+                    "the numbers.")]
     [Description("Added to a county's terrain score if any of its baronies reaches the sea, because a coast is a road when roads are bad.")]
     public double DevelopmentCoastBonus { get; set; } = 0.12;
 
@@ -2016,6 +2033,33 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Description("Share of generated religions that are monotheist. Weighted by how settled the religion's land is, so monotheism clusters in the developed core rather than falling randomly across the map.")]
     public double MonotheistShare { get; set; } = 0.35;
 
+    public enum FaithShape
+    {
+        /// <summary>
+        /// Settled monotheist religions are written Abrahamic-shaped: the <c>rf_abrahamic</c>
+        /// family and hostility doctrine, so their heresies are Hostile and every other religion
+        /// Evil; a chance of lay clergy and of a temporal (caliph-style) head; a great-holy-war
+        /// tenet guaranteed beside a head of faith; temple art matched to theism; and the
+        /// syncretism tenets that name vanilla religions filtered out. Everything else stays pagan.
+        /// </summary>
+        Shaped,
+
+        /// <summary>
+        /// Every religion is <c>rf_pagan</c> with the pagan hostility doctrine, as the generator
+        /// always wrote them. Nothing on the map is ever Evil to anything, and no faith can holy-war
+        /// its own religion's heresies. Kept as the exact old output.
+        /// </summary>
+        PaganOnly,
+    }
+
+    /// <summary>
+    /// Whether settled monotheist religions take vanilla's Abrahamic shape or every religion is
+    /// written pagan. See <see cref="MapGen.Faiths"/> and the notes on <see cref="FaithShape"/>.
+    /// </summary>
+    [Category("10 Cultures and faiths")]
+    [Description("Shaped writes settled monotheist religions like vanilla's Abrahamic ones: heresies are Hostile and rival religions Evil (so holy wars reach both), some get lay clergy or a temporal head, a great-holy-war tenet comes with every head of faith, and temple art follows theism. PaganOnly is the old output: every religion pagan, every rival merely Hostile, no holy wars between heresies.")]
+    public FaithShape FaithShaping { get; set; } = FaithShape.Shaped;
+
 
     // =========================================================================
     // 15 Rulers
@@ -2120,7 +2164,7 @@ public sealed class MapConfig : CustomTypeDescriptor
 
     [Category("11 Rulers")]
     [Description("Enable Nomadic horde realms across steppes and arid plains (requires nomadic DLC; safely degrades to Tribal/Clan if DLC is absent).")]
-    public bool EnableNomadHordes { get; set; } = false;
+    public bool EnableNomadHordes { get; set; } = true;
 
     [Category("11 Rulers")]
     [AzgaarIncompat("Governments come from each state's own form and type — a horde is one because Azgaar " +
@@ -2128,7 +2172,7 @@ public sealed class MapConfig : CustomTypeDescriptor
                     "on. Enable nomad hordes still applies, and turns those states tribal instead. Read " +
                     "again only for counties no state claims.")]
     [Description("Share of qualifying steppe and arid realms that start as Nomads. Qualifying means a real pastoral majority: a fifth of the realm on steppe, or three fifths on steppe/desert/drylands together, or a steppe capital. Early starts add up to +0.25 to this and late starts subtract up to 0.25.")]
-    public double NomadSteppeShare { get; set; } = 0.45;
+    public double NomadSteppeShare { get; set; } = 0.3;
 
 
     // =========================================================================

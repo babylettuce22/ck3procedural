@@ -710,8 +710,37 @@ public static class MapDataWriter
           """);
     }
 
+    /// <summary>
+    /// The straits and river crossings, in vanilla's shape. Overwrites the stub
+    /// <see cref="WriteStubs"/> left, which is written first because the crossings need the
+    /// titles and the titles are made after the map data. Coordinates are measured from the
+    /// bottom-left corner, as vanilla's are — checked against its own file: the Carrickfergus
+    /// shore point lands on Carrickfergus only when y is taken from the bottom.
+    /// </summary>
+    public static void WriteAdjacencies(string modDir, MapGen.CrossingMap crossings, int height,
+        Func<int, string> name)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("From;To;Type;Through;start_x;start_y;stop_x;stop_y;Comment\n");
+
+        foreach (var c in crossings.Crossings)
+        {
+            string type = c.Kind == MapGen.CrossingKind.Strait ? "sea" : "river_large";
+            sb.Append(c.From).Append(';').Append(c.To).Append(';').Append(type).Append(';')
+              .Append(c.Through).Append(';')
+              .Append(c.Start.X).Append(';').Append(height - 1 - c.Start.Y).Append(';')
+              .Append(c.Stop.X).Append(';').Append(height - 1 - c.Stop.Y).Append(';')
+              .Append(name(c.From)).Append('-').Append(name(c.To)).Append('\n');
+        }
+
+        sb.Append("-1;-1;;-1;-1;-1;-1;-1;\n");
+        ParadoxText.WriteNoBom(Path.Combine(modDir, "map_data", "adjacencies.csv"), sb.ToString());
+    }
+
     private static void WriteStubs(string dir)
     {
+        // Replaced by WriteAdjacencies once the titles exist; this keeps the file present and
+        // valid for a run that stops before then.
         ParadoxText.WriteNoBom(Path.Combine(dir, "adjacencies.csv"),
             """
             From;To;Type;Through;start_x;start_y;stop_x;stop_y;Comment

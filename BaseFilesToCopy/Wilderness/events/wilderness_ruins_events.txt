@@ -40,9 +40,22 @@
 # seeded ruined at generation (no variables, nobody remembers), and a map with the Ruins set absent
 # entirely (also no variables — the only way to have ruins there is somebody's console).
 #
-# The find itself is deliberately still thin. What is under the stones wants an artifact, a name and
-# a rarity, and those belong to the artifact writer the way the wonder capstone's did — see the same
-# note in Core/events/gen_wonder_events.txt. This is the hook and the framing, ready for it.
+# ---- What is in this file ----
+#
+#   0001  The digging is finished. The frame: what the ground remembers, and how deep you dug.
+#   0002  Coin under the floor.
+#   0003  Something somebody kept.
+#   0004  The floor gives way.
+#
+# 0001 always fires; the other three are rolled for by gen_ruins_find_effect in
+# common/scripted_effects/00_ruins_discovery_effects.txt, and the fourth outcome — nothing but
+# rubble — is a toast rather than a window. Every branch of that roll reports, which is the house
+# rule for any generated option that resolves with odds: an invisible outcome cannot be told apart
+# from an option that did nothing.
+#
+# 0004 is the only one of the three that can chain, and it chains into the other two: going down
+# into the undercroft yourself is the gamble, and paying to brace it first is the safe purchase of
+# the smaller prize.
 
 # =====================================================================================
 #  0001 — The digging is finished
@@ -116,9 +129,13 @@ wilderness_ruins.0001 = {
 	# Prestige rather than a modifier, for the reason the wonder capstone gives: the province already
 	# carries `build_gold_cost = -0.10` for as long as the ruins stand, and that discount has just
 	# been spent by clearing them. A standing bonus here would be paying for the same act twice.
+	#
+	# DIG = deep. Reusing the masonry means lifting the foundations, which is the only way to reach
+	# whatever is under them — better odds on all three finds, and the sole route to 0004.
 	option = {
 		name = wilderness_ruins.0001.a
 		add_prestige = minor_prestige_gain
+		gen_ruins_find_effect = { DIG = deep }
 	}
 
 	# ---- Leave the foundations where they lie ----
@@ -126,6 +143,10 @@ wilderness_ruins.0001 = {
 	# Piety, and only for a character whose faith has something to say about the dead. The trigger is
 	# what makes this an option rather than decoration: an option every character always takes for a
 	# free reward is not a choice, and this one is closed to anyone the ground means nothing to.
+	#
+	# DIG = shallow, and that is the price of the piety rather than a second reward. The stones stay
+	# where they were set, so the odds on a find drop and the undercroft is unreachable — the option
+	# buys certainty about the dead and gives up the chance of what was buried with them.
 	option = {
 		name = wilderness_ruins.0001.b
 
@@ -142,5 +163,401 @@ wilderness_ruins.0001 = {
 		}
 
 		add_piety = minor_piety_gain
+		gen_ruins_find_effect = { DIG = shallow }
+	}
+}
+
+
+# =====================================================================================
+#  0002 — Coin under the floor
+# =====================================================================================
+#
+# The plain find, and the one that wants no explanation: somebody buried their money and never came
+# back for it.
+#
+# ---- Why major_gold_value and not a number ----
+#
+# `major_gold_value` is twelve months of the character's own income, floored at 75 and capped at
+# 500, with that cap scaled by cultural era (×0.75 tribal through ×3 late medieval) — so the same
+# event is worth having to a count in 867 and still worth having to an emperor in 1200, without this
+# file knowing anything about either. A flat number would be a fortune to one and a rounding error
+# to the other, and would need retuning every time vanilla moves its economy.
+#
+# The whole ladder is in 01_dynamic_values.txt: tiny 1.2 months, minor 3, medium 6, major 12,
+# massive 18, monumental 36. Major is the top of what vanilla is willing to hand out in an event
+# without the player having gone looking for it, which is exactly what this is.
+#
+# Every option here is deterministic, so none of them needs a report: the option text is the promise
+# and the effect tooltip is the receipt. The odds were all spent upstream in gen_ruins_find_effect.
+
+wilderness_ruins.0002 = {
+	type = character_event
+	title = wilderness_ruins.0002.t
+	desc = wilderness_ruins.0002.desc
+	theme = stewardship_domain_focus
+	override_background = { reference = wilderness }
+
+	left_portrait = {
+		character = root
+		animation = shock
+	}
+
+	# Fired only by gen_ruins_find_effect and by 0004, both of which have the county in hand. The
+	# debug panel's Events tab bakes a button for every shipped event and fires it with nothing
+	# attached; without this guard that button would open a window whose text named a county that
+	# resolved to nothing.
+	trigger = {
+		exists = scope:gen_ruins_county
+	}
+
+	# ---- Straight to the treasury ----
+	option = {
+		name = wilderness_ruins.0002.a
+		add_gold = major_gold_value
+
+		ai_chance = {
+			base = 60
+			modifier = {
+				add = 40
+				has_trait = greedy
+			}
+			modifier = {
+				add = 30
+				gold < 0
+			}
+		}
+	}
+
+	# ---- The men who found it take a share ----
+	#
+	# Half the coin for control in the county that just came back into the world, which is the thing
+	# a freshly cleared ruin is shortest of. medium_gold_value is six months against major's twelve,
+	# so the price is legible without this file naming a fraction.
+	option = {
+		name = wilderness_ruins.0002.b
+		add_gold = medium_gold_value
+		add_prestige = minor_prestige_gain
+
+		scope:gen_ruins_county ?= {
+			change_county_control = medium_county_control_gain
+		}
+
+		ai_chance = {
+			base = 40
+			modifier = {
+				add = 40
+				has_trait = generous
+			}
+			modifier = {
+				factor = 0
+				has_trait = greedy
+			}
+		}
+	}
+
+	# ---- It was buried with the dead ----
+	#
+	# Faith-gated, and gated the same way 0001's second option is, so a character who thought the
+	# foundations were worth leaving is the same character offered this. Takes the smallest share of
+	# the coin and the largest share of the piety.
+	option = {
+		name = wilderness_ruins.0002.c
+
+		trigger = {
+			OR = {
+				faith = { has_doctrine_parameter = can_build_megaliths }
+				has_trait = zealous
+				piety_level >= medium_piety_level
+			}
+		}
+
+		add_gold = minor_gold_value
+		add_piety = major_piety_gain
+
+		ai_chance = {
+			base = 20
+			modifier = {
+				add = 60
+				has_trait = zealous
+			}
+			modifier = {
+				factor = 0
+				has_trait = greedy
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0003 — Something somebody kept
+# =====================================================================================
+#
+# The artifact find. gen_ruins_relic_effect mints it in the immediate and leaves it in
+# scope:gen_ruins_relic; see that effect for why the creation goes through vanilla's
+# `scope:adventurer` branch and what it buys.
+#
+# ---- The window is the report ----
+#
+# The roll that chose the piece and its rarity happened before this window opened, and this window
+# names the piece, shows it, and lets the player read its rarity off the frame. That is the report
+# the house rule asks for — a toast on top of it would be announcing the same thing twice, which is
+# the fault the buildings file already warns about at ruins_cleared's on_complete.
+#
+# Every option below is deterministic for the same reason 0002's are.
+
+wilderness_ruins.0003 = {
+	type = character_event
+	title = wilderness_ruins.0003.t
+	desc = wilderness_ruins.0003.desc
+	theme = stewardship_domain_focus
+	override_background = { reference = wilderness }
+
+	left_portrait = {
+		character = root
+		animation = admiration
+	}
+
+	artifact = {
+		target = scope:gen_ruins_relic
+		position = lower_center_portrait
+	}
+
+	trigger = {
+		exists = scope:gen_ruins_county
+	}
+
+	immediate = {
+		gen_ruins_relic_effect = yes
+	}
+
+	# ---- Keep it ----
+	#
+	# equip_artifact_to_owner_replace rather than leaving it in the inventory, for the reason the
+	# artifact writer's startup spawn gives: created is not equipped, and an artifact that is never
+	# equipped has none of its modifiers live and never reaches the portrait.
+	option = {
+		name = wilderness_ruins.0003.a
+
+		scope:gen_ruins_relic ?= {
+			equip_artifact_to_owner_replace = yes
+		}
+
+		ai_chance = {
+			base = 70
+			modifier = {
+				add = 30
+				has_trait = arrogant
+			}
+		}
+	}
+
+	# ---- Break it up ----
+	#
+	# The option that exists so keeping it is a choice. Gold now against a piece that would have
+	# been in the dynasty for three hundred years.
+	option = {
+		name = wilderness_ruins.0003.b
+
+		add_gold = medium_gold_value
+		destroy_artifact = scope:gen_ruins_relic
+
+		ai_chance = {
+			base = 10
+			modifier = {
+				add = 30
+				gold < 0
+			}
+			modifier = {
+				factor = 0
+				has_trait = arrogant
+			}
+		}
+	}
+
+	# ---- Give it to the faith ----
+	#
+	# set_owner rather than destroy_artifact: the piece survives, it is simply somebody else's, and
+	# a realm priest who owns a relic dug out of a ruin is a better outcome than one melted down.
+	# Gated on the chaplain existing at all, because an unlanded or landless character has none.
+	option = {
+		name = wilderness_ruins.0003.c
+
+		trigger = {
+			exists = cp:councillor_court_chaplain
+			cp:councillor_court_chaplain ?= { NOT = { this = root } }
+		}
+
+		add_piety = major_piety_gain
+
+		scope:gen_ruins_relic ?= {
+			set_owner = root.cp:councillor_court_chaplain
+		}
+
+		cp:councillor_court_chaplain ?= {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 20
+			}
+		}
+
+		ai_chance = {
+			base = 20
+			modifier = {
+				add = 50
+				has_trait = zealous
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0004 — The floor gives way
+# =====================================================================================
+#
+# The one event here that can hurt, and the one that chains. Reachable only from 0001's first
+# option, because a floor nobody lifted cannot fall in.
+#
+# ---- The shape of the choice ----
+#
+#   a  go down yourself       — odds: the relic, or a beam across the shoulders
+#   b  brace it and send men  — pay minor_gold_value, take the coin, no risk
+#   c  wall it up             — nothing found, and the work finishes on time
+#
+# So the gamble and the purchase reach the SAME two events 0001 could have rolled directly, which is
+# what keeps this from being a punishment branch: the undercroft is a second, better bite at the
+# other two finds, bought with either risk or money.
+#
+# ---- Both branches of the gamble report ----
+#
+# The good branch opens 0003 and the bad branch sends a toast, so neither resolves in silence. The
+# bad branch is the one that matters for the rule: a wound applied with no window and no toast reads
+# as the option having done nothing at all, and the player would not know to look at their health.
+#
+# ---- increase_wounds_no_death_effect, not increase_wounds_effect ----
+#
+# The plain effect kills outright at wound rank 3, so a character who had already been wounded twice
+# would die to a collapsing cellar in a county they may never have visited. The no_death variant is
+# vanilla's own answer to exactly that and is what the tournament and hunt injuries use. REASON is
+# only read there as a flag for the infection follow-up, and `accident` is a value vanilla already
+# passes.
+
+wilderness_ruins.0004 = {
+	type = character_event
+	title = wilderness_ruins.0004.t
+	desc = wilderness_ruins.0004.desc
+	theme = stewardship_domain_focus
+	override_background = { reference = wilderness }
+
+	left_portrait = {
+		character = root
+		animation = fear
+	}
+
+	trigger = {
+		exists = scope:gen_ruins_county
+	}
+
+	# ---- Go down yourself ----
+	#
+	# The odds move with the things that ought to move them and nothing else: prowess is climbing
+	# down a rotten shaft, brave is being willing to, and craven is the trait that should have
+	# talked you out of it.
+	option = {
+		name = wilderness_ruins.0004.a
+
+		hidden_effect = {
+			random_list = {
+				60 = {
+					modifier = {
+						add = 15
+						prowess >= high_skill_rating
+					}
+					modifier = {
+						add = 10
+						has_trait = brave
+					}
+					trigger_event = wilderness_ruins.0003
+				}
+
+				40 = {
+					modifier = {
+						add = 15
+						has_trait = craven
+					}
+					modifier = {
+						factor = 0.5
+						prowess >= high_skill_rating
+					}
+
+					increase_wounds_no_death_effect = { REASON = accident }
+					add_stress = medium_stress_impact_gain
+
+					send_interface_toast = {
+						type = event_generic_bad
+						title = wilderness_ruins.0004.hurt
+						left_icon = root
+					}
+				}
+			}
+		}
+
+		ai_chance = {
+			base = 20
+			modifier = {
+				add = 40
+				has_trait = brave
+			}
+			modifier = {
+				factor = 0
+				OR = {
+					has_trait = craven
+					has_trait_rank = { trait = wounded rank >= 2 }
+					is_pregnant = yes
+				}
+			}
+		}
+	}
+
+	# ---- Brace it first ----
+	#
+	# The purchase. Costs three months' income and returns twelve, which is a good trade the player
+	# can see through the tooltip — the point of the option is that it is safe, not that it is
+	# cheap, and 0002 still lets them decide what to do with the coin afterwards.
+	option = {
+		name = wilderness_ruins.0004.b
+
+		remove_short_term_gold = minor_gold_value
+		trigger_event = wilderness_ruins.0002
+
+		ai_chance = {
+			base = 60
+			modifier = {
+				factor = 0
+				gold < minor_gold_value
+			}
+		}
+	}
+
+	# ---- Wall it up ----
+	#
+	# Deterministic and small, and it has to be here: without it the only ways out of this window
+	# are a gamble and a bill, which makes the undercroft a tax on having dug at all.
+	option = {
+		name = wilderness_ruins.0004.c
+
+		scope:gen_ruins_county ?= {
+			change_county_control = minor_county_control_gain
+		}
+
+		ai_chance = {
+			base = 20
+			modifier = {
+				add = 40
+				has_trait = craven
+			}
+		}
 	}
 }

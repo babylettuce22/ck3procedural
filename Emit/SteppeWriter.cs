@@ -172,7 +172,7 @@ public static class SteppeWriter
     /// occupies. The key is searched for at the start of a line so a sub-region *named*
     /// something-sub_regions could not be mistaken for it.
     /// </summary>
-    private static string? SubRegionsBlock(string text, out int start, out int end)
+    internal static string? SubRegionsBlock(string text, out int start, out int end)
     {
         start = end = -1;
 

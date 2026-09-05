@@ -56,6 +56,7 @@ public static class GuiWriter
         PatchBookmarkTab(modDir, gameDir);
         PatchArtifactDetailsWindow(modDir, gameDir);
         PatchInventoryWindow(modDir, gameDir);
+        PatchSilkRoadWindow(modDir, gameDir);
 
         if (societies) PatchHudTabs(modDir, gameDir);
         // The windows this project authors itself live in Emit/GuiWindows. Called from here so a
@@ -625,6 +626,29 @@ public static class GuiWriter
     /// tunable against a running game. The camera does not: it is read at game start, so a change
     /// to the zoom costs a full run and a restart where a change to the frame costs neither.
     /// </summary>
+    /// <summary>
+    /// Hides the Silk Road window's link to the Dynastic Cycle when that situation does not exist.
+    ///
+    /// Vanilla's window carries a button bound to <c>GetSituation('dynastic_cycle')</c>, All
+    /// Under Heaven's China situation, which its history starts on every vanilla map and which a
+    /// generated map does not have. Bound to nothing, the button drew with an empty name and an
+    /// empty icon path, and clicking it asked the engine to open a window with no name — an
+    /// access violation, reproduced 2026-09-02. The vanilla block has no <c>visible</c> of its
+    /// own, so one is inserted rather than narrowed.
+    /// </summary>
+    private static void PatchSilkRoadWindow(string modDir, string gameDir)
+    {
+        var doc = GuiDocument.Open(gameDir, "gui", "gui", "window_silk_road.gui");
+        if (doc is null) return;
+
+        doc.Unique("silk road window dynastic cycle link",
+                n => !n.IsBlock && n.Key == "datacontext"
+                     && n.Value is not null && n.Value.Contains("GetSituation('dynastic_cycle')"))
+            .InsertVisible(GuiExpr.Raw("Situation.IsValid"));
+
+        doc.Ship(modDir);
+    }
+
     private static void PatchInventoryWindow(string modDir, string gameDir)
     {
         var doc = GuiDocument.Open(gameDir, "gui", "gui", "window_inventory.gui");

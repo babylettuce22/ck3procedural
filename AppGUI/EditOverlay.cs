@@ -40,8 +40,20 @@ public sealed class EditOverlay
     /// <summary>Keyed by the character's history id, which is the seat county's index.</summary>
     public Dictionary<string, RulerEdit> Rulers { get; set; } = [];
 
+    /// <summary>
+    /// A realm put on a different government, keyed by the county its ruler is seated in — a title
+    /// key, so it carries the generated name and needs no guard of its own.
+    ///
+    /// The realm rather than the county: replaying it re-resolves who that seat's vassals are in
+    /// the new world and applies the government across all of them, the same as making the change
+    /// by hand. A seed that reshuffled who holds what therefore lands the edit on the realm that
+    /// grew there instead, which is the same bargain every other entry here makes.
+    /// </summary>
+    public Dictionary<string, string> Governments { get; set; } = [];
+
     [JsonIgnore]
-    public int Count => Titles.Count + Cultures.Count + Faiths.Count + Religions.Count + Rulers.Count;
+    public int Count => Titles.Count + Cultures.Count + Faiths.Count + Religions.Count
+                      + Rulers.Count + Governments.Count;
 
     private static readonly JsonSerializerOptions Json = new()
     {

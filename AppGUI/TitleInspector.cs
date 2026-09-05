@@ -95,6 +95,20 @@ public sealed class TitleInspector : InspectorForm
         _ => "Barony",
     };
 
+    /// <summary>
+    /// The governments a realm can be put on. Exclusive, unlike the nickname and legitimacy
+    /// dropdowns, because this is not a key the engine merely looks up: the capital holding of
+    /// every county in the realm is derived from it, and a government the tool has no
+    /// <c>primary_holding</c> for would leave every ruler in the realm unable to hold his own seat.
+    /// </summary>
+    public sealed class GovernmentConverter : StringConverter
+    {
+        public override bool GetStandardValuesSupported(ITypeDescriptorContext? context) => true;
+        public override bool GetStandardValuesExclusive(ITypeDescriptorContext? context) => true;
+        public override StandardValuesCollection GetStandardValues(ITypeDescriptorContext? context)
+            => new(GovernmentMap.Assignable);
+    }
+
     // --- Actions ------------------------------------------------------------------------------
 
     private void Reroll()
@@ -204,6 +218,30 @@ public sealed class TitleInspector : InspectorForm
                 : realm!.LiegeSeat(s) is { } above
                     ? $"{TierName(realm.Primary(above))} {realm.Primary(above).Name}"
                     : "(independent)";
+
+        [Category("Realm (de facto)")]
+        [TypeConverter(typeof(GovernmentConverter))]
+        [Description("What this title's holder rules as. Changing it moves the whole realm — this "
+                     + "ruler's counties and every vassal's beneath them — because a government is "
+                     + "decided per realm, and it takes each county's capital holding with it, "
+                     + "since each government seats its ruler in one kind of holding only. To "
+                     + "change a single vassal instead, open them from Vassals… and change theirs. "
+                     + "Empty until the mod is written.")]
+        public string Government
+        {
+            // Blank for the wilderness as well as for a title nobody holds: an unsettled county is
+            // held by its own immortal placeholder under wilderness_government, which is not one of
+            // ours to change, and showing a settable value that quietly did nothing would be worse
+            // than showing none.
+            get => !Unsettled && Seat is { } s && edits.Governments is { } map ? map.For(s) : "—";
+            set
+            {
+                if (Unsettled || Seat is not { } s || realm is null) return;
+                edits.SetGovernment(s, realm.Primary(s), realm.RealmCounties(s), value);
+            }
+        }
+
+        private bool Unsettled => edits.Target?.Written.Wilderness.Contains(title) == true;
 
         [Category("Realm (de facto)")]
         [DisplayName("Direct vassals")]

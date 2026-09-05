@@ -84,7 +84,7 @@ public static class ContentWriter
         var development = Core.Stage.Time("development", () =>
         {
             var levels = MapGen.Development.ForCounties(counties, provinceTerrain, cfg,
-                new Rng(cfg.Seed ^ 0x0DE7));
+                new Rng(cfg.Seed ^ 0x0DE7), null, azgaar);
             ReportDevelopment(levels);
             return levels;
         });
@@ -149,7 +149,7 @@ public static class ContentWriter
         development = Core.Stage.Time("development", () =>
         {
             var levels = MapGen.Development.ForCounties(counties, provinceTerrain, cfg,
-                new Rng(cfg.Seed ^ 0x0DE7), worldCenters);
+                new Rng(cfg.Seed ^ 0x0DE7), worldCenters, azgaar);
             ReportDevelopment(levels);
             return levels;
         });
@@ -238,6 +238,34 @@ public static class ContentWriter
         var steppe = Core.Stage.Time("great steppe", () => MapGen.Steppe.Build(counties, provinces,
             order, landCount, provinceTerrain, governments, new Rng(cfg.Seed ^ 0x57E9)));
 
+        // Where an army can march across water: straits and major-river crossings, written into
+        // map_data/adjacencies.csv over the stub the map writer left. See MapGen/Crossings.cs.
+        var crossings = Core.Stage.Time("crossings", () =>
+        {
+            var found = MapGen.Crossings.Build(empires, provinces, order, baronyCount, cfg);
+            var baronyKey = Titles.Flatten(empires)
+                .Where(t => t.Tier == "b" && t.ProvinceId > 0)
+                .ToDictionary(t => t.ProvinceId, t => t.Key);
+            MapDataWriter.WriteAdjacencies(modDir, found, provinces.Height,
+                id => baronyKey.GetValueOrDefault(id, id.ToString()));
+            int strait = (int)Math.Round(cfg.Scaled(cfg.StraitPixelsAtVanilla));
+            Console.WriteLine($"  crossings: {found.Straits} straits up to {strait} px and " +
+                              $"{found.Rivers} river crossings up to {strait * MapGen.Crossings.RiverWidthFactor} px wide");
+            return found;
+        });
+
+        // The roads and sea lanes between markets. After cultivation and the capitals, since a
+        // road runs over the ground as it will be painted and between the seats as they were
+        // just chosen; after the crossings, which it walks. See MapGen/Routes.cs.
+        var routes = Core.Stage.Time("routes", () => MapGen.Routes.Build(empires, provinces, order,
+            baronyCount, provinceTerrain, drainage, wilderness, crossings));
+
+        // The Silk Road, laid along the network. Before the landed titles and localisation are
+        // written, and it has to be: six bazaar counties take vanilla's county keys here, so
+        // that the base-game script naming them finds this map's markets. See MapGen/SilkRoad.cs.
+        var silkRoad = Core.Stage.Time("silk road", () => MapGen.SilkRoad.Build(empires, routes, crossings,
+            development, worldCenters, governments, provinces, order, baronyCount));
+
         // The traced courses go in so each river can be named along its length rather than by the
         // latitude of its provinces — see WaterNaming.GroupRiverProvinces.
         var waterNames = Core.Stage.Time("water naming", () => WaterNaming.Generate(
@@ -247,12 +275,14 @@ public static class ContentWriter
         // Assigned inside the stage below and kept for WrittenContent — the holdings come off one
         // Rng walked across the whole world, so this is the only chance to see them.
         Dictionary<int, string> holdings = [];
+        List<ProvinceRow> provinceRows = [];
 
         Core.Stage.Time("titles, history and localisation", () =>
         {
             WriteLandedTitles(modDir, empires, faiths, wilderness);
             WriteProvinceTerrain(modDir, provinceTerrain, landCount);
-            holdings = WriteProvinceHistory(modDir, cfg, empires, provinceTerrain, development, cultures, faiths, governments, wilderness, worldCenters, cfg.Seed);
+            (provinceRows, holdings) = BuildProvinceHistory(cfg, empires, provinceTerrain, development, cultures, faiths, governments, wilderness, worldCenters, silkRoad, cfg.Seed, azgaar);
+            EmitProvinceHistory(modDir, provinceRows, holdings);
             WriteLocalisation(modDir, empires, waterNames, provinces, order, baronyCount,
                 landCount, riverCount);
         });
@@ -313,16 +343,25 @@ public static class ContentWriter
             CompatibilityWriter.WriteDefines(modDir, gameDir, cfg);
             CompatibilityWriter.WriteCultureEras(modDir, gameDir, cfg);
             CompatibilityWriter.WriteCalendarLocalisation(modDir, azgaar);
-            CompatibilityWriter.WriteGeographicalRegions(modDir, gameDir, empires, cultures,
-                steppe.RegionMembers());
+            var regionMembers = steppe.RegionMembers();
+            foreach (var (key, members) in silkRoad.RegionMembers()) regionMembers[key] = members;
+            CompatibilityWriter.WriteGeographicalRegions(modDir, gameDir, empires, cultures, regionMembers);
             CompatibilityWriter.WriteHolySites(modDir, gameDir, empires, faiths);
             CompatibilityWriter.WriteDecisionBlocks(modDir, gameDir);
         });
 
         // After the regions it points at, and nothing reads what it writes.
         Core.Stage.Time("great steppe files", () => SteppeWriter.WriteAll(modDir, gameDir, steppe));
+        Core.Stage.Time("silk road files", () => SilkRoadWriter.WriteAll(modDir, gameDir, cfg, silkRoad));
+        Core.Stage.Time("route files", () => RouteWriter.WriteAll(modDir, routes, crossings, silkRoad,
+            provinces, order, baronyCount, provinceTerrain));
 
         Core.Stage.Time("religion files", () => ReligionWriter.WriteAll(modDir, faiths));
+
+        // After the religions, whose crown-or-regalia answer it writes into CK3's triggers, and
+        // after the titles it reads seats off. It writes nothing anything else reads.
+        Core.Stage.Time("coronation files",
+            () => CoronationWriter.WriteAll(modDir, gameDir, empires, faiths));
 
         Core.Stage.Time("vanilla titulars",
             () => CompatibilityWriter.WriteVanillaTitulars(modDir, gameDir, empires));
@@ -642,11 +681,13 @@ public static class ContentWriter
             Wilderness = wilderness,
             Development = development,
             Holdings = holdings,
+            ProvinceHistory = provinceRows,
             WorldCenters = worldCenters,
             Realms = realms,
             Rulers = rulers,
             Prehistory = prehistory,
             Governments = governments,
+            Steppe = steppe,
             Bookmarks = bookmarks,
             BaronyCount = baronyCount,
             LandCount = landCount,
@@ -1002,8 +1043,6 @@ public static class ContentWriter
                           $"(vanilla 867 counties that set one: median 6, p90 12, ordinary top 20, peak 30)");
     }
 
-    /// <returns>The holding written for every barony, by province id — see
-    /// <see cref="WrittenContent.Holdings"/> for why it is kept rather than replayed.</returns>
     /// <summary>
     /// How much of a wonder already stands on the start date: 0 for an empty slot, up to
     /// <see cref="GeneratedWonder.Tiers"/> for one finished long ago.
@@ -1094,18 +1133,69 @@ public static class ContentWriter
         };
     }
 
-    private static Dictionary<int, string> WriteProvinceHistory(string modDir, MapConfig cfg,
-        List<Title> empires,
-        TerrainClass[] provinceTerrain, Dictionary<Title, int> development, CultureMap cultures,
-        FaithMap faiths, GovernmentMap governments, WildernessMap wilderness,
-        WorldCenterMap worldCenters, int cfgSeed)
+    /// <summary>
+    /// One barony's line in the province history, minus its holding.
+    ///
+    /// Everything here was decided by a draw or by a generator that cannot be run again on its own
+    /// — the wonder tier comes off the world centres and the era, the market off the Silk Road
+    /// route — so it is captured rather than replayed, and a later re-emit writes back exactly what
+    /// the first write did. The holding is the one thing an edit can move, and it lives in
+    /// <see cref="WrittenContent.Holdings"/> so that there is a single place to move it.
+    /// </summary>
+    public sealed record ProvinceRow(
+        int ProvinceId, string Culture, string Faith, string? SpecialSlot, string? SpecialBuilding);
+
+    /// <summary>
+    /// Writes the province history from rows already decided.
+    ///
+    /// Split from <see cref="BuildProvinceHistory"/> so that changing a realm's government after
+    /// the mod is written can re-emit this file without re-rolling anything: the holdings come off
+    /// a single <see cref="Rng"/> walked across every barony in the world in one pass, and a county
+    /// whose government had changed would desync the rest of that stream. One serialiser either
+    /// way — the generator calls Build then this, an overwrite calls this alone.
+    /// </summary>
+    internal static void EmitProvinceHistory(string modDir, IReadOnlyList<ProvinceRow> rows,
+        IReadOnlyDictionary<int, string> holdings)
     {
         string dir = Path.Combine(modDir, "history", "provinces");
         Directory.CreateDirectory(dir);
 
+        // Four spaces again, matching landed_titles above.
+        var b = new JominiBuilder(JominiStyle.Spaced);
+
+        foreach (var row in rows)
+        {
+            using (b.Block(row.ProvinceId))
+            {
+                b.Field("culture", row.Culture);
+                b.Field("religion", row.Faith);
+                b.Field("holding", holdings.GetValueOrDefault(row.ProvinceId, "none"));
+
+                if (row.SpecialSlot is { } slot) b.Field("special_building_slot", slot);
+                if (row.SpecialBuilding is { } building) b.Field("special_building", building);
+            }
+        }
+
+        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_provinces.txt"), b.ToString());
+    }
+
+    /// <returns>
+    /// Every barony's line, in the order it is written, and the holding written for each of them by
+    /// province id — see <see cref="WrittenContent.Holdings"/> for why the second is kept rather
+    /// than replayed.
+    /// </returns>
+    private static (List<ProvinceRow> Rows, Dictionary<int, string> Holdings) BuildProvinceHistory(
+        MapConfig cfg,
+        List<Title> empires,
+        TerrainClass[] provinceTerrain, Dictionary<Title, int> development, CultureMap cultures,
+        FaithMap faiths, GovernmentMap governments, WildernessMap wilderness,
+        WorldCenterMap worldCenters, SilkRoadMap silkRoad, int cfgSeed, AzgaarImport? azgaar)
+    {
         var rng = new Rng(cfgSeed ^ 0x8A12);
         var counts = new Dictionary<string, int>();
+        var importedHoldings = new Dictionary<string, int>();
         var holdings = new Dictionary<int, string>();
+        var rows = new List<ProvinceRow>();
 
         // The richest county that is NOT a world centre, for the wonder roll below to measure its
         // centres against. The counties being judged are excluded on purpose: the yardstick has to
@@ -1121,9 +1211,6 @@ public static class ContentWriter
             .DefaultIfEmpty(1)
             .Max();
 
-        // Four spaces again, matching landed_titles above.
-        var b = new JominiBuilder(JominiStyle.Spaced);
-
         var wondersByBarony = worldCenters.Centers
             .ToDictionary(wc => wc.CapitalBarony, wc => wc.Wonder);
 
@@ -1138,6 +1225,33 @@ public static class ContentWriter
             // Seat first: index zero is the capital holding, and the seat is the capital. The
             // list itself is not reordered — see Title.Seat.
             var baronies = county.SeatFirst().ToList();
+
+            // The town an export drew on each barony, where it drew one big enough to be a holding
+            // in its own right. The seat is skipped: its holding is whatever its ruler's government
+            // seats him in, so a burg there says nothing new and must not count toward whether the
+            // export has already settled a second barony of this county.
+            var settlements = new AzgaarBurg?[baronies.Count];
+            bool settledByExport = false;
+
+            // A horde's county is its camp and nothing else whatever was drawn on it, so a burg
+            // there settles nothing — and counting one would make the log claim holdings the world
+            // does not have.
+            if (azgaar is not null && !wild && government != GovernmentMap.Nomad)
+            {
+                for (int i = 1; i < baronies.Count; i++)
+                {
+                    var burg = azgaar.For(baronies[i])?.Burgs
+                        .FirstOrDefault(b => AzgaarSettlement.IsHolding(b, azgaar.MedianBurgPopulation));
+                    if (burg is null) continue;
+
+                    settlements[i] = burg;
+                    settledByExport = true;
+
+                    string kind = AzgaarSettlement.Describe(burg);
+                    importedHoldings[kind] = importedHoldings.GetValueOrDefault(kind) + 1;
+                }
+            }
+
             for (int i = 0; i < baronies.Count; i++)
             {
                 var barony = baronies[i];
@@ -1147,40 +1261,56 @@ public static class ContentWriter
 
                 string holding = wild
                     ? (i == 0 ? "wilderness_holding" : "none")
-                    : MapGen.Development.Holding(i, terrain, level, government, rng);
+                    : MapGen.Development.Holding(i, terrain, level, government, rng,
+                                                 settlements[i], settledByExport);
+
+                // A Silk Road bazaar displaced from the seat by a wonder lands on whatever barony
+                // is next, which the roll above usually leaves empty. A market is a town, so it
+                // gets one; the roll is still made, so nothing else on the map moves.
+                if (holding == "none" && silkRoad.MarketAt(barony) is not null) holding = "city_holding";
 
                 counts[holding] = counts.GetValueOrDefault(holding) + 1;
                 holdings[barony.ProvinceId] = holding;
 
-                using (b.Block(barony.ProvinceId))
+                string? slot = null, building = null;
+
+                if (wondersByBarony.TryGetValue(barony, out var wonder))
                 {
-                    b.Field("culture", cultureKey);
-                    b.Field("religion", faith);
-                    b.Field("holding", holding);
+                    // How far up its own ladder this wonder already is on the start date.
+                    int built = StartingWonderTier(
+                        wonder, development, ordinaryTopDevelopment, governments, cfg,
+                        new Rng(barony.ProvinceId ^ 0x5C0E));
 
-                    if (wondersByBarony.TryGetValue(barony, out var wonder))
-                    {
-                        // How far up its own ladder this wonder already is on the start date.
-                        int built = StartingWonderTier(
-                            wonder, development, ordinaryTopDevelopment, governments, cfg,
-                            new Rng(barony.ProvinceId ^ 0x5C0E));
+                    // The slot is declared either way. Without it a world that rolled "not yet
+                    // built" would have nowhere to build it, and the wonder would be a
+                    // building nobody could ever construct.
+                    slot = wonder.TierKey(1);
 
-                        // The slot is declared either way. Without it a world that rolled "not yet
-                        // built" would have nowhere to build it, and the wonder would be a
-                        // building nobody could ever construct.
-                        b.Field("special_building_slot", wonder.TierKey(1));
-
-                        if (built > 0) b.Field("special_building", wonder.TierKey(built));
-                    }
+                    if (built > 0) building = wonder.TierKey(built);
                 }
+                else if (silkRoad.MarketAt(barony) is { } market)
+                {
+                    // A Silk Road bazaar: vanilla's market building, standing from the start,
+                    // since the visit-a-market decision requires one to be there. Never on a
+                    // wonder's barony — a province has one slot — which SilkRoad.Build
+                    // guarantees by moving the market a barony over.
+                    slot = market;
+                    building = market;
+                }
+
+                rows.Add(new ProvinceRow(barony.ProvinceId, cultureKey, faith, slot, building));
             }
         }
 
         Console.WriteLine("  holdings: " + string.Join(", ",
             counts.OrderByDescending(k => k.Value).Select(k => $"{k.Value} {k.Key}")));
 
-        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_provinces.txt"), b.ToString());
-        return holdings;
+        if (importedHoldings.Count > 0)
+            Console.WriteLine($"  azgaar: {importedHoldings.Values.Sum()} of those are burgs the " +
+                              "export drew — " + string.Join(", ", importedHoldings
+                                  .OrderByDescending(k => k.Value).Select(k => $"{k.Value} {k.Key}")));
+
+        return (rows, holdings);
     }
 
     /// <summary>

@@ -31,6 +31,25 @@ public sealed class GovernmentMap
     /// <inheritdoc cref="Meritocratic"/>
     public const string SteppeAdmin = "steppe_admin_government";
 
+    /// <summary>
+    /// Every government a realm can be put on by hand, for the inspector's dropdown.
+    ///
+    /// Assignment in title history bypasses <c>can_get_government</c> entirely, so what belongs
+    /// here is not what a ruler could reach in play but what stands up on a generated map with
+    /// nothing else authored for it: a bare <c>government =</c> line and a capital holding of the
+    /// right type. That is the seven the cascade above already produces plus All Under Heaven's two
+    /// portable bureaucracies, which vanilla history likewise assigns bare.
+    ///
+    /// The ones deliberately absent are the ones with something hardcoded behind them —
+    /// <c>celestial_government</c> wants <c>title:h_china</c>, the two Japanese ones want a
+    /// heritage and a figurehead title, <c>wanua</c> wants another heritage, <c>mandala</c> wants
+    /// temple capitals — and <c>landless_adventurer</c>, which is not a realm at all.
+    /// </summary>
+    public static readonly string[] Assignable =
+    [
+        Feudal, Clan, Tribal, Republic, Theocracy, Administrative, Nomad, Meritocratic, SteppeAdmin,
+    ];
+
     private readonly Dictionary<Title, string> byCounty;
     private readonly HashSet<Title> _adminRealms;
     private readonly HashSet<Title> _nomadRealms;
@@ -61,8 +80,40 @@ public sealed class GovernmentMap
     public bool IsAdminEmpire(Title title) => _adminRealms.Contains(title);
     public bool IsNomadRealm(Title title) => _nomadRealms.Contains(title);
 
+    /// <summary>
+    /// Moves one county onto a different government after the map was built — the editor's
+    /// override, and the only thing here that mutates.
+    ///
+    /// Per county rather than per realm because that is how the map is keyed and how a revert has
+    /// to put it back: the counties of one realm do not all share a government even as generated,
+    /// since a coastal city and a steppe march are decided county by county on top of whatever
+    /// their sovereign got.
+    /// </summary>
+    public void Set(Title county, string government) => byCounty[county] = government;
+
+    /// <summary>
+    /// Whether a realm is listed as one of the two kinds that are tracked whole rather than county
+    /// by county. Set alongside <see cref="Set"/> when an override changes what a realm is, so a
+    /// realm that has stopped being nomadic stops being listed as one.
+    /// </summary>
+    public void MarkRealm(Title primary, bool administrative, bool nomad)
+    {
+        if (administrative) _adminRealms.Add(primary); else _adminRealms.Remove(primary);
+        if (nomad) _nomadRealms.Add(primary); else _nomadRealms.Remove(primary);
+    }
+
     public IEnumerable<Title> AdminTitles => _adminRealms;
     public IEnumerable<Title> NomadTitles => _nomadRealms;
+
+    /// <summary>
+    /// Whether any county on the map is a horde — a peripheral steppe march counts, which is why
+    /// this reads the counties and not <see cref="NomadTitles"/>. What decides whether the nomad
+    /// naming override is worth shipping.
+    /// </summary>
+    public bool AnyNomad => byCounty.Values.Any(g => g == Nomad);
+
+    /// <inheritdoc cref="AnyNomad"/>
+    public IEnumerable<Title> NomadCounties => byCounty.Where(kv => kv.Value == Nomad).Select(kv => kv.Key);
 
     public static string SafeFallback(string government, bool isClanEligible = false) => government switch
     {

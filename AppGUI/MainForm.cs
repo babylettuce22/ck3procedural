@@ -2386,7 +2386,8 @@ public sealed class MainForm : Form
         try
         {
             using (new WaitCursorFor(this))
-                Emit.WorldOverwrite.Apply(target.ModDir, target.Result, target.Written, _edits.Pending);
+                Emit.WorldOverwrite.Apply(target.ModDir, target.Result, target.Written,
+                    _edits.Pending, _options.GameDir);
 
             _edits.MarkWritten();
             SaveEdits(modDir);
@@ -2428,11 +2429,12 @@ public sealed class MainForm : Form
         try
         {
             using (new WaitCursorFor(this))
-                Emit.WorldOverwrite.Apply(target.ModDir, target.Result, target.Written, aspects);
+                Emit.WorldOverwrite.Apply(target.ModDir, target.Result, target.Written, aspects,
+                    _options.GameDir);
 
             _edits.MarkWritten();
             SaveEdits(target.ModDir);
-            Emit.WorldOverwrite.Report(aspects, edited, target.ModDir);
+            Emit.WorldOverwrite.Report(aspects, edited, target.ModDir, target.Written);
             _status.Text = $"Edits written to {target.ModDir}";
         }
         catch (Exception ex)
@@ -3276,7 +3278,8 @@ public sealed class MainForm : Form
         if (_edits.EditedCount == 0) return;
 
         var answer = MessageBox.Show(this,
-            "Put everything edited — titles, cultures, faiths and rulers — back to how it was generated?",
+            "Put everything edited — titles, cultures, faiths, rulers and governments — back to how "
+            + "it was generated?",
             "Revert all", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
 
         if (answer == DialogResult.OK) _edits.RevertAll();

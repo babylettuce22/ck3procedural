@@ -31,5 +31,63 @@
 
  wilderness_ruins.0001.desc_close:0 "\nThe ground is yours to build on now, whatever it was before."
 
- wilderness_ruins.0001.a:0 "Good stone. Use it."
+ wilderness_ruins.0001.a:0 "Good stone. Use it — and lift the foundations while you are at it."
  wilderness_ruins.0001.b:0 "Set the foundations back as they were, and build elsewhere."
+
+ # The fourth outcome of gen_ruins_find_effect's roll, and the only one that is a toast rather than
+ # a window. It exists because a roll nobody can see is indistinguishable from a mod that is broken:
+ # a player who cleared a ruin and got no window at all would have no way to tell a bad roll from a
+ # chain that never fired. The control gain in the toast is the honest consolation and is also what
+ # gives the message a body — event_generic_neutral renders its desc from the effect list.
+ wilderness_ruins.0001.nothing:0 "The diggers turn over every stone in [gen_ruins_county.GetName] and find nothing under any of them but more stone. The site is clean, at least, and the ground can be worked."
+
+
+ # =====================================================================================
+ #  0002 — Coin under the floor
+ # =====================================================================================
+
+ wilderness_ruins.0002.t:0 "What the Floor Was Hiding"
+
+ wilderness_ruins.0002.desc:0 "A spade turns up on its edge with a noise nobody expected, and the man holding it stops and calls the others over.\n\nThere is a jar set into the packed clay beneath where the hearth used to be, mouth stopped with wax and the wax gone grey with age. Inside is coin — a great deal of coin, of no mintage anyone here can read, wrapped in cloth that comes apart when it is touched.\n\nSomebody buried their whole life under that floor and meant to come back for it. Whatever happened to [gen_ruins_county.GetName] happened faster than they could."
+
+ wilderness_ruins.0002.a:0 "Count it, sack it, and send it to the treasury."
+ wilderness_ruins.0002.b:0 "The men who found it get a share of it."
+ wilderness_ruins.0002.c:0 "It was buried with the dead. Most of it goes back to them."
+
+
+ # =====================================================================================
+ #  0003 — Something somebody kept
+ # =====================================================================================
+ #
+ # The artifact is minted in the event's immediate and shown in the window itself, so the desc can
+ # name it. It is deliberately vague about what the thing IS: gen_ruins_relic_effect rolls between a
+ # weapon, a piece of armour, a crown and a set of regalia, and lets vanilla pick a form the owner's
+ # culture actually uses — so the prose has to fit all of them and the artifact widget does the
+ # describing.
+
+ wilderness_ruins.0003.t:0 "Something Somebody Kept"
+
+ wilderness_ruins.0003.desc:0 "It is not in the rubble. It is under it, in a space somebody made on purpose — a lined hollow with a lid on it, cut into the floor of what must have been the best room in the house.\n\nWhatever else these people lost when the walls came down, they did not lose this by accident. They put it somewhere safe and then never came back, which means they were not there to be asked.\n\nThe work gang has stopped pretending to work. They are standing in a ring around the hole, and they are waiting to see what you do with [gen_ruins_relic.GetName]."
+
+ wilderness_ruins.0003.a:0 "It was safe under a floor for two hundred years. It will be safer with me."
+ wilderness_ruins.0003.b:0 "It is metal and stones. Break it up and weigh it."
+ wilderness_ruins.0003.c:0 "It came out of a grave. Give it to the Church."
+
+
+ # =====================================================================================
+ #  0004 — The floor gives way
+ # =====================================================================================
+
+ wilderness_ruins.0004.t:0 "The Floor Gives Way"
+
+ wilderness_ruins.0004.desc:0 "The foundation course comes up, and the ground under it does not hold. Two men go down with it in a noise like a wave breaking, and come up filthy and swearing and entirely unhurt, standing waist-deep in a hole that goes down further than the light does.\n\nIt is a cellar. A proper one — vaulted, dressed stone, built to outlast the house it was under, and it did. There is something at the bottom of it that catches the lantern.\n\nThere is also a great deal of rotten timber holding up a great deal of masonry, and every man there can see it."
+
+ wilderness_ruins.0004.a:0 "Give me the lantern. I will go down."
+ wilderness_ruins.0004.b:0 "Nobody goes down until it is shored. Send for timber."
+ wilderness_ruins.0004.c:0 "Fill it in. There is nothing down there worth a man."
+
+ # The failure branch of 0004's first option. Toasted rather than swallowed, because a wound applied
+ # with no window and no message reads exactly like an option that did nothing at all — the player
+ # would have no reason to go and look at their own health screen. event_generic_bad renders the
+ # effects underneath this line, so the wound and the stress say themselves.
+ wilderness_ruins.0004.hurt:0 "You are nine rungs down the ladder when the beam above the shaft mouth lets go. It is only a glancing blow, and only because you had already begun to turn — they get you out in an hour, and the men are very careful not to say anything at all on the way back up."

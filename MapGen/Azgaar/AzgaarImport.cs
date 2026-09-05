@@ -39,6 +39,33 @@ public sealed class AzgaarBinding
 
     /// <summary>The title's centre of mass, in Azgaar canvas coordinates.</summary>
     public required (double X, double Y) Centre { get; init; }
+
+    /// <summary>
+    /// Country people living on this title's ground, in Azgaar's population points.
+    ///
+    /// Apportioned by area rather than assigned whole: an Azgaar cell is far larger than one of
+    /// our baronies and routinely straddles several of them, so each title takes the share of the
+    /// cell's people that matches the share of the cell's pixels it holds. Summing whole cells
+    /// instead would count the same villagers once per barony they touch, which on a fine
+    /// <see cref="MapConfig.CountyScale"/> inflates a county's population by the number of
+    /// baronies in it.
+    /// </summary>
+    public required double RuralPopulation { get; init; }
+
+    /// <summary>
+    /// Townspeople, in the same points: the populations of <see cref="Burgs"/>, whole, because a
+    /// burg is a point on the map and lands entirely inside one barony.
+    /// </summary>
+    public required double UrbanPopulation { get; init; }
+
+    /// <summary>Everyone the export puts on this ground.</summary>
+    public double Population => RuralPopulation + UrbanPopulation;
+
+    /// <summary>
+    /// People per raster pixel — the measure development is ranked on, since development is how
+    /// settled a county is and not how large. Zero where the export claims no ground here.
+    /// </summary>
+    public double PopulationDensity => Pixels > 0 ? Population / Pixels : 0;
 }
 
 /// <summary>
@@ -81,6 +108,28 @@ public sealed class AzgaarImport
 
     private readonly Dictionary<int, AzgaarNames?> _namesByBase = [];
     private Dictionary<Title, AzgaarBinding> _bindings = [];
+    private double? _medianBurgPopulation;
+
+    /// <summary>
+    /// The population of the middling burg on this map, in Azgaar's own points.
+    ///
+    /// The yardstick <see cref="AzgaarSettlement.IsHolding"/> measures a burg against. Population
+    /// points are not a head count — <c>settings.populationRate</c> scales them, and how densely
+    /// an author draws his world moves them again — so the only stable question is how a burg
+    /// compares with the rest of its own map.
+    /// </summary>
+    public double MedianBurgPopulation
+    {
+        get
+        {
+            if (_medianBurgPopulation is { } cached) return cached;
+
+            var populations = World.RealBurgs.Select(b => b.Population).OrderBy(p => p).ToList();
+            return (_medianBurgPopulation = populations.Count == 0
+                ? 0
+                : populations[populations.Count / 2]).Value;
+        }
+    }
 
     /// <summary>
     /// Azgaar cell tallies for every one of our provinces, indexed by province id — sea and river
@@ -108,6 +157,13 @@ public sealed class AzgaarImport
         public required int[] Pixels { get; init; }
         public required Dictionary<int, List<AzgaarBurg>> Burgs { get; init; }
         public required int BaronyCount { get; init; }
+
+        /// <summary>
+        /// How many of our pixels each Azgaar cell covers, over the whole map. The denominator for
+        /// apportioning a cell's people between the titles that share it — see
+        /// <see cref="AzgaarBinding.RuralPopulation"/>.
+        /// </summary>
+        public required int[] CellPixels { get; init; }
 
         /// <summary>Majority Azgaar state for each land barony, indexed by province id. 0 for none.</summary>
         public required int[] StateByBarony { get; init; }
@@ -316,6 +372,7 @@ public sealed class AzgaarImport
         var label = provinces.Label;
         int width = Raster.Width;
         int count = Math.Min(label.Length, Raster.CellByPixel.Length);
+        var cellPixels = new int[World.Pack.Cells.Count];
 
         for (int p = 0; p < count; p++)
         {
@@ -328,6 +385,12 @@ public sealed class AzgaarImport
 
             int cell = Raster.CellByPixel[p];
             if (cell < 0) continue;
+
+            // Land baronies only. A coastal Azgaar cell reaches into our sea provinces as well as
+            // our counties, and counting those pixels in the denominator would hand a share of the
+            // cell's villagers to the water and quietly under-rate every coastal county — on a map
+            // where Azgaar's own suitability model puts its people on the coast in the first place.
+            if (cell < cellPixels.Length && id <= baronyCount) cellPixels[cell]++;
 
             var cells = tally[id] ??= [];
             cells[cell] = cells.GetValueOrDefault(cell) + 1;
@@ -369,6 +432,7 @@ public sealed class AzgaarImport
             Pixels = pixels,
             Burgs = burgs,
             BaronyCount = baronyCount,
+            CellPixels = cellPixels,
             StateByBarony = stateByBarony,
             ProvinceByBarony = provinceByBarony,
         };
@@ -507,6 +571,19 @@ public sealed class AzgaarImport
                 .ThenBy(b => b.I)
                 .ToList();
 
+            double rural = 0;
+            var cellList = World.Pack.Cells;
+            var cellPixels = survey.CellPixels;
+
+            foreach (var (cellIndex, votes) in cells)
+            {
+                if (cellIndex < 0 || cellIndex >= cellList.Count) continue;
+                int whole = cellIndex < cellPixels.Length ? cellPixels[cellIndex] : 0;
+                if (whole <= 0) continue;
+
+                rural += cellList[cellIndex].Pop * votes / whole;
+            }
+
             return new AzgaarBinding
             {
                 State = Winner(cells, area, c => c.State),
@@ -517,6 +594,8 @@ public sealed class AzgaarImport
                 Pixels = area,
                 Burgs = burgs,
                 Centre = area > 0 ? (x / area, y / area) : (0, 0),
+                RuralPopulation = rural,
+                UrbanPopulation = burgs.Sum(b => b.Population),
             };
         }
     }

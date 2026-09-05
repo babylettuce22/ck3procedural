@@ -29,11 +29,30 @@ public static class HistoryWriter
 
         if (counties.Count == 0) return;
 
+        // The character file grades every ruler from Ruler.PrimaryTitle, and the title history
+        // below hands out titles from realms.HolderCounty. RulerMap.Build read the same map, so the
+        // two agree unless something handed out or moved a title between the two calls — which
+        // would leave a king written with a count's purse and prestige, and nothing in the mod to
+        // say so. Fail here instead: a stage that changes the realm map after the rulers exist has
+        // to be moved ahead of RulerMap.Build, or rebuild the RulerMap.
+        foreach (var seat in counties)
+        {
+            if (!rulers.TryGet(seat, out var ruler))
+                throw new InvalidOperationException(
+                    $"{seat.Key} is a seat in the realm map but has no ruler: the realm map changed after RulerMap.Build");
+
+            var primary = Primary(seat, realms);
+            if (!ReferenceEquals(primary, ruler.PrimaryTitle))
+                throw new InvalidOperationException(
+                    $"{ruler.Id} holds {primary.Key} in the title history but was graded as the holder of "
+                    + $"{ruler.PrimaryTitle.Key}: the realm map changed after RulerMap.Build");
+        }
+
         WriteDynasties(modDir, prehistory);
         WriteDynastyHouses(modDir, prehistory);
         CoatOfArmsWriter.WriteAll(modDir, prehistory);
         WriteCharacters(modDir, cfg, cultures, ethnicities, prehistory, rulers);
-        WriteHeadOfFaithCharacters(modDir, cfg, faiths, cultures, ethnicities, counties);
+        WriteHeadOfFaithCharacters(modDir, cfg, faiths, cultures, ethnicities, counties, realms, wilderness);
         WriteWildernessHolder(modDir, cfg, wild, wilderness);
         WriteHouseRelationsOnAction(modDir, prehistory);
         WriteTitleHistory(modDir, cfg, empires, development, realms, governments, faiths, wilderness, wild);
@@ -492,7 +511,8 @@ public static class HistoryWriter
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_characters.txt"), b.ToString());
     }
     private static void WriteHeadOfFaithCharacters(string modDir, MapConfig cfg,
-        FaithMap faiths, CultureMap cultures, EthnicityMap ethnicities, List<Title> counties)
+        FaithMap faiths, CultureMap cultures, EthnicityMap ethnicities, List<Title> counties,
+        RealmMap realms, WildernessMap wilderness)
     {
         string dir = Path.Combine(modDir, "history", "characters");
         Directory.CreateDirectory(dir);
@@ -502,7 +522,9 @@ public static class HistoryWriter
 
         foreach (var faith in faiths.Faiths)
         {
-            if (faith.Head is null)
+            // A temporal head's title goes to a landed ruler, so no theocrat is written for it.
+            // Same test as WriteTitleHistory, which is what keeps gen_hof_N numbering aligned.
+            if (faith.Head is null || TemporalHeadHolder(faith, realms, faiths, wilderness) is not null)
             {
                 continue;
             }
@@ -635,6 +657,67 @@ public static class HistoryWriter
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_house_relations.txt"), b.ToString());
     }
+    /// <summary>
+    /// The one government the base game will not rescue on its own.
+    ///
+    /// <c>common/on_action/game_start.txt</c> sweeps every other DLC government back to something
+    /// the base game has: nomad and herder to tribal without Khans of the Steppe, and wanua,
+    /// mandala, celestial, meritocratic, steppe-admin and the two Japanese ones without All Under
+    /// Heaven. <c>administrative_government</c> is in none of those lists. Verified against the
+    /// installed 1.19 file rather than assumed — it is the sort of thing a patch changes, and the
+    /// failure mode is a realm sitting on a government whose machinery is not there.
+    ///
+    /// So vanilla guards it per title instead, and this is that guard, copied from
+    /// <c>e_byzantium</c> in <c>history/titles/00_other_titles.txt</c>: the holder is put back on
+    /// feudal and given a succession law feudal can actually hold, since the acclamation an
+    /// administrative realm runs on is not one of them. With Roads to Power installed the limit
+    /// fails and nothing happens, which is why it is written unconditionally rather than gated on
+    /// anything this tool can see about the player's install.
+    /// </summary>
+    private static void WriteAdministrativeFallback(JominiBuilder b)
+    {
+        using (b.Block("effect"))
+        using (b.Block("if"))
+        {
+            using (b.Block("limit"))
+            {
+                // Guards the whole thing: title history runs for a title that may be unheld on the
+                // date, and holder = { … } on nobody is an error rather than a no-op.
+                b.Field("exists", "holder");
+                using (b.Block("NOT")) b.Field("has_dlc_feature", "roads_to_power");
+            }
+
+            using (b.Block("holder"))
+            {
+                b.Field("change_government", GovernmentMap.Feudal);
+                b.Field("add_realm_law_skip_effects", "single_heir_succession_law");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Re-emits the title history alone, for a government changed after the mod was written — the
+    /// <c>government =</c> line beside every holder is the whole of what such an edit says to the
+    /// engine.
+    ///
+    /// The wilderness counties are worked out the same way <see cref="WriteAll"/> does rather than
+    /// being carried, because the answer is a filter over the de jure tree and neither the tree nor
+    /// the wilderness map is editable. Everything else the file carries — holders, lieges,
+    /// development, the heads of faith — is written from the same objects the first write used, so
+    /// a re-emit with nothing edited reproduces it exactly.
+    /// </summary>
+    internal static void ReWriteTitleHistory(string modDir, MapConfig cfg, List<Title> empires,
+        Dictionary<Title, int> development, RealmMap realms, GovernmentMap governments,
+        FaithMap faiths, WildernessMap wilderness)
+    {
+        var wild = Titles.Flatten(empires)
+            .Where(t => t.Tier == "c" && wilderness.Contains(t))
+            .ToList();
+
+        WriteTitleHistory(modDir, cfg, empires, development, realms, governments, faiths,
+            wilderness, wild);
+    }
+
     private static void WriteTitleHistory(string modDir, MapConfig cfg, List<Title> empires,
         Dictionary<Title, int> development, RealmMap realms, GovernmentMap governments,
         FaithMap faiths, WildernessMap wilderness, List<Title> wild)
@@ -673,6 +756,12 @@ public static class HistoryWriter
 
                 b.Field("liege", liege?.Key);
                 if (level > 0) b.Field("change_development_level", level);
+
+                // Once per ruler, on the one title that is theirs: the effect acts on the holder,
+                // and a man holding a kingdom and six counties would otherwise run it seven times.
+                if (government == GovernmentMap.Administrative
+                    && ReferenceEquals(title, Primary(holder, realms)))
+                    WriteAdministrativeFallback(b);
             }
         }
 
@@ -721,12 +810,51 @@ public static class HistoryWriter
             using (b.Block(faith.Head.TitleKey))
             using (b.Block(titleGrantDate))
             {
-                b.Field("holder", $"gen_hof_{hofIndex++}");
-                b.Field("government", "theocracy_government");
+                // A temporal head is worn by the faith's strongest ruler beside their own titles,
+                // under their own government, the way vanilla's caliphs wear theirs. A spiritual
+                // one gets a theocrat of its own from WriteHeadOfFaithCharacters.
+                if (TemporalHeadHolder(faith, realms, faiths, wilderness) is { } sovereign)
+                {
+                    b.Field("holder", sovereign);
+                }
+                else
+                {
+                    b.Field("holder", $"gen_hof_{hofIndex++}");
+                    b.Field("government", "theocracy_government");
+                }
             }
         }
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_titles.txt"), b.ToString());
+    }
+
+    /// <summary>
+    /// The character id that wears a temporal head-of-faith title: the holder of the highest-tier
+    /// title whose holder's seat follows the faith, ties broken by county index so both writers
+    /// name the same one. Null for a spiritual head, and for the rare temporal head whose faith has
+    /// no ruler of its own to give it to — that title falls back to a theocrat, and the faith keeps
+    /// its doctrine, which the engine accepts.
+    ///
+    /// Read from <see cref="RealmMap.HolderCounty"/> rather than from <see cref="RulerMap"/> on
+    /// purpose: it is what the title history above writes every other holder from, so the answer
+    /// cannot disagree with it. A ruler's <see cref="Ruler.PrimaryTitle"/> is the same answer
+    /// today — <see cref="WriteAll"/> asserts it — but only because nothing touches the realm
+    /// map between <see cref="RulerMap.Build"/> and this writer; reading the map directly keeps
+    /// this correct even if that changes.
+    /// </summary>
+    private static string? TemporalHeadHolder(Faith faith, RealmMap realms, FaithMap faiths,
+        WildernessMap wilderness)
+    {
+        if (faith.Head is not { Temporal: true }) return null;
+
+        var seat = realms.HolderCounty
+            .Where(kv => !wilderness.Contains(kv.Value) && faiths.For(kv.Value) == faith)
+            .OrderByDescending(kv => Rank(kv.Key))
+            .ThenBy(kv => kv.Value.Index)
+            .Select(kv => kv.Value)
+            .FirstOrDefault();
+
+        return seat is null ? null : CharacterId(seat);
     }
 
     /// <summary>

@@ -67,9 +67,12 @@ public static class ReligionWriter
         {
             using (b.Block(religion.Key))
             {
-                b.Field("family", MapGen.Faiths.Family);
+                // The family gates flavour only; the hostility doctrine in the list below is what
+                // decides who this religion may holy-war. Pagan roots exist for the unreformed
+                // doctrine's reform flow, which an Abrahamic-shaped religion never enters.
+                b.Field("family", religion.Abrahamic ? MapGen.Faiths.AbrahamicFamily : MapGen.Faiths.Family);
                 b.Field("graphical_faith", religion.GraphicalFaith);
-                b.Field("pagan_roots", "yes");
+                if (!religion.Abrahamic) b.Field("pagan_roots", "yes");
                 b.Blank();
 
                 foreach (var (_, doctrine) in religion.Doctrines) b.Field("doctrine", doctrine);
@@ -110,8 +113,45 @@ public static class ReligionWriter
 
                             if (faith.Head is not null && faith.IsOrganized)
                             {
-                                b.Field("doctrine", "doctrine_spiritual_head");
+                                // A temporal head is a landed ruler who is also the faith's head —
+                                // see HistoryWriter, which hands the title to one — and vanilla
+                                // pairs it with no anointment, so the rite below is left to the
+                                // spiritual kind.
+                                b.Field("doctrine", faith.Head.Temporal
+                                    ? "doctrine_temporal_head"
+                                    : "doctrine_spiritual_head");
                                 b.Field("religious_head", faith.Head.TitleKey);
+
+                                // The anointment rite belongs beside the head that performs it.
+                                //
+                                // Its doctrine group is filled at *religion* level, where
+                                // doctrine_head_of_faith is pinned to doctrine_no_head — so the
+                                // can_pick repair in Faiths.Build correctly rules the two anointment
+                                // doctrines out and every religion lands on doctrine_no_anointment.
+                                // That is right for the religion and wrong for the faiths overridden
+                                // here: they have a head of faith and inherited a rite that assumes
+                                // there is none, which left `crowned_emperor` unreachable on the
+                                // whole map and the imperial branch of the coronation dead.
+                                //
+                                // A faith-level doctrine overrides its religion's for the same
+                                // group, so one line here reconciles them. The dominant faith of a
+                                // religion gets the imperial rite — it is the one whose head is
+                                // expected to crown emperors, and it is what makes the anointment
+                                // option default-on at empire tier — and the rest get the plain
+                                // permission.
+                                //
+                                // Guarded on the religion having drawn a coronation doctrine at
+                                // all, which is this generator's own record of whether the install
+                                // it read defines the group: the doctrines live in a base-game file
+                                // but only since the patch Coronations shipped with, and naming one
+                                // an older install has never heard of is a hard script error rather
+                                // than a feature quietly doing nothing.
+                                if (!faith.Head.Temporal && religion.Doctrines.ContainsKey("doctrine_coronation"))
+                                {
+                                    b.Field("doctrine", faith.IsDominant
+                                        ? "doctrine_imperial_anointment"
+                                        : "doctrine_anointment_permitted");
+                                }
                             }
 
                             // Ensure every faith has at least one holy site

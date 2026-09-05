@@ -446,7 +446,7 @@ public static class PreviewRenderer
             cfg, result.Provinces, result.ProvinceOrder, result.Terrain.Terrain, result.LandCount);
 
         var development = MapGen.Development.ForCounties(
-            counties, provinceTerrain, cfg, new Rng(cfg.Seed ^ 0x0DE7));
+            counties, provinceTerrain, cfg, new Rng(cfg.Seed ^ 0x0DE7), null, result.Azgaar);
 
         var wilderness = MapGen.Wilderness.Build(counties, result.Provinces, result.ProvinceOrder,
             result.LandCount, provinceTerrain, development, cfg, new Rng(cfg.Seed ^ 0x1D17),
@@ -468,7 +468,7 @@ public static class PreviewRenderer
         // the world centers exist, and only realms and governments see their boost. Folding the
         // boost into the first pass instead would change which counties come out wild.
         development = MapGen.Development.ForCounties(
-            counties, provinceTerrain, cfg, new Rng(cfg.Seed ^ 0x0DE7), worldCenters);
+            counties, provinceTerrain, cfg, new Rng(cfg.Seed ^ 0x0DE7), worldCenters, azgaar);
 
         var realms = MapGen.Realms.Build(empires, development, wilderness, cfg,
             new Rng(cfg.Seed ^ 0x2E17), result.Provinces, result.ProvinceOrder,

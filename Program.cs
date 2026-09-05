@@ -240,6 +240,14 @@ public static class Program
                     cfg.Gender = Enum.Parse<GenderPreference>(args[++i], ignoreCase: true);
                     break;
 
+                // Whether settled monotheist religions take vanilla's Abrahamic shape (shaped, the
+                // default) or every religion is written pagan as the generator always did
+                // (paganonly). See MapConfig.FaithShape.
+                case "--faith-shape" when i + 1 < args.Length:
+                    cfg.FaithShaping = Enum.Parse<MapConfig.FaithShape>(
+                        args[++i].Replace("-", "").Replace("_", ""), ignoreCase: true);
+                    break;
+
                 // Which real-world looks the world's humans are drawn from; see HumanLook.
                 // Fantasy races are unaffected either way. Varied is the default.
                 case "--dominant-look" when i + 1 < args.Length:

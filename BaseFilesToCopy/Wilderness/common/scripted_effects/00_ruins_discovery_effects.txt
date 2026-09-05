@@ -1,0 +1,204 @@
+﻿# What the digging turned up, and the roll that decides it.
+#
+# ---- Why this is in the Wilderness set ----
+#
+# Same reason as events/wilderness_ruins_events.txt, and it is a hard constraint rather than a
+# preference: `ruins_cleared`'s on_complete in common/buildings/00_wilderness_buildings.txt names
+# wilderness_ruins.0001, a building cannot be conditional, and 0001 calls into this file. If any of
+# it could be withheld, a map with the Ruins set switched off would load a building pointing at an
+# event pointing at an effect that does not exist.
+#
+# The Ruins set owns ruination -- the decay counter, the collapse, the dummy that holds what falls.
+# This owns the other end: the work gang has finished and something is either under the floor or it
+# is not.
+#
+# ---- The scopes every effect here needs ----
+#
+#   root                    the county holder -- whoever paid for the digging
+#   scope:gen_ruins_site    the PROVINCE the ruins stood on
+#   scope:gen_ruins_county  the county
+#
+# Both saved by the building's on_complete, never rediscovered, because a static file cannot know
+# which ruin fired it.
+
+# =====================================================================================
+#  gen_ruins_find_effect = { DIG = deep|shallow }
+# =====================================================================================
+#
+# The roll, and the only place it happens. Called from both of wilderness_ruins.0001's options,
+# which differ only in DIG -- pulling the foundations out reaches whatever is under them, setting
+# them back does not.
+#
+# ---- Every branch is visible ----
+#
+# House rule: an option that resolves with odds must end in something the player reads, because an
+# invisible outcome is indistinguishable from an option that did nothing, and in generated content
+# there is no authored memory to fall back on. Three of the four branches open a window; the fourth
+# is the one that would otherwise be silent, so it sends a toast that says so out loud.
+#
+# ---- Weights, and why DIG is a modifier and not a macro ----
+#
+# `random_list` weights CANNOT be macros. A `$DEEP_WEIGHT$ = { ... }` arm parses, contributes zero
+# to the total, and the last arm wins every time -- silently, with nothing in error.log. So the two
+# dig depths share ONE table and are separated by `modifier` blocks inside the arms, which is
+# vanilla's own shape (00_hunt_effects.txt does the same thing with terrain).
+#
+# Base 30/20/25/25. A deep dig multiplies the three finds up and halves the nothing, so tearing the
+# foundations out roughly doubles the chance of the stones being worth something -- and is the only
+# way to reach the undercroft, because a floor nobody lifted cannot give way.
+
+gen_ruins_find_effect = {
+	# A flag rather than a bool: `scope:x = yes` on a saved scope value is easy to write and easy to
+	# get silently wrong, and vanilla's own creation effects compare flags for exactly this
+	# (`scope:weapon_type_is_set = flag:no`).
+	save_temporary_scope_value_as = {
+		name = gen_ruins_dig
+		value = flag:$DIG$
+	}
+
+	# hidden_effect, so the option's tooltip does not try to render four branches of trigger_event
+	# and a toast. What the player is told before choosing is in the option text; what they are told
+	# after is the window that opens.
+	hidden_effect = {
+		random_list = {
+			# ---- Coin ----
+			30 = {
+				modifier = {
+					factor = 1.5
+					scope:gen_ruins_dig = flag:deep
+				}
+				trigger_event = wilderness_ruins.0002
+			}
+
+			# ---- Something somebody kept ----
+			20 = {
+				modifier = {
+					factor = 1.5
+					scope:gen_ruins_dig = flag:deep
+				}
+				trigger_event = wilderness_ruins.0003
+			}
+
+			# ---- The floor gives way ----
+			#
+			# Zero unless the foundations were lifted. A weight of zero rather than a `trigger` on
+			# the arm, because the whole table then stays readable at a glance and the shallow dig
+			# genuinely cannot reach this: a floor nobody took up cannot fall in.
+			25 = {
+				modifier = {
+					factor = 0
+					NOT = { scope:gen_ruins_dig = flag:deep }
+				}
+				trigger_event = wilderness_ruins.0004
+			}
+
+			# ---- Rubble ----
+			#
+			# The branch this file exists to make audible. "Nothing came of it" is a result and has
+			# to be said, or a player who cleared a ruin and saw no window cannot tell a bad roll
+			# from a broken mod.
+			#
+			# The control gain is inside the toast rather than beside it, and it is not decoration:
+			# `event_generic_neutral` renders its desc from the toast's own effect list, so a toast
+			# carrying no effect is a title over a blank line. It is also the honest consolation —
+			# the gang found nothing, but the site is finally clear and the county can be worked.
+			25 = {
+				modifier = {
+					factor = 0.5
+					scope:gen_ruins_dig = flag:deep
+				}
+				send_interface_toast = {
+					type = event_generic_neutral
+					title = wilderness_ruins.0001.nothing
+					left_icon = root
+
+					scope:gen_ruins_county ?= {
+						change_county_control = minor_county_control_gain
+					}
+				}
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  gen_ruins_relic_effect
+# =====================================================================================
+#
+# Mints the thing under the stones and leaves it in scope:gen_ruins_relic.
+#
+# ---- scope:adventurer is the whole trick ----
+#
+# Every vanilla creation effect below opens with a branch on `exists = scope:adventurer`, and
+# 00_ep1_artifact_creation_effects.txt says why in its own comment: "If scope:adventurer exists this
+# will result in the history entry reading that the weapon was discovered instead of made." That is
+# exactly the claim a ruin find wants -- nobody in this realm made it, somebody in this realm dug it
+# up -- and it is the difference between an artifact panel reading "Created by" the man who found it
+# and one reading "Discovered by" him, at this province.
+#
+# It also buys the right power level for free. get_artifact_quality_effect and
+# get_artifact_wealth_effect each add +20 when that scope exists ("if it is worth bringing home from
+# an adventure it is not common"), against rarity thresholds of 50 / 130 / 180 on quality + wealth.
+# So a ruin find skews above common without being handed a famed piece, and nothing here has to name
+# a number that vanilla might retune.
+#
+# scope:location must be the province, and is what the history entry names as the place.
+#
+# ---- Why these four, and why flag:no ----
+#
+# Weapon and armour take `flag:no` for their type, which sends them down
+# set_weapon_artifact_type_effect / set_armor_artifact_type_effect and derives something the OWNER's
+# culture actually uses. Naming a sword here would put a sword in every ruin on every map; letting
+# vanilla choose means a steppe ruin gives up a different blade from a Frankish one, at no cost.
+#
+# Crown and regalia are the other half: a ruin is somebody's failed holding, and the thing worth
+# burying with it is as often a symbol as a weapon. All four are INVENTORY artifacts, so none of
+# this needs Royal Court -- a court artifact needs a slot to sit in and would have to be guarded on
+# has_dlc_feature = court_artifacts, which is a gate this event should not have.
+
+gen_ruins_relic_effect = {
+	hidden_effect = {
+		# The finder and the ground, in the scope names vanilla's creation path reads.
+		save_scope_as = adventurer
+		scope:gen_ruins_site ?= { save_scope_as = location }
+
+		random_list = {
+			40 = {
+				create_artifact_weapon_effect = {
+					OWNER = root
+					CREATOR = root
+					SET_WEAPON_TYPE = flag:no
+				}
+			}
+			25 = {
+				create_artifact_armor_effect = {
+					OWNER = root
+					CREATOR = root
+					SET_ARMOR_TYPE = flag:no
+				}
+			}
+			20 = {
+				create_artifact_crown_effect = {
+					OWNER = root
+					SMITH = root
+				}
+			}
+			15 = {
+				create_artifact_regalia_effect = {
+					OWNER = root
+					SMITH = root
+				}
+			}
+		}
+
+		# Renamed off vanilla's scope immediately. scope:newly_created_artifact is a name half the
+		# game writes to, and this one has to survive from the event's immediate through to whichever
+		# option the player takes.
+		scope:newly_created_artifact ?= { save_scope_as = gen_ruins_relic }
+
+		# Cleared so that nothing later in the same chain -- the undercroft handing off to this
+		# event, most of all -- inherits a scope that changes how vanilla writes an artifact.
+		clear_saved_scope = adventurer
+	}
+}

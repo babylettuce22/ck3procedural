@@ -860,7 +860,7 @@ public sealed class ArtifactMap
         switch (category)
         {
             case ArtifactCategory.SovereignJewels:
-                return Sovereign(legendary, culture, primaryTitle, firstName, taken, rng);
+                return Sovereign(legendary, culture, faith, primaryTitle, firstName, taken, rng);
 
             case ArtifactCategory.MartialRelics:
                 return Martial(rarity, culture, primaryTitle, firstName, taken, rng, forgedWeapons);
@@ -1169,14 +1169,22 @@ public sealed class ArtifactMap
     private static readonly List<string> TomeNouns =
         ["Compendium", "Almanac", "Chronicle", "Treatise", "Survey", "Commentary", "Register"];
 
+    /// <summary>
+    /// The crown or the sceptre of a realm.
+    ///
+    /// Which of the two is not a roll: it is <see cref="Religion.CoronationCrown"/>, the same answer
+    /// <see cref="Emit.CoronationWriter"/> writes into CK3's crown and regalia triggers. A coin flip
+    /// here would have handed a third of crown-crowning realms a sceptre their own coronation cannot
+    /// use — the ceremony reads the artifact slot, not the artifact's name.
+    /// </summary>
     private static ArtifactLook Sovereign(
-        bool legendary, Culture culture, Title primaryTitle, string firstName,
+        bool legendary, Culture culture, Faith faith, Title primaryTitle, string firstName,
         HashSet<string> taken, Rng rng)
     {
         var (fields, clause) = legendary ? Signature(SovereignFlourishes, SovereignBase, rng) : (null, "");
         string place = primaryTitle.Name;
 
-        if (rng.Int(0, 100) < 30)
+        if (!faith.Religion.CoronationCrown)
         {
             var bank = new List<string>
             {

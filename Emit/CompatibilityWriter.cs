@@ -1799,6 +1799,10 @@ public static partial class CompatibilityWriter
                     if (region.Graphical) b.Field("graphical", "yes");
                     if (region.Color is not null) b.Inline("color", region.Color);
 
+                    // The Silk Road route regions are ordered lists along the road, and the
+                    // flag is what makes the engine keep that order.
+                    if (region.RememberOrder) b.Field("should_remember_counties_order", "yes");
+
                     if (regionMembers is not null
                         && regionMembers.TryGetValue(key, out var members) && members.Count > 0)
                     {
@@ -1910,6 +1914,7 @@ public static partial class CompatibilityWriter
             // Walk the block to its closing brace, noting the flags we must preserve.
             bool generateModifiers = false;
             bool graphical = false;
+            bool rememberOrder = false;
             string? color = null;
             int depth = 0;
             for (int j = i; j < lines.Length; j++)
@@ -1920,6 +1925,7 @@ public static partial class CompatibilityWriter
 
                 if (body.Contains("generate_modifiers")) generateModifiers = true;
                 if (body.Contains("graphical") && body.Contains("yes")) graphical = true;
+                if (body.Contains("should_remember_counties_order")) rememberOrder = true;
 
                 int colorAt = body.IndexOf("color", StringComparison.Ordinal);
                 if (colorAt >= 0)
@@ -1933,7 +1939,7 @@ public static partial class CompatibilityWriter
                 if (depth <= 0) { i = j; break; }
             }
 
-            result.Add(new Region(key, generateModifiers, graphical, color));
+            result.Add(new Region(key, generateModifiers, graphical, color, rememberOrder));
         }
 
         return result;
@@ -1948,5 +1954,5 @@ public static partial class CompatibilityWriter
     /// "Province N has no visual geographical region assigned" once for every land province.
     /// </summary>
     private readonly record struct Region(
-        string Key, bool GenerateModifiers, bool Graphical, string? Color);
+        string Key, bool GenerateModifiers, bool Graphical, string? Color, bool RememberOrder);
 }

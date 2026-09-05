@@ -256,6 +256,27 @@ public static class ArtifactWriter
                                     b.Field("target", $"title:{th.TitleKey}");
                                     b.Field("date", th.Date);
                                 }
+
+                                // The title history is a *claim* about the past; this variable is
+                                // what makes it true going forward. CK3 reads
+                                // `artifact_succession_title` in title_on_actions and moves the
+                                // object with the title rather than with the dead man's estate, and
+                                // the coronation reads it to tell "the regalia of this realm" from
+                                // "an expensive hat this ruler owns". Without it a crown whose panel
+                                // said it belonged to the kingdom left the kingdom on the first
+                                // partition, and every generated crown shipped that way.
+                                //
+                                // Only sovereign pieces get it. It is set for the crown and the
+                                // sceptre because those *are* the realm; a sword with a title
+                                // history was carried by kings, which is not the same claim.
+                                if (art.Category == ArtifactCategory.SovereignJewels)
+                                {
+                                    using (b.Block("set_variable"))
+                                    {
+                                        b.Field("name", "artifact_succession_title");
+                                        b.Field("value", $"title:{th.TitleKey}");
+                                    }
+                                }
                             }
 
                             // Created is not equipped. Without this the treasure sits in the

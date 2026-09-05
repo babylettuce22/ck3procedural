@@ -609,6 +609,17 @@ public sealed class AzgaarBurg
     [JsonPropertyName("shanty")] public int Shanty { get; set; }
     [JsonPropertyName("temple")] public int Temple { get; set; }
     [JsonPropertyName("type")] public string? Type { get; set; }
+
+    /// <summary>
+    /// Which of the author's burg groups this one is in — "capital", "city", "town", "village",
+    /// "hamlet", "fort", "monastery", "trading_post", "caravanserai".
+    ///
+    /// Newer builds only, and the groups are editable, so it is a hint rather than a taxonomy:
+    /// every reader falls back to the building flags and <see cref="Population"/>, which are the
+    /// facts the groups are themselves computed from (<c>settings.options.burgs.groups</c> states
+    /// the rules). Absent on older exports, where it reads null.
+    /// </summary>
+    [JsonPropertyName("group")] public string? Group { get; set; }
     [JsonPropertyName("removed")] public bool Removed { get; set; }
 
     public bool IsCapital => Capital != 0;

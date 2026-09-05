@@ -61,6 +61,18 @@ public sealed record WrittenContent
     /// </summary>
     public required Dictionary<int, string> Holdings { get; init; }
 
+    /// <summary>
+    /// The rest of every barony's province-history line, in the order it was written — culture,
+    /// faith, and the special building slot a wonder or a bazaar claimed.
+    ///
+    /// Kept beside <see cref="Holdings"/> rather than folded into it because the two answer
+    /// different questions: this is what an edit may never change, that is the one field it can.
+    /// Together they are enough to write <c>00_generated_provinces.txt</c> again from
+    /// <see cref="ContentWriter.EmitProvinceHistory"/> — which is what a government changed after
+    /// the fact needs, since each government seats its ruler in a different holding.
+    /// </summary>
+    public required IReadOnlyList<ContentWriter.ProvinceRow> ProvinceHistory { get; init; }
+
     /// <inheritdoc cref="Wilderness"/>
     public required WorldCenterMap WorldCenters { get; init; }
 
@@ -89,6 +101,18 @@ public sealed record WrittenContent
 
     /// <summary>Needed to re-emit the bookmarks, which name each character's government.</summary>
     public GovernmentMap? Governments { get; init; }
+
+    /// <summary>
+    /// Where the Great Steppe situation was bound, so that an edit can tell whether a realm it has
+    /// just turned nomadic is standing inside it.
+    ///
+    /// Not re-derivable and not re-emitted. The belt is cut from the ground <em>and</em> from where
+    /// the hordes were when the mod was written, and its sub-regions are partitioned by a growth
+    /// pass off its own <see cref="Rng"/>; rebuilding it for one changed realm would redraw every
+    /// seam on the map. So it is kept only to be asked a question — <see cref="SteppeMap.Contains"/>
+    /// — and the answer goes in the overwrite report rather than into a file.
+    /// </summary>
+    public SteppeMap? Steppe { get; init; }
 
     /// <summary>
     /// Who stands on the bookmark screen and what it says about them.

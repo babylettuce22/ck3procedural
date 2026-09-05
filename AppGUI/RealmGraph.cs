@@ -120,6 +120,33 @@ public sealed class RealmGraph
         return path;
     }
 
+    /// <summary>
+    /// Every county in this ruler's realm — their demesne and their vassals', all the way down.
+    ///
+    /// The unit a government is decided in: <see cref="MapGen.Governments.Build"/> assigns one per
+    /// independent top liege and lays it over everything inside, so this is the same span an
+    /// override has to cover to leave a realm that looks generated rather than half-converted.
+    /// Bounded by a visited set for the reason <see cref="RealmSize"/> is.
+    /// </summary>
+    public IReadOnlyList<Title> RealmCounties(Title seat)
+    {
+        var counties = new List<Title>();
+        var visited = new HashSet<Title> { seat };
+        var pending = new Queue<Title>();
+        pending.Enqueue(seat);
+
+        while (pending.Count > 0)
+        {
+            var next = pending.Dequeue();
+            counties.AddRange(Demesne(next));
+
+            foreach (var vassal in VassalSeats(next))
+                if (visited.Add(vassal)) pending.Enqueue(vassal);
+        }
+
+        return counties;
+    }
+
     /// <summary>Counties in this ruler's realm: demesne plus everything their vassals hold.</summary>
     public int RealmSize(Title seat)
     {

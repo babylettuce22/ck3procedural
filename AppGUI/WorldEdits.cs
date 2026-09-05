@@ -292,6 +292,48 @@ public sealed class WorldEdits
     }
 
     /// <summary>
+    /// A realm's government: which government each of its counties is on, and the holdings that
+    /// seat their rulers.
+    ///
+    /// Both halves, because they are one change. Each government names exactly one
+    /// <c>primary_holding</c>, so moving a realm onto another one moves every capital holding with
+    /// it, and putting the government back without putting the holdings back would leave a world
+    /// the edit had quietly rearranged.
+    ///
+    /// The counties are held individually rather than as one word for the realm because they were
+    /// never uniform: a coastal city and a steppe march are decided county by county on top of
+    /// whatever their sovereign got, and restoring them all to the realm's word would erase that.
+    /// </summary>
+    private sealed record GovernmentSnapshot(
+        GovernmentMap Map, Title Seat, Title Primary,
+        Dictionary<Title, string> Counties,
+        Dictionary<int, string> Holdings, Dictionary<int, string> Live,
+        bool WasAdministrative, bool WasNomad) : ISnapshot
+    {
+        public bool Differs()
+            => Counties.Any(kv => !string.Equals(Map.For(kv.Key), kv.Value, StringComparison.Ordinal));
+
+        public void Restore()
+        {
+            foreach (var (county, government) in Counties) Map.Set(county, government);
+            foreach (var (province, holding) in Holdings) Live[province] = holding;
+            Map.MarkRealm(Primary, WasAdministrative, WasNomad);
+        }
+
+        // The seat's government stands for the realm's: SetGovernment writes one word across the
+        // whole realm, and where a vassal has since been moved off it, the vassal's own entry is
+        // what carries that.
+        public void Capture(EditOverlay into) => into.Governments[Seat.Key] = Map.For(Seat);
+    }
+
+    /// <summary>
+    /// The <c>_originals</c> key for a realm's government, distinct from the seat county itself so
+    /// that it and the county's own <see cref="TitleSnapshot"/> coexist — the same arrangement, and
+    /// for the same reason, as <see cref="EthnicityKey"/>.
+    /// </summary>
+    private sealed record GovernmentKey(Title Seat);
+
+    /// <summary>
     /// Keyed by the object itself. Every generated type here is a class with reference equality,
     /// which is exactly the identity wanted — two cultures with the same name are still two
     /// cultures.
@@ -335,14 +377,33 @@ public sealed class WorldEdits
 
     // A culture carries two independent snapshots — its own fields, and the look the map points at
     // — so both of these have to ask about the second one as well, or a culture whose only change
-    // is its ethnicity reads as unedited and offers no revert.
+    // is its ethnicity reads as unedited and offers no revert. A title does the same for the
+    // government of the realm it belongs to.
     public bool WasEdited(object target)
         => (_originals.TryGetValue(target, out var snapshot) && snapshot.Differs())
-        || (target is Culture c && _originals.TryGetValue(new EthnicityKey(c), out var eth) && eth.Differs());
+        || (target is Culture c && _originals.TryGetValue(new EthnicityKey(c), out var eth) && eth.Differs())
+        || (GovernmentKeyOf(target) is { } gov && _originals.TryGetValue(gov, out var rule) && rule.Differs());
 
     public bool CanRevert(object target)
         => _originals.ContainsKey(target)
-        || (target is Culture c && _originals.ContainsKey(new EthnicityKey(c)));
+        || (target is Culture c && _originals.ContainsKey(new EthnicityKey(c)))
+        || (GovernmentKeyOf(target) is { } gov && _originals.ContainsKey(gov));
+
+    /// <summary>
+    /// Where a title's government edit is filed: under the seat of whoever holds it, so that every
+    /// title of one realm — the empire, the duchy inside it, the county the man actually sits in —
+    /// reaches the same entry, whichever of them was inspected when the change was made.
+    ///
+    /// Null for a title nobody holds, which is what a de-jure-only duchy is, and before a write.
+    /// </summary>
+    private GovernmentKey? GovernmentKeyOf(object target)
+    {
+        if (target is not Title title || _written?.Realms is not { } realms) return null;
+
+        return realms.HolderCounty.TryGetValue(title, out var seat) ? new GovernmentKey(seat)
+            : title.Tier == "c" ? new GovernmentKey(title)
+            : null;
+    }
 
     public void Attach(GenerationResult result, WrittenContent written, string modDir)
     {
@@ -493,6 +554,98 @@ public sealed class WorldEdits
         string checkedName = Checked(name);
         Apply(religion, () => Snapshot(religion),
             () => religion.Name = checkedName, WorldAspect.Faiths);
+    }
+
+    /// <summary>
+    /// The governments the written world is on. Null before a write and for a mod written with
+    /// history skipped, which is when there is no realm to have one.
+    /// </summary>
+    public GovernmentMap? Governments => _written?.Governments;
+
+    /// <summary>
+    /// Moves a realm onto a different government.
+    ///
+    /// The whole realm — the ruler's own counties and every vassal's beneath them — because that is
+    /// the unit <see cref="MapGen.Governments.Build"/> decides in: a government is chosen once per
+    /// independent top liege and laid over everything inside it. A liege whose vassals kept the old
+    /// one is a shape the generator never produces, and under a horde it is one the engine comes
+    /// apart on: a nomad holding declares <c>required_heir_government_types</c>, so settled counts
+    /// under a khan misinherit at the first succession. Changing one vassal alone is still
+    /// possible — drill into them and change their realm, which is a smaller span of the same
+    /// edit.
+    ///
+    /// The capital holding of every county follows, for the reason
+    /// <see cref="GovernmentSnapshot"/> gives. A county's second holding is left as it was — a city
+    /// under a new liege is still a city — except under a horde, whose counties are the camp and
+    /// nothing else, the way the generator writes the steppe.
+    ///
+    /// Snapshotted once per realm, first touch wins, so a revert goes back to what was generated
+    /// rather than to the previous edit. Two overlapping edits — an empire, then a duke inside it —
+    /// are two entries, and reverting the empire's takes the duke's counties back with it.
+    /// </summary>
+    public void SetGovernment(Title seat, Title primary, IReadOnlyList<Title> realmCounties,
+        string government)
+    {
+        if (_written is not { } written || written.Governments is not { } map) return;
+
+        // The wilderness is held by its own immortal placeholder under a government of its own, and
+        // it is not part of anybody's realm; this only guards against a caller that thinks it is.
+        var counties = realmCounties.Where(c => !written.Wilderness.Contains(c)).ToList();
+        if (counties.Count == 0) return;
+
+        var key = new GovernmentKey(seat);
+        if (!_originals.ContainsKey(key))
+        {
+            _originals[key] = new GovernmentSnapshot(map, seat, primary,
+                counties.ToDictionary(c => c, map.For),
+                Baronies(counties).ToDictionary(id => id, id => written.Holdings[id]),
+                written.Holdings,
+                map.IsAdminEmpire(primary), map.IsNomadRealm(primary));
+        }
+
+        string capital = GovernmentMap.CapitalHolding(government);
+
+        // Baronies carrying a wonder or a Silk Road bazaar. A horde's counties are otherwise
+        // emptied of their second holding, the way the generator writes the steppe — but never
+        // these: the province history writer upgrades a bazaar's barony to a city precisely so a
+        // special building is never left standing on ground with no holding under it, and the rest
+        // of the mod points at both kinds from elsewhere. Measured, not assumed: without this a
+        // realm turned nomadic stranded a changan_market on a holding-less barony.
+        var special = written.ProvinceHistory
+            .Where(r => r.SpecialSlot is not null)
+            .Select(r => r.ProvinceId)
+            .ToHashSet();
+
+        foreach (var county in counties)
+        {
+            map.Set(county, government);
+
+            // Seat first, matching the province history: index zero is the capital.
+            var baronies = county.SeatFirst().ToList();
+            for (int i = 0; i < baronies.Count; i++)
+            {
+                int province = baronies[i].ProvinceId;
+                if (!written.Holdings.ContainsKey(province)) continue;
+
+                if (i == 0) written.Holdings[province] = capital;
+                else if (government == GovernmentMap.Nomad && !special.Contains(province))
+                    written.Holdings[province] = "none";
+            }
+        }
+
+        map.MarkRealm(primary,
+            government == GovernmentMap.Administrative, government == GovernmentMap.Nomad);
+
+        _pending |= WorldAspect.Governments;
+        Changed?.Invoke(WorldAspect.Governments);
+
+        // Only the baronies this map actually wrote a holding for; a barony absent from the table
+        // is one no province history line covers, and inventing one for it would put a holding on
+        // ground the mod says nothing about.
+        IEnumerable<int> Baronies(IEnumerable<Title> of)
+            => of.SelectMany(c => c.Children)
+                 .Select(b => b.ProvinceId)
+                 .Where(written.Holdings.ContainsKey);
     }
 
     public void EditRuler(Ruler ruler, Action<Ruler> change)
@@ -747,6 +900,30 @@ public sealed class WorldEdits
             applied++;
         }
 
+        // Last, because it reads the realm graph rather than one object, and the graph is built from
+        // the world as attached — nothing above changes who holds what. A seat whose realm this
+        // world did not grow, or a government this build does not offer, is a miss rather than a
+        // half-applied change.
+        if (overlay.Governments.Count > 0 && RealmGraph.Build(_written, _result) is { } graph)
+        {
+            foreach (var (key, government) in overlay.Governments)
+            {
+                if (!titles.TryGetValue(key, out var seat) || seat.Tier != "c"
+                    || !GovernmentMap.Assignable.Contains(government))
+                {
+                    missed++;
+                    continue;
+                }
+
+                var counties = graph.RealmCounties(seat);
+                if (counties.Count == 0) { missed++; continue; }
+
+                SetGovernment(seat, graph.Primary(seat), counties, government);
+                applied++;
+            }
+        }
+        else missed += overlay.Governments.Count;
+
         return (applied, missed);
 
         // A name that fails validation is the only way an edit can refuse; it was valid when typed,
@@ -763,8 +940,10 @@ public sealed class WorldEdits
     public void Revert(object target)
     {
         // Reverting a culture takes its look with it. The two are separate entries so that neither
-        // evicts the other, but to the person clicking Revert on a culture they are one edit.
+        // evicts the other, but to the person clicking Revert on a culture they are one edit. A
+        // title and its realm's government are the same arrangement.
         if (target is Culture culture) RevertOne(new EthnicityKey(culture));
+        if (GovernmentKeyOf(target) is { } government) RevertOne(government);
 
         RevertOne(target);
     }
@@ -803,6 +982,7 @@ public sealed class WorldEdits
         Title => WorldAspect.TitleNames | WorldAspect.TitleColors | WorldAspect.TitleWords,
         Culture => WorldAspect.Cultures | WorldAspect.TitleWords,
         EthnicityKey => WorldAspect.Ethnicities,
+        GovernmentKey => WorldAspect.Governments,
         Faith or Religion => WorldAspect.Faiths,
         Ruler => WorldAspect.Rulers,
         _ => WorldAspect.None,

@@ -44,6 +44,12 @@ public enum WorldAspect
     /// names the variants. Humans only; a culture's race is fixed at generation.
     /// </summary>
     Ethnicities = 64,
+
+    /// <summary>
+    /// What a realm's rulers are — history/titles, and the province history whose capital holdings
+    /// have to seat them.
+    /// </summary>
+    Governments = 128,
 }
 
 /// <summary>
@@ -104,10 +110,20 @@ public static class WorldOverwrite
         if (aspects.HasFlag(WorldAspect.Rulers))
         {
             yield return "00_generated_characters.txt";
-            yield return "00_bookmarks.txt";
             yield return "00_generated_challenge.txt";
             yield return "gen_history_l_english.yml";
         }
+
+        if (aspects.HasFlag(WorldAspect.Governments))
+        {
+            yield return "00_generated_titles.txt";
+            yield return "00_generated_provinces.txt";
+        }
+
+        // Named once by whichever got there first: the screen states each character's government
+        // beside their name, so both aspects stale it.
+        if (aspects.HasFlag(WorldAspect.Rulers) || aspects.HasFlag(WorldAspect.Governments))
+            yield return "00_bookmarks.txt";
 
         if (aspects.HasFlag(WorldAspect.TitleWords))
         {
@@ -125,8 +141,15 @@ public static class WorldOverwrite
     /// silently recreating a directory holding a few orphaned files, which the launcher would list
     /// as a mod and the game would load as an empty one.
     /// </exception>
+    /// <param name="gameDir">
+    /// The installed game, for the one file an edit can newly require: a realm turned nomadic on a
+    /// map that had no hordes when it was written has no <c>zz_generated_nomad_government.txt</c>
+    /// beside it, and without that override the engine names the horde after its culture and its
+    /// house head instead of after its title — see <see cref="GovernmentWriter"/>. Optional because
+    /// nothing else here reads the game, and a missing or wrong path costs only that name.
+    /// </param>
     public static void Apply(string modDir, GenerationResult result, WrittenContent written,
-        WorldAspect aspects)
+        WorldAspect aspects, string? gameDir = null)
     {
         if (aspects == WorldAspect.None) return;
 
@@ -180,18 +203,40 @@ public static class WorldOverwrite
         {
             HistoryWriter.WriteCharacters(modDir, result.Config, written.Cultures, written.Ethnicities,
                 prehistory, rulers);
+        }
 
-            // The bookmark screen describes the same men, down to the age beside the name and the
-            // byname after it, so it is stale the moment the character file is not. The cast is
-            // replayed rather than reselected — see WrittenContent.Bookmarks for why.
-            if (written.Bookmarks is { } cast
-                && written.Realms is { } realms
-                && written.Governments is { } governments)
-            {
-                BookmarkWriter.ReWrite(modDir, result.Config, cast, result.Titles, realms,
-                    written.Cultures, written.Faiths, governments, written.Wilderness, rulers,
-                    result.Azgaar);
-            }
+        // The title history, for the government line beside every holder, and the province history,
+        // for the capital holdings that have to seat them — each government names exactly one
+        // primary_holding and a ruler on anything else cannot hold his own seat. The province file
+        // is written from the rows the first write captured rather than rebuilt, so nothing but the
+        // holdings this edit moved can differ. See WrittenContent.ProvinceHistory.
+        if (aspects.HasFlag(WorldAspect.Governments)
+            && written.Realms is { } governed && written.Governments is { } edited)
+        {
+            HistoryWriter.ReWriteTitleHistory(modDir, result.Config, result.Titles,
+                written.Development, governed, edited, written.Faiths, written.Wilderness);
+
+            ContentWriter.EmitProvinceHistory(modDir, written.ProvinceHistory, written.Holdings);
+
+            // Only ever adds: the writer is a no-op when the map has no hordes, so a world that has
+            // stopped having one keeps a harmless override rather than losing the file mid-edit.
+            if (gameDir is not null && Core.GameLocator.IsGameDir(gameDir))
+                GovernmentWriter.WriteNomadNaming(modDir, gameDir, edited.AnyNomad);
+        }
+
+        // The bookmark screen describes the same men, down to the age beside the name, the byname
+        // after it and the government they rule under, so it is stale the moment either the
+        // character file or the title history is not. The cast is replayed rather than reselected —
+        // see WrittenContent.Bookmarks for why.
+        if ((aspects.HasFlag(WorldAspect.Rulers) || aspects.HasFlag(WorldAspect.Governments))
+            && written.Bookmarks is { } cast
+            && written.Rulers is { } castRulers
+            && written.Realms is { } realms
+            && written.Governments is { } governments)
+        {
+            BookmarkWriter.ReWrite(modDir, result.Config, cast, result.Titles, realms,
+                written.Cultures, written.Faiths, governments, written.Wilderness, castRulers,
+                result.Azgaar);
         }
 
         // Both files whole, from the words now on the cultures and titles. The writer is pure —
@@ -201,7 +246,13 @@ public static class WorldOverwrite
     }
 
     /// <summary>What just happened, and the things about it that surprise people.</summary>
-    public static void Report(WorldAspect aspects, int edited, string modDir)
+    /// <param name="written">
+    /// The world as edited, for the one warning that has to be counted rather than stated: a horde
+    /// standing outside the Great Steppe. Optional — without it that check is skipped, and nothing
+    /// else here reads it.
+    /// </param>
+    public static void Report(WorldAspect aspects, int edited, string modDir,
+        WrittenContent? written = null)
     {
         Console.WriteLine($"Rewrote {string.Join(", ", FilesFor(aspects))} in {modDir}");
         Console.WriteLine($"  {edited} edited {(edited == 1 ? "object" : "objects")} applied");
@@ -215,6 +266,43 @@ public static class WorldOverwrite
                               + "fathers, spouses and children keep their generated dates");
             Console.WriteLine("  the bookmark screen follows the edit, but who is on it does not "
                               + "change — the realm outlines and portraits were drawn for them");
+        }
+
+        if (aspects.HasFlag(WorldAspect.Governments))
+        {
+            Console.WriteLine("  the capital holding of every county in the realm follows the "
+                              + "government; a second holding keeps its type, and a barony holding "
+                              + "a wonder or a bazaar keeps its holding even under a horde");
+            Console.WriteLine("  what the government was at generation still shows in the ground "
+                              + "and the men: the rulers' purses, schooling, dread and legitimacy, "
+                              + "their culture's men-at-arms, and the farmland cultivation were all "
+                              + "decided from it and keep what they were given");
+
+            // Named on its own because it is the one of those a change can make meaningless rather
+            // than merely dated: republics and theocracies do not declare legitimacy = yes, so a
+            // realm moved onto one carries an add_legitimacy the engine has no currency for. The
+            // ruler window is where that is cleared, and its Legitimacy dropdown takes a blank.
+            Console.WriteLine("  a realm moved onto a republic or a theocracy keeps a legitimacy "
+                              + "its government cannot hold — blank it on the ruler (Ruler…) if the "
+                              + "line bothers you; the engine ignores it either way");
+
+            // The one consequence that is a mechanic rather than a flavour: vanilla's Migrate
+            // interaction requires the actor to be a participant of a migration situation, and the
+            // Great Steppe was bound to the ground and to the hordes as they stood when the mod was
+            // written. Counted rather than stated, because on most edits the number is zero.
+            if (written is { Steppe: { } steppe, Governments: { } governments })
+            {
+                int stranded = steppe.IsEmpty
+                    ? governments.NomadCounties.Count()
+                    : governments.NomadCounties.Count(c => !steppe.Contains(c));
+
+                if (stranded > 0)
+                    Console.WriteLine($"  WARNING {stranded} nomadic {(stranded == 1 ? "county is" : "counties are")} "
+                                      + "outside the Great Steppe, which was bound to the ground and "
+                                      + "the hordes this mod was written with — a horde outside the "
+                                      + "situation can never migrate. Revert the government, or "
+                                      + "write the mod again to cut the belt around it.");
+            }
         }
 
         if (aspects.HasFlag(WorldAspect.TitleWords))

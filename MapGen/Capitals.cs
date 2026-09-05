@@ -56,64 +56,12 @@ public static class Capitals
         int baronyCount, int landCount, TerrainClass[] provinceTerrain, Drainage? drainage,
         AzgaarImport? azgaar)
     {
-        var coastal = new bool[baronyCount + 1];
-        var riverside = new bool[baronyCount + 1];
-        var peakFlow = new float[baronyCount + 1];
-        var position = new (double X, double Y)[baronyCount + 1];
-
-        for (int label = 0; label < order.Length; label++)
-        {
-            int id = order[label];
-            if (id >= 1 && id <= baronyCount && label < provinces.Seeds.Count)
-                position[id] = (provinces.Seeds[label].X, provinces.Seeds[label].Y);
-        }
-
-        // One pass over the raster for the two facts the seeds cannot give: what water a province
-        // touches, and how much flow crosses it. Right and down neighbours are enough — every
-        // adjacent pair is seen once from one side or the other.
-        int w = provinces.Width, h = provinces.Height;
-        for (int y = 0; y < h; y++)
-        {
-            int row = y * w;
-            for (int x = 0; x < w; x++)
-            {
-                int cell = row + x;
-                int label = provinces.Label[cell];
-                int id = order[label];
-                bool land = id >= 1 && id <= baronyCount;
-
-                if (land && drainage is not null && cell < drainage.Flow.Length && drainage.LandMask[cell] != 0)
-                    peakFlow[id] = Math.Max(peakFlow[id], drainage.Flow[cell]);
-
-                if (x + 1 < w) Touch(id, label, land, provinces.Label[cell + 1]);
-                if (y + 1 < h) Touch(id, label, land, provinces.Label[cell + w]);
-            }
-        }
-
-        void Touch(int id, int label, bool land, int otherLabel)
-        {
-            if (label == otherLabel) return;
-            int other = order[otherLabel];
-            bool otherLand = other >= 1 && other <= baronyCount;
-            if (land == otherLand) return;
-
-            // Exactly one side is a barony; the other is water, wasteland or an impassable. A
-            // wasteland is land too, so only water counts, and a major river is a river port
-            // rather than a coast.
-            int barony = land ? id : other;
-            var water = provinces.Seeds[land ? otherLabel : label];
-            if (water.IsLand) return;
-            if (water.IsMajorRiver) riverside[barony] = true;
-            else coastal[barony] = true;
-        }
-
-        // Flow is normalised against the strong rivers rather than the strongest one, so a single
-        // great river does not make every other stream read as a trickle.
-        var flows = new List<float>();
-        for (int id = 1; id <= baronyCount; id++) if (peakFlow[id] > 0) flows.Add(peakFlow[id]);
-        flows.Sort();
-        float reference = flows.Count == 0 ? 1f : flows[(int)(0.9 * (flows.Count - 1))];
-        if (reference <= 0) reference = 1f;
+        var survey = ProvinceSurvey.Take(provinces, order, baronyCount, drainage);
+        var coastal = survey.Coastal;
+        var riverside = survey.Riverside;
+        var peakFlow = survey.PeakFlow;
+        var position = survey.Position;
+        float reference = survey.FlowReference;
 
         int moved = 0;
         foreach (var county in Titles.Flatten(empires).Where(t => t.Tier == "c"))

@@ -4,7 +4,12 @@ using Ck3MapGen.MapGen;
 namespace Ck3MapGen.AppGUI;
 
 /// <summary>What a click on the map picks in an editable mode.</summary>
-public enum MapPick { Title, Culture, Faith, Realm }
+/// <summary>
+/// What a map mode paints from — what a click on it picks, and which edits stale it. Government
+/// is the one member nothing clicks: a government is changed from the realm inspector rather than
+/// from the map, but the map has to follow it. See <see cref="MapMode.Repaints"/>.
+/// </summary>
+public enum MapPick { Title, Culture, Faith, Realm, Government }
 
 /// <summary>
 /// One map mode: how it renders, where it lives in the strip, whether a click edits something,
@@ -79,6 +84,7 @@ public static class MapModes
         MapPick.Realm => false,
 
         MapPick.Culture => touched.HasFlag(Emit.WorldAspect.Cultures),
+        MapPick.Government => touched.HasFlag(Emit.WorldAspect.Governments),
         _ => touched.HasFlag(Emit.WorldAspect.Faiths),
     };
 
@@ -211,6 +217,10 @@ public static class MapModes
         new("Wealth", "World", PreviewRenderer.RenderWealth)
         {
             AfterWrite = true,
+
+            // Income is counted off the holdings, and the one thing that moves a holding after the
+            // write is a realm changing government — each seats its ruler in a different one.
+            Repaints = MapPick.Government,
             Legend = RampLegend(PreviewRenderer.WealthColour,
                 [(0.0, "0"), (0.25, "0.25"), (0.55, "0.55"), (0.9, "0.9"), (1.3, "1.3"),
                  (1.85, "1.85+ gold/mth")]),
@@ -219,6 +229,11 @@ public static class MapModes
         new("Government", "World", PreviewRenderer.RenderGovernment)
         {
             Estimate = true,
+
+            // Not clickable — a realm's government is changed from the realm inspector, which is
+            // where the realm the change applies to is visible — but painted from a map an edit
+            // moves, so it says so itself.
+            Repaints = MapPick.Government,
             Legend =
             [
                 (PreviewRenderer.GovernmentColour(GovernmentMap.Administrative), "Administrative"),

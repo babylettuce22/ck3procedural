@@ -8,6 +8,14 @@ public sealed class HeadOfFaith
     public required string TitleKey { get; init; }
     public required string Name { get; init; }
     public required Title Seat { get; init; }
+
+    /// <summary>
+    /// A temporal head — vanilla's caliph shape — rather than a spiritual one. The title is held
+    /// by the faith's strongest landed ruler instead of a theocrat of its own, and it is written
+    /// with <c>doctrine_temporal_head</c>, which vanilla only allows beside lay clergy. Only an
+    /// Abrahamic-shaped religion with lay clergy mints one.
+    /// </summary>
+    public bool Temporal { get; init; }
 }
 
 public sealed class Faith
@@ -43,9 +51,46 @@ public sealed class Religion
     public required string GraphicalFaith { get; init; }
     public required bool Monotheist { get; init; }
 
+    /// <summary>
+    /// Written in vanilla's Abrahamic shape: the <c>rf_abrahamic</c> family and its hostility
+    /// doctrine, no pagan roots, and every faith organised. Decided in
+    /// <see cref="Faiths.CreateReligion"/> from theism and settledness under
+    /// <see cref="MapConfig.FaithShape.Shaped"/>; always false under
+    /// <see cref="MapConfig.FaithShape.PaganOnly"/>.
+    ///
+    /// The family itself gates only flavour. What this changes is the hostility doctrine, which
+    /// decides who a faith may holy-war: a pagan faith sees its own religion's heresies as Astray
+    /// and every other religion as merely Hostile, an Abrahamic one sees heresies as Hostile and
+    /// everything else as Evil.
+    /// </summary>
+    public required bool Abrahamic { get; init; }
+
+    /// <summary>
+    /// Rulers own the temples (vanilla's Islamic model) rather than a clergy holding them. Only
+    /// rolled for Abrahamic-shaped religions, and the precondition for a temporal head.
+    /// </summary>
+    public required bool LayClergy { get; init; }
+
     public required Dictionary<string, string> Doctrines { get; init; }
     public required List<string> Virtues { get; init; }
     public required List<string> Sins { get; init; }
+
+    /// <summary>
+    /// Whether this religion crowns a new ruler or invests them with regalia — true for a crown.
+    ///
+    /// CK3 keeps this in two hardcoded religion lists inside
+    /// <c>coronation_proper_artifact_crown_trigger</c> and its regalia twin, which name only vanilla
+    /// religions. A generated religion matches neither and falls into their <c>trigger_else</c>,
+    /// where both count — and "both" is the one answer that leaves the ceremony worse off, because
+    /// <c>coronation_being_crowned_trigger</c> (the officiator places the crown, event 6100) needs
+    /// the crown list to say yes. Deciding it here, per religion, lets
+    /// <see cref="Emit.CoronationWriter"/> re-declare those two triggers with real answers.
+    ///
+    /// It also picks the slot of the sovereign artifact its kings start with, so the regalia a
+    /// realm owns is the regalia its faith expects to see. Roughly two in three crown, which is
+    /// vanilla's own split (12 religions to 7).
+    /// </summary>
+    public required bool CoronationCrown { get; init; }
 
     public required List<(string Tag, string Value)> Localization { get; init; }
     public required Dictionary<string, string> LocalizationText { get; init; }
@@ -101,10 +146,32 @@ public static class Faiths
     private static readonly Dictionary<string, string> ForcedDoctrines = new()
     {
         ["doctrine_head_of_faith"] = "doctrine_no_head",
-        ["hostility_group"] = "pagan_hostility_doctrine",
+        ["hostility_group"] = PaganHostility,
     };
 
     public const string Family = "rf_pagan";
+    public const string AbrahamicFamily = "rf_abrahamic";
+
+    public const string PaganHostility = "pagan_hostility_doctrine";
+    public const string AbrahamicHostility = "abrahamic_hostility_doctrine";
+
+    /// <summary>
+    /// The two tenets that carry <c>great_holy_wars_active</c>. Vanilla shows the first only to
+    /// Christianity and Judaism and the second only to Islam, but <c>is_shown</c> gates the
+    /// creation screen, not script, so a generated faith can hold either. The first suits a
+    /// spiritual head, the second a temporal one.
+    /// </summary>
+    private const string SpiritualWarTenet = "tenet_armed_pilgrimages";
+    private const string TemporalWarTenet = "tenet_struggle_submission";
+
+    /// <summary>
+    /// Temple art vanilla files under Abrahamic religions. Every other set on the install is
+    /// treated as the polytheist pool.
+    /// </summary>
+    private static readonly HashSet<string> MonotheistGraphics = new(StringComparer.Ordinal)
+    {
+        "catholic_gfx", "orthodox_gfx", "islamic_gfx",
+    };
 
     public static FaithMap Build(List<Title> empires, ProvinceMap provinces, int[] order,
         int landCount, TerrainClass[] provinceTerrain, Dictionary<Title, int> development,
@@ -310,15 +377,26 @@ public static class Faiths
 
         foreach (var faith in faiths)
         {
-            if (faith.Head is not null && faith.HolySites.Count > 0)
+            if (faith.Head is null) continue;
+
+            // A head with nowhere to sit is dropped rather than carried with a null seat:
+            // ContentWriter writes `capital = <seat>` for every head title and would throw on it.
+            // Only reachable for a faith holding no land at all — every other faith gets holy sites
+            // from PlaceAllHolySites' fallbacks — and a landless faith was already headless before
+            // Abrahamic religions began organising their faiths regardless of tribal share.
+            if (faith.HolySites.Count == 0)
             {
-                faith.Head = new HeadOfFaith
-                {
-                    TitleKey = faith.Head.TitleKey,
-                    Name = faith.Head.Name,
-                    Seat = faith.HolySites[0].County,
-                };
+                faith.Head = null;
+                continue;
             }
+
+            faith.Head = new HeadOfFaith
+            {
+                TitleKey = faith.Head.TitleKey,
+                Name = faith.Head.Name,
+                Seat = faith.HolySites[0].County,
+                Temporal = faith.Head.Temporal,
+            };
         }
 
         Report(religions, faiths, counties.Count, sw.ElapsedMilliseconds);
@@ -341,35 +419,48 @@ public static class Faiths
 
             foreach (var faith in religionFaiths)
             {
-                faith.IsOrganized = TribalShare(faith.Counties) < cfg.UnreformedTribalShare;
+                // An Abrahamic-shaped religion organises every faith: it has no pagan roots for the
+                // unreformed doctrine's reform flow to stand on, and it was only given the shape
+                // because its land as a whole is settled enough that this rarely overrides anything.
+                faith.IsOrganized = religion.Abrahamic
+                    || TribalShare(faith.Counties) < cfg.UnreformedTribalShare;
                 religion.Faiths.Add(faith);
                 faiths.Add(faith);
             }
+
+            // Heresies share most of the primary faith's creed. Before the heads, so a seeded war
+            // tenet lands on top of the shared pair rather than being overwritten by it.
+            AlignSiblingTenets(religion, primaryFaith, religionFaiths.Where(f => f != primaryFaith),
+                vocab, cfg, rng);
 
             // Step 3: Mint Heads of Faith (Favor Dominant / Primary Faiths)
             double headShare = cfg.HeadOfFaithShare * (religion.Monotheist ? 2.0 : 1.0);
 
             if (primaryFaith.IsOrganized && rng.Chance(headShare * (hasDominantFaith ? 1.4 : 1.0)))
-            {
-                primaryFaith.Head = new HeadOfFaith
-                {
-                    TitleKey = $"d_{primaryFaith.Key}_head",
-                    Name = GenerateHeadTitleName(religion, rng),
-                    Seat = null!,
-                };
-            }
+                Mint(primaryFaith);
 
             foreach (var faith in religionFaiths.Where(f => f != primaryFaith && f.IsOrganized))
             {
-                if (rng.Chance(headShare * 0.25))
+                if (rng.Chance(headShare * 0.25)) Mint(faith);
+            }
+
+            // The head's kind and its war tenet are only drawn for Abrahamic-shaped religions, so a
+            // PaganOnly run consumes the stream exactly as before this existed. One in three heads
+            // of a lay-clergy religion is temporal: a ruler who is also the faith's head, as
+            // vanilla's caliphs are.
+            void Mint(Faith faith)
+            {
+                bool temporal = religion.Abrahamic && religion.LayClergy && rng.Chance(1.0 / 3.0);
+
+                faith.Head = new HeadOfFaith
                 {
-                    faith.Head = new HeadOfFaith
-                    {
-                        TitleKey = $"d_{faith.Key}_head",
-                        Name = GenerateHeadTitleName(religion, rng),
-                        Seat = null!,
-                    };
-                }
+                    TitleKey = $"d_{faith.Key}_head",
+                    Name = GenerateHeadTitleName(religion, rng, temporal),
+                    Seat = null!,
+                    Temporal = temporal,
+                };
+
+                if (religion.Abrahamic) SeedWarTenet(faith, temporal, vocab, cfg, rng);
             }
         }
 
@@ -612,10 +703,16 @@ public static class Faiths
         }
     }
 
-    private static string GenerateHeadTitleName(Religion religion, Rng rng)
+    private static string GenerateHeadTitleName(Religion religion, Rng rng, bool temporal = false)
     {
         string word = religion.Language.Word(rng, 2, 3);
-        string prefix = religion.Monotheist
+        string prefix = temporal
+            ? rng.Pick([
+                "the Sovereign Seat of", "the Faithful Crown of", "the Anointed Throne of",
+                "the Sword and Sanctum of", "the Dominion of", "the Guardianship of",
+                "the Successorship of", "the Sceptre of", "the Commandery of"
+            ])
+            : religion.Monotheist
             ? rng.Pick([
                 "the High Seat of", "the Sacred Throne of", "the Prime Apex of",
                 "the First Sanctum of", "the Grand Exaltate of", "the Sole Pinnacle of",
@@ -716,7 +813,7 @@ public static class Faiths
         HashSet<string> usedNames, MapConfig cfg, Rng rng)
     {
         var religion = CreateReligion(0, 0, vocab, usedNames, cfg, rng,
-            keyOverride: "gen_religion_unsettled");
+            keyOverride: "gen_religion_unsettled", shapeable: false);
 
         var faith = new Faith
         {
@@ -725,7 +822,13 @@ public static class Faiths
             Religion = religion,
             Color = (0.42, 0.40, 0.37),
             Icon = vocab.FaithIcons.Count > 0 ? rng.Pick(vocab.FaithIcons) : "germanic",
-            Tenets = SampleCompatible(vocab.Tenets, 3, religion.Doctrines.Values, vocab, rng),
+
+            // Through the same pool every other faith draws from. Drawing from the raw vocabulary
+            // here let the wilderness faith hold the one tenet the map was told to keep off it —
+            // natural primitivism strips its holder's portrait — and, under Shaped, a syncretism
+            // tenet naming a vanilla religion this map does not have.
+            Tenets = SampleCompatible(TenetPool(religion, vocab, cfg), 3, religion.Doctrines.Values,
+                vocab, rng),
             IsOrganized = false,
         };
 
@@ -741,9 +844,29 @@ public static class Faiths
     /// Doctrine keys to try first for the theism slot, for imported forms with a CK3 counterpart
     /// beyond the monotheist/polytheist pair (dualism). Prefer() ignores keys the install lacks.
     /// </param>
+    /// <param name="shapeable">
+    /// Whether this religion may take the Abrahamic shape at all. False for the unsettled
+    /// religion, whose one faith is unreformed by construction and must keep its pagan roots.
+    /// </param>
+    /// <summary>
+    /// Temple art by theism: a pantheon does not get a mosque. Under <see cref="MapConfig.FaithShape.Shaped"/>
+    /// monotheists draw from the sets vanilla files under Abrahamic religions and polytheists from
+    /// the rest; either pool falls back to the whole install when it is empty. PaganOnly draws from
+    /// everything, as it always did.
+    /// </summary>
+    private static string PickGraphicalFaith(VanillaVocabulary vocab, MapConfig cfg, bool monotheist, Rng rng)
+    {
+        if (vocab.GraphicalFaiths.Count == 0) return "pagan_gfx";
+        if (cfg.FaithShaping != MapConfig.FaithShape.Shaped) return rng.Pick(vocab.GraphicalFaiths);
+
+        var pool = vocab.GraphicalFaiths.Where(g => MonotheistGraphics.Contains(g) == monotheist).ToList();
+        return rng.Pick(pool.Count > 0 ? pool : vocab.GraphicalFaiths);
+    }
+
     private static Religion CreateReligion(int index, double tribalShare, VanillaVocabulary vocab,
         HashSet<string> usedNames, MapConfig cfg, Rng rng, bool? monotheistOverride = null,
-        string[]? theismPreference = null, string? keyOverride = null, Language? liturgical = null)
+        string[]? theismPreference = null, string? keyOverride = null, Language? liturgical = null,
+        bool shapeable = true)
     {
         string tongueKey = $"religion_tongue_{keyOverride ?? index.ToString()}";
         var language = liturgical is not null
@@ -755,6 +878,22 @@ public static class Faiths
         bool monotheist = monotheistOverride
             ?? rng.Chance(Math.Clamp(cfg.MonotheistShare * (0.15 + 1.45 * settled), 0.0, 1.0));
 
+        // The Abrahamic shape goes to settled monotheists only. Vanilla has no unreformed
+        // Abrahamic faith and the reform flow assumes pagan roots, so a religion tribal enough to
+        // be written unreformed keeps the pagan shape whatever it worships — the same threshold
+        // OrganizeAndMintHeads reads per faith, read here over the whole religion. Nothing below
+        // draws from the stream unless this is true, so PaganOnly reproduces the old output
+        // exactly rather than merely resembling it.
+        bool abrahamic = cfg.FaithShaping == MapConfig.FaithShape.Shaped && shapeable && monotheist
+            && tribalShare < cfg.UnreformedTribalShare
+            && vocab.DoctrineGroups.TryGetValue("hostility_group", out var hostilities)
+            && hostilities.Contains(AbrahamicHostility);
+
+        // Half of the Abrahamic religions let rulers own the temples, which is what makes a
+        // temporal head possible later: vanilla refuses doctrine_temporal_head beside temporal
+        // theocracy or a spiritually appointed clergy, so both groups follow this one roll.
+        bool layClergy = abrahamic && rng.Chance(0.5);
+
         // Rolled before the loop because two groups read it: the clergy's sex follows the faith's,
         // rather than being drawn again from a hat and leaving a faith that bars women from land
         // with a female-only priesthood.
@@ -763,6 +902,12 @@ public static class Faiths
         var doctrines = new Dictionary<string, string>();
         foreach (string group in FilledGroups)
         {
+            if (group == "hostility_group" && abrahamic)
+            {
+                doctrines[group] = AbrahamicHostility;
+                continue;
+            }
+
             if (ForcedDoctrines.TryGetValue(group, out string? forced)
                 && vocab.DoctrineGroups.TryGetValue(group, out var forcedMembers)
                 && forcedMembers.Contains(forced))
@@ -788,7 +933,16 @@ public static class Faiths
                     members.Where(d => d != "doctrine_pilgrimage_mandatory_hajj").ToList(),
                     ["doctrine_pilgrimage_encouraged", "doctrine_pilgrimage_mandatory"], rng),
 
-                "doctrine_theocracy" => Prefer(members, ["doctrine_theocracy_temporal"], rng),
+                "doctrine_theocracy" => Prefer(members, layClergy
+                    ? ["doctrine_theocracy_lay_clergy"]
+                    : ["doctrine_theocracy_temporal"], rng),
+
+                // Lay clergy is appointed by the ruler in vanilla's own model, and the temporal
+                // succession pair is what leaves doctrine_temporal_head pickable. Everyone else
+                // draws from the whole group as before.
+                "doctrine_clerical_succession" when layClergy => Prefer(members,
+                    ["doctrine_clerical_succession_temporal_appointment",
+                     "doctrine_clerical_succession_temporal_fixed_appointment"], rng),
 
                 "doctrine_gender" => Prefer(members, [gender], rng),
 
@@ -824,6 +978,22 @@ public static class Faiths
             }
         }
 
+        // Read back rather than trusting the roll. The repair loop above may replace any pick, and
+        // a temporal head beside temporal theocracy or a spiritually appointed clergy is exactly
+        // what CK3's own can_pick forbids — so what the religion is recorded as having must be what
+        // was written, not what was intended. Neither doctrine carries a can_pick in the current
+        // install, so this changes nothing today; it is what keeps a patch that adds one from
+        // quietly producing a faith the game would not have let a player build.
+        layClergy = layClergy
+            && doctrines.GetValueOrDefault("doctrine_theocracy") == "doctrine_theocracy_lay_clergy"
+            && doctrines.GetValueOrDefault("doctrine_clerical_succession", "")
+                .StartsWith("doctrine_clerical_succession_temporal", StringComparison.Ordinal);
+
+        // Drawn here rather than in the initializer below so that when it is drawn is visible: it
+        // shares the stream with everything else in this method, and a reader cannot tell where an
+        // object initializer's members fall in that order.
+        bool coronationCrown = rng.Chance(0.67);
+
         var localization = new List<(string, string)>();
         var text = new Dictionary<string, string>();
         BuildLocalization(key, language, monotheist, gender, vocab, rng, localization, text);
@@ -833,10 +1003,11 @@ public static class Faiths
             Key = key,
             Name = UniqueFrom(() => language.Word(rng, 2, 3), usedNames),
             Language = language,
-            GraphicalFaith = vocab.GraphicalFaiths.Count > 0
-                ? rng.Pick(vocab.GraphicalFaiths)
-                : "pagan_gfx",
+            GraphicalFaith = PickGraphicalFaith(vocab, cfg, monotheist, rng),
             Monotheist = monotheist,
+            Abrahamic = abrahamic,
+            LayClergy = layClergy,
+            CoronationCrown = coronationCrown,
             Doctrines = doctrines,
             Virtues = Sample(vocab.Virtues, rng.Int(3, 5), rng),
             Sins = Sample(vocab.Sins, rng.Int(3, 5), rng),
@@ -1003,15 +1174,94 @@ public static class Faiths
         return DeityGenders[rng.Chance(0.5) ? 2 : 3];
     }
 
+    /// <summary>
+    /// The tenets a faith of this religion may draw.
+    ///
+    /// The six syncretism tenets each grant opinion with, and soften hostility towards, one vanilla
+    /// religion family by name — Christian, Islamic, Jewish, Eastern, Sinitic, unreformed. None of
+    /// the first five exists on a generated map, so a faith holding one carries a dead tenet in a
+    /// slot that could have held a live one. They go under Shaped. The unreformed one stays for
+    /// Abrahamic-shaped faiths only, which is who vanilla shows it to (its is_shown is "not
+    /// pagan"), and unreformed faiths do exist here for it to point at. PaganOnly keeps the pool
+    /// whole, as it always was.
+    /// </summary>
+    private static List<string> TenetPool(Religion religion, VanillaVocabulary vocab, MapConfig cfg)
+    {
+        IEnumerable<string> pool = vocab.Tenets;
+
+        if (!cfg.AllowNaturalPrimitivism)
+            pool = pool.Where(t => !t.Contains("natural_primitivism", StringComparison.OrdinalIgnoreCase));
+
+        if (cfg.FaithShaping == MapConfig.FaithShape.Shaped)
+            pool = pool.Where(t => !t.EndsWith("_syncretism", StringComparison.Ordinal)
+                || (religion.Abrahamic && t == "tenet_unreformed_syncretism"));
+
+        return pool.ToList();
+    }
+
+    /// <summary>
+    /// Puts the great-holy-war tenet first for a faith that has just been given a head.
+    ///
+    /// <c>great_holy_wars_active</c> lives on exactly two tenets, and a head of faith without one
+    /// is a title that never launches anything. The tenets the faith already holds are kept where
+    /// the seed allows them — they may be what it shares with its sister faiths — and only the
+    /// ones the seed rules out (pacifism, human sacrifice, gruesome festivals) are drawn again.
+    /// No-op when the install lacks the tenet or the faith already holds one of the pair.
+    /// </summary>
+    private static void SeedWarTenet(Faith faith, bool temporal, VanillaVocabulary vocab,
+        MapConfig cfg, Rng rng)
+    {
+        if (faith.Tenets.Contains(SpiritualWarTenet) || faith.Tenets.Contains(TemporalWarTenet)) return;
+
+        string seed = temporal ? TemporalWarTenet : SpiritualWarTenet;
+        if (!vocab.Tenets.Contains(seed)) return;
+
+        var held = new List<string>(faith.Religion.Doctrines.Values) { seed };
+        var kept = new List<string>();
+        foreach (string tenet in faith.Tenets)
+        {
+            if (kept.Count == 2 || !vocab.Compatible(tenet, held)) continue;
+            kept.Add(tenet);
+            held.Add(tenet);
+        }
+
+        var rest = TenetPool(faith.Religion, vocab, cfg)
+            .Where(t => t != seed && !kept.Contains(t)).ToList();
+        faith.Tenets = [seed, .. kept, .. SampleCompatible(rest, 2 - kept.Count, held, vocab, rng)];
+    }
+
+    /// <summary>
+    /// Makes a religion's other faiths read as heresies of its primary one: each keeps two of the
+    /// primary faith's three tenets and draws one the primary does not hold. Vanilla's own
+    /// siblings are built this way — Catholic and Orthodox share two tenets and differ in one —
+    /// and without it two faiths of one religion could look nothing alike. Shaped only; under
+    /// PaganOnly every faith keeps its independent draw, and nothing here touches the stream.
+    /// </summary>
+    private static void AlignSiblingTenets(Religion religion, Faith primary, IEnumerable<Faith> siblings,
+        VanillaVocabulary vocab, MapConfig cfg, Rng rng)
+    {
+        if (cfg.FaithShaping != MapConfig.FaithShape.Shaped || primary.Tenets.Count < 3) return;
+
+        var pool = TenetPool(religion, vocab, cfg).Where(t => !primary.Tenets.Contains(t)).ToList();
+
+        foreach (var faith in siblings)
+        {
+            var kept = primary.Tenets.ToList();
+            rng.Shuffle(kept);
+            kept.RemoveAt(kept.Count - 1);
+
+            var own = SampleCompatible(pool, 1, religion.Doctrines.Values.Concat(kept), vocab, rng);
+            faith.Tenets = [.. kept, .. own];
+        }
+    }
+
     private static Faith CreateFaith(Religion religion, int index, VanillaVocabulary vocab,
         HashSet<string> usedNames, MapConfig cfg, Rng rng)
     {
         // Natural primitivism reads as a slur on a generated people rather than as flavour, so it is
         // filterable. Filtered here rather than out of the vocabulary itself because the vocabulary
         // is what the install actually has, and the rest of the program is entitled to see it whole.
-        var pool = cfg.AllowNaturalPrimitivism
-            ? vocab.Tenets
-            : vocab.Tenets.Where(t => !t.Contains("natural_primitivism", StringComparison.OrdinalIgnoreCase)).ToList();
+        var pool = TenetPool(religion, vocab, cfg);
 
         return new Faith
         {
@@ -1174,12 +1424,16 @@ public static class Faiths
         if (faiths.Count == 0) return;
 
         int monotheist = religions.Count(r => r.Monotheist);
+        int abrahamic = religions.Count(r => r.Abrahamic);
+        int layClergy = religions.Count(r => r.LayClergy);
         int heads = faiths.Count(f => f.Head is not null);
+        int temporal = faiths.Count(f => f.Head is { Temporal: true });
         int unreformed = faiths.Count(f => !f.IsOrganized);
         var sizes = faiths.Select(f => f.Counties.Count).OrderBy(n => n).ToList();
 
         Console.WriteLine($"  faiths: {faiths.Count} in {religions.Count} religions " +
-                          $"({monotheist} monotheist, {unreformed} unreformed, {heads} heads of faith) " +
+                          $"({monotheist} monotheist, {abrahamic} Abrahamic-shaped, {layClergy} lay clergy, " +
+                          $"{unreformed} unreformed, {heads} heads of faith, {temporal} temporal) " +
                           $"over {counties} counties — " +
                           $"smallest {sizes[0]}, median {sizes[sizes.Count / 2]}, largest {sizes[^1]} counties " +
                           $"({elapsedMs} ms)");
