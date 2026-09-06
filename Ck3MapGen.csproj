@@ -43,6 +43,14 @@
          referenced as source, so the Heightmap tab and the Forge app share one implementation.
          Override NoiseToolDir on the command line or in Directory.Build.props if it lives elsewhere. -->
     <NoiseToolDir Condition="'$(NoiseToolDir)' == ''">..\noisetool\</NoiseToolDir>
+
+    <!-- ImageSharp's targets glob for *.lic and hard-fail with "Multiple Six Labors license files
+         found" the moment they see more than one. A git worktree under .claude/worktrees/ carries
+         its own copy of sixlabors.lic, so the build breaks as soon as a second session is open —
+         and it breaks *past* a no-build `dotnet run`, which then silently runs the stale binary.
+         MSBuildProjectDirectory rather than an absolute path, so a worktree picks its OWN licence
+         rather than reaching back into the main checkout. -->
+    <SixLaborsLicenseFile Condition="'$(SixLaborsLicenseFile)' == ''">$(MSBuildProjectDirectory)\sixlabors.lic</SixLaborsLicenseFile>
   </PropertyGroup>
 
   <ItemGroup>
@@ -65,6 +73,14 @@
     <None Update="assets\**">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Real-world place names the name generator must avoid (MapGen/Gazetteer.cs). Embedded
+         rather than copied beside the executable, so a name check can never come up empty
+         because the file was not shipped. Rebuild it with tools/make_gazetteer.py. -->
+    <None Remove="assets\realworld_places.txt" />
+    <EmbeddedResource Include="assets\realworld_places.txt" LogicalName="realworld_places.txt" />
   </ItemGroup>
 
 </Project>

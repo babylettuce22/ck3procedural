@@ -585,7 +585,7 @@ public static class Steppe
     }
 
     /// <summary>Connected groups of flagged nodes, in node order.</summary>
-    private static List<List<int>> Components(RegionGrowth.Graph graph, bool[] flagged)
+    internal static List<List<int>> Components(RegionGrowth.Graph graph, bool[] flagged)
     {
         var seen = new bool[graph.Count];
         var components = new List<List<int>>();

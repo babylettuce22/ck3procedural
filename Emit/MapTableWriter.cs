@@ -34,6 +34,27 @@ public static class MapTableWriter
     /// <summary>Vanilla's province-map height, the denominator for the Z and mesh-Z ratio.</summary>
     private const int VanillaProvinceHeight = 4608;
 
+    /// <summary>
+    /// World Y of the paper map: <c>FLAT_MAP_HEIGHT</c> in vanilla's 00_graphics.txt, and the plane
+    /// the map is drawn on once the terrain hands over. Nothing we write moves it — it is not one
+    /// of the defines <see cref="CompatibilityWriter"/> rescales, and it does not travel with map
+    /// size the way the XZ extents do. That fixedness is the whole reason the drop below exists.
+    /// </summary>
+    private const double FlatMapHeight = 3.92;
+
+    /// <summary>
+    /// World Y of the table surface the map sits on in vanilla — the top of the tablecloth on
+    /// western and ce1, measured from the shipped meshes: object Y -20, mesh scale 5, cloth top at
+    /// local -0.3673, so -20 + 5(-0.3673) = -21.84. ep3, whose cloth is modelled into the tabletop
+    /// rather than shipped separately, comes out at -19.44; the deeper of the two is the one to
+    /// hold, since holding it also holds the shallower.
+    ///
+    /// This is the height whose distance to <see cref="FlatMapHeight"/> is the gap the eye reads as
+    /// "the map is lying on the table" — 25.76 units in vanilla — and the one thing the Y rescale
+    /// must not quietly spend.
+    /// </summary>
+    private const double VanillaTableSurfaceY = -21.84;
+
     public static void WriteAll(string modDir, Config.MapConfig cfg)
     {
         string relative = Path.Combine("gfx", "map", "map_object_data");
@@ -68,6 +89,7 @@ public static class MapTableWriter
         // Erring large is free: vanilla's table already overhangs its map on every side, and more
         // overhang on the slack axis just reads as more tablecloth.
         double meshScale = Math.Max(scale, heightScale);
+        double drop = Drop(cfg, meshScale);
 
         int written = 0, objects = 0, dropped = 0;
 
@@ -78,7 +100,7 @@ public static class MapTableWriter
 
             string rescaled = Transform.Replace(text, match =>
             {
-                string? scaled = Rescale(match.Groups[1].Value, scale, heightScale, meshScale);
+                string? scaled = Rescale(match.Groups[1].Value, scale, heightScale, meshScale, drop);
                 if (scaled is null) return match.Value;
                 objects++;
                 return $"transform=\"{scaled}\"";
@@ -91,11 +113,46 @@ public static class MapTableWriter
         }
 
         Console.WriteLine($"  map tables: {objects} objects in {written} files placed at " +
-                          $"{scale:F3}x / {heightScale:F3}x vanilla's world, mesh {meshScale:F3}x " +
+                          $"{scale:F3}x / {heightScale:F3}x vanilla's world, mesh {meshScale:F3}x, " +
+                          $"dropped {-drop:F1} below the map " +
                           (cfg.MapTableProps ? "(props kept)" : $"({dropped} prop objects dropped)"));
 
         RescaleLayerFades(targetDir, cfg);
     }
+
+    /// <summary>
+    /// How far the whole tableau moves down, in world units. Negative, and applied as one rigid
+    /// translation to every object in every style, so the table keeps its own shape — the candles
+    /// stay on the cloth, the legs stay on the floor — and only its distance from the map changes.
+    ///
+    /// Two independent reasons to move it, which add:
+    ///
+    /// **The map's vertical regime does not scale and the table's does.** Everything about the map
+    /// surface is fixed in absolute world units on every map — <c>WORLD_EXTENTS_Y</c> stays 50,
+    /// <c>WATERLEVEL</c> stays 3, <c>FLAT_MAP_HEIGHT</c> stays 3.92 — while
+    /// <see cref="Rescale"/> multiplies the table's Y by <paramref name="meshScale"/> to keep the
+    /// tableau self-similar. Self-similar about y=0 means the *gap* to the map shrinks with the
+    /// map: vanilla's 25.76 units become 11.5 at half size and 5.7 at quarter size, on a table
+    /// whose own thickness did not change nearly as much. The first term puts that gap back where
+    /// vanilla left it. It is one-sided — a map larger than vanilla scales the table *away* from
+    /// the map, which needs no correction and must not be pulled back in.
+    ///
+    /// **Vanilla's tabletops are not entirely below the map.** Measured from the shipped meshes
+    /// against the map plane at 3.92, the map-spanning opaque furniture straddles it: tgp's
+    /// tabletop surface at +28.42, western's and ce1's metal <c>barsShape</c> at +11.99, ep3's
+    /// tablecloth pattern only 9.81 under. <c>render_pass=MapUnderTerrain</c> deals with table
+    /// geometry that is *clearly* above the map — ce1's scrolls are 149 units up and are never seen
+    /// over it — but two surfaces eight units apart, viewed from two thousand, fight for the depth
+    /// buffer, and that flicker is read as the tablecloth showing through the map.
+    /// <see cref="Config.MapConfig.MapTableClearance"/> is the second term; its default of 50 puts
+    /// all of that furniture at least as far under the map as vanilla's own cloth already is.
+    ///
+    /// Nothing below needs a floor guard. <c>MAPTABLE_FLOOR_LEVEL = -3100</c> is a shadow hint
+    /// rather than a bound — tgp's own floor is authored at -5361, well past it — and the styles
+    /// that do respect it have 75 units of room at the default.
+    /// </summary>
+    private static double Drop(Config.MapConfig cfg, double meshScale) =>
+        Math.Min(0.0, VanillaTableSurfaceY * (1.0 - meshScale)) - cfg.MapTableClearance;
 
     /// <summary>
     /// The <c>entity=</c> substrings that mark an object as clutter rather than furniture.
@@ -289,9 +346,14 @@ public static class MapTableWriter
     /// larger of the two so the table covers the map on both — see <c>meshScale</c> in WriteAll.
     /// Y position rides that same ratio, since it is the mesh it has to stay attached to.
     ///
+    /// Scaling Y is a ratio and <paramref name="drop"/> is a length, so they compose in that order:
+    /// the ratio sets the tableau's shape, the drop then moves the finished thing away from a map
+    /// surface that never scaled at all. Adding the drop before scaling would scale it too, which
+    /// is exactly the mistake it exists to undo. See <see cref="Drop"/>.
+    ///
     /// The rotation quaternion is left alone for the obvious reason — it is not a length.
     /// </summary>
-    private static string? Rescale(string transform, double scale, double heightScale, double meshScale)
+    private static string? Rescale(string transform, double scale, double heightScale, double meshScale, double drop)
     {
         var parts = transform.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length != 10) return null;
@@ -302,7 +364,7 @@ public static class MapTableWriter
                 return null;
 
         v[0] *= scale;                                    // position X
-        v[1] *= meshScale;                                // position Y, with the mesh
+        v[1] = v[1] * meshScale + drop;                   // position Y, with the mesh, then clear of the map
         v[2] *= heightScale;                              // position Z
         for (int i = 7; i < 10; i++) v[i] *= meshScale;   // mesh scale, uniform
 

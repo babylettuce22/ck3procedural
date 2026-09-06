@@ -117,11 +117,25 @@ overseeing_the_settlement = {
 settlement_overseen = {
 	icon = county_modifier_development_positive
 
-	# Exactly cancels settlement_01's -0.75. A colony with its lord in it develops like ordinary
-	# land; a colony without one does not. That is the cleanest statement of the rule this file
-	# exists to express, and it is why the number is a mirror rather than a round figure — if the
-	# malus in 00_settlement_buildings.txt is ever retuned, this has to move with it.
-	development_growth_factor = 0.15
+	# A colony with its lord in it develops like ordinary land; a colony without one does not.
+	# That is the cleanest statement of the rule this file exists to express, and it is why the
+	# number is a mirror rather than a round figure — if the malus in 00_settlement_buildings.txt
+	# is ever retuned, this has to move with it.
+	#
+	# ---- It stopped being a mirror, and nothing said so ----
+	#
+	# This comment read "exactly cancels settlement_01's -0.75" while the value was 0.15 and the
+	# malus was -0.95. Three numbers, no two of which agreed, and the file's own instruction to
+	# keep them in step was the thing that went stale. Nothing catches this: a factor is a factor,
+	# the tooltip renders, the colony grows at some rate, and the only way to notice is to open
+	# both files at once.
+	#
+	# 0.30 is not the full -0.95 either, and that is deliberate rather than another drift. The
+	# malus falls with the settlement chain (-0.95, -0.85, -0.80) while presence does not, so a
+	# single number cannot cancel all three. 0.30 is the honest reading of what presence is worth
+	# against the tier where it matters — a lord rides out to a colony that is still settlement_01
+	# or 02 — and it leaves the ground still harder than ordinary land, which it should be.
+	development_growth_factor = 0.30
 
 	monthly_county_control_growth_add = 0.5
 	county_opinion_add = 20
@@ -208,9 +222,35 @@ colony_surveyed_ground = {
 
 
 # The lord broke his sacred word
+#
+# `county_modifier_corruption` (no suffix) is not a file — vanilla ships only the _positive,
+# _negative and _mixed variants, and the bare name silently drew nothing.
 settlers_betrayed_unrest = {
-	icon = county_modifier_corruption
+	icon = county_modifier_corruption_negative
 	county_opinion_add = -35
 	monthly_county_control_growth_factor = -0.50
 	tax_mult = 0.10
+}
+
+# =====================================================================================
+#  The frontier charter
+# =====================================================================================
+#
+# Character scope. Taken from the_wilds.0001, the introduction the Wilds situation sends a marcher
+# lord (Emit/FrontierWriter.cs). Halves colonize_cost AND colonize_prestige_cost for ONE expedition,
+# and is spent by colony_launch_expedition_effect.
+#
+# A MODIFIER rather than a character flag, and that was a real fix rather than a tidy-up. CK3
+# renders costs, modifiers and stat changes in an option tooltip and renders flags NOWHERE, so as
+# a flag the charter was invisible at the moment the player chose it and only ever surfaced later,
+# as colonize_cost_charter_desc in the price breakdown of an expedition already decided on. As a
+# modifier it sits on the character sheet where a granted benefit belongs, and it carries its own
+# expiry instead of lingering unread until the holder dies.
+#
+# No effects of its own, which is the same argument colony_surveyed_ground makes above: the
+# discount lives in colonize_cost, where the rest of the price does. Vanilla marks promises the
+# same way — pilgrimage_promised_modifier and hajj_promised_modifier are icon-only too, and use
+# this same compass icon for the same reason.
+wilds_frontier_charter = {
+	icon = compass_positive
 }

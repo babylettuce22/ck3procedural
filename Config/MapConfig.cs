@@ -1253,6 +1253,49 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Description("Keep the map table's candles, goblets, coins and ground props. They render under the terrain, so only the parts overhanging the map's edge are visible. Turn off if candle flames show through the map when zooming in — the flames are attached particle entities the layer fade does not reach.")]
     public bool MapTableProps { get; set; } = true;
 
+    /// <summary>
+    /// Extra world units the whole map-table tableau is pushed down, away from the map.
+    ///
+    /// Vanilla's tabletops are not entirely below the paper map. Measured from the shipped meshes
+    /// against <c>FLAT_MAP_HEIGHT = 3.92</c>, the world Y the flat map is drawn at, the *furniture*
+    /// — the map-spanning opaque surfaces the map lies on — straddles the plane:
+    ///
+    ///     tgp      tgp_tabletop_01              +28.42     24.50 ABOVE the map
+    ///     ce1      barsShape                    +11.99      8.08 ABOVE
+    ///     western  barsShape                    +11.99      8.08 ABOVE
+    ///     ep3      ep3_cloth_patternShape        -5.89      9.81 below
+    ///     ep3      ep3_byzantium_cloth          -19.44     23.36 below
+    ///     ce1      tablecloth_decorationShape   -21.84     25.76 below
+    ///     western  tablecloth_decorationShape   -21.84     25.76 below
+    ///     ce1      tableShape                   -39.83     43.75 below
+    ///
+    /// Everything from ep3's cloth pattern up is close enough to coplanar with the map to fight it
+    /// for the depth buffer, and all of it spans the map rather than only the overhang. That is
+    /// what the tablecloth flickering through the map is. <c>render_pass=MapUnderTerrain</c> hides
+    /// table geometry that is *clearly* above the map — ce1's scrolls sit 149 units up and are
+    /// never seen over it — but it cannot separate two surfaces eight units apart seen from two
+    /// thousand.
+    ///
+    /// 50 puts every one of those below the plane by at least 25.5, which is the gap vanilla's own
+    /// tablecloth already has and therefore a separation the game demonstrably renders cleanly. It
+    /// costs a wider gap between the map and the cloth — 75.8 against 25.8 — which is 0.5% of a
+    /// vanilla-width map and reads as nothing at the zoom the table is seen from. 0 restores
+    /// vanilla's offsets exactly.
+    ///
+    /// It does not fix the *props*, and cannot: candles, coins and books are spread continuously
+    /// through the same band (vanilla has a candle flame 1.71 above the plane and ep3's eagle 61
+    /// above), so any rigid drop that clears one drags another in. They are small sparse objects
+    /// rather than map-wide planes, so they shimmer at a point instead of across the map, and
+    /// <see cref="MapTableProps"/> is the lever that removes them outright.
+    ///
+    /// This is separate from the map-size correction in <see cref="Emit.MapTableWriter"/>, which
+    /// keeps that gap constant in absolute units as the map shrinks. Both land as one translation.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("06 Map Objects")]
+    [Description("World units the map table is pushed down, away from the map. Vanilla's tabletops carry map-spanning surfaces up to 24 units ABOVE the flat map plane, close enough to fight it for the depth buffer — which is the tablecloth flickering through the map. The tableau moves rigidly, so this only opens the gap between the map and the cloth. Does not affect the candles and clutter, which straddle the map plane by design — use Map Table Props for those. 0 restores vanilla's offsets exactly.")]
+    public double MapTableClearance { get; set; } = 50.0;
+
     [Category("06 Map Objects")]
     [Description("Density multiplier for trees and ground foliage. 1.0 is about vanilla's own density per land pixel (trees are drawn at vanilla size on every map, so this is also vanilla's canopy); 0.5 = sparser, 2.0 = denser. Costs load time and memory in the game at high values — every instance is written out individually.")]
     public double TreeDensity { get; set; } = 1.65;

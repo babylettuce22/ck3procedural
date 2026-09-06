@@ -214,7 +214,7 @@ public sealed class Language
     /// <summary>A bare word of the language: a culture, a faith, a river, a thing.</summary>
     public string Word(Rng rng, int minSyllables = 2, int maxSyllables = 3)
     {
-        if (_markov is not null) return Orthography.Capitalise(MarkovRoot(rng, minSyllables, maxSyllables));
+        if (_markov is not null) return Unblocked(() => Orthography.Capitalise(MarkovRoot(rng, minSyllables, maxSyllables)));
 
         string best = "";
         for (int attempt = 0; attempt < 12; attempt++)
@@ -229,7 +229,7 @@ public sealed class Language
     public string MaleName(Rng rng)
     {
         if (_markov is not null)
-            return Orthography.Capitalise(JoinText(MarkovRoot(rng, 1, 2), rng.Chance(0.55) ? rng.Pick(MaleEndings) : ""));
+            return Unblocked(() => Orthography.Capitalise(JoinText(MarkovRoot(rng, 1, 2), rng.Chance(0.55) ? rng.Pick(MaleEndings) : "")));
 
         string best = "";
         for (int attempt = 0; attempt < 12; attempt++)
@@ -244,7 +244,7 @@ public sealed class Language
     public string FemaleName(Rng rng)
     {
         if (_markov is not null)
-            return Orthography.Capitalise(JoinText(MarkovRoot(rng, 1, 2), rng.Chance(0.80) ? rng.Pick(FemaleEndings) : ""));
+            return Unblocked(() => Orthography.Capitalise(JoinText(MarkovRoot(rng, 1, 2), rng.Chance(0.80) ? rng.Pick(FemaleEndings) : "")));
 
         var f = Flavour!;
         var lex = Lexicon!;
@@ -336,9 +336,12 @@ public sealed class Language
             return PlaceName(rng, tier);
         }
 
-        string root = MarkovRoot(rng, 1, 2);
-        if (!rng.Chance(0.75)) return Orthography.Capitalise(root);
-        return Orthography.Capitalise(JoinText(root, rng.Pick(affixes)));
+        return Unblocked(() =>
+        {
+            string root = MarkovRoot(rng, 1, 2);
+            if (!rng.Chance(0.75)) return Orthography.Capitalise(root);
+            return Orthography.Capitalise(JoinText(root, rng.Pick(affixes)));
+        });
     }
 
     private List<string> PlaceIds(Rng rng, char tier)
@@ -439,10 +442,11 @@ public sealed class Language
     public string CompoundName(Rng rng)
     {
         if (_markov is not null)
-        {
-            string a = MarkovRoot(rng, 1, 2), b = MarkovRoot(rng, 1, 2);
-            return Orthography.Capitalise(rng.Chance(0.3) ? $"{a}-{b}" : JoinText(a, b));
-        }
+            return Unblocked(() =>
+            {
+                string a = MarkovRoot(rng, 1, 2), b = MarkovRoot(rng, 1, 2);
+                return Orthography.Capitalise(rng.Chance(0.3) ? $"{a}-{b}" : JoinText(a, b));
+            });
 
         string best = "";
         for (int attempt = 0; attempt < 8; attempt++)
@@ -559,6 +563,22 @@ public sealed class Language
 
     private bool Fits(List<string> ids, string spelled, int min, int max)
         => Phonology.Syllables(ids) <= 4 && spelled.Length >= min && spelled.Length <= max && !Blocked(spelled);
+
+    /// <summary>
+    /// The Markov path has no phoneme list to test, only the spelled string, so it redraws until
+    /// one passes <see cref="Blocked"/>. Its chains are trained on real place names, which makes
+    /// it the path most likely to say "Yemen" verbatim.
+    /// </summary>
+    private static string Unblocked(Func<string> draw, int attempts = 12)
+    {
+        string best = "";
+        for (int attempt = 0; attempt < attempts; attempt++)
+        {
+            best = draw();
+            if (!Blocked(best)) return best;
+        }
+        return best;
+    }
 
     private string MarkovRoot(Rng rng, int minSyllables, int maxSyllables)
     {
@@ -711,13 +731,15 @@ public sealed class Language
 
     /// <summary>
     /// Whether a spelled name is one an English reader would trip over: a real word that means
-    /// something rude or silly, a slur, or plain English. Checked on every emitted name, because
-    /// the generator has no idea what it is saying and a map is forever.
+    /// something rude or silly, a slur, plain English, or a real place — a county called "Yemen"
+    /// reads as a mistake, not a name (<see cref="Gazetteer"/>). Checked on every emitted name,
+    /// because the generator has no idea what it is saying and a map is forever.
     /// </summary>
     public static bool Blocked(string name)
     {
         string plain = Fold(name);
         if (BlockedWords.Contains(plain) || EnglishWords.Contains(plain)) return true;
+        if (Gazetteer.IsRealPlace(plain)) return true;
         if (Echoes(plain)) return true;
         foreach (string fragment in BlockedFragments)
             if (plain.Contains(fragment, StringComparison.Ordinal)) return true;

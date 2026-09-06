@@ -115,6 +115,12 @@ public sealed record WrittenContent
     public SteppeMap? Steppe { get; init; }
 
     /// <summary>
+    /// The frontiers the Wilds situation is bound to. Derived from <see cref="Wilderness"/> with
+    /// no rng, so it could be rebuilt, but nothing downstream asks for it yet.
+    /// </summary>
+    public FrontierMap? Frontier { get; init; }
+
+    /// <summary>
     /// Who stands on the bookmark screen and what it says about them.
     ///
     /// Kept whole rather than reselected: the realm highlights and the portrait DNA were written

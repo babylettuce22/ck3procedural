@@ -25,6 +25,10 @@ public static class Ascii
         ['œ'] = "oe", ['ř'] = "r", ['ś'] = "s", ['š'] = "s", ['ş'] = "s", ['ß'] = "ss", ['ť'] = "t", ['þ'] = "th",
         ['ú'] = "u", ['ù'] = "u", ['û'] = "u", ['ü'] = "u", ['ū'] = "u", ['ű'] = "u", ['ů'] = "u",
         ['ý'] = "y", ['ÿ'] = "y", ['ź'] = "z", ['ž'] = "z", ['ż'] = "z",
+        // Letters vanilla title names use that the rows above do not cover — Argeș, Bălți,
+        // Aydıncıḳ — so the gazetteer folds them to the letter and not to nothing.
+        ['ș'] = "s", ['ț'] = "t", ['ţ'] = "t", ['ḳ'] = "k", ['ĩ'] = "i", ['ġ'] = "g", ['ŋ'] = "ng",
+        ['ų'] = "u", ['ŕ'] = "r",
     };
 
     /// <summary>Lower-case ASCII letters and digits only; spaces and hyphens become underscores when

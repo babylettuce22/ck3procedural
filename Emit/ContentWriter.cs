@@ -238,6 +238,12 @@ public static class ContentWriter
         var steppe = Core.Stage.Time("great steppe", () => MapGen.Steppe.Build(counties, provinces,
             order, landCount, provinceTerrain, governments, new Rng(cfg.Seed ^ 0x57E9)));
 
+        // Where the Wilds situation lives: one frontier per connected stretch of wilderness, plus
+        // the settled counties one hop out. Deterministic from the wilderness map, no rng. See
+        // MapGen/Frontier.cs.
+        var frontier = Core.Stage.Time("frontier", () => MapGen.Frontier.Build(counties, provinces,
+            order, landCount, provinceTerrain, wilderness));
+
         // Where an army can march across water: straits and major-river crossings, written into
         // map_data/adjacencies.csv over the stub the map writer left. See MapGen/Crossings.cs.
         var crossings = Core.Stage.Time("crossings", () =>
@@ -352,6 +358,7 @@ public static class ContentWriter
 
         // After the regions it points at, and nothing reads what it writes.
         Core.Stage.Time("great steppe files", () => SteppeWriter.WriteAll(modDir, gameDir, steppe));
+        Core.Stage.Time("the wilds files", () => FrontierWriter.WriteAll(modDir, cfg, frontier));
         Core.Stage.Time("silk road files", () => SilkRoadWriter.WriteAll(modDir, gameDir, cfg, silkRoad));
         Core.Stage.Time("route files", () => RouteWriter.WriteAll(modDir, routes, crossings, silkRoad,
             provinces, order, baronyCount, provinceTerrain));
@@ -375,8 +382,10 @@ public static class ContentWriter
 
         Core.Stage.Time("locators", () => LocatorWriter.WriteAll(modDir, gameDir, provinces, order, landCount, anchors, cfg));
         Core.Stage.Time("casus belli", () => CasusBelliWriter.WriteAll(modDir, gameDir, cfg));
+        Core.Stage.Time("council tasks", () => CouncilTaskWriter.WriteAll(modDir, gameDir, cfg));
         Core.Stage.Time("frontend", () => FrontendWriter.WriteFrontend(modDir, gameDir));
-        Core.Stage.Time("GUI changes", () => GuiWriter.WriteAll(modDir, gameDir, cfg.EnableSocieties));
+        Core.Stage.Time("GUI changes",
+            () => GuiWriter.WriteAll(modDir, gameDir, cfg.EnableSocieties, cfg.EnableWilderness));
 
         if (cfg.EnableFantasyEthnicities && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly)
         {
@@ -688,6 +697,7 @@ public static class ContentWriter
             Prehistory = prehistory,
             Governments = governments,
             Steppe = steppe,
+            Frontier = frontier,
             Bookmarks = bookmarks,
             BaronyCount = baronyCount,
             LandCount = landCount,

@@ -219,10 +219,20 @@ task_clear_the_wilds = {
 #
 # Both lines are NEGATIVE and both are improvements. `build_gold_cost` is a cost and `build_speed` is
 # a construction *time* — vanilla's own good traits carry `church_holding_build_speed = -0.2` — so a
-# positive number there is a slower colony. That sign is easy to get backwards and worth stating: it
-# is already backwards in colony_law_corvee, which advertises faster clearance and applies
-# `build_speed = 0.30`. Sharing one block is safe here precisely because both want the same 20% at
-# stewardship 10.
+# positive number there is a slower colony. That sign is easy to get backwards and worth stating —
+# colony_law_corvee once had it backwards, advertising faster clearance while applying
+# `build_speed = 0.30`; it is -0.30 now. Sharing one block is safe here precisely because both want
+# the same 20% at stewardship 10.
+#
+# ---- What this task is worth, and why it is the biggest single build_speed in the set ----
+#
+# -1 scaled by colony_quartermaster_thrift (stewardship / 50, max 0.4) is up to -0.40, against
+# vanilla's largest single scripted build_speed of -0.5. That is defensible on its own and it is
+# not on its own: colony_law_corvee is -0.30, colony_rich_seam -0.20, settlement_overseen -0.30's
+# neighbour build_speed -0.15, and the Wilds situation's wilds_settlement_set adds more again.
+# build_speed is additive and vanilla defines no cap for it, so this is the number to look at
+# first if the total ever has to come down. It is not the one that pushed the stack past -1.0 —
+# that was wilds_settlement_set at -0.25, now -0.10 — but it is the largest.
 task_husband_the_stores = {
 	default_task = yes
 	position = councillor_colony_quartermaster

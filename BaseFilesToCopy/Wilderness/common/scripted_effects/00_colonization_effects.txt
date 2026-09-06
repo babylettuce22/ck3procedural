@@ -170,6 +170,16 @@ colony_launch_expedition_effect = {
 	}
 
 	scope:colonizer = {
+		# The frontier charter pays for ONE expedition. Spent here rather than on arrival because
+		# this is the single funnel every launch path runs through — decision, scripted_gui,
+		# interaction and event all call this effect — and because the price has already been
+		# charged by the time we arrive, so removing it now cannot make the player pay full rate
+		# for the expedition the charter was meant to cover. See colonize_cost.
+		if = {
+			limit = { has_character_modifier = wilds_frontier_charter }
+			remove_character_modifier = wilds_frontier_charter
+		}
+
 		set_variable = {
 			name = expedition_underway
 			value = scope:colony
@@ -332,6 +342,10 @@ colonize_county_effect = {
 			name = colony_just_founded
 			years = 3
 		}
+
+		# The Wilds situation hears of it. Defined by the generator (Emit/FrontierWriter.cs),
+		# and an empty shell on a map with no frontier.
+		wilds_situation_colony_founded_effect = { COUNTY = this }
 	}
 
 	# The expedition marks come off
@@ -497,6 +511,9 @@ promote_colony_effect = {
 			}
 		}
 		set_color_from_title = de_jure_liege
+
+		# The Wilds situation counts it as won. See Emit/FrontierWriter.cs.
+		wilds_situation_colony_promoted_effect = { COUNTY = this }
 	}
 
 	# End lord in residence activity if present
@@ -986,6 +1003,9 @@ abandon_county_effect = {
 					wilderness_seed_province_effect = yes
 				}
 			}
+
+			# The Wilds situation hears of the loss. See Emit/FrontierWriter.cs.
+			wilds_situation_colony_abandoned_effect = { COUNTY = this }
 		}
 	}
 }
@@ -1012,6 +1032,14 @@ abandon_county_effect = {
 # through pioneer_outcome_toast_effect, the council task through wilderness_obstacle_cleared_effect),
 # and an effect that announced itself could not be used by either without doubling up.
 wilderness_clear_hardest_obstacle_effect = {
+	# The one exception to "no bookkeeping": the Wilds situation's catalyst, which is silent and
+	# which both callers want exactly once per clearance. Asked before the ladder runs, since
+	# afterwards there is no telling whether anything came off. See Emit/FrontierWriter.cs.
+	if = {
+		limit = { has_building_with_flag = { flag = clearable_obstacle } }
+		county ?= { wilds_situation_obstacle_cleared_effect = { COUNTY = this } }
+	}
+
 	if = { limit = { has_building = killing_cold }        remove_building = killing_cold }
 	else_if = { limit = { has_building = flooded_lands }  remove_building = flooded_lands }
 	else_if = { limit = { has_building = bandit_camps }   remove_building = bandit_camps }

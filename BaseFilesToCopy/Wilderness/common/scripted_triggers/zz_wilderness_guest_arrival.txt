@@ -1,0 +1,76 @@
+﻿# Keeps the wilderness dummy from being given a court.
+#
+# ---- What this is ----
+#
+# A single-object override of vanilla's `guest_allowed_to_arrive_trigger` from
+# common/scripted_triggers/00_courtier_guest_management_triggers.txt. Script is last-wins, so
+# redefining the one trigger here replaces vanilla's without touching the file it lives in. The
+# filename sorts last so the override cannot lose to another mod's copy of the same directory.
+#
+# Everything below is vanilla's own definition verbatim, with ONE line added.
+#
+# ---- Why this trigger ----
+#
+# The engine hands a landed ruler guests out of the local character pool whether or not anything
+# about that ruler makes sense as a host, and the dummy is landed everywhere at once. The
+# government fields in 00_wilderness_government.txt stop the court GENERATING people —
+# court_generate_spouses, court_generate_commanders, royal_court — but none of them govern arrivals
+# from the pool, which is a different system with its own chokepoint.
+#
+# This is that chokepoint. `guest_can_arrive` in common/courtier_guest_management/guest_management.txt
+# is the once-a-month "can this pool character visit this court" test and it delegates the whole
+# question here, and the two host-picking loops in 00_courtier_guest_management_effects.txt call the
+# same trigger with the ruler they are considering. One object covers all three.
+#
+# ---- What this replaces, and what it does not ----
+#
+# `wilderness_yearly_cleanup` in 00_colonization_on_actions.txt kills every courtier and guest at a
+# wilderness ruler once a year, and it STAYS — it is the backstop for whatever the engine does
+# anyway, and it is the only thing covering courtiers, who are generated rather than invited. What
+# it cannot do is stop an arrival being an event: `courtier_guest_management.1001` fires on the way
+# in, so up to a year of guests would arrive, be greeted and then vanish. This stops them coming.
+#
+# ---- The `is_ai = no` in courtier_guest_management.1001 ----
+#
+# That event's arrival toast is gated on the host being a player, so in ordinary play nobody ever
+# saw these — they surface when the dummy is being played directly to watch the map, which is the
+# only way anyone reads its court at all. The arrivals themselves were happening either way.
+
+guest_allowed_to_arrive_trigger = {
+	# THE ONE ADDED LINE. The dummy has no hall to be a guest in.
+	NOT = { $HOST$ = { has_trait = wilderness } }
+
+	trigger_if = {
+		limit = { exists = var:last_visited_ruler }
+		NOT = { var:last_visited_ruler = $HOST$ }
+	}
+	trigger_if = { # Make sure that they're not trying to go back to where they are right now
+		limit = { exists = host }
+		NOT = { host = $HOST$ }
+	}
+	NOT = { has_trait_with_flag = epidemic_disease }
+	NOT = { has_relation_rival = $HOST$ }
+	#Compatible faiths
+	faith = {
+		save_temporary_scope_as = potential_guest_faith
+		faith_hostility_level = {
+			target = $HOST$.faith
+			value < faith_evil_level
+		}
+	}
+	$HOST$.faith = {
+		faith_hostility_level = {
+			target = scope:potential_guest_faith
+			value < faith_evil_level
+		}
+	}
+	
+	#Isn't too good for host
+	NAND = {
+		OR = {
+			any_claim = { tier = tier_empire }
+			any_close_family_member = { highest_held_title_tier = tier_empire }
+		}
+		$HOST$ = { highest_held_title_tier <= tier_county }
+	}
+} #Note: this trigger used to contain opinion triggers but then some awful rulers could never get guests because everyone hates them

@@ -56,6 +56,30 @@ colonize_cost = {
 	else = {
 		add = { value = 100 desc = colonize_cost_tier_desc }
 	}
+
+	# A marcher lord in a frontier whose era favours expeditions pays less. The trigger is
+	# written by the generator beside the Wilds situation (Emit/FrontierWriter.cs) and is
+	# `always = no` on a map with no frontier.
+	#
+	# 0.9, and it was 0.75. Read the note on @base_colonize_cost above and then read what 0.75
+	# did to it: 125/150/175/200 by tier became 94/113/131/150, which is the 75-150 band that
+	# note names as the thing that broke the frontier. A discount is allowed to make the price
+	# easier; it is not allowed to put it back where the design already found it fatal.
+	#
+	# It compounds with the charter below, and that is the other half of why it has to be small.
+	# 0.75 x 0.5 came to 0.375 — a count claiming a county for 47 gold.
+	if = {
+		limit = { wilds_cheaper_expedition_trigger = yes }
+		multiply = { value = 0.9 desc = colonize_cost_frontier_desc }
+	}
+
+	# The one-off charter a marcher lord may take when the Wilds situation first introduces
+	# itself (the_wilds.0001, written by Emit/FrontierWriter.cs). Consumed by
+	# colony_launch_expedition_effect, so it pays for one expedition and no more.
+	if = {
+		limit = { has_character_modifier = wilds_frontier_charter }
+		multiply = { value = 0.5 desc = colonize_cost_charter_desc }
+	}
 }
 
 # Zero for everyone but tribal rulers, who pay here instead of in gold.
@@ -65,6 +89,22 @@ colonize_prestige_cost = {
 	if = {
 		limit = { government_has_flag = government_is_tribal }
 		value = @tribal_colonize_prestige
+	}
+
+	# Both frontier discounts apply HERE as well as against gold, and the omission was a real
+	# bug: a tribal marcher lord pays their whole price in prestige, so a discount written only
+	# into colonize_cost above was worth exactly nothing to them. Nothing said so — the era
+	# still turned, the parameter still read true, and the price simply never moved.
+	#
+	# No government guard needed on either. The value is 0 for everyone else and multiplying
+	# zero leaves zero.
+	if = {
+		limit = { wilds_cheaper_expedition_trigger = yes }
+		multiply = { value = 0.9 desc = colonize_cost_frontier_desc }
+	}
+	if = {
+		limit = { has_character_modifier = wilds_frontier_charter }
+		multiply = { value = 0.5 desc = colonize_cost_charter_desc }
 	}
 }
 

@@ -339,9 +339,30 @@ colony_office_03 = {
 		monthly_income = 1.5
 	}
 
+	# ---- Both numbers were outside anything vanilla ships, and this is the one building the
+	#      whole promotion clock runs on ----
+	#
+	# `development_growth` is the ONLY flat growth anywhere in this file set, so the office chain
+	# is not one contributor among many — it is the entire numerator. Everything else in the
+	# system, this mod's modifiers and the Wilds situation alike, is a factor multiplying it.
+	# That makes these two lines the colony's speed, and they were set as if they were flavour.
+	#
+	# The flat was 1.5. Vanilla's largest building `development_growth` is 0.5, on one special
+	# building, and its named band tops out at `very_large_development_growth_gain = 0.5`
+	# (00_basic_values.txt); an ordinary building's base is 0.02-0.04. 1.5 was three times the
+	# ceiling and better than half a stewardship-15 steward running Increase Development
+	# (0.1 + 15 x 0.175 = 2.725) — permanently, on one county, from one building.
+	#
+	# The factor was 0.80. Vanilla's largest building `development_growth_factor` is 0.4, on the
+	# top tier of the city chain.
+	#
+	# 0.5 and 0.40 are those two ceilings exactly. The colony still finishes — the gate is
+	# development_level >= 4 in can_promote_colony_trigger, which is 1000 progress against
+	# LEVELS_DEVELOPMENT — it finishes on a clock a player can watch rather than one that
+	# resolves while they are looking at something else.
 	county_modifier = {
-		development_growth_factor = 0.80
-		development_growth = 1.5
+		development_growth_factor = 0.40
+		development_growth = 0.5
 	}
 
 	type_icon = "icon_structure_ghana_palace.dds"

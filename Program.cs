@@ -588,7 +588,7 @@ public static class Program
             //
             // --societies here as well as on a full run: the HUD tab is a .gui edit, so it is one
             // of the things --gui-only exists to iterate on without regenerating a world.
-            GuiWriter.WriteAll(modDir, options.GameDir, cfg.EnableSocieties);
+            GuiWriter.WriteAll(modDir, options.GameDir, cfg.EnableSocieties, cfg.EnableWilderness);
 
             return 0;
         }

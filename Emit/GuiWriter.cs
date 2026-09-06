@@ -47,7 +47,8 @@ public static class GuiWriter
     /// <param name="societies">Whether the society prototype is shipping. Gates the HUD tab, and
     /// nothing else here — a tab pointing at a panel whose scripted_guis were not copied would be
     /// a button that silently does nothing. See <see cref="PatchHudTabs"/>.</param>
-    public static void WriteAll(string modDir, string gameDir, bool societies = false)
+    public static void WriteAll(string modDir, string gameDir, bool societies = false,
+        bool wilderness = false)
     {
         PatchCountyView(modDir, gameDir);
         PatchCharacterWindow(modDir, gameDir);
@@ -58,6 +59,7 @@ public static class GuiWriter
         PatchInventoryWindow(modDir, gameDir);
         PatchSilkRoadWindow(modDir, gameDir);
 
+        if (wilderness) PatchSituationWindow(modDir, gameDir);
         if (societies) PatchHudTabs(modDir, gameDir);
         // The windows this project authors itself live in Emit/GuiWindows. Called from here so a
         // --gui-only run still emits them; the ones that need generator data are called from
@@ -645,6 +647,96 @@ public static class GuiWriter
                 n => !n.IsBlock && n.Key == "datacontext"
                      && n.Value is not null && n.Value.Contains("GetSituation('dynastic_cycle')"))
             .InsertVisible(GuiExpr.Raw("Situation.IsValid"));
+
+        doc.Ship(modDir);
+    }
+
+    /// <summary>
+    /// Hides the shared situation window's "Ends:" line for the Wilds situation.
+    ///
+    /// <code>
+    /// Related base files:
+    ///   Emit/FrontierWriter.cs   writes common/situation/situations/gen_the_wilds.txt
+    /// </code>
+    ///
+    /// The line is <c>SITUATION_CURRENT_PHASE_ENDS</c>, drawn with no <c>visible</c> of its own,
+    /// and it reads <c>SituationPhase.GetEndDate</c>. A phase with no <c>max_duration</c> has no
+    /// end date, and the engine renders the empty one as <em>1st of January, 2 BC</em> — observed
+    /// in game, logged nowhere.
+    ///
+    /// Every vanilla situation drawn by this window gives all of its phases a duration, so vanilla
+    /// never sees it. The Wilds deliberately gives none: a frontier's era turns on catalyst points,
+    /// the way the Dynastic Cycle's does, and a wall-clock timer on top of that would move an era
+    /// for no reason a player could see. The Dynastic Cycle gets away with duration-less phases
+    /// because it ships its own window; ours uses the shared one, so the line is hidden here.
+    ///
+    /// Narrowed to our own situation by comparing the type, so every other situation drawn by this
+    /// window — natural disasters above all — keeps its end date. Gated on the wilderness set
+    /// shipping at all, because <c>GetSituationType('the_wilds')</c> names a database key that
+    /// only exists when it does.
+    /// </summary>
+    private static void PatchSituationWindow(string modDir, string gameDir)
+    {
+        var doc = GuiDocument.Open(gameDir, "gui", "gui", "window_situation.gui");
+        if (doc is null) return;
+
+        // `Situation` is in the datacontext throughout: the window's root sets it from
+        // SituationWindow.GetSituation, and the blocks between only add contexts of their own.
+        var isOurs = GuiExpr.Raw(
+            $"ObjectsEqual( Situation.GetType.Self, GetSituationType('{FrontierWriter.TypeKey}').Self )");
+
+        doc.Unique("situation window phase end date",
+                n => !n.IsBlock && n.Key == "text"
+                     && n.Value is not null && n.Value.Contains("SITUATION_CURRENT_PHASE_ENDS"))
+            // GuiExpr.Not, NOT string interpolation. `GuiExpr.ToString()` wraps its body in the
+            // square brackets a .gui datafunction needs, so interpolating one into a raw string
+            // nests them — `[Not( [ObjectsEqual( … )] )]` — and the whole `visible` stops parsing.
+            // The combinators compose on `.Inner`, which is the unwrapped body, and are the only
+            // safe way to build one expression out of another.
+            .InsertVisible(GuiExpr.Not(isOurs));
+
+        // ---- The era's art behind the selected frontier's panel ----
+        //
+        // The generic situation window draws NO illustration anywhere. `Situation.GetIllustration`
+        // is read once, in window_situation_list.gui, for the tab list; a phase's illustration is
+        // read only by the two DLC windows and by a block in window_county_view.gui hardcoded to
+        // `the_great_steppe` and gated on County.UsesCountyFertility, which no frontier county
+        // has. So the four phase illustrations the situation ships were, until this, drawn nowhere
+        // at all — the window was text and 40px icons and nothing else.
+        //
+        // This puts the CURRENT phase's art behind the panel that already shows the player's
+        // participant group and its effects, so selecting a frontier in the left-hand list changes
+        // the picture, and a frontier whose era turns looks different the next time it is opened.
+        // Copied in shape from window_county_view.gui's steppe block — centercrop, rough edges, a
+        // horizontal fade so the art dies out under the text rather than boxing it.
+        //
+        // The anchor is the vbox carrying `min_height = 75`, which is unique in the file, and it
+        // sits inside `current_sub_region` — whose two datacontext lines put SituationSubRegion
+        // and then SituationPhase in scope, which is what makes the bare
+        // `SituationPhase.GetType.GetIllustration` resolve. That exact spelling has precedent in
+        // window_tgp_dynastic_cycle.gui; per the datafunction traps note, a NAME that does not
+        // exist fails silently and past tiger, so none here is invented.
+        //
+        // Appended rather than inserted first, and gated hard. `background` blocks stack in
+        // declaration order, so landing after vanilla's `using = Background_Area` puts the art over
+        // the flat panel and still under the text. The `visible` is not decoration: this file is
+        // shared by every situation on the generic window — the five nomad extras and the natural
+        // disasters — and an ungated illustration would repaint all of them.
+        //
+        // alpha 0.45 rather than the county view's 0.6: that panel is a header with room to
+        // breathe and this one is 75px with effect lines over it. It is one number if it reads too
+        // strong in game.
+        doc.Unique("situation window selected sub-region panel",
+                n => n.IsBlock && n.Key == "vbox"
+                     && n.Children.Any(c => !c.IsBlock && c.Key == "min_height" && c.Value == "75"))
+            .Append(GuiBuilder.Of("background")
+                .Visible(isOurs)
+                .Texture("[SituationPhase.GetType.GetIllustration]")
+                .FitType("centercrop")
+                .Alpha("0.45")
+                .Using("Mask_Rough_Edges")
+                .ModifyTexture("gfx/interface/component_masks/mask_fade_horizontal.dds", "alphamultiply")
+                .Node);
 
         doc.Ship(modDir);
     }

@@ -332,6 +332,14 @@ wilderness_colonization.0029.t:0 "The Starving Winter"
 
  # --- Cost breakdown -----------------------------------------------------------------------
  colonize_cost_tier_desc:0 "Rank"
+ colonize_cost_frontier_desc:0 "Age of the frontier"
+ colonize_cost_charter_desc:0 "Frontier charter"
+
+ # --- The frontier charter -------------------------------------------------------------------
+ # The modifier is defined in common/modifiers/00_colonization_modifiers.txt and granted by
+ # the_wilds.0001. It carries no effects, so these two strings are the whole of what it shows.
+ wilds_frontier_charter:0 "Frontier Charter"
+ wilds_frontier_charter_desc:0 "A charter drawn up for the men on the edge, and leave to go and use it.\n\nThe next expedition into the wild costs #V 50%#! less, in @gold_icon! and @prestige_icon! alike. The charter is spent on that one expedition, and lapses if it is never used."
 
  # --- Auto-generated holding modifiers -------------------------------------------------------
  # CK3 creates these eight names per holding type on its own; these are the strings they display
