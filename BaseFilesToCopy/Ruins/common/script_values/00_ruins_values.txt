@@ -12,8 +12,8 @@
 #
 # So nothing here is a level. Every point is scored against a county's own recent past or against
 # conditions that mean the same thing at any development: control lost, ground occupied, plague in
-# the province, a population that hates whoever claims to hold it. A county has to hold several of
-# those for several consecutive years before anything happens, and one good year takes points back.
+# the province, a population that hates whoever claims to hold it. A county has to hold one of those
+# every year without a break before anything happens, and a single good year wipes the count.
 
 # ---- The ladder ------------------------------------------------------------------------------
 #
@@ -21,40 +21,194 @@
 # GEN_RUIN_DECAY_THRESHOLD it falls.
 #
 # The gap between them is the point of having two numbers. It is not a courtesy: a county that
-# vanishes with no warning is indistinguishable from a bug, and the player has to have had a year
-# or more in which the answer was still "raise the control and it stops".
+# vanishes with no warning is indistinguishable from a bug, and the player has to have had years
+# in which the answer was still "raise the control and it stops".
 #
-# What these two numbers buy, at the gains below:
+# ---- These count CONSECUTIVE years. They are not a running total ----
 #
-#   neglect alone, no war        +3 a year          warned in 5 years, falls in 8
-#   besieged and looted yearly   +11 a year         warned in 2, falls in 3
-#   one bad war, then peace      +12 once, then -2  never falls; back to nothing in six years
+# They used to be. The counter accumulated and bled off slowly, and the result was that ruination
+# measured whether a county had changed hands rather than whether anyone was governing it. Measured
+# over 57 years of one 819-county world: 119 counties ruined, 2.1 a year, 14.5% of the map, and the
+# rate was not falling. 59 of them had been conquered exactly once, and 48 had never been conquered
+# at all. One war was worth twelve points against a threshold of twenty-four while a peaceful year
+# paid back two, so a single war took six good years to undo and two wars inside six years was a
+# ruin — which is most border counties, in most games.
 #
-# The last row is the one worth checking after any retune. A county that is sacked once and then
-# left alone must recover on its own, or every long game ends with the map full of holes.
-gen_ruin_decay_threshold = 24
-gen_ruin_decay_warning = 14
+# So a good year no longer pays points back. It sets the count to zero. What these numbers measure
+# now is an UNBROKEN run of bad years, and a county with one decent year in fifteen never falls at
+# all. That is the whole intent: ruination should mean nobody has held this place together for a
+# generation, and no running total can say that — it can only say that something bad once happened.
+#
+# What the numbers buy:
+#
+#   neglect alone, unbroken        +1 a year         warned in 9 years, falls in 15
+#   besieged and looted as well    up to +5 a year   count is full in 3 — but see the shock veto
+#   one bad war, then a good year  reset to 0        never falls, whatever the war cost
+#
+# The last row is the one to check after any retune, and it is now guaranteed rather than tuned: any
+# single year that is not suffering resets the count, so no amount of past violence can carry a
+# county to the threshold on its own.
+gen_ruin_decay_threshold = 15
+gen_ruin_decay_warning = 9
 
-# What a year of being in a bad way is worth on its own, before anything the war hooks add. Small,
-# because this is the arm that fires on a county nobody is actively destroying — it is losing
-# control, or losing people, or getting poorer, and the answer to all three is that it takes years.
-gen_ruin_decay_yearly = 3
-
-# What a county at rest bleeds off each year. Small on purpose — this is the reason a county that
-# was sacked once in 1080 is not still carrying points for it in 1120, and it must not be big enough
-# to cancel an ongoing occupation on its own.
-gen_ruin_decay_recovery = 2
-
-# What a good year is worth on top of that: control back above half, or development actually rising.
-# Two of these plus the drift outruns anything short of an active occupation, which is the intended
-# shape — a county somebody is genuinely holding cannot be ground down by the counter.
-gen_ruin_decay_relief = 3
+# What one unbroken year of being in a bad way is worth. One, because what the counter counts is
+# years — the shocks below are the only thing that can make a year worth more than a year.
+#
+# There is deliberately no recovery or relief value any more. Both existed to bleed a running total
+# back down at a few points a year, and both are meaningless against a reset: the tick's else branch
+# sets the count to zero outright, so a good year is worth every bad year that came before it.
+gen_ruin_decay_yearly = 1
 
 # ---- What the world does to a county, outside the yearly tick -----------------------------------
 #
 # Stamped by the on_action hooks the moment the thing happens, rather than inferred a year later
 # from its aftermath. A siege that is lifted in March would be invisible to a December sweep, and it
 # should not be: somebody still burned the place.
-gen_ruin_shock_occupied = 4
-gen_ruin_shock_siege = 3
-gen_ruin_shock_looted = 5
+#
+# A quarter of what they were. Their job is to make an already-failing county fail faster, never to
+# condemn a healthy one: a county that is sacked and then governed properly is forgiven entirely by
+# the next good year, and these numbers have to be small enough that the sacking alone cannot
+# outrun that. At the old values one war was half a ruin.
+gen_ruin_shock_occupied = 1
+gen_ruin_shock_siege = 1
+gen_ruin_shock_looted = 2
+
+# How long after the last violence a county is safe from falling, whatever the count says.
+#
+# A ruin is the aftermath, not the battle. Without this a county collapses at the moment its count
+# peaks, which is while an army is still standing on it and the war has not yet decided who owns it
+# — the behaviour that made ruination read as a casualty of war rather than as neglect. Every shock
+# restarts the clock, so a county fought over for a decade cannot fall until the fighting stops, and
+# then only if it is still failing five years later.
+#
+# Read by gen_ruin_can_fall_trigger, so it is a veto like the others: the debug console's "collapse
+# it now" still goes straight past it, which is the point of that button.
+gen_ruin_shock_immunity_years = 5
+
+# ---- Debug readouts ----------------------------------------------------------------------------
+#
+# Character scope. How many counties the mass-ruin debug event (gen_ruins.9010) would take: the
+# character's own domain, and the domain of everyone below them. Counties that already carry ruins
+# are not counted, because the event will not touch them either.
+gen_ruin_debug_domain_count = {
+	value = 0
+	every_held_title = {
+		limit = {
+			tier = tier_county
+			gen_county_has_ruins_trigger = no
+		}
+		add = 1
+	}
+}
+
+gen_ruin_debug_realm_count = {
+	value = gen_ruin_debug_domain_count
+	every_vassal_or_below = {
+		add = gen_ruin_debug_domain_count
+	}
+}
+
+# ---- The reprieve: what it costs to refuse to let a county go ---------------------------------
+#
+# At the threshold the tick no longer collapses the county. It fires gen_ruins.0005, which offers
+# the holder — player or AI, the same event and the same numbers — three ways to buy the place
+# another few years. Paying applies the `ruin_reprieve` county modifier and knocks the counter back
+# down the ladder; declining fires gen_ruins.0010 and the county falls exactly as it used to.
+#
+# This exists to make ruination rarer than the counter alone makes it, and it does that in two
+# different ways at once. A holder who pays gets a county that is measurably easier to govern for a
+# few years — see the effects on the modifier — and one good year in that window sets the counter to
+# zero for good. A holder who cannot or will not pay loses the county on the same schedule as before.
+# So the frequency falls exactly where somebody is paying attention, which is where it should.
+
+# How long the paid-for reprieve holds. Read by gen_ruin_reprieve_effect as the modifier's duration,
+# and the modifier is a veto in gen_ruin_timing_allows_fall_trigger — so this is also the shortest
+# possible gap between two payments on the same county.
+#
+# Three rather than one. One year is not enough time for anything the money bought to show up in the
+# county's numbers: control growth is monthly, development growth is monthly, and a single year of
+# either moves a failing county barely at all. At three the holder has a real chance of a good year,
+# which is the only thing that ends the count permanently — and still has to keep paying if they do
+# not get one.
+gen_ruin_reprieve_years = 3
+
+# Where the counter is put back to when somebody pays.
+#
+# The warning line, deliberately, and not zero. Zero would mean the payment did the work the holder
+# was supposed to do — the county would leave the watchlist entirely and the whole slide would have
+# to happen again from nothing, at which point money simply repeals the mechanic.
+#
+# Put back to the warning line, the county is still visibly failing, the warning flag is still set
+# so no second letter is sent, and the earliest it can be back at the threshold is
+# (threshold - warning) unbroken bad years. With the shipped ladder that is six.
+gen_ruin_reprieve_setback = {
+	value = gen_ruin_decay_warning
+}
+
+# ---- The price -------------------------------------------------------------------------------
+#
+# One multiplier and three currencies. All three prices are vanilla's own "major" band, which is the
+# band vanilla reserves for a decision a ruler makes a handful of times in a life — and `major_gold_value`
+# is not a flat number: it is roughly a year of the payer's income, so a count pays what a count has
+# and an emperor pays what an emperor has. A flat price would be ruinous at one end of the map and
+# invisible at the other, and ruination happens at both ends.
+#
+# The escalation is what stops a rich realm from propping a dead county up forever at a fixed price.
+# Each save on the same county makes the next one dearer, up to three times the base; a county that
+# has been bought back three times is one the holder should either fix or let go.
+gen_ruin_save_escalation = {
+	value = 1
+
+	# `ruin_saves` is stamped on the county by gen_ruin_reprieve_effect and cleared with the rest of
+	# the counter's memory when the county recovers — so a county that gets a good year, drops off
+	# the watchlist and starts failing again years later is priced as a first save. That is right:
+	# what escalates is repeatedly buying off the SAME collapse, not having had a bad century.
+	if = {
+		limit = {
+			exists = scope:gen_ruin_target
+			scope:gen_ruin_target = { has_variable = ruin_saves }
+		}
+		scope:gen_ruin_target = { add = var:ruin_saves }
+	}
+
+	max = 3
+}
+
+gen_ruin_save_gold_cost = {
+	value = major_gold_value
+	multiply = gen_ruin_save_escalation
+}
+
+gen_ruin_save_prestige_cost = {
+	value = major_prestige_value
+	multiply = gen_ruin_save_escalation
+}
+
+gen_ruin_save_piety_cost = {
+	value = major_piety_value
+	multiply = gen_ruin_save_escalation
+}
+
+# The same three, negated, because `add_prestige` and `add_piety` are the only way to spend either
+# and they take the amount as a signed number. Gold has `remove_short_term_gold` and so needs no
+# negative twin.
+gen_ruin_save_prestige_cost_neg = {
+	value = gen_ruin_save_prestige_cost
+	multiply = -1
+}
+
+gen_ruin_save_piety_cost_neg = {
+	value = gen_ruin_save_piety_cost
+	multiply = -1
+}
+
+# Three times the gold price, read only by the AI weights on gen_ruins.0005.
+#
+# "Can afford" and "should spend" are different questions and the AI has to be able to ask both. An
+# AI holding exactly the price would be emptying its treasury on its worst county, which is not a
+# thing a careful ruler does — so affordability opens the option and this decides how eagerly it is
+# taken.
+gen_ruin_save_gold_cost_comfortable = {
+	value = gen_ruin_save_gold_cost
+	multiply = 3
+}

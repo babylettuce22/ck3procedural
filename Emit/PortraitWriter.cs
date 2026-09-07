@@ -333,7 +333,7 @@ public static class PortraitWriter
     /// </summary>
     private static string[] HeadgearRanksFor(string tier) => tier switch
     {
-        "e" => ["imperial", "royalty", "high_nobility", "nobility"],
+        "h" or "e" => ["imperial", "royalty", "high_nobility", "nobility"],
         "k" => ["royalty", "high_nobility", "nobility"],
         "d" => ["high_nobility", "nobility", "low_nobility"],
         _ => ["nobility", "low_nobility", "common", "commoner"],
@@ -446,7 +446,7 @@ public static class PortraitWriter
     /// </summary>
     private static string[] RanksFor(string tier) => tier switch
     {
-        "e" => ["imperial", "royalty", "high_nobility", "nobility", "war_nobility"],
+        "h" or "e" => ["imperial", "royalty", "high_nobility", "nobility", "war_nobility"],
         "k" => ["royalty", "high_nobility", "nobility", "war_nobility"],
         "d" => ["high_nobility", "nobility", "war_nobility", "royalty"],
         _ => ["low_nobility", "nobility", "commoner", "common", "high_nobility"],
@@ -779,6 +779,7 @@ public static class PortraitWriter
 
     private static string DemoteTier(string tier) => tier switch
     {
+        "h" => "e",
         "e" => "k",
         "k" => "d",
         _ => "c",

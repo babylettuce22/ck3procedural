@@ -81,10 +81,18 @@ public sealed record RulerProfile
         IntrigueLifestyle, LearningLifestyle,
     ];
 
+    /// <summary>
+    /// The governments that declare <c>legitimacy = yes</c>, so an <c>add_legitimacy</c> has a
+    /// currency to land in. All Under Heaven's three bureaucracies do; they were missing here, and
+    /// a celestial hegemon written without a grant began at zero Mandate — which the Dynastic
+    /// Cycle reads as "lost the Mandate" at its first yearly pulse and answers by shattering the
+    /// hegemony (observed 2026-09-06: deposed within a year).
+    /// </summary>
     private static readonly HashSet<string> LegitimacyGovernments =
     [
         GovernmentMap.Feudal, GovernmentMap.Clan, GovernmentMap.Tribal,
         GovernmentMap.Administrative, GovernmentMap.Nomad,
+        GovernmentMap.Celestial, GovernmentMap.Meritocratic, GovernmentMap.SteppeAdmin,
     ];
 
     // Mutually exclusive opposing personality pairs in CK3
@@ -113,7 +121,8 @@ public sealed record RulerProfile
         Title county, string tier, string government, string ethos, int age, bool hasVassals)
     {
         var rng = new Rng(county.Index ^ 0x6F13);
-        int rank = tier switch { "e" => 4, "k" => 3, "d" => 2, _ => 1 };
+        // 5 is the hegemon. Every rank switch below treats it as "an emperor, at least".
+        int rank = tier switch { "h" => 5, "e" => 4, "k" => 3, "d" => 2, _ => 1 };
 
         string lifestyle = PickLifestyle(rng, government, ethos, null);
         int level = PickEducationLevel(rng, rank);
@@ -124,7 +133,7 @@ public sealed record RulerProfile
         // and high imperial/royal court rank.
         int points = Math.Max(0, age - 16) / 12;
         if (level >= 4) points++;
-        points += rank switch { 4 => 2, 3 => 1, _ => 0 };
+        points += rank switch { >= 4 => 2, 3 => 1, _ => 0 };
         points = Math.Clamp(points, 0, 4);
 
         // Only kings and emperors of advanced age dabble in a secondary tree, giving at most 1 point.
@@ -163,7 +172,7 @@ public sealed record RulerProfile
             Nickname = nickname,
             Dread = RollDread(rng, rank, government, hasVassals),
             Legitimacy = PickLegitimacy(rank, government, hasVassals),
-            StabilityYears = rank switch { 4 => 6, 3 => 5, _ => 3 },
+            StabilityYears = rank switch { >= 4 => 6, 3 => 5, _ => 3 },
         };
     }
 
@@ -410,7 +419,7 @@ public sealed record RulerProfile
     {
         int[] w = rank switch
         {
-            4 => [0, 14, 42, 40, 4],
+            >= 4 => [0, 14, 42, 40, 4],
             3 => [5, 25, 45, 24, 1],
             2 => [14, 38, 36, 12, 0],
             _ => [30, 42, 23, 5, 0],
@@ -423,7 +432,7 @@ public sealed record RulerProfile
     {
         var (min, max) = rank switch
         {
-            4 => (6, 10),
+            >= 4 => (6, 10),
             3 => (5, 9),
             2 => (4, 7),
             _ => (3, 6),
@@ -440,7 +449,7 @@ public sealed record RulerProfile
     {
         int prowess = rank switch
         {
-            4 => rng.Int(7, 12),
+            >= 4 => rng.Int(7, 12),
             3 => rng.Int(6, 11),
             2 => rng.Int(5, 9),
             _ => rng.Int(4, 8),
@@ -457,7 +466,7 @@ public sealed record RulerProfile
     {
         if (rank < 3) return null;
 
-        double chance = rank == 4 ? 0.65 : 0.40;
+        double chance = rank >= 4 ? 0.65 : 0.40;
         if (level >= 4) chance += 0.15;
         if (!rng.Chance(chance)) return null;
 
@@ -473,7 +482,7 @@ public sealed record RulerProfile
             _ => ["nick_the_wise", "nick_the_pious", "nick_the_scholar"],
         };
 
-        if (rank == 4 && level >= 4)
+        if (rank >= 4 && level >= 4)
         {
             pool = lifestyle == MartialLifestyle
                 ? [.. pool, "nick_the_great", "nick_the_conqueror"]
@@ -498,6 +507,13 @@ public sealed record RulerProfile
 
         return rank switch
         {
+            // The hegemon's currency is the Mandate (mandate_legitimacy), whose ladder runs to
+            // level 8 and whose bottom rung is "lost the Mandate". Vanilla's game start hands the
+            // Son of Heaven 3000 flat "so you don't fold over immediately" — but only inside a
+            // block gated on the Coronations DLC, so it cannot be relied on. level_7 is
+            // 450 × the tier-and-era factor, 2700–4050 on a hegemony: the same footing, DLC or not.
+            // Both may apply; the currency clamps at its max.
+            5 => "legitimacy_level_7",
             4 => "legitimacy_level_3",
             3 => "legitimacy_level_2",
             _ => null,

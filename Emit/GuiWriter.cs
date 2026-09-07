@@ -58,6 +58,7 @@ public static class GuiWriter
         PatchArtifactDetailsWindow(modDir, gameDir);
         PatchInventoryWindow(modDir, gameDir);
         PatchSilkRoadWindow(modDir, gameDir);
+        PatchDynastyHouseWindow(modDir, gameDir);
 
         if (wilderness) PatchSituationWindow(modDir, gameDir);
         if (societies) PatchHudTabs(modDir, gameDir);
@@ -821,6 +822,145 @@ public static class GuiWriter
         return "Select_CString( " + wide.IsShown().ToString().Trim('[', ']')
             + ", 'gen_camera_inventory_body_wide', 'gen_camera_inventory_body' )";
     }
+
+    // ===========================================================================================
+    // The dynasty house list
+    // ===========================================================================================
+
+    /// <summary>
+    /// Hides extinct houses from the dynasty view's list of houses.
+    ///
+    /// ---- A house is never deleted ----
+    ///
+    /// CK3 ships <c>create_dynasty</c> and <c>create_cadet_branch</c> and no counterpart to either.
+    /// There is no <c>destroy_house</c> effect, no <c>on_house_extinct</c> on_action, and nothing
+    /// under <c>common/on_action/</c> that sweeps for empty ones — the only <c>every_dynasty_house</c>
+    /// loop vanilla runs is house-relation bookkeeping in <c>yearly_on_actions.txt</c>, which
+    /// iterates the dead along with the living. The word "extinct" appears in no <c>.gui</c> file
+    /// and in no house localisation key, because the state has no name: a house is a permanent
+    /// record from the moment it is founded, and the list says as much. Its only gate on a row is
+    /// <c>visible = "[DynastyHouse.HasBeenFounded]"</c>, so a house with nobody left in it renders
+    /// as an ordinary row reading "Living Members: 0" under the name of a long-dead head.
+    ///
+    /// Vanilla can afford that because it mints houses slowly. Its one throttled tap,
+    /// <c>create_cadet_branch_decision</c>, checks every six years and wants a duke with three
+    /// living children who is not near his house head's succession. This generator's worlds run
+    /// centuries past that assumption, and administrative realms open a second tap that is not
+    /// throttled at all — <c>create_noble_family_effect</c> ends in a bare <c>create_cadet_branch</c>
+    /// fired from <c>title_on_actions.txt</c>. A long game leaves one dynasty carrying dozens of
+    /// rows, nearly all of them empty.
+    ///
+    /// ---- Why narrowing the row and not merging the houses ----
+    ///
+    /// The obvious alternative is to fold dying branches back into the main line with
+    /// <c>set_house</c>. It would not help here, and would read as a regression: a merged house
+    /// keeps its row and simply drops from "Living Members: 1" to 0. The number of rows is
+    /// unchanged and the number of empty ones has gone up. Merging is worth doing for the clutter
+    /// that lives on characters rather than in this list — house arms on portraits, house heads,
+    /// unity blocs, <c>house_based_map_names</c> — and is a separate edit that this one does not
+    /// wait on.
+    ///
+    /// ---- The condition ----
+    ///
+    /// <c>GetNumberOfMembers</c> counts the living only, which is not a guess about the name:
+    /// vanilla spells it out in the very row being patched, as
+    /// <c>HOUSE_LIST_MEMBERS:0 "Living Members: [DynastyHouse.GetNumberOfMembers]"</c>.
+    /// <c>GreaterThan_int32</c> is vanilla's own comparator, used against data model sizes
+    /// throughout <c>window_ledger.gui</c>.
+    ///
+    /// Narrowed rather than replaced, per <see cref="GuiRef.AndVisible"/> — an unfounded house has
+    /// no living members either, so the new clause would subsume <c>HasBeenFounded</c>, but leaving
+    /// vanilla's reason in place keeps this file responsible for one clause instead of all of them.
+    /// An invisible widget is dropped from vbox layout, so the surviving rows close up rather than
+    /// leaving gaps.
+    ///
+    /// The anchor is the row's own <c>visible</c> rather than the widget type, because the type is
+    /// a bare <c>button_standard_hover</c> with no name and the file uses it elsewhere. Asserted
+    /// unique: a second row hiding on <c>HasBeenFounded</c> means vanilla grew one, and patching
+    /// whichever came first would be a coin toss.
+    ///
+    /// The ledger keeps a second house list, at <c>window_ledger.gui</c>'s
+    /// <c>Dynasty.GetDynastyHouses</c>. It is left alone — vanilla already concedes the problem
+    /// there by fading empty houses to <c>alpha 0.1</c>, and a ledger is the one screen where
+    /// somebody may genuinely want to count the dead.
+    ///
+    /// ---- The checkbox ----
+    ///
+    /// Hiding them outright would be a lie about the dynasty, so the filter is a toggle rather than
+    /// a verdict, sitting beside the sort dropdown that already governs this list. It is pure
+    /// presentation state and so lives in the UI variable store rather than in script — no
+    /// scripted_gui, no character flag, nothing saved. It resets to off when the game restarts,
+    /// which is the behaviour wanted: the list is quiet by default and the dead are one click away.
+    ///
+    /// The widget is <c>button_checkbox_label</c> driven exactly as
+    /// <c>window_ruler_designer.gui</c>'s "auto hide" toggle drives it — <c>onclick</c> toggling
+    /// the variable on the outer <c>button_group</c>, <c>checked</c> reading it back inside the
+    /// <c>checkbox</c> blockoverride. That pairing is the whole mechanism, and it is worth naming
+    /// its failure mode: the two halves must quote the same variable, and a typo in either simply
+    /// yields a checkbox that never lights up or never filters, with nothing logged.
+    ///
+    /// Shown rows that are extinct are dimmed rather than drawn as equals, which is the same
+    /// concession the ledger makes for the same data. <c>Select_float</c> reads the same comparison
+    /// the <c>visible</c> does — not vanilla's <c>NotZero</c>, which the ledger uses here but which
+    /// does not appear in the binary's datafunction names at all, so it is presumably an alias and
+    /// not something to bet a silent failure on.
+    ///
+    /// <code>
+    /// Related base files:
+    ///   Core/localization/english/gen_dynasty_house_l_english.yml   GEN_HOUSE_LIST_SHOW_EXTINCT,
+    ///                                                                 …_TT
+    /// </code>
+    /// </summary>
+    private static void PatchDynastyHouseWindow(string modDir, string gameDir)
+    {
+        var doc = GuiDocument.Open(gameDir, "gui", "gui", "window_dynasty_house.gui");
+        if (doc is null) return;
+
+        // Asked three times between them — by the row's `visible`, by its `alpha`, and by the
+        // checkbox's `checked` — which is the reason both are built once here.
+        var living = GuiExpr.Raw("GreaterThan_int32( DynastyHouse.GetNumberOfMembers, '(int32)0' )");
+        var showExtinct = GuiExpr.VariableExists(ShowExtinctHouses);
+
+        doc.Unique("dynasty house list row",
+                n => n.IsBlock
+                    && n.Key == "button_standard_hover"
+                    && n.Field("visible") == "\"[DynastyHouse.HasBeenFounded]\"")
+            .AndVisible(GuiExpr.Or(living, showExtinct))
+            .Set("alpha", GuiExpr.Raw(
+                $"Select_float( {living.Inner}, '(float)1.0', '(float)0.4' )"));
+
+        // The dropdown is anchored by the sort it drives rather than by its own type, because the
+        // file writes the type on a line of its own — `dropdown_menu_standard =` with the brace
+        // beneath it — and a substring anchor would have to know that. The parsed head does not.
+        doc.Unique("house sort dropdown",
+                n => n.IsBlock
+                    && n.Key == "dropdown_menu_standard"
+                    && n.Descendants().Any(d => !d.IsBlock
+                        && d.Key == "onselectionchanged"
+                        && d.Value == "\"[DynastyHouseView.SortHouses]\""))
+            .InsertAfter(ShowExtinctToggle(showExtinct));
+
+        doc.Ship(modDir);
+    }
+
+    /// <summary>The UI variable the checkbox writes and the row's <c>visible</c> reads.</summary>
+    private const string ShowExtinctHouses = "gen_show_extinct_houses";
+
+    private static GuiNode ShowExtinctToggle(GuiExpr showExtinct)
+        => GuiBuilder.Of("button_checkbox_label", "gen_show_extinct_houses")
+            .ParentAnchor("vcenter")
+            .OnClick(GuiExpr.VariableToggle(ShowExtinctHouses))
+            .Tooltip("GEN_HOUSE_LIST_SHOW_EXTINCT_TT")
+            .Add(
+                GuiBuilder.BlockOverride("text")
+                    .Text("GEN_HOUSE_LIST_SHOW_EXTINCT")
+                    .MaxWidth(150),
+
+                GuiBuilder.BlockOverride("checkbox")
+                    // The label takes the click for the whole group; a checkbox that took its own
+                    // would toggle twice for one press.
+                    .AlwaysTransparent()
+                    .Quoted("checked", showExtinct.ToString()));
 
     // ===========================================================================================
     // The title window

@@ -2012,7 +2012,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     // Can be way too many nude characters lol
     [Category("10 Cultures and faiths")]
     [Description("Allow generated faiths to roll the Natural Primitivism tenet (which renders character portraits naked).")]
-    public bool AllowNaturalPrimitivism { get; set; } = true;
+    public bool AllowNaturalPrimitivism { get; set; } = false;
 
     /// <summary>Counties a generated faith covers on average. Coarser than cultures, as in vanilla.</summary>
     [Category("10 Cultures and faiths")]
@@ -2336,10 +2336,9 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// ruins on and wilderness off ships neither half instead of a broken one.
     /// </summary>
     /// HIDING FOR THIS BUILD
-    [HideInGenerator]
     [Category("12 Wilderness")]
-    [Description("Let settled counties collapse back into wilderness when they are dying — repeated sacking, plague, lost control — leaving ruins that have to be cleared before the land can be settled again. Requires the wilderness system. Off by default: it can take a county away from a player.")]
-    public bool EnableRuins { get; set; } = false;
+    [Description("HEAVILY WIP: Let settled counties collapse back into wilderness when they are dying — repeated sacking, plague, lost control — leaving ruins that have to be cleared before the land can be settled again. Requires the wilderness system. Off by default: it can take a county away from a player.")]
+    public bool EnableRuins { get; set; } = true;
 
     /// <summary>
     /// Share of counties that start already ruined.
@@ -2361,7 +2360,6 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// <see cref="WildernessShare"/>.
     /// </summary>
     /// HIDING FOR THIS BUILD
-    [HideInGenerator]
     [Category("12 Wilderness")]
     [Description("Share of counties that start as ruins — held by nobody, with the stones of whoever was there before still standing. Unlike wilderness these are scattered anywhere, including inside settled kingdoms. 0 means the world starts whole and ruins only ever happen in play.")]
     public double RuinsShare { get; set; } = 0.0;

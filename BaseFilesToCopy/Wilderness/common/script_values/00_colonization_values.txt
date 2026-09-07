@@ -176,6 +176,26 @@ colony_settling_chance = {
 			if = { limit = { has_building = beast_dens }    add = -6 }
 			if = { limit = { has_building = dense_growth }  add = -5 }
 			if = { limit = { has_building = scree_slopes }  add = -4 }
+
+			# ---- And a ruin is easier than untouched country, not harder ----
+			#
+			# Every line above is a natural obstacle and every one of them subtracts, which is right.
+			# A ruined county carries a ruin AND, because gen_ruin_county_effect goes through
+			# abandon_county_effect, two or three of those same obstacles seeded on top — so before
+			# this line a county that used to be farmland was strictly harder to settle than country
+			# nobody had ever touched. That is backwards on its own terms: the ground here is cleared,
+			# the road survives, the well is dug and the stone is already quarried and stacked.
+			#
+			# It does not cancel the obstacles, and should not. The forest has grown back over the
+			# fields and there is a reason the last people left; what this says is that the balance
+			# of the two favours the ruin, not that the ruin is free. `ruins_large` is worth more
+			# than `ruins_small` because more of the town is still standing to build from.
+			#
+			# Sized against the obstacles rather than against the base: +12 roughly cancels the two
+			# or three seeded blockers a ruined county typically carries, which leaves resettling a
+			# ruin at about the difficulty of settling clear wilderness — the intended statement.
+			if = { limit = { has_building = ruins_large } add = 12 }
+			if = { limit = { has_building = ruins_small } add = 8 }
 		}
 	}
 

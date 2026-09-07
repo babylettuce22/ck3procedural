@@ -1,0 +1,6 @@
+﻿l_english:
+ # The "show extinct" checkbox beside the sort dropdown in the dynasty view's house list.
+ # See Emit/GuiWriter.cs, PatchDynastyHouseWindow — there is no scripted_gui behind it, only the
+ # UI variable gen_show_extinct_houses, so these two keys and that method are the whole feature.
+ GEN_HOUSE_LIST_SHOW_EXTINCT:0 "Show extinct"
+ GEN_HOUSE_LIST_SHOW_EXTINCT_TT:0 "Show houses of this dynasty that have no living members.\n\nA house is never removed once founded, so a long game leaves many behind. They are listed dimmed."

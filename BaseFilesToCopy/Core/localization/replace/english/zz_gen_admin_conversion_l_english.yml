@@ -1,0 +1,10 @@
+﻿l_english:
+ # Tooltips for the three "Adopt <X> Government" items of convert_to_administrative_decision,
+ # re-worded to match the loosened gates in
+ # common/scripted_triggers/zz_gen_admin_conversion_triggers.txt. Vanilla's versions name the
+ # Hegemony of China, Han culture and four Earth regions, none of which a generated map has.
+ # Same keys as localization/english/dlc/ep3/dlc_ep3_decisions_l_english.yml; a mod's copy of a
+ # key replaces vanilla's.
+ convert_to_administrative_celestial_desc: "You do #bold not#! fulfill at least one of the following:\n$EFFECT_LIST_BULLET$You hold a [hegemony|E]\n$EFFECT_LIST_BULLET$You are a [vassal|E] of a [hegemony|E]\n$EFFECT_LIST_BULLET$Your [top_liege|E] already rules a [GetGovernment('celestial_government').GetName] [government|E]"
+ convert_to_administrative_meritocratic_desc: "You do #bold not#! fulfill at least one of the following:\n$EFFECT_LIST_BULLET$Your [realm|E] borders a [ruler|E] with a [government|E] using [merit|E]\n$EFFECT_LIST_BULLET$You are an [independent_ruler|E], or your [liege|E] is not [administrative|E] (player only)"
+ convert_to_administrative_japanese_desc: "You do #bold not#! fulfill at least one of the following:\n$EFFECT_LIST_BULLET$Your [top_liege_possessive|E] [government|E] is [GetGovernment('japan_administrative_government').GetName] or [GetGovernment('japan_feudal_government').GetName]\n$EFFECT_LIST_BULLET$Your [government|E] is [GetGovernment( 'japan_feudal_government' ).GetName]\n$EFFECT_LIST_BULLET$You are an [independent_ruler|E], or your [liege|E] is not [administrative|E] (player only)"

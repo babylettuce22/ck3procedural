@@ -1,0 +1,52 @@
+﻿# Keeps the wilderness and ruins dummies out of the regency system.
+#
+# ---- What this is ----
+#
+# A single-object override of vanilla's `should_have_diarchy` from
+# common/scripted_rules/00_rules.txt. Script is last-wins, so redefining the one rule here replaces
+# vanilla's without touching the file it lives in. The filename sorts last so the override cannot
+# lose to another mod's copy of the same directory.
+#
+# Everything below is vanilla's own definition verbatim, with TWO lines added.
+#
+# ---- Why the dummy was getting a regent ----
+#
+# `wilderness_setup_on_start_effect` gives it `incapable`, and that trait is load-bearing: it is what
+# fails the `is_available` test that most character interactions put on their target, and it is named
+# as the defence against ordinary landed rulers in zz_wilderness_laamp_range.txt. It cannot be
+# dropped.
+#
+# But vanilla reads the same trait as a reason to appoint a regent. `should_have_diarchy` is
+# `basic_eligible_for_diarchy_trigger` AND `regency_for_personal_reasons_trigger`, and the dummy
+# passes both: it holds a titular kingdom, so it clears `highest_held_title_tier >= tier_county`, and
+# `is_incapable = yes` is one of the three arms of the personal-reasons OR. So the one trait that
+# makes it unreachable is also the one that hands it a regency.
+#
+# ---- Why the rule rather than the trait ----
+#
+# `basic_eligible_for_diarchy_trigger` already carries
+# `NOT = { government_has_flag = government_is_landless_adventurer }`, with the comment "Laamps don't
+# use diarchs". So excluding a whole government from the diarchy system by flag is exactly what
+# vanilla does here, and this is the same edit one level up.
+#
+# It is overridden at `should_have_diarchy` rather than inside
+# `basic_eligible_for_diarchy_trigger` because the rule is the engine's entry point — nothing else in
+# common/ or events/ references it — while the inner trigger has other callers that are none of our
+# business.
+#
+# ---- It ends an existing regency too ----
+#
+# The rule is "should have", not "can start": the engine consults it continuously, which is how a
+# child's regency ends by itself the day they come of age. So a dummy that already has a regent in a
+# save loses it once this is false, and there is no migration step. `wilderness_yearly_cleanup`
+# carries an `end_diarchy` sweep as the backstop, for the same reason it sweeps courtiers.
+
+should_have_diarchy = {
+	# THE TWO ADDED LINES. The dummy is bookkeeping, not a minor, and there is no realm to govern in
+	# its stead. Trait and flag both, so the ruins dummy is covered by the same edit.
+	NOT = { has_trait = wilderness }
+	NOT = { government_has_flag = government_is_wilderness }
+
+	basic_eligible_for_diarchy_trigger = yes
+	regency_for_personal_reasons_trigger = yes
+}

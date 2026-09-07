@@ -155,6 +155,10 @@ public static class HistoryWriter
     /// </summary>
     public static int Rank(Title title) => title.Tier switch
     {
+        // Above empire, so a crowned hegemon's PRIMARY is the hegemony — as vanilla's Son of
+        // Heaven holds h_china first. Left at 0, Primary() picked his empire, and everything
+        // graded off the primary (RulerProfile, purses, retinues, headgear) saw an emperor.
+        "h" => 5,
         "e" => 4,
         "k" => 3,
         "d" => 2,

@@ -37,6 +37,13 @@
 # Runs after the lobby rather than during history load: adding buildings to a holding history is
 # still assembling errors. That is why wilderness_on_game_start exists too.
 gen_ruins_setup_on_start_effect = {
+	# One line of known constants into debug.log, so the log can be checked against itself before
+	# anything is concluded from it. See gen_ruin_debug_probe_effect.
+	if = {
+		limit = { debug_only = yes }
+		gen_ruin_debug_probe_effect = yes
+	}
+
 	title:k_gen_ruins.holder ?= {
 		# ---- Only when the wilderness pass will have missed it ----
 		#
@@ -155,6 +162,13 @@ gen_ruins_cleanup_effect = {
 
 # County (title) scope on $COUNTY$. Adds $POINTS$ of decay and puts the county on the watchlist.
 #
+# $TALLY$ names the telemetry variable this kind of violence is counted in — `ruin_s_siege`,
+# `ruin_s_occupied` or `ruin_s_looted`. It is used for nothing else and only inside `debug_only`, so
+# outside -debug_mode the parameter is carried and never read. Passing the variable NAME rather than
+# a kind keyword is what keeps it a plain value substitution: `$TALLY$` lands in the value slot of
+# `name = ...`, which substitutes, and never in a key slot, which does not — the trap that ate
+# gen_ruins_place_effect's weights once already.
+#
 # Called from the on_action hooks the moment the thing happens, rather than inferred from its
 # aftermath a year later. A siege lifted in March leaves no trace a December sweep could read, and
 # it should leave one: somebody still burned the place.
@@ -173,6 +187,32 @@ gen_ruin_shock_effect = {
 		}
 
 		change_variable = { name = ruin_decay add = $POINTS$ }
+
+		# ---- Remember what kind of violence this was ----
+		#
+		# Points are fungible and the tally is not: three occupations and one looting reach the
+		# threshold at the same speed but are not the same story, and the counter cannot tell them
+		# apart afterwards because it only ever held a sum.
+		if = {
+			limit = { debug_only = yes }
+			gen_ruin_debug_init_effect = yes
+			change_variable = { name = $TALLY$ add = 1 }
+		}
+
+		# ---- And the county is off limits for a while ----
+		#
+		# Read by gen_ruin_can_fall_trigger, which refuses any county carrying this. Every shock
+		# restarts the clock, so a county that is being fought over cannot fall however high its
+		# count climbs — it falls, if at all, once the fighting has been over for
+		# gen_ruin_shock_immunity_years and it is still failing.
+		#
+		# Stamped here rather than in the war on_actions themselves because this effect is already
+		# the single place every kind of violence passes through, and a second list of hooks would
+		# be a second thing to keep in step with this one.
+		set_variable = {
+			name = ruin_recent_shock
+			years = gen_ruin_shock_immunity_years
+		}
 
 		if = {
 			limit = {
@@ -204,40 +244,68 @@ gen_ruin_tick_county_effect = {
 	}
 
 	# ---- This year ----
+	#
+	# A bad year adds one. A year that is not bad does not pay one back — it sets the count to zero.
+	#
+	# That asymmetry is the mechanic. The counter used to accumulate and bleed off at a couple of
+	# points a year, which meant it was measuring how much harm had ever been done to a county
+	# rather than whether anyone was governing it now, and the two are not the same question: a
+	# county sacked twice in a decade of otherwise ordinary rule would ruin, while a county quietly
+	# rotting for thirty years might not. Reversed, a run of bad years is the only thing that can
+	# reach the threshold, and it is exactly what "nobody is holding this place together" means.
+	#
+	# The practical effect is that losing a war costs the war. What costs the county is the fifteen
+	# years afterwards in which nobody puts it back together, without a single good year among them.
 	if = {
 		limit = { gen_ruin_is_suffering_trigger = yes }
 		change_variable = { name = ruin_decay add = gen_ruin_decay_yearly }
-	}
-	else = {
-		change_variable = { name = ruin_decay subtract = gen_ruin_decay_recovery }
 
+		# Which of the five arms made this year bad, recorded now because nothing later can recover
+		# it — the trigger above collapses all five into one boolean and keeps none of them.
 		if = {
-			limit = { gen_ruin_is_recovering_trigger = yes }
-			change_variable = { name = ruin_decay subtract = gen_ruin_decay_relief }
+			limit = { debug_only = yes }
+			gen_ruin_debug_tally_year_effect = yes
 		}
 	}
+	else = {
+		# BEFORE the zeroing on the next line, which is the only reason this is a separate effect
+		# rather than a log line down there: how far the county had got is exactly what that line
+		# destroys, and it is the number that says whether the threshold is anywhere near right.
+		if = {
+			limit = { debug_only = yes }
+			gen_ruin_debug_log_reset_effect = yes
+		}
 
-	# The counter never goes negative. Without this a county that is fine for fifty years banks
-	# fifty years of credit, and then survives a war it should not have.
-	if = {
-		limit = { var:ruin_decay < 0 }
 		set_variable = { name = ruin_decay value = 0 }
 	}
 
-	# ---- Has it fallen? ----
+	# ---- Has it run out of years? ----
+	#
+	# This fires gen_ruins.0005, the LAST CHANCE, and not the collapse. The county is at the
+	# threshold and will fall — but the holder is offered gold, prestige or piety to buy it three
+	# more years first, and only the decline option calls gen_ruin_county_effect. So the sequence
+	# the counter now drives is warning at 9, an offer at 15, and a fall only if nobody takes it.
+	#
+	# Firing the offer rather than collapsing here is also what lets a reprieve be bought at all: an
+	# effect cannot wait for an answer, and the answer is the whole mechanic. The AI gets the same
+	# event and the same prices, and picks with the ai_chance weights on each option.
 	#
 	# The event does the collapsing, not this effect, so that the holder is looking at a window when
 	# it happens. It needs to be told WHICH county, and an event inherits the scopes saved where it
 	# was fired from — hence the save on this side of the trigger_event rather than a rediscovery on
 	# the other, which could only guess.
+	# Both vetoes here, and only the structural one on the warning below. A county the timing refuses
+	# is a county that may still fall later, so it has to be told now — see the note on
+	# gen_ruin_timing_allows_fall_trigger for the silent-collapse this ordering prevents.
 	if = {
 		limit = {
 			var:ruin_decay >= gen_ruin_decay_threshold
 			gen_ruin_can_fall_trigger = yes
+			gen_ruin_timing_allows_fall_trigger = yes
 		}
 
 		save_scope_as = gen_ruin_target
-		holder ?= { trigger_event = gen_ruins.0010 }
+		holder ?= { trigger_event = gen_ruins.0005 }
 	}
 
 	# ---- Has it been warned? ----
@@ -255,6 +323,12 @@ gen_ruin_tick_county_effect = {
 
 		set_variable = { name = ruin_warned value = yes }
 
+		if = {
+			limit = { debug_only = yes }
+			gen_ruin_debug_payload_effect = yes
+			debug_log = gen_ruin_log_warn
+		}
+
 		save_scope_as = gen_ruin_target
 		holder ?= { trigger_event = gen_ruins.0001 }
 	}
@@ -266,6 +340,12 @@ gen_ruin_tick_county_effect = {
 	# could never once be true.
 	set_variable = { name = ruin_last_dev value = development_level }
 
+	# And this year's control, for the same reason and with the same ordering constraint. The control
+	# arm is a trajectory now, not a floor, so it compares against last year — and stamped before the
+	# reading rather than after it, it would compare this year against itself and could never once be
+	# true. See gen_ruin_suffer_control_trigger.
+	set_variable = { name = ruin_last_ctl value = county_control }
+
 	# ---- Off the list ----
 	#
 	# A county back at zero has nothing left to measure and should not be walked again next year.
@@ -274,8 +354,18 @@ gen_ruin_tick_county_effect = {
 	# After the stamp, not before it. Forgetting a county and then immediately writing a variable
 	# back onto it leaves state on a county nobody is watching — harmless, but it makes "forget"
 	# mean two different things depending on who called it.
+	# `has_variable` first, and it is not belt-and-braces. This effect opens by creating `ruin_decay`
+	# if it is missing, so the variable is guaranteed at the top of the tick and it is tempting to
+	# read it bare down here — but the branches in between can take it away again. Anything that
+	# reaches gen_ruin_forget_county_effect during this same tick removes it, and the bare read then
+	# logs `Failed to fetch variable for 'ruin_decay' due to not being set`: 18 times in one measured
+	# run. A missing counter means the same thing as a zero one to the line below, so the guard
+	# changes no outcome — it only stops the error.
 	if = {
-		limit = { var:ruin_decay <= 0 }
+		limit = {
+			has_variable = ruin_decay
+			var:ruin_decay <= 0
+		}
 		gen_ruin_forget_county_effect = { COUNTY = this }
 	}
 }
@@ -299,6 +389,83 @@ gen_ruin_forget_county_effect = {
 		if = { limit = { has_variable = ruin_decay }    remove_variable = ruin_decay }
 		if = { limit = { has_variable = ruin_warned }   remove_variable = ruin_warned }
 		if = { limit = { has_variable = ruin_last_dev } remove_variable = ruin_last_dev }
+		if = { limit = { has_variable = ruin_last_ctl } remove_variable = ruin_last_ctl }
+
+		# How many times somebody has bought this county back. Goes with the rest of the counter's
+		# memory, so a county that genuinely recovers is priced as a first save the next time it is
+		# in trouble — what escalates is buying off the same collapse over and over, not having had
+		# a bad century at some point.
+		#
+		# The `ruin_reprieve` MODIFIER deliberately does not go with it. That is a thing the holder
+		# paid for and it is still doing its job; it runs out on its own, and on a county at zero
+		# its veto changes no outcome anyway. The debug console's reset strips it separately,
+		# because a tester wants the county back in its virgin state and a player does not.
+		if = { limit = { has_variable = ruin_saves }    remove_variable = ruin_saves }
+
+		# The shock veto goes too, so that "forget this county" means what it says. It would expire
+		# on its own within gen_ruin_shock_immunity_years and leaving it would change no outcome —
+		# a forgotten county is at zero and cannot fall regardless — but the debug console's reset
+		# is supposed to hand back a county in its virgin state, and a tester who then drove the
+		# count to the threshold and ticked would watch nothing happen for no visible reason.
+		if = { limit = { has_variable = ruin_recent_shock } remove_variable = ruin_recent_shock }
+
+		# And the telemetry, which is a description of the counter and has no meaning without it.
+		#
+		# Unconditional, where every other telemetry call site is wrapped in `debug_only`. A save
+		# begun in debug mode and continued without it would otherwise keep a tally that nothing
+		# maintains any more, on counties that have long since recovered. Nothing reads these to
+		# decide anything, so the cost of leaving them would be a lying readout rather than a bug —
+		# which is worse in a diagnostic, not better.
+		gen_ruin_debug_wipe_effect = yes
+	}
+}
+
+# =====================================================================================
+#  The reprieve
+# =====================================================================================
+
+# County (title) scope on $COUNTY$. Somebody has paid; the county gets a few more years.
+#
+# Called by every paying option of gen_ruins.0005 and by nothing else. The three options differ only
+# in which currency leaves the holder and what the letter says about it — what happens to the COUNTY
+# is the same whether the money came from the treasury, the family name or the church, because the
+# thing being bought is the same thing: attention, for a while.
+#
+# ---- What it does not do ----
+#
+# It does not clear the counter and it does not take the county off the watchlist. A reprieved county
+# is still a failing county and the tick still reads it every year; what changed is that it is six
+# unbroken bad years from the threshold again instead of at it, and that for three of those years it
+# has help. Escaping for good still needs one good year, from the same `else` branch every other
+# county uses. Nothing here is a special case in the mechanic — it is a setback and a modifier.
+gen_ruin_reprieve_effect = {
+	$COUNTY$ ?= {
+		# ---- The price of the next one ----
+		#
+		# Read by gen_ruin_save_escalation, which is what makes a second save on the same county
+		# dearer than the first. Counted before the setback so the number is right even if the same
+		# county comes back round in six years.
+		if = {
+			limit = { NOT = { has_variable = ruin_saves } }
+			set_variable = { name = ruin_saves value = 0 }
+		}
+		change_variable = { name = ruin_saves add = 1 }
+
+		# ---- Back down the ladder, not off it ----
+		#
+		# To the warning line. See gen_ruin_reprieve_setback for why this is not zero: at zero the
+		# county leaves the watchlist and money would simply repeal the mechanic.
+		set_variable = { name = ruin_decay value = gen_ruin_reprieve_setback }
+
+		# ---- And the three years ----
+		#
+		# The modifier is the veto — gen_ruin_timing_allows_fall_trigger refuses any county carrying
+		# it — and it is also the help, which is the half that matters more. See the file it is
+		# defined in for why a pure timer would have been the wrong object.
+		add_county_modifier = {
+			modifier = ruin_reprieve
+			years = gen_ruin_reprieve_years
+		}
 	}
 }
 
@@ -328,6 +495,84 @@ gen_ruin_county_effect = {
 		set_variable = { name = ruin_former_culture value = culture }
 		set_variable = { name = ruin_former_faith value = faith }
 		set_variable = { name = ruin_fell_year value = current_year }
+
+		# ---- And whose it was ----
+		#
+		# The HOUSE, not the holder and not the dynasty. A holder is dead within a generation and a
+		# variable pointing at them says nothing to anybody; a dynasty is often too broad to mean
+		# "ours" at the scale a county is lost. A house is the unit that actually remembers a place —
+		# it is what a cadet branch carries when it splits off, and it survives the man who lost the
+		# county by exactly as long as anyone still cares.
+		#
+		# Read by wilderness_pick_adjacent_effect, which weights a ruin its reader's own house let
+		# fall above every other target on the map. Guarded there and cleared with its siblings by
+		# wilderness_ruins.0001, so a county ruined, reclaimed and ruined again does not report the
+		# first family the second time.
+		#
+		# `?=` because a landless or houseless holder is possible and this runs before the teardown
+		# that removes them. No house stored simply means the bonus never fires for that county.
+		holder ?= {
+			house ?= { save_temporary_scope_as = gen_ruin_former_house }
+		}
+		if = {
+			limit = { exists = scope:gen_ruin_former_house }
+			set_variable = { name = ruin_former_house value = scope:gen_ruin_former_house }
+		}
+
+		# ---- And the lords above hear of it ----
+		#
+		# The holder gets gen_ruins.0010, a whole event, because it happened to them. Everybody
+		# ABOVE them in the realm gets a toast, because it happened to their realm: a county is gone
+		# from the map and the ledger is one county shorter, and finding that out by noticing it
+		# missing later is the kind of silence that reads as a bug.
+		#
+		# ---- Only the fall, never the warning ----
+		#
+		# There is deliberately nothing like this in gen_ruins.0001 or gen_ruins.0005. A liege told
+		# every time a vassal's county dipped would be told constantly and would learn to ignore it —
+		# measured over 122 years of one world, 260 counties were warned and 42 fell, so six out of
+		# seven of those messages would have been about a county that recovered. Worse, most of what
+		# a warning reports is not the vassal's fault and none of it is the liege's business yet.
+		# A liege hears once, when it is final and irreversible. A vassal who was in trouble and
+		# pulled the county back out gets to have done that quietly, which is the right of it.
+		#
+		# ---- Before the teardown, and that is the whole reason it sits here ----
+		#
+		# `abandon_county_effect` on the next line revokes the title. After it there is no holder to
+		# name, no liege chain to walk and no vassal relationship left to have been broken — the
+		# toast would go to nobody, or worse, to whoever the engine has left in scope. The same
+		# ordering note is on gen_ruins.0010's own debug_log for the same reason.
+		#
+		# `every_liege_or_above` with `is_ai = no` is vanilla's own shape for "tell the players up
+		# the chain" (00_character_interactions.txt). It starts at the holder's liege, so a holder
+		# who is themselves the player is never told twice, and an independent ruler's collapse
+		# tells nobody, there being nobody above them.
+		#
+		# Permanent scopes, not temporary: a toast is rendered by the interface after this effect has
+		# returned, and a temporary scope would already be gone by then — every field would come out
+		# blank. They are read by the toast strings in ruins_l_english.yml.
+		#
+		# Living in the EFFECT rather than in gen_ruins.0010 means every route to a collapse reports
+		# it, the debug console's "Collapse it now" included, which is what a tester wants. The one
+		# cost is that gen_ruins.9010's mass ruin stacks one toast per county; that button already
+		# says it will end your realm, so a wall of toasts is honest about what it just did.
+		save_scope_as = gen_ruin_lost_county
+
+		holder ?= {
+			save_scope_as = gen_ruin_lost_holder
+
+			every_liege_or_above = {
+				limit = { is_ai = no }
+
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_ruin_vassal_loss_toast
+					desc = gen_ruin_vassal_loss_toast_desc
+					left_icon = scope:gen_ruin_lost_holder
+					right_icon = scope:gen_ruin_lost_county
+				}
+			}
+		}
 	}
 
 	abandon_county_effect = { COUNTY = $COUNTY$ }
@@ -345,6 +590,13 @@ gen_ruin_county_effect = {
 				create_title_and_vassal_change = {
 					type = revoked
 					save_scope_as = change
+
+					# The loser of this second transfer is the wilderness dummy, which has no use
+					# for a claim on anything; said anyway so the pair of transfers reads the same
+					# way. The claims that MATTER — the ones real rulers were holding on this county
+					# before it fell — were already stripped by abandon_county_effect on the way
+					# through, which is the only reason a ruin is not a claim war waiting to happen.
+					add_claim_on_loss = no
 				}
 				change_title_holder = {
 					holder = title:k_gen_ruins.holder
@@ -374,6 +626,26 @@ gen_ruin_county_effect = {
 		# The counter has done its job and the county is no longer a candidate for anything. Leaving
 		# the variables on would have the next tick reading decay on a county nobody holds.
 		gen_ruin_forget_county_effect = { COUNTY = this }
+
+		# ---- And the Wilds situation hears of it ----
+		#
+		# Last, and that placement is the point. abandon_county_effect already told the situation a
+		# county was abandoned, on its way through above — but it did so while this county was still
+		# under the WILDERNESS dummy, one line before it moved to the ruins one. The situation counts
+		# a ruined county as wild (wilds_is_wild_county_trigger names both dummies when the Ruins set
+		# ships), so a recount taken at that moment is right by luck rather than by construction, and
+		# would have been wrong for the several lines in between.
+		#
+		# This fires the ruin's own catalyst, which is what separates settled ground lost from a
+		# colony that never took, and recounts with the county finally where it belongs. See
+		# Emit/FrontierWriter.cs for why a ruin is worth this catalyst as well as the abandonment's
+		# rather than instead of it.
+		#
+		# It reaches only a county inside a frontier sub-region: the situation's membership is fixed
+		# at load from geographical regions and the engine offers no way to add ground to a running
+		# situation, so a county that ruins deep inside a settled kingdom is the Ruins system's own
+		# story and touches nothing here. The effect is a no-op there, not an error.
+		wilds_situation_county_ruined_effect = { COUNTY = this }
 	}
 }
 
@@ -407,5 +679,330 @@ gen_ruin_debug_set_effect = {
 				target = scope:gen_debug_target
 			}
 		}
+	}
+}
+
+# Character scope. Puts every county this character holds directly onto the temporary list
+# `gen_ruin_batch`, for gen_ruin_debug_ruin_batch_effect to collapse. $SPARE_CAPITAL$ is yes or no:
+# yes leaves this character's capital off the list, so the ruler stays landed and the realm keeps
+# its shape.
+#
+# Collect first, collapse second; never collapse while walking `every_held_title`. Each collapse
+# revokes the county out from under the walk, and whether the engine's list iterator survives having
+# its own contents pulled out mid-loop is not something this mod should be the one to find out. A
+# temporary list holds title references, which outlive the transfer.
+#
+# Already-ruined counties are left off, the same guard the console's `fall` option wears: a county
+# with stones on it has already been through gen_ruin_county_effect once, and running it again would
+# re-stamp the memory variables with the ruins dummy's own culture and faith.
+gen_ruin_debug_collect_domain_effect = {
+	every_held_title = {
+		limit = {
+			tier = tier_county
+			gen_county_has_ruins_trigger = no
+			NOT = {
+				AND = {
+					always = $SPARE_CAPITAL$
+					this = prev.capital_county
+				}
+			}
+		}
+		add_to_temporary_list = gen_ruin_batch
+	}
+}
+
+# Any scope. Collapses everything on `gen_ruin_batch`, one gen_ruin_county_effect call each,
+# BYPASSING the vetoes exactly as the console's `fall` option does. The saved scope is there because
+# the effect takes a scope reference for its COUNTY parameter and `this` from inside a list is not a
+# shape that appears anywhere in vanilla.
+gen_ruin_debug_ruin_batch_effect = {
+	every_in_list = {
+		list = gen_ruin_batch
+		save_scope_as = gen_ruin_batch_county
+		gen_ruin_county_effect = { COUNTY = scope:gen_ruin_batch_county }
+	}
+}
+
+# =====================================================================================
+#  Telemetry — why a county is failing
+# =====================================================================================
+#
+# ---- The problem this exists for ----
+#
+# The mechanic destroys its own evidence, twice over.
+#
+# `gen_ruin_is_suffering_trigger` is a five-arm OR read as one boolean, so the tick knows a year was
+# bad and nothing whatever about WHICH of the five made it bad. And a good year does not decrement
+# the count, it zeroes it — then gen_ruin_forget_county_effect deletes ruin_decay, ruin_warned,
+# ruin_last_dev and ruin_saves outright. By the time a county actually falls, the only state that
+# survived the fifteen years is a single number that reads 15.
+#
+# So "why did this county ruin" cannot be answered by looking at a ruined county, however good the
+# inspector. It has to be RECORDED at the moment each point is scored, which is what everything
+# below does.
+#
+# ---- What it costs a normal game: nothing ----
+#
+# Every entry point is wrapped in `if = { limit = { debug_only = yes } }` at its CALLER, so outside
+# `-debug_mode` not one of these effects runs, not one variable is written and not one line is
+# logged. `debug_log` is itself inert without the flag, so the gate is belt and braces — but the
+# variable writes are not, and those are the reason the gate is at the caller rather than in here.
+#
+# Nothing in this section is ever read by a trigger that decides an outcome. The tally is written by
+# the tick, wiped by the reset, and read by gen_ruins.9000 and by the log. That is the whole graph:
+# there is no path from a telemetry variable back into whether a county falls, which is what makes
+# "it does not affect gameplay" a property of the shape rather than a promise.
+#
+# ---- The log format ----
+#
+# One line per event, semicolon-delimited key=value, with the county NAME last so that a generated
+# name containing punctuation cannot shift any numeric field. Parsed offline by `--ruinlog`; see
+# Program.cs. The four kinds are `year` (a point was scored), `warn`, `reset` (a streak ended
+# without a fall — the counterfactual, and the most useful of the four for tuning) and `fall`.
+#
+# `debug_log` takes a bare LOCALISATION KEY here, not a quoted string. That distinction is the whole
+# reason a structured line is possible: a quoted string is printed literally and cannot interpolate
+# anything (see Emit/GuiWindows/DebugPanel.cs, which says so), while a bare key is resolved as
+# localisation and so runs its datafunctions. `wilderness_leak_debug_log` in the Wilderness set is
+# the working precedent. Vanilla uses the bare-key form widely but never with a datafunction in the
+# string, so gen_ruin_debug_probe_effect below checks it at game start rather than trusting it.
+#
+# The values arrive as saved scope VALUES because a .yml cannot read a script value or a variable —
+# `[var:ruin_decay]` renders as nothing. Same trap as gen_ruins.9000's counter line.
+
+# County scope. Every telemetry variable this county will need, at zero.
+#
+# Called first by everything below so the readers can be written bare. Without it each of the nine
+# reads would need its own `has_variable` guard, and a missed one prints nothing at all rather than
+# erroring — which in a diagnostic is the worst failure mode available.
+#
+# Idempotent, and it deliberately does NOT touch `ruin_decay`. That variable belongs to the
+# mechanic; telemetry reads it where it exists and reports zero where it does not, and never writes
+# it. The moment a debug-only path can create gameplay state, "debug mode changes nothing" stops
+# being true.
+gen_ruin_debug_init_effect = {
+	if = { limit = { NOT = { has_variable = ruin_c_contested } } set_variable = { name = ruin_c_contested value = 0 } }
+	if = { limit = { NOT = { has_variable = ruin_c_control } }   set_variable = { name = ruin_c_control   value = 0 } }
+	if = { limit = { NOT = { has_variable = ruin_c_opinion } }   set_variable = { name = ruin_c_opinion   value = 0 } }
+	if = { limit = { NOT = { has_variable = ruin_c_plague } }    set_variable = { name = ruin_c_plague    value = 0 } }
+	if = { limit = { NOT = { has_variable = ruin_c_devdrop } }   set_variable = { name = ruin_c_devdrop   value = 0 } }
+	if = { limit = { NOT = { has_variable = ruin_s_occupied } }  set_variable = { name = ruin_s_occupied  value = 0 } }
+	if = { limit = { NOT = { has_variable = ruin_s_siege } }     set_variable = { name = ruin_s_siege     value = 0 } }
+	if = { limit = { NOT = { has_variable = ruin_s_looted } }    set_variable = { name = ruin_s_looted    value = 0 } }
+	if = { limit = { NOT = { has_variable = ruin_streak_year } } set_variable = { name = ruin_streak_year value = current_year } }
+}
+
+# County scope. Mirrors everything a log line wants into VARIABLES on the county, because a variable
+# is the only thing `debug_log` can actually read.
+#
+# ---- This was saved scopes once, and every field printed `ERROR:` ----
+#
+# `debug_log = <bare loc key>` does resolve datafunctions — that much is true, and vanilla's
+# `create_noble_family_title` proves it with `[THIS.GetCharacter.GetNameNoTooltip]`. What it does
+# NOT do is resolve a saved scope. A line built from `save_temporary_scope_value_as` names came out
+# as `RUINLOG;year;y=ERROR:[ruin_log_year|;decay=ERROR:[ruin_log_decay|;...` — every field, the
+# saved scope for the county included. The datafunction machinery is running; the scope chain the
+# effect saved into is simply not what it resolves against.
+#
+# So everything printable has to hang off `THIS`, and the general way to hang a NUMBER off THIS is
+# `[THIS.Var('name').GetValue|0]` — `Scope.Var( Arg0 )` and `Scope.GetValue` are both in the game's
+# own data-type dump (logs/data_types/), and vanilla uses the shape in
+# `[THIS.Var('oath_reconquest_title').Title.GetName]`. Hence variables rather than scope values.
+#
+# The county's name needs no mirror: `[THIS.Title.GetNameNoTooltip]` reads it off THIS directly, as
+# does the year off the global `[GetCurrentDate.GetYear]`.
+#
+# ---- Why the mirrors exist at all, when most of these are already variables ----
+#
+# Two of the five would otherwise be unreadable and three would be unsafe:
+#
+#   ctl / op / dev   are not variables at all, they are county properties. `County.GetControl` and
+#                    friends exist in the dump, but reaching them needs THIS cast to a County and
+#                    the cast that works from a landed_title scope is not something to guess at in
+#                    a diagnostic. A mirror is one line and cannot be wrong.
+#   decay            is the mechanic's own and may not exist — a county the debug console collapsed
+#                    without ever ticking has no counter. `Var` on a missing variable prints ERROR,
+#                    so the guard has to happen here, where an `if` can do it, rather than in a .yml
+#                    where nothing can.
+#
+# The `ruin_dbg_` prefix marks them as write-only mirrors: nothing reads them but the log strings,
+# and gen_ruin_debug_wipe_effect clears them with the rest of the telemetry.
+gen_ruin_debug_payload_effect = {
+	gen_ruin_debug_init_effect = yes
+
+	set_variable = { name = ruin_dbg_ctl value = county_control }
+	set_variable = { name = ruin_dbg_op value = county_opinion }
+	set_variable = { name = ruin_dbg_dev value = development_level }
+	set_variable = { name = ruin_dbg_since value = var:ruin_streak_year }
+
+	# Reporting 0 for a county nothing ever measured is honest; printing ERROR is not.
+	if = {
+		limit = { has_variable = ruin_decay }
+		set_variable = { name = ruin_dbg_decay value = var:ruin_decay }
+	}
+	else = {
+		set_variable = { name = ruin_dbg_decay value = 0 }
+	}
+}
+
+# County scope. The same numbers as the payload, saved PERMANENTLY and under their own names, for
+# gen_ruins.9000's description to read.
+#
+# ---- Why this is not just a flag on the payload effect ----
+#
+# The two differ only in `save_temporary_scope_value_as` versus `save_scope_value_as`, and there is
+# no way to switch between them from a parameter: the effect name is the KEY of the line, and macro
+# substitution does not happen in a key. Every other route — a parameter naming the effect, a
+# wrapper picking one — runs into the same wall.
+#
+# So it is a copy, and the lifetimes are the reason a copy is right rather than merely unavoidable.
+# The payload feeds `debug_log`, which reads its scopes inside the effect that saved them, and must
+# leave nothing behind: the tick fires gen_ruins.0005 and gen_ruins.0001 in the same execution, and
+# an event inherits the scopes saved where it was fired from. Fourteen permanent telemetry names in
+# the last-chance event's scope chain is a collision waiting for the first time somebody reuses one.
+#
+# This one has the opposite requirement. An event description is evaluated after the immediate has
+# returned, so a temporary scope is already gone by the time the window draws it and every field
+# renders blank. The three counter values above it are permanent for the same reason.
+#
+# Keep the two in step. A field added to one wants adding to the other, and the failure if it is not
+# is a blank in a readout rather than an error anywhere.
+gen_ruin_debug_readout_effect = {
+	gen_ruin_debug_init_effect = yes
+
+	save_scope_value_as = { name = gen_ruin_tel_streak value = var:ruin_streak_year }
+
+	save_scope_value_as = { name = gen_ruin_tel_contested value = var:ruin_c_contested }
+	save_scope_value_as = { name = gen_ruin_tel_control value = var:ruin_c_control }
+	save_scope_value_as = { name = gen_ruin_tel_opinion value = var:ruin_c_opinion }
+	save_scope_value_as = { name = gen_ruin_tel_plague value = var:ruin_c_plague }
+	save_scope_value_as = { name = gen_ruin_tel_devdrop value = var:ruin_c_devdrop }
+
+	save_scope_value_as = { name = gen_ruin_tel_occupied value = var:ruin_s_occupied }
+	save_scope_value_as = { name = gen_ruin_tel_siege value = var:ruin_s_siege }
+	save_scope_value_as = { name = gen_ruin_tel_looted value = var:ruin_s_looted }
+
+	save_scope_value_as = { name = gen_ruin_tel_ctl value = county_control }
+	save_scope_value_as = { name = gen_ruin_tel_op value = county_opinion }
+	save_scope_value_as = { name = gen_ruin_tel_dev value = development_level }
+}
+
+# County scope. One suffering year, attributed. Called by the tick immediately after the point is
+# added, and only there.
+#
+# Asks the five arms SEPARATELY, which is the entire point and the reason 00_ruins_triggers.txt was
+# factored. More than one can be true in the same year and all of them are counted — a county that
+# is occupied, hated and emptying is not three counties, but it is three reasons, and a tally that
+# picked one would misreport exactly the compound cases worth understanding.
+#
+# The counts are of YEARS in which each arm was true during the current unbroken streak, so they sum
+# to at least the decay count and usually to more. That is the intended reading: `c_control=15` next
+# to `decay=15` says every single bad year was a control failure.
+gen_ruin_debug_tally_year_effect = {
+	gen_ruin_debug_init_effect = yes
+
+	# The streak's first birthday. Stamped when the counter has just gone from nothing to one, so
+	# the fall line can report how long this took without the log having to be joined up.
+	if = {
+		limit = { var:ruin_decay <= gen_ruin_decay_yearly }
+		set_variable = { name = ruin_streak_year value = current_year }
+	}
+
+	if = { limit = { gen_ruin_suffer_contested_trigger = yes } change_variable = { name = ruin_c_contested add = 1 } }
+	if = { limit = { gen_ruin_suffer_control_trigger = yes }   change_variable = { name = ruin_c_control   add = 1 } }
+	if = { limit = { gen_ruin_suffer_opinion_trigger = yes }   change_variable = { name = ruin_c_opinion   add = 1 } }
+	if = { limit = { gen_ruin_suffer_plague_trigger = yes }    change_variable = { name = ruin_c_plague    add = 1 } }
+	if = { limit = { gen_ruin_suffer_devdrop_trigger = yes }   change_variable = { name = ruin_c_devdrop   add = 1 } }
+
+	gen_ruin_debug_payload_effect = yes
+	debug_log = gen_ruin_log_year
+}
+
+# County scope. A streak ended without a fall. Called by the tick's else branch BEFORE the counter
+# is zeroed, because zeroing it is what destroys the number worth recording.
+#
+# The most valuable of the four lines and the least obvious. Falls tell you what the threshold
+# caught; these tell you what it nearly caught, which is the only way to know whether 15 is a bar
+# most failing counties clear by a year or by a decade. A tuning pass that only reads `fall` lines
+# is reading the survivors of a filter and calling it a distribution.
+#
+# Logged only for a streak that had actually started. A county sitting on the watchlist at zero —
+# one shocked and then immediately fine — would otherwise emit a reset line every year forever.
+gen_ruin_debug_log_reset_effect = {
+	if = {
+		limit = {
+			has_variable = ruin_decay
+			var:ruin_decay > 0
+		}
+
+		gen_ruin_debug_payload_effect = yes
+		debug_log = gen_ruin_log_reset
+
+		# The story is over, so the tally goes with the counter it described. A county that recovers
+		# and fails again five years later is a new streak and has to be counted as one, or every
+		# number here slowly becomes a lifetime total and stops meaning "unbroken run".
+		gen_ruin_debug_wipe_effect = yes
+	}
+}
+
+# County scope. Forgets the tally. Called from gen_ruin_forget_county_effect alongside the
+# mechanic's own variables, and by the reset above.
+#
+# NOT gated on debug_only at its caller, unlike everything else here, and that asymmetry is on
+# purpose: a save started in debug mode and continued without it would otherwise carry stale tallies
+# on every county forever. They decide nothing, so it would be untidy rather than broken — but a
+# variable that outlives every code path that maintains it is how a diagnostic starts lying.
+gen_ruin_debug_wipe_effect = {
+	if = { limit = { has_variable = ruin_c_contested } remove_variable = ruin_c_contested }
+	if = { limit = { has_variable = ruin_c_control }   remove_variable = ruin_c_control }
+	if = { limit = { has_variable = ruin_c_opinion }   remove_variable = ruin_c_opinion }
+	if = { limit = { has_variable = ruin_c_plague }    remove_variable = ruin_c_plague }
+	if = { limit = { has_variable = ruin_c_devdrop }   remove_variable = ruin_c_devdrop }
+	if = { limit = { has_variable = ruin_s_occupied }  remove_variable = ruin_s_occupied }
+	if = { limit = { has_variable = ruin_s_siege }     remove_variable = ruin_s_siege }
+	if = { limit = { has_variable = ruin_s_looted }    remove_variable = ruin_s_looted }
+	if = { limit = { has_variable = ruin_streak_year } remove_variable = ruin_streak_year }
+
+	# The write-only log mirrors go too. See gen_ruin_debug_payload_effect for why they exist.
+	if = { limit = { has_variable = ruin_dbg_ctl }   remove_variable = ruin_dbg_ctl }
+	if = { limit = { has_variable = ruin_dbg_op }    remove_variable = ruin_dbg_op }
+	if = { limit = { has_variable = ruin_dbg_dev }   remove_variable = ruin_dbg_dev }
+	if = { limit = { has_variable = ruin_dbg_since } remove_variable = ruin_dbg_since }
+	if = { limit = { has_variable = ruin_dbg_decay } remove_variable = ruin_dbg_decay }
+}
+
+# Any scope. Writes one line of known constants at game start, so the log says whether the log works.
+#
+# The whole telemetry design rests on `debug_log = <bare loc key>` resolving datafunctions. That is
+# the established pattern in this mod and the form vanilla uses everywhere — but vanilla never puts
+# a datafunction inside one of those strings, so there is no shipped proof, and the failure mode if
+# it does not resolve is that every line comes out with blanks or brackets where the numbers should
+# be. Discovering that after a fifty-year run is expensive; discovering it on the first line is free.
+#
+# Read it as: `probe=1234` and a plausible year means the log can be trusted. Anything else — an
+# `ERROR:` fragment, an empty field, the raw key `gen_ruin_log_probe` — means it cannot, and every
+# number in every other line is fiction. `--ruinlog` refuses to print a report under a failed probe.
+#
+# ---- It runs on a TITLE, and has to ----
+#
+# The first version of this saved a scope value and ran in whatever scope game start happened to be
+# in. It failed, and usefully: `y=ERROR:[ruin_log_year|` on the very first line, which is exactly
+# what this exists for. But it only proved that saved scopes do not resolve — it could not have
+# proved the replacement works, because the replacement reads a VARIABLE off `THIS` and a scopeless
+# probe has no THIS to read one from.
+#
+# So it borrows `title:k_gen_ruins`, which is the one scope this file can be certain exists at game
+# start: the ruins realm's titular kingdom is written by the generator whether or not anything is
+# ruined, which is the whole reason the setup effect can reach the dummy through it. Stamping a
+# variable there and printing it back exercises both halves the real lines depend on —
+# `THIS.Var(...).GetValue` and `THIS.Title.GetNameNoTooltip` — on the same kind of scope.
+#
+# The variable is removed immediately. A stray telemetry number on a titular title would outlive
+# every path that maintains it, which is the thing gen_ruin_debug_wipe_effect exists to prevent.
+gen_ruin_debug_probe_effect = {
+	title:k_gen_ruins ?= {
+		set_variable = { name = ruin_dbg_probe value = 1234 }
+		debug_log = gen_ruin_log_probe
+		remove_variable = ruin_dbg_probe
 	}
 }

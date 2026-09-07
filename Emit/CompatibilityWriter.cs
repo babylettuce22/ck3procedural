@@ -987,6 +987,27 @@ public static partial class CompatibilityWriter
     /// Every landless title needs `capital`, or CK3 logs "has no capital defined. Needed to
     /// ensure proper on-map location".
     /// </summary>
+    /// <summary>
+    /// The nine seats of All Under Heaven's ministry (common/landed_titles/02_china.txt), the one
+    /// family of vanilla e_ keys a generated ruler is MEANT to hold.
+    ///
+    /// They are landless in vanilla too, granted by <c>got_minister_position_effect</c> to whoever
+    /// a Celestial hegemon appoints, and vacated by <c>destroy_if_invalid_heir</c>. The strip guard
+    /// would destroy each one the moment it was granted, which is what left Celestial hollow on a
+    /// generated map once BaseFilesToCopy/Core/common/scripted_triggers/zz_gen_admin_conversion_triggers.txt
+    /// opened the ministry to the generated hegemony. So they are still declared as shims — the
+    /// key must resolve, and nobody may create one through the UI — but they are not stamped, and
+    /// they carry vanilla's behaviour fields. That is the no-hegemony case; when the map has one,
+    /// they are not shims at all but de jure children of the generated h_china, written by
+    /// ContentWriter with these same fields.
+    /// </summary>
+    internal static readonly HashSet<string> MinistryTitles = new(StringComparer.Ordinal)
+    {
+        "e_minister_chancellor", "e_minister_censor", "e_minister_grand_marshal",
+        "e_minister_of_personnel", "e_minister_of_revenue", "e_minister_of_rites",
+        "e_minister_of_war", "e_minister_of_justice", "e_minister_of_works",
+    };
+
     public static void WriteVanillaTitulars(string modDir, string gameDir, List<Title> empires)
     {
         string source = Path.Combine(gameDir, "common", "landed_titles");
@@ -1000,7 +1021,15 @@ public static partial class CompatibilityWriter
         // The hegemony stands above the empires, so flattening from them never reaches it. A shim
         // for a key the map really generated would declare the same title twice, and the guard below
         // would then destroy the real one out of a player's domain.
-        if (Titles.HegemonyOf(empires) is { } crown) generated.Add(crown.Key);
+        if (Titles.HegemonyOf(empires) is { } crown)
+        {
+            generated.Add(crown.Key);
+
+            // With a real h_china on the map, its ministry is written inside it by
+            // ContentWriter.WriteLandedTitles — vanilla's own shape, and the one
+            // title_on_actions.txt:1955 checks with `de_jure_liege = title:h_china`.
+            generated.UnionWith(MinistryTitles);
+        }
 
         // Paradox identifiers are not [a-z_0-9]: title keys carry hyphens and uppercase
         // (e_caspian-pontic_steppe, c_SUM_bangka-belitung, b_al-fayyum). A stricter pattern
@@ -1058,6 +1087,20 @@ public static partial class CompatibilityWriter
                 jb.Field("no_automatic_claims", "yes");
                 jb.Inline("ai_primary_priority", "add = -1000");
 
+                // A minister's seat is a shim that IS meant to be held, so it carries vanilla's own
+                // behaviour (02_china.txt) on top of the gates above: script grants it past
+                // can_create, and destroy_if_invalid_heir is what vacates it on the minister's death.
+                if (MinistryTitles.Contains(keys[i]))
+                {
+                    jb.Field("allow_domicile", "no");
+                    jb.Field("destroy_if_invalid_heir", "yes");
+                    jb.Field("de_jure_drift_disabled", "yes");
+                    jb.Field("can_use_nomadic_naming", "no");
+                    jb.Field("can_be_named_after_dynasty", "no");
+                    jb.Field("definite_form", "yes");
+                    jb.Field("ruler_uses_title_name", "no");
+                }
+
                 // Deliberately absent: delete_on_destroy. It defaults to no and has to stay no — the
                 // guard destroys these titles, and deleting the object would take the key with it,
                 // undoing the ~12,900 references this whole file exists to resolve.
@@ -1068,7 +1111,7 @@ public static partial class CompatibilityWriter
         Directory.CreateDirectory(dir);
         ParadoxText.WriteBom(Path.Combine(dir, "zz_vanilla_titulars.txt"), jb.ToString());
 
-        WriteTitularGuard(modDir, keys);
+        WriteTitularGuard(modDir, keys.Where(k => !MinistryTitles.Contains(k)).ToList());
 
         Console.WriteLine($"  titulars: {keys.Count} vanilla e_/k_/d_/h_ keys re-declared as landless");
     }

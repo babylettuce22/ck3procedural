@@ -47,7 +47,7 @@ be missing (a Steam library move, an uninstall). Wherever this skill or its refe
 | `<logs>` | Game logs (`error.log`, `script_docs` dumps, `data_types/`) | `C:\Users\caelo\Documents\Paradox Interactive\Crusader Kings III\logs` |
 | `<mods>` | User mod folder (where mods are developed) | `C:\Users\caelo\Documents\Paradox Interactive\Crusader Kings III\mod` |
 | `<workshop>` | Steam Workshop content for CK3 | `C:\Program Files (x86)\Steam\steamapps\workshop\content\1158310` — see the subscription list below |
-| `<tiger>` | ck3-tiger validator executable | **NOT INSTALLED.** Nothing matching `ck3-tiger*` exists on this machine. Before following `references/validation.md`, tell the user it must be downloaded from github.com/amtep/tiger (get the v1.19 release to match the installed patch) — do not invent a path |
+| `<tiger>` | ck3-tiger validator executable | `C:\Users\caelo\Desktop\ck3-tiger-windows-v1.19.0\ck3-tiger.exe` (installed 2026-08-26, matches the 1.19 patch). Run it against the mod's `descriptor.mod`; it emits ANSI colour even when piped, so strip with `sed -e 's/\x1b\[[0-9;]*m//g'` before grepping `^error` |
 
 **This project.** The primary working directory is a C# heightmap-to-CK3 map generator; it *emits*
 `<mods>\proceduralmap` (map_data, landed_titles, history, generated cultures/faiths) rather than
@@ -158,8 +158,8 @@ last play session will list stale effect/trigger names and mislead you. Confirm 
    prefer per-actor story cycles over `every_living_character` (AGOT is the worked example).
 9. Validate with **ck3-tiger** after writing code, before asking the user to test in-game
    (see `references/validation.md`). Localization checks stay off unless asked for.
-   **ck3-tiger is not installed on this machine** — say so and offer the download rather than
-   silently skipping the step or inventing a path.
+   ck3-tiger is installed at the `<tiger>` path in the Step 0 table; the repo's clean baseline is
+   a handful of gui datafunction-arity errors in `gui\window_*.gui` plus loc-hash-collision noise.
 10. Then test in-game: ask the user to launch with `-debug_mode` and run the console tests
     (`event x.1`, `effect ...`, `trigger ...`), then read `error.log` yourself
     (see "Game logs" above) — don't ask the user what it says.

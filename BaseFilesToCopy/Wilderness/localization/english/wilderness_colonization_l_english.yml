@@ -9,6 +9,19 @@
  is_a_wilderness_recipient_tt:0 "You cannot declare war on uncolonized wilderness."
  is_a_wilderness_actor_tt:0 "The wilderness cannot declare war."
 
+ # Referenced by the emitted zz_wilderness_war_triggers.txt, which reproduces vanilla's
+ # herder clause with a tooltip of its own. Vanilla has is_a_herder_defender_tt and
+ # is_a_herder_recipient_tt but no attacker-side key, so this one has to exist here: a
+ # custom_tooltip naming a key that does not exist fails PostValidate and takes the whole
+ # trigger down with it, which is what error.log was reporting against
+ # herders_and_tributary_constraints.
+ is_a_herder_actor_cb_tt:0 "A herder cannot declare war."
+
+ # Migration is not a war and does not read like one, so it gets its own line rather than reusing
+ # the two above. A nomad migrating is moving a people onto ground, and the refusal has to say why
+ # that ground is not available.
+ is_a_wilderness_migration_target_tt:0 "You cannot migrate onto uncolonized wilderness."
+
  # --- Trait and government -----------------------------------------------------------------
  trait_wilderness:0 "Wilderness"
  blank_title_male:0 ""

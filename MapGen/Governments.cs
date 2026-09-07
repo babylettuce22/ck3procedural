@@ -32,22 +32,94 @@ public sealed class GovernmentMap
     public const string SteppeAdmin = "steppe_admin_government";
 
     /// <summary>
+    /// The Son of Heaven's government, and the one thing in All Under Heaven that is NOT portable:
+    /// its ministry, its Mandate and its Dynastic Cycle all test <c>title:h_china</c> by name.
+    /// Assignable since the generated hegemony took that key (<see cref="Titles.HegemonyKey"/>),
+    /// and meant for its holder — on any other realm it is a bureaucracy with an empty ministry.
+    /// Vanilla history assigns it bare, and the game-start sweep turns it feudal without the
+    /// expansion, so nothing here needs a guard of its own.
+    /// </summary>
+    public const string Celestial = "celestial_government";
+
+    /// <summary>
+    /// Ritsuryō — the court bureaucracy of All Under Heaven's Japan, and the same admin family as
+    /// the three above: castle seats, noble families, county-tier appointments, a manor for a
+    /// domicile.
+    ///
+    /// Vanilla makes it Japanese twice over and the mod undoes both. The government declares
+    /// <c>primary_heritages = { heritage_japonic }</c>, and its <c>can_get_government</c> asks to
+    /// be inside a Japanese realm; both objects are re-declared without either in
+    /// BaseFilesToCopy/Core/common/governments/zz_gen_japan_government_types.txt, which is what
+    /// lets the Adopt-a-Bureaucracy decision offer it on a generated map. History assignment never
+    /// consulted those anyway, so here it takes a bare <c>government =</c> line like the rest.
+    ///
+    /// What stays Japanese is flavour rather than function: the house blocs, the shogunate layer
+    /// and the imperial branches all name <c>title:e_japan</c>, which no generated map has. The
+    /// government itself loads and plays; those layers simply stay quiet.
+    /// </summary>
+    public const string JapanAdministrative = "japan_administrative_government";
+
+    /// <summary>
+    /// Sōryō — the Japanese feudal government, and the counterpart Ritsuryō's vassals sit on.
+    /// Castle-seated, and re-declared beside Ritsuryō in the same file to drop the heritage.
+    /// </summary>
+    public const string JapanFeudal = "japan_feudal_government";
+
+    /// <summary>
+    /// The Southeast Asian mandala: tributary overlordship rather than a hierarchy of vassals, and
+    /// the one government here whose seat is not a castle. It declares
+    /// <c>primary_holding = temple_citadel_holding</c>, so <see cref="CapitalHolding"/> rebuilds
+    /// every capital in the realm as a temple citadel — a holding vanilla itself writes into
+    /// province history 114 times, and one feudal's <c>valid_holdings</c> accepts, so the counties
+    /// still stand up when the game-start sweep turns the realm feudal without the expansion.
+    /// </summary>
+    public const string Mandala = "mandala_government";
+
+    /// <summary>
+    /// Wanua — the maritime tribal government: barter, cheap embarkation, safer seas. Tribal-seated
+    /// like ordinary tribes, and swept to <see cref="Tribal"/> without the expansion.
+    ///
+    /// Vanilla prefers it for <c>heritage_austronesian</c> and no generated culture carries any
+    /// vanilla heritage. That preference is not a gate — history assignment bypasses
+    /// <c>can_get_government</c> and the realm loads — but it is the reason a courtier newly landed
+    /// inside one may be given an ordinary tribal government rather than this.
+    /// </summary>
+    public const string Wanua = "wanua_government";
+
+    /// <summary>
     /// Every government a realm can be put on by hand, for the inspector's dropdown.
     ///
     /// Assignment in title history bypasses <c>can_get_government</c> entirely, so what belongs
     /// here is not what a ruler could reach in play but what stands up on a generated map with
     /// nothing else authored for it: a bare <c>government =</c> line and a capital holding of the
-    /// right type. That is the seven the cascade above already produces plus All Under Heaven's two
-    /// portable bureaucracies, which vanilla history likewise assigns bare.
+    /// right type. That is the seven the cascade above already produces plus all seven of
+    /// All Under Heaven's, which vanilla history likewise assigns bare and which its game-start
+    /// sweep turns back into feudal or tribal for anyone without the expansion — so not one of them
+    /// needs a per-title guard the way <see cref="Administrative"/> does.
     ///
-    /// The ones deliberately absent are the ones with something hardcoded behind them —
-    /// <c>celestial_government</c> wants <c>title:h_china</c>, the two Japanese ones want a
-    /// heritage and a figurehead title, <c>wanua</c> wants another heritage, <c>mandala</c> wants
-    /// temple capitals — and <c>landless_adventurer</c>, which is not a realm at all.
+    /// Each of the seven wants one thing beyond the line, and each is met: the two Japanese ones
+    /// want <c>heritage_japonic</c>, dropped by the mod's own re-declaration of both objects;
+    /// <see cref="Celestial"/> wants <c>title:h_china</c>, which the generated hegemony now is;
+    /// <see cref="Mandala"/> wants temple capitals, which <see cref="CapitalHolding"/> builds; and
+    /// <see cref="Wanua"/> wants <c>heritage_austronesian</c>, which is a preference rather than a
+    /// gate. Celestial and wanua are the two that mean less off their intended realm — a ministry
+    /// with nothing behind it on any ruler but the hegemon, and a landing preference no generated
+    /// culture answers to.
+    ///
+    /// Still absent, and for a reason no editor choice can fix: <c>landless_adventurer</c>, which
+    /// is not a realm at all, and the four government types the engine hands out itself —
+    /// <c>mercenary</c> and <c>holy_order</c>, plus <c>herder</c>, which is a vassal government
+    /// under a horde rather than one a realm is put on.
+    ///
+    /// Absent from generation is not the same as unreachable in play: meritocratic and Ritsuryō
+    /// (and Sōryō through it) can also be ADOPTED on a generated map, because
+    /// BaseFilesToCopy/Core/common/scripted_triggers/zz_gen_admin_conversion_triggers.txt
+    /// re-points vanilla's decision gates at the generated hegemony and at the player.
     /// </summary>
     public static readonly string[] Assignable =
     [
         Feudal, Clan, Tribal, Republic, Theocracy, Administrative, Nomad, Meritocratic, SteppeAdmin,
+        Celestial, JapanAdministrative, JapanFeudal, Mandala, Wanua,
     ];
 
     private readonly Dictionary<Title, string> byCounty;
@@ -73,9 +145,14 @@ public sealed class GovernmentMap
     /// <summary>
     /// The bureaucracies that behave alike: one government across the whole realm, castle seats, and
     /// noble families rather than ordinary vassals.
+    ///
+    /// Ritsuryō belongs here on every count — <c>administrative = yes</c>, <c>noble_families</c>,
+    /// a castle seat — though the cascade never produces it, so today this only answers for the
+    /// editor. Sōryō does not: it is the feudal half of that pair, and its vassals are ordinary.
     /// </summary>
     public static bool IsAdminFamily(string government)
-        => government is Administrative or Meritocratic or SteppeAdmin;
+        => government is Administrative or Meritocratic or SteppeAdmin or Celestial
+            or JapanAdministrative;
 
     public bool IsAdminEmpire(Title title) => _adminRealms.Contains(title);
     public bool IsNomadRealm(Title title) => _nomadRealms.Contains(title);
@@ -131,19 +208,42 @@ public sealed class GovernmentMap
         Republic => "city_holding",
         Theocracy => "church_holding",
 
-        // Feudal, clan and every bureaucracy — administrative, meritocratic and steppe-admin all
-        // declare primary_holding = castle_holding, so the default is the right answer for them
-        // rather than an unconsidered one.
+        // Wanua is a tribal government with a boat: primary_holding = tribal_holding, the same as
+        // any other tribe, and the same holding the game-start sweep leaves it standing on when it
+        // reverts the realm to tribal without the expansion.
+        Wanua => "tribal_holding",
+
+        // The one seat here that is neither a castle nor an ordinary tribe. Feudal's valid_holdings
+        // include temple_citadel_holding, so a mandala realm swept to feudal keeps its capitals.
+        Mandala => "temple_citadel_holding",
+
+        // Feudal, clan and every bureaucracy — administrative, meritocratic, steppe-admin,
+        // celestial and both Japanese ones all declare primary_holding = castle_holding, so the
+        // default is the right answer for them rather than an unconsidered one.
         _ => "castle_holding",
     };
 
-    public IEnumerable<(string Government, int Count)> Tally(int total)
+    /// <summary>
+    /// The government the dummies' counties are seated under in title history. Never assigned by
+    /// <see cref="Governments.Build"/> — the cascade does not know about the wilderness and gives
+    /// those counties a terrain guess — so this is reported over it wherever a wild county is
+    /// shown or counted, because the history line is what the game actually loads.
+    /// </summary>
+    public const string Wilderness = "wilderness_government";
+
+    /// <summary>
+    /// Counts what the written history will say, county by county. Wild and ruined counties count
+    /// as <see cref="Wilderness"/> whatever the cascade assigned them, which is what the history
+    /// writer seats them under; an unassigned settled county counts as feudal, the same default
+    /// <see cref="For"/> returns.
+    /// </summary>
+    public IEnumerable<(string Government, int Count)> Tally(IEnumerable<Title> counties, WildernessMap? wilderness)
     {
-        var counts = new Dictionary<string, int> { [Feudal] = total };
-        foreach (var government in byCounty.Values)
+        var counts = new Dictionary<string, int>();
+        foreach (var county in counties)
         {
+            string government = wilderness?.Contains(county) == true ? Wilderness : For(county);
             counts[government] = counts.GetValueOrDefault(government) + 1;
-            counts[Feudal]--;
         }
 
         return counts.Where(kv => kv.Value > 0)
@@ -269,8 +369,10 @@ public static class Governments
 
             foreach (var (topLiege, realmCounties) in topLiegeCounties)
             {
+                // Empire or above: a crowned hegemon's primary is the hegemony (HistoryWriter.Rank),
+                // and his realm is the one the celestial branch below exists for.
                 var primary = HistoryWriter.Primary(topLiege, realms);
-                if (primary.Tier != "e") continue;
+                if (primary.Tier is not ("e" or "h")) continue;
 
                 bool hasImperialWonder = worldCenters is not null && realmCounties.Any(c =>
                 {
@@ -395,17 +497,19 @@ public static class Governments
 
             // A crowned hegemon does not settle for the ordinary bureaucracy. Administrative is what
             // the cascade above can reach; a realm that rules the world should read as something
-            // stranger, and All Under Heaven's two portable bureaucracies are exactly that at no
-            // extra cost — they need no special titles and degrade to feudal without the expansion.
-            // The steppe share picks between them for the same reason the horde clause reads it: a
-            // bureaucracy grown out of the grasslands is the Khitan one, anything else the courtly.
+            // stranger. The hegemony is written as h_china, so the Son of Heaven's own government
+            // fits it exactly: the ministry, the Mandate and the Dynastic Cycle all answer to that
+            // key. The steppe share keeps the one exception vanilla itself makes, for the same
+            // reason the horde clause reads it: a bureaucracy grown out of the grasslands is the
+            // Khitan one, and vanilla's 1178 Jin hold the Mandate as steppe-admin. Both degrade to
+            // feudal without the expansion.
             if (hegemonSeat is not null
                 && realmGovernment == GovernmentMap.Administrative
                 && realmCounties.Contains(hegemonSeat))
             {
                 realmGovernment = steppeShare >= 0.20
                     ? GovernmentMap.SteppeAdmin
-                    : GovernmentMap.Meritocratic;
+                    : GovernmentMap.Celestial;
             }
 
             // Assign the unified government to all constituent counties

@@ -690,6 +690,24 @@ public static class Titles
     private const int MinEmpiresPerHegemony = 2;
 
     /// <summary>
+    /// The key the generated hegemony is written under: vanilla's, on purpose.
+    ///
+    /// All Under Heaven hardcodes <c>title:h_china</c> some 220 times across the Dynastic Cycle
+    /// situation, the celestial government's ministry, the Mandate casus belli and the tribute
+    /// missions, and a hundred more times in localisation datafunctions. Under a key of its own the
+    /// hegemony was a border and a name; under this one every one of those references resolves to
+    /// it, and the Dynastic Cycle can be started on it (Emit/DynasticCycleWriter.cs). The price is
+    /// that vanilla's rules about that key apply too — <c>is_alliance_valid</c> forbids alliances
+    /// with its holder — and that vanilla's "China" strings have to be re-worded, which
+    /// BaseFilesToCopy/Core/localization/english/zz_gen_dynastic_cycle_l_english.yml does.
+    ///
+    /// Only the KEY is vanilla's. The name, adjective and colour are generated, and
+    /// CompatibilityWriter skips the shim it would otherwise write for this key whenever a
+    /// hegemony exists. On a map too small for one, h_china stays a shim and nothing starts.
+    /// </summary>
+    public const string HegemonyKey = "h_china";
+
+    /// <summary>
     /// Puts one title above every empire — the world's hegemony — and returns it, or null when the
     /// map is too small to warrant one.
     ///
@@ -980,6 +998,9 @@ public static class Titles
 
             for (int suffix = 2; usedKeys.Contains(key); suffix++)
                 key = $"{title.Tier}_gen_{CleanKey(name)}_{suffix}";
+
+            // The hegemony keeps its generated NAME and takes vanilla's KEY. See HegemonyKey.
+            if (title.Tier == "h") key = HegemonyKey;
 
             usedKeys.Add(key);
             usedNames.Add(name);

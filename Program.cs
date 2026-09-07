@@ -84,6 +84,20 @@ public static class Program
                     return MapGen.LanguageProbe.Run(flavour, probeSeed, family) ? 0 : 1;
                 }
 
+                // Reads CK3's debug.log and reports why counties ruined: cause mix at the fall, the
+                // same mix for streaks that recovered instead, and how close those got. Generates
+                // nothing and needs no heightmap. The lines it reads are written only under
+                // -debug_mode; see MapGen/RuinLogReport.cs and the Ruins mod's telemetry section.
+                case "--ruinlog":
+                {
+                    if (i + 1 >= args.Length || args[i + 1].StartsWith("--"))
+                    {
+                        Console.Error.WriteLine("--ruinlog needs a path to CK3's debug.log.");
+                        return 1;
+                    }
+                    return MapGen.RuinLogReport.Run(args[++i]) ? 0 : 1;
+                }
+
                 case "--static-only":
                     staticOnly = true;
                     break;
@@ -530,6 +544,14 @@ public static class Program
             if (cfg.EnableWilderness)
             {
                 sets.Add(Ck3MapGen.Emit.StaticFileWriter.Wilderness);
+
+                // The set calls a generated effect by name; a static-only ship into a fresh
+                // folder would otherwise leave that reference dangling. Needs the game folder,
+                // which a static-only run does not otherwise touch.
+                if (Core.GameLocator.IsGameDir(options.GameDir))
+                    Ck3MapGen.Emit.BuildingStripWriter.Write(modDir, options.GameDir);
+                else
+                    Console.WriteLine("  buildings: game folder not found, gen_strip_buildings_effect not refreshed");
 
                 // Never on its own: every file in the Ruins set references the wilderness
                 // government, its buildings or its colonisation flow.

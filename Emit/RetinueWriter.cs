@@ -207,7 +207,7 @@ public static class RetinueWriter
 
                 if (regiment is null) continue;
 
-                int size = ruler.Tier switch { "e" => 3, "k" => 2, _ => 1 };
+                int size = ruler.Tier switch { "h" or "e" => 3, "k" => 2, _ => 1 };
 
                 using (b.Block($"character:{ruler.Id}"))
                 using (b.Block("create_maa_regiment"))

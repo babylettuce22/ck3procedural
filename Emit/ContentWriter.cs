@@ -177,12 +177,18 @@ public static class ContentWriter
             worldCenters, cfg, new Rng(cfg.Seed ^ 0x6017), azgaar, stateGovernments));
 
         Console.WriteLine("  governments: " + string.Join(", ",
-            governments.Tally(counties.Count).Select(g => $"{g.Count} {g.Government[..^11]}")));
+            governments.Tally(counties, wilderness).Select(g => $"{g.Count} {g.Government[..^11]}")));
 
         // After the governments, never before: this brings whole kingdoms under the hegemon, and
         // governments are decided one per realm grouped by top liege — done first, every absorbed
         // kingdom would have been swept into the hegemon's government. See ExpandHegemonRealm.
         if (cfg.StartingHegemony) Realms.ExpandHegemonRealm(realms, empires, wilderness);
+
+        // Read once the homage pass is done, because it is what the Dynastic Cycle will measure the
+        // hegemon against every year — see DynasticCycleWriter for the thresholds it tunes.
+        double? hegemonShare = cfg.StartingHegemony
+            ? Realms.HegemonDeJureShare(realms, empires, wilderness)
+            : null;
 
         Core.Stage.Time("government overrides",
             () => GovernmentWriter.WriteNomadNaming(modDir, gameDir, counties.Any(governments.IsNomad)));
@@ -285,7 +291,7 @@ public static class ContentWriter
 
         Core.Stage.Time("titles, history and localisation", () =>
         {
-            WriteLandedTitles(modDir, empires, faiths, wilderness);
+            WriteLandedTitles(modDir, empires, faiths, wilderness, HegemonSeat(empires, realms));
             WriteProvinceTerrain(modDir, provinceTerrain, landCount);
             (provinceRows, holdings) = BuildProvinceHistory(cfg, empires, provinceTerrain, development, cultures, faiths, governments, wilderness, worldCenters, silkRoad, cfg.Seed, azgaar);
             EmitProvinceHistory(modDir, provinceRows, holdings);
@@ -360,6 +366,7 @@ public static class ContentWriter
         Core.Stage.Time("great steppe files", () => SteppeWriter.WriteAll(modDir, gameDir, steppe));
         Core.Stage.Time("the wilds files", () => FrontierWriter.WriteAll(modDir, cfg, frontier));
         Core.Stage.Time("silk road files", () => SilkRoadWriter.WriteAll(modDir, gameDir, cfg, silkRoad));
+        Core.Stage.Time("dynastic cycle", () => DynasticCycleWriter.WriteAll(modDir, empires, hegemonShare));
         Core.Stage.Time("route files", () => RouteWriter.WriteAll(modDir, routes, crossings, silkRoad,
             provinces, order, baronyCount, provinceTerrain));
 
@@ -383,6 +390,7 @@ public static class ContentWriter
         Core.Stage.Time("locators", () => LocatorWriter.WriteAll(modDir, gameDir, provinces, order, landCount, anchors, cfg));
         Core.Stage.Time("casus belli", () => CasusBelliWriter.WriteAll(modDir, gameDir, cfg));
         Core.Stage.Time("council tasks", () => CouncilTaskWriter.WriteAll(modDir, gameDir, cfg));
+        Core.Stage.Time("faction rules", () => FactionWriter.WriteAll(modDir, gameDir, cfg));
         Core.Stage.Time("frontend", () => FrontendWriter.WriteFrontend(modDir, gameDir));
         Core.Stage.Time("GUI changes",
             () => GuiWriter.WriteAll(modDir, gameDir, cfg.EnableSocieties, cfg.EnableWilderness));
@@ -652,7 +660,16 @@ public static class ContentWriter
         }
 
         List<string> sets = [StaticFileWriter.Core];
-        if (cfg.EnableWilderness) sets.Add(StaticFileWriter.Wilderness);
+        if (cfg.EnableWilderness)
+        {
+            sets.Add(StaticFileWriter.Wilderness);
+
+            // abandon_county_effect in the set calls gen_strip_buildings_effect by name, and the
+            // effect's body is the game's building list, so it is emitted beside the set every time
+            // the set ships. See BuildingStripWriter for why it cannot be a static file.
+            Core.Stage.Time("building strip", () => Console.WriteLine(
+                $"  buildings: strip effect covers {BuildingStripWriter.Write(modDir, gameDir)} keys"));
+        }
 
         // ANDed, never implied. Ruins hand counties to a dummy under wilderness_government and
         // expect the colonisation flow to be the way back, so shipping them without the wilderness
@@ -724,8 +741,19 @@ public static class ContentWriter
     /// Not private: every title's colour lives in this file, so recolouring one after the mod is
     /// written re-runs exactly this. See <see cref="WorldOverwrite"/>.
     /// </summary>
+    /// <summary>The county the crowned hegemon rules from, or null when nobody wears the hegemony.</summary>
+    internal static Title? HegemonSeat(List<Title> empires, RealmMap realms)
+        => Titles.HegemonyOf(empires) is { } crown ? realms.HolderCounty.GetValueOrDefault(crown) : null;
+
+    /// <param name="hegemonSeat">
+    /// The county a hegemon crowned at the start rules from, when there is one. It becomes the
+    /// hegemony's <c>capital</c> instead of the de jure default, because vanilla script reads
+    /// <c>title:h_china.title_capital_county</c> as "where the Son of Heaven sits" — a Mandate claim
+    /// moves the claimant's realm capital there — and the de jure default is whatever county the
+    /// first empire happens to be seated in, nomad camp included.
+    /// </param>
     internal static void WriteLandedTitles(string modDir, List<Title> empires, FaithMap faiths,
-        WildernessMap wilderness)
+        WildernessMap wilderness, Title? hegemonSeat = null)
     {
         string dir = Path.Combine(modDir, "common", "landed_titles");
         Directory.CreateDirectory(dir);
@@ -836,7 +864,9 @@ public static class ContentWriter
                     // would take the first county anyway: the two agree because MapGen/Capitals
                     // put the capital first, and saying so keeps a hand edit of the order from
                     // silently moving the seat.
-                    if (title.Tier is "d" or "k" or "e" or "h"
+                    if (title.Tier == "h" && hegemonSeat is not null)
+                        jb.Field("capital", hegemonSeat.Key);
+                    else if (title.Tier is "d" or "k" or "e" or "h"
                         && MapGen.Capitals.CapitalCounty(title) is { } seat)
                         jb.Field("capital", seat.Key);
 
@@ -847,6 +877,7 @@ public static class ContentWriter
                         // than for a house.
                         jb.Field("definite_form", "yes");
                         jb.Field("can_be_named_after_dynasty", "no");
+                        jb.Field("disable_regnal_numbers", "yes");
 
                         // Creation runs through the generated decision and nowhere else. Left open,
                         // the title-creation UI would sell the world for 2400 gold to anyone
@@ -860,6 +891,39 @@ public static class ContentWriter
                     // The capital first: for a county that is the whole declaration of its seat,
                     // since baronies carry no capital field. Write-time order only.
                     foreach (var child in title.SeatFirst()) Write(child);
+
+                    // The nine seats of the celestial ministry, as vanilla declares them inside
+                    // h_china (02_china.txt:8603): landless de jure children, granted by script to
+                    // whoever the hegemon appoints. Inside this block because vanilla's own script
+                    // tests `de_jure_liege = title:h_china` on them; after the empires because a
+                    // Title child's position is load-bearing and these are not Title children.
+                    // Fields match the no-hegemony shim in CompatibilityWriter, which owns the list.
+                    if (title.Tier == "h"
+                        && (hegemonSeat ?? MapGen.Capitals.CapitalCounty(title)) is { } ministrySeat)
+                    {
+                        int i = 0;
+                        foreach (string minister in CompatibilityWriter.MinistryTitles)
+                        {
+                            var (r, g, bl) = MapDataWriter.ProvinceColor(1000 + i++);
+                            using (jb.Block(minister))
+                            {
+                                jb.Inline("color", $"{r}", $"{g}", $"{bl}");
+                                jb.Field("landless", "yes");
+                                jb.Field("capital", ministrySeat.Key);
+                                jb.Inline("can_create", "always = no");
+                                jb.Inline("can_create_on_partition", "always = no");
+                                jb.Field("no_automatic_claims", "yes");
+                                jb.Inline("ai_primary_priority", "add = -1000");
+                                jb.Field("allow_domicile", "no");
+                                jb.Field("destroy_if_invalid_heir", "yes");
+                                jb.Field("de_jure_drift_disabled", "yes");
+                                jb.Field("can_use_nomadic_naming", "no");
+                                jb.Field("can_be_named_after_dynasty", "no");
+                                jb.Field("definite_form", "yes");
+                                jb.Field("ruler_uses_title_name", "no");
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1363,9 +1427,25 @@ public static class ContentWriter
         var named = Titles.Flatten(empires).ToList();
         if (Titles.HegemonyOf(empires) is { } crown) named.Add(crown);
 
+        // The hegemony's key is vanilla's (Titles.HegemonyKey), and vanilla already localises it —
+        // "China", with an adjective "Chinese" that a hundred datafunctions read. A mod's copy of a
+        // vanilla key in an ordinary loc file is logged as "Duplicate localization key" on every
+        // launch; localization/replace/ is the sanctioned place for one, so the hegemony's two keys
+        // go there, in a file of their own. Every other generated title falls back on its name for
+        // lack of an adjective; this one has to say so, or it stays "Chinese".
+        var crownLoc = new LocFile();
+
         foreach (var title in named)
         {
             string name = ParadoxText.Loc(title.Name);
+
+            if (title.Tier == "h")
+            {
+                crownLoc.AddBuilt(title.Key, name);
+                crownLoc.AddBuilt($"{title.Key}_adj", name);
+                continue;
+            }
+
             loc.AddBuilt(title.Key, name);
 
             if (title.Tier == "b" && title.ProvinceId > 0)
@@ -1390,6 +1470,9 @@ public static class ContentWriter
         }
 
         loc.Write(Path.Combine(dir, "gen_titles_l_english.yml"));
+
+        if (Titles.HegemonyOf(empires) is not null)
+            crownLoc.Write(Path.Combine(modDir, "localization", "replace", "english", "gen_hegemony_l_english.yml"));
     }
 
     private static void BlankVanillaData(string modDir, string gameDir)

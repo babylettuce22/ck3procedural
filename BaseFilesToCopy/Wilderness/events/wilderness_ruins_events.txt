@@ -108,8 +108,23 @@ wilderness_ruins.0001 = {
 		# county on a map seeded with ruins at generation, and every county at all when the Ruins
 		# set is not shipping.
 		scope:gen_ruins_county ?= {
-			var:ruin_former_culture ?= { save_scope_as = ruin_culture }
-			var:ruin_former_faith   ?= { save_scope_as = ruin_faith }
+			# `?=` does not guard `var:` — it suppresses the scope switch failing, not the variable
+			# fetch that feeds it, and the fetch throws first. Written bare, these two log
+			# `Failed to fetch variable ... due to not being set` for every ruin that has no memory:
+			# a county seeded ruined at generation, and every county at all on a map without the
+			# Ruins set. That is the common case here, not the rare one.
+			#
+			# It went unnoticed for as long as it did only because this event is rare — the same
+			# mistake copied into wilderness_pick_adjacent_effect, which runs on every AI colonisation
+			# pulse, produced 832 errors in a single measured run.
+			if = {
+				limit = { has_variable = ruin_former_culture }
+				var:ruin_former_culture ?= { save_scope_as = ruin_culture }
+			}
+			if = {
+				limit = { has_variable = ruin_former_faith }
+				var:ruin_former_faith ?= { save_scope_as = ruin_faith }
+			}
 
 			if = {
 				limit = { has_variable = ruin_fell_year }
@@ -121,6 +136,13 @@ wilderness_ruins.0001 = {
 			if = { limit = { has_variable = ruin_former_culture } remove_variable = ruin_former_culture }
 			if = { limit = { has_variable = ruin_former_faith }   remove_variable = ruin_former_faith }
 			if = { limit = { has_variable = ruin_fell_year }      remove_variable = ruin_fell_year }
+
+			# Goes with the other three even though this event never reads it. It is written by the
+			# same effect at the same moment and means the same thing — whose county this was — and
+			# it is read by wilderness_pick_adjacent_effect, which weights a house's own lost ground
+			# above everything else. Left standing it would outlive the stones it describes, and the
+			# next family to lose this county would find their ruin already claimed by the last one.
+			if = { limit = { has_variable = ruin_former_house }   remove_variable = ruin_former_house }
 		}
 	}
 

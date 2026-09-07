@@ -1,7 +1,6 @@
 using Ck3MapGen.MapGen;
 using NoiseTool.Core;
 using NoiseTool.Pipeline;
-using NoiseTool.Stages;
 
 namespace Ck3MapGen.AppGUI.Forge;
 
@@ -121,10 +120,10 @@ public sealed class ForgeSession : IDisposable
     // ------------------------------------------------------------------ project
 
     /// <summary>
-    /// The starting pipeline: Forge's default stack at a size that previews instantly and exports
-    /// in a minute. 2048x1024 with a 2x Upscale lands on 4096x2048 — the same shape as the
-    /// heightmaps this tool has been built around, and a multiple of 64 on both axes for the
-    /// packer. Raise it in the Project box when the map is right.
+    /// The starting project: an empty stage stack at a size that previews instantly and exports in
+    /// a minute. 2048x1024 is the shape this tool has been built around, and a multiple of 64 on
+    /// both axes for the packer — note that an Upscale stage multiplies it. Raise it in the
+    /// Project box when the map is right.
     /// </summary>
     public void NewDefault()
     {
@@ -136,21 +135,9 @@ public sealed class ForgeSession : IDisposable
             Pipeline.MasterSeed = Random.Shared.Next(1, 1_000_000);
             Pipeline.SeaLevel = Ck3.SeaLevelNormalised;
             Pipeline.PreviewLongEdge = 1024;
-            // Hand Paint ships in the default stack rather than waiting behind the Add menu: the
-            // brushes are the point of the tab, and a pipeline you have to modify before you can
-            // paint hides them. It costs nothing until painted — an empty paint stage returns its
-            // input untouched. It sits after the terrain passes so strokes are the last word on
-            // relief, and before Upscale so they are upscaled with everything else.
-            Pipeline.ReplaceAll(
-            [
-                new ContinentStage(),
-                new BaseReliefStage(),
-                new RidgeStage(),
-                new HillStage(),
-                new HeightPaintStage(),
-                new ContrastStage(),
-                new UpscaleStage(),
-            ]);
+            // No stages: a new project opens empty and every pass is one the user chose from the
+            // Add menu. A pipeline with nothing in it previews as flat ocean rather than failing.
+            Pipeline.ReplaceAll([]);
             Name = "untitled";
             PresetPath = null;
         }

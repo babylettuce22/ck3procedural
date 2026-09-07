@@ -52,6 +52,14 @@ public sealed class RealmMap
     /// </summary>
     public FormationHistory? History { get; init; }
 
+    /// <summary>
+    /// Which settled counties border which, land and short sea crossings alike, or null when the
+    /// map was built without provinces. Kept so passes that run after <see cref="Realms.Build"/>
+    /// — the hegemon's homage pass above all — can ask whether two realms touch without
+    /// rebuilding the graph from the province bitmap.
+    /// </summary>
+    public Dictionary<Title, HashSet<Title>>? CountyAdjacency { get; set; }
+
     /// <summary>Records that <paramref name="vassal"/> answers to <paramref name="lord"/>.</summary>
     public void SetLiege(Title vassal, Title lord, LiegeOrigin origin)
     {
@@ -190,6 +198,7 @@ public static class Realms
                 HolderCounty = shatteredHolders,
                 Liege = [],
                 Greatest = shatteredGreatest,
+                CountyAdjacency = countyAdj,
             };
         }
 
@@ -224,7 +233,9 @@ public static class Realms
             var history = Formation.Run(nonWildCounties, countyAdj, development, cultures,
                                         cfg, deJureKingdoms);
 
-            return FromFormation(history, all, development, weight, holderCounty, countyAdj, cfg, rng);
+            var formed = FromFormation(history, all, development, weight, holderCounty, countyAdj, cfg, rng);
+            formed.CountyAdjacency = countyAdj;
+            return formed;
         }
 
         // --- Step 0: Countries the export drew ---
@@ -527,6 +538,7 @@ public static class Realms
             Liege = liege,
             Origin = origin,
             Greatest = greatest,
+            CountyAdjacency = countyAdj,
         };
     }
 
@@ -1286,7 +1298,7 @@ public static class Realms
         if (Titles.HegemonyOf(empires) is not { } hegemony) return null;
         if (realms.HolderCounty.ContainsKey(hegemony)) return null;
 
-        var (primaryOf, realmCounties) = RealmSizes(realms, empires, wilderness);
+        var (primaryOf, realmCounties, _) = RealmSizes(realms, empires, wilderness);
         if (realmCounties.Count == 0) return null;
 
         // Size decides it. Holding an empire only breaks a tie, so a great king outranks a titular
@@ -1335,15 +1347,37 @@ public static class Realms
     private const double HegemonMinShare = 0.40;
 
     /// <summary>
+    /// How big a patch of independent ground surrounded by the hegemony may be and still count as
+    /// a hole to be closed rather than a neighbour to be left alone — as a share of the settled
+    /// world, with a floor in counties for small maps. A twentieth of the world is a large duchy
+    /// or a small kingdom: anything bigger enclosed by the hegemony is a real enclave state, and
+    /// those are interesting to leave standing.
+    /// </summary>
+    private const double HegemonPocketShare = 0.05;
+    private const int HegemonPocketMinCounties = 8;
+
+    /// <summary>
     /// Brings realms under a crowned hegemon until nobody else is close, by homage rather than by
-    /// moving land.
+    /// moving land — and only ever realms that touch the ground the hegemon already answers for.
     ///
     /// The de jure hegemony covers the whole map by construction, so a hegemon ruling a quarter of
     /// it reads as a lie the moment a player opens the realm view — which is exactly what the first
-    /// version produced. Vassalising the largest independent neighbours is how CK3 itself states
-    /// "these kings answer to that throne", and it costs nothing but <c>liege =</c> lines: no county
-    /// changes hands, no ruler is invented, and every absorbed realm keeps its own government, its
-    /// own vassals and its own internal structure.
+    /// version produced. Vassalising independent neighbours is how CK3 itself states "these kings
+    /// answer to that throne", and it costs nothing but <c>liege =</c> lines: no county changes
+    /// hands, no ruler is invented, and every absorbed realm keeps its own government, its own
+    /// vassals and its own internal structure.
+    ///
+    /// **Contiguity is the whole point of the second version.** The first took the largest
+    /// independent realms wherever they happened to be, and on a map of many middling realms it
+    /// needed five or six of them to reach its share — so the finished hegemony was one big realm
+    /// and a scatter of unrelated islands of the same colour across the whole map. A realm may now
+    /// swear only if some county of it borders some county already inside the hegemony (land or a
+    /// short sea crossing, the same graph the simulation grew realms across), and the hegemony grows
+    /// outward from its core one neighbour at a time, largest bordering realm first. When nothing
+    /// left borders it, it stops short of its share rather than reach across the map; the run log
+    /// says so when that happens. Dominance is still measured against the largest realm anywhere,
+    /// bordering or not — a hegemon with a rival of half its size across the sea is not yet a
+    /// hegemon, so the pass keeps taking neighbours while it can.
     ///
     /// **Runs after <see cref="Governments"/>, and must.** Governments are assigned one per realm,
     /// grouped by top liege, so doing this first would sweep every absorbed kingdom into the
@@ -1357,43 +1391,150 @@ public static class Realms
         if (Titles.HegemonyOf(empires) is not { } hegemony) return 0;
         if (!realms.HolderCounty.TryGetValue(hegemony, out var hegemonSeat)) return 0;
 
-        var (primaryOf, size) = RealmSizes(realms, empires, wilderness);
+        var (primaryOf, size, members) = RealmSizes(realms, empires, wilderness);
         if (!size.TryGetValue(hegemonSeat, out int hegemonSize)) return 0;
 
-        // Largest first, so the fewest oaths buy the most dominance and the realms that swear are
-        // the ones whose independence was the point.
-        var others = size.Where(kv => kv.Key != hegemonSeat)
-                         .OrderByDescending(kv => kv.Value)
-                         .ThenBy(kv => kv.Key.Index)
-                         .ToList();
-
         int total = size.Values.Sum();
-        int absorbed = 0, nextLargest = 0;
+        var adjacency = realms.CountyAdjacency;
 
-        foreach (var (seat, count) in others)
+        // The ground the hegemon answers for, grown as realms swear. A map built without provinces
+        // has no adjacency graph; there, and only there, every realm counts as bordering — the
+        // old behaviour, kept because it is better than a hegemony that never grows at all.
+        var ground = new HashSet<Title>(members[hegemonSeat]);
+
+        bool Borders(Title seat)
+            => adjacency is null
+            || members[seat].Any(c => adjacency.TryGetValue(c, out var next) && next.Overlaps(ground));
+
+        bool Dominant(int nextLargest)
+            => hegemonSize > HegemonDominance * nextLargest && hegemonSize >= HegemonMinShare * total;
+
+        var sworn = new HashSet<Title>();
+        int absorbed = 0, nextLargest = 0;
+        bool stoppedShort = false;
+
+        while (true)
         {
-            // Both tests, and the list is descending, so once the hegemon clears this realm it
-            // clears every one after it too.
-            if (hegemonSize > HegemonDominance * count && hegemonSize >= HegemonMinShare * total)
+            // Everyone still independent, largest first — the same order as before, so when the
+            // map does let the hegemon reach the largest rival it takes that one before a smaller
+            // neighbour.
+            var candidates = size
+                .Where(kv => kv.Key != hegemonSeat && !sworn.Contains(kv.Key))
+                .Where(kv =>
+                {
+                    var primary = primaryOf.GetValueOrDefault(kv.Key, kv.Key);
+                    return primary != hegemony && !realms.Liege.ContainsKey(primary);
+                })
+                .OrderByDescending(kv => kv.Value)
+                .ThenBy(kv => kv.Key.Index)
+                .ToList();
+
+            nextLargest = candidates.Count > 0 ? candidates[0].Value : 0;
+            if (Dominant(nextLargest)) break;
+
+            var next = candidates.FirstOrDefault(kv => Borders(kv.Key));
+            if (next.Key is null)
             {
-                nextLargest = count;
+                stoppedShort = candidates.Count > 0;
                 break;
             }
 
-            var primary = primaryOf.GetValueOrDefault(seat, seat);
-            if (primary == hegemony || realms.Liege.ContainsKey(primary)) continue;
-
-            realms.SetLiege(primary, hegemony, LiegeOrigin.Hegemony);
-            hegemonSize += count;
+            realms.SetLiege(primaryOf.GetValueOrDefault(next.Key, next.Key), hegemony, LiegeOrigin.Hegemony);
+            sworn.Add(next.Key);
+            ground.UnionWith(members[next.Key]);
+            hegemonSize += next.Value;
             absorbed++;
         }
 
-        Console.WriteLine($"  hegemony: {absorbed} realm(s) swore to it — the hegemon rules "
-                        + $"{hegemonSize} of {total} settled counties "
-                        + $"({(double)hegemonSize / Math.Max(1, total):P0}), "
-                        + $"next largest {nextLargest}");
+        // Pockets. Independent ground that touches the hegemony and nothing else is not a rival,
+        // it is a hole — and on the realm map a hegemony riddled with holes reads as no hegemony
+        // at all, which was the second half of the original complaint. Measured on connected
+        // components of the counties outside the hegemony rather than realm by realm, because
+        // the typical hole is two or three small realms leaning on each other, none of which is
+        // enclosed on its own. A component is a pocket when it borders the hegemony and is small
+        // (HegemonPocketShare); the rest of the world is one huge component and is never one, and
+        // an island that touches nothing is skipped by the first test. Taken after the share is
+        // met rather than counted toward it, because the share is a floor on how big the hegemony
+        // is, not a ceiling; and repeated, because closing one hole can leave the next one small.
+        int pockets = 0;
+        if (adjacency is not null)
+        {
+            int pocketMax = Math.Max(HegemonPocketMinCounties, (int)(HegemonPocketShare * total));
+            var seatOf = new Dictionary<Title, Title>();
+            foreach (var (seat, counties) in members)
+                foreach (var county in counties) seatOf[county] = seat;
 
-        return absorbed;
+            bool found;
+            do
+            {
+                found = false;
+                var seen = new HashSet<Title>();
+                foreach (var start in seatOf.Keys.OrderBy(c => c.Index))
+                {
+                    if (ground.Contains(start) || !seen.Add(start)) continue;
+
+                    // Flood the component this county sits in, staying off the hegemony's ground.
+                    var component = new List<Title> { start };
+                    var stack = new Stack<Title>([start]);
+                    bool touches = false;
+                    while (stack.Count > 0)
+                    {
+                        if (!adjacency.TryGetValue(stack.Pop(), out var next)) continue;
+                        foreach (var other in next)
+                        {
+                            if (ground.Contains(other)) { touches = true; continue; }
+                            if (seen.Add(other)) { component.Add(other); stack.Push(other); }
+                        }
+                    }
+                    if (!touches || component.Count > pocketMax) continue;
+
+                    // Every realm wholly inside the pocket swears; one with ground elsewhere is
+                    // left alone, since taking it would drag counties outside the hole in too.
+                    var inside = new HashSet<Title>(component);
+                    foreach (var seat in component.Select(c => seatOf[c]).Distinct().OrderBy(s => s.Index))
+                    {
+                        if (seat == hegemonSeat || sworn.Contains(seat)) continue;
+                        if (!members[seat].All(inside.Contains)) continue;
+                        var primary = primaryOf.GetValueOrDefault(seat, seat);
+                        if (primary == hegemony || realms.Liege.ContainsKey(primary)) continue;
+
+                        realms.SetLiege(primary, hegemony, LiegeOrigin.Hegemony);
+                        sworn.Add(seat);
+                        ground.UnionWith(members[seat]);
+                        hegemonSize += size[seat];
+                        pockets++;
+                        found = true;
+                    }
+                }
+            } while (found);
+        }
+
+        Console.WriteLine($"  hegemony: {absorbed} bordering realm(s) and {pockets} enclosed pocket(s) swore to it — "
+                        + $"the hegemon rules {hegemonSize} of {total} settled counties "
+                        + $"({(double)hegemonSize / Math.Max(1, total):P0}), "
+                        + $"next largest {nextLargest}"
+                        + (stoppedShort ? " — stopped short: nothing independent borders it any more" : ""));
+
+        return absorbed + pockets;
+    }
+
+    /// <summary>
+    /// The share of the hegemony's de jure counties — every county on the map, wilderness included —
+    /// that answers to the crowned hegemon, or null when nobody wears the crown.
+    ///
+    /// This is the ratio All Under Heaven's Dynastic Cycle tests every year (see
+    /// <c>Emit/DynasticCycleWriter.cs</c>), and it is deliberately not the settled share
+    /// <see cref="ExpandHegemonRealm"/> grows by: the two differ by exactly the wilderness, and the
+    /// game does not know the wilderness is empty.
+    /// </summary>
+    public static double? HegemonDeJureShare(RealmMap realms, List<Title> empires, WildernessMap wilderness)
+    {
+        if (Titles.HegemonyOf(empires) is not { } hegemony) return null;
+        if (!realms.HolderCounty.TryGetValue(hegemony, out var hegemonSeat)) return null;
+
+        var (_, size, _) = RealmSizes(realms, empires, wilderness);
+        int deJure = Titles.Flatten(empires).Count(t => t.Tier == "c");
+        return deJure == 0 ? null : (double)size.GetValueOrDefault(hegemonSeat) / deJure;
     }
 
     /// <summary>
@@ -1404,7 +1545,8 @@ public static class Realms
     /// the other measures against it, and two derivations of "how big is this realm" would sooner or
     /// later disagree about which realm that is.
     /// </summary>
-    private static (Dictionary<Title, Title> PrimaryOf, Dictionary<Title, int> Size)
+    private static (Dictionary<Title, Title> PrimaryOf, Dictionary<Title, int> Size,
+                    Dictionary<Title, List<Title>> Members)
         RealmSizes(RealmMap realms, List<Title> empires, WildernessMap wilderness)
     {
         // The highest-ranked title each ruler holds, keyed by their seat — the same derivation the
@@ -1414,14 +1556,19 @@ public static class Realms
             if (!primaryOf.TryGetValue(seat, out var best) || Rank(title) > Rank(best))
                 primaryOf[seat] = title;
 
+        // Size and membership together, from one walk, so they cannot disagree about which realm
+        // a county is in. Members is what lets the hegemon's homage pass ask whether realms touch.
         var size = new Dictionary<Title, int>();
+        var members = new Dictionary<Title, List<Title>>();
         foreach (var county in Titles.Flatten(empires))
         {
             if (county.Tier != "c" || wilderness.Contains(county)) continue;
-            if (TopSeat(county) is { } top) size[top] = size.GetValueOrDefault(top) + 1;
+            if (TopSeat(county) is not { } top) continue;
+            size[top] = size.GetValueOrDefault(top) + 1;
+            (members.TryGetValue(top, out var list) ? list : members[top] = []).Add(county);
         }
 
-        return (primaryOf, size);
+        return (primaryOf, size, members);
 
         Title? TopSeat(Title county)
         {

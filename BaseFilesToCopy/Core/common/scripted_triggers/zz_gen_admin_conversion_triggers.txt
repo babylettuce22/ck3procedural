@@ -1,0 +1,109 @@
+﻿# Loosens who may adopt All Under Heaven's three regional bureaucracies on a generated map.
+#
+# ---- What this is ----
+#
+# Single-object overrides of four vanilla scripted triggers from
+# common/scripted_triggers/10_tgp_triggers.txt. Script is last-wins and this directory has no
+# subfolders, so a zz_ file here replaces each trigger without touching the file it lives in.
+#
+# The "Adopt <X> Government" items of convert_to_administrative_decision (06_ep3_admin_decisions.txt)
+# gate on the first three. Vanilla ties them to Earth: the Hegemony of China, Han ancestry, the
+# world_asia/world_tibet/world_burma/world_steppe_east regions, and a Japanese top liege. None of
+# those exist on a generated map, so all three items showed as permanently unfulfillable — the
+# tooltips in the screenshots that prompted this file.
+#
+# ---- The design ----
+#
+# * Celestial is the HEGEMON'S government. The generated hegemony (Titles.Crown) stands in for
+#   h_china: hold it, or be a vassal of whoever does, and you may adopt Celestial. AI included —
+#   that is vanilla's intent for the Chinese emperor, and there is one hegemony per world.
+#
+# * Meritocratic and Ritsuryō are opened to PLAYERS anywhere the structural rules allow
+#   (independent, or a vassal of a non-administrative liege). The AI keeps vanilla's logic: the
+#   decision's widget weights celestial/ritsuryō at 100 and meritocratic at 50 against
+#   administrative at 10, so an AI allowed into all three would turn most converting empires
+#   Ritsuryō — a government whose house blocs, shogunate and imperial-branch layers lean on
+#   title:e_japan. Vanilla's "borders a merit realm" clause still lets AI neighbours of a
+#   generated meritocratic hegemon follow it, as on Earth.
+#
+# * tgp_has_access_to_ministry_trigger is the one line the whole ministry layer (council
+#   positions, minister titles, ministry projects) hangs off. Generalised from h_china to
+#   "holds a hegemony-tier title" so a Celestial hegemon is not a name with nothing behind it.
+#   The minister titles themselves are exempted from the vanilla-titular strip guard in
+#   Emit/CompatibilityWriter.cs for the same reason. The dynastic-cycle situation and the imperial
+#   examinations remain bound to title:h_china and are NOT reached by this file.
+#
+# Loc for the three decision tooltips is overridden alongside, in
+# localization/english/zz_gen_admin_conversion_l_english.yml.
+
+tgp_should_become_meritocratic_trigger = {
+	has_tgp_dlc_trigger = yes
+	OR = {
+		# Vanilla: follow a neighbour or liege that already uses merit.
+		top_liege = {
+			OR = {
+				has_government = meritocratic_government
+				any_neighboring_and_across_water_top_liege_realm_owner = { government_allows = merit }
+			}
+		}
+		# Vanilla's East Asia clause, with the region test replaced by a player test.
+		AND = {
+			is_ai = no
+			OR = {
+				is_independent_ruler = yes
+				liege = {
+					NOT = {
+						government_has_flag = government_is_administrative
+					}
+				}
+			}
+		}
+		# Becoming admin with creation of meritocratic great yuan
+		exists = scope:great_yuan_ruler
+	}
+}
+
+tgp_can_become_japan_administrative_trigger = {
+	OR = {
+		# Vanilla: inside a Ritsuryō/Sōryō realm, or restoring one.
+		top_liege = {
+			OR = {
+				government_is_japanese_trigger = yes
+				has_character_flag = tgp_japan_restore_japanese_government_flag
+			}
+		}
+		government_is_japanese_trigger = yes
+		has_character_flag = tgp_japan_restore_japanese_government_flag
+		# Generated worlds: any player whose realm is not already another bureaucracy.
+		gen_player_may_found_bureaucracy_trigger = yes
+	}
+}
+
+tgp_can_become_celestial_trigger = {
+	top_liege = {
+		OR = {
+			has_government = celestial_government
+			highest_held_title_tier = tier_hegemony
+		}
+	}
+}
+
+tgp_has_access_to_ministry_trigger = {
+	highest_held_title_tier = tier_hegemony
+	government_has_flag = government_is_celestial
+}
+
+# The player-side loosening, shared by the Ritsuryō decision gate above and by
+# japan_administrative_government.can_get_government (common/governments/zz_gen_japan_government_types.txt)
+# so the engine's own validity check agrees with the decision that offers it.
+gen_player_may_found_bureaucracy_trigger = {
+	is_ai = no
+	OR = {
+		is_independent_ruler = yes
+		liege = {
+			NOT = {
+				government_has_flag = government_is_administrative
+			}
+		}
+	}
+}

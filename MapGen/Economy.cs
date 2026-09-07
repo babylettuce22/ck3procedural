@@ -27,7 +27,17 @@ public static class Economy
     /// <item>church_holding → temple_01 → normal_building_tax_tier_3 → 0.35 + 0.2 + 0.2</item>
     /// <item>tribal_holding → tribe_01 → poor_building_tax_tier_1 → 0.25, and only under
     /// <c>government_is_tribal_excluding_wanua</c>, which every generated tribal county satisfies</item>
+    /// <item>temple_citadel_holding → temple_citadel_01 → super_poor_building_tax_tier_1 →
+    /// 0.25 / 2. Never generated — a mandala realm is only ever an editor choice — but the editor
+    /// rebuilds that realm's capitals as temple citadels, so the wealth readout would otherwise
+    /// report them as earning nothing. The building's <c>tax_per_piety_level</c> on top is left
+    /// out, the way every other piety- and prestige-scaled bonus here is.</item>
     /// </list>
+    ///
+    /// One known overstatement, and the reason it is left standing: tribe_01 pays a WANUA holder
+    /// <c>poor_building_tax_halved_tier_1</c> rather than the full tier, so an editor-made wanua
+    /// realm reads twice what it earns. Correcting it means passing the government down into
+    /// <see cref="CountyIncome"/> and its callers for one government the generator never produces.
     ///
     /// Nomads and wilderness earn nothing here, and that is not an omission: nomadic_camp_01
     /// declares no <c>monthly_income</c> at all — a horde's purse comes from its herds — and our own
@@ -39,6 +49,7 @@ public static class Economy
         "city_holding" => 0.80,
         "church_holding" => 0.75,
         "tribal_holding" => 0.25,
+        "temple_citadel_holding" => 0.125,
         _ => 0.0,
     };
 

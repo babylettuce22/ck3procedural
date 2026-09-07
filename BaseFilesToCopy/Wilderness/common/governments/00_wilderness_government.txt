@@ -82,9 +82,74 @@ wilderness_government = {
 		ai_war_chance = -100
 		ai_war_cooldown = 1000
 
+		# ---- Domain limit: the dummy must never think it holds too much ----
+		#
+		# The engine's AI sheds land when a ruler is over the domain limit, and it does so by
+		# GRANTING counties to whoever is in the court — there is no `ai = { ... }` switch for it,
+		# and `cannot_be_vassal_or_liege` is only a script flag that vanilla's interactions read,
+		# not something the engine honours. Both dummies hold hundreds of counties against a base
+		# limit of a handful, so the only reason this had never shown was that the yearly sweep
+		# leaves the court empty and the AI has nobody to give land to.
+		#
+		# Ruining a whole realm broke that: the dispossessed holders and their houses land in the
+		# ruins dummy's court, and within the year the AI had handed nine counties back to them
+		# (`type = granted` in the title history, `de_facto_liege = k_gen_ruins`), so a supposedly
+		# empty realm grew colonist vassals. A limit no realm can reach means the AI never sees an
+		# overflow to fix. The yearly cleanup releases any vassal that gets through regardless.
+		domain_limit = 1000
+
 		# Its counties never revolt: a peasant rising in an empty county is a war the player cannot
 		# reach and the AI cannot resolve.
 		county_opinion_add = 100
+
+		# ---- Control: the wilds are unclaimed, never restive ----
+		#
+		# Opinion was only half of it. County control is a second, independent number, and every
+		# value it can take below 100 on a dummy-held county is a problem waiting to happen: it
+		# feeds unrest and revolt content, and — the one that actually costs the player something —
+		# it is INHERITED BY THE COLONIST. `colonize_county_effect` hands the title over with
+		# `type = returned`, a peaceful change, so control is not reset the way a conquest resets
+		# it (`COUNTY_CONTROL_LOSS_ON_HOSTILE_OWNER_CHANGE = 75`); whatever the wilderness was
+		# sitting on is what the new colony starts its first winter on.
+		#
+		# Counties open at `DEFAULT_COUNTY_CONTROL = 100`, so on a quiet map this changes nothing.
+		# What it fixes is the county a war marched through, a ruin sat on, or a plague crossed:
+		# that county is back at 100 within a year instead of being handed to a colonist half-held.
+		# The `if county_control < 50 -> change_county_control = 50` floor in
+		# 00_colonization_effects.txt stays as a backstop, and should now never fire.
+		#
+		# Both dummies get this: the ruins holder runs the same government (see the trait file).
+		#
+		# Growth is signed the obvious way. DECLINE is not, and it is worth writing down: vanilla's
+		# epidemics use `monthly_county_control_decline_add = -0.1` as a PENALTY, while the dread
+		# special building uses `+0.5` as a BONUS — so a positive add counteracts decline. The
+		# factor runs the other way (`decline_factor` is `color = bad` when positive; vanilla's
+		# fortifications buy `-0.1` to shave a tenth off it). Setting both cancels decline twice
+		# over, which is the point: nothing should be able to reintroduce it.
+		#
+		# It costs no travel danger worth having, and this was measured rather than assumed.
+		# `COUNTY_CONTROL_DANGER_MULTIPLIER = 0.6` does mean control below 100 is itself danger, so
+		# in principle pinning control removes up to +60 from crossing the wilds. In practice that
+		# term was invisible, because the wilds are already saturated without it:
+		#
+		#   vanilla terrain baseline (00_travel_values.txt)  10 plains .. 65 mountains/jungle
+		#   wilderness_01                                    +30
+		#   obstacles, 2 guaranteed + 40% of a third         +15 .. +50 each (mean 29)
+		#
+		# so a typical wilderness county is ~133 and a bad one ~265. For scale: across ALL of
+		# vanilla's common/, a +40 travel_danger modifier is in the top few percent, and the single
+		# worst thing the game ships is the +120 `ep3_laamp_flavour_ewan_4061_hungry_maneater`
+		# ladder — a temporary province modifier that scales with how many people a legendary beast
+		# has eaten. We beat it permanently on ordinary ground. Danger is a CHANCE
+		# (`TRAVEL_DANGER_MINIMUM = 1` is "the minimum chance of danger happening in any province"),
+		# so everything past ~100 is already pinned and the control term was adding to a number
+		# over the top of its own range.
+		#
+		# Do NOT compensate on the obstacles. The wilds are dangerous on a deliberate number now
+		# instead of partly on an accounting figure, and the deliberate number is the larger one.
+		monthly_county_control_growth_add = 10
+		monthly_county_control_decline_add = 10
+		monthly_county_control_decline_factor = -1
 	}
 
 	ai = {
@@ -95,7 +160,9 @@ wilderness_government = {
 		use_scripted_guis = no
 		use_legends = no
 		perform_religious_reformation = no
-		use_great_projects = no
+		# use_great_projects is NOT here, though _governments.info documents it inside this very
+		# block. The engine rejects it -- `Unexpected token: use_great_projects` in error.log --
+		# and no vanilla government uses it. The .info is stale; the log is the oracle.
 	}
 
 	flags = {

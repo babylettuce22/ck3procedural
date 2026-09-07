@@ -23,10 +23,49 @@
  gen_ruins.0001.desc:0 "The reports out of [gen_ruin_target.GetName] have stopped being about harvests and started being about who has left.\n\nThe fields nearest the road are being worked and the rest are not. Two of the mills are down and nobody has been sent to look at them. Your reeve there writes that he can raise a tally of what is owed or he can raise men to collect it, and he no longer believes he can do both.\n\nHe is not asking for money. He is telling you that if the next few years look like the last few, there will be nothing left there to hold — and that the thing which would fix it is your #V control#! over the county, not your generosity."
  gen_ruins.0001.a:0 "Then it will not look like the last few."
 
+ # ---- The reprieve modifier ----
+ #
+ # common/modifiers/00_ruins_modifiers.txt. What a holder gets for paying at 0005.
+ ruin_reprieve:0 "Held Together By Hand"
+ ruin_reprieve_desc:0 "Somebody with authority decided this county was not going to be lost, and is spending accordingly. The mills are being repaired, the wages are being paid on time, and the men who would have left this spring have been given a reason not to."
+
+ # ---- 0005, the last chance ----
+ #
+ # The prices are SCOPE VALUES saved in the event's immediate, not script values — a .yml cannot read
+ # a script value and the bracket renders as nothing, silently. Same rule as the 9000 readout.
+ #
+ # They are printed in the description as well as on the buttons on purpose: an option whose trigger
+ # fails is not drawn at all, so a holder who can afford none of the three would otherwise see one
+ # button and no explanation of what the others would have cost.
+ gen_ruins.0005.t:0 "The Last Year of [gen_ruin_target.GetName]"
+ gen_ruins.0005.desc:0 "Your reeve in [gen_ruin_target.GetName] has stopped writing letters and come in person, which tells you most of it before he opens his mouth.\n\nHe has a list. The names on it are the households still there, and it is short enough to read aloud. He says that if nothing arrives before the spring they will go the way the others went — not driven out, not burned out, simply gone one cart at a time to kin elsewhere — and that after that there is no county to save, only a place on the map where one used to be.\n\nHe is asking for a great deal, and he knows it. What he is offering in return is #V [gen_ruin_reprieve_n|0] years#! in which the thing is not decided yet.\n\nGold would do it: @gold_icon![gen_ruin_gold_cost|0] into the mills, the roads and the wages. So would going yourself and spending what your name is worth — @prestige_icon![gen_ruin_prestige_cost|0]. So would asking the faith for relief, at @piety_icon![gen_ruin_piety_cost|0].\n\nOr you can tell him to bring the last of them out and stop pretending."
+
+ gen_ruins.0005.a_gold:0 "Open the treasury. (@gold_icon![gen_ruin_gold_cost|0])"
+ gen_ruins.0005.b_prestige:0 "I will go myself, and call in what I am owed. (@prestige_icon![gen_ruin_prestige_cost|0])"
+ gen_ruins.0005.c_piety:0 "Ask the faith for relief. (@piety_icon![gen_ruin_piety_cost|0])"
+ gen_ruins.0005.d_decline:0 "Bring the last of them out. It is finished."
+
  # ---- 0010, the fall ----
  gen_ruins.0010.t:0 "[gen_ruin_target.GetName] Is Gone"
  gen_ruins.0010.desc:0 "There was no final calamity. That is somehow the worst of it.\n\nThe last families out of [gen_ruin_target.GetName] went the way the others had gone, in ones and twos, over a season, to kin in other counties or to whatever town would take them. Somebody pulled the good timber off the roofs before they left. The rest came down on its own.\n\nWhat is left is walls, and the wood is already going. In a generation the road in will be gone too, and it will be a place people warn each other about rather than a place anyone has been.\n\nIt is not yours any more. It is not anybody's."
  gen_ruins.0010.a:0 "We should have gone ourselves, years ago."
+
+ # ---- What the lords above are told ----
+ #
+ # Sent by gen_ruin_county_effect to every player who is a liege of the county's holder, and to
+ # nobody else. The holder themselves gets gen_ruins.0010 instead, so these strings are always
+ # written from the point of view of somebody who did not lose the county but has lost something.
+ #
+ # There is deliberately no warning-stage equivalent. See the note in gen_ruin_county_effect: a
+ # liege who heard about every county that dipped would hear about six recoveries for every real
+ # loss, and a vassal who saved a county is entitled to have done it quietly.
+ #
+ # Written for a reader who may be two or three tiers up and has never seen the place. It names who
+ # held it, because that is the part a liege can act on, and it is careful not to accuse: the
+ # mechanic ruins counties for reasons a vassal often could not have fixed, and a toast that called
+ # it negligence would be wrong about half the time it fired.
+ gen_ruin_vassal_loss_toast:0 "A County Is Lost"
+ gen_ruin_vassal_loss_toast_desc:0 "[gen_ruin_lost_county.GetName], held in your realm by [gen_ruin_lost_holder.GetTitledFirstName], has emptied. No army took it. The last families went out over a season, to kin elsewhere or to whatever town would have them, and nobody came to take their place. What is left is walls, and the road in will be gone within a generation.\n\nIt is not [gen_ruin_lost_holder.GetHerHis] any more, and it is not yours."
 
  # ---- 9000, the debug console ----
  #
@@ -40,7 +79,10 @@
 
  gen_ruins.9000.desc_already_ruined:0 "Target: #V [gen_ruin_target.GetName]#!\n#EMP Ruins are already standing here.#! It cannot fall again, but it can be cleared — build #V ruins_cleared#! in the holding view and the discovery event fires when it completes. Use #V Take the stones back off#! to reset it for another run.\n"
 
- gen_ruins.9000.desc_vetoed:0 "Target: #V [gen_ruin_target.GetName]#!\n#X The vetoes refuse this county.#! The yearly pulse will never ruin it however high the counter goes — it is somebody's capital, or their only county, or a de jure capital, or it carries a special building or a holy site. #V Collapse it now#! bypasses this on purpose.\n"
+ gen_ruins.9000.desc_vetoed:0 "Target: #V [gen_ruin_target.GetName]#!\n#X The vetoes refuse this county.#! The yearly pulse will never ruin it however high the count goes — it is somebody's capital, or their only county, or a de jure capital, or it carries a special building or a holy site. This one does not lapse. #V Collapse it now#! bypasses it on purpose.\n"
+ gen_ruins.9000.desc_waiting:0 "Target: #V [gen_ruin_target.GetName]#!\n#X Not this year.#! Nothing structural protects this county, but it cannot fall yet: somebody else's army is holding it, or it has been besieged, occupied or looted too recently. Every act of violence restarts that clock. It becomes eligible once the fighting has been over for a few years and it is #EMP still#! failing — a ruin is the aftermath, not the battle. The warning letter is still sent meanwhile.\n"
+
+ gen_ruins.9000.desc_reprieved:0 "Target: #V [gen_ruin_target.GetName]#!\n#P Somebody has paid for this county.#! It carries #V ruin_reprieve#!, bought at the last-chance event, and it cannot fall while that modifier is standing — nor will it be offered the choice again until it lapses. The counter was knocked back to the warning line when it was paid, so the earliest it can be here again is (collapse - warning) unbroken bad years. #V Forget this county#! strips the modifier as well.\n"
 
  gen_ruins.9000.desc_eligible:0 "Target: #V [gen_ruin_target.GetName]#!\n#P The vetoes allow this county to fall.#! Reaching the threshold is all that is left.\n"
 
@@ -49,16 +91,48 @@
  # only thing that catches it, as "unknown datafunction", and it did.
  gen_ruins.9000.desc_counter:0 "\nDecay: #V [gen_ruin_decay_now|0]#! — warning at #V [gen_ruin_warn_at|0]#!, collapse at #V [gen_ruin_fall_at|0]#!."
 
+ # ---- Which veto, by name ----
+ #
+ # desc_vetoed says only that something refuses the county, because it asks a trigger that ANDs six
+ # reasons into one boolean. These name the first clause that actually refuses. They read as
+ # instructions rather than descriptions on purpose: a tester looking at this wants to know what to
+ # change to get the county under test, and "move the capital" is that answer where "is_capital" is
+ # not.
+ # Two empty strings rather than one shared key. They render identically and always will, but they
+ # are read by chains that answer different questions — "nothing is refusing this county" against
+ # "there is no county" — and a single key would make a later edit to one of those messages silently
+ # change the other.
+ gen_ruins.9000.desc_blank:0 ""
+ gen_ruins.9000.desc_veto_none:0 ""
+ gen_ruins.9000.desc_veto_settled:0 "\n#X Veto: nothing is standing here.#! The county is wilderness or a colony, or nobody holds it at all — so there is nothing to lose and no one to lose it. Ruination only takes settled, held ground."
+ gen_ruins.9000.desc_veto_capital:0 "\n#X Veto: this is its holder's seat.#! A ruler whose capital falls is not a ruler afterwards. Move their capital elsewhere and this county becomes eligible."
+ gen_ruins.9000.desc_veto_only_county:0 "\n#X Veto: it is its holder's only county.#! Losing it would unland them, and any realm beneath them would come apart with no war to explain it. Give the holder a second county and this one becomes eligible."
+ gen_ruins.9000.desc_veto_dejure:0 "\n#X Veto: it is the de jure capital of a duchy, kingdom or empire.#! A title whose capital county is held by nobody can never be created again, so ruining this would delete a title from the game permanently. Nothing lifts this one."
+ gen_ruins.9000.desc_veto_special:0 "\n#X Veto: a special building or an empty special slot stands on the capital barony.#! A collapse keeps that barony but turns it to wilderness, and the slot would then be unbuildable forever. Usually a world centre's wonder."
+ gen_ruins.9000.desc_veto_holysite:0 "\n#X Veto: it is a holy site.#! The faith would lose the site for good, and generated faiths are given only three to five."
+ gen_ruins.9000.desc_veto_unknown:0 "\n#X Veto: something refuses this county, and this readout cannot say what.#! The per-clause triggers restate #V gen_ruin_can_fall_trigger#! rather than composing it, so a clause added there and not to them lands here. See the note at the foot of #V 00_ruins_triggers.txt#!."
+
+ # ---- The tally ----
+ #
+ # Every counter here is written only inside `debug_only`, so there is nothing to show without
+ # -debug_mode and the branch above says so rather than printing zeroes that look like measurements.
+ #
+ # The cause counts are YEARS in the current unbroken streak in which each arm was true, so they
+ # sum to at least the decay count and usually to more: a county can be occupied, hated and
+ # emptying in the same year, and it is one bad year for three reasons.
+ gen_ruins.9000.desc_no_telemetry:0 "\n\n#EMP No telemetry.#! The per-cause tally is only kept when the game is running with #V -debug_mode#!, because keeping it means writing variables and this mechanic is not allowed to behave differently in an ordinary game. Relaunch with the flag and the counters start on the next tick."
+ gen_ruins.9000.desc_telemetry:0 "\n\n#EMP Why it is failing#! — counted since #V [gen_ruin_tel_streak|0]#!, in years:\nContested: #V [gen_ruin_tel_contested|0]#!  ·  No control: #V [gen_ruin_tel_control|0]#!  ·  Hated: #V [gen_ruin_tel_opinion|0]#!  ·  Plague: #V [gen_ruin_tel_plague|0]#!  ·  Emptying: #V [gen_ruin_tel_devdrop|0]#!\nViolence done to it — occupied #V [gen_ruin_tel_occupied|0]#!, besieged #V [gen_ruin_tel_siege|0]#!, looted #V [gen_ruin_tel_looted|0]#! times.\nRight now: control #V [gen_ruin_tel_ctl|0]#!, opinion #V [gen_ruin_tel_op|0]#!, development #V [gen_ruin_tel_dev|0]#!.\nThe same figures go to #V debug.log#! every year as #V RUINLOG#! lines; run them through #V --ruinlog#! for the whole world at once."
+
  gen_ruins.9000.a_read:0 "Just looking. Close."
 
  gen_ruins.9000.b_warn:0 "Set the counter to the warning point"
  gen_ruins.9000.b_warn_tt:0 "Sets decay to the warning value and puts the county on the watchlist. The letter is sent by the next yearly tick — press #V Run a year's tick now#! to see it immediately."
 
  gen_ruins.9000.c_doom:0 "Set the counter to the collapse threshold"
- gen_ruins.9000.c_doom_tt:0 "Sets decay to the threshold. The next yearly tick collapses the county — IF the vetoes allow it. On a vetoed county nothing will happen, which is the intended way to test that they hold."
+ gen_ruins.9000.c_doom_tt:0 "Sets the count to the threshold. The next yearly tick collapses the county — IF it is still suffering that year AND the vetoes allow it. #X On a healthy county the tick resets the count to zero instead and nothing happens#!, because the count measures unbroken bad years and a good year wipes it. That is not a bug in the button; use #V Collapse it now#! to see a fall on a county that is doing fine."
 
  gen_ruins.9000.d_tick:0 "Run a year's tick now"
- gen_ruins.9000.d_tick_tt:0 "Runs exactly the evaluation the yearly pulse runs, on this county only: score the year, move the counter, send the warning or collapse if either line is crossed, then record this year's development for next year to compare against."
+ gen_ruins.9000.d_tick_tt:0 "Runs exactly the evaluation the yearly pulse runs, on this county only: score the year, add one if it was a bad one or #V reset the count to zero if it was not#!, send the warning or collapse if either line is crossed, then record this year's development for next year to compare against."
 
  gen_ruins.9000.e_fall:0 "Collapse it now"
  gen_ruins.9000.e_fall_tt:0 "Calls the collapse directly, BYPASSING the vetoes. The county is stripped, wiped to zero development, seeded with obstacles, given ruins, and handed to the ruins holder."
@@ -71,6 +145,9 @@
 
  gen_ruins.9000.g_clear:0 "Take the stones back off"
  gen_ruins.9000.g_clear_tt:0 "Removes whichever rung is standing and does NOT fire the discovery event, so this county can be used for another run. The only place in the mod that removes a ruin any way other than finishing #V ruins_cleared#!."
+
+ gen_ruins.9000.m_offer:0 "Open the last-chance offer now"
+ gen_ruins.9000.m_offer_tt:0 "Fires #V gen_ruins.0005#! on this county without waiting for the counter, so the three prices and the escalation can be read at any time. #X This is not a preview#! — declining there calls the real collapse, and paying there really spends the gold, prestige or piety and applies the reprieve."
 
  gen_ruins.9000.h_reset:0 "Forget this county"
  gen_ruins.9000.h_reset_tt:0 "Clears the decay counter, the warning flag and the remembered development, and takes the county off the watchlist. What recovery looks like."
@@ -90,3 +167,72 @@
 
  gen_ruins.9000.l_capital:0 "Aim back at my capital"
  gen_ruins.9000.l_capital_tt:0 "Reopens this console on your capital county, where it opens by default."
+
+ # ---- 9010, mass ruin ----
+ gen_ruins.9010.t:0 "DEBUG — Ruin Everything"
+ gen_ruins.9010.desc_open:0 "Collapses whole realms at once, through the same path the yearly pulse uses: every county stripped, wiped to zero development, seeded with obstacles, given ruins, and handed to the ruins holder. The vetoes are bypassed.\n\n"
+ gen_ruins.9010.desc_no_dummy:0 "#X No ruins holder on this map.#! There is nobody to hand the counties to, so nothing here can run."
+ gen_ruins.9010.desc_nothing:0 "#X Nothing to ruin.#! You hold no county that is not already ruined, and neither does anyone below you."
+ gen_ruins.9010.desc_counts:0 "Your domain: #V [gen_ruin_domain_n|0]#! counties. Your whole realm, vassals included: #V [gen_ruin_realm_n|0]#!.\n\n#EMP Sparing capitals#! leaves every ruler landed and the realm in one piece. The all-in options do not: a vassal with no county drops out of the realm, and if you lose your last county with no titular title above it, that is the end of the game."
+
+ gen_ruins.9010.a_cancel:0 "On second thought, no."
+
+ gen_ruins.9010.b_domain_spare:0 "Ruin my domain, but keep my capital"
+ gen_ruins.9010.b_domain_spare_tt:0 "Collapses every county you hold directly except your capital. You stay landed; nothing happens to your vassals."
+
+ gen_ruins.9010.c_domain_all:0 "Ruin my whole domain, capital included"
+ gen_ruins.9010.c_domain_all_tt:0 "Collapses every county you hold directly, capital included. #X You will be landless afterwards#! — if you hold no titular title above the counties, this is a game over."
+
+ gen_ruins.9010.d_realm_spare:0 "Ruin the whole realm, but keep every capital"
+ gen_ruins.9010.d_realm_spare_tt:0 "Collapses every county held by you and by everyone below you — vassals, their vassals, all the way down — except each ruler's capital. Every ruler stays landed and the realm keeps its shape."
+
+ gen_ruins.9010.e_realm_all:0 "Ruin the whole realm, everything"
+ gen_ruins.9010.e_realm_all_tt:0 "Collapses every county in the realm, capitals included. #X Every vassal ends up landless and drops out of the realm, and so do you#! — if you hold no titular title above the counties, this is a game over."
+
+ # ---- The RUINLOG lines --------------------------------------------------------------------------
+ #
+ # These are not prose and are not shown to anybody. They are the strings `debug_log` writes into
+ # debug.log, parsed offline by `--ruinlog` (see Program.cs). They live in a .yml because that is the
+ # only place a CK3 log line can hold a number: `debug_log = "..."` prints a quoted string literally
+ # and interpolates nothing, while `debug_log = <bare key>` resolves the key as localisation and so
+ # runs its datafunctions. Every value below is a SCOPE VALUE saved by gen_ruin_debug_payload_effect
+ # a line earlier — a .yml can read neither a script value nor a variable.
+ #
+ # ---- Rules for editing these ----
+ #
+ # Semicolons separate fields and `key=value` is the field. The county NAME is last in every line
+ # because it is the one field that can contain arbitrary text: a generated name with a semicolon in
+ # it then corrupts nothing, since the parser has already taken every number to its left.
+ #
+ # Keep the field list identical across the four kinds. The parser reads them by name and does not
+ # care about order, but a field present in `fall` and missing from `reset` cannot be compared
+ # between them, and comparing them is the entire purpose — `fall` is what the threshold caught and
+ # `reset` is what it nearly caught, and a tuning pass that reads only the first is reading the
+ # survivors of a filter and calling it a distribution.
+ #
+ # `probe` is deliberately different: constants only, written once at game start. If its year field
+ # does not read 1234, datafunctions are not resolving here and every number in every other line is
+ # fiction. See gen_ruin_debug_probe_effect.
+ # ---- Everything hangs off THIS or off a global. Nothing here may name a saved scope ----
+ #
+ # The first version of these lines was built from `save_temporary_scope_value_as` names and every
+ # single field printed `ERROR:[ruin_log_year|` in game. `debug_log` runs the datafunctions — vanilla's
+ # own `create_noble_family_title` interpolates `[THIS.GetCharacter.GetNameNoTooltip]` and works — but
+ # it does not resolve against the scope chain the calling effect saved into. Saved scopes are simply
+ # not visible from here, the saved county scope included.
+ #
+ # So numbers come off THIS as variables and the two non-variables come off THIS and off the global
+ # clock. All four forms below are in the game's own dump at logs/data_types/:
+ # `Scope.Var( Arg0 )`, `Scope.GetValue`, `Title.GetNameNoTooltip`, `GetCurrentDate` + `Date.GetYear`.
+ #
+ # `GetValue` takes the `|0` format spec; `GetYear` is already an integer and must not be given one.
+ #
+ # A variable named here that does not exist on the county prints `ERROR:` for that field alone and
+ # nothing else complains — so every one of them is guaranteed present by gen_ruin_debug_init_effect
+ # or by gen_ruin_debug_payload_effect before the line is written. Adding a field means adding it
+ # there first.
+ gen_ruin_log_probe:0 "RUINLOG;probe;y=[GetCurrentDate.GetYear];probe=[THIS.Var('ruin_dbg_probe').GetValue|0];county=[THIS.Title.GetNameNoTooltip]"
+ gen_ruin_log_year:0 "RUINLOG;year;y=[GetCurrentDate.GetYear];decay=[THIS.Var('ruin_dbg_decay').GetValue|0];since=[THIS.Var('ruin_dbg_since').GetValue|0];ctl=[THIS.Var('ruin_dbg_ctl').GetValue|0];op=[THIS.Var('ruin_dbg_op').GetValue|0];dev=[THIS.Var('ruin_dbg_dev').GetValue|0];c_contested=[THIS.Var('ruin_c_contested').GetValue|0];c_control=[THIS.Var('ruin_c_control').GetValue|0];c_opinion=[THIS.Var('ruin_c_opinion').GetValue|0];c_plague=[THIS.Var('ruin_c_plague').GetValue|0];c_devdrop=[THIS.Var('ruin_c_devdrop').GetValue|0];s_occupied=[THIS.Var('ruin_s_occupied').GetValue|0];s_siege=[THIS.Var('ruin_s_siege').GetValue|0];s_looted=[THIS.Var('ruin_s_looted').GetValue|0];county=[THIS.Title.GetNameNoTooltip]"
+ gen_ruin_log_warn:0 "RUINLOG;warn;y=[GetCurrentDate.GetYear];decay=[THIS.Var('ruin_dbg_decay').GetValue|0];since=[THIS.Var('ruin_dbg_since').GetValue|0];ctl=[THIS.Var('ruin_dbg_ctl').GetValue|0];op=[THIS.Var('ruin_dbg_op').GetValue|0];dev=[THIS.Var('ruin_dbg_dev').GetValue|0];c_contested=[THIS.Var('ruin_c_contested').GetValue|0];c_control=[THIS.Var('ruin_c_control').GetValue|0];c_opinion=[THIS.Var('ruin_c_opinion').GetValue|0];c_plague=[THIS.Var('ruin_c_plague').GetValue|0];c_devdrop=[THIS.Var('ruin_c_devdrop').GetValue|0];s_occupied=[THIS.Var('ruin_s_occupied').GetValue|0];s_siege=[THIS.Var('ruin_s_siege').GetValue|0];s_looted=[THIS.Var('ruin_s_looted').GetValue|0];county=[THIS.Title.GetNameNoTooltip]"
+ gen_ruin_log_reset:0 "RUINLOG;reset;y=[GetCurrentDate.GetYear];decay=[THIS.Var('ruin_dbg_decay').GetValue|0];since=[THIS.Var('ruin_dbg_since').GetValue|0];ctl=[THIS.Var('ruin_dbg_ctl').GetValue|0];op=[THIS.Var('ruin_dbg_op').GetValue|0];dev=[THIS.Var('ruin_dbg_dev').GetValue|0];c_contested=[THIS.Var('ruin_c_contested').GetValue|0];c_control=[THIS.Var('ruin_c_control').GetValue|0];c_opinion=[THIS.Var('ruin_c_opinion').GetValue|0];c_plague=[THIS.Var('ruin_c_plague').GetValue|0];c_devdrop=[THIS.Var('ruin_c_devdrop').GetValue|0];s_occupied=[THIS.Var('ruin_s_occupied').GetValue|0];s_siege=[THIS.Var('ruin_s_siege').GetValue|0];s_looted=[THIS.Var('ruin_s_looted').GetValue|0];county=[THIS.Title.GetNameNoTooltip]"
+ gen_ruin_log_fall:0 "RUINLOG;fall;y=[GetCurrentDate.GetYear];decay=[THIS.Var('ruin_dbg_decay').GetValue|0];since=[THIS.Var('ruin_dbg_since').GetValue|0];ctl=[THIS.Var('ruin_dbg_ctl').GetValue|0];op=[THIS.Var('ruin_dbg_op').GetValue|0];dev=[THIS.Var('ruin_dbg_dev').GetValue|0];c_contested=[THIS.Var('ruin_c_contested').GetValue|0];c_control=[THIS.Var('ruin_c_control').GetValue|0];c_opinion=[THIS.Var('ruin_c_opinion').GetValue|0];c_plague=[THIS.Var('ruin_c_plague').GetValue|0];c_devdrop=[THIS.Var('ruin_c_devdrop').GetValue|0];s_occupied=[THIS.Var('ruin_s_occupied').GetValue|0];s_siege=[THIS.Var('ruin_s_siege').GetValue|0];s_looted=[THIS.Var('ruin_s_looted').GetValue|0];county=[THIS.Title.GetNameNoTooltip]"

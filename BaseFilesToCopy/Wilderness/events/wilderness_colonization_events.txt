@@ -1906,11 +1906,56 @@ wilderness_colonization.0001 = {
 		# Three times the price in hand, not merely the price. A ruler who would be broke the
 		# moment the claim went through cannot carry a colony through its first winter, and a
 		# colony that fails is worse than one never founded.
-		gold > { value = colonize_cost  multiply = 3 }
 		prestige >= colonize_prestige_cost
 
-		# Enough income to absorb the upkeep settlement_01 starts charging on the day it appears.
-		monthly_character_income > 4
+		# ---- Two prices, because there are two different jobs ----
+		#
+		# The strict branch is the original gate and is what breaking new ground costs: three times
+		# the price in hand and enough income to absorb the upkeep settlement_01 charges from the day
+		# it appears. A ruler who would be broke the moment the claim went through cannot carry a
+		# colony through its first winter.
+		#
+		# The loose branch is for going back to somewhere that was already a place. It is the same
+		# argument the settling bonus in colony_settling_chance makes, applied to the price instead
+		# of to the odds: the road in still runs, the wells are dug, the fields were cleared once and
+		# the stone is stacked on site. Half again rather than three times, and an income bar low
+		# enough that an ordinary count qualifies.
+		#
+		# ---- Why this needed a second branch at all ----
+		#
+		# Measured over 122 years of one world: 42 counties ruined and about 6 colonies founded in
+		# the whole span. Ruins were accumulating roughly seven times faster than anything reclaimed
+		# them, and the gap was not in the odds or in the targeting — it was here. In a tribal world
+		# `monthly_character_income > 4` excludes most of the map's rulers outright, so the counties
+		# best placed to take a ruin back, its neighbours, were the ones least able to qualify.
+		#
+		# Deliberately NOT a blanket loosening of the strict branch. The frontier fills at a rate
+		# that is tuned and wanted; what was missing was a way back for ground already lost, and this
+		# opens only that. Paired with the ruins preference in wilderness_pick_adjacent_effect, a
+		# ruler who qualifies this way will actually go to the ruin rather than past it.
+		OR = {
+			AND = {
+				gold > { value = colonize_cost  multiply = 3 }
+				monthly_character_income > 4
+			}
+
+			AND = {
+				gold > { value = colonize_cost  multiply = 1.5 }
+				monthly_character_income > 2
+
+				any_sub_realm_county = {
+					any_title_to_title_neighboring_and_across_water_county = {
+						county_can_be_claimed_trigger = yes
+						title_province ?= {
+							OR = {
+								has_building = ruins_large
+								has_building = ruins_small
+							}
+						}
+					}
+				}
+			}
+		}
 
 		# Not while fighting. Settlers and soldiers come out of the same villages, and an AI that
 		# colonises mid-war is one that does it while its army is dying somewhere else.
@@ -2757,7 +2802,11 @@ wilderness_colonization.0062 = {
 		# --- Debug Toast (Fires only in Debug Mode) ---
 		if = {
 			limit = { debug_only = yes }
-			debug_log = "Colony in [colony.GetNameNoTier] collapsed from 0 control (Military Defeat)"
+			# `NoTooltip`, or the log fills with the interface markup a tooltip needs and the county
+			# name is buried in it: `Colony in ONCLICK:TITLE,2692 TOOLTIP:LANDED_TITLE,2692 L; Luwe!!!
+			# collapsed...`. Nothing reads a debug line's tooltip, and the markup makes the line
+			# unparseable as well as unreadable.
+			debug_log = "Colony in [colony.GetNameNoTierNoTooltip] collapsed from 0 control (Military Defeat)"
 			every_player = {
 				send_interface_toast = {
 					type = event_toast_effect_bad
@@ -2855,7 +2904,8 @@ wilderness_colonization.0064 = {
 		# --- Debug Toast (Fires only in Debug Mode) ---
 		if = {
 			limit = { debug_only = yes }
-			debug_log = "Colony in [colony.GetNameNoTier] collapsed from 0 control (Voluntary Abandonment)"
+			# NoTooltip — see the note on the Military Defeat line above.
+			debug_log = "Colony in [colony.GetNameNoTierNoTooltip] collapsed from 0 control (Voluntary Abandonment)"
 			every_player = {
 				send_interface_toast = {
 					type = event_toast_effect_bad

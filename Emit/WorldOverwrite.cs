@@ -76,7 +76,11 @@ public static class WorldOverwrite
     /// <summary>The files each aspect owns, for the log.</summary>
     public static IEnumerable<string> FilesFor(WorldAspect aspects)
     {
-        if (aspects.HasFlag(WorldAspect.TitleNames)) yield return "gen_titles_l_english.yml";
+        if (aspects.HasFlag(WorldAspect.TitleNames))
+        {
+            yield return "gen_titles_l_english.yml";
+            yield return "gen_hegemony_l_english.yml";
+        }
         if (aspects.HasFlag(WorldAspect.TitleColors)) yield return "00_landed_titles.txt";
 
         if (aspects.HasFlag(WorldAspect.Cultures))
@@ -167,7 +171,8 @@ public static class WorldOverwrite
             // hierarchy itself, and there is no meaningful way to rewrite one colour inside it
             // without reproducing the writer.
             ContentWriter.WriteLandedTitles(modDir, result.Titles, written.Faiths,
-                written.Wilderness);
+                written.Wilderness,
+                written.Realms is { } crowned ? ContentWriter.HegemonSeat(result.Titles, crowned) : null);
 
         if (aspects.HasFlag(WorldAspect.Cultures))
         {

@@ -133,6 +133,111 @@ wilderness_pick_adjacent_effect = {
 		order_by = {
 			value = 0
 
+			# ---- Ground somebody has already cleared once ----
+			#
+			# Resettling a ruin is a different and easier proposition than breaking new ground: the
+			# fields are cleared, the road in still runs, the stone is stacked on site, and
+			# somebody's grandparents farmed it. That is the same reasoning the settling bonus in
+			# colony_settling_chance is built on, applied to where the AI looks rather than to
+			# whether it succeeds.
+			#
+			# It is also what makes ruination survivable as a system rather than a ratchet. Measured
+			# over 122 years of one world: 42 counties ruined and about 6 colonies founded in the
+			# same span, with the ruin count rising the whole time and nothing aiming the colonisation
+			# flow at it. The flow was working; it was simply pointed at the frontier, because the
+			# frontier was the only thing this list knew how to prefer. Nothing here changes how
+			# OFTEN anybody colonises — only where they go when they do.
+			#
+			# ---- On the size of these numbers ----
+			#
+			# The de jure terms below are worth far more than they look, because every one of them is
+			# inside an `every_neighboring_county` and therefore scores ONCE PER NEIGHBOUR. A
+			# wilderness county with three neighbours held by root in the same duchy is already on
+			# 3 x 18 = 54, and can reach about 90 with the kingdom and empire terms on top.
+			#
+			# So +40 is not an override — it is worth a little over two well-integrated neighbours. A
+			# ruin in an awkward corner still loses to wilderness sitting in the middle of the realm,
+			# which is right: a ruler should not walk past the obvious land to rebuild a place three
+			# valleys away. The "theirs" bonuses below are what let a ruin beat that ceiling, and only
+			# when it is genuinely their own ground.
+			#
+			# Asks the BUILDING and not the holder, for the same reason gen_county_has_ruins_trigger
+			# does: the ruin is the thing on the ground. `ruins_cleared` is not in the list — that
+			# rung means somebody is already at work here, and a second claimant is not wanted.
+			title_province ?= {
+				if = { limit = { has_building = ruins_large } add = 40 }
+				if = { limit = { has_building = ruins_small } add = 40 }
+			}
+
+			# ---- And a bonus when the ruin is THEIRS ----
+			#
+			# Three different senses of "theirs", scored separately and stacking, because they are
+			# genuinely different claims and a county can be any combination of them.
+			#
+			# All three are guarded and all three are silent on a map without the Ruins set: two read
+			# variables that only gen_ruin_county_effect ever writes, and a county with no such
+			# variable simply scores nothing. The same is true of a ruin SEEDED at generation — it
+			# never had a holder, a culture or a house, and nobody alive remembers it. That is the
+			# right answer rather than a limitation: an ancient ruin is nobody's, and the ones worth
+			# going back for are the ones that fell within living memory.
+			#
+			# Why this matters more for legibility than for throughput: the list this scores was
+			# built from counties ADJACENT to the realm, so everything in it is already near home.
+			# What these change is which of several near-home options a ruler picks, and the effect
+			# is that realms visibly rebuild their own heartlands instead of wandering. The rate of
+			# reclamation is set by the pulse in wilderness_colonization.0001, not here.
+
+			# Ground their own title still claims. The strongest institutional version of "ours", and
+			# the only one of the three that needs no stored memory at all — de jure structure says
+			# it. `any_this_title_or_de_jure_above` includes the county itself, whose holder is the
+			# ruins dummy, so that arm is simply never true and costs nothing.
+			if = {
+				limit = {
+					any_this_title_or_de_jure_above = { holder ?= root }
+				}
+				add = 25
+			}
+
+			# ---- `?=` DOES NOT GUARD `var:`. The has_variable branch is not optional ----
+			#
+			# These two were written as a bare `var:ruin_former_culture ?= { ... }`, copying the shape
+			# `wilderness_ruins.0001` uses. It is wrong, and the log says so 832 times in one run:
+			#
+			#   Failed to fetch variable for 'ruin_former_culture' due to not being set
+			#   Event target link 'var' returned an unset scope
+			#
+			# `?=` suppresses the failure of the SCOPE SWITCH, not the variable fetch that feeds it.
+			# The fetch happens first and throws on its own, so `?=` only stops the second error of
+			# the two and never the first. Every county in the list that is not a ruin — which is
+			# almost all of them, every time the AI pulse runs — threw a pair of these.
+			#
+			# The bug is worse than noise: it meant both bonuses were dead for the whole run, so a
+			# feature added to make realms rebuild their own ground was never once applied.
+			#
+			# The outer `if` is real short-circuiting, unlike putting `has_variable` beside the
+			# comparison in one `limit`. A compound trigger has no guaranteed evaluation order and
+			# would throw exactly the same way; control flow evaluates the limit, and only then the
+			# body. Same reasoning as the guard order note in gen_ruin_can_fall_trigger.
+
+			# Their own people farmed it. Weaker as a claim, stronger as a motive — and it reaches
+			# rulers who hold no de jure title above the county at all, which is most counts.
+			if = {
+				limit = { has_variable = ruin_former_culture }
+				var:ruin_former_culture ?= {
+					if = { limit = { this = root.culture } add = 20 }
+				}
+			}
+
+			# Their own house lost it. The narrowest of the three and the one that should win when it
+			# fires: a ruler going back to a county their family let fall is the best story this
+			# system has, and stacked with the other two it beats any wilderness county on the map.
+			if = {
+				limit = { has_variable = ruin_former_house }
+				var:ruin_former_house ?= {
+					if = { limit = { this = root.house } add = 30 }
+				}
+			}
+
 			every_neighboring_county = {
 				limit = { holder = root }
 				add = 2
@@ -973,6 +1078,23 @@ abandon_county_effect = {
 		if = { limit = { has_variable = settlers_were_promised } remove_variable = settlers_were_promised }
 		if = { limit = { has_variable = colony_just_founded }    remove_variable = colony_just_founded }
 
+		# And any claim anybody holds on it. A claim outlives the county it was made on: it is
+		# created while the ground is real and somebody's, and it is still there when the ground
+		# stops being anybody's — at which point it is a claim against a dummy, and the claim CB has
+		# an entirely legitimate reason to start a war the wilderness cannot fight.
+		#
+		# Stripped here rather than only in the yearly sweep so the claim never exists against a
+		# dummy at all, not even for the rest of the year. `prev` inside `every_claimant` is the
+		# title, which is the shape vanilla uses in 00_claim.txt's own claim-losing block.
+		#
+		# Nothing is being taken from the claimant that survives the transaction: the county they
+		# had a claim on is about to stop existing as a holding. If it is ever colonised again it is
+		# new land with a new holder, and a claim inherited across that gap is what produced the
+		# war this removes.
+		every_claimant = {
+			remove_claim = prev
+		}
+
 		if = {
 			limit = { exists = scope:wilderness_holder }
 
@@ -980,6 +1102,12 @@ abandon_county_effect = {
 				create_title_and_vassal_change = {
 					type = revoked
 					save_scope_as = change
+
+					# The dispossessed holder must not walk away with a claim on the wilderness —
+					# that is the same war by another door. Stated rather than left to the default,
+					# because the default is not documented and vanilla writes this field explicitly
+					# on both sides of the argument.
+					add_claim_on_loss = no
 				}
 				change_title_holder = {
 					holder = scope:wilderness_holder
@@ -996,6 +1124,16 @@ abandon_county_effect = {
 				}
 				every_county_province = {
 					limit = { has_holding = yes  is_county_capital = yes }
+
+					# Clear the slots first. set_holding_type keeps whatever was built, and a
+					# developed county arrives here with every slot full — every add_building
+					# below then fails with "No building slots available", and a ruined county
+					# can reach the ruins realm with no ruin standing on it. The effect is
+					# generated from the installed game's building list (Emit/BuildingStripWriter)
+					# and leaves wonders, the holding's own level building and the obstacle
+					# family alone.
+					gen_strip_buildings_effect = yes
+
 					if = {
 						limit = { NOT = { has_holding_type = wilderness_holding } }
 						set_holding_type = wilderness_holding

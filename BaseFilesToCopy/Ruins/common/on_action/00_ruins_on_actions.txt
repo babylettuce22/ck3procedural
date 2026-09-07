@@ -40,7 +40,7 @@ on_county_occupied = {
 
 gen_ruins_county_occupied = {
 	effect = {
-		gen_ruin_shock_effect = { COUNTY = scope:county  POINTS = gen_ruin_shock_occupied }
+		gen_ruin_shock_effect = { COUNTY = scope:county  POINTS = gen_ruin_shock_occupied  TALLY = ruin_s_occupied }
 	}
 }
 
@@ -53,7 +53,7 @@ on_siege_completion = {
 
 gen_ruins_siege_done = {
 	effect = {
-		gen_ruin_shock_effect = { COUNTY = scope:county  POINTS = gen_ruin_shock_siege }
+		gen_ruin_shock_effect = { COUNTY = scope:county  POINTS = gen_ruin_shock_siege  TALLY = ruin_s_siege }
 	}
 }
 
@@ -68,7 +68,7 @@ on_siege_looting = {
 
 gen_ruins_siege_looted = {
 	effect = {
-		gen_ruin_shock_effect = { COUNTY = scope:county  POINTS = gen_ruin_shock_looted }
+		gen_ruin_shock_effect = { COUNTY = scope:county  POINTS = gen_ruin_shock_looted  TALLY = ruin_s_looted }
 	}
 }
 

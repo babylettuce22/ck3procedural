@@ -189,6 +189,7 @@ public sealed class RulerMap
 
             int gold = primaryTitle.Tier switch
             {
+                "h" => rng.Int(1200, 1600),
                 "e" => rng.Int(850, 1200),
                 "k" => rng.Int(480, 700),
                 "d" => rng.Int(150, 210),
@@ -207,6 +208,8 @@ public sealed class RulerMap
             // bottom of it stays modest.
             int prestige = primaryTitle.Tier switch
             {
+                // Above the third threshold (5000): the one ruler the whole map defers to.
+                "h" => rng.Int(5200, 6500),
                 "e" => rng.Int(3400, 4600),
                 "k" => rng.Int(2000, 2700),
                 "d" => rng.Int(350, 600),
@@ -214,6 +217,7 @@ public sealed class RulerMap
             };
             int renown = primaryTitle.Tier switch
             {
+                "h" => rng.Int(7000, 10000),
                 "e" => rng.Int(4000, 7000),
                 "k" => rng.Int(2000, 4000),
                 "d" => rng.Int(900, 1600),

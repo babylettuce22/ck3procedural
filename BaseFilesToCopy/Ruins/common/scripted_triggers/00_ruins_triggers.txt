@@ -61,7 +61,90 @@ gen_ruin_can_fall_trigger = {
 
 	# Somebody's sacred ground. A faith whose holy site falls into the wilderness loses the site for
 	# good, and generated faiths are given between three and five — losing one is a real hole.
-	is_holy_site = no
+	#
+	# ---- This was `is_holy_site = no` and it never worked ----
+	#
+	# `is_holy_site` is a BARONY trigger. Asked of a county it does not answer false, it throws:
+	#
+	#   is_holy_site trigger [ Title of invalid tier, only baronies are allowed for holy site
+	#   script but title is 'county' ]
+	#
+	# 174 times in one measured run — 87 from here and the rest from the two places
+	# gen_ruin_can_fall_trigger is called in the tick. So for as long as this clause has existed the
+	# veto it was supposed to impose has not existed, and a generated faith could lose a holy site to
+	# ruination with nothing in the game saying so. ck3-tiger reports none of it, which is the point
+	# of reading error.log after a load rather than trusting a clean validation.
+	#
+	# `any_in_de_jure_hierarchy` with a barony tier filter asks every barony in the county, not only
+	# the capital. That breadth is needed and is not the same choice made for the special-building
+	# clause above: a wonder is written onto the capital barony by ContentWriter and can only be
+	# there, whereas a holy site can sit on any barony in the county — and `abandon_county_effect`
+	# strips every non-capital holding on its way through, so a site on one of those is just as gone.
+	#
+	# `barony = { is_holy_site = ... }` is vanilla's own shape for reaching the trigger from outside
+	# a barony scope (bp3_mapmaking.txt); this reaches the barony titles directly instead, which
+	# needs no province hop.
+	NOT = {
+		any_in_de_jure_hierarchy = {
+			tier = tier_barony
+			is_holy_site = yes
+		}
+	}
+}
+
+# County (title) scope. May this county fall RIGHT NOW? Nothing here says a county is safe forever —
+# every clause lapses on its own — which is exactly why it is not part of the trigger above.
+#
+# ---- Why this is a second trigger and not four more lines in the first one ----
+#
+# The two are different kinds of statement and only one of them may gate the warning letter.
+# gen_ruin_can_fall_trigger answers "could this county ever fall", and a county it refuses must
+# never be warned, because the warning would be a lie. This one answers "is this the moment", and a
+# county it refuses may well fall in five years — so it must NOT suppress the warning, or the
+# invariant that nothing vanishes unannounced quietly dies.
+#
+# Concretely, with both in one trigger: a county besieged every year for a decade keeps its count
+# climbing past the warning line and past the threshold, but is vetoed throughout and so is never
+# warned. The wars end, the veto lapses, and the next tick collapses it with no letter ever sent.
+# That is the exact failure the two-number ladder exists to prevent. See 00_ruins_values.txt.
+gen_ruin_timing_allows_fall_trigger = {
+	# ---- Not while somebody else's army is standing on it ----
+	#
+	# A county's count peaks while it is being fought over, so without this the collapse lands at
+	# the worst possible moment: the war undecided and the ground pulled out from under both sides.
+	#
+	# `county_controller` is unset on a county nobody has taken, so the comparison is guarded rather
+	# than written bare — unguarded it would be a failed context switch across most of the map.
+	trigger_if = {
+		limit = { exists = county_controller }
+		county_controller = holder
+	}
+
+	# ---- And the fighting has been over for a while ----
+	#
+	# gen_ruin_shock_effect stamps this timed variable on every siege, occupation and looting, so
+	# any violence at all restarts the clock. The county becomes eligible only once it has been left
+	# alone for gen_ruin_shock_immunity_years and is STILL failing; one fought over for a decade
+	# simply waits.
+	#
+	# This is what makes the counter mean what it claims. Losing a war costs the war. Only a county
+	# nobody rebuilds afterwards is lost for good.
+	NOT = { has_variable = ruin_recent_shock }
+
+	# ---- And nobody has just paid to keep it ----
+	#
+	# The `ruin_reprieve` modifier is what the holder bought at gen_ruins.0005, the last-chance event
+	# that now stands between the threshold and the fall. While it is up the county cannot be taken.
+	#
+	# It belongs in the TIMING trigger and not in the structural one for the same reason everything
+	# else here does: it lapses. A reprieved county is one that may still fall in three years, so it
+	# must keep being warned and must keep being counted — a reprieve that suppressed the letter
+	# would let a holder pay once and then never hear about the county again.
+	#
+	# Putting it here also does a second job for free. The tick asks this trigger before firing the
+	# last-chance event at all, so a county under reprieve is not asked to pay again next year: one
+	# payment buys the whole three years rather than an annual renewal notice.
+	NOT = { has_county_modifier = ruin_reprieve }
 }
 
 # =====================================================================================
@@ -77,44 +160,168 @@ gen_ruin_can_fall_trigger = {
 # Nothing here is a development threshold. See the note at the top of 00_ruins_values.txt.
 gen_ruin_is_suffering_trigger = {
 	OR = {
-		# Whoever claims it is not the one holding it. The clearest single statement in the game
-		# that a county's ruler does not control it.
-		AND = {
-			exists = county_controller
-			exists = holder
-			NOT = { county_controller = holder }
-		}
-
-		# Control gone. Not "low" — a county at 20 control is one nobody is administering.
-		county_control < 20
-
-		# The people in it want somebody else.
-		county_opinion < -40
-
-		# Plague. Reachable only with the relevant content installed; on a base-game install the list
-		# is simply empty and this arm contributes nothing rather than erroring.
-		any_county_province_epidemic = { count >= 1 }
-
-		# It is getting poorer. The one signal that means the same thing at every development level,
-		# and the reason the counter measures a trajectory rather than a floor. The variable is
-		# stamped each year by gen_ruin_tick_county_effect; on the first tick it does not exist yet
-		# and this arm is simply false.
-		AND = {
-			has_variable = ruin_last_dev
-			development_level < var:ruin_last_dev
-		}
+		gen_ruin_suffer_control_trigger = yes
+		gen_ruin_suffer_opinion_trigger = yes
+		gen_ruin_suffer_plague_trigger = yes
+		gen_ruin_suffer_devdrop_trigger = yes
 	}
 }
 
-# County (title) scope. Is this county having a good enough year to give points back faster?
-gen_ruin_is_recovering_trigger = {
-	county_control >= 50
+# ---- `gen_ruin_suffer_contested_trigger` is NOT in that list, as of the 122-year measurement ----
+#
+# It was, and it was war counted a third time. `on_county_occupied` already charges the county the
+# moment somebody takes it, `gen_ruin_timing_allows_fall_trigger` already refuses to let an occupied
+# county fall — and then this arm added a point for every further year of the same occupation.
+#
+# The telemetry priced it: it fired on **40.6% of all bad years** across 8,550 of them, 26% of them
+# on its own with nothing else true, and in 42 falls it was the dominant cause exactly once. So it
+# was manufacturing more than a quarter of the world's decay while explaining almost none of the
+# collapses — which is the signature of a clause that measures something real but not the thing the
+# mechanic is about. A county held by an enemy army is at war. It is not being neglected, and the
+# whole rewrite this file documents was to stop ruination meaning "was invaded once".
+#
+# It stays DEFINED and the tally still counts it, deliberately. It is now an observation rather than
+# a charge: the `c_contested` column in the RUINLOG keeps saying how much of a streak happened under
+# occupation, which is what makes it possible to see whether removing it was right without adding it
+# back to find out.
+gen_ruin_suffer_contested_trigger = {
+	exists = county_controller
+	exists = holder
+	NOT = { county_controller = holder }
+}
 
-	OR = {
-		NOT = { has_variable = ruin_last_dev }
-		development_level >= var:ruin_last_dev
+# =====================================================================================
+#  The five arms, one trigger each
+# =====================================================================================
+#
+# ---- Why these are named and not inlined above ----
+#
+# The tick has to be able to ask them SEPARATELY. `gen_ruin_is_suffering_trigger` answers one
+# boolean, so a county that gained a point this year gained it for a reason the mechanic has already
+# thrown away — and "why did this county ruin" is then a question no amount of later inspection can
+# answer, because the counter resets and gen_ruin_forget_county_effect deletes what is left.
+#
+# So the debug telemetry (gen_ruin_debug_tally_year_effect) walks these five one at a time and keeps
+# a per-cause count. The alternative was a second copy of the five conditions living in the debug
+# code, which would have been a second thing to keep in step with this file and would have gone
+# stale the first time a bar moved — the readout would then confidently report a cause the mechanic
+# no longer uses. Redefining the OR above in terms of these is what makes that impossible: there is
+# exactly one statement of each arm and both callers read it.
+#
+# Each is SELF-CONTAINED, guards included, and has to stay that way. That is what makes the split
+# safe: a trigger asked on its own must not depend on a sibling clause having been evaluated first.
+# The contested arm carries its own two `exists` lines for exactly this reason — the AND that used
+# to hold them is gone, and without them the arm would be a failed context switch when asked alone.
+
+# Control gone AND not coming back. Both halves are needed and the second one is new.
+#
+# ---- Why a floor alone was wrong, measured over 122 years ----
+#
+# `county_control < 10` on its own fired on **70.8% of every bad year in the world** and was the
+# dominant cause of **41 of 42** collapses. That looks like a mechanic working until you ask what
+# the other 29% were, and then it is obvious that this one clause WAS the mechanic.
+#
+# The reason is the same one the header of 00_ruins_values.txt gives for refusing a development
+# threshold, and it was missed here: a level says how well-administered a county is, and ruination
+# is about whether it is dying. In a 901 tribal world control is chronically low everywhere —
+# measured across bad years, the median was 3 and the distribution was bimodal, 71% of counties
+# under 10 and the rest above 34. A floor at 10 therefore did not separate failing counties from
+# healthy ones. It separated tribal from feudal, which is why **82% of every warning and collapse in
+# the world landed on a Chiefdom**.
+#
+# The second clause makes it a trajectory, exactly as `gen_ruin_suffer_devdrop_trigger` already is.
+# A county clawing up from 2 to 5 is being rebuilt by somebody and is not suffering, however low the
+# number still looks. A county pinned at 3 for a decade is not being rebuilt by anybody, and that —
+# not the height of the number — is the thing worth ruining a county over.
+#
+# It also gives the thing suppressing control a way to matter. Devastation, an epidemic and a
+# natural disaster all work by holding control down (`monthly_county_control_growth_add` and
+# `_factor` in vanilla's disaster modifiers), so a county under one of those cannot recover and
+# keeps scoring, while an ordinary poor county recovers a point a year and does not.
+#
+# ---- The slack is load-bearing, and leaving it out turned the mechanic off completely ----
+#
+# This clause was `county_control <= var:ruin_last_ctl` — control must not have risen AT ALL in the
+# year — and measured over the next 71 years that produced **zero collapses in the entire world**,
+# against 42 in the 122 years before it. Not a reduction: an off switch. Bad years across the whole
+# map fell from 8,550 to 124.
+#
+# The reason is that CK3 control regenerates continuously toward its cap. A county being actively
+# rebuilt gains several points a year, but even a neglected one usually gains a fraction, so
+# "has not risen by any amount" describes almost nothing. The clause was not asking whether the
+# county was recovering; it was asking whether the county was perfectly frozen, and essentially
+# nothing is.
+#
+# `+ 2` is the difference between "not recovering" and "not moving". A county clawing back three or
+# four points a year is being rebuilt and should score nothing; one gaining a point or two a year is
+# treading water at the bottom, which over the fifteen years the threshold asks for is exactly the
+# county nobody is holding together. The comparison-against-a-block shape is the one
+# wilderness_colonization.0001 already uses for `gold > { value = colonize_cost multiply = 3 }`.
+#
+# ---- Why the fix goes here and not on the threshold ----
+#
+# The obvious alternative was to lower gen_ruin_decay_threshold until collapses resumed. That would
+# have been wrong twice over: it would speed up every OTHER arm at the same time, and it would hide
+# the actual defect, which is that one clause was silently answering no. The threshold means "an
+# unbroken run of this many bad years" and that meaning is worth more than the rate it produces.
+#
+# `<=` rather than `<`, unlike the development arm. Development genuinely plateaus in counties that
+# are simply finished growing, so there the stricter test is right; control does not plateau, it is
+# either climbing or being held down.
+#
+# `has_variable` first, so the first tick of a streak is simply false rather than an error — the
+# same shape and the same reason as the development arm below.
+gen_ruin_suffer_control_trigger = {
+	county_control < 10
+	has_variable = ruin_last_ctl
+	county_control <= {
+		value = var:ruin_last_ctl
+		add = 2
 	}
 }
+
+# The people in it want somebody else.
+#
+# ---- -40, then -70, now -45, and the last move is the measured one ----
+#
+# The original -40 fired on being CONQUERED rather than on being hated: a revocation or a foreign
+# conquest puts a county past -40 as a matter of course and holds it there for years. So it went to
+# -70, "a county in open contempt of whoever claims it", which sounds right and is not.
+#
+# Measured over 71 years of one world with the telemetry running: **not one streak in 2,198 ever saw
+# county_opinion below -70.** Not rare — zero. The arm was not strict, it was unreachable, and for
+# most of a year it was costing a trigger evaluation to always answer no. At -40 the same sample
+# gives 7.1% and at -30 gives 11.8%, against a median opinion of 0.
+#
+# -45 rather than back to -40 because the reason -40 was abandoned is still true — but it is no
+# longer this trigger's problem to solve. Two things added since then already handle the conquest
+# case and handle it better: a single good year now RESETS the counter outright rather than paying
+# a few points back, and gen_ruin_shock_immunity_years vetoes any fall for five years after the last
+# violence. A freshly taken county therefore cannot ride a conquest-depressed opinion into a ruin;
+# it gets one ordinary year and the count is gone. The bar only has to describe a hated county now,
+# not defend against a false positive that something else already catches.
+gen_ruin_suffer_opinion_trigger = {
+	county_opinion < -45
+}
+
+# Plague. Reachable only with the relevant content installed; on a base-game install the list is
+# simply empty and this arm contributes nothing rather than erroring.
+gen_ruin_suffer_plague_trigger = {
+	any_county_province_epidemic = { count >= 1 }
+}
+
+# It is getting poorer. The one signal that means the same thing at every development level, and the
+# reason the counter measures a trajectory rather than a floor. The variable is stamped each year by
+# gen_ruin_tick_county_effect; on the first tick it does not exist yet and this arm is simply false.
+gen_ruin_suffer_devdrop_trigger = {
+	has_variable = ruin_last_dev
+	development_level < var:ruin_last_dev
+}
+
+# There was a gen_ruin_is_recovering_trigger here, asking whether a county was doing well enough to
+# pay points back FASTER than the ordinary drift. It has no meaning against a counter that resets:
+# a year that is not suffering now returns the county to zero outright, so there is no faster to be.
+# Its one caller was the tick's else branch, which is now a single set_variable.
 
 # County (title) scope. Are the stones standing here?
 #
@@ -132,6 +339,83 @@ gen_county_has_ruins_trigger = {
 			has_building = ruins_large
 			has_building = ruins_small
 			has_building = ruins_cleared
+		}
+	}
+}
+
+# =====================================================================================
+#  Which veto is refusing — readout only
+# =====================================================================================
+#
+# `gen_ruin_can_fall_trigger` is an AND of six separate reasons and answers one boolean, so a county
+# it refuses tells a tester nothing about WHICH reason. These six exist so the debug console can say
+# so in words. Each answers "does this clause allow a fall", so `no` from any of them is the one
+# holding the county.
+#
+# ---- These are a COPY, and that is deliberate ----
+#
+# The suffering arms above were factored out and the real trigger rebuilt from them, because the
+# tick needs them individually. This set is the opposite decision: gen_ruin_can_fall_trigger is left
+# untouched, byte for byte, and these restate its clauses beside it.
+#
+# The reason is guard order. That trigger opens with `exists = holder` and three later clauses reach
+# through `holder` — a shape that is only safe because the whole thing is one AND. Factoring it and
+# rebuilding it from the pieces would move `exists = holder` into a different trigger and leave the
+# capital and only-county clauses unguarded, which is a failed context switch on every unheld county
+# on the map. A readout is not worth that risk to the live veto, so each clause below carries its
+# own guard instead and the thing that decides real collapses is not edited at all.
+#
+# The cost is that this set can drift from the veto it describes. It is only ever read by
+# gen_ruins.9000, so drift misleads a tester and changes no outcome — which is the right way round.
+# Anything added to gen_ruin_can_fall_trigger wants a clause here too.
+
+# Something is standing here and somebody holds it. False for wilderness and for colonies in one
+# line: is_settled_county_trigger is false for both holding types.
+gen_ruin_veto_settled_trigger = {
+	is_settled_county_trigger = yes
+	exists = holder
+}
+
+# Not its holder's seat. A ruler whose capital falls is unlanded by it.
+gen_ruin_veto_capital_trigger = {
+	exists = holder
+	NOT = { holder.capital_county = this }
+}
+
+# Not its holder's last county.
+gen_ruin_veto_only_county_trigger = {
+	exists = holder
+	holder = {
+		any_held_title = {
+			tier = tier_county
+			count >= 2
+		}
+	}
+}
+
+# Not the de jure capital of a duchy, kingdom or empire — a title whose capital county is held by
+# nobody can never be created again.
+gen_ruin_veto_dejure_trigger = {
+	NOT = { this = duchy.title_capital_county }
+	NOT = { this = kingdom.title_capital_county }
+	NOT = { this = empire.title_capital_county }
+}
+
+# No wonder or other special building standing on the capital barony.
+gen_ruin_veto_special_trigger = {
+	title_province ?= {
+		has_special_building = no
+		has_special_building_slot = no
+	}
+}
+
+# Nobody's sacred ground. Asks every barony in the county, not the county itself — `is_holy_site` is
+# a barony trigger and throws on a county. See the clause it mirrors in gen_ruin_can_fall_trigger.
+gen_ruin_veto_holysite_trigger = {
+	NOT = {
+		any_in_de_jure_hierarchy = {
+			tier = tier_barony
+			is_holy_site = yes
 		}
 	}
 }

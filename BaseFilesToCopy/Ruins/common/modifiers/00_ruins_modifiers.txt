@@ -1,0 +1,35 @@
+﻿# The one modifier ruination needs: what a holder gets for refusing to let a county go.
+#
+# Applied by gen_ruin_reprieve_effect when somebody pays at gen_ruins.0005 — the last-chance event
+# that fires INSTEAD of the collapse once the counter reaches the threshold. Nothing else applies it
+# and nothing removes it early; it is timed and it runs out.
+#
+# ---- It is read as well as felt ----
+#
+# gen_ruin_timing_allows_fall_trigger refuses any county carrying this, so while it is up the county
+# cannot fall and — because the same trigger gates the last-chance event itself — cannot be asked to
+# pay again either. That is the whole "prevents its ruination for about a year" half of the design.
+# The numbers below are the other half.
+#
+# ---- Why it carries real effects and not just the veto ----
+#
+# A pure timer would make the payment a bribe against the mechanic: money in, calendar out, nothing
+# on the ground changes and the county falls the moment it lapses. Every line here attacks one of
+# the arms of gen_ruin_is_suffering_trigger directly, because the point of the money is to buy a
+# chance at a GOOD year — and one good year sets the counter to zero outright, which is the only
+# real escape ruination has.
+#
+#   control growth   answers the `county_control < 10` arm
+#   opinion          answers the `county_opinion < -70` arm
+#   development      answers the trajectory arm, `development_level < var:ruin_last_dev`
+#
+# So the reprieve is not a stay of execution on its own. It is a stay of execution plus the means to
+# make it permanent, and a holder who pays and then goes back to ignoring the place still loses it —
+# a few years later, and a year's income poorer.
+ruin_reprieve = {
+	icon = county_modifier_control_positive
+
+	monthly_county_control_growth_add = 0.5
+	county_opinion_add = 10
+	development_growth = 0.15
+}

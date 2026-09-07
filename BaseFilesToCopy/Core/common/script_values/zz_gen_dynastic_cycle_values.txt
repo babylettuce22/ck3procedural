@@ -1,0 +1,29 @@
+﻿# The Dynastic Cycle's "hegemon holds too little of the hegemony" thresholds, re-tuned for a
+# hegemony that is the whole map.
+#
+# Single-object overrides of two script values from
+# common/script_values/10_tgp_dynastic_cycle_values.txt. Script values are last-wins and this
+# directory has no subfolders, so a zz_ file here replaces them without touching the vanilla file.
+#
+# ---- Why ----
+#
+# common/on_action/dynastic_cycle_on_actions.txt asks every year what share of h_china's de jure
+# counties sit in the hegemon's realm. Vanilla's China is a compact de jure block the Son of
+# Heaven normally holds nearly all of, so "too few" at 50 % is a warning and "far too few" at
+# 30 % is worth the same 4000 points as losing the Mandate outright — which, from instability,
+# is the chaos phase and a shattered hegemony on the spot.
+#
+# The generated hegemony is de jure over EVERY county on the map, wilderness included
+# (MapGen/Titles.cs, Crown), and Realms.ExpandHegemonRealm only guarantees its holder about 40 %
+# of the SETTLED ones. Against that denominator a freshly crowned hegemon sits at or under
+# vanilla's "far too few" line on day one, and the yearly pulse would shatter a realm nothing
+# has actually gone wrong in. Halved, the ladder means the same thing it means in vanilla — a
+# hegemon who has lost a large part of what the crown guaranteed — measured against this map.
+#
+# These constants are the UNHELD case. When the map starts with a hegemon crowned,
+# Emit/DynasticCycleWriter.cs writes this same path with values derived from the share that
+# hegemon actually holds (half of it / three tenths of it), and the static copy never overwrites
+# a generated file — so what ships then is the writer's numbers, not these.
+
+catalyst_hegemony_too_few_lands_value = 0.25
+catalyst_hegemony_far_too_few_lands_value = 0.15

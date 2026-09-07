@@ -483,9 +483,17 @@ public static class PreviewRenderer
 
     public static Image RenderGovernment(GenerationResult result, Emit.WrittenContent? written)
         => RenderGovernment(result, written?.Governments
-            ?? EstimateGovernments(result, written?.Cultures, written?.WorldCenters));
+            ?? EstimateGovernments(result, written?.Cultures, written?.WorldCenters),
+            written?.Wilderness ?? EstimateWilderness(result).Wilderness);
 
-    private static Image RenderGovernment(GenerationResult result, GovernmentMap governments)
+    /// <summary>
+    /// Paints what title history seats each county under, not what the cascade assigned it. The
+    /// cascade never sees the wilderness and hands wild counties a terrain guess — clan, tribal —
+    /// which the history writer then overrides with <c>wilderness_government</c> for every county
+    /// the dummies hold. Read straight from the map, this mode painted the guess.
+    /// </summary>
+    private static Image RenderGovernment(GenerationResult result, GovernmentMap governments,
+        WildernessMap wilderness)
     {
         var map = result.Provinces;
         var order = result.ProvinceOrder;
@@ -494,7 +502,8 @@ public static class PreviewRenderer
         var counties = Titles.Flatten(result.Titles).Where(t => t.Tier == "c").ToList();
 
         var government = new string[counties.Count];
-        for (int c = 0; c < counties.Count; c++) government[c] = governments.For(counties[c]);
+        for (int c = 0; c < counties.Count; c++)
+            government[c] = wilderness.Contains(counties[c]) ? GovernmentMap.Wilderness : governments.For(counties[c]);
 
         var countyOf = new int[baronyCount + 1];
         Array.Fill(countyOf, NoCounty);
@@ -725,14 +734,26 @@ public static class PreviewRenderer
             (1.85, (255, 242, 198)),
         ]);
 
+    /// <summary>
+    /// One swatch per kind of realm rather than per government key, which is why the legend beside
+    /// it stays eight rows while the inspector's dropdown offers fourteen. All Under Heaven's
+    /// governments are only ever set by hand, and each of them is a variety of something already
+    /// painted here: its four bureaucracies take administrative's purple, wanua is a tribe, and
+    /// Sōryō and mandala fall through to feudal — which is also what the game itself turns each of
+    /// them into for a player without the expansion.
+    /// </summary>
     public static (byte R, byte G, byte B) GovernmentColour(string government) => government switch
     {
-        GovernmentMap.Administrative => (155, 60, 160),
+        GovernmentMap.Administrative or GovernmentMap.Meritocratic or GovernmentMap.SteppeAdmin
+            or GovernmentMap.Celestial or GovernmentMap.JapanAdministrative => (155, 60, 160),
         GovernmentMap.Nomad => (210, 160, 65),
-        GovernmentMap.Tribal => (185, 95, 60),
+        GovernmentMap.Tribal or GovernmentMap.Wanua => (185, 95, 60),
         GovernmentMap.Clan => (80, 150, 95),
         GovernmentMap.Republic => (200, 70, 70),
         GovernmentMap.Theocracy => (205, 205, 200),
+        // The same tint the Realms, Cultures and Faiths modes give the wilderness, so it reads as
+        // the same ground from one mode to the next.
+        GovernmentMap.Wilderness => (168, 120, 48),
         _ => (65, 110, 160),
     };
 

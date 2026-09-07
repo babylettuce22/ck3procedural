@@ -1,0 +1,120 @@
+﻿# Keeps factions from forming against the wilderness and ruins dummies.
+#
+# ---- What this is ----
+#
+# A single-object override of vanilla's `passes_faction_hard_block` from
+# common/scripted_rules/00_rules.txt. Script is last-wins, so redefining the one rule here replaces
+# vanilla's without touching the file it lives in. The filename sorts last so the override cannot
+# lose to another mod's copy of the same directory.
+#
+# Everything below is vanilla's own definition verbatim, with ONE block added.
+#
+# ---- Why this rule ----
+#
+# It is engine-called, root is the character trying to act, and `scope:target` is the character the
+# faction is aimed at — which is the question we need to ask. Its own loc keys say what it covers:
+# FACTION_CANT_JOIN_CREATE_ADULT, FACTION_CANT_JOIN_CREATE_ALLIED. Join and create, both.
+#
+# That reaches every faction whose members are CHARACTERS: independence, liberty, claimant,
+# nation_fracturing, and the four Traditions Grand Palace ones. Eight of the twelve faction types in
+# the game, in three files we then do not have to copy.
+#
+# ---- What this does NOT cover ----
+#
+# The other four — populist, peasant, escalated_peasant and nomadic — are joined by COUNTIES rather
+# than by characters (`requires_county = yes`, `requires_character = no`), so no character ever
+# passes through this rule on their way in. Those are handled in Emit/FactionWriter.cs, at each
+# type's own `can_county_create` and `is_valid`. A populist uprising against the wilderness is the
+# case that started all this, and it is one of the four this file cannot reach.
+#
+# ---- On the existing county_opinion_add = 100 ----
+#
+# 00_wilderness_government.txt already gives the dummy's counties +100 opinion, with a note saying
+# its counties never revolt. That was not enough and could not have been: a populist faction's
+# discontent comes from its own `discontent_progress` block, not from county opinion, so the counties
+# were content and rose anyway.
+
+passes_faction_hard_block = {
+	# THE ONE ADDED BLOCK. Nobody musters against ground. Guarded on the scope existing, the way
+	# every other target test in this rule is, because scope:target is not always set here.
+	trigger_if = {
+		limit = { exists = scope:target }
+		scope:target = {
+			NOT = { has_trait = wilderness }
+			NOT = { government_has_flag = government_is_wilderness }
+		}
+	}
+
+	custom_description = {
+		text = "FACTION_CANT_JOIN_IF_TARGET"
+		root != scope:target
+	}
+
+	custom_description = {
+		text = "FACTION_CANT_JOIN_CREATE_ADULT"
+		is_adult = yes
+	}
+
+	custom_description = {
+		text = "FACTION_CANT_JOIN_CREATE_ALLIED"
+		trigger_if = {
+			limit = { exists = scope:target }
+			NOT = { is_allied_to = scope:target }
+		}
+	}
+
+	custom_description = {
+		text = "FACTION_CANT_JOIN_CREATE_HOOK"
+		trigger_if = {
+			limit = { exists = scope:target }
+			scope:target = {
+				NOT = { has_strong_hook = root }
+			}
+		}
+	}
+
+	custom_description = {
+		text = "FACTION_CANT_JOIN_CREATE_IMPRISONED"
+		trigger_if = {
+			limit = {
+				joined_faction ?= {
+					faction_is_at_war = yes
+				}
+			}
+		}
+		trigger_else = {
+			is_imprisoned = no
+		}
+	}
+
+	custom_description = {
+		text = "FACTION_CANT_JOIN_CREATE_INCAPABLE"
+		NOT = { has_trait = incapable }
+	}
+
+	custom_description = {
+		text = "character_blocked_from_joining"
+		NOT = { has_character_flag = joining_faction_block }
+	}
+
+	custom_description = {
+		text = "faction_relation_blocks_joining_friend"
+		trigger_if = {
+			limit = { exists = scope:target }
+			NOT = {
+				root = { has_relation_friend = scope:target }
+			}
+		}
+	}
+
+	custom_description = {
+		text = "faction_relation_blocks_joining_lover"
+		trigger_if = {
+			limit = { exists = scope:target }
+			NOR = {
+				root = { has_relation_lover = scope:target }
+				root = { has_secret_relation_lover = scope:target }
+			}
+		}
+	}
+}

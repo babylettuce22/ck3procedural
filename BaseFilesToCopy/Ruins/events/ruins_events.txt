@@ -3,8 +3,10 @@
 # Ruination, from the holder's side.
 #
 #   0001  The warning. Sent once, well before anything is lost.
+#   0005  The last chance. Fires at the threshold; pay and the county gets a few more years.
 #   0010  The fall. This is the event that actually ruins the county.
 #   9000  The debug console for all of it.
+#   9010  The mass-ruin debug event: whole domains and whole realms at once.
 #
 # ---- Why the collapse is an event and not just an effect ----
 #
@@ -61,6 +63,229 @@ gen_ruins.0001 = {
 
 
 # =====================================================================================
+#  0005 — The last chance
+# =====================================================================================
+#
+# Fires at the threshold INSTEAD of the collapse. The county is one decision away from being lost
+# and the holder is offered three ways to buy it back: gold out of the treasury, prestige spent
+# calling in what the family name is worth, or piety spent asking the faith for relief. Any of them
+# applies the `ruin_reprieve` county modifier for gen_ruin_reprieve_years and knocks the counter back
+# to the warning line. The fourth option lets it go, and only that option fires gen_ruins.0010.
+#
+# ---- Why this exists ----
+#
+# Ruination is supposed to be rare, and the counter alone cannot make it rarer without also making
+# it unreachable: every knob that slows the slide slows it for the neglected county and the tended
+# one alike. This separates the two questions. A holder who is paying attention now has something to
+# spend, and a county nobody has looked at in fifteen years still falls on exactly the old schedule —
+# because nobody is there to press the button.
+#
+# ---- It is not a free rescue, in three separate ways ----
+#
+#   the price scales    `major_gold_value` is about a year of the payer's own income, so this is a
+#                       real decision at every tier rather than a formality above some wealth line
+#   it escalates        each save on the same county makes the next dearer, to three times the base
+#   it does not cure    the counter goes back to the WARNING line, not to zero, and the county is
+#                       still on the watchlist and still failing. Six more unbroken bad years and it
+#                       is here again, at a higher price
+#
+# What actually saves a county for good is the ordinary tick: one year that is not suffering sets
+# the count to zero. The modifier's control, opinion and development bonuses exist to make that year
+# reachable — see common/modifiers/00_ruins_modifiers.txt.
+#
+# ---- The AI plays it too ----
+#
+# Same event, same prices, same effects; the ai_chance weights on each option decide. That is
+# deliberate rather than incidental: a rescue only the player can perform would mean the AI's map
+# keeps ruining at the old rate while the player's does not, and the mechanic would read as a tax on
+# playing rather than as something happening in the world.
+#
+# One thing it does NOT do: let a liege save a vassal's county. The event goes to the holder, and
+# the holder is whoever is failing. A liege who wants that county tended has the ordinary tools.
+
+gen_ruins.0005 = {
+	type = character_event
+	title = gen_ruins.0005.t
+	desc = gen_ruins.0005.desc
+	theme = realm
+	override_background = { reference = wilderness }
+
+	left_portrait = {
+		character = root
+		animation = disapproval
+	}
+
+	# Same guard as its neighbours: the debug panel's Events tab fires every shipped event at the
+	# player with nothing attached, and this one would otherwise open with no county, no prices and
+	# a decline option that calls the collapse. Use gen_ruins.9000 to reach it deliberately.
+	trigger = {
+		exists = scope:gen_ruin_target
+	}
+
+	immediate = {
+		# The three prices, lifted into scope values so the DESCRIPTION can state them.
+		#
+		# Stating them there rather than only on the options is the point: an option whose trigger
+		# fails is not drawn at all, so a holder who cannot afford any of the three would otherwise
+		# be shown a window with one button on it and no explanation of what the other three would
+		# have cost. Printed in the text, the price is visible whether or not it can be paid.
+		#
+		# Scope values and not script values, for the reason documented on gen_ruins.9000: a .yml
+		# cannot read a script value, and the bracket renders as nothing with no error anywhere.
+		save_scope_value_as = { name = gen_ruin_gold_cost value = gen_ruin_save_gold_cost }
+		save_scope_value_as = { name = gen_ruin_prestige_cost value = gen_ruin_save_prestige_cost }
+		save_scope_value_as = { name = gen_ruin_piety_cost value = gen_ruin_save_piety_cost }
+		save_scope_value_as = { name = gen_ruin_reprieve_n value = gen_ruin_reprieve_years }
+	}
+
+	# ---- Pay for it ----
+	#
+	# The plainest of the three and the one most rulers will take: money out of the treasury, into
+	# the mills and the roads and the wages of people who would otherwise have left.
+	option = {
+		name = gen_ruins.0005.a_gold
+
+		trigger = {
+			gold >= gen_ruin_save_gold_cost
+		}
+
+		remove_short_term_gold = gen_ruin_save_gold_cost
+		gen_ruin_reprieve_effect = { COUNTY = scope:gen_ruin_target }
+
+		ai_chance = {
+			base = 60
+
+			# Affordable is not the same as comfortable. An AI at exactly the price would be
+			# spending its last coin on its worst county, which is not what a careful ruler does.
+			modifier = {
+				add = 60
+				gold >= gen_ruin_save_gold_cost_comfortable
+			}
+
+			# Worth the money. A developed county is a real asset and losing it is a real loss; a
+			# county at development 2 is worth about what the reprieve costs.
+			modifier = {
+				add = 40
+				scope:gen_ruin_target = { development_level >= 10 }
+			}
+
+			modifier = {
+				add = -40
+				has_trait = greedy
+			}
+
+			modifier = {
+				add = 25
+				has_trait = diligent
+			}
+		}
+	}
+
+	# ---- Go there ----
+	#
+	# Prestige rather than gold: the lord spends what the name is worth — calls in favours, leans on
+	# neighbours, puts his own household on the road — instead of opening the treasury. Costs the
+	# same in kind and lands in the same place.
+	option = {
+		name = gen_ruins.0005.b_prestige
+
+		trigger = {
+			prestige >= gen_ruin_save_prestige_cost
+		}
+
+		add_prestige = gen_ruin_save_prestige_cost_neg
+		gen_ruin_reprieve_effect = { COUNTY = scope:gen_ruin_target }
+
+		# A little stress, because this is the option where the ruler personally goes and deals with
+		# it. The gold option is a decision; this one is a season of somebody's life.
+		add_stress = minor_stress_impact_gain
+
+		ai_chance = {
+			base = 30
+
+			modifier = {
+				add = 50
+				prestige_level >= 3
+			}
+
+			modifier = {
+				add = 30
+				has_trait = ambitious
+			}
+
+			modifier = {
+				add = -30
+				has_trait = lazy
+			}
+		}
+	}
+
+	# ---- Ask the faith ----
+	#
+	# Piety, and the relief arrives as grain and hands rather than coin. The cheapest of the three
+	# for anybody who has been pious and the most expensive for anybody who has not, which is what
+	# having three currencies is for.
+	option = {
+		name = gen_ruins.0005.c_piety
+
+		trigger = {
+			piety >= gen_ruin_save_piety_cost
+		}
+
+		add_piety = gen_ruin_save_piety_cost_neg
+		gen_ruin_reprieve_effect = { COUNTY = scope:gen_ruin_target }
+
+		ai_chance = {
+			base = 30
+
+			modifier = {
+				add = 50
+				piety_level >= 3
+			}
+
+			modifier = {
+				add = 40
+				has_trait = zealous
+			}
+
+			modifier = {
+				add = 30
+				is_theocratic_lessee = yes
+			}
+		}
+	}
+
+	# ---- Let it go ----
+	#
+	# The only option with no trigger on it, so this window can never be a dead end: a holder who can
+	# afford nothing sees one button, and it is this one. It fires the collapse rather than doing it,
+	# so that gen_ruins.0010 stays the single place a county is lost and its letter is still read.
+	option = {
+		name = gen_ruins.0005.d_decline
+
+		trigger_event = gen_ruins.0010
+
+		ai_chance = {
+			base = 25
+
+			# An AI that cannot pay for any of the three will be choosing this whatever the weight
+			# says — the others are not drawn. What this modifier is for is the AI that CAN pay and
+			# should not: one county among forty, poor, and not worth a year's income.
+			modifier = {
+				add = 60
+				scope:gen_ruin_target = { development_level <= 4 }
+			}
+
+			modifier = {
+				add = 40
+				has_trait = greedy
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
 #  0010 — The fall
 # =====================================================================================
 
@@ -76,6 +301,10 @@ gen_ruins.0010 = {
 		animation = grief
 	}
 
+	# Reached from gen_ruins.0005's decline option, never from the yearly tick directly — the tick
+	# fires the last chance and this is what the last chance costs when nobody takes it. The debug
+	# console reaches the collapse by its effect instead, past every veto.
+	#
 	# Same guard as 0001, and it matters more here: this event RUINS A COUNTY in its immediate. Fired
 	# from the Events tab with no target it would either half-render or, with a fallback, quietly
 	# destroy the player's capital past every veto. Declining is the only right answer. The debug
@@ -87,9 +316,16 @@ gen_ruins.0010 = {
 	immediate = {
 		# Before the effect, not after. gen_ruin_county_effect revokes the title, so anything asking
 		# a question about the county's holder has to ask it here.
+		# Before the collapse for the same reason, and it matters more now than it did when this was
+		# one literal string: gen_ruin_county_effect calls gen_ruin_forget_county_effect on its way
+		# through, which wipes the tally. Everything this line reports stops existing four lines
+		# below it.
 		if = {
 			limit = { debug_only = yes }
-			debug_log = "Ruins: county collapsed at the decay threshold"
+			scope:gen_ruin_target = {
+				gen_ruin_debug_payload_effect = yes
+				debug_log = gen_ruin_log_fall
+			}
 		}
 
 		gen_ruin_county_effect = { COUNTY = scope:gen_ruin_target }
@@ -161,10 +397,101 @@ gen_ruins.9000 = {
 				}
 				desc = gen_ruins.9000.desc_vetoed
 			}
+			# Somebody has paid. Its own line rather than folding into the one below, because a
+			# reprieve is a thing a PLAYER did and the tester's next question is when it runs out,
+			# not what is standing on the county.
+			triggered_desc = {
+				trigger = {
+					scope:gen_ruin_target = { has_county_modifier = ruin_reprieve }
+				}
+				desc = gen_ruins.9000.desc_reprieved
+			}
+			# Structurally allowed, but not this year: occupied, or the fighting is too recent. A
+			# separate line from the one above because the two mean opposite things to a tester —
+			# that county will never fall, this one is merely waiting.
+			triggered_desc = {
+				trigger = {
+					scope:gen_ruin_target = { gen_ruin_timing_allows_fall_trigger = no }
+				}
+				desc = gen_ruins.9000.desc_waiting
+			}
 			desc = gen_ruins.9000.desc_eligible
 		}
 
 		desc = gen_ruins.9000.desc_counter
+
+		# ---- Which veto, by name ----
+		#
+		# `desc_vetoed` above can only say that SOMETHING refuses this county, because the trigger it
+		# asks is an AND of six reasons that answers one boolean. This chain asks the six separately
+		# (see the readout triggers at the foot of 00_ruins_triggers.txt) and names the first that
+		# refuses, which is the difference between "this will never fall" and knowing whether moving
+		# the capital would fix it.
+		#
+		# First-match rather than a list of every failing clause: a first_valid stops at one, and one
+		# is what a tester acts on. The order is the order the real trigger states them in.
+		first_valid = {
+			# First, and it is not redundant with the chain above. Every clause below reaches through
+			# `scope:gen_ruin_target ?= { ... }`, which answers FALSE when there is no target — so a
+			# landless player, whose case the chain above already handled with desc_no_county, would
+			# fall past all seven clauses and land on desc_veto_unknown, telling them a county they
+			# do not have is being refused for an unknown reason.
+			triggered_desc = {
+				trigger = { NOT = { exists = scope:gen_ruin_target } }
+				desc = gen_ruins.9000.desc_blank
+			}
+			triggered_desc = {
+				trigger = { scope:gen_ruin_target ?= { gen_ruin_can_fall_trigger = yes } }
+				desc = gen_ruins.9000.desc_veto_none
+			}
+			triggered_desc = {
+				trigger = { scope:gen_ruin_target ?= { gen_ruin_veto_settled_trigger = no } }
+				desc = gen_ruins.9000.desc_veto_settled
+			}
+			triggered_desc = {
+				trigger = { scope:gen_ruin_target ?= { gen_ruin_veto_capital_trigger = no } }
+				desc = gen_ruins.9000.desc_veto_capital
+			}
+			triggered_desc = {
+				trigger = { scope:gen_ruin_target ?= { gen_ruin_veto_only_county_trigger = no } }
+				desc = gen_ruins.9000.desc_veto_only_county
+			}
+			triggered_desc = {
+				trigger = { scope:gen_ruin_target ?= { gen_ruin_veto_dejure_trigger = no } }
+				desc = gen_ruins.9000.desc_veto_dejure
+			}
+			triggered_desc = {
+				trigger = { scope:gen_ruin_target ?= { gen_ruin_veto_special_trigger = no } }
+				desc = gen_ruins.9000.desc_veto_special
+			}
+			triggered_desc = {
+				trigger = { scope:gen_ruin_target ?= { gen_ruin_veto_holysite_trigger = no } }
+				desc = gen_ruins.9000.desc_veto_holysite
+			}
+			# The six above restate gen_ruin_can_fall_trigger rather than composing it, so they can
+			# in principle disagree with it — a clause added there and not here lands exactly here.
+			# Saying so is better than rendering nothing and letting the console look broken.
+			desc = gen_ruins.9000.desc_veto_unknown
+		}
+
+		# ---- Why it is failing ----
+		#
+		# The per-cause tally, which only exists in debug mode: everything that writes it is behind
+		# `debug_only`, so outside -debug_mode there is genuinely nothing to show and saying so is
+		# more useful than fifteen zeroes that look like data.
+		first_valid = {
+			# No target means the readout effect never ran, so every field in desc_telemetry would
+			# render blank rather than zero — worse than saying nothing.
+			triggered_desc = {
+				trigger = { NOT = { exists = scope:gen_ruin_target } }
+				desc = gen_ruins.9000.desc_blank
+			}
+			triggered_desc = {
+				trigger = { NOT = { debug_only = yes } }
+				desc = gen_ruins.9000.desc_no_telemetry
+			}
+			desc = gen_ruins.9000.desc_telemetry
+		}
 	}
 
 	theme = realm
@@ -208,6 +535,22 @@ gen_ruins.9000 = {
 		# live in 00_ruins_values.txt and this readout has to follow them when they are tuned.
 		save_scope_value_as = { name = gen_ruin_warn_at value = gen_ruin_decay_warning }
 		save_scope_value_as = { name = gen_ruin_fall_at value = gen_ruin_decay_threshold }
+
+		# ---- The tally, for desc_telemetry ----
+		#
+		# Behind `debug_only` like every other telemetry call, because the readout effect initialises
+		# the variables it reads, and initialising them outside debug mode would put telemetry state
+		# on a county in an ordinary game. The description has its own branch for that case.
+		#
+		# `gen_ruin_debug_readout_effect` and not `gen_ruin_debug_payload_effect`, which saves the
+		# same numbers under different names. The difference is lifetime and it is not cosmetic: the
+		# payload saves TEMPORARY scopes, which end with the effect that saved them, and an event
+		# description is evaluated after the immediate has returned — so a description reading them
+		# would render blanks. The three scope values above are permanent for exactly this reason.
+		if = {
+			limit = { debug_only = yes }
+			scope:gen_ruin_target ?= { gen_ruin_debug_readout_effect = yes }
+		}
 	}
 
 	# ---- read ----
@@ -255,6 +598,26 @@ gen_ruins.9000 = {
 		scope:gen_ruin_target = { gen_ruin_tick_county_effect = yes }
 
 		custom_tooltip = gen_ruins.9000.d_tick_tt
+	}
+
+	# ---- the last chance ----
+	#
+	# Opens gen_ruins.0005 on this county without waiting for the counter to reach the threshold, so
+	# the offer, its three prices and the escalation can be read at any time. Declining it there
+	# collapses the county for real, exactly as it would in a game — this is not a preview.
+	#
+	# Fired rather than simulated: the prices are computed in that event's immediate from the
+	# county's own `ruin_saves`, and a debug copy of them would be a second thing to keep in step.
+	option = {
+		name = gen_ruins.9000.m_offer
+		trigger = {
+			exists = scope:gen_ruin_target
+			scope:gen_ruin_target = { gen_county_has_ruins_trigger = no }
+		}
+
+		trigger_event = gen_ruins.0005
+
+		custom_tooltip = gen_ruins.9000.m_offer_tt
 	}
 
 	# ---- fall ----
@@ -373,6 +736,16 @@ gen_ruins.9000 = {
 
 		gen_ruin_forget_county_effect = { COUNTY = scope:gen_ruin_target }
 
+		# The paid-for reprieve as well, which that effect deliberately leaves alone — see the note
+		# on it. A tester wants the county back in its virgin state; a player whose county recovered
+		# keeps what they bought.
+		scope:gen_ruin_target = {
+			if = {
+				limit = { has_county_modifier = ruin_reprieve }
+				remove_county_modifier = ruin_reprieve
+			}
+		}
+
 		custom_tooltip = gen_ruins.9000.h_reset_tt
 	}
 
@@ -477,5 +850,137 @@ gen_ruins.9000 = {
 
 		trigger_event = gen_ruins.9000
 		custom_tooltip = gen_ruins.9000.l_capital_tt
+	}
+}
+
+# =====================================================================================
+#  9010 — Mass ruin
+# =====================================================================================
+#
+# Collapses whole realms at once, for looking at what a map full of holes does to everything
+# downstream: the ruins realm's size, the discovery path at scale, the Wilds situation's counters,
+# the AI's appetite for reclaiming. The console above does one county at a time and that is the
+# right tool for testing the mechanic; this is the tool for testing what the mechanic produces.
+#
+# Four reaches, in two pairs. `Domain` is what root holds directly; `realm` adds every vassal, and
+# their vassals, all the way down. Each comes in a version that leaves every ruler's CAPITAL standing
+# and one that does not. Sparing capitals is the one to reach for first: a ruler with no county at
+# all is landless, a vassal with no county drops out of the realm, and a player with no county and no
+# titular title above it gets the game-over screen. The all-in versions are there for exactly that
+# case — seeing what the collapse looks like with nothing held back — and their tooltips say so.
+#
+# Everything goes through gen_ruin_county_effect, and so through abandon_county_effect under it, so a
+# county ruined here is indistinguishable from one the yearly pulse took: same stones, same
+# obstacles, same memory of who lived there, same hand-off to the ruins dummy. The vetoes are
+# bypassed the way the console's `fall` bypasses them.
+#
+# Fired from the debug panel's Events tab at the player with nothing attached, so root is the
+# player and that is the only scope it needs.
+
+gen_ruins.9010 = {
+	type = character_event
+	title = gen_ruins.9010.t
+	desc = {
+		desc = gen_ruins.9010.desc_open
+
+		first_valid = {
+			triggered_desc = {
+				trigger = { NOT = { exists = title:k_gen_ruins.holder } }
+				desc = gen_ruins.9010.desc_no_dummy
+			}
+			triggered_desc = {
+				trigger = { gen_ruin_debug_realm_count <= 0 }
+				desc = gen_ruins.9010.desc_nothing
+			}
+			desc = gen_ruins.9010.desc_counts
+		}
+	}
+
+	theme = realm
+	override_background = { reference = council_chamber }
+
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+
+	immediate = {
+		# Lifted into scope values for the description; a .yml cannot read a script value directly.
+		save_scope_value_as = { name = gen_ruin_domain_n value = gen_ruin_debug_domain_count }
+		save_scope_value_as = { name = gen_ruin_realm_n value = gen_ruin_debug_realm_count }
+	}
+
+	# ---- nothing ----
+	option = {
+		name = gen_ruins.9010.a_cancel
+	}
+
+	# ---- domain, sparing the capital ----
+	option = {
+		name = gen_ruins.9010.b_domain_spare
+		trigger = {
+			exists = title:k_gen_ruins.holder
+			gen_ruin_debug_domain_count > 0
+		}
+
+		gen_ruin_debug_collect_domain_effect = { SPARE_CAPITAL = yes }
+		gen_ruin_debug_ruin_batch_effect = yes
+
+		custom_tooltip = gen_ruins.9010.b_domain_spare_tt
+	}
+
+	# ---- domain, everything ----
+	option = {
+		name = gen_ruins.9010.c_domain_all
+		trigger = {
+			exists = title:k_gen_ruins.holder
+			gen_ruin_debug_domain_count > 0
+		}
+
+		gen_ruin_debug_collect_domain_effect = { SPARE_CAPITAL = no }
+		gen_ruin_debug_ruin_batch_effect = yes
+
+		custom_tooltip = gen_ruins.9010.c_domain_all_tt
+	}
+
+	# ---- realm, sparing every capital ----
+	#
+	# The whole list is gathered before the first county falls, across root and every vassal below.
+	# That matters more here than in the domain options: collapsing a vassal's last county unlands
+	# them and drops them out of `every_vassal_or_below`, and a walk that was still in progress
+	# would then be walking a tree that is changing under it.
+	option = {
+		name = gen_ruins.9010.d_realm_spare
+		trigger = {
+			exists = title:k_gen_ruins.holder
+			gen_ruin_debug_realm_count > 0
+			any_vassal_or_below = { always = yes }
+		}
+
+		gen_ruin_debug_collect_domain_effect = { SPARE_CAPITAL = yes }
+		every_vassal_or_below = {
+			gen_ruin_debug_collect_domain_effect = { SPARE_CAPITAL = yes }
+		}
+		gen_ruin_debug_ruin_batch_effect = yes
+
+		custom_tooltip = gen_ruins.9010.d_realm_spare_tt
+	}
+
+	# ---- realm, everything ----
+	option = {
+		name = gen_ruins.9010.e_realm_all
+		trigger = {
+			exists = title:k_gen_ruins.holder
+			gen_ruin_debug_realm_count > 0
+			any_vassal_or_below = { always = yes }
+		}
+
+		gen_ruin_debug_collect_domain_effect = { SPARE_CAPITAL = no }
+		every_vassal_or_below = {
+			gen_ruin_debug_collect_domain_effect = { SPARE_CAPITAL = no }
+		}
+		gen_ruin_debug_ruin_batch_effect = yes
+
+		custom_tooltip = gen_ruins.9010.e_realm_all_tt
 	}
 }

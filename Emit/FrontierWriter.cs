@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using Ck3MapGen.Config;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
@@ -45,6 +45,14 @@ public static class FrontierWriter
         ("catalyst_wilds_frontier_quiet", "The Frontier Falls Quiet", "No colony stands in this frontier. Every year without one, the wild reclaims the age."),
         ("catalyst_wilds_land_reclaimed", "Land Reclaimed", "A third of this frontier has been won from the wild. Every year it stays won, the frontier draws closer to closing."),
         ("catalyst_wilds_wild_returns", "The Wild Returns", "This frontier has slipped back to being mostly wild. Every year it stays so, the age slips back with it."),
+
+        // Fired on top of Colony Abandoned rather than instead of it, because ruination reaches the
+        // Wilds through abandon_county_effect and that effect has no way to know it is being called
+        // by a collapse. Teaching it would mean either a parameter on all six of its callers or the
+        // Wilds emitter reading a Ruins-set variable, and both are worse than the arithmetic: a
+        // ruined county is an abandonment AND something worse, so it is worth both catalysts.
+        // Abandonment is 25 of the 100 a phase costs; a ruin is 35.
+        ("catalyst_wilds_county_ruined", "County Ruined", "Settled ground has fallen out of civilisation altogether. The people are gone and the stones are still standing."),
     ];
 
     public static void WriteAll(string modDir, MapConfig cfg, FrontierMap frontier)
@@ -52,7 +60,7 @@ public static class FrontierWriter
         if (!cfg.EnableWilderness) return;
 
         WriteEffects(modDir, frontier);
-        WriteTriggers(modDir, frontier);
+        WriteTriggers(modDir, frontier, cfg.EnableRuins);
 
         if (frontier.IsEmpty)
         {
@@ -339,6 +347,7 @@ public static class FrontierWriter
         					takeover_points = 100
         					catalysts = {
         						catalyst_wilds_colony_abandoned = wilds_catalyst_major
+        						catalyst_wilds_county_ruined = wilds_catalyst_medium
         						catalyst_wilds_frontier_quiet = wilds_catalyst_medium
         					}
         				}
@@ -415,6 +424,7 @@ public static class FrontierWriter
         					takeover_points = 100
         					catalysts = {
         						catalyst_wilds_colony_abandoned = wilds_catalyst_major
+        						catalyst_wilds_county_ruined = wilds_catalyst_medium
         						catalyst_wilds_wild_returns = wilds_catalyst_medium
         					}
         				}
@@ -493,6 +503,7 @@ public static class FrontierWriter
         					takeover_points = 100
         					catalysts = {
         						catalyst_wilds_colony_abandoned = wilds_catalyst_major
+        						catalyst_wilds_county_ruined = wilds_catalyst_medium
         					}
         				}
         			}
@@ -645,7 +656,7 @@ public static class FrontierWriter
             b.Blank();
             // Empty bodies. Vanilla ships six scripted effects like this, so the shape is legal;
             // an effect that is never DEFINED is what breaks a load.
-            foreach (string name in new[] { "colony_founded", "colony_promoted", "colony_abandoned", "obstacle_cleared" })
+            foreach (string name in new[] { "colony_founded", "colony_promoted", "colony_abandoned", "obstacle_cleared", "county_ruined" })
             {
                 using (b.Block($"wilds_situation_{name}_effect")) { }
                 b.Blank();
@@ -713,6 +724,20 @@ public static class FrontierWriter
 
         wilds_situation_colony_abandoned_effect = {
         	wilds_situation_catalyst_effect = { CATALYST = catalyst_wilds_colony_abandoned COUNTY = $COUNTY$ }
+        	wilds_situation_recount_if_exists_effect = yes
+        }
+
+        # A county that has fallen out of civilisation, called at the END of gen_ruin_county_effect —
+        # after the county has reached the ruins dummy, not before. Ruination passes through
+        # abandon_county_effect on its way here, so the abandoned catalyst above has already fired on
+        # this county; this one is the difference between a colony that failed and settled ground
+        # lost. See the catalyst table in Emit/FrontierWriter.cs for why both.
+        #
+        # The recount is the reason the call site is the end rather than beside the abandonment. A
+        # ruined county counts as wild (see wilds_is_wild_county_trigger), and it only reaches the
+        # holder that makes it so on the last line of the collapse.
+        wilds_situation_county_ruined_effect = {
+        	wilds_situation_catalyst_effect = { CATALYST = catalyst_wilds_county_ruined COUNTY = $COUNTY$ }
         	wilds_situation_recount_if_exists_effect = yes
         }
 
@@ -951,7 +976,9 @@ public static class FrontierWriter
         using (b.Block("trigger_sub_region_catalyst")) b.Field("catalyst", key);
     }
 
-    private static void WriteTriggers(string modDir, FrontierMap frontier)
+    /// <param name="ruins">Whether the Ruins set ships, which decides whether
+    /// <c>wilds_is_wild_county_trigger</c> may name the ruins dummy's titular kingdom.</param>
+    private static void WriteTriggers(string modDir, FrontierMap frontier, bool ruins)
     {
         var b = new JominiBuilder();
         b.Comment("""
@@ -960,9 +987,39 @@ public static class FrontierWriter
                   """);
         b.Blank();
 
-        b.Comment("Title scope. A county the Wilds hold — unsettled, not ruined.");
-        using (b.Block("wilds_is_wild_county_trigger"))
-            b.Token($"holder ?= {{ has_title = title:{WildernessMap.TitleKey} }}");
+        // Found by TITLE and not by the `wilderness` trait, because both dummies wear that trait —
+        // the titular kingdom each holds is the only thing that tells them apart. See
+        // abandon_county_effect in the Wilderness set for the same discrimination.
+        //
+        // Ruined counties count as wild when the Ruins set ships. That is a deliberate reading of
+        // what "wild" means here: not never-settled, but out of cultivation and holding nobody. The
+        // Wilds window measures ground won and lost, and ground lost to ruin is lost the same way.
+        // Counting only the wilderness dummy meant a frontier could lose county after county to
+        // collapse with every counter it shows frozen.
+        //
+        // Emitted conditionally because k_gen_ruins exists only when the Ruins set ships, and a
+        // trigger naming a title the database has never heard of is an error on every other map.
+        if (ruins)
+        {
+            b.Comment("Title scope. A county nobody is working — the Wilds hold it, or it is a ruin.");
+            using (b.Block("wilds_is_wild_county_trigger"))
+            using (b.Block("OR"))
+            {
+                // Two guarded checks rather than one guard around an inner OR. That shape would
+                // read better and cannot be built: JominiBuilder.Block writes `key = {`, so a
+                // `holder ?=` block comes out as `holder ?= = {`. Splitting it costs one repeated
+                // scope change on a trigger that already walks every county twice a year, and is
+                // exactly equivalent — `?=` yields false on a county with no holder either way.
+                b.Token($"holder ?= {{ has_title = title:{WildernessMap.TitleKey} }}");
+                b.Token($"holder ?= {{ has_title = title:{WildernessMap.RuinsTitleKey} }}");
+            }
+        }
+        else
+        {
+            b.Comment("Title scope. A county the Wilds hold — unsettled, not ruined.");
+            using (b.Block("wilds_is_wild_county_trigger"))
+                b.Token($"holder ?= {{ has_title = title:{WildernessMap.TitleKey} }}");
+        }
         b.Blank();
 
         b.Comment("Character scope. A marcher lord in a frontier whose era makes expeditions cheaper.");

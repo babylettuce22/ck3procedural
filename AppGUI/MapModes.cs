@@ -243,6 +243,7 @@ public static class MapModes
                 (PreviewRenderer.GovernmentColour(GovernmentMap.Republic), "Republic"),
                 (PreviewRenderer.GovernmentColour(GovernmentMap.Theocracy), "Theocracy"),
                 (PreviewRenderer.GovernmentColour("feudal"), "Feudal"),
+                (PreviewRenderer.GovernmentColour(GovernmentMap.Wilderness), "Wilderness"),
             ],
         },
         // Reads the written wilderness when there is one, and before then reproduces it exactly —

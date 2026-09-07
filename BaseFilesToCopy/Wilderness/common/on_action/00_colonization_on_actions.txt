@@ -40,6 +40,32 @@ yearly_global_pulse = {
 	}
 }
 
+# Nicknames. The dummies are landed playable rulers, so vanilla's five-year pulse rolls
+# `chance_for_random_nickname_effect` over them like anyone else — and they win, because the
+# criteria it tests are the ones a faceless immortal meets by construction: never leaves the
+# capital, never marries, never fights. `nick_the_sleeping_king` renders as "the Sleeping Kingdom"
+# on a titular king, which is how this got noticed.
+#
+# Stripped rather than prevented: the roll lives inside a vanilla effect, and the only two gates on
+# it are the mercenary government flag and already having a nickname — both worse to borrow than a
+# `remove_nickname` is to run. Hooked to the five-year pulse as well as the yearly sweep so it lands
+# in the same tick the nickname is given and never reaches the UI.
+five_year_playable_pulse = {
+	on_actions = {
+		wilderness_nickname_strip
+	}
+}
+
+wilderness_nickname_strip = {
+	trigger = {
+		has_trait = wilderness
+		has_any_nickname = yes
+	}
+	effect = {
+		remove_nickname = yes
+	}
+}
+
 # The game-start cleanup runs once; the engine keeps generating courtiers and guests for a landed
 # ruler forever after. Without a recurring sweep the dummy slowly accumulates a court of hundreds —
 # each one a portrait, an opinion, and a claim on land nobody should inherit.
@@ -72,6 +98,88 @@ wilderness_yearly_cleanup = {
 			}
 			every_character_artifact = {
 				destroy_artifact = this
+			}
+		}
+
+		# And regencies. The `incapable` trait the dummy is given at game start is what makes it
+		# unreachable by most interactions, and vanilla reads that same trait as a reason to appoint
+		# a regent — so the trait that hides it also hands it a diarch, drawn from a court this file
+		# is busy emptying.
+		#
+		# zz_wilderness_diarchy_rules.txt stops one being created, and because `should_have_diarchy`
+		# is evaluated continuously the engine also ends an existing one on its own. This is the
+		# backstop for a save that predates that rule, and it costs a trigger per year.
+		every_ruler = {
+			limit = {
+				has_trait = wilderness
+				has_active_diarchy = yes
+			}
+			end_diarchy = yes
+		}
+
+		# And nicknames, for anything the five-year hook above missed — a save made before it
+		# existed, or a nickname from one of the other sources (commanders, activities, events).
+		every_ruler = {
+			limit = {
+				has_trait = wilderness
+				has_any_nickname = yes
+			}
+			remove_nickname = yes
+		}
+
+		# And vassals. Neither dummy may have any: a realm named "the Wilds" or "Ruins" with counts
+		# under it is a realm, and everything that reads the dummies — the leak event, the colony
+		# triggers, the Wilds situation — assumes their counties have no holder but them.
+		#
+		# How one got vassals anyway: the engine's AI grants counties away when it is over the
+		# domain limit, to whoever is in its court. The court is normally empty (swept above), but
+		# ruining a whole realm at once drops the dispossessed into the ruins dummy's court, and the
+		# AI landed nine of them again before the next sweep — as colonist vassals of the ruins.
+		# `domain_limit` in 00_wilderness_government.txt removes the motive; this removes the result
+		# from any save that already has it, and from whatever other path the engine finds later.
+		#
+		# Independence rather than a transfer to anyone: the county is real land with a real holder
+		# who won it back through the engine's own rules, and there is no liege it should go to.
+		# `independency` is the change type vanilla uses for exactly this in title_on_actions.txt.
+		every_ruler = {
+			limit = {
+				has_trait = wilderness
+				any_vassal = { always = yes }
+			}
+			every_vassal = {
+				create_title_and_vassal_change = {
+					type = independency
+					save_scope_as = change
+					add_claim_on_loss = no
+				}
+				becomes_independent = { change = scope:change }
+				resolve_title_and_vassal_change = scope:change
+			}
+		}
+
+		# And claims. Nobody may hold a claim on ground a dummy is standing on, because a claim is
+		# the one thing that turns the wilderness into a war target through a route no guard in
+		# Emit/CasusBelliWriter.cs can see: the claim is created while the county is real, held by a
+		# real ruler, and only becomes a claim against a dummy later when the county falls or is
+		# abandoned. By then the claimant has it, it inherits down their line like any other, and the
+		# claim CB has a perfectly ordinary reason to fire.
+		#
+		# The claim-creating moments are shut at the source too — abandon_county_effect and
+		# gen_ruin_county_effect both strip the county's claims as it changes hands, and both title
+		# transfers say `add_claim_on_loss = no` — so this is the backstop for the claims that
+		# predate those edits in an existing save, and for whatever else hands one out later
+		# (events, hooks, the claimant a faction invents). Claims are cheap to hand out and there is
+		# no on_action for "a claim was created", so a sweep is the only shape that catches them all.
+		#
+		# Cost is one pass over the two dummies' held titles with `any_claimant` as the gate, which
+		# is empty for essentially every title every year.
+		every_ruler = {
+			limit = { has_trait = wilderness }
+			every_held_title = {
+				limit = { any_claimant = { always = yes } }
+				every_claimant = {
+					remove_claim = prev
+				}
 			}
 		}
 	}

@@ -1,0 +1,41 @@
+﻿l_english:
+ # Vanilla's Dynastic Cycle and celestial-government strings that say "China" or "Chinese" in
+ # plain text, re-worded onto the generated hegemony. The hegemony is written under vanilla's
+ # h_china key (MapGen/Titles.cs, HegemonyKey) so the ~100 GetTitleByKey('h_china') datafunctions
+ # already resolve to it; these are the strings that named the country instead of the title.
+ #
+ # Under localization/replace/ because a mod's copy of a vanilla key anywhere else is logged as
+ # "Duplicate localization key" on every launch (seen 2026-09-06); replace/ is the sanctioned way.
+ #
+ # $h_china$ / $h_china_adj$ rather than datafunctions: three of these keys (the two game
+ # concepts and the government description) are evaluated at load, before titles exist, and
+ # [GetTitleByKey(...)] there logged "Data error in loc string". Key substitution is plain text
+ # and works in every context. The two keys are generated into
+ # localization/replace/english/gen_hegemony_l_english.yml.
+ #
+ # Left alone on purpose: the Son of Heaven, the Mandate of Heaven, and "$heritage_chinese_name$"
+ # in the conquest era, which is celestial flavour rather than geography.
+ game_concept_son_of_heaven_desc: "The $game_concept_son_of_heaven$ is the [hegemon|E] of $h_china$ and the [top_liege|E] of the [celestial_government|E].\n\nThe $game_concept_son_of_heaven$ has a special form of [legitimacy|E], the [mandate_of_heaven|E], and a unique [situation_participant_group|E] simply called $game_concept_son_of_heaven$."
+ game_concept_dynastic_cycle_desc: "The $game_concept_dynastic_cycle$ depicts the socio-political status of the [hegemony|E] of $h_china$, which flows through [situation_dynastic_cycle_phases|E] of stability, instability, and chaos.\n\nKey to the $game_concept_dynastic_cycle$ is the [mandate_of_heaven|E], a form of [legitimacy|E] held by the Emperor. If it is ever lost, the [hegemony|E] of $h_china$ will #N shatter#! - until it is again united by someone worthy to be the Son of Heaven.#!"
+ CHINESE_CONSOLIDATION_WAR_NAME: "$h_china_adj$ Consolidation War"
+ invite_to_join_movement_fallback: "As a member of a $h_china_adj$ [movement|E], I hereby invite you to join it."
+ great_empire_of_china_shatters: "The #V [hegemony|E] of $h_china$#! will #N shatter#!"
+ situation_dynastic_cycle_phase_stability_expansion_desc: "$situation_dynastic_cycle_phase_stability_expansion_desc_short$\n\n$SITUATION_DYNASTIC_CYCLE_FROM_UNSTABLE_ERA$ Therefore, to reform $h_china$ to this $game_concept_dynastic_cycle_era_short$ from the [GetSituationType('dynastic_cycle').GetPhaseType('situation_dynastic_cycle_phase_stability_advancement').GetName] $game_concept_dynastic_cycle_era_short$, it must first enter the [GetSituationType('dynastic_cycle').GetPhaseType('situation_dynastic_cycle_phase_instability').GetName] $game_concept_dynastic_cycle_era_short$."
+ situation_dynastic_cycle_phase_stability_advancement_desc: "$situation_dynastic_cycle_phase_stability_advancement_desc_short$\n\n$SITUATION_DYNASTIC_CYCLE_FROM_UNSTABLE_ERA$ Therefore, to reform $h_china$ to this $game_concept_dynastic_cycle_era_short$ from the [GetSituationType('dynastic_cycle').GetPhaseType('situation_dynastic_cycle_phase_stability_expansion').GetName] $game_concept_dynastic_cycle_era_short$, it must first enter the [GetSituationType('dynastic_cycle').GetPhaseType('situation_dynastic_cycle_phase_instability').GetName] $game_concept_dynastic_cycle_era_short$."
+ SITUATION_DYNASTIC_CYCLE_FROM_UNSTABLE_ERA: "$h_china$ enters this $game_concept_dynastic_cycle_era_short$ from either [dynastic_cycle_era_type_unstable|E] if enough [situation_catalyst_catalysts|E] trigger."
+ situation_dynastic_cycle_phase_instability_conquest_desc_short: "An [dynastic_cycle_era_short|E] of consolidation after a foreign power has conquered $h_china$."
+ situation_dynastic_cycle_phase_instability_conquest_desc: "$situation_dynastic_cycle_phase_instability_conquest_desc_short$\n\nIn order to enter this $game_concept_dynastic_cycle_era_short$, the [hegemony|E] of $h_china$ has to fall into the hands of a [ruler|E] that does #bold not#! have a [GetGovernment('celestial_government').GetName|E] [government|E] or a [culture|E] [heritage|E] that is #bold not#! $heritage_chinese_name$."
+ situation_dynastic_cycle_phase_instability_desc: "$situation_dynastic_cycle_phase_instability_desc_short$ If [GetSituationType('dynastic_cycle').GetPhaseType('situation_dynastic_cycle_phase_chaos').GetName] is avoided, it is possible for $h_china$ to reach either the [GetSituationType('dynastic_cycle').GetPhaseType('situation_dynastic_cycle_phase_stability_advancement').GetName] or [GetSituationType('dynastic_cycle').GetPhaseType('situation_dynastic_cycle_phase_stability_expansion').GetName] $game_concept_dynastic_cycle_era_short$.\n\n$h_china$ enters this $game_concept_dynastic_cycle_era_short$ from either [dynastic_cycle_era_type_stable|E] if enough [situation_catalyst_catalysts|E] trigger."
+ situation_dynastic_cycle_phase_instability_desc_short: "This is an [dynastic_cycle_era_short|E] of unrest, but also of opportunity. While corruption, popular unrest, and invasions are a threat, wise rule can reform $h_china$."
+ situation_dynastic_cycle_phase_chaos_desc_short: "An [dynastic_cycle_era_short|E] of warlords, where only a strong [ruler|E] can unite $h_china$."
+ situation_dynastic_cycle_phase_chaos_desc: "$situation_dynastic_cycle_phase_chaos_desc_short$\n\nThis $game_concept_dynastic_cycle_era_short$ begins either if:\n$EFFECT_LIST_BULLET$In either [dynastic_cycle_era_type_unstable|E], enough [situation_catalyst_catalysts|E] trigger\n$EFFECT_LIST_BULLET$The current [son_of_heaven|E] loses the [mandate_of_heaven|E]\n\n#S When this $game_concept_dynastic_cycle_era_short$ starts#!\n$BULLET$#indent_newline:2 The [hegemony|E] of $h_china$ [title|E] is destroyed and the former [son_of_heaven|E] is [deposed|E]#!\n$BULLET$#indent_newline:2 [empire|E] and [kingdom|E] [title_tier|E] [titles|E] in the [de_jure|E] hierarchy are also destroyed, if their [holders|E] have [movement_power_i][movement_power_short|E] lower than [EmptyScope.ScriptValue('high_movement_power_value')] and [EmptyScope.ScriptValue('medium_movement_power_value')] respectively#!\n$BULLET$#indent_newline:2 Independent [rulers|E] will swear fealty or pay tribute to their [elders|E] or [movement_leaders|E]\n$BULLET$Every independent [ruler|E] will join the #V $dynastic_cycle_participant_group_other_rulers$#! [situation_participant_group|E]#!\n$BULLET$Every other [situation_participant_group|E] will be disbanded"
+ dynastic_cycle_sub_region_core: "$h_china$"
+ dynastic_cycle_sub_region_core_desc: "All [counties|E] integrated into the [de_jure|E] hierarchy of [GetTitleByKey('h_china').GetDefinitiveName]"
+ dynastic_cycle_sub_region_peripheries: "$h_china_adj$ Peripheries"
+ dynastic_cycle_sub_region_peripheries_desc: "All [counties|E] that are not a part of the [GetSituation('dynastic_cycle').GetSubRegionByKey( 'core' ).GetName], but still owned by [son_of_heaven|E]"
+ situation_parameter_dynastic_cycle_more_common_calamities: "[calamities|E] occur more frequently in $h_china$"
+ celestial_government_desc: "\n$game_concept_celestial_government_desc$\n\n#F The $celestial_government$ system refers to the centralized Administrative government of $h_china$, overseen by the Son of Heaven.#!"
+ DYNASTIC_CYCLE_WINDOW_UNITE_CHINA_FAVORED_PHASE_TOOLTIP: "If [Character.GetShortUIName] united $h_china$, [Character.GetSheHe] would choose to begin an [dynastic_cycle_era_short|E] of [SituationPhaseType.GetName|V]"
+ DYNASTIC_CYCLE_WINDOW_HEGEMON_FAVORED_PHASE_TOOLTIP: "If [Character.GetShortUIName] stabilized $h_china$, [Character.GetSheHe] would choose to begin an [dynastic_cycle_era_short|E] of [SituationPhaseType.GetName|V]"
+ DYNASTIC_CYCLE_WINDOW_UNITE_CHINA_FAVORED_PHASE_ME_TOOLTIP: "If you manage to unite $h_china$, you will begin an [dynastic_cycle_era_short|E] of [SituationPhaseType.GetName|V]"
+ DYNASTIC_CYCLE_WINDOW_HEGEMON_FAVORED_PHASE_ME_TOOLTIP: "If you manage to stabilize $h_china$, you will begin an [dynastic_cycle_era_short|E] of [SituationPhaseType.GetName|V]"
