@@ -60,17 +60,54 @@ public static class TitleTierWriter
     private static readonly string Nomad = Token(GovernmentMap.Nomad);
 
     /// <summary>
+    /// The All Under Heaven governments, grouped by the vanilla government whose ladders suit them:
+    /// its four bureaucracies read as administrative ones, Sōryō as feudal, wanua as a tribe.
+    ///
+    /// Mandala is deliberately in none of them. Every restricted ladder here is a hierarchy of
+    /// vassals under one crown and a mandala is not — it is overlordship of tributaries — so it
+    /// takes the unrestricted ladders, which is what a government no ladder names does anyway.
+    /// </summary>
+    private static readonly string[] AdminLike =
+    [
+        Token(GovernmentMap.Meritocratic), Token(GovernmentMap.SteppeAdmin),
+        Token(GovernmentMap.Celestial), Token(GovernmentMap.JapanAdministrative),
+    ];
+
+    /// <inheritdoc cref="AdminLike"/>
+    private static readonly string FeudalLike = Token(GovernmentMap.JapanFeudal);
+
+    /// <inheritdoc cref="AdminLike"/>
+    private static readonly string TribalLike = Token(GovernmentMap.Wanua);
+
+    /// <summary>The tokens a ladder suits, with each family's All Under Heaven governments added.</summary>
+    private static string[] With(params string[] tokens) =>
+    [
+        .. tokens,
+        .. tokens.Contains(Administrative) ? AdminLike : [],
+        .. tokens.Contains(Feudal) ? new[] { FeudalLike } : [],
+        .. tokens.Contains(Tribal) ? new[] { TribalLike } : [],
+    ];
+
+    /// <summary>
     /// The governments a generated ruler can hold, as the short token the rest of this file keys
     /// vocabularies by — the government's name with its <c>_government</c> suffix removed.
     ///
     /// Only the suffix is dropped here; the entries themselves are written with the full
     /// <c>_government</c> name, which is what the <c>governments</c> condition matches on.
     /// </summary>
+    /// <remarks>
+    /// The seven the cascade produces come first and in their original order, and All Under
+    /// Heaven's seven after them, so extending this list left every entry the writer already
+    /// emitted exactly where it was. A government here draws no randomness of its own — the ladder
+    /// is drawn once per culture and only spent in this loop — so the words the old seven get are
+    /// the same words they got before the new ones were added.
+    /// </remarks>
     public static readonly string[] Governments =
     [
         Token(GovernmentMap.Feudal), Token(GovernmentMap.Clan), Token(GovernmentMap.Tribal),
         Token(GovernmentMap.Republic), Token(GovernmentMap.Theocracy),
         Token(GovernmentMap.Administrative), Token(GovernmentMap.Nomad),
+        .. AdminLike, FeudalLike, TribalLike, Token(GovernmentMap.Mandala),
     ];
 
     /// <summary>Strips the <c>_government</c> suffix CK3's localisation keys leave off.</summary>
@@ -107,7 +144,7 @@ public static class TitleTierWriter
 
         new(new("Imperium", "Principality", "March",
                 "Imperator", "Imperatrix", "Prince", "Princess", "Margrave", "Margravine"),
-            [Feudal, Clan, Administrative]),
+            With(Feudal, Clan, Administrative)),
 
         new(new("Dominion", "Realm", "Marches",
                 "Overlord", "Overlady", "High Lord", "High Lady", "Warden", "Wardeness")),
@@ -117,15 +154,15 @@ public static class TitleTierWriter
 
         new(new("Autocracy", "Tsardom", "Voivodeship",
                 "Autocrat", "Autocratrix", "Tsar", "Tsaritsa", "Voivode", "Voivodess"),
-            [Feudal, Clan, Administrative]),
+            With(Feudal, Clan, Administrative)),
 
         new(new("Grand Realm", "Grand Duchy", "Duchy",
                 "Grand Prince", "Grand Princess", "Grand Duke", "Grand Duchess", "Duke", "Duchess"),
-            [Feudal, Administrative]),
+            With(Feudal, Administrative)),
 
         new(new("Great Khanate", "Khanate", "Horde",
                 "Great Khan", "Great Khatun", "Khan", "Khatun", "Beg", "Begum"),
-            [Nomad, Clan, Tribal]),
+            With(Nomad, Clan, Tribal)),
 
         new(new("Hegemony", "Thearchy", "Prelacy",
                 "Hegemon", "Hegemoness", "Thearch", "Thearchess", "Prelate", "Prelatess"),
@@ -137,7 +174,7 @@ public static class TitleTierWriter
 
         new(new("Grand Council", "Council", "Assembly",
                 "Grand Speaker", "Grand Speaker", "Speaker", "Speaker", "Elder", "Elder"),
-            [Republic, Tribal]),
+            With(Republic, Tribal)),
     ];
 
     /// <summary>Every shipped vocabulary, the plain one first — what an inspector offers.</summary>

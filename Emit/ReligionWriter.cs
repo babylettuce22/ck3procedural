@@ -76,6 +76,13 @@ public static class ReligionWriter
                 b.Blank();
 
                 foreach (var (_, doctrine) in religion.Doctrines) b.Field("doctrine", doctrine);
+
+                // Righteous both ways between the wilderness and everyone else: a doctrine can
+                // only fix its own faith's view of others, so the marker sits on the unsettled
+                // religion and the override on every settled one. See Faiths.SettledDoctrine.
+                b.Field("doctrine", religion.Key == MapGen.Faiths.UnsettledReligionKey
+                    ? MapGen.Faiths.UnsettledMarkerDoctrine
+                    : MapGen.Faiths.SettledDoctrine);
                 b.Blank();
 
                 using (b.Block("traits"))

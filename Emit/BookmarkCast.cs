@@ -348,30 +348,60 @@ public sealed class BookmarkCast
     }
 
     /// <summary>
+    /// The words this screen uses for one ruler.
+    ///
+    /// Everything the bookmark says is written English rather than a loc key the game can inflect —
+    /// <see cref="Describe"/> builds whole sentences — so the pronoun has to be chosen here. It used
+    /// not to be: every description said "he", which on a female ruler was the one claim on the
+    /// screen a player could catch without opening the game, and it contradicted the portrait
+    /// standing beside it.
+    /// </summary>
+    private readonly record struct Pronouns(string Subject, string Object, string Possessive, string Noun)
+    {
+        public static Pronouns For(bool female) => female
+            ? new Pronouns("she", "her", "her", "woman")
+            : new Pronouns("he", "him", "his", "man");
+
+        public string SubjectCap => Capitalise(Subject);
+        public string PossessiveCap => Capitalise(Possessive);
+    }
+
+    /// <summary>
     /// The line under the name. Every branch is gated on something that has to be true of this
     /// ruler; when none of them is, the fall-through is vanilla's own subheading, which resolves
     /// "[tier] of [title]" from the <c>title =</c> the writer emits and so cannot be wrong.
+    ///
+    /// The three gendered branches swap a noun rather than a pronoun, so they are written out
+    /// rather than taken from <see cref="Pronouns"/>: "Mistress of the Realm" is not "Master" with
+    /// a word substituted.
     /// </summary>
-    internal static string Epithet(BookmarkFacts f) => f switch
+    internal static string Epithet(BookmarkFacts f)
     {
-        { Greatest: true } => "Master of the Realm",
+        bool female = f.Ruler.Female;
 
-        // The liege's realm rather than his name: half the rulers on a generated map share a first
-        // name with somebody, and "Sworn Man of Finu" under a character also called Finu reads like
-        // an error. A realm is unambiguous.
-        { Liege: { } liege } => $"Sworn Man of {ParadoxText.Loc(liege.PrimaryTitle.Name)}",
+        return f switch
+        {
+            { Greatest: true } => female ? "Mistress of the Realm" : "Master of the Realm",
 
-        // Not the largest realm on the map, but a great power in it. Worth its own line: the map's
-        // largest realm is often an administrative empire nobody can play, so the top of the
-        // bookmark screen is usually the biggest realm a player is offered rather than the biggest
-        // there is, and saying "master of the realm" there would be a quiet overstatement.
-        { Vassals: >= 5 } => "Lord of Many Banners",
-        { Government: GovernmentMap.Tribal } => "First Among the Clans",
-        { Frontier: true } => "Guardian of the Frontier",
-        { Wealthy: true } => "Keeper of the Trade Routes",
-        { Vassals: >= 1 } => "Answerable to No Crown",
-        _ => "$BOOKMARK_SUBHEADING_DEFAULT$",
-    };
+            // The liege's realm rather than their name: half the rulers on a generated map share a
+            // first name with somebody, and "Sworn Man of Finu" under a character also called Finu
+            // reads like an error. A realm is unambiguous.
+            { Liege: { } liege } => female
+                ? $"Sworn Lady of {ParadoxText.Loc(liege.PrimaryTitle.Name)}"
+                : $"Sworn Man of {ParadoxText.Loc(liege.PrimaryTitle.Name)}",
+
+            // Not the largest realm on the map, but a great power in it. Worth its own line: the map's
+            // largest realm is often an administrative empire nobody can play, so the top of the
+            // bookmark screen is usually the biggest realm a player is offered rather than the biggest
+            // there is, and saying "master of the realm" there would be a quiet overstatement.
+            { Vassals: >= 5 } => female ? "Lady of Many Banners" : "Lord of Many Banners",
+            { Government: GovernmentMap.Tribal } => "First Among the Clans",
+            { Frontier: true } => "Guardian of the Frontier",
+            { Wealthy: true } => "Keeper of the Trade Routes",
+            { Vassals: >= 1 } => "Answerable to No Crown",
+            _ => "$BOOKMARK_SUBHEADING_DEFAULT$",
+        };
+    }
 
     internal static string Describe(BookmarkFacts f)
     {
@@ -380,7 +410,8 @@ public sealed class BookmarkCast
         // rather than a string frozen when the cast was chosen.
         var rng = new Rng(f.Ruler.Seat.Index ^ 0x8B21);
 
-        var body = new List<string> { Standing(f) };
+        var p = Pronouns.For(f.Ruler.Female);
+        var body = new List<string> { Standing(f, p) };
 
         // The world pressing in. Each of these is written only when it is the case, and the two
         // loudest are enough — a paragraph listing six true things reads like a form.
@@ -388,22 +419,26 @@ public sealed class BookmarkCast
         if (f.War is { } war)
             pressures.Add($"A war over {ParadoxText.Loc(war.TargetTitle.Name)} is already under way.");
         if (f.RivalIsLiege)
-            pressures.Add("He and the man he answers to are open enemies.");
+            // Two people in one sentence, and the liege's own sex decides the second word — a queen
+            // sworn to another queen was being told about "the man she answers to".
+            pressures.Add($"{p.SubjectCap} and the {Pronouns.For(f.Liege!.Female).Noun} {p.Subject} "
+                        + "answers to are open enemies.");
         else if (f.Rival is { } rival)
-            pressures.Add($"{ParadoxText.Loc(rival.Name)} counts him a personal enemy.");
+            pressures.Add($"{ParadoxText.Loc(rival.Name)} counts {p.Object} a personal enemy.");
         if (f.PressedClaim is { } claim)
-            pressures.Add($"He presses a claim on {ParadoxText.Loc(claim.Name)}.");
+            pressures.Add($"{p.SubjectCap} presses a claim on {ParadoxText.Loc(claim.Name)}.");
         if (f.Frontier)
-            pressures.Add("Past his borders the map gives out into unclaimed wilds.");
+            pressures.Add($"Past {p.Possessive} borders the map gives out into unclaimed wilds.");
         if (f.Wealthy)
-            pressures.Add("His lands are among the richest anyone has surveyed.");
+            pressures.Add($"{p.PossessiveCap} lands are among the richest anyone has surveyed.");
         if (f.Government == GovernmentMap.Tribal)
-            pressures.Add("His authority rests on the assent of the clans and on nothing written down.");
+            pressures.Add($"{p.PossessiveCap} authority rests on the assent of the clans and on "
+                        + "nothing written down.");
         if (f.Ally is { } ally)
             pressures.Add($"An alliance already stands with {ParadoxText.Loc(ally.Name)}.");
 
         body.AddRange(pressures.Take(2));
-        body.Add(TheMan(f.Ruler));
+        body.Add(TheRuler(f.Ruler, p));
 
         string hook = f.DifficultyKey switch
         {
@@ -417,14 +452,14 @@ public sealed class BookmarkCast
                  "A middling hand, played against neighbours who know it."]),
             _ => rng.Pick<string>(
                 ["Very little of this is in your favour.",
-                 "There is no comfortable year ahead of him.",
+                 $"There is no comfortable year ahead of {p.Object}.",
                  "Survive the decade first. Plan afterwards."]),
         };
 
         return string.Join(" ", body) + $"\\n\\n#bold {hook}#!";
     }
 
-    private static string Standing(BookmarkFacts f)
+    private static string Standing(BookmarkFacts f, Pronouns p)
     {
         string counties = f.RealmCounties == 1 ? "a single county" : $"{f.RealmCounties} counties";
 
@@ -437,14 +472,16 @@ public sealed class BookmarkCast
 
         if (f.Vassals > 0)
         {
-            string vassals = f.Vassals == 1 ? "one vassal of his own" : $"{f.Vassals} vassals of his own";
+            string vassals = f.Vassals == 1
+                ? $"one vassal of {p.Possessive} own"
+                : $"{f.Vassals} vassals of {p.Possessive} own";
             return $"Answers to nobody, and rules {counties} through {vassals}.";
         }
 
-        return $"Answers to nobody, and rules {counties} with his own two hands.";
+        return $"Answers to nobody, and rules {counties} with {p.Possessive} own two hands.";
     }
 
-    private static string TheMan(Ruler ruler)
+    private static string TheRuler(Ruler ruler, Pronouns p)
     {
         var traits = ruler.Profile.PersonalityTraits;
         string bent = ruler.Profile.Lifestyle switch
@@ -459,10 +496,10 @@ public sealed class BookmarkCast
         if (traits.Count >= 2)
         {
             string pair = $"{Capitalise(traits[0])} and {traits[1]}";
-            return $"{pair}, he is at his sharpest {bent}.";
+            return $"{pair}, {p.Subject} is at {p.Possessive} sharpest {bent}.";
         }
 
-        return $"He is at his sharpest {bent}.";
+        return $"{p.SubjectCap} is at {p.Possessive} sharpest {bent}.";
     }
 
     private static string Capitalise(string word) =>

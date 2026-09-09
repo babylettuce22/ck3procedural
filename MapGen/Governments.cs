@@ -122,6 +122,46 @@ public sealed class GovernmentMap
         Celestial, JapanAdministrative, JapanFeudal, Mandala, Wanua,
     ];
 
+    /// <summary>
+    /// The same fourteen as <see cref="Assignable"/>, in the order to show a person rather than the
+    /// order the cascade decides them in: by family, each All Under Heaven government beside the
+    /// vanilla one it is a variety of. The editor's dropdown and the map legend both read this, so
+    /// a colour sits in the same place in the key as its name does in the list.
+    ///
+    /// Kept as its own array rather than sorting <see cref="Assignable"/>, because that array's
+    /// order is load-bearing in its own right — it is the cascade's, and its doc comment reasons
+    /// about it. That the two hold the same fourteen is checked by <c>--verify-world-editor</c>.
+    /// </summary>
+    public static readonly string[] DisplayOrder =
+    [
+        Feudal, JapanFeudal, Administrative, Celestial, Meritocratic, SteppeAdmin,
+        JapanAdministrative, Clan, Republic, Theocracy, Mandala, Nomad, Tribal, Wanua,
+    ];
+
+    /// <summary>
+    /// What to call a government on screen — the editor's dropdown, the map legend and both hover
+    /// readouts, so all four agree on the name beside a colour instead of one saying "Ritsuryō"
+    /// and the next <c>japan_administrative_government</c>.
+    ///
+    /// Only the names the game's own text uses and a mechanical key would lose are spelled out:
+    /// the two Japanese governments, which vanilla calls Ritsuryō and Sōryō rather than anything
+    /// containing "Japan", and the wilderness, which is not a government anyone plays. Everything
+    /// else reads correctly straight from its key, so it is de-suffixed and de-underscored rather
+    /// than listed — which also means a government added later gets a serviceable name here
+    /// without this switch being the thing that has to remember it.
+    /// </summary>
+    public static string DisplayName(string government) => government switch
+    {
+        JapanAdministrative => "Ritsuryō",
+        JapanFeudal => "Sōryō",
+        Wilderness => "Wilderness",
+        "" => "—",
+        _ => Sentence(government.Replace("_government", "").Replace('_', ' ')),
+    };
+
+    private static string Sentence(string words)
+        => words.Length == 0 ? "—" : char.ToUpperInvariant(words[0]) + words[1..];
+
     private readonly Dictionary<Title, string> byCounty;
     private readonly HashSet<Title> _adminRealms;
     private readonly HashSet<Title> _nomadRealms;
@@ -153,6 +193,30 @@ public sealed class GovernmentMap
     public static bool IsAdminFamily(string government)
         => government is Administrative or Meritocratic or SteppeAdmin or Celestial
             or JapanAdministrative;
+
+    /// <summary>
+    /// Whether this government declares <c>noble_families = yes</c> — the six that hand their
+    /// house heads a landless family title and run appointments off it.
+    ///
+    /// Deliberately NOT <see cref="IsAdminFamily"/>, though five of the six are the same. Sōryō
+    /// allows noble families too (01_japan_government_types.txt) while being feudal in every other
+    /// respect, and folding it into the bureaucracy predicate would also claim it has one
+    /// government realm-wide and a castle seat, which it does not.
+    /// </summary>
+    public static bool AllowsNobleFamilies(string government)
+        => government is Administrative or Meritocratic or SteppeAdmin or Celestial
+            or JapanAdministrative or JapanFeudal;
+
+    /// <summary>
+    /// The tier a family title is minted at, which is the government's own
+    /// <c>min_appointment_tier</c>: duchy for the two Byzantine-descended bureaucracies, county for
+    /// the four that carry <c>government_has_county_tier_noble_families</c>.
+    ///
+    /// Returned as the title-key prefix rather than a tier name because that is the only thing the
+    /// callers do with it.
+    /// </summary>
+    public static string NobleFamilyTier(string government)
+        => government is Administrative or SteppeAdmin ? "d" : "c";
 
     public bool IsAdminEmpire(Title title) => _adminRealms.Contains(title);
     public bool IsNomadRealm(Title title) => _nomadRealms.Contains(title);

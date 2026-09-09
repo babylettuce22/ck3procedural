@@ -20,6 +20,58 @@ public sealed class MajorRiverPath
 
 public static class MajorRivers
 {
+    /// <summary>
+    /// The counties a major river runs through or past — the ground a flood would take.
+    ///
+    /// A course is a list of map-pixel points down the middle of the channel, and the channel
+    /// itself is water, so the land at risk is whatever sits within a few pixels of those points.
+    /// Each sample resolves through the same <c>order[Label[pixel]]</c> lookup the partition uses,
+    /// keeps only playable land baronies, and lifts them to their counties. No horizontal wrap,
+    /// matching <see cref="Titles.BuildAdjacency"/>.
+    ///
+    /// Read by the natural-disaster placement in <c>Emit/CompatibilityWriter.cs</c>, which seeds
+    /// vanilla's river-flood regions here in preference to bare terrain. Floodplain terrain is a
+    /// fair proxy for a river basin, but an actual riverbank is the thing itself — and a generated
+    /// map may have no floodplains at all, which is exactly when the proxy stops meaning anything.
+    /// </summary>
+    public static HashSet<Title> RiversideCounties(List<MajorRiverPath> rivers, ProvinceMap map,
+        int[] order, int baronyCount, List<Title> counties, int radius)
+    {
+        var riverside = new HashSet<Title>();
+        if (rivers.Count == 0 || radius < 1) return riverside;
+
+        var countyOf = new Dictionary<int, Title>();
+        foreach (var county in counties)
+            foreach (var barony in county.Children)
+                if (barony.ProvinceId >= 1 && barony.ProvinceId <= baronyCount)
+                    countyOf[barony.ProvinceId] = county;
+
+        int w = map.Width, h = map.Height;
+        foreach (var river in rivers)
+        {
+            foreach (var (px, py) in river.Points)
+            {
+                int cx = (int)px, cy = (int)py;
+                for (int dy = -radius; dy <= radius; dy++)
+                {
+                    int y = cy + dy;
+                    if (y < 0 || y >= h) continue;
+                    int row = y * w;
+                    for (int dx = -radius; dx <= radius; dx++)
+                    {
+                        int x = cx + dx;
+                        if (x < 0 || x >= w) continue;
+                        int cell = map.Label[row + x];
+                        int id = order[cell];
+                        if (id < 1 || id > baronyCount || !map.Seeds[cell].IsLand) continue;
+                        if (countyOf.TryGetValue(id, out var county)) riverside.Add(county);
+                    }
+                }
+            }
+        }
+        return riverside;
+    }
+
     public static List<MajorRiverPath> ExtractAndCarve(
         float[] fullElev,
         int fullWidth,

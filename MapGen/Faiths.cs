@@ -808,12 +808,25 @@ public static class Faiths
     };
 
     public const string UnsettledFaithKey = "gen_faith_unsettled";
+    public const string UnsettledReligionKey = "gen_religion_unsettled";
+
+    /// <summary>
+    /// The two hidden doctrines that make the unsettled faith Righteous to every other generated
+    /// religion and vice versa, defined in
+    /// <c>BaseFilesToCopy/Core/common/religion/doctrine_types/zz_gen_unsettled_hostility.txt</c>.
+    /// Hostility is what holy-war and Great Holy War targeting run on, and a doctrine can only set
+    /// its own faith's view of others — so the marker goes on the unsettled religion and the
+    /// override on everyone else (ReligionWriter). The dummies hold counties in every de jure
+    /// kingdom; without this they were the reason kingdoms qualified as crusade targets.
+    /// </summary>
+    public const string UnsettledMarkerDoctrine = "gen_unsettled_marker_doctrine";
+    public const string SettledDoctrine = "gen_settled_doctrine";
 
     public static (Religion Religion, Faith Faith) CreateUnsettled(VanillaVocabulary vocab,
         HashSet<string> usedNames, MapConfig cfg, Rng rng)
     {
         var religion = CreateReligion(0, 0, vocab, usedNames, cfg, rng,
-            keyOverride: "gen_religion_unsettled", shapeable: false);
+            keyOverride: UnsettledReligionKey, shapeable: false);
 
         var faith = new Faith
         {

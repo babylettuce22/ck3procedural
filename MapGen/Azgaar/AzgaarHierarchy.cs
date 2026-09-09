@@ -214,10 +214,42 @@ public static class AzgaarHierarchy
         Titles.AssignColorsTo(current, rng, cfg.DeJureColorCoding);
         AzgaarColors.Apply(current, azgaar, rng, cfg.DeJureColorCoding);
 
-        // After the export has had its say, never before: the hegemony sits above every empire and
-        // takes a colour of its own, so nothing it does can reach a border Azgaar drew. It claims
-        // no state, no government and no relation — an import keeps every one of those.
-        Titles.Crown(current, rng);
+        // After the export has had its say, never before: the hegemony takes a colour of its own,
+        // so nothing it does can reach a border Azgaar drew. It claims no state, no government and
+        // no relation — an import keeps every one of those.
+        //
+        // The two graphs are the county-level ones this method has been carrying all along, lifted
+        // onto whichever empire each county ended up inside: the crown covers a contiguous group of
+        // empires rather than all of them, and picking that group needs to know what borders what.
+        var empireOf = new Dictionary<Title, Title>();
+        foreach (var empire in current)
+            foreach (var county in Titles.Flatten([empire]).Where(t => t.Tier == "c"))
+                empireOf[county] = empire;
+
+        Titles.Crown(current, rng,
+                     LiftToEmpires(countyAdjacency), LiftToEmpires(countySea));
+
+        Dictionary<Title, HashSet<Title>> LiftToEmpires(Dictionary<int, HashSet<int>> below)
+        {
+            var lifted = new Dictionary<Title, HashSet<Title>>(current.Count);
+            foreach (var empire in current) lifted[empire] = [];
+
+            foreach (var (county, neighbours) in below)
+            {
+                if (county < 0 || county >= counties.Count) continue;
+                if (!empireOf.TryGetValue(counties[county], out var a)) continue;
+
+                foreach (int other in neighbours)
+                {
+                    if (other < 0 || other >= counties.Count) continue;
+                    if (!empireOf.TryGetValue(counties[other], out var b) || a == b) continue;
+                    lifted[a].Add(b);
+                    lifted[b].Add(a);
+                }
+            }
+
+            return lifted;
+        }
 
         int kingdoms = Titles.Flatten(current).Count(t => t.Tier == "k");
         int duchies = Titles.Flatten(current).Count(t => t.Tier == "d");

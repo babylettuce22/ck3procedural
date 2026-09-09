@@ -54,6 +54,47 @@ is_colonist_trigger = {
 	government_has_flag = government_is_colony
 }
 
+# Character scope. SHOULD this ruler be a colonist — i.e. is the state colony_government describes
+# actually the state he is in?
+#
+# This is the one definition of the colonist condition, and it exists because there were three
+# copies of it that had drifted apart: `can_get_government` in 00_colony_government.txt, the guard
+# at the top of colonization_make_colonist_effect, and nothing at all on the way back out. Any two
+# of them disagreeing is a ruler stuck in a government that does not describe him.
+#
+# ---- The tier line, and the save that made it necessary ----
+#
+# The first two clauses were the whole trigger, and a claimant faction found the hole in them. A
+# landless claimant was installed as King of Tāsstia; the only county that came with the crown was a
+# colony; and `can_get_government` is checked BY THE ENGINE the moment a character becomes landed,
+# so it looked at a man holding one colony and no settled county, said yes, and handed
+# colony_government to a king with eight de jure duchies and five vassals. The whole realm then read
+# as Colonial — the government is the realm's, not the county's.
+#
+# So the missing clause is the one the design has always assumed and never written down: a colonist
+# is a COUNT. 00_wilderness_flavorization.txt only ever flavours colony_government at county tier,
+# the character modifiers are priced for one palisade, and the decision file's note on why there is
+# no move-seat decision spends a paragraph on exactly this state being unreachable. It was reachable
+# from the other end.
+#
+# `highest_held_title_tier` rather than an `any_held_title` sweep for the tier: it is vanilla's own
+# idiom for this question (00_accolade_names.txt uses the identical comparison), it is one lookup
+# instead of a pass over the domain, and it reads the right way round — a colonist's ceiling is a
+# county, and his capital barony sits below it and never trips the test.
+colony_government_valid_trigger = {
+	any_held_title = {
+		tier = tier_county
+		is_colony_county_trigger = yes
+	}
+	NOT = {
+		any_held_title = {
+			tier = tier_county
+			is_settled_county_trigger = yes
+		}
+	}
+	NOT = { highest_held_title_tier > tier_county }
+}
+
 # Character scope. Is this character standing in a colony they themselves hold?
 #
 # THE presence test. Everything about "the lord is here" reduces to this one line, which is why it

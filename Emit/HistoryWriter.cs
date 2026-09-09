@@ -55,7 +55,8 @@ public static class HistoryWriter
         WriteHeadOfFaithCharacters(modDir, cfg, faiths, cultures, ethnicities, counties, realms, wilderness);
         WriteWildernessHolder(modDir, cfg, wild, wilderness);
         WriteHouseRelationsOnAction(modDir, prehistory);
-        WriteTitleHistory(modDir, cfg, empires, development, realms, governments, faiths, wilderness, wild);
+        ContentWriter.WriteNobleFamilyTitles(modDir, prehistory);
+        WriteTitleHistory(modDir, cfg, empires, development, realms, governments, faiths, wilderness, wild, prehistory);
         WriteDynastyLocalisation(modDir, prehistory);
     }
 
@@ -343,9 +344,21 @@ public static class HistoryWriter
                 b.Inline(ruler.BirthDate, "birth = yes");
 
                 // --- Simulated Wedding Date ---
+                //
+                // A reigning woman marries matrilineally, without exception. Not flavour: her
+                // children are already written into HER house by Prehistory (they carry
+                // CharacterDynastyMap[ruler]), so a plain add_spouse states the opposite of the
+                // character file standing next to it — and every heir born after the start date
+                // would leave for the consort's house, which on the fallback match is
+                // gen_dynasty_noble_N, a house with nothing behind it. Every queen on the map would
+                // then be the last of her line by construction.
+                //
+                // Written from her own scope, which vanilla does too (khanty.txt 302530 marries
+                // 302531 exactly this way); the commoner shape is the husband scoping his wife, and
+                // the effect means the same thing from either side.
                 if (prehistory.Spouses.TryGetValue(county, out var spouse) && spouse.MarriageDate != null)
                     using (b.Block(spouse.MarriageDate))
-                        b.Field("add_spouse", spouse.Id);
+                        b.Field(ruler.Female ? "add_matrilineal_spouse" : "add_spouse", spouse.Id);
 
                 // --- Chronologically Dated Alliances (with explicit marriage scopes) ---
                 if (prehistory.Alliances.TryGetValue(county, out var allies))
@@ -710,21 +723,27 @@ public static class HistoryWriter
     /// development, the heads of faith — is written from the same objects the first write used, so
     /// a re-emit with nothing edited reproduces it exactly.
     /// </summary>
+    /// <param name="prehistory">
+    /// Read for its noble families, which this file grants. Expected to have been rebuilt against
+    /// the edited government map already — the caller does that, because the same rebuild decides
+    /// whether two other files need re-emitting and only the caller holds what they need.
+    /// </param>
     internal static void ReWriteTitleHistory(string modDir, MapConfig cfg, List<Title> empires,
         Dictionary<Title, int> development, RealmMap realms, GovernmentMap governments,
-        FaithMap faiths, WildernessMap wilderness)
+        FaithMap faiths, WildernessMap wilderness, MapGen.PrehistoryMap? prehistory = null)
     {
         var wild = Titles.Flatten(empires)
             .Where(t => t.Tier == "c" && wilderness.Contains(t))
             .ToList();
 
         WriteTitleHistory(modDir, cfg, empires, development, realms, governments, faiths,
-            wilderness, wild);
+            wilderness, wild, prehistory);
     }
 
     private static void WriteTitleHistory(string modDir, MapConfig cfg, List<Title> empires,
         Dictionary<Title, int> development, RealmMap realms, GovernmentMap governments,
-        FaithMap faiths, WildernessMap wilderness, List<Title> wild)
+        FaithMap faiths, WildernessMap wilderness, List<Title> wild,
+        MapGen.PrehistoryMap? prehistory)
     {
         string dir = Path.Combine(modDir, "history", "titles");
         Directory.CreateDirectory(dir);
@@ -767,6 +786,37 @@ public static class HistoryWriter
                     && ReferenceEquals(title, Primary(holder, realms)))
                     WriteAdministrativeFallback(b);
             }
+        }
+
+        // The noble families, granted on the same day their holders got their land.
+        //
+        // Second date block, and its DATE is the start date rather than the grant date, because
+        // that is what destroy_landless_title_no_dlc_effect tests: it fires only when the game being
+        // started IS that date, so a player without Roads to Power opens a world with no landless
+        // family titles in it instead of one where every governor holds a duchy the engine has no
+        // machinery for. Vanilla writes exactly this beside each of Byzantium's sixty-one.
+        foreach (var family in prehistory?.NobleFamilies ?? [])
+        {
+            using (b.Block(family.TitleKey))
+            {
+                using (b.Block(titleGrantDate))
+                {
+                    // Omitted for a sovereign, who has nobody to be a vassal of. Vanilla leaves the
+                    // stale line on e_byzantium's own family and lets the engine resolve holding a
+                    // title under yourself; saying nothing is the same answer without the puzzle.
+                    b.Field("liege", family.Liege?.Key);
+
+                    b.Field("holder", CharacterId(family.HolderCounty));
+                    b.Field("government", family.Government);
+                    b.Inline("succession_laws", "noble_family_succession_law");
+                }
+
+                using (b.Block(cfg.StartDate))
+                using (b.Block("effect"))
+                    b.Inline("destroy_landless_title_no_dlc_effect", $"DATE = {cfg.StartDate}");
+            }
+
+            b.Blank();
         }
 
         // The two unsettled realms and their counties, each held by its own immortal placeholder.
@@ -901,7 +951,7 @@ public static class HistoryWriter
         };
     }
 
-    private static void WriteDynastyLocalisation(string modDir, PrehistoryMap prehistory)
+    internal static void WriteDynastyLocalisation(string modDir, PrehistoryMap prehistory)
     {
         string dir = Path.Combine(modDir, "localization", "english");
         Directory.CreateDirectory(dir);
@@ -947,6 +997,30 @@ public static class HistoryWriter
 
         foreach (var house in prehistory.Houses.Values)
             if (writtenKeys.Add(house.NameKey)) loc.AddUnversioned(house.NameKey, house.LocalizedName);
+
+        loc.Blank();
+
+        // The family titles, named through their house rather than after it: `$dynn_gen_7$ Family`
+        // resolves at display time, so renaming a house in the editor renames its family too
+        // instead of leaving a title carrying the name the house used to have. Vanilla writes its
+        // own the same way — `d_nf_ampelas: "$dynn_Ampelas$ Family"`.
+        //
+        // The _article key beside it is not decoration: the title is definite_form, and without one
+        // the game draws the raw DEFAULT_TITLE_NAME_ARTICLE token where "the" belongs.
+        foreach (var family in prehistory.NobleFamilies)
+        {
+            if (!prehistory.Houses.TryGetValue(family.HouseKey, out var house)) continue;
+            if (!writtenKeys.Add(family.TitleKey)) continue;
+
+            loc.AddUnversioned(family.TitleKey, $"${house.NameKey}$ Family");
+            loc.AddUnversioned($"{family.TitleKey}_article", "$DEFAULT_TITLE_NAME_ARTICLE$");
+
+            // Vanilla ships no _adj for any of its sixty-one and takes a missing-localisation
+            // warning for each — which is only invisible because tiger hides findings against the
+            // game's own files. One more line is cheaper than a warning per family, and the name
+            // reads as an adjective unchanged: "the Ampelas levies".
+            loc.AddUnversioned($"{family.TitleKey}_adj", $"${house.NameKey}$");
+        }
 
         loc.Write(Path.Combine(dir, "gen_dynasties_l_english.yml"));
     }

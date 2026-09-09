@@ -21,18 +21,31 @@ namespace Ck3MapGen.Emit;
 /// which the mod blanks with the rest of that folder. This is its replacement, under a name of
 /// our own, the way SilkRoadWriter starts the Silk Road.
 ///
-/// Two things vanilla's file does are deliberately not copied. Its three hundred lines of
-/// <c>record_situation_special_event</c> are the Qin-to-Song timeline, which this world did not
-/// have; and its dated <c>change_phase</c> calls set the era per bookmark, where this map has one
-/// start date and the type's own <c>start_phase</c> (instability) suits both a hegemony worn from
-/// the start and one waiting to be won. The chaos phase in particular is not a starting position:
-/// its <c>on_start</c> shatters the hegemon's realm.
+/// Vanilla's three hundred lines of <c>record_situation_special_event</c> are the Qin-to-Song
+/// timeline, which this world did not have, and are not copied. Its dated <c>change_phase</c>
+/// calls are what set the era per bookmark, and one of them is: 1066 opens Song China in
+/// <c>situation_dynastic_cycle_phase_stability_advancement</c> because its emperor holds nearly
+/// all of it, while 867 and 1178 open in instability with a dynasty already fading. A crowned
+/// hegemon here is the Song case — <c>Realms.ExpandHegemonRealm</c> fills the border to nine
+/// tenths — so a crowned start gets the 1066 line, verbatim in form, dated the day after the
+/// situation starts. An unheld hegemony keeps the type's own <c>start_phase</c> (instability),
+/// which is vanilla's 221 BC opening before the first emperor.
+///
+/// <c>MapConfig.DynasticCycle</c> off means this writer is not called at all (ContentWriter):
+/// the situation is never started, and everything else on the hegemony — title, celestial
+/// government, ministries — stands without it. See the setting's own doc for what that costs.
+///
+/// Instability is not a neutral opening. Its every future phase — expansion, advancement, and
+/// instability's own chaos track — is <c>takeover_points = 1</c>, so the first year's drift
+/// catalysts decide the era; a crowned hegemon that opened there was observed (2026-09-07,
+/// 1050 start) with 142 of its sub-region phase records in chaos by 1067. The chaos phase in
+/// particular is not a starting position: its <c>on_start</c> shatters the hegemon's realm.
 ///
 /// The map footprint takes care of itself. The situation's <c>on_start</c> adds every de jure
 /// county of the title to its one sub-region and its yearly pulse re-syncs to the same, so the
-/// Dynastic Cycle covers exactly what the hegemony does — which, on a generated map, is every
-/// empire there is. That is the design of the hegemony (Titles.Crown), not an accident here, but
-/// it does mean the cycle is a world cycle rather than a regional one.
+/// Dynastic Cycle covers exactly what the hegemony does — a contiguous group of empires, a
+/// landmass where the map offers one (Titles.Crown), and never the whole world. It is a regional
+/// cycle, as vanilla's is; it stopped being a world cycle when the crown stopped being the map.
 ///
 /// Game start then finishes the job: vanilla's <c>on_game_start</c> block finds the situation
 /// through <c>situation:dynastic_cycle ?=</c>, zeroes the examination clock on the title and
@@ -47,9 +60,11 @@ namespace Ck3MapGen.Emit;
 /// <c>catalyst_hegemony_far_too_few_lands_value</c> it is chaos on the spot — and the chaos phase's
 /// first act is <c>tgp_chaos_shattering_effect</c>, which destroys the hegemony and the emperor's
 /// empire and frees every vassal outside the emperor's remaining de jure. Vanilla's 50 % and 30 %
-/// assume the Song holding nearly all of China. Here the de jure hegemony is the whole map, so a
-/// freshly crowned hegemon at a third of it would be shattered by the first yearly pulse for a
-/// realm nothing had gone wrong in. When the map starts with a hegemon, the two values are
+/// assume the Song holding nearly all of China, and a crowned hegemon here now starts in much the
+/// same position — <c>Realms.ExpandHegemonRealm</c> fills the border to nine tenths. The wilderness
+/// is what still separates the two: it counts in the denominator (the game does not know those
+/// counties are empty) and can put the starting share under vanilla's warning line on its own. So
+/// when the map starts with a hegemon, the two values are
 /// rewritten in vanilla's own proportion to what the crown actually holds: half of the starting
 /// share is the warning, three tenths of it is the loss. That keeps their meaning — "the hegemon
 /// has lost most of what a hegemon should hold" — while making the yardstick this map's. Unheld,
@@ -81,6 +96,24 @@ public static class DynasticCycleWriter
             using (b.Block("start_situation")) b.Field("type", "dynastic_cycle");
         }
 
+        // A crowned hegemon opens in the stable era, the way vanilla's 1066.1.1 entry opens Song
+        // China. Same grammar as that entry; dated the day after start_situation so the situation
+        // and its top sub-region exist when it runs. Unheld, the type's start_phase stands.
+        if (hegemonShare is not null)
+        {
+            b.Blank();
+            b.Comment("Crowned at the start date, so the cycle opens in the stable era, as vanilla's 1066 does.");
+            using (b.Block("1.1.2"))
+            using (b.Block("effect"))
+            using (b.Block("if"))
+            {
+                using (b.Block("limit")) b.Field("has_tgp_dlc_trigger", "yes");
+                using (b.Block("situation:dynastic_cycle"))
+                using (b.Block("situation_top_sub_region"))
+                    b.Inline("change_phase", "phase = situation_dynastic_cycle_phase_stability_advancement");
+            }
+        }
+
         string dir = Path.Combine(modDir, "history", "struggles");
         Directory.CreateDirectory(dir);
         ParadoxText.WriteBom(Path.Combine(dir, "zz_gen_dynastic_cycle.txt"), b.ToString());
@@ -97,8 +130,9 @@ public static class DynasticCycleWriter
         var b = new JominiBuilder();
         b.Comment($"The Dynastic Cycle's land thresholds, tuned to what the crowned hegemon of {hegemony.Key}");
         b.Comment($"(\"{hegemony.Name}\") holds at the start date: {Fraction(share)} of the hegemony's de jure counties.");
-        b.Comment("Vanilla's 0.5 / 0.3 assume a hegemon holding nearly all of a compact de jure China; this");
-        b.Comment("hegemony is de jure the whole map. Same proportions, this map's yardstick. See Emit/DynasticCycleWriter.cs.");
+        b.Comment("Vanilla's 0.5 / 0.3 assume a hegemon holding nearly all of a compact de jure China; this one");
+        b.Comment("starts holding nearly all of the settled part, with wilderness counties in the denominator");
+        b.Comment("that no ruler will ever hold. Same proportions, this map's yardstick. See Emit/DynasticCycleWriter.cs.");
         b.Blank();
         b.Field("catalyst_hegemony_too_few_lands_value", Fraction(share * TooFewOfShare));
         b.Field("catalyst_hegemony_far_too_few_lands_value", Fraction(share * FarTooFewOfShare));
@@ -108,6 +142,7 @@ public static class DynasticCycleWriter
         ParadoxText.WriteBom(Path.Combine(dir, "zz_gen_dynastic_cycle_values.txt"), b.ToString());
 
         Console.WriteLine($"  dynastic cycle: land thresholds {Fraction(share * TooFewOfShare)} / "
-                        + $"{Fraction(share * FarTooFewOfShare)} for a hegemon holding {share:P0} of the de jure map");
+                        + $"{Fraction(share * FarTooFewOfShare)} for a hegemon holding {share:P0} of the "
+                        + "hegemony's de jure counties");
     }
 }

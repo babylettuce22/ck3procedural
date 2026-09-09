@@ -42,9 +42,9 @@ public static class ContentWriter
 
         var provinceTerrain = Core.Stage.Time("province terrain vote", () =>
         {
-            var vote = ProvinceTerrain(cfg, provinces, order, terrain, landCount);
             ReportTerrain(terrain);
-            return vote;
+            return ProvinceTerrain(cfg, provinces, order, terrain, provinceElevation, landCount,
+                baronyCount, report: true);
         });
 
         var vocabulary = Core.Stage.Time("vanilla vocabulary", () => MapGen.VanillaVocabulary.Read(gameDir));
@@ -357,7 +357,20 @@ public static class ContentWriter
             CompatibilityWriter.WriteCalendarLocalisation(modDir, azgaar);
             var regionMembers = steppe.RegionMembers();
             foreach (var (key, members) in silkRoad.RegionMembers()) regionMembers[key] = members;
-            CompatibilityWriter.WriteGeographicalRegions(modDir, gameDir, empires, cultures, regionMembers);
+            // The natural-disaster regions need terrain to sit on, neighbours to spread over, and
+            // the hegemon's realm to stay mostly clear of; see WriteGeographicalRegions. Not
+            // realms.CountyAdjacency — that one is built over the non-wilderness counties only
+            // (Realms.Build), so a wilderness county has no entry in it and cannot be tested
+            // against. Built once more here over every county, at the bridge distance Realms uses.
+            var everyCountyAdjacency = Realms.BuildCountyAdjacency(counties, provinces, baronyCount, order,
+                (int)Math.Round(cfg.Scaled(cfg.SeaBridgePixelsAtVanilla)));
+            // Flood regions want actual riverbank rather than a terrain proxy; a few pixels either
+            // side of the traced course is the land a river takes. See PlaceDisasterRegions.
+            var riverside = MapGen.MajorRivers.RiversideCounties(terra.MajorRiversList, provinces,
+                order, baronyCount, counties, Math.Max(2, (int)Math.Round(cfg.Scaled(4))));
+            CompatibilityWriter.WriteGeographicalRegions(modDir, gameDir, empires, cultures, regionMembers,
+                wilderness, everyCountyAdjacency, provinceTerrain,
+                Realms.HegemonRealmCounties(realms, empires, wilderness), riverside);
             CompatibilityWriter.WriteHolySites(modDir, gameDir, empires, faiths);
             CompatibilityWriter.WriteDecisionBlocks(modDir, gameDir);
         });
@@ -366,7 +379,20 @@ public static class ContentWriter
         Core.Stage.Time("great steppe files", () => SteppeWriter.WriteAll(modDir, gameDir, steppe));
         Core.Stage.Time("the wilds files", () => FrontierWriter.WriteAll(modDir, cfg, frontier));
         Core.Stage.Time("silk road files", () => SilkRoadWriter.WriteAll(modDir, gameDir, cfg, silkRoad));
-        Core.Stage.Time("dynastic cycle", () => DynasticCycleWriter.WriteAll(modDir, empires, hegemonShare));
+        // The situation is started from one history entry and nothing else (see the writer), so
+        // MapConfig.DynasticCycle off is simply that entry not being written; the guarded
+        // on_actions and the Silk Road link handle its absence at runtime.
+        Core.Stage.Time("dynastic cycle", () =>
+        {
+            if (cfg.DynasticCycle) DynasticCycleWriter.WriteAll(modDir, empires, hegemonShare);
+            else Console.WriteLine("  dynastic cycle: not started (MapConfig.DynasticCycle is off)");
+        });
+        // Independent of the situation above: the hegemony wears China's arms, robes and throne
+        // room whether or not the Dynastic Cycle is running, because all of it keys off the title
+        // rather than off the situation. Not gated on MapConfig.DynasticCycle for that reason.
+        Core.Stage.Time("hegemony flavour",
+            () => HegemonyFlavourWriter.WriteAll(modDir, gameDir, empires));
+
         Core.Stage.Time("route files", () => RouteWriter.WriteAll(modDir, routes, crossings, silkRoad,
             provinces, order, baronyCount, provinceTerrain));
 
@@ -765,13 +791,11 @@ public static class ContentWriter
         jb.Comment("Generated de jure hierarchy.");
         jb.Blank();
 
-        // When the world has a hegemony it *is* the root, and writing it writes every empire nested
-        // inside — which is all CK3 needs to read a de jure tier above empire. The prefix is the
-        // whole declaration: `tier` is documented as not for use in database definitions and appears
-        // nowhere in vanilla's own data.
-        var hegemony = Titles.HegemonyOf(empires);
-        if (hegemony is not null) Write(hegemony);
-        else foreach (var empire in empires) Write(empire);
+        // The hegemony first when there is one, then every empire it does not cover — the crown is a
+        // region rather than the map, so writing it alone would drop the empires outside it. Nesting
+        // is the whole declaration of the tier: `tier` is documented as not for use in database
+        // definitions and appears nowhere in vanilla's own data.
+        foreach (var root in Titles.Roots(empires)) Write(root);
 
         jb.Comment("Head of faith landless titles.");
         jb.Blank();
@@ -930,6 +954,65 @@ public static class ContentWriter
     }
 
     /// <summary>
+    /// The landless family titles, in a file of their own.
+    ///
+    /// Separate from 00_landed_titles.txt for a scheduling reason rather than a stylistic one: that
+    /// file is written in the titles stage, and the houses these are named for do not exist until
+    /// the history stage several steps later. A second file in the same directory is how vanilla
+    /// carries its own additions (02_china.txt, 02_japan.txt) and the engine loads the directory
+    /// whole, so the `capital` pointers into 00_landed_titles.txt resolve either way.
+    ///
+    /// Every field is vanilla's, from the sixty-one d_nf_ blocks at 00_landed_titles.txt:76374.
+    /// The two that would be easy to leave off are the two that matter most: `landless` is what
+    /// keeps the title off the map, and `noble_family` is the whole point — without it the engine
+    /// sees a titular duchy and none of the administrative machinery looks at it.
+    /// </summary>
+    internal static void WriteNobleFamilyTitles(string modDir, MapGen.PrehistoryMap prehistory)
+    {
+        string dir = Path.Combine(modDir, "common", "landed_titles");
+        Directory.CreateDirectory(dir);
+
+        var jb = new JominiBuilder(JominiStyle.Spaced);
+
+        jb.Comment("Generated noble families. One landless title per house head under a government");
+        jb.Comment("that appoints from houses; see MapGen/Prehistory.RebuildNobleFamilies.");
+        jb.Blank();
+
+        foreach (var family in prehistory.NobleFamilies)
+        {
+            using (jb.Block(family.TitleKey))
+            {
+                // Vanilla's flat grey for every one of them. The colour of a landless title is only
+                // ever seen in a list beside its name, and a family is not a place.
+                jb.Inline("color", "100", "100", "100");
+
+                // A de jure pointer and nothing else — the holder's own seat rather than the realm
+                // capital vanilla uses, so a family reads as being FROM somewhere.
+                jb.Field("capital", family.HolderCounty.Key);
+
+                jb.Field("definite_form", "yes");
+                jb.Field("landless", "yes");
+                jb.Field("noble_family", "yes");
+
+                // The family follows the heir who takes the land, rather than being partitioned off
+                // to a second son as an inheritance in its own right.
+                jb.Field("always_follows_primary_heir", "yes");
+                jb.Field("no_automatic_claims", "yes");
+                jb.Field("destroy_if_invalid_heir", "yes");
+
+                // He is styled for his land, not for his family: a duke who also holds one of these
+                // is still called duke.
+                jb.Field("ruler_uses_title_name", "no");
+                jb.Inline("ai_primary_priority", "add = -1000");
+            }
+
+            jb.Blank();
+        }
+
+        ParadoxText.WriteBom(Path.Combine(dir, "01_generated_noble_families.txt"), jb.ToString());
+    }
+
+    /// <summary>
     /// Everything the debug panel bakes into the mod: what this run decided, gathered in one place
     /// so the window can report it back from inside the game.
     ///
@@ -1052,13 +1135,65 @@ public static class ContentWriter
         Console.WriteLine($"  terrain classes (share of land): {string.Join(", ", parts)}");
     }
 
+    /// <summary>
+    /// The terrain each province is written as, from the pixels inside it.
+    ///
+    /// A plurality of those pixels for vegetation, which is the right answer there — a province
+    /// that is mostly jungle is a jungle province — and the wrong one for the two relief tiers. A
+    /// range is a linear feature, and the hill band ringing it is three times its size by
+    /// construction: <see cref="TerrainClassifier"/> gives mountains the top 3.3% of land by
+    /// elevation and hills the 9.4% below. So in any province a ridge crosses, the hills outnumber
+    /// the peaks and take the vote, and the taller the ground the more reliably they do it.
+    ///
+    /// Measured before this, on a 5,400-barony run: <c>mountains</c> won 0.00% of baronies and
+    /// <c>hills</c> 5.48%, against vanilla's 12.15% and 19.20%. All 35 mountain provinces the vote
+    /// produced were inside the impassable range — that is, the pass that takes provinces out of
+    /// play had already claimed every one of them, so no county on the map sat on mountains at all.
+    /// Even among the 128 steepest provinces there, the vote still returned hills for 64 and
+    /// mountains for 24.
+    ///
+    /// The fix is not a bigger pixel budget. Those pixels are what the ground is *painted* from,
+    /// and widening the band paints mountain rock over ground the heightmap renders flat — the
+    /// regression recorded on <see cref="TerrainClassifier"/>'s MountainShareOfLand, which is why
+    /// that constant is 3.3% and should stay there. The two consumers want different things:
+    /// terrain in common/province_terrain is a claim about a province's *character*, which is what
+    /// the movement and combat rules read and what a hand-authored map states, while the texture
+    /// underneath stays free to show the valley floor that is really there. Vanilla is exactly this
+    /// — an Alpine province is named for its range whatever share of it is pasture.
+    ///
+    /// So the pixels keep the relief and the province is promoted on rank instead: the baronies
+    /// carrying the most mountain-band ground are named for the range they hold. Nothing repaints
+    /// the raster to match, deliberately — that would reintroduce the rock-on-flat-ground
+    /// regression, and is the one way this differs from <see cref="MapGen.Cultivation"/>, which
+    /// does repaint because a farmland province genuinely has to look like fields.
+    ///
+    /// Ranked over baronies alone and then applied to every land province, so the impassable ones —
+    /// which sit at the top of the relief distribution and are not counties — cannot eat a target
+    /// share that is meant to describe playable ground.
+    /// </summary>
     public static TerrainClass[] ProvinceTerrain(MapConfig cfg, ProvinceMap provinces,
-        int[] order, TerrainClass[] terrain, int landCount)
+        int[] order, TerrainClass[] terrain, float[] provinceElevation, int landCount,
+        int baronyCount, bool report = false)
     {
         int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
         int classes = Enum.GetValues<TerrainClass>().Length;
 
         var votes = new int[(provinces.Count + 1) * classes];
+        var counted = new int[provinces.Count + 1];
+
+        // Land pixels, counted separately from votable ones because beach is land that must dilute a
+        // coastal province's relief share while still being kept out of the plurality below.
+        var land = new int[provinces.Count + 1];
+        var landMask = new byte[width * height];
+
+        // The relief lines are drawn over barony ground only, never over all land. The impassable
+        // provinces are the highest ground on the map by the very score that selected them, and
+        // they are not counties — measured against a line that counts them, the top
+        // MountainProvinceShare of *land* is a far smaller share of the ground baronies actually
+        // hold, and the tier cannot fill however the rank is set. Against a line that does not,
+        // the setting means what it says: a share of playable ground.
+        var baronyMask = new byte[width * height];
+
         for (int y = 0; y < height; y++)
         {
             for (int x = 0; x < width; x++)
@@ -1067,16 +1202,126 @@ public static class ContentWriter
                 int id = order[provinces.Label[i]];
                 if (id > landCount) continue;
 
+                landMask[i] = 1;
+                if (id <= baronyCount) baronyMask[i] = 1;
+                land[id]++;
+
                 var t = terrain[i];
                 if (t is TerrainClass.Sea or TerrainClass.Beach) continue;
                 votes[id * classes + (int)t]++;
+                counted[id]++;
             }
         }
+
+        int Pixels(int id, TerrainClass t) => votes[id * classes + (int)t];
+
+        // Relief is read off the elevation, not off the painted class, and that is the whole point
+        // of this pass rather than an implementation detail.
+        //
+        // The painted mountain class is the top 3.3% of land by height and has to stay there — it
+        // is what the ground is *textured* from, and widening it paints rock over ground the
+        // heightmap renders flat (the regression recorded on TerrainClassifier.MountainShareOfLand).
+        // Measured, that band reaches almost nothing: on a 4,169-barony run only 0.9% of baronies
+        // held a single mountain pixel and 6.5% a single hill pixel, because the impassable pass
+        // takes the steepest provinces first and fuses them, and because Arctic relabels high
+        // ground in polar latitudes before Hills ever sees it. A rank over that band can only
+        // promote what survives it, which is why ranking the painted class moved 0.3% to mountains
+        // and left the tier as broken as it found it.
+        //
+        // Elevation has none of those holes. Every land pixel has a height, whatever was painted on
+        // top of it, so a polar range and a range the impassable pass declined both still read as
+        // high ground here.
+        //
+        // The lines are drawn at the same shares as the tiers they feed, which makes the two
+        // settings one idea rather than two: a province is mountains when it holds more than its
+        // even share of the highest MountainProvinceShare of land. Uniform relief would give every
+        // province exactly that share and the ranking would mean nothing — which is what
+        // ReliefPromotionFloor is there to catch — but relief is never uniform, and the ranking is
+        // the whole signal on any world with ranges in it.
+        double mountainTarget = Math.Clamp(cfg.MountainProvinceShare, 0, 1);
+        double hillTarget = Math.Clamp(cfg.HillProvinceShare, 0, 1);
+        double reliefTarget = Math.Clamp(mountainTarget + hillTarget, 0, 1);
+
+        float mountainLine = mountainTarget <= 0 ? float.MaxValue
+            : TerrainClassifier.LandPercentile(provinceElevation, baronyMask, 1.0 - mountainTarget);
+        float hillLine = reliefTarget <= 0 ? float.MaxValue
+            : TerrainClassifier.LandPercentile(provinceElevation, baronyMask, 1.0 - reliefTarget);
+
+        var above = new int[provinces.Count + 1];   // pixels over the mountain line
+        var high = new int[provinces.Count + 1];    // pixels over the hill line, mountains included
+
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int i = y * width + x;
+                if (landMask[i] == 0) continue;
+
+                int id = order[provinces.Label[i]];
+                float e = provinceElevation[i];
+                if (e >= mountainLine) above[id]++;
+                if (e >= hillLine) high[id]++;
+            }
+        }
+
+        // Nested by construction — the mountain line is above the hill line — so a province can
+        // never rank above the mountain cut and below the hill one, and the tiers stay ordered
+        // however the two cuts happen to fall.
+        double MountainBand(int id) => land[id] == 0 ? 0 : above[id] / (double)land[id];
+        double HillBand(int id) => land[id] == 0 ? 0 : high[id] / (double)land[id];
+
+        // Which kind of range, for a province promoted on height alone: it may hold no painted
+        // mountain pixel at all, so the question is what the ground around it is, not what the peak
+        // was painted as.
+        bool Arid(int id) => counted[id] > 0 &&
+            Pixels(id, TerrainClass.Desert) + Pixels(id, TerrainClass.Drylands)
+            + Pixels(id, TerrainClass.DesertMountains) + Pixels(id, TerrainClass.Oasis)
+            > counted[id] / 2;
+
+        double floor = Math.Clamp(cfg.ReliefPromotionFloor, 0, 1);
+        int baronies = Math.Clamp(baronyCount, 0, landCount);
+
+        // The band share at the target rank, floored. Returns infinity — promoting nothing — when
+        // the tier is switched off or there is nothing to rank, which leaves the plain vote below.
+        double ReliefCut(Func<int, double> band, double target)
+        {
+            if (target <= 0 || baronies <= 0) return double.PositiveInfinity;
+
+            var ranked = new List<double>(baronies);
+            for (int id = 1; id <= baronies; id++)
+                if (land[id] > 0) ranked.Add(band(id));
+            if (ranked.Count == 0) return double.PositiveInfinity;
+
+            ranked.Sort(static (a, b) => b.CompareTo(a));
+
+            int want = (int)Math.Round(ranked.Count * Math.Clamp(target, 0, 1));
+            if (want <= 0) return double.PositiveInfinity;
+
+            return Math.Max(ranked[Math.Min(want, ranked.Count) - 1], floor);
+        }
+
+        double mountainCut = ReliefCut(MountainBand, mountainTarget);
+
+        // Cut on the combined band at the combined share, so this names the provinces left once the
+        // mountains above have taken theirs rather than competing with them for the same rank.
+        double hillCut = ReliefCut(HillBand, reliefTarget);
 
         var result = new TerrainClass[provinces.Count + 1];
         for (int id = 1; id <= provinces.Count; id++)
         {
             if (id > landCount) { result[id] = TerrainClass.Sea; continue; }
+
+            // The `> 0` is load-bearing, not belt and braces: a floor of 0 on a world whose ranked
+            // cut is also 0 would otherwise promote every province, mountain pixels or not.
+            double mountain = MountainBand(id);
+            if (mountain > 0 && mountain >= mountainCut)
+            {
+                result[id] = Arid(id) ? TerrainClass.DesertMountains : TerrainClass.Mountains;
+                continue;
+            }
+
+            double hill = HillBand(id);
+            if (hill > 0 && hill >= hillCut) { result[id] = TerrainClass.Hills; continue; }
 
             int best = -1, bestCount = 0;
             for (int c = 0; c < classes; c++)
@@ -1088,7 +1333,67 @@ public static class ContentWriter
             result[id] = best < 0 ? TerrainClass.Plains : (TerrainClass)best;
         }
 
+        if (report)
+        {
+            ReportBand("mountain", MountainBand);
+            ReportBand("hill", HillBand);
+            ReportProvinceTerrain(result, baronies, mountainCut, hillCut);
+        }
+
         return result;
+
+        // How much relief the baronies actually hold, which is the only thing that decides whether
+        // the ranks above can be met at all. Worth printing rather than inferring from the outcome:
+        // a cut sitting on its floor means either the world is flat or something upstream took the
+        // ground before the vote saw it, and the percentiles tell those two apart at a glance.
+        void ReportBand(string name, Func<int, double> band)
+        {
+            var ranked = new List<double>(baronies);
+            for (int id = 1; id <= baronies; id++)
+                if (land[id] > 0) ranked.Add(band(id));
+            if (ranked.Count == 0) return;
+
+            ranked.Sort();
+            string At(double q) => $"{ranked[Math.Clamp((int)(ranked.Count * q), 0, ranked.Count - 1)]:P1}";
+            int any = ranked.Count(v => v > 0);
+
+            Console.WriteLine($"    {name} band over baronies: p50 {At(0.50)}, p75 {At(0.75)}, " +
+                              $"p90 {At(0.90)}, p99 {At(0.99)}, max {ranked[^1]:P1}; " +
+                              $"{any} of {ranked.Count} hold any ({100.0 * any / ranked.Count:F1}%) — " +
+                              "a tier cannot fill past that last figure");
+        }
+    }
+
+    /// <summary>
+    /// What the vote came out with, over baronies only — the impassable provinces sit at the top of
+    /// the relief distribution and are not counties, so counting them would flatter exactly the two
+    /// tiers worth watching. Vanilla's own shares are quoted beside it because these are calibrated
+    /// against them and a drift is otherwise invisible without opening its files.
+    /// </summary>
+    private static void ReportProvinceTerrain(TerrainClass[] provinceTerrain, int baronyCount,
+        double mountainCut, double hillCut)
+    {
+        if (baronyCount <= 0) return;
+
+        static string Cut(double c) => double.IsPositiveInfinity(c) ? "off" : $"{c:P1}";
+        Console.WriteLine($"  relief promotion: mountains from {Cut(mountainCut)} of a province " +
+                          $"above the mountain line, hills from {Cut(hillCut)} above the hill line");
+
+        var counts = new Dictionary<string, int>();
+        for (int id = 1; id <= baronyCount && id < provinceTerrain.Length; id++)
+        {
+            string name = TerrainClassifier.Name(provinceTerrain[id]);
+            counts[name] = counts.GetValueOrDefault(name) + 1;
+        }
+
+        var parts = counts.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal)
+            .Select(kv => $"{kv.Key} {100.0 * kv.Value / baronyCount:F1}%");
+
+        Console.WriteLine($"  province terrain (share of {baronyCount} baronies): {string.Join(", ", parts)}");
+        Console.WriteLine("    vanilla for comparison: plains 19.6%, hills 19.2%, mountains 12.2%, " +
+                          "drylands 9.5%, forest 8.0%, desert 6.8%, jungle 5.3%, taiga 5.2%, " +
+                          "steppe 3.2%, wetlands 2.8%, desert_mountains 2.5%, farmlands 2.2%, " +
+                          "floodplains 2.2%, oasis 0.5%");
     }
 
     private static void WriteProvinceTerrain(string modDir, TerrainClass[] terrain, int landCount)

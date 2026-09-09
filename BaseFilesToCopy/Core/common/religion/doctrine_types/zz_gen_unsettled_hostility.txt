@@ -1,0 +1,45 @@
+﻿# Two hidden doctrines that make the wilderness and ruins holders nobody's holy war.
+#
+# ---- What was happening ----
+#
+# The unsettled faith the dummy holders carry (Faiths.CreateUnsettled) sits on the pagan hostility
+# doctrine like every other generated pagan religion, so every faith on the map saw it as Evil.
+# Hostility is what Great Holy War targeting runs on: valid_ghw_target_trigger counts de jure
+# counties whose top liege is "hostile enough" and determine_ghw_target_effect then picks the
+# largest hostile holder in the kingdom. The wilderness dummy holds hundreds of counties spread
+# across every de jure kingdom, so it was both the reason a kingdom qualified and the holder that
+# got picked -- and the "holy sites held by hostile top lieges" arm of great_holy_war.0010 was
+# unlocking Great Holy Wars on its account. The casus belli guard (CasusBelliWriter) only fires at
+# declaration and only on the casus belli path; GHW targeting is script.
+#
+# ---- The lever ----
+#
+# A doctrine cannot change how others see its faith, only how its faith sees others -- vanilla says
+# so in 40_doctrines_special.txt and solves it the same way: every Christian faith carries a hidden
+# doctrine whose hostility_override_<doctrine> parameter fixes its view of any faith holding the
+# named doctrine, overriding family and religion hostility (_doctrine_types.info, "Hostility").
+# So: the unsettled faith gets the marker below, and ReligionWriter puts gen_settled_doctrine on
+# every other generated religion. Level 0 is Righteous, the same level a faith has toward itself;
+# holy wars, holy-order hiring and GHW targeting all need faith_hostile_level (2).
+#
+# The marker's own override is the mirror image, so the dummy faith is Righteous toward everyone
+# too. It never acts, but a symmetric table is one fewer surprise in a tooltip.
+#
+# Localisation for the four keys lives in localization/english/zz_gen_unsettled_hostility_l_english.yml;
+# vanilla leaves the parameter strings empty for its hidden overrides and so does this.
+
+gen_unsettled_marker_doctrine = {
+	visible = no
+	icon = doctrine_pluralism_righteous # Never drawn while hidden; borrowed so the key has a file behind it.
+	parameters = {
+		hostility_override_gen_settled_doctrine = 0
+	}
+}
+
+gen_settled_doctrine = {
+	visible = no
+	icon = doctrine_pluralism_righteous
+	parameters = {
+		hostility_override_gen_unsettled_marker_doctrine = 0
+	}
+}

@@ -43,6 +43,25 @@ public static class Program
                     gui = true;
                     break;
 
+                case "--edit-world" when i + 1 < args.Length:
+                {
+                    try
+                    {
+                        var world = LoadedWorld.Open(args[++i]);
+                        if (GameLocator.IsGameDir(options.GameDir)) MapGen.VanillaVocabulary.Read(options.GameDir);
+                        ApplicationConfiguration.Initialize();
+                        var form = new AppGUI.MainForm(options);
+                        var view = new AppGUI.LoadedWorldView(world);
+                        form.Shown += (_, _) => form.AdoptLoadedWorld(view);
+                        System.Windows.Forms.Application.Run(form);
+                        return 0;
+                    }
+                    catch (Exception ex) { Console.Error.WriteLine(ex.Message); return 1; }
+                }
+
+                case "--verify-world-editor":
+                    return Tools.WorldEditorChecks.Run(i + 1 < args.Length && !args[i + 1].StartsWith("--") ? args[++i] : null);
+
                 // Draw a .gui widget to an HTML page instead of generating anything. Takes a widget
                 // name from the indexed files, or the path to a .gui file.
                 case "--preview" when i + 1 < args.Length:
@@ -277,6 +296,13 @@ public static class Program
                 // a single line of title history, and diffing two runs is the fastest way to see it.
                 case "--starting-hegemony":
                     cfg.StartingHegemony = true;
+                    break;
+
+                // Leaves the Dynastic Cycle unstarted. Its whole effect is one history entry not
+                // being written (Emit/DynasticCycleWriter.cs), so it pairs with the flag above for
+                // the same reason: a diff of two runs shows exactly what the situation costs.
+                case "--no-dynastic-cycle":
+                    cfg.DynasticCycle = false;
                     break;
 
                 // Hands out titles down the de jure tree instead of simulating centuries of

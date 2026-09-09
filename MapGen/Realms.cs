@@ -1276,7 +1276,14 @@ public static class Realms
     }
 
     /// <summary>
-    /// Hands the world's hegemony to its greatest realm, for a map asked to start with one worn.
+    /// The settled counties inside a title's de jure border — the yardstick every hegemony pass
+    /// measures against now that the crown covers a region rather than the whole map.
+    /// </summary>
+    private static HashSet<Title> SettledDeJure(Title title, WildernessMap wilderness)
+        => [.. Titles.Flatten([title]).Where(t => t.Tier == "c" && !wilderness.Contains(t))];
+
+    /// <summary>
+    /// Hands the hegemony to the greatest realm inside it, for a map asked to start with one worn.
     ///
     /// Called after <see cref="Build"/> has finished rather than from inside it, and that ordering is
     /// the whole safety of the thing. The liege pass walks every county's de jure ancestors looking
@@ -1284,13 +1291,18 @@ public static class Realms
     /// present during Build, it would have made its holder the liege of the entire map in one step.
     /// Granted afterwards it is what CK3 makes it: a claim over ground whose rulers answer to nobody.
     ///
-    /// It goes to whoever actually rules the most ground, counted here rather than read off
-    /// <see cref="RealmMap.Greatest"/>. That list sorts by the rank of a ruler's primary title first
-    /// and only then by that title's <em>de jure</em> weight, so its head is whoever wears the
-    /// grandest crown, not whoever commands the largest realm — and with imperial titles as sparse as
-    /// <see cref="MapConfig.EmpireTitleShare"/> makes them, the grandest crown is routinely worn by
-    /// someone holding two counties inside a de jure empire that never formed. Handing such a ruler
-    /// the world reads exactly as wrong as it is.
+    /// It goes to whoever actually rules the most ground <em>inside the hegemony's own border</em>,
+    /// counted here rather than read off <see cref="RealmMap.Greatest"/>. That list sorts by the rank
+    /// of a ruler's primary title first and only then by that title's <em>de jure</em> weight, so its
+    /// head is whoever wears the grandest crown, not whoever commands the largest realm — and with
+    /// imperial titles as sparse as <see cref="MapConfig.EmpireTitleShare"/> makes them, the grandest
+    /// crown is routinely worn by someone holding two counties inside a de jure empire that never
+    /// formed. Handing such a ruler the world reads exactly as wrong as it is.
+    ///
+    /// Inside the border, because the hegemony is a region: the greatest realm on the map may sit on
+    /// the far side of the world from the ground this crown claims, and crowning them would put the
+    /// hegemon outside their own hegemony — with every expansion below then dragged across the map
+    /// to reach it. The greatest realm *of the region* is the one the title is about.
     /// </summary>
     /// <returns>The hegemony, when there was one to grant and somebody to grant it to.</returns>
     public static Title? CrownHegemon(RealmMap realms, List<Title> empires, WildernessMap wilderness)
@@ -1298,74 +1310,89 @@ public static class Realms
         if (Titles.HegemonyOf(empires) is not { } hegemony) return null;
         if (realms.HolderCounty.ContainsKey(hegemony)) return null;
 
-        var (primaryOf, realmCounties, _) = RealmSizes(realms, empires, wilderness);
+        var (primaryOf, realmCounties, members) = RealmSizes(realms, empires, wilderness);
         if (realmCounties.Count == 0) return null;
 
-        // Size decides it. Holding an empire only breaks a tie, so a great king outranks a titular
-        // emperor, and the seat index breaks the rest so the same world always crowns the same ruler.
+        var inside = SettledDeJure(hegemony, wilderness);
+        var held = realmCounties.Keys.ToDictionary(seat => seat, seat => members[seat].Count(inside.Contains));
+
+        // Size inside the hegemony decides it. Holding an empire only breaks a tie, so a great king
+        // outranks a titular emperor, and the seat index breaks the rest so the same world always
+        // crowns the same ruler.
         var emperorSeats = empires
             .Where(realms.HolderCounty.ContainsKey)
             .Select(e => realms.HolderCounty[e])
             .ToHashSet();
 
-        var chosen = realmCounties
+        var chosen = held
+            .Where(kv => kv.Value > 0)
             .OrderByDescending(kv => kv.Value)
             .ThenByDescending(kv => emperorSeats.Contains(kv.Key))
             .ThenBy(kv => kv.Key.Index)
-            .First().Key;
+            .Select(kv => (Title?)kv.Key)
+            .FirstOrDefault();
+
+        // Nobody at all inside the border is possible in principle — a hegemony drawn entirely over
+        // wilderness — and there is nothing to crown there.
+        if (chosen is null) return null;
 
         realms.HolderCounty[hegemony] = chosen;
 
         Console.WriteLine($"  hegemony: {hegemony.Name} is worn from the start by the ruler of "
-                        + $"{chosen.Name}, who rules {realmCounties[chosen]} of "
-                        + $"{realmCounties.Values.Sum()} settled counties");
+                        + $"{chosen.Name}, who rules {held[chosen]} of its {inside.Count} settled "
+                        + $"counties ({realmCounties[chosen]} in all, of "
+                        + $"{realmCounties.Values.Sum()} on the map)");
 
         return hegemony;
     }
 
     /// <summary>
-    /// How far ahead of the next realm a crowned hegemon has to stand.
+    /// The share of its own de jure counties a crowned hegemon has to actually answer for.
     ///
-    /// Merely being the largest is not enough to read as one: the biggest realm on a generated map
-    /// is routinely a quarter of the world with two kingdoms close behind it, which on the political
-    /// map looks like a strong king rather than a sovereign of everything. Twice the next realm is
-    /// the point where the hegemony stops being one power among several and starts being the thing
-    /// the map is arranged around.
+    /// A hegemony worn from the start should be a hegemony that <em>happened</em>: its border and
+    /// its realm are very nearly the same shape, the way vanilla's Song hold nearly all of China.
+    /// The last tenth is deliberate — a rebel duchy or an unbowed kingdom inside the border is the
+    /// first thing worth playing about, and All Under Heaven's Dynastic Cycle measures exactly this
+    /// ratio every year (see <c>Emit/DynasticCycleWriter.cs</c>), so starting at nine tenths leaves
+    /// the whole of vanilla's warning band below the start position instead of beginning inside it.
+    ///
+    /// This replaced a share of the *world* (two fifths), which was the only thing a hegemony could
+    /// be measured against back when its de jure border was the coastline.
     /// </summary>
-    private const double HegemonDominance = 2.0;
+    private const double HegemonDeJureHold = 0.90;
 
     /// <summary>
-    /// The share of the settled world a crowned hegemon has to actually rule.
+    /// How much of a realm has to lie inside the hegemony's de jure border before it may swear.
     ///
-    /// Standing clear of the next realm turns out not to be the same thing as looking like a
-    /// hegemon, and on the first map that difference was the whole bug: the largest realm was
-    /// already more than twice its nearest rival and still only a quarter of the map, under a de
-    /// jure hegemony that claims all of it. Nothing about that reads as a sovereign of the world.
-    /// Two fifths leaves the map plainly arranged around one throne while still leaving most of the
-    /// interesting fight — the last three fifths — un-won.
+    /// Half. A realm mostly inside the border is one of its own kingdoms and belongs under the
+    /// crown; a realm mostly outside is a neighbour, and swearing it would push the hegemon's realm
+    /// out past the border that is supposed to describe it — which is the sprawl this whole rework
+    /// exists to stop.
     /// </summary>
-    private const double HegemonMinShare = 0.40;
+    private const double HegemonInsideShare = 0.5;
 
     /// <summary>
     /// How big a patch of independent ground surrounded by the hegemony may be and still count as
-    /// a hole to be closed rather than a neighbour to be left alone — as a share of the settled
-    /// world, with a floor in counties for small maps. A twentieth of the world is a large duchy
-    /// or a small kingdom: anything bigger enclosed by the hegemony is a real enclave state, and
-    /// those are interesting to leave standing.
+    /// a hole to be closed rather than a neighbour to be left alone — as a share of the hegemony's
+    /// own settled de jure counties, with a floor in counties for small maps. A twentieth of it is
+    /// a large duchy or a small kingdom: anything bigger enclosed by the hegemony is a real enclave
+    /// state, and those are interesting to leave standing. Measured against the hegemony rather
+    /// than against the world because "how big is a hole" is a question about the thing around it,
+    /// and that thing is no longer the map.
     /// </summary>
     private const double HegemonPocketShare = 0.05;
     private const int HegemonPocketMinCounties = 8;
 
     /// <summary>
-    /// Brings realms under a crowned hegemon until nobody else is close, by homage rather than by
-    /// moving land — and only ever realms that touch the ground the hegemon already answers for.
+    /// Brings realms under a crowned hegemon until the hegemony's border and the hegemon's realm
+    /// are very nearly the same shape, by homage rather than by moving land — and only ever realms
+    /// that touch the ground the hegemon already answers for.
     ///
-    /// The de jure hegemony covers the whole map by construction, so a hegemon ruling a quarter of
-    /// it reads as a lie the moment a player opens the realm view — which is exactly what the first
-    /// version produced. Vassalising independent neighbours is how CK3 itself states "these kings
-    /// answer to that throne", and it costs nothing but <c>liege =</c> lines: no county changes
-    /// hands, no ruler is invented, and every absorbed realm keeps its own government, its own
-    /// vassals and its own internal structure.
+    /// A de jure title whose holder rules a quarter of it reads as a lie the moment a player opens
+    /// the realm view — which is exactly what the first version produced. Vassalising independent
+    /// neighbours is how CK3 itself states "these kings answer to that throne", and it costs nothing
+    /// but <c>liege =</c> lines: no county changes hands, no ruler is invented, and every absorbed
+    /// realm keeps its own government, its own vassals and its own internal structure.
     ///
     /// **Contiguity is the whole point of the second version.** The first took the largest
     /// independent realms wherever they happened to be, and on a map of many middling realms it
@@ -1373,11 +1400,18 @@ public static class Realms
     /// and a scatter of unrelated islands of the same colour across the whole map. A realm may now
     /// swear only if some county of it borders some county already inside the hegemony (land or a
     /// short sea crossing, the same graph the simulation grew realms across), and the hegemony grows
-    /// outward from its core one neighbour at a time, largest bordering realm first. When nothing
-    /// left borders it, it stops short of its share rather than reach across the map; the run log
-    /// says so when that happens. Dominance is still measured against the largest realm anywhere,
-    /// bordering or not — a hegemon with a rival of half its size across the sea is not yet a
-    /// hegemon, so the pass keeps taking neighbours while it can.
+    /// outward from its core one neighbour at a time.
+    ///
+    /// **The border is the target of the third.** The de jure hegemony used to be the whole map, so
+    /// the only goal available was a share of the world and the only brake on it was dominance over
+    /// the next-largest realm anywhere — which is how a hegemon ended up swallowing a third of the
+    /// planet and still looking like a lie. Now that the crown covers a region
+    /// (<see cref="Titles.Crown"/>) the goal is that region: realms that are mostly inside it swear,
+    /// largest first, until <see cref="HegemonDeJureHold"/> of its settled counties answer to the
+    /// throne, and the pass stops. The only thing that reaches past the border afterwards is the
+    /// guard against being outweighed — a hegemon smaller than some rival realm elsewhere is not a
+    /// hegemon, so bordering neighbours keep swearing until that is no longer true, which on most
+    /// maps means none at all.
     ///
     /// **Runs after <see cref="Governments"/>, and must.** Governments are assigned one per realm,
     /// grouped by top liege, so doing this first would sweep every absorbed kingdom into the
@@ -1397,6 +1431,12 @@ public static class Realms
         int total = size.Values.Sum();
         var adjacency = realms.CountyAdjacency;
 
+        // The border this pass is trying to fill, and how much of it the hegemon already answers
+        // for. Settled only, because the wilderness has no ruler to swear.
+        var inside = SettledDeJure(hegemony, wilderness);
+        int deJure = inside.Count;
+        int insideHeld = members[hegemonSeat].Count(inside.Contains);
+
         // The ground the hegemon answers for, grown as realms swear. A map built without provinces
         // has no adjacency graph; there, and only there, every realm counts as bordering — the
         // old behaviour, kept because it is better than a hegemony that never grows at all.
@@ -1406,44 +1446,78 @@ public static class Realms
             => adjacency is null
             || members[seat].Any(c => adjacency.TryGetValue(c, out var next) && next.Overlaps(ground));
 
-        bool Dominant(int nextLargest)
-            => hegemonSize > HegemonDominance * nextLargest && hegemonSize >= HegemonMinShare * total;
+        int Inside(Title seat) => members[seat].Count(inside.Contains);
 
         var sworn = new HashSet<Title>();
-        int absorbed = 0, nextLargest = 0;
+        int absorbed = 0, reached = 0, nextLargest = 0;
         bool stoppedShort = false;
 
-        while (true)
+        // Everyone still independent: not the hegemon, not already sworn, and not somebody's vassal.
+        List<KeyValuePair<Title, int>> Independent() => size
+            .Where(kv => kv.Key != hegemonSeat && !sworn.Contains(kv.Key))
+            .Where(kv =>
+            {
+                var primary = primaryOf.GetValueOrDefault(kv.Key, kv.Key);
+                return primary != hegemony && !realms.Liege.ContainsKey(primary);
+            })
+            .OrderByDescending(kv => kv.Value)
+            .ThenBy(kv => kv.Key.Index)
+            .ToList();
+
+        void Swear(Title seat, int weight)
         {
-            // Everyone still independent, largest first — the same order as before, so when the
-            // map does let the hegemon reach the largest rival it takes that one before a smaller
-            // neighbour.
-            var candidates = size
-                .Where(kv => kv.Key != hegemonSeat && !sworn.Contains(kv.Key))
-                .Where(kv =>
-                {
-                    var primary = primaryOf.GetValueOrDefault(kv.Key, kv.Key);
-                    return primary != hegemony && !realms.Liege.ContainsKey(primary);
-                })
-                .OrderByDescending(kv => kv.Value)
-                .ThenBy(kv => kv.Key.Index)
+            realms.SetLiege(primaryOf.GetValueOrDefault(seat, seat), hegemony, LiegeOrigin.Hegemony);
+            sworn.Add(seat);
+            ground.UnionWith(members[seat]);
+            hegemonSize += weight;
+            insideHeld += Inside(seat);
+        }
+
+        // --- Filling the border. Realms mostly inside it, largest first, until it is nearly whole.
+        //
+        // No adjacency test here, and that is deliberate. The de jure border is itself the statement
+        // that this ground belongs together, so a king inside it needs no land bridge to the throne
+        // to answer for it — CK3 realms cross water all the time. Requiring one was measured wrong
+        // on a shipped map (2026-09-07): every empire sat on its own landmass, the crowned hegemon's
+        // realm was the small continent, and of the twenty-six independent realms inside the border
+        // exactly three touched his ground — so the pass stopped at 28 % of the hegemony and the
+        // title claimed three times what its holder ruled, which is the bug this rework was for.
+        // Contiguity still governs everything *outside* the border, below, where it is the thing
+        // that stops the hegemon sprawling across the map.
+        while (insideHeld < HegemonDeJureHold * deJure)
+        {
+            var candidates = Independent()
+                .Where(kv => Inside(kv.Key) >= HegemonInsideShare * members[kv.Key].Count)
+                .Where(kv => Inside(kv.Key) > 0)
                 .ToList();
 
+            // Bordering realms first all the same, so the hegemony grows outward from its core
+            // where the land allows and reaches over water only for what it cannot walk to.
+            var next = candidates.FirstOrDefault(kv => Borders(kv.Key));
+            if (next.Key is null) next = candidates.FirstOrDefault();
+            if (next.Key is null) { stoppedShort = true; break; }
+
+            Swear(next.Key, next.Value);
+            absorbed++;
+        }
+
+        // --- Not being outweighed. Everything above stays inside the border; this is the one thing
+        // that may cross it, and only far enough that no other realm on the map is bigger than the
+        // hegemon's. On a map whose hegemony was sized the way Titles.Crown sizes it, it takes
+        // nobody at all — but a world of one giant realm outside the border would otherwise crown a
+        // hegemon who is visibly not the greatest power in it.
+        while (true)
+        {
+            var candidates = Independent();
             nextLargest = candidates.Count > 0 ? candidates[0].Value : 0;
-            if (Dominant(nextLargest)) break;
+            if (hegemonSize > nextLargest) break;
 
             var next = candidates.FirstOrDefault(kv => Borders(kv.Key));
-            if (next.Key is null)
-            {
-                stoppedShort = candidates.Count > 0;
-                break;
-            }
+            if (next.Key is null) { stoppedShort = candidates.Count > 0; break; }
 
-            realms.SetLiege(primaryOf.GetValueOrDefault(next.Key, next.Key), hegemony, LiegeOrigin.Hegemony);
-            sworn.Add(next.Key);
-            ground.UnionWith(members[next.Key]);
-            hegemonSize += next.Value;
+            Swear(next.Key, next.Value);
             absorbed++;
+            reached++;
         }
 
         // Pockets. Independent ground that touches the hegemony and nothing else is not a rival,
@@ -1459,7 +1533,7 @@ public static class Realms
         int pockets = 0;
         if (adjacency is not null)
         {
-            int pocketMax = Math.Max(HegemonPocketMinCounties, (int)(HegemonPocketShare * total));
+            int pocketMax = Math.Max(HegemonPocketMinCounties, (int)(HegemonPocketShare * deJure));
             var seatOf = new Dictionary<Title, Title>();
             foreach (var (seat, counties) in members)
                 foreach (var county in counties) seatOf[county] = seat;
@@ -1490,18 +1564,15 @@ public static class Realms
 
                     // Every realm wholly inside the pocket swears; one with ground elsewhere is
                     // left alone, since taking it would drag counties outside the hole in too.
-                    var inside = new HashSet<Title>(component);
+                    var hole = new HashSet<Title>(component);
                     foreach (var seat in component.Select(c => seatOf[c]).Distinct().OrderBy(s => s.Index))
                     {
                         if (seat == hegemonSeat || sworn.Contains(seat)) continue;
-                        if (!members[seat].All(inside.Contains)) continue;
+                        if (!members[seat].All(hole.Contains)) continue;
                         var primary = primaryOf.GetValueOrDefault(seat, seat);
                         if (primary == hegemony || realms.Liege.ContainsKey(primary)) continue;
 
-                        realms.SetLiege(primary, hegemony, LiegeOrigin.Hegemony);
-                        sworn.Add(seat);
-                        ground.UnionWith(members[seat]);
-                        hegemonSize += size[seat];
+                        Swear(seat, size[seat]);
                         pockets++;
                         found = true;
                     }
@@ -1510,31 +1581,57 @@ public static class Realms
         }
 
         Console.WriteLine($"  hegemony: {absorbed} bordering realm(s) and {pockets} enclosed pocket(s) swore to it — "
-                        + $"the hegemon rules {hegemonSize} of {total} settled counties "
-                        + $"({(double)hegemonSize / Math.Max(1, total):P0}), "
-                        + $"next largest {nextLargest}"
-                        + (stoppedShort ? " — stopped short: nothing independent borders it any more" : ""));
+                        + $"the hegemon answers for {insideHeld} of the hegemony's {deJure} settled "
+                        + $"counties ({(double)insideHeld / Math.Max(1, deJure):P0}) and "
+                        + $"{hegemonSize} of {total} on the map "
+                        + $"({(double)hegemonSize / Math.Max(1, total):P0}), next largest {nextLargest}"
+                        + (reached > 0 ? $" — {reached} taken from outside the border to outweigh it" : "")
+                        + (stoppedShort ? " — stopped short: nothing eligible borders it any more" : ""));
 
         return absorbed + pockets;
     }
 
     /// <summary>
-    /// The share of the hegemony's de jure counties — every county on the map, wilderness included —
-    /// that answers to the crowned hegemon, or null when nobody wears the crown.
+    /// The share of the hegemony's de jure counties — wilderness included — that answers to the
+    /// crowned hegemon, or null when nobody wears the crown.
     ///
     /// This is the ratio All Under Heaven's Dynastic Cycle tests every year (see
-    /// <c>Emit/DynasticCycleWriter.cs</c>), and it is deliberately not the settled share
-    /// <see cref="ExpandHegemonRealm"/> grows by: the two differ by exactly the wilderness, and the
-    /// game does not know the wilderness is empty.
+    /// <c>Emit/DynasticCycleWriter.cs</c>), and it is deliberately neither of the numbers
+    /// <see cref="ExpandHegemonRealm"/> grows by. Both ends are restricted to the hegemony's own
+    /// de jure ground, exactly as vanilla's <c>title:h_china = { any_de_jure_county = { … } }</c>
+    /// counts it: a county the hegemon holds outside the border is not in the numerator, and a
+    /// wilderness county inside it *is* in the denominator, because the game has no idea it is
+    /// empty.
     /// </summary>
     public static double? HegemonDeJureShare(RealmMap realms, List<Title> empires, WildernessMap wilderness)
     {
         if (Titles.HegemonyOf(empires) is not { } hegemony) return null;
         if (!realms.HolderCounty.TryGetValue(hegemony, out var hegemonSeat)) return null;
 
-        var (_, size, _) = RealmSizes(realms, empires, wilderness);
-        int deJure = Titles.Flatten(empires).Count(t => t.Tier == "c");
-        return deJure == 0 ? null : (double)size.GetValueOrDefault(hegemonSeat) / deJure;
+        var (_, _, members) = RealmSizes(realms, empires, wilderness);
+        var inside = Titles.Flatten([hegemony]).Where(t => t.Tier == "c").ToHashSet();
+        if (inside.Count == 0) return null;
+
+        int held = members.TryGetValue(hegemonSeat, out var counties) ? counties.Count(inside.Contains) : 0;
+        return (double)held / inside.Count;
+    }
+
+    /// <summary>
+    /// Every county inside the hegemon's realm — its own and its vassals', walked to the top seat
+    /// the same way <see cref="HegemonDeJureShare"/> does so the two cannot disagree. Null when
+    /// nobody wears the hegemony.
+    ///
+    /// Read by the natural-disaster placement in <c>Emit/CompatibilityWriter.cs</c>, which needs
+    /// what the crown actually answers for rather than what it claims: a disaster makes every
+    /// ruler holding a realm county in its area a participant, and de jure has no part in that.
+    /// </summary>
+    public static HashSet<Title>? HegemonRealmCounties(RealmMap realms, List<Title> empires,
+        WildernessMap wilderness)
+    {
+        if (Titles.HegemonyOf(empires) is not { } hegemony) return null;
+        if (!realms.HolderCounty.TryGetValue(hegemony, out var hegemonSeat)) return null;
+        var (_, _, members) = RealmSizes(realms, empires, wilderness);
+        return members.TryGetValue(hegemonSeat, out var counties) ? [.. counties] : null;
     }
 
     /// <summary>

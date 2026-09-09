@@ -1,0 +1,8 @@
+﻿l_english:
+ # The two hidden doctrines in common/religion/doctrine_types/zz_gen_unsettled_hostility.txt.
+ gen_unsettled_marker_doctrine_name:0 "Of the Wild"
+ gen_unsettled_marker_doctrine_desc:0 "The unsettled lands belong to no creed and quarrel with none."
+ gen_settled_doctrine_name:0 "Peace of the Wild"
+ gen_settled_doctrine_desc:0 "The faith holds no quarrel with the unsettled lands, and calls no holy war upon them."
+ doctrine_parameter_hostility_override_gen_settled_doctrine:0 ""
+ doctrine_parameter_hostility_override_gen_unsettled_marker_doctrine:0 ""

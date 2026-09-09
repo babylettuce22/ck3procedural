@@ -8,7 +8,7 @@ namespace Ck3MapGen.AppGUI;
 /// <summary>
 /// One window: choose a heightmap, tune the settings, look at what they produce, write the mod.
 /// </summary>
-public sealed class MainForm : Form
+public sealed partial class MainForm : Form
 {
     private readonly GenerationOptions _options;
     private readonly GuiState _state = GuiState.Load();
@@ -505,6 +505,8 @@ public sealed class MainForm : Form
 
         // ---- File -----------------------------------------------------------------------
         var chooseHeightmap = MenuItem("Choose heightmap…", PickHeightmap);
+        var editWorld = MenuItem("Open generated world… (WIP)", () => _ = OpenGeneratedWorldAsync());
+        var closeWorld = MenuItem("Return to generator", CloseLoadedWorld);
         var recent = Submenu("Recent heightmaps", RecentMenuItems);
         var azgaar = Submenu("Azgaar export", AzgaarMenuItems);
         var exportView = MenuItem("Export the current view…", ExportView, "Ctrl+E");
@@ -513,7 +515,7 @@ public sealed class MainForm : Form
         var exit = MenuItem("Exit", Close);
 
         var file = TopMenu(menu, "&File",
-            chooseHeightmap, recent, azgaar, new ToolStripSeparator(),
+            editWorld, closeWorld, new ToolStripSeparator(), chooseHeightmap, recent, azgaar, new ToolStripSeparator(),
             exportView, new ToolStripSeparator(),
             savePreset, loadPreset, new ToolStripSeparator(),
             exit);
@@ -521,6 +523,8 @@ public sealed class MainForm : Form
         file.DropDownOpening += (_, _) =>
         {
             chooseHeightmap.Enabled = _browse.Enabled;
+            editWorld.Enabled = !_busy;
+            closeWorld.Enabled = !_busy && _loadedWorld is not null;
             recent.Enabled = _recent.Enabled;
             azgaar.Enabled = _azgaar.Enabled;
             exportView.Enabled = !_busy;
@@ -795,6 +799,14 @@ public sealed class MainForm : Form
         viewer.Controls.Add(_categoryStrip);
 
         var tabs = _tabs = Theme.MakeTabs();
+        tabs.Selecting += (_, e) =>
+        {
+            if (_loadedWorld is not null && (e.TabPage == _sourceTab || e.TabPage == _forgeTab))
+            {
+                e.Cancel = true;
+                _status.Text = "This loaded world is edited from the Map and Titles tabs; generation and heightmap tools are inactive.";
+            }
+        };
 
         // Loaded when the tab is first opened, not at startup: decoding a vanilla-sized heightmap
         // is several seconds, and a window that takes that long to appear for a view nobody asked
@@ -1230,7 +1242,7 @@ public sealed class MainForm : Form
         return button;
     }
 
-    private bool Available(MapMode mode) => !mode.AfterWrite || _written is not null;
+    private bool Available(MapMode mode) => _loadedWorld is not null ? _loadedWorld.Available(mode.Name) : !mode.AfterWrite || _written is not null;
 
     private void OnModeClicked(MapMode mode)
     {
@@ -1381,6 +1393,7 @@ public sealed class MainForm : Form
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
+        if (_loadedWorld is not null && !ConfirmLoadedEdits()) { e.Cancel = true; return; }
         var bounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
         _state.Left = bounds.X;
         _state.Top = bounds.Y;
@@ -2058,6 +2071,49 @@ public sealed class MainForm : Form
         return Directory.Exists(_modRoot) ? _modRoot : null;
     }
 
+    private async Task OpenGeneratedWorldAsync()
+    {
+        if (_busy) return;
+        using var dialog = new FolderBrowserDialog
+        {
+            Description = "Choose a generated CK3 mod to edit",
+            UseDescriptionForTitle = true,
+            SelectedPath = ModFolderToOpen() ?? _state.ModRoot ?? "",
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            if (_loadedWorld is not null && !ConfirmLoadedEdits()) return;
+            if (_edits.HasPending)
+            {
+                var answer = MessageBox.Show(this, "Save your current edits before opening another world?", "Unsaved edits", MessageBoxButtons.YesNoCancel);
+                if (answer == DialogResult.Cancel) return;
+                if (answer == DialogResult.Yes) { OverwriteTitles(); if (_edits.HasPending) return; }
+            }
+            UseWaitCursor = true;
+            _busy = true;
+            SetEnabled(false);
+            string path = dialog.SelectedPath;
+            string gameDir = _options.GameDir;
+            var world = await Task.Run(() =>
+            {
+                // The dropdowns for pillars, looks, doctrines and icons read the same harvest the
+                // generator writes from; an opened mod has no world of its own to have built it.
+                if (MapGen.VanillaVocabulary.Current is null && Core.GameLocator.IsGameDir(gameDir))
+                    MapGen.VanillaVocabulary.Read(gameDir);
+                return new LoadedWorldView(Core.LoadedWorld.Open(path));
+            });
+            UseWaitCursor = false;
+            AdoptLoadedWorld(world);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Could not open generated world",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally { UseWaitCursor = false; _busy = false; SetEnabled(true); }
+    }
+
     private void OpenModFolder()
     {
         if (ModFolderToOpen() is not { } dir) return;
@@ -2235,6 +2291,7 @@ public sealed class MainForm : Form
 
     private async Task WriteModAsync()
     {
+        if (_loadedWorld is not null) { SaveLoadedWorld(); return; }
         if (_busy || _source is null) return;
 
         // The edits are carried across the rebuild rather than lost to it: exported now, while the
@@ -2421,6 +2478,7 @@ public sealed class MainForm : Form
 
     private void OverwriteTitles()
     {
+        if (_loadedWorld is not null) { SaveLoadedWorld(); return; }
         if (_busy || !_edits.HasPending || _edits.Target is not { } target) return;
 
         var aspects = _edits.Pending;
@@ -2725,6 +2783,7 @@ public sealed class MainForm : Form
         bool ready = enabled && _source is not null;
         _writeMod.Enabled = ready;
         _preview.Enabled = ready;
+        if (_loadedWorld is not null) ConfigureLoadedControls(enabled);
     }
 
     private void OnStageEntered(string name) => Post(() =>
@@ -2803,6 +2862,10 @@ public sealed class MainForm : Form
     {
         get
         {
+            // An opened mod's graph is read from its title history when it is opened, and lives
+            // with the view; a generated one is built lazily from the last write.
+            if (_loadedWorld is not null) return _loadedWorld.Realm;
+
             if (!_realmGraphBuilt && _result is not null)
             {
                 _realmGraph = RealmGraph.Build(_written, _result);
@@ -2815,6 +2878,7 @@ public sealed class MainForm : Form
 
     private void SelectView(string name)
     {
+        if (_loadedWorld is not null) { SelectLoadedView(name); return; }
         var mode = MapModes.Find(name) ?? MapModes.All[0];
 
         // A remembered or restored mode can point at written content that does not exist yet;
@@ -2848,6 +2912,7 @@ public sealed class MainForm : Form
                     MapPick.Culture => "Click a county to inspect and edit its culture",
                     MapPick.Faith => "Click a county to inspect and edit its faith",
                     MapPick.Realm => "Click a realm to focus it · Ctrl+click jumps to a county · Esc steps back",
+                    MapPick.Dynasty => "Click a county to inspect its holder's dynasty and house",
                     _ => $"Click a {TierWord(pick.Tier)} to inspect and edit it",
                 };
             }
@@ -2915,6 +2980,7 @@ public sealed class MainForm : Form
     {
         foreach (var (key, button) in _categoryButtons)
         {
+            button.Enabled = _loadedWorld is null || MapModes.All.Any(m => m.Category == key && Available(m));
             bool on = key == _category;
             button.BackColor = on ? Theme.Accent : Theme.SurfaceHigh;
             button.ForeColor = on ? Theme.AccentText : Theme.Text;
@@ -2931,13 +2997,14 @@ public sealed class MainForm : Form
             var button = _viewButtons[mode.Name];
             bool on = mode.Name == _view;
             bool available = Available(mode);
+            button.Enabled = _loadedWorld is null || available;
 
             button.BackColor = on ? Theme.Accent : available ? Theme.SurfaceHigh : Theme.Surface;
             button.ForeColor = on ? Theme.AccentText : available ? Theme.Text : Theme.TextDim;
             button.FlatAppearance.MouseOverBackColor = on ? Theme.Accent : Theme.Border;
 
             _tips.SetToolTip(button, !available
-                ? "Shows written content — available after Write mod"
+                ? _loadedWorld is not null ? "This simulation layer was not saved in the mod; it cannot be reconstructed without regenerating." : "Shows written content — available after Write mod"
                 : mode.Estimate && _written is null
                     ? "Estimated from the current world — write the mod to see what it actually ships"
                     : mode.Pick?.Kind switch
@@ -2986,7 +3053,7 @@ public sealed class MainForm : Form
         // An estimate mode before a write paints a recomputation of what a write would decide, so
         // it says so beside its own key. In the amber rather than the dim grey the legend labels
         // use: the point of the line is that it is not one of them.
-        bool estimate = mode.Estimate && _written is null;
+        bool estimate = mode.Estimate && _written is null && _loadedWorld is null;
         if (estimate)
         {
             _legendBar.Controls.Add(new Label
@@ -3060,25 +3127,43 @@ public sealed class MainForm : Form
 
     private void PickTitleAt(Point pixel)
     {
-        if (_busy || _edits.Target is not { } target || _result is null) return;
+        if (_busy) return;
         if (MapModes.Find(_view)?.Pick is not { } view) return;
 
-        var map = _result.Provinces;
-        int step = PreviewRenderer.StepFor(map.Width);
-
-        int x = Math.Clamp(pixel.X * step, 0, map.Width - 1);
-        int y = Math.Clamp(pixel.Y * step, 0, map.Height - 1);
-
-        int id = _result.ProvinceOrder[map.Label[y * map.Width + x]];
-        if (id < 1 || id > _result.BaronyCount)
+        // The barony under the cursor, from whichever world is showing. Everything after this —
+        // the walk up to the view's tier, the realm drill, the inspectors — is the same for an
+        // opened mod as for a generated world, because both hand over Title objects.
+        MapGen.Title? barony;
+        if (_loadedWorld is { } loaded)
         {
-            _status.Text = "Nothing there — that is water or impassable";
-            return;
+            barony = loaded.BaronyAt(pixel);
+            if (barony is null)
+            {
+                _status.Text = "Nothing there — that is water or impassable";
+                return;
+            }
         }
+        else
+        {
+            if (_edits.Target is null || _result is null) return;
 
-        var barony = MapGen.Titles.Flatten(_result.Titles)
-            .FirstOrDefault(t => t.Tier == "b" && t.ProvinceId == id);
-        if (barony is null) return;
+            var map = _result.Provinces;
+            int step = PreviewRenderer.StepFor(map.Width);
+
+            int x = Math.Clamp(pixel.X * step, 0, map.Width - 1);
+            int y = Math.Clamp(pixel.Y * step, 0, map.Height - 1);
+
+            int id = _result.ProvinceOrder[map.Label[y * map.Width + x]];
+            if (id < 1 || id > _result.BaronyCount)
+            {
+                _status.Text = "Nothing there — that is water or impassable";
+                return;
+            }
+
+            barony = MapGen.Titles.Flatten(_result.Titles)
+                .FirstOrDefault(t => t.Tier == "b" && t.ProvinceId == id);
+            if (barony is null) return;
+        }
 
         var title = barony;
         while (title is not null && title.Tier != view.Tier) title = title.Parent;
@@ -3102,14 +3187,49 @@ public sealed class MainForm : Form
                 _status.Text = $"{TitleInspector.TierName(title)} {title.Name}";
                 break;
 
+            // The county's direct holder, whose inspector carries the dynasty and house.
+            case MapPick.Dynasty when _loadedWorld is not null:
+                if (Realm is { } loadedGraph && _loadedWorld.HolderOf(loadedGraph.Primary(loadedGraph.SeatOfCounty(title))) is { } loadedHolder)
+                {
+                    Inspect([loadedHolder]);
+                    _status.Text = $"{loadedHolder.Name} — {title.Name}";
+                }
+                else _status.Text = $"Nobody holds {title.Name}";
+                break;
+
+            case MapPick.Dynasty:
+                if (Realm is { } graph && _written?.Rulers is { } rulers && rulers.TryGet(graph.SeatOfCounty(title), out var holder))
+                {
+                    Inspect([holder]);
+                    _status.Text = $"{holder.Name} — {title.Name}";
+                }
+                else _status.Text = $"Nobody holds {title.Name}";
+                break;
+
+            case MapPick.Culture when _loadedWorld is not null:
+                if (_loadedWorld.CultureOf(title) is { } loadedCulture)
+                {
+                    Inspect([loadedCulture]);
+                    _status.Text = $"Culture {loadedCulture.Name} — {title.Name}";
+                }
+                break;
+
+            case MapPick.Faith when _loadedWorld is not null:
+                if (_loadedWorld.FaithOf(title) is { } loadedFaith)
+                {
+                    Inspect([loadedFaith]);
+                    _status.Text = $"Faith {loadedFaith.Name} — {title.Name}";
+                }
+                break;
+
             case MapPick.Culture:
-                var culture = target.Written.Cultures.For(title);
+                var culture = _edits.Target!.Value.Written.Cultures.For(title);
                 Inspect([culture]);
                 _status.Text = $"Culture {culture.Name} — {title.Name}";
                 break;
 
             case MapPick.Faith:
-                var faith = target.Written.Faiths.For(title);
+                var faith = _edits.Target!.Value.Written.Faiths.For(title);
                 Inspect([faith]);
                 _status.Text = $"Faith {faith.Name} — {title.Name}";
                 break;
@@ -3224,7 +3344,24 @@ public sealed class MainForm : Form
     {
         if (targets.Count == 0) return;
 
-        var kind = targets[0].GetType();
+        // An opened mod's things arrive as Title shells from the tree and the map, or as entries
+        // from a link; either way the inspector window is picked by what kind of thing it is, so
+        // a county opens in the same Title window it would in a generated world.
+        IReadOnlyList<Core.WorldEntry>? loaded = null;
+        Type kind;
+        if (_loadedWorld is not null)
+        {
+            loaded = _loadedWorld.EntriesOf(targets);
+            if (loaded.Count == 0) return;
+            kind = loaded[0].Kind switch
+            {
+                "Culture" => typeof(MapGen.Culture),
+                "Faith" or "Religion" => typeof(MapGen.Faith),
+                "Character" => typeof(MapGen.Ruler),
+                _ => typeof(MapGen.Title),
+            };
+        }
+        else kind = targets[0].GetType();
 
         if (!_inspectors.TryGetValue(kind, out var inspector) || inspector.IsDisposed)
         {
@@ -3249,7 +3386,8 @@ public sealed class MainForm : Form
         if (inspector is TitleInspector titles) titles.Realm = Realm;
         if (inspector is RulerInspector rulers) rulers.Realm = Realm;
 
-        inspector.Inspect(targets);
+        if (loaded is not null) inspector.InspectLoaded(loaded, _loadedWorld!, LoadedEditsChanged);
+        else inspector.Inspect(targets);
 
         if (!inspector.Visible) inspector.Show(this);
         inspector.BringToFront();
@@ -3257,6 +3395,7 @@ public sealed class MainForm : Form
 
     private void ShowPending()
     {
+        if (_loadedWorld is not null) { ShowLoadedPending(); return; }
         _pendingBar.Visible = _edits.HasPending;
         if (!_edits.HasPending) return;
 
@@ -3275,6 +3414,7 @@ public sealed class MainForm : Form
 
     private void RevertAll()
     {
+        if (_loadedWorld is not null) { _loadedWorld.World.Revert(); LoadedEditsChanged(); return; }
         if (_edits.EditedCount == 0) return;
 
         var answer = MessageBox.Show(this,
@@ -3334,6 +3474,12 @@ public sealed class MainForm : Form
 
     private void ShowReadout(float zoom, Point? pixel)
     {
+        if (_loadedWorld is not null)
+        {
+            string under = pixel is { } loadedPixel ? _loadedWorld.Probe(_view, loadedPixel) : "";
+            _readout.Text = under.Length > 0 ? $"{under}   ·   {zoom * 100:F0}%" : $"{_view}   {zoom * 100:F0}%";
+            return;
+        }
         if (_result is null)
         {
             _readout.Text = "";

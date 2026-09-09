@@ -800,6 +800,47 @@ colony_completion_effect = {
 
 
 # =====================================================================================
+#  Transition 2c: the way out that is not a promotion
+# =====================================================================================
+
+# Character scope. Move a ruler off colony_government because he no longer answers to the
+# description, without any of the ceremony a promotion carries.
+#
+# ---- Why a second exit exists at all ----
+#
+# promote_colony_effect was the only one, and it can only fire for the man who holds the colony at
+# the moment it stops being a colony. Every other way of ceasing to be a colonist had no exit:
+#
+#   * the colony is taken by war, revoked, or granted away — the ex-colonist keeps the government
+#     and holds nothing that matches its `valid_holdings`;
+#   * he inherits or conquers settled land beside the colony;
+#   * he rises above county tier, by creating a title or by being installed in one;
+#   * his colony is promoted to a city or a temple, which until now skipped the government change
+#     entirely (see the two interactions in 00_colonization_interactions.txt).
+#
+# All four are the same fault from different directions: `can_get_government` is checked by the
+# engine ONCE, when a character becomes landed, and never again. Nothing in CK3 re-runs it when the
+# facts underneath it change, so a government entered by script has to be left by script too.
+#
+# No secession roll, no founder trait, no ceremony event: colony_completion_effect owns the story of
+# a colony that was finished, and this owns the bookkeeping for one that was not.
+colony_government_exit_effect = {
+	# colony_promotes_to_tribe_trigger reads scope:colony_promoter, and asking it here rather than
+	# writing a second tribal/feudal rule is the point — the two exits must not disagree about what
+	# kind of seat a colonist's realm becomes.
+	save_scope_as = colony_promoter
+
+	if = {
+		limit = { colony_promotes_to_tribe_trigger = yes }
+		change_government = tribal_government
+	}
+	else = {
+		change_government = feudal_government
+	}
+}
+
+
+# =====================================================================================
 #  Granting a colony away
 # =====================================================================================
 
@@ -807,12 +848,13 @@ colonization_make_colonist_effect = {
 	if = {
 		limit = {
 			is_colonist_trigger = no
-			NOT = {
-				any_held_title = {
-					tier = tier_county
-					is_settled_county_trigger = yes
-				}
-			}
+
+			# One trigger, shared with `can_get_government` and with the validity sweep. This used to
+			# be the settled-county half written out by hand, which meant a duke or a king who was
+			# granted or inherited a colony while holding no county of his own was converted into a
+			# colonist by this effect — the same end state the engine reached on its own from the
+			# landing side.
+			colony_government_valid_trigger = yes
 		}
 
 		change_government = colony_government

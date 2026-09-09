@@ -51,6 +51,26 @@ public static class PreviewRenderer
 
     public static int StepFor(int width) => Math.Max(1, (width + MaxWidth - 1) / MaxWidth);
 
+    /// <summary>
+    /// The province raster every political view paints from, without the rest of a
+    /// <see cref="GenerationResult"/>: the id under each pixel and the numeric split into
+    /// baronies, impassable land and water. A generated world supplies it from its label map; an
+    /// opened mod supplies it from provinces.png and definition.csv, so both draw with the same
+    /// borders, water and palette.
+    /// </summary>
+    public sealed record ProvinceRaster(
+        int Width, int Height, Func<int, int> IdAt, int BaronyCount, int LandCount,
+        List<Title> Titles, Func<Title, bool>? IsWild)
+    {
+        public static ProvinceRaster From(GenerationResult result, MapGen.WildernessMap? wilderness)
+        {
+            var map = result.Provinces;
+            var order = result.ProvinceOrder;
+            return new(map.Width, map.Height, i => order[map.Label[i]], result.BaronyCount, result.LandCount,
+                result.Titles, wilderness is null ? null : wilderness.Contains);
+        }
+    }
+
     // --- Progressive Overloads ---
 
     public static Image RenderRelief(float[] elevation, MapConfig cfg)
@@ -149,8 +169,14 @@ public static class PreviewRenderer
         int landCount,
         List<Title> titles,
         string targetTier)
+        => RenderTitles(new ProvinceRaster(map.Width, map.Height, i => order[map.Label[i]], baronyCount, landCount, titles, null), targetTier);
+
+    public static Image RenderTitles(ProvinceRaster raster, string targetTier)
     {
-        int width = map.Width, height = map.Height;
+        int width = raster.Width, height = raster.Height;
+        int baronyCount = raster.BaronyCount, landCount = raster.LandCount;
+        var idAt = raster.IdAt;
+        var titles = raster.Titles;
         var targetTitles = Titles.Flatten(titles).Where(t => t.Tier == targetTier).ToList();
         var targetIndexMap = new Dictionary<Title, int>();
         for (int i = 0; i < targetTitles.Count; i++) targetIndexMap[targetTitles[i]] = i;
@@ -172,8 +198,8 @@ public static class PreviewRenderer
 
         int At(int i)
         {
-            int id = order[map.Label[i]];
-            return id <= baronyCount ? titleIndexOf[id] : id <= landCount ? Impassable : Water;
+            int id = idAt(i);
+            return id >= 1 && id <= baronyCount ? titleIndexOf[id] : id > landCount || id < 1 ? Water : Impassable;
         }
 
         bool Edge(int i, int titleIndex)
@@ -241,13 +267,36 @@ public static class PreviewRenderer
     /// <see cref="RealmPalette"/>, for reasons that class states.
     /// </summary>
     public static Image RenderRealms(GenerationResult result, RealmGraph? graph, MapGen.WildernessMap? wilderness)
-    {
-        if (graph is null) return RenderTitles(result, "c");
+        => RenderRealms(ProvinceRaster.From(result, wilderness), graph);
 
-        var counties = Titles.Flatten(result.Titles).Where(t => t.Tier == "c").ToList();
+    /// <summary>
+    /// Every county in the colour of the dynasty whose member holds it directly — the seat's
+    /// ruler's dynasty, so a king's demesne and his count vassal's county come out apart even when
+    /// the realm colours them together. Hashed from the dynasty id so the colours survive edits.
+    /// </summary>
+    public static Image RenderDynasties(GenerationResult result, RealmGraph? graph, Emit.WrittenContent? written)
+    {
+        if (graph is null || written?.Rulers is not { } rulers) return RenderTitles(result, "c");
+        return RenderByCounty(result, written.Wilderness,
+            county => rulers.TryGet(graph.SeatOfCounty(county), out var ruler) ? DynastyColour(ruler.DynastyId) : null);
+    }
+
+    public static (byte R, byte G, byte B) DynastyColour(string dynastyId)
+    {
+        // The generator's own title palette conversion, so these sit in the same saturation and
+        // lightness band as every other political view rather than beside it.
+        ulong hash = Rng.StableHash(dynastyId);
+        return MapGen.Titles.FromHsl(hash % 360, 0.45f + (hash >> 9) % 30 / 100f, 0.42f + (hash >> 17) % 22 / 100f);
+    }
+
+    public static Image RenderRealms(ProvinceRaster raster, RealmGraph? graph)
+    {
+        if (graph is null) return RenderTitles(raster, "c");
+
+        var counties = Titles.Flatten(raster.Titles).Where(t => t.Tier == "c").ToList();
         var palette = new RealmPalette(graph, counties);
 
-        return RenderByCounty(result, wilderness,
+        return RenderByCounty(raster,
             county => palette.Colour(graph.PathFromTop(graph.SeatOfCounty(county))[0]));
     }
 
@@ -270,14 +319,17 @@ public static class PreviewRenderer
     /// </summary>
     public static Image RenderRealmsFocused(GenerationResult result, RealmGraph graph,
         MapGen.WildernessMap? wilderness, Title focusSeat)
+        => RenderRealmsFocused(ProvinceRaster.From(result, wilderness), graph, focusSeat);
+
+    public static Image RenderRealmsFocused(ProvinceRaster raster, RealmGraph graph, Title focusSeat)
     {
-        var counties = Titles.Flatten(result.Titles).Where(t => t.Tier == "c").ToList();
+        var counties = Titles.Flatten(raster.Titles).Where(t => t.Tier == "c").ToList();
         var palette = new RealmPalette(graph, counties);
         var focusColour = palette.Colour(focusSeat);
 
         // Wilderness recedes with the rest of the unfocused world — at its usual orange it would
         // be the loudest thing on a frame whose whole point is that one realm is loudest.
-        return RenderByCounty(result, wilderness, wildColour: Dim(168, 120, 48), colourOf: county =>
+        return RenderByCounty(raster, wildColour: Dim(168, 120, 48), colourOf: county =>
         {
             var seat = graph.SeatOfCounty(county);
             var path = graph.PathFromTop(seat);
@@ -318,21 +370,25 @@ public static class PreviewRenderer
     private static Image RenderByCounty(GenerationResult result, MapGen.WildernessMap? wilderness,
         Func<Title, (byte R, byte G, byte B)?> colourOf,
         (byte R, byte G, byte B)? wildColour = null)
+        => RenderByCounty(ProvinceRaster.From(result, wilderness), colourOf, wildColour);
+
+    public static Image RenderByCounty(ProvinceRaster raster,
+        Func<Title, (byte R, byte G, byte B)?> colourOf,
+        (byte R, byte G, byte B)? wildColour = null)
     {
         var wildTint = wildColour ?? ((byte)168, (byte)120, (byte)48);
 
-        var map = result.Provinces;
-        var order = result.ProvinceOrder;
-        int width = map.Width, height = map.Height;
-        int baronyCount = result.BaronyCount, landCount = result.LandCount;
-        var counties = Titles.Flatten(result.Titles).Where(t => t.Tier == "c").ToList();
+        int width = raster.Width, height = raster.Height;
+        int baronyCount = raster.BaronyCount, landCount = raster.LandCount;
+        var idAt = raster.IdAt;
+        var counties = Titles.Flatten(raster.Titles).Where(t => t.Tier == "c").ToList();
 
         var colour = new (byte R, byte G, byte B)[counties.Count];
         var wild = new bool[counties.Count];
 
         for (int c = 0; c < counties.Count; c++)
         {
-            if (wilderness?.Contains(counties[c]) == true) { wild[c] = true; continue; }
+            if (raster.IsWild?.Invoke(counties[c]) == true) { wild[c] = true; continue; }
             if (colourOf(counties[c]) is { } found) colour[c] = found;
             else wild[c] = true;
         }
@@ -346,8 +402,8 @@ public static class PreviewRenderer
 
         int At(int i)
         {
-            int id = order[map.Label[i]];
-            return id <= baronyCount ? countyOf[id] : id <= landCount ? Impassable : Water;
+            int id = idAt(i);
+            return id >= 1 && id <= baronyCount ? countyOf[id] : id > landCount || id < 1 ? Water : Impassable;
         }
 
         bool Edge(int i, int county)
@@ -443,7 +499,8 @@ public static class PreviewRenderer
         var counties = Titles.Flatten(result.Titles).Where(t => t.Tier == "c").ToList();
 
         var provinceTerrain = Emit.ContentWriter.ProvinceTerrain(
-            cfg, result.Provinces, result.ProvinceOrder, result.Terrain.Terrain, result.LandCount);
+            cfg, result.Provinces, result.ProvinceOrder, result.Terrain.Terrain,
+            result.ProvinceElevation, result.LandCount, result.BaronyCount);
 
         var development = MapGen.Development.ForCounties(
             counties, provinceTerrain, cfg, new Rng(cfg.Seed ^ 0x0DE7), null, result.Azgaar);
@@ -482,9 +539,57 @@ public static class PreviewRenderer
     }
 
     public static Image RenderGovernment(GenerationResult result, Emit.WrittenContent? written)
-        => RenderGovernment(result, written?.Governments
-            ?? EstimateGovernments(result, written?.Cultures, written?.WorldCenters),
-            written?.Wilderness ?? EstimateWilderness(result).Wilderness);
+    {
+        var (governments, wilderness) = GovernmentState(result, written);
+        return RenderGovernment(result, governments, wilderness);
+    }
+
+    /// <summary>
+    /// What the government mode paints from: the written maps when a mod has been written, and a
+    /// recomputation of both when one has not.
+    ///
+    /// Memoised on the world and the written content it was built from, because the estimate is
+    /// not cheap — it runs the wilderness pass, two development passes and a whole realm build —
+    /// and it now has a second caller that asks far more often than the renderer does. The hover
+    /// readout wants the same answer under every cursor move, and recomputing a realm build per
+    /// mouse move is not a readout anyone would wait for. One entry is enough: both callers ask
+    /// about the world currently on screen.
+    ///
+    /// Identity, not equality, is the right key. The edit layer mutates the map it hands out
+    /// rather than replacing it, so a cached instance stays the live one across a government edit,
+    /// and a genuinely different world arrives as a different object.
+    /// </summary>
+    private static (GenerationResult Result, Emit.WrittenContent? Written,
+                    GovernmentMap Governments, WildernessMap Wilderness)? _governmentState;
+
+    private static (GovernmentMap Governments, WildernessMap Wilderness) GovernmentState(
+        GenerationResult result, Emit.WrittenContent? written)
+    {
+        if (_governmentState is { } cached
+            && ReferenceEquals(cached.Result, result) && ReferenceEquals(cached.Written, written))
+        {
+            return (cached.Governments, cached.Wilderness);
+        }
+
+        var governments = written?.Governments
+            ?? EstimateGovernments(result, written?.Cultures, written?.WorldCenters);
+        var wilderness = written?.Wilderness ?? EstimateWilderness(result).Wilderness;
+
+        _governmentState = (result, written, governments, wilderness);
+        return (governments, wilderness);
+    }
+
+    /// <summary>
+    /// The hover line for the government mode: what the county under the cursor is seated on, by
+    /// the same name the legend gives its colour.
+    /// </summary>
+    public static string? GovernmentProbe(
+        GenerationResult result, Emit.WrittenContent? written, Title county)
+    {
+        var (governments, wilderness) = GovernmentState(result, written);
+        return GovernmentMap.DisplayName(
+            wilderness.Contains(county) ? GovernmentMap.Wilderness : governments.For(county));
+    }
 
     /// <summary>
     /// Paints what title history seats each county under, not what the cascade assigned it. The
@@ -735,22 +840,41 @@ public static class PreviewRenderer
         ]);
 
     /// <summary>
-    /// One swatch per kind of realm rather than per government key, which is why the legend beside
-    /// it stays eight rows while the inspector's dropdown offers fourteen. All Under Heaven's
-    /// governments are only ever set by hand, and each of them is a variety of something already
-    /// painted here: its four bureaucracies take administrative's purple, wanua is a tribe, and
-    /// Sōryō and mandala fall through to feudal — which is also what the game itself turns each of
-    /// them into for a player without the expansion.
+    /// One swatch per government key the inspector's dropdown can set, so a realm put on one of
+    /// All Under Heaven's governments by hand is visible as that government rather than as the
+    /// vanilla family it belongs to.
+    ///
+    /// Family first, key second: hue says what kind of realm it is — purple for a bureaucracy,
+    /// blue for feudal, earth for tribal — and the variation inside that hue says which one, so
+    /// the map still reads as families at a glance and only separates when you look. Sōryō is a
+    /// lighter feudal blue, the three portable bureaucracies and celestial are shades either side
+    /// of administrative's purple, wanua is a coral off tribal's terracotta. Mandala is the one
+    /// that gets a hue of its own: it is not a variety of anything else painted here — tributary
+    /// overlordship on temple seats rather than a hierarchy of vassals in castles.
+    ///
+    /// The distinction is a mod-file one, not a played one. Without the expansion the game's
+    /// game-start sweep turns every All Under Heaven government back into feudal or tribal, which
+    /// is exactly the neighbouring colour each of them is drawn beside.
     /// </summary>
     public static (byte R, byte G, byte B) GovernmentColour(string government) => government switch
     {
-        GovernmentMap.Administrative or GovernmentMap.Meritocratic or GovernmentMap.SteppeAdmin
-            or GovernmentMap.Celestial or GovernmentMap.JapanAdministrative => (155, 60, 160),
+        GovernmentMap.Administrative => (155, 60, 160),
+
+        // Darkest of the purples for the Son of Heaven, lighter and bluer for the two portable
+        // bureaucracies, and pink for Ritsuryō — the one that is a court rather than a chancery.
+        GovernmentMap.Celestial => (105, 35, 115),
+        GovernmentMap.Meritocratic => (135, 85, 210),
+        GovernmentMap.SteppeAdmin => (165, 110, 140),
+        GovernmentMap.JapanAdministrative => (210, 95, 180),
+
         GovernmentMap.Nomad => (210, 160, 65),
-        GovernmentMap.Tribal or GovernmentMap.Wanua => (185, 95, 60),
+        GovernmentMap.Tribal => (185, 95, 60),
+        GovernmentMap.Wanua => (225, 140, 120),
+        GovernmentMap.Mandala => (40, 160, 135),
         GovernmentMap.Clan => (80, 150, 95),
         GovernmentMap.Republic => (200, 70, 70),
         GovernmentMap.Theocracy => (205, 205, 200),
+        GovernmentMap.JapanFeudal => (95, 160, 215),
         // The same tint the Realms, Cultures and Faiths modes give the wilderness, so it reads as
         // the same ground from one mode to the next.
         GovernmentMap.Wilderness => (168, 120, 48),

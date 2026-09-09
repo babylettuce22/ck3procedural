@@ -2,9 +2,12 @@
 #
 # ---- What this is ----
 #
-# Single-object overrides of four vanilla scripted triggers from
+# Single-object overrides of six vanilla scripted triggers from
 # common/scripted_triggers/10_tgp_triggers.txt. Script is last-wins and this directory has no
 # subfolders, so a zz_ file here replaces each trigger without touching the file it lives in.
+#
+# The first four loosen who may adopt a bureaucracy; the last two (minister eligibility, at the
+# bottom of this file) tighten who may staff one, and fix a crash rather than a tooltip.
 #
 # The "Adopt <X> Government" items of convert_to_administrative_decision (06_ep3_admin_decisions.txt)
 # gate on the first three. Vanilla ties them to Earth: the Hegemony of China, Han ancestry, the
@@ -106,4 +109,116 @@ gen_player_may_found_bureaucracy_trigger = {
 			}
 		}
 	}
+}
+
+# ---- A landless ruler who still has vassals may not hold a ministry ----
+#
+# Verbatim copies of vanilla's two minister-eligibility triggers (10_tgp_triggers.txt 172 and 218)
+# with one clause added to each. Both are single-object overrides, same as the four above.
+#
+# The bug they fix: vanilla asks only "is_ruler = no OR government_is_celestial", and nothing about
+# vassals. A celestial ruler who has lost every county keeps his landless noble-family title AND
+# whatever vassals were sworn to him -- crash ck3_20260907_175647's character 1453 held only
+# x_nf_216 and still had three vassals, one of them his son on a real county. Appointing him closes
+# a loop the engine cannot leave:
+#
+#     got_minister_position_effect grants the e_ tier ministry title, then (its own
+#       `vassal_count > 0` block) moves every vassal he has up to the top liege
+#       -> rank up fires on_rank_up 4023, which re-parents landless noble-family vassals again
+#       -> the liege changes trip the engine's appointment-lease revocation
+#       -> the ministry title is left holderless and destroyed
+#       -> the council seat is vacant, so he is re-appointed
+#
+# Each turn nests one title-and-vassal change inside the last. The crash was a C00000FD stack
+# overflow 7269 frames deep, ~170 turns a second for six seconds, all of it that one character.
+#
+# What the clause must NOT do is bar landless noble-family heads as a class, and the first version
+# of this file did exactly that (`is_landed = no` plus `is_noble_family_title`). In a celestial
+# realm the landless noble-family head IS the normal minister: claim_mandate turns every courtier
+# with 3000 merit into one on purpose, and vanilla's own 10_tgp_triggers.txt 905 speaks of "the
+# councilors of landless noble family heads" as an ordinary thing. With them barred, vanilla's
+# fired-minister path -- fired_minister_position_effect hands the title to the title's
+# appointment-succession heir and re-seats him through assign_councillor_type -- failed
+# valid_character on every heir, left an e_ title in the hands of a non-councillor, and the engine
+# resigned it (ResignInvalidTierNonDejure). Measured after nine years of that: eight of nine
+# ministries vacant, e_minister_of_revenue created 22 times and destroyed 21, and every refill
+# drawn from the rank-0 remainder, so the low-merit Dynastic Cycle catalysts fired on each one.
+#
+# `vassal_count > 0` is the discriminator because it is the one vanilla's own effect uses to decide
+# a new minister needs cleaning up, and a fresh courtier-turned-noble-family-head has none. A
+# landless ruler WITH vassals is by construction a former landed ruler, which is the crash shape
+# and nothing else. Landed rulers are untouched: they are the governors, and can be ministers.
+#
+# Grand marshal carries the same hole and is overridden for the same reason -- left alone, the loop
+# would move to e_minister_grand_marshal on the next appointment.
+
+tgp_can_be_a_minister_trigger = {
+	can_be_councillor_basics_trigger = yes
+	# Has to be celestial or a non-ruler
+	OR = {
+		is_ruler = no
+		government_has_flag = government_is_celestial
+	}
+	# Added: not a landless ruler who still has vassals. See the comment above.
+	NOT = {
+		AND = {
+			is_landed = no
+			vassal_count > 0
+		}
+	}
+	# Gender is based on laws of the liege
+	OR = {
+		has_variable = can_be_councillor_override
+		AND = {
+			is_female = yes
+			$COURT_OWNER$ = {
+				NOR = {
+					has_realm_law = male_only_law
+					has_realm_law = male_preference_law
+				}
+			}
+		}
+		AND = {
+			is_male = yes
+			$COURT_OWNER$ = {
+				NOR = {
+					has_realm_law = female_only_law
+					has_realm_law = female_preference_law
+				}
+			}
+		}
+	}
+	# Players are only allowed if they have enough merit or is a councillor already, unless they are friends or disciples/elders
+	# We do this to prevent the AI from "randomly" requesting the player to be on their council
+	trigger_if = {
+		limit = {
+			is_ai = no
+			$COURT_OWNER$ = { is_ai = yes }
+			NOT = { is_councillor_of = $COURT_OWNER$ }
+		}
+		OR = {
+			merit_level >= merit_level_expected_empire_value
+			has_relation_friend = $COURT_OWNER$
+			has_relation_disciple = $COURT_OWNER$
+			has_relation_elder = $COURT_OWNER$
+		}
+	}
+}
+
+tgp_can_be_grand_marshal_trigger = {
+	can_be_councillor_basics_trigger = yes
+	# Has to be celestial or a non-ruler
+	OR = {
+		is_ruler = no
+		government_has_flag = government_is_celestial
+	}
+	# Added: not a landless ruler who still has vassals. See the comment above.
+	NOT = {
+		AND = {
+			is_landed = no
+			vassal_count > 0
+		}
+	}
+	# Has to be able to lead armies
+	can_be_combatant_based_on_gender_trigger = { ARMY_OWNER = $COURT_OWNER$ }
 }

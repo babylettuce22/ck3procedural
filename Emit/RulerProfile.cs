@@ -88,6 +88,14 @@ public sealed record RulerProfile
     /// Cycle reads as "lost the Mandate" at its first yearly pulse and answers by shattering the
     /// hegemony (observed 2026-09-06: deposed within a year).
     /// </summary>
+    /// <summary>
+    /// Whether a government has a legitimacy to gain, for anything that has to say so out loud —
+    /// the report after an overwrite names the ones that do not, and naming them from this set is
+    /// what stops that text drifting from the rule it describes.
+    /// </summary>
+    public static bool HasLegitimacy(string government) => LegitimacyGovernments.Contains(government);
+
+    /// <inheritdoc cref="HasLegitimacy"/>
     private static readonly HashSet<string> LegitimacyGovernments =
     [
         GovernmentMap.Feudal, GovernmentMap.Clan, GovernmentMap.Tribal,

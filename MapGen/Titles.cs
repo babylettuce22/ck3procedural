@@ -631,7 +631,12 @@ public static class Titles
         var empires = Wrap("e", empireClusters, c => c.Select(i => kingdoms[i]));
 
         AssignColors(empires, rng, cfg.DeJureColorCoding);
-        Crown(empires, rng);
+
+        // Lifted one more rung than the clustering needed, purely so the hegemony can be given a
+        // heartland: `empireAdjacency` is a graph of kingdoms, and the crown reasons about empires.
+        Crown(empires, rng,
+              ByTitle(empires, LiftAdjacency(empireClusters, empireAdjacency)),
+              ByTitle(empires, LiftAdjacency(empireClusters, empireSea)));
 
         int seaLinked = seaAdjacency.Values.Sum(s => s.Count) / 2;
         Console.WriteLine($"  titles: {empires.Count} empires, {kingdoms.Count} kingdoms, " +
@@ -708,28 +713,80 @@ public static class Titles
     public const string HegemonyKey = "h_china";
 
     /// <summary>
-    /// Puts one title above every empire — the world's hegemony — and returns it, or null when the
-    /// map is too small to warrant one.
+    /// The most of the world's counties a hegemony should ever claim de jure.
     ///
-    /// There is exactly one, and it takes every empire, because at the scale this tool generates
-    /// there is nothing else it could be. An empire averages a hundred and twenty counties, so a
-    /// full-sized world is three or four of them; carving that into competing hegemonies the way
-    /// vanilla carves Earth would produce hegemonies of one empire each. The single world-spanning
-    /// title is the only shape the land supports.
+    /// A preference rather than a rule — a three-empire world cannot put two empires under a crown
+    /// and stay under any share worth naming, and the fallbacks below ignore it rather than refuse
+    /// to build one. But wherever the map allows a choice, this is what keeps the hegemony a power
+    /// on the map instead of a second drawing of it: under half the world, so the ground it does not
+    /// claim is still most of the ground there is.
+    /// </summary>
+    private const double HegemonyMaxShare = 0.45;
+
+    /// <summary>
+    /// The share past which no hegemony is built at all.
+    ///
+    /// The soft cap above is a preference the search concedes when the land will not meet it; this
+    /// is not conceded, and the map goes without a hegemony instead. A three-empire world measured
+    /// 2026-09-07 is why it exists: with every empire on a landmass of its own the search fell
+    /// through to the sea-linked fallback and crowned 73 % of the world, which is the whole-map
+    /// hegemony this rework exists to kill, wearing a smaller number. Over half the world under one
+    /// de jure title is not a hegemony, it is the map — and a map too small or too scattered to
+    /// support one is better off with none: <c>h_china</c> stays a shim, nothing starts, and every
+    /// path for that case already exists because maps under two empires have always taken it.
+    /// </summary>
+    private const double HegemonyHardMaxShare = 0.55;
+
+    /// <summary>
+    /// Puts one title above a contiguous group of empires — the world's hegemony — and returns it,
+    /// or null when the map is too small to warrant one.
+    ///
+    /// <para><b>It is a region, not the map.</b> The first version parented every empire on the
+    /// planet, which made the hegemony's de jure border the coastline and nothing else: a title
+    /// that claimed everything said nothing, the Dynastic Cycle's "share of your de jure land"
+    /// tests measured against the whole world (see <c>Emit/DynasticCycleWriter.cs</c>), and no
+    /// starting hegemon could ever look like one. What is built now is the shape a real hegemony
+    /// has — a heartland of neighbouring empires, one landmass wherever the land offers one,
+    /// large enough that no single empire outweighs it and small enough that the rest of the world
+    /// is still the rest of the world.</para>
+    ///
+    /// <para>The extent is the <em>smallest</em> contiguous group of empires that outweighs the
+    /// largest empire on the map, searched on the biggest landmass first (see
+    /// <see cref="ChooseExtent"/>). Smallest, because a hegemony only has to stand above the crowns
+    /// beneath it: taking more ground than that is how the old one ended up being the world.</para>
     ///
     /// De jure is not vassalage — CK3 makes an empire's holder a vassal only where history says
     /// <c>liege =</c>, which is why vanilla still writes that line for titles already nested inside
     /// <c>h_china</c>. So a hegemony nobody holds costs the starting map nothing at all: it paints
     /// a border, answers the hardcoded references, and waits for someone to earn it.
     /// </summary>
-    internal static Title? Crown(List<Title> empires, Rng rng)
+    /// <param name="land">
+    /// Which empires border which by land, when the caller knows. Without it there is no way to
+    /// tell a heartland from a scatter, and the extent falls back to the two largest empires.
+    /// </param>
+    /// <param name="sea">Empire borders across the short crossings the map counts as adjacency.</param>
+    internal static Title? Crown(List<Title> empires, Rng rng,
+        IReadOnlyDictionary<Title, HashSet<Title>>? land = null,
+        IReadOnlyDictionary<Title, HashSet<Title>>? sea = null)
     {
         if (empires.Count < MinEmpiresPerHegemony) return null;
 
+        var extent = ChooseExtent(empires, land, sea);
+
+        if (extent is not { Count: >= MinEmpiresPerHegemony })
+        {
+            Console.WriteLine($"  hegemony: none — no group of {empires.Count} empires is both "
+                            + "contiguous and small enough to be a hegemony rather than the map");
+            return null;
+        }
+
         var hegemony = new Title { Tier = "h", Index = 0 };
 
+        // In map order, never in the order the search happened to reach them: a Title's child order
+        // decides its capital and is load-bearing everywhere downstream.
         foreach (var empire in empires)
         {
+            if (!extent.Contains(empire)) continue;
             empire.Parent = hegemony;
             hegemony.Children.Add(empire);
         }
@@ -740,19 +797,239 @@ public static class Titles
         hegemony.Color = new Hsl(rng.Float(0f, 360f), rng.Float(0.55f, 0.85f),
                                  rng.Float(0.42f, 0.58f)).ToRgb();
 
+        int claimed = Flatten([hegemony]).Count(t => t.Tier == "c");
+        int world = empires.Sum(e => Flatten([e]).Count(t => t.Tier == "c"));
+        int biggest = empires.Max(e => Flatten([e]).Count(t => t.Tier == "c"));
+
+        Console.WriteLine($"  hegemony: {hegemony.Children.Count} of {empires.Count} empires under one crown, "
+                        + $"{claimed} of {world} counties ({(double)claimed / Math.Max(1, world):P0}) — "
+                        + $"{(double)claimed / Math.Max(1, biggest):0.0}x the largest empire");
+
         return hegemony;
+    }
+
+    /// <summary>
+    /// The ground the hegemony should cover: the smallest contiguous group of empires that
+    /// outweighs the largest single empire on the map, preferring one landmass and under
+    /// <see cref="HegemonyMaxShare"/> of the world.
+    ///
+    /// Weighed in counties rather than in empires, because empires vary by a factor of two and a
+    /// count of them says nothing about how much of the map a border encloses. The floor is the
+    /// largest empire anywhere, not the largest inside the group: a hegemony that some emperor
+    /// outweighs is not one, however contiguous.
+    ///
+    /// Searched greedily from every empire in turn — grow from a seed by whichever neighbour adds
+    /// the least, stop as soon as the floor is passed, keep the lightest finished group — which on
+    /// graphs this small (a world is five to a dozen empires) lands on the true minimum or within
+    /// one empire of it, without an exponential enumeration.
+    ///
+    /// The four attempts below are in order of how much they concede. A group inside one landmass
+    /// and under the cap is the shape being aimed at; then the same without the cap, for a world of
+    /// three empires where any pair is most of it; then the same allowing the short sea crossings
+    /// the rest of the hierarchy already treats as adjacency, for an archipelago; and last, when no
+    /// group can outweigh the biggest empire at all, the largest landmass entire — the "one whole
+    /// continent" hegemony, which is what a small continent beside a giant one deserves anyway.
+    /// </summary>
+    private static HashSet<Title>? ChooseExtent(List<Title> empires,
+        IReadOnlyDictionary<Title, HashSet<Title>>? land,
+        IReadOnlyDictionary<Title, HashSet<Title>>? sea)
+    {
+        var weight = empires.ToDictionary(e => e, e => Flatten([e]).Count(t => t.Tier == "c"));
+
+        int total = weight.Values.Sum();
+        int floor = weight.Values.Max();
+        int ceiling = (int)(HegemonyHardMaxShare * total);
+
+        // A map with no adjacency at hand — no provinces, so no notion of what touches what. The
+        // two largest empires are the only defensible guess: contiguity cannot be checked, so the
+        // smallest group that clears the floor cannot be preferred over a scattered one.
+        if (land is null)
+        {
+            var guess = empires.OrderByDescending(e => weight[e]).ThenBy(e => e.Index)
+                               .Take(MinEmpiresPerHegemony).ToHashSet();
+            return guess.Sum(e => weight[e]) <= ceiling ? guess : null;
+        }
+
+        var union = sea is null ? land : Merge(land, sea);
+        var continents = Components(empires, land)
+            .Where(c => c.Count >= MinEmpiresPerHegemony)
+            .OrderByDescending(c => c.Sum(e => weight[e]))
+            .ThenBy(c => c.Min(e => e.Index))
+            .ToList();
+
+        // Three strategies, each tried at the preferred cap before any of them is tried at the
+        // ceiling. Nothing is tried past the ceiling at all: a map that cannot put a hegemony on
+        // less than that much of itself gets no hegemony (see HegemonyHardMaxShare).
+        foreach (int limit in (int[])[(int)(HegemonyMaxShare * total), ceiling])
+        {
+            // A whole landmass, when one of them happens to be the right size to be a hegemony.
+            // The best answer the map can give — the border is a coastline rather than a line drawn
+            // between two empires for arithmetic's sake — so it is tried before any group is grown,
+            // and the largest such landmass wins.
+            if (continents.FirstOrDefault(c => c.Sum(e => weight[e]) > floor
+                                            && c.Sum(e => weight[e]) <= limit) is { } continent)
+                return [.. continent];
+
+            // Failing that, the lightest group a single landmass can offer, across all of them
+            // rather than the first the biggest one yields: a map lumpy enough to reach this stage
+            // is better served by restraint than by a heartland story.
+            if (continents.Select(c => Grow(c, land, weight, floor, limit)).OfType<HashSet<Title>>()
+                          .OrderBy(p => p.Sum(e => weight[e])).ThenBy(p => p.Min(e => e.Index))
+                          .FirstOrDefault() is { } pick)
+                return pick;
+
+            // Last, across the short crossings. An archipelago world has no landmass with two
+            // empires on it, and a hegemony reaching over a strait is a real shape — but it is the
+            // shape that is hardest for a realm to actually hold, so it goes behind the others.
+            if (Grow(empires, union, weight, floor, limit) is { } overseas) return overseas;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The lightest connected group of at least <see cref="MinEmpiresPerHegemony"/> empires that
+    /// weighs more than <paramref name="floor"/> and no more than <paramref name="limit"/>, or null
+    /// when the pool holds none.
+    /// </summary>
+    private static HashSet<Title>? Grow(IReadOnlyCollection<Title> pool,
+        IReadOnlyDictionary<Title, HashSet<Title>> adjacency,
+        Dictionary<Title, int> weight, int floor, int limit)
+    {
+        var inside = new HashSet<Title>(pool);
+        HashSet<Title>? best = null;
+        int bestWeight = int.MaxValue;
+
+        foreach (var seed in pool.OrderBy(e => e.Index))
+        {
+            var group = new HashSet<Title> { seed };
+            int sum = weight[seed];
+
+            while (group.Count < inside.Count && (sum <= floor || group.Count < MinEmpiresPerHegemony))
+            {
+                // The neighbour that adds the least, so the finished group overshoots the floor by
+                // as little as the map allows. Ties by index, so the same world always grows the
+                // same hegemony.
+                var next = group
+                    .SelectMany(m => adjacency.TryGetValue(m, out var n) ? (IEnumerable<Title>)n : [])
+                    .Where(n => inside.Contains(n) && !group.Contains(n))
+                    .Distinct()
+                    .OrderBy(n => weight[n]).ThenBy(n => n.Index)
+                    .FirstOrDefault();
+
+                if (next is null) break;
+                group.Add(next);
+                sum += weight[next];
+            }
+
+            if (sum <= floor || group.Count < MinEmpiresPerHegemony || sum > limit) continue;
+
+            if (sum < bestWeight
+                || (sum == bestWeight && best is not null
+                    && (group.Count < best.Count
+                        || (group.Count == best.Count && group.Min(e => e.Index) < best.Min(e => e.Index)))))
+            {
+                best = group;
+                bestWeight = sum;
+            }
+        }
+
+        return best;
+    }
+
+    /// <summary>Connected components of the given titles under one adjacency graph.</summary>
+    private static List<List<Title>> Components(List<Title> titles,
+        IReadOnlyDictionary<Title, HashSet<Title>> adjacency)
+    {
+        var pool = new HashSet<Title>(titles);
+        var seen = new HashSet<Title>();
+        var result = new List<List<Title>>();
+
+        foreach (var start in titles)
+        {
+            if (!seen.Add(start)) continue;
+
+            var component = new List<Title> { start };
+            var stack = new Stack<Title>([start]);
+
+            while (stack.Count > 0)
+            {
+                if (!adjacency.TryGetValue(stack.Pop(), out var next)) continue;
+                foreach (var other in next)
+                    if (pool.Contains(other) && seen.Add(other)) { component.Add(other); stack.Push(other); }
+            }
+
+            result.Add(component);
+        }
+
+        return result;
+    }
+
+    private static Dictionary<Title, HashSet<Title>> Merge(
+        IReadOnlyDictionary<Title, HashSet<Title>> land, IReadOnlyDictionary<Title, HashSet<Title>> sea)
+    {
+        var merged = new Dictionary<Title, HashSet<Title>>(land.Count);
+        foreach (var (key, values) in land) merged[key] = [.. values];
+
+        foreach (var (key, values) in sea)
+        {
+            if (!merged.TryGetValue(key, out var set)) merged[key] = set = [];
+            set.UnionWith(values);
+        }
+
+        return merged;
+    }
+
+    /// <summary>
+    /// Lifts an index-keyed adjacency graph onto the titles those indices belong to — the bridge
+    /// between <see cref="LiftAdjacency"/>, which speaks in cluster indices, and
+    /// <see cref="Crown"/>, which has only titles to work with.
+    /// </summary>
+    internal static Dictionary<Title, HashSet<Title>> ByTitle(
+        IReadOnlyList<Title> titles, Dictionary<int, HashSet<int>> graph)
+    {
+        var result = new Dictionary<Title, HashSet<Title>>(titles.Count);
+        foreach (var title in titles) result[title] = [];
+
+        foreach (var (index, neighbours) in graph)
+        {
+            if (index < 0 || index >= titles.Count) continue;
+            foreach (int other in neighbours)
+                if (other >= 0 && other < titles.Count && other != index)
+                    result[titles[index]].Add(titles[other]);
+        }
+
+        return result;
     }
 
     /// <summary>
     /// The hegemony over a set of empires, or null when the world has none.
     ///
-    /// Derived from the tree rather than carried alongside it: <see cref="Crown"/> parents every
-    /// empire to the same title, so any one of them can be asked. That keeps the hegemony off every
-    /// signature that already takes the empire list, and keeps it impossible for a caller to hold a
-    /// hegemony that is not the one the map was built with.
+    /// Derived from the tree rather than carried alongside it, which keeps the hegemony off every
+    /// signature that already takes the empire list and makes it impossible for a caller to hold a
+    /// hegemony that is not the one the map was built with. Every empire is asked, not just the
+    /// first: since the crown covers a region rather than the map (see <see cref="Crown"/>), the
+    /// empires outside it have no parent at all, and one of those is routinely first in the list.
     /// </summary>
     public static Title? HegemonyOf(IEnumerable<Title> empires)
-        => empires.FirstOrDefault()?.Parent is { Tier: "h" } hegemony ? hegemony : null;
+        => empires.Select(e => e.Parent).FirstOrDefault(p => p is { Tier: "h" });
+
+    /// <summary>
+    /// The emit roots of a finished hierarchy: the hegemony when there is one, followed by every
+    /// empire it does not cover.
+    ///
+    /// Anything that walks the de jure tree from the top needs this rather than the empire list,
+    /// and needed it the moment the hegemony stopped covering every empire — writing the hegemony
+    /// alone would have dropped the empires outside it out of the mod entirely.
+    /// </summary>
+    public static List<Title> Roots(List<Title> empires)
+    {
+        if (HegemonyOf(empires) is not { } hegemony) return [.. empires];
+
+        var roots = new List<Title> { hegemony };
+        roots.AddRange(empires.Where(e => e.Parent != hegemony));
+        return roots;
+    }
 
     public static void RecolorChildren(Title parent, Rng rng)
         => DistributeChildren(parent, Hsl.FromRgb(parent.Color), rng);

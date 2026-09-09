@@ -76,6 +76,14 @@ public sealed class TitleEditor : UserControl
     private readonly List<Title> _selected = [];
 
     private Title? _anchor;
+    private bool _fileBacked;
+    internal void LoadExisting(List<Title> roots) { _fileBacked = true; Build(roots); }
+    internal void UnloadExisting() { _fileBacked = false; Clear(); }
+    internal void RefreshExisting()
+    {
+        foreach (var (title, node) in _nodes) node.Text = Label(title);
+        Sync();
+    }
 
     /// <summary>Raised when the picked titles change, for whoever is showing the inspector.</summary>
     public event Action<IReadOnlyList<Title>>? SelectionChanged;
@@ -152,6 +160,7 @@ public sealed class TitleEditor : UserControl
     /// <summary>Rebuilds the tree for whatever <see cref="WorldEdits"/> is now pointing at.</summary>
     private void OnEditsChanged(WorldAspect touched)
     {
+        if (_fileBacked) return;
         if (!_edits.IsLoaded)
         {
             if (_nodes.Count > 0) Clear();
@@ -247,7 +256,7 @@ public sealed class TitleEditor : UserControl
     /// </summary>
     public void Reveal(Title title)
     {
-        if (!_edits.IsLoaded) return;
+        if (!_edits.IsLoaded && !_fileBacked) return;
 
         var chain = new List<Title>();
         for (var t = title; t is not null; t = t.Parent) chain.Add(t);
@@ -340,6 +349,7 @@ public sealed class TitleEditor : UserControl
 
     private void Sync()
     {
+        if (_fileBacked) { _count.Text = "Loaded world"; return; }
         int edited = _edits.EditedCount;
 
         _count.Text = !_edits.IsLoaded ? ""

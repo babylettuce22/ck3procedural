@@ -43,12 +43,24 @@ public sealed class FaithInspector : InspectorForm
     protected override void Refreshed()
     {
         bool single = Selection.Count == 1;
-        _holySites.Enabled = single && Selection[0] is Faith { HolySites.Count: > 0 };
+        _holySites.Enabled = single && (Selection[0] is Faith { HolySites.Count: > 0 }
+            || Loaded is { } world && LoadedOne is { } entry && world.HolySitesOf(entry).Count > 0);
         _seat.Enabled = single && Selection[0] is Faith { Head: not null };
     }
 
     private void ShowHolySites()
     {
+        if (Loaded is { } world && LoadedOne is { } entry)
+        {
+            var sites = world.HolySitesOf(entry);
+            MessageBox.Show(this,
+                $"{entry.Name} holds {sites.Count} holy sites:\n\n"
+                + string.Join("\n", sites.Select(s => $"  {world.Titles.GetValueOrDefault(s.Value("county"))?.Name ?? s.Value("county")}   ({s.Key})"))
+                + "\n\nEach site's county is edited on the site itself: pick it from the holy_site "
+                + "fields below, or open it from the world's entries.",
+                "Holy sites", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
         if (Selection.Count != 1 || Selection[0] is not Faith faith) return;
 
         MessageBox.Show(this,
@@ -125,8 +137,44 @@ public sealed class FaithInspector : InspectorForm
     }
 
     /// <inheritdoc cref="TitleInspector.Fields"/>
-    public sealed class Fields(Faith faith, WorldEdits edits)
+    public sealed class Fields(Faith faith, WorldEdits edits) : ILoadedChoices
     {
+        // --- Holy sites ---
+        //
+        // Five slots, the way tenets have three: the generator places a handful per faith. A site
+        // keeps its key when moved, so the religion file and its modifier still find it; only the
+        // county line in the site definition changes, and the site takes the new county's name.
+
+        private const string SiteHelp = "The county this holy site sits in. Moving it keeps the site's key and "
+            + "renames it after the new county. Blank slots are sites the faith does not have.";
+
+        [Category("Holy sites")] [DisplayName("Holy site 1")] [Description(SiteHelp)] [TypeConverter(typeof(ChoiceConverter))]
+        public string HolySite1 { get => Site(0); set => SetSite(0, value); }
+        [Category("Holy sites")] [DisplayName("Holy site 2")] [Description(SiteHelp)] [TypeConverter(typeof(ChoiceConverter))]
+        public string HolySite2 { get => Site(1); set => SetSite(1, value); }
+        [Category("Holy sites")] [DisplayName("Holy site 3")] [Description(SiteHelp)] [TypeConverter(typeof(ChoiceConverter))]
+        public string HolySite3 { get => Site(2); set => SetSite(2, value); }
+        [Category("Holy sites")] [DisplayName("Holy site 4")] [Description(SiteHelp)] [TypeConverter(typeof(ChoiceConverter))]
+        public string HolySite4 { get => Site(3); set => SetSite(3, value); }
+        [Category("Holy sites")] [DisplayName("Holy site 5")] [Description(SiteHelp)] [TypeConverter(typeof(ChoiceConverter))]
+        public string HolySite5 { get => Site(4); set => SetSite(4, value); }
+
+        private string Site(int index) => index < faith.HolySites.Count ? faith.HolySites[index].County.Key : "";
+
+        private void SetSite(int index, string value)
+        {
+            if (index >= faith.HolySites.Count || string.IsNullOrWhiteSpace(value)) return;
+            var county = WorldCounties().FirstOrDefault(c => c.Key == value.Trim());
+            if (county is null) throw new ArgumentException("Choose a county of this world.");
+            edits.SetHolySite(faith, index, county);
+        }
+
+        private IEnumerable<Title> WorldCounties()
+            => edits.Target is { } target ? Titles.Flatten(target.Result.Titles).Where(t => t.Tier == "c") : [];
+
+        public IReadOnlyList<(string Key, string Label)> Choices(string property)
+            => property.StartsWith("HolySite") ? WorldCounties().Select(c => (c.Key, c.Name)).ToList() : [];
+
         [Category("Identity")]
         [Description("The name shown in game. The adjective and adherent forms are derived from it.")]
         public string Name

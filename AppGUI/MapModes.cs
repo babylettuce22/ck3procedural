@@ -9,7 +9,7 @@ namespace Ck3MapGen.AppGUI;
 /// is the one member nothing clicks: a government is changed from the realm inspector rather than
 /// from the map, but the map has to follow it. See <see cref="MapMode.Repaints"/>.
 /// </summary>
-public enum MapPick { Title, Culture, Faith, Realm, Government }
+public enum MapPick { Title, Culture, Faith, Realm, Government, Dynasty }
 
 /// <summary>
 /// One map mode: how it renders, where it lives in the strip, whether a click edits something,
@@ -180,6 +180,17 @@ public static class MapModes
             // MainForm owns the focus stack this drives; the probe lives there too, beside it.
             Pick = (MapPick.Realm, "c"),
         },
+        new("Dynasties", "World", (r, w) => PreviewRenderer.RenderDynasties(r, RealmGraph.Build(w, r), w))
+        {
+            AfterWrite = true,
+            // Every county in the colour of the dynasty whose member holds it directly. A click
+            // opens that ruler, where the dynasty's and house's names and arms are edited.
+            Pick = (MapPick.Dynasty, "c"),
+            Probe = (_, w, _, county) => county is null || w?.Rulers is null || w.Realms is null ? null
+                : w.Rulers.TryGet(w.Realms.HolderCounty.GetValueOrDefault(county, county), out var ruler)
+                    && w.Prehistory?.Dynasties.TryGetValue(ruler.DynastyId, out var dynasty) == true
+                    ? $"dynasty {dynasty.LocalizedName}" : null,
+        },
         new("Cultures", "World", (r, w) => PreviewRenderer.RenderCultures(r, w?.Cultures, w?.Wilderness))
         {
             AfterWrite = true,
@@ -234,17 +245,17 @@ public static class MapModes
             // where the realm the change applies to is visible — but painted from a map an edit
             // moves, so it says so itself.
             Repaints = MapPick.Government,
-            Legend =
-            [
-                (PreviewRenderer.GovernmentColour(GovernmentMap.Administrative), "Administrative"),
-                (PreviewRenderer.GovernmentColour(GovernmentMap.Nomad), "Nomad"),
-                (PreviewRenderer.GovernmentColour(GovernmentMap.Tribal), "Tribal"),
-                (PreviewRenderer.GovernmentColour(GovernmentMap.Clan), "Clan"),
-                (PreviewRenderer.GovernmentColour(GovernmentMap.Republic), "Republic"),
-                (PreviewRenderer.GovernmentColour(GovernmentMap.Theocracy), "Theocracy"),
-                (PreviewRenderer.GovernmentColour("feudal"), "Feudal"),
-                (PreviewRenderer.GovernmentColour(GovernmentMap.Wilderness), "Wilderness"),
-            ],
+            // One row per government the inspector can set, ordered by family rather than
+            // alphabetically, so the four purples sit together and each All Under Heaven
+            // government is read beside the vanilla one it is a variety of. Feudal is asked for by
+            // its own key rather than through the switch's default arm, so a key the switch has
+            // stopped painting blue cannot leave this row lying.
+            Legend = GovernmentLegend(),
+
+            // Fifteen colours is more than a legend can be read against, so the county under the
+            // cursor names its own government rather than leaving the user to match a swatch.
+            Probe = (r, w, _, county) =>
+                county is null ? null : PreviewRenderer.GovernmentProbe(r, w, county),
         },
         // Reads the written wilderness when there is one, and before then reproduces it exactly —
         // no Estimate flag, because there is nothing estimated about it. Wilderness is decided from
@@ -284,6 +295,16 @@ public static class MapModes
 
         return $"{gold:F2} gold/month · {from}{centre}";
     }
+
+    /// <summary>
+    /// Every government the editor can set, in the dropdown's own order, with the wilderness after
+    /// them — it is painted here but is not one a realm is put on, so it reads last rather than
+    /// among the choices. Built from the list rather than written out, so a government added to
+    /// the model appears in the key without this file being the thing that has to remember it.
+    /// </summary>
+    private static ((byte, byte, byte), string)[] GovernmentLegend()
+        => [.. GovernmentMap.DisplayOrder.Append(GovernmentMap.Wilderness)
+                .Select(g => (PreviewRenderer.GovernmentColour(g), GovernmentMap.DisplayName(g)))];
 
     private static ((byte, byte, byte), string)[] TerrainLegend()
         => [.. Enum.GetValues<TerrainClass>()

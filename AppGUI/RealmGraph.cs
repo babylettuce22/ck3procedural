@@ -29,6 +29,9 @@ public sealed class RealmGraph
             ? new RealmGraph(realms, Titles.Flatten(result.Titles).Where(t => t.Tier == "c"))
             : null;
 
+    /// <summary>The same graph over a realm map read back from an existing mod's title history.</summary>
+    public static RealmGraph From(RealmMap realms, IEnumerable<Title> counties) => new(realms, counties);
+
     private RealmGraph(RealmMap realms, IEnumerable<Title> counties)
     {
         _holderCounty = realms.HolderCounty;

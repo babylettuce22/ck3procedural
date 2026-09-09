@@ -155,7 +155,7 @@ public static class BookmarkWriter
         {
             string tail = slot.Companions.Count == 0
                 ? ""
-                : $" (+{slot.Companions.Count} beside him)";
+                : $" (+{slot.Companions.Count} beside them)";
             Console.WriteLine($"  bookmark {slot.Key}: {slot.Ruler.Name} of "
                               + $"{slot.Ruler.PrimaryTitle.Name} — {Grade(slot.Difficulty)}{tail}");
         }

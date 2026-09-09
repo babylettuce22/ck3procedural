@@ -1,0 +1,124 @@
+﻿# Vanilla's Great Holy War unlock, re-declared without its Earth.
+#
+# ---- What was happening ----
+#
+# great_holy_war.0010 (events/religion_events/great_holy_war_events.txt) fires from on_faith_monthly
+# for every faith and decides when a religion first learns to call a Great Holy War. Its trigger is
+# an OR of historical set-ups -- who holds Jerusalem, Rome, Constantinople, Toulouse, Cologne -- and
+# every one of them reads title:c_<earth county>.holder. This mod ships those keys as unheld
+# titular shims (CompatibilityWriter), so the holder link fails and each faith logs a "Failed
+# context switch" per arm per month: 4,100 entries in five minutes, the second largest source.
+#
+# ---- What this is ----
+#
+# The same event with the same id, in the same directory with a zz_ name so it loads after
+# vanilla's and replaces it (the pattern events/activities/coronation_activity/
+# zz_gen_coronation_events.txt already uses). Kept: the doctrine, cooldown, head and legitimacy
+# gates, the "under attack" arm (two or more holy sites held by top lieges of another religion),
+# the free-for-all date, and the whole immediate block. Dropped: the four Catholic arms that name
+# Earth counties, the two "learned it from Christianity / Islam" propagation arms, and the two
+# Jerusalem weight modifiers. Replaced: propagation now keys on any religion having unlocked,
+# read through the same global cooldown variable the original sets, so a second religion still
+# follows a first one into the age of holy wars.
+#
+# The "under attack" arm no longer counts the wilderness: the unsettled faith is Righteous to
+# every generated religion (common/religion/doctrine_types/zz_gen_unsettled_hostility.txt), and
+# the arm tests religion, not hostility, so it is restated here on hostility so that a holy site
+# in unclaimed land does not unlock a crusade against nobody.
+
+namespace = great_holy_war
+
+great_holy_war.0010 = {
+	hidden = yes
+	scope = faith
+	trigger = {
+		suitable_faith_for_any_ghw_trigger = yes
+		NOR = {
+			religion = { exists = var:variable_ghw_unlocked }
+			has_global_variable = variable_ghw_global_unlocking_cooldown
+		}
+		religious_head ?= { is_imprisoned = no }
+		num_county_followers >= 35
+		OR = {
+			current_date >= 1100.1.1
+			AND = { # Any Faith is seriously under attack.
+				any_holy_site = {
+					holder.top_liege = {
+						faith.religion != root.religion
+						root = {
+							is_hostile_enough_for_holy_war_trigger = { FAITH = prev.faith }
+						}
+					}
+					count >= 2
+				}
+				current_date >= 800.1.1
+			}
+			AND = { # Someone else has shown the way.
+				has_global_variable = variable_gen_any_ghw_unlocked
+				any_holy_site = {
+					holder.top_liege = {
+						faith.religion != root.religion
+						root = {
+							is_hostile_enough_for_holy_war_trigger = { FAITH = prev.faith }
+						}
+					}
+					count >= 1
+				}
+			}
+		}
+	}
+	weight_multiplier = {
+		base = 1
+	}
+	immediate = {
+		set_global_variable = {
+			name = variable_ghw_global_unlocking_cooldown
+			value = yes
+			days = 3650
+		}
+		set_global_variable = {
+			name = variable_gen_any_ghw_unlocked
+			value = yes
+		}
+		religion = {
+			set_variable = {
+				name = variable_first_ghw_cooldown
+				value = yes
+				days = 120
+			}
+		}
+		save_scope_as = awakening_faith
+		if = {
+			limit = {
+				exists = religious_head
+			}
+			religious_head = { save_scope_as = ghw_first_sponsor }
+		}
+		else = {
+			random_theocratic_ruler = {
+				limit = { faith = root }
+				save_scope_as = ghw_first_sponsor
+			}
+		}
+		if = {
+			limit = {
+				NOT = {
+					exists = scope:ghw_first_sponsor
+				}
+			}
+			random_ruler = {
+				limit = { faith = root }
+				save_scope_as = ghw_first_sponsor
+			}
+		}
+		religion = {
+			set_variable = {
+				name = variable_ghw_unlocked
+				value = yes
+			}
+		}
+		every_player = {
+			trigger_event = great_holy_war.0011
+		}
+	}
+}

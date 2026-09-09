@@ -50,6 +50,12 @@ public enum WorldAspect
     /// have to seat them.
     /// </summary>
     Governments = 128,
+
+    /// <summary>Dynasty and house display names — their localisation file.</summary>
+    Dynasties = 256,
+
+    /// <summary>Dynasty and house arms — common/coat_of_arms.</summary>
+    Coats = 512,
 }
 
 /// <summary>
@@ -134,6 +140,9 @@ public static class WorldOverwrite
             yield return "zz_generated_flavorization.txt";
             yield return "gen_title_tiers_l_english.yml";
         }
+
+        if (aspects.HasFlag(WorldAspect.Dynasties)) yield return "gen_dynasties_l_english.yml";
+        if (aspects.HasFlag(WorldAspect.Coats)) yield return "00_generated_coas.txt";
     }
 
     /// <summary>
@@ -218,8 +227,25 @@ public static class WorldOverwrite
         if (aspects.HasFlag(WorldAspect.Governments)
             && written.Realms is { } governed && written.Governments is { } edited)
         {
+            // Before the title history, which grants them. Which houses hold a family title is a
+            // fact about the government map and nothing else, so a realm moved onto administrative
+            // seats families and one moved off unseats them — left alone, this file would go on
+            // granting a landless noble_family duchy to a man it now writes as feudal.
+            //
+            // The other two files a family needs are rewritten whole, so they are touched only when
+            // the set actually moved: a government edit that seats nobody leaves them alone, and
+            // "only intended outputs changed" still holds.
+            if (written.Prehistory is { } seated
+                && seated.RebuildNobleFamilies(governed, edited, written.Wilderness))
+            {
+                ContentWriter.WriteNobleFamilyTitles(modDir, seated);
+                HistoryWriter.WriteDynastyLocalisation(modDir, seated);
+                CoatOfArmsWriter.WriteAll(modDir, seated, written.Coats);
+            }
+
             HistoryWriter.ReWriteTitleHistory(modDir, result.Config, result.Titles,
-                written.Development, governed, edited, written.Faiths, written.Wilderness);
+                written.Development, governed, edited, written.Faiths, written.Wilderness,
+                written.Prehistory);
 
             ContentWriter.EmitProvinceHistory(modDir, written.ProvinceHistory, written.Holdings);
 
@@ -248,6 +274,14 @@ public static class WorldOverwrite
         // the draw happened in Assign at generation — so this cannot reshuffle anyone's vocabulary.
         if (aspects.HasFlag(WorldAspect.TitleWords))
             TitleTierWriter.WriteAll(modDir, written.Cultures, result.Titles);
+
+        // Both from the prehistory the write built: the names are its localisation file whole, and
+        // the arms are rolled again from the same seeds with the edited ones laid over.
+        if (written.Prehistory is { } families)
+        {
+            if (aspects.HasFlag(WorldAspect.Dynasties)) HistoryWriter.WriteDynastyLocalisation(modDir, families);
+            if (aspects.HasFlag(WorldAspect.Coats)) CoatOfArmsWriter.WriteAll(modDir, families, written.Coats);
+        }
     }
 
     /// <summary>What just happened, and the things about it that surprise people.</summary>
@@ -284,11 +318,18 @@ public static class WorldOverwrite
                               + "decided from it and keep what they were given");
 
             // Named on its own because it is the one of those a change can make meaningless rather
-            // than merely dated: republics and theocracies do not declare legitimacy = yes, so a
-            // realm moved onto one carries an add_legitimacy the engine has no currency for. The
-            // ruler window is where that is cleared, and its Legitimacy dropdown takes a blank.
-            Console.WriteLine("  a realm moved onto a republic or a theocracy keeps a legitimacy "
-                              + "its government cannot hold — blank it on the ruler (Ruler…) if the "
+            // than merely dated: a government that does not declare legitimacy = yes leaves a realm
+            // moved onto it carrying an add_legitimacy the engine has no currency for. The ruler
+            // window is where that is cleared, and its Legitimacy dropdown takes a blank.
+            //
+            // Listed from the rule rather than written out. It said "a republic or a theocracy"
+            // when those were the only two a realm could be moved onto without legitimacy, and it
+            // went on saying it after four more became settable.
+            string noLegitimacy = string.Join(", ", MapGen.GovernmentMap.DisplayOrder
+                .Where(g => !RulerProfile.HasLegitimacy(g))
+                .Select(MapGen.GovernmentMap.DisplayName));
+            Console.WriteLine($"  a realm moved onto one of {noLegitimacy} keeps a legitimacy its "
+                              + "government cannot hold — blank it on the ruler (Ruler…) if the "
                               + "line bothers you; the engine ignores it either way");
 
             // The one consequence that is a mechanic rather than a flavour: vanilla's Migrate

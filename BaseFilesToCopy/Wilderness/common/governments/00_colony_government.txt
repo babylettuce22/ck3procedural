@@ -85,17 +85,13 @@ colony_government = {
 
 	vassal_contract_group = colony_vassal
 
+	# The engine checks this when a character becomes landed, and it is the ONLY thing standing
+	# between a colony in someone's personal domain and a colonial realm. It used to be written out
+	# here in full, which is how it came to disagree with the guard in colonization_make_colonist_
+	# effect and with nothing at all on the way back out; see the note on the trigger for the king
+	# that produced.
 	can_get_government = {
-		any_held_title = {
-			tier = tier_county
-			is_colony_county_trigger = yes
-		}
-		NOT = {
-			any_held_title = {
-				tier = tier_county
-				is_settled_county_trigger = yes
-			}
-		}
+		colony_government_valid_trigger = yes
 	}
 
 	character_modifier = {

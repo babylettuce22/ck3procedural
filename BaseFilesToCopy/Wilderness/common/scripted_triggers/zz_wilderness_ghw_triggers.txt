@@ -1,0 +1,40 @@
+﻿# The wilderness and ruins holders are never a Great Holy War target.
+#
+# ---- What this is ----
+#
+# Single-object override of valid_ghw_target_trigger from
+# common/scripted_triggers/00_great_holy_war_triggers.txt. Script is last-wins and this directory
+# has no subfolders, so a zz_ file here replaces the trigger without touching the vanilla file.
+# Root is a kingdom title, $FAITH$ the faith looking for a target.
+#
+# The first line of defence is hostility: the unsettled faith is Righteous to every generated
+# religion (common/religion/doctrine_types/zz_gen_unsettled_hostility.txt), so a dummy's counties
+# already fail is_hostile_enough_for_holy_war_trigger here and in determine_ghw_target_effect. This
+# file is the belt to that brace: whatever the hostility table says, a county whose holder wears
+# the wilderness trait counts for nothing, so a later change to the dummy faith cannot readmit it.
+#
+# Vanilla's two clauses are kept as written; only the holder test is added to each.
+
+valid_ghw_target_trigger = {
+	exists = capital_vassal.capital_vassal
+	any_in_de_jure_hierarchy = {
+		continue = { tier > tier_county }
+		tier = tier_county
+		count >= 5
+		NOT = { holder = { has_trait = wilderness } }
+		$FAITH$ = {
+			is_hostile_enough_for_holy_war_trigger = { FAITH = prev.holder.top_liege.faith }
+		}
+	}
+	NOT = {
+		any_in_de_jure_hierarchy = {
+			continue = { tier > tier_county }
+			tier = tier_county
+			NOT = { holder = { has_trait = wilderness } }
+			$FAITH$ = {
+				is_hostile_enough_for_holy_war_trigger = { FAITH = prev.holder.top_liege.faith }
+				prev.holder.top_liege.current_military_strength > { value = scope:faith_strength }
+			}
+		}
+	}
+}

@@ -272,6 +272,19 @@ promote_colony_to_city_interaction = {
 			set_color_from_title = de_jure_liege
 		}
 
+		# The government transition promote_colony_effect carries, which this path does NOT get for
+		# free — it has never called that effect, only copied its teardown. A colonist who promoted
+		# his one colony into a city therefore kept colony_government and held a city_holding his own
+		# `valid_holdings` rejects, with no way back: the engine checks can_get_government once, when
+		# a character is landed, and never again. Same three lines below the temple button.
+		if = {
+			limit = {
+				scope:target = { is_colony_county_trigger = no }
+				scope:actor = { is_colonist_trigger = yes }
+			}
+			scope:actor = { colony_completion_effect = yes }
+		}
+
 		scope:actor = {
 			send_interface_toast = {
 				type = event_toast_effect_good
@@ -342,6 +355,16 @@ promote_colony_to_temple_interaction = {
 				set_holding_type = church_holding
 			}
 			set_color_from_title = de_jure_liege
+		}
+
+		# See the note on the city button: the same missing government transition, for the same
+		# reason.
+		if = {
+			limit = {
+				scope:target = { is_colony_county_trigger = no }
+				scope:actor = { is_colonist_trigger = yes }
+			}
+			scope:actor = { colony_completion_effect = yes }
 		}
 
 		scope:actor = {

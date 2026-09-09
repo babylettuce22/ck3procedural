@@ -392,6 +392,30 @@ public sealed class MapConfig : CustomTypeDescriptor
                + "as an unclaimed title to be won. De jure only: the empires beneath it stay independent.")]
     public bool StartingHegemony { get; set; } = false;
 
+    /// <summary>
+    /// Whether All Under Heaven's Dynastic Cycle runs on the hegemony at all.
+    ///
+    /// On, the situation starts from history the way vanilla's does on China (see
+    /// <c>Emit/DynasticCycleWriter.cs</c>): eras, movements, catalysts, the Mandate of Heaven, and
+    /// the chaos phase that shatters a hegemon who has lost too much. Off, that one history entry
+    /// is not written and nothing else is: the hegemony title, the celestial government and its
+    /// nine ministries all stand on <c>title:h_china</c> and work without the situation, the
+    /// generated on_actions that touch the cycle guard on its existence, and the Silk Road window's
+    /// link to it is hidden at runtime by <c>Situation.IsValid</c>.
+    ///
+    /// The cost is error.log noise, not behaviour: vanilla reaches <c>situation:dynastic_cycle</c>
+    /// without a null check at some 170 sites, and on a map with the DLC but no situation each one
+    /// logs a failed context switch when its interaction, project or yearly pulse is evaluated.
+    /// Same class as the <c>c_byzantion</c> entries a generated map already lives with.
+    /// </summary>
+    [Category("02 World State")]
+    [DisplayName("Dynastic Cycle")]
+    [Description("Run All Under Heaven's Dynastic Cycle on the hegemony: eras, movements, catalysts and the "
+               + "Mandate of Heaven. Off, the situation is never started; the hegemony, celestial government "
+               + "and ministries still work. Expect some harmless error.log noise from vanilla script that "
+               + "assumes the situation exists.")]
+    public bool DynasticCycle { get; set; } = true;
+
     [Category("02 World State")]
     [DisplayName("Gender Preference")]
     [TypeConverter(typeof(GenderPreferenceConverter))]
@@ -663,6 +687,45 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Category("03 Provinces")]
     [Description("Rounds of border smoothing over the finished provinces. Each hands a border pixel to whichever province holds most of the block around it, which rounds the staircase a raster flood leaves. Coastlines never move and a province is never cut in two. 0 leaves borders as grown.")]
     public int ProvinceBorderSmoothing { get; set; } = 3;
+
+    /// <summary>
+    /// Share of baronies whose <c>common/province_terrain</c> comes out <c>mountains</c> or
+    /// <c>desert_mountains</c>. Vanilla's own map runs 0.1215 and 0.0254 against 11,965 provinces.
+    ///
+    /// A rank rather than a pixel majority, because a majority names a mountain province after the
+    /// hills around the range instead of the range — see
+    /// <see cref="Emit.ContentWriter.ProvinceTerrain"/>, which records what that cost when measured.
+    /// 0 restores the plain majority vote.
+    /// </summary>
+    [Category("03 Provinces")]
+    [Description("Share of baronies whose terrain comes out mountains or desert_mountains. A majority of pixels names these after the hills that ring a range rather than the range itself, so the most mountainous baronies are promoted by rank instead. Vanilla runs 0.147 across both. 0 restores the plain majority vote.")]
+    public double MountainProvinceShare { get; set; } = 0.14;
+
+    /// <summary>
+    /// Share of baronies whose terrain comes out <c>hills</c>, taken after
+    /// <see cref="MountainProvinceShare"/> has had its pick. Vanilla runs 0.192.
+    ///
+    /// Promoted on the combined hill-and-mountain band, so a province cannot rank above the
+    /// mountain cut and below this one. 0 restores the plain majority vote for this tier.
+    /// </summary>
+    [Category("03 Provinces")]
+    [Description("Share of baronies whose terrain comes out hills, taken after the mountain share has had its pick. Vanilla runs 0.192. 0 restores the plain majority vote for this tier.")]
+    public double HillProvinceShare { get; set; } = 0.19;
+
+    /// <summary>
+    /// The least mountain- or hill-band ground a province may hold and still be promoted for it,
+    /// as a share of its own pixels.
+    ///
+    /// A backstop, not the normal constraint, and the same role
+    /// <see cref="ImpassableMinMountainShare"/> plays for the impassable cut. The shares above are
+    /// ranks, and a rank always finds a top 14% — on a world with no relief worth the name that
+    /// would name its gentlest swells mountains. This is what stops it. On any world with real
+    /// ranges it does not bind.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("03 Provinces")]
+    [Description("The least mountain- or hill-band ground a province may hold and still be promoted for it, as a share of its own pixels. A backstop for worlds with no real relief, where a rank would otherwise name the gentlest swells mountains. Does not bind on a world with ranges.")]
+    public double ReliefPromotionFloor { get; set; } = 0.05;
 
     /// <summary>
     /// Rounds of Lloyd relaxation on the province seeds: move each to the middle of what it grew,
@@ -2010,6 +2073,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     public double CultureTerrainWeight { get; set; } = 1.0;
 
     // Can be way too many nude characters lol
+    // Need to extend this to cover "Nudism" cultural pillar
     [Category("10 Cultures and faiths")]
     [Description("Allow generated faiths to roll the Natural Primitivism tenet (which renders character portraits naked).")]
     public bool AllowNaturalPrimitivism { get; set; } = false;

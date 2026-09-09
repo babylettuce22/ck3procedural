@@ -198,6 +198,32 @@ yearly_playable_pulse = {
 		wilderness_yearly_colonist_petition_check
 		wilderness_yearly_colonist_development_aid_check
 		wilderness_yearly_control_check
+		wilderness_yearly_colonist_validity
+	}
+}
+
+# The backstop for a colonist who has stopped being one.
+#
+# `can_get_government` is engine-checked once, at the moment a character becomes landed, and never
+# again — so every fact it reads can change underneath it and leave the government behind. This asks
+# the same question once a year and moves the ruler off colony_government when the answer has turned
+# over. See colony_government_exit_effect for the four ways that happens.
+#
+# It also repairs saves already in that state, which is why it is a sweep rather than a hook on any
+# one of the four causes: the king this was written for has been Colonial for twenty years, and no
+# event fires retroactively.
+#
+# Cheap in the way the rest of this file is cheap: the trigger's first line is a government-flag
+# test, so a world of feudal lords costs one flag lookup each and the expensive half is only reached
+# by the handful of characters who are actually colonists.
+wilderness_yearly_colonist_validity = {
+	trigger = {
+		is_colonist_trigger = yes
+		colony_government_valid_trigger = no
+	}
+
+	effect = {
+		colony_government_exit_effect = yes
 	}
 }
 

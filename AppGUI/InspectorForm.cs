@@ -1,4 +1,5 @@
 using Ck3MapGen.Emit;
+using Ck3MapGen.Core;
 
 namespace Ck3MapGen.AppGUI;
 
@@ -66,6 +67,16 @@ public abstract class InspectorForm : Form
     /// knows nothing about the others.
     /// </summary>
     public event Action<object>? Navigate;
+    /// <summary>
+    /// The opened mod when this inspector shows file-backed entries, else null. In that mode the
+    /// selection holds <see cref="WorldEntry"/> objects and every edit goes to the files through
+    /// them; the generator's <see cref="WorldEdits"/> is detached and never consulted.
+    /// </summary>
+    protected LoadedWorldView? Loaded { get; private set; }
+    private Action? _loadedChanged;
+
+    /// <summary>Whether there is a world to edit at all — generated and written, or opened from disk.</summary>
+    protected bool Live => Edits.IsLoaded || Loaded is not null;
 
     protected InspectorForm(WorldEdits edits, string title, Size size)
     {
@@ -89,6 +100,13 @@ public abstract class InspectorForm : Form
 
         _revert.Click += (_, _) =>
         {
+            if (Loaded is { } loaded)
+            {
+                loaded.Revert(Selection.OfType<WorldEntry>());
+                _grid.Refresh();
+                _loadedChanged?.Invoke();
+                return;
+            }
             foreach (var target in Selection) Edits.Revert(target);
             Rebuild();
         };
@@ -99,6 +117,7 @@ public abstract class InspectorForm : Form
 
         AddAction(_revert);
         Edits.Changed += OnEditsChanged;
+        _grid.PropertyValueChanged += (_, _) => _loadedChanged?.Invoke();
     }
 
     protected override void OnLoad(EventArgs e)
@@ -135,9 +154,49 @@ public abstract class InspectorForm : Form
     /// <summary>Points this inspector at one or more objects. An empty list clears it.</summary>
     public void Inspect(IReadOnlyList<object> targets)
     {
+        Loaded = null;
+        _loadedChanged = null;
         Selection = [.. targets];
         Rebuild();
     }
+
+    /// <summary>
+    /// Points this inspector at file-backed entries of an opened mod. The same window and the
+    /// same buttons as for a generated world; only what backs the grid changes.
+    /// </summary>
+    internal void InspectLoaded(IReadOnlyList<WorldEntry> entries, LoadedWorldView world, Action changed)
+    {
+        Loaded = world;
+        _loadedChanged = changed;
+        Selection = [.. entries];
+        Rebuild();
+    }
+
+    /// <summary>After an edit elsewhere in the opened mod: values and the caption follow the files.</summary>
+    internal void RefreshLoaded()
+    {
+        if (Loaded is null) return;
+        _grid.Refresh();
+        Text = Selection.Count == 1 && Selection[0] is WorldEntry entry ? entry.Name : $"{Selection.Count} selected";
+        Refreshed();
+    }
+
+    /// <summary>Commits a value still being typed in the grid, before a save reads the files.</summary>
+    internal void CommitGrid() => _revert.Focus();
+
+    /// <summary>For a subclass action that edited the opened mod outside the grid.</summary>
+    protected void LoadedChanged()
+    {
+        _grid.Refresh();
+        _loadedChanged?.Invoke();
+    }
+
+    /// <summary>The editable faces of file-backed entries. Generic unless a subclass knows better.</summary>
+    protected virtual IEnumerable<object> WrapLoaded(IReadOnlyList<WorldEntry> entries)
+        => entries.Select(e => new LoadedEntryProperties(e));
+
+    /// <summary>The single selected entry of an opened mod, when there is exactly one.</summary>
+    protected WorldEntry? LoadedOne => Loaded is not null && Selection.Count == 1 ? Selection[0] as WorldEntry : null;
 
     protected void Rebuild()
     {
@@ -146,6 +205,17 @@ public abstract class InspectorForm : Form
             _heading.Text = "Nothing selected";
             _grid.SelectedObjects = [];
             foreach (Control c in _actions.Controls) c.Enabled = false;
+            return;
+        }
+
+        if (Loaded is not null)
+        {
+            var entries = Selection.OfType<WorldEntry>().ToList();
+            _heading.Text = entries.Count == 1 ? $"{entries[0].Kind} — {entries[0].Key}" : $"{entries.Count} selected";
+            Text = entries.Count == 1 ? entries[0].Name : $"{entries.Count} selected";
+            _grid.SelectedObjects = [.. WrapLoaded(entries)];
+            foreach (Control c in _actions.Controls) c.Enabled = true;
+            Refreshed();
             return;
         }
 
@@ -176,6 +246,7 @@ public abstract class InspectorForm : Form
 
     private void OnEditsChanged(WorldAspect touched)
     {
+        if (Loaded is not null) return;
         if (!Edits.IsLoaded)
         {
             Inspect([]);

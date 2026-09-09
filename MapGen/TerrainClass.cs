@@ -363,8 +363,12 @@ public static class TerrainClassifier
     /// <summary>
     /// The value at <paramref name="fraction"/> of the land distribution, via a histogram over the
     /// observed range. Exact enough for a classification threshold and single-pass.
+    ///
+    /// Internal rather than private because <see cref="Emit.ContentWriter.ProvinceTerrain"/> draws
+    /// its own relief lines the same way, and two percentile helpers over the same raster is the
+    /// "derived twice in two places" mistake this pipeline avoids elsewhere.
     /// </summary>
-    private static float LandPercentile(float[] values, byte[] landMask, double fraction)
+    internal static float LandPercentile(float[] values, byte[] landMask, double fraction)
     {
         float min = float.MaxValue, max = float.MinValue;
         for (int i = 0; i < values.Length; i++)

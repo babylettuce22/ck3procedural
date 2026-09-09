@@ -24,9 +24,9 @@ namespace Ck3MapGen.Io;
 /// <c>is_shown = {</c>" is a claim about the file that survives Paradox adding an interaction above
 /// it, and <c>IndexOf("is_shown = {")</c> is not.
 ///
-/// Deliberately not yet general enough for <c>FrontendWriter</c>, which comments out an unknown
-/// number of portrait blocks and so needs an "at least one" rule alongside "exactly these". Left
-/// unbuilt rather than guessed at.
+/// <see cref="ReplaceEvery"/> is the "at least one" rule, added for the hegemony's China-flavour
+/// strip. It is still not general enough for <c>FrontendWriter</c>, which comments out whole
+/// portrait blocks and so needs brace matching rather than token rewriting.
 /// </summary>
 public sealed class VanillaPatch
 {
@@ -93,6 +93,43 @@ public sealed class VanillaPatch
 
         text = text.Insert(at, body);
         landed.Add(name);
+    }
+
+    /// <summary>
+    /// Rewrites every occurrence of <paramref name="find"/>, and misses if there were none.
+    ///
+    /// The counterpart to <see cref="InsertAfter"/> for the other shape of override: not "add a
+    /// guard at one named place" but "neutralise a test wherever vanilla makes it". A file that
+    /// makes the same check in eight places is one edit conceptually, and writing eight anchors
+    /// for it would be eight chances to describe the file wrongly.
+    ///
+    /// "At least one" rather than an exact count on purpose. The count is what Paradox changes
+    /// most often — an entry added, an entry retired — and pinning it would turn every such patch
+    /// into a shipped-nothing skip. Zero is still a failure, and it is the failure that matters:
+    /// zero means the token itself is gone, so the file no longer says what this edit was written
+    /// against and a copy of it would be vanilla wearing our name.
+    ///
+    /// Order matters when one search string contains another. <c>primary_title = title:x</c> is a
+    /// substring of <c>primary_spouse.primary_title = title:x</c>, and replacing the short form
+    /// first leaves <c>primary_spouse.always = no</c> behind — valid script that scopes into
+    /// nothing. Call the longest forms first.
+    /// </summary>
+    public void ReplaceEvery(string name, string find, string replacement)
+    {
+        if (!text.Contains(find, StringComparison.Ordinal))
+        {
+            missed.Add(name);
+            return;
+        }
+
+        int count = 0;
+        for (int at = 0; (at = text.IndexOf(find, at, StringComparison.Ordinal)) >= 0; at += replacement.Length)
+        {
+            text = text.Remove(at, find.Length).Insert(at, replacement);
+            count++;
+        }
+
+        landed.Add($"{name} x{count}");
     }
 
     /// <summary>

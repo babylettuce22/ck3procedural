@@ -1749,9 +1749,22 @@ public static partial class CompatibilityWriter
     /// building_gfx belongs to — the round-robin split this replaced dealt provinces to the seven
     /// regions by index, which dressed neighbouring baronies of one culture in walls from three
     /// continents.
+    ///
+    /// <para><b>The natural-disaster keys are not placeholders.</b> All Under Heaven spawns its
+    /// floods and earthquakes from the keys in 10_natural_disaster_regions.txt — every year
+    /// natural_disaster.9901/9902 pick one — so where those keys land decides who the Dynastic
+    /// Cycle punishes. They get terrain, extent and a ration of crown ground rather than the
+    /// one-arbitrary-county placeholder every other region takes; see
+    /// <see cref="PlaceDisasterRegions"/>. Without terrain data they fall back to the placeholder
+    /// and the console says so, because that fallback drives the Cycle.</para>
     /// </summary>
     public static void WriteGeographicalRegions(string modDir, string gameDir, List<Title> empires,
-        CultureMap cultures, Dictionary<string, List<Title>>? regionMembers = null)
+        CultureMap cultures, Dictionary<string, List<Title>>? regionMembers = null,
+        MapGen.WildernessMap? wilderness = null,
+        Dictionary<Title, HashSet<Title>>? countyAdjacency = null,
+        MapGen.TerrainClass[]? provinceTerrain = null,
+        HashSet<Title>? hegemonRealm = null,
+        HashSet<Title>? riverside = null)
     {
         string source = Path.Combine(gameDir, "map_data", "geographical_regions");
         string destination = Path.Combine(modDir, "map_data", "geographical_regions");
@@ -1829,6 +1842,18 @@ public static partial class CompatibilityWriter
             b.Blank();
 
             int counter = 0;
+
+            // The natural-disaster regions are placed by terrain, with extent, off the wilderness
+            // and mostly off the crown — see PlaceDisasterRegions.
+            bool disasterFile = fileName == "10_natural_disaster_regions.txt";
+            var disasterAreas = new Dictionary<string, List<Title>>(StringComparer.Ordinal);
+            int disasterInside = 0;
+            if (disasterFile && provinceTerrain is not null)
+                disasterAreas = PlaceDisasterRegions(
+                    [.. regions.Where(r => IsDisasterKey(r.Key)).Select(r => r.Key)],
+                    counties, provinceTerrain, wilderness, countyAdjacency, hegemonRealm,
+                    riverside, out disasterInside);
+
             foreach (var region in regions)
             {
                 string key = region.Key;
@@ -1864,6 +1889,14 @@ public static partial class CompatibilityWriter
                             for (int i = 0; i < provinces.Count; i += 20)
                                 b.Token(string.Concat(provinces.Skip(i).Take(20).Select(p => $"{p} ")));
                     }
+                    else if (disasterAreas.TryGetValue(key, out var area) && area.Count > 0)
+                    {
+                        // A disaster region with real extent: a flood covers all of it, an
+                        // earthquake takes one county of it plus that county's neighbours.
+                        using (b.Block("counties"))
+                            for (int i = 0; i < area.Count; i += 10)
+                                b.Token(string.Join(' ', area.Skip(i).Take(10).Select(c => c.Key)));
+                    }
                     else
                     {
                         // One real member is the minimum for the region to register at all.
@@ -1876,6 +1909,24 @@ public static partial class CompatibilityWriter
             }
 
             ParadoxText.WriteBom(Path.Combine(destination, fileName), b.ToString());
+
+            if (disasterFile)
+            {
+                int disasterKeys = regions.Count(r => IsDisasterKey(r.Key));
+                if (disasterAreas.Count > 0)
+                {
+                    int disasterCounties = disasterAreas.Values.Sum(a => a.Count);
+                    Console.WriteLine($"  natural disasters: {disasterAreas.Count} of {disasterKeys} regions " +
+                                      $"over {disasterCounties} counties " +
+                                      $"(mean {(double)disasterCounties / disasterAreas.Count:F1}), " +
+                                      $"{disasterInside} reaching the hegemon's realm");
+                }
+                else
+                {
+                    Console.WriteLine($"  natural disasters: WARNING {disasterKeys} regions fell back to one " +
+                                      "arbitrary county each; they can stack on the crown and drive the Dynastic Cycle");
+                }
+            }
         }
 
         // Every barony must have landed in some graphical region: one the engine misses is one
@@ -1889,6 +1940,182 @@ public static partial class CompatibilityWriter
             .Select(kv => $"{kv.Key.Replace("graphical_", "")} {kv.Value.Count}"));
         Console.WriteLine($"  re-declared {written} geographical regions " +
                           $"({graphical.Count} graphical: {spread})");
+    }
+
+    /// <summary>A key All Under Heaven spawns floods or earthquakes from.</summary>
+    private static bool IsDisasterKey(string key)
+        => IsFloodKey(key) || key.EndsWith("_earthquake_region", StringComparison.Ordinal);
+
+    /// <summary>A flood key. The rest of <see cref="IsDisasterKey"/> is earthquakes.</summary>
+    private static bool IsFloodKey(string key)
+        => key.EndsWith("_river_region", StringComparison.Ordinal) || key == "global_flood_region";
+
+    /// <summary>
+    /// Places All Under Heaven's natural-disaster regions on ground that suits them, with real
+    /// extent, never on wilderness, and mostly clear of the crown.
+    ///
+    /// <para><b>Ground.</b> Flood keys want a bank of a traced major river first
+    /// (<c>MapGen.MajorRivers.RiversideCounties</c>) and floodplain or wetland second, because a
+    /// river through dry country still floods and a generated map may have no floodplains at all;
+    /// they fall back to plains and farmlands. Earthquake keys have no such tell and go on height:
+    /// mountains, then hills. Each region is then grown over its neighbours to about four counties
+    /// — a flood following its river — so a disaster is a regional event, which is what vanilla's
+    /// river basins and fault zones are: a flood covers its whole region, an earthquake takes one
+    /// county of it plus that county's neighbours.</para>
+    ///
+    /// <para><b>Never the wilderness.</b> An earlier pass put every region there to keep disasters
+    /// away from realms. That was wrong twice: it deleted the mechanic, and the wilderness dummy
+    /// passes the situation's own `is_character_valid` (`is_landed` + `is_independent_ruler`), so
+    /// it became the sole participant of every disaster on the map and spawned contracts in
+    /// counties nobody holds — the county-targeting hole that has caught this mod repeatedly.</para>
+    ///
+    /// <para><b>Why the crown is rationed rather than spared.</b> Of the 42 regions on Earth about
+    /// six lie in China, so the Son of Heaven is exposed to roughly a fifth of the world's
+    /// disasters — and the Dynastic Cycle's constants are tuned to that. `catalyst_hegemon_natural_disaster`
+    /// is +50 toward the next era for every year of every disaster he is in, and its only designed
+    /// counterweight, `catalyst_hegemon_handled_calamity`, is declared in vanilla and fired by
+    /// nothing, so the ledger is one-sided by construction. A generated hegemon answers for a much
+    /// larger share of its map than China is of Earth, so placing purely by terrain would put him
+    /// in most disasters at once: measured at 40 % exposure, disasters alone contributed 2,500 of
+    /// the 3,910 points a 34-year reign had accumulated, and instability needs only 2,000 more to
+    /// reach chaos. So one region in five is allowed onto crown ground and the rest are grown
+    /// strictly off it — the same rescale-Earth's-proportion-to-this-map argument
+    /// <c>Emit/DynasticCycleWriter.cs</c> makes for the land thresholds.</para>
+    ///
+    /// <para>Only independent rulers pass the participant check, so a county held by any vassal
+    /// still makes the top liege the participant: the set that must be rationed is the hegemon's
+    /// whole realm, which is what <c>Realms.HegemonRealmCounties</c> returns.</para>
+    /// </summary>
+    private static Dictionary<string, List<Title>> PlaceDisasterRegions(
+        List<string> keys, List<Title> counties, MapGen.TerrainClass[] provinceTerrain,
+        MapGen.WildernessMap? wilderness, Dictionary<Title, HashSet<Title>>? adjacency,
+        HashSet<Title>? hegemonRealm, HashSet<Title>? riverside, out int insideHegemon)
+    {
+        insideHegemon = 0;
+        var areas = new Dictionary<string, List<Title>>(StringComparer.Ordinal);
+        if (keys.Count == 0) return areas;
+
+        const int CrownEvery = 5, TargetSize = 4;
+
+        MapGen.TerrainClass Terrain(Title county)
+        {
+            var tally = new Dictionary<MapGen.TerrainClass, int>();
+            foreach (var barony in county.Children)
+            {
+                int id = barony.ProvinceId;
+                if (id < 1 || id >= provinceTerrain.Length) continue;
+                tally[provinceTerrain[id]] = tally.GetValueOrDefault(provinceTerrain[id]) + 1;
+            }
+            return tally.Count == 0
+                ? MapGen.TerrainClass.Plains
+                : tally.OrderByDescending(kv => kv.Value).ThenBy(kv => (int)kv.Key).First().Key;
+        }
+
+        static bool Wet(MapGen.TerrainClass t)
+            => t is MapGen.TerrainClass.Floodplains or MapGen.TerrainClass.Wetlands;
+        static bool WetEnough(MapGen.TerrainClass t)
+            => Wet(t) || t is MapGen.TerrainClass.Plains or MapGen.TerrainClass.Farmlands;
+        static bool High(MapGen.TerrainClass t)
+            => t is MapGen.TerrainClass.Mountains or MapGen.TerrainClass.DesertMountains;
+        static bool HighEnough(MapGen.TerrainClass t) => High(t) || t is MapGen.TerrainClass.Hills;
+
+        bool Settled(Title c) => wilderness is null || !wilderness.Contains(c);
+        bool Crown(Title c) => hegemonRealm is not null && hegemonRealm.Contains(c);
+        bool River(Title c) => riverside is not null && riverside.Contains(c);
+
+        var terrain = new Dictionary<Title, MapGen.TerrainClass>();
+        foreach (var c in counties)
+            if (Settled(c)) terrain[c] = Terrain(c);
+
+        // Four ordered candidate lists, best ground first, split by whether the county answers to
+        // the crown. A flood wants a riverbank before it wants soft ground: a major river through
+        // dry country still floods — the Nile is the whole argument — and a generated map may have
+        // no floodplains at all, which is exactly when terrain stops proxying for "river basin".
+        // Earthquakes have no such tell and go on height alone. OrderBy is stable and the county
+        // list is deterministic, so two runs of one seed place disasters identically.
+        var pools = new Dictionary<(bool Flood, bool OnCrown), List<Title>>();
+        foreach (bool flood in (bool[])[true, false])
+        {
+            foreach (bool onCrown in (bool[])[true, false])
+            {
+                Func<MapGen.TerrainClass, bool> best = flood ? Wet : High;
+                Func<MapGen.TerrainClass, bool> rest = flood ? WetEnough : HighEnough;
+                int Rank(Title c)
+                {
+                    if (!terrain.TryGetValue(c, out var t)) return int.MaxValue;
+                    if (!flood) return best(t) ? 0 : rest(t) ? 1 : int.MaxValue;
+                    if (River(c)) return best(t) ? 0 : 1;
+                    return best(t) ? 2 : rest(t) ? 3 : int.MaxValue;
+                }
+                pools[(flood, onCrown)] =
+                [
+                    .. counties.Where(c => Crown(c) == onCrown && Rank(c) != int.MaxValue).OrderBy(Rank),
+                ];
+            }
+        }
+
+        // How many regions each pool owes, so seeds can be strided evenly across it rather than
+        // bunched at the head of the county list.
+        var owed = new Dictionary<(bool, bool), int>();
+        for (int i = 0; i < keys.Count; i++)
+        {
+            var slot = (IsFloodKey(keys[i]), hegemonRealm is not null && i % CrownEvery == CrownEvery - 1);
+            owed[slot] = owed.GetValueOrDefault(slot) + 1;
+        }
+        var cursor = new Dictionary<(bool, bool), int>();
+
+        var used = new HashSet<Title>();
+        for (int i = 0; i < keys.Count; i++)
+        {
+            string key = keys[i];
+            bool flood = IsFloodKey(key);
+            bool onCrown = hegemonRealm is not null && i % CrownEvery == CrownEvery - 1;
+            var pool = pools[(flood, onCrown)];
+            if (pool.Count == 0) continue;
+
+            int step = Math.Max(1, pool.Count / Math.Max(1, owed[(flood, onCrown)]));
+            int at = cursor.GetValueOrDefault((flood, onCrown));
+            Title? seed = null;
+            for (int probe = 0; probe < pool.Count; probe++)
+            {
+                var candidate = pool[(at + probe) % pool.Count];
+                if (used.Add(candidate)) { seed = candidate; at = (at + probe + step) % pool.Count; break; }
+            }
+            cursor[(flood, onCrown)] = at;
+            if (seed is null) continue;
+
+            // Grow over neighbours that share the disaster's kind of ground and the seed's side of
+            // the crown border, so a region rationed off the crown cannot reach it by spreading.
+            Func<MapGen.TerrainClass, bool> fits = flood ? WetEnough : HighEnough;
+            var area = new List<Title> { seed };
+            if (adjacency is not null)
+            {
+                var frontier = new Queue<Title>();
+                frontier.Enqueue(seed);
+                while (area.Count < TargetSize && frontier.Count > 0)
+                {
+                    if (!adjacency.TryGetValue(frontier.Dequeue(), out var around)) continue;
+                    // A flood follows its river before it spreads sideways, and takes riverbank of
+                    // any terrain; an earthquake only knows about height.
+                    var order = flood
+                        ? around.OrderByDescending(River).ThenBy(c => c.Key, StringComparer.Ordinal)
+                        : around.OrderBy(c => c.Key, StringComparer.Ordinal);
+                    foreach (var candidate in order)
+                    {
+                        if (area.Count >= TargetSize) break;
+                        if (!Settled(candidate) || Crown(candidate) != onCrown) continue;
+                        if (!terrain.TryGetValue(candidate, out var t)) continue;
+                        if (!fits(t) && !(flood && River(candidate))) continue;
+                        if (!used.Add(candidate)) continue;
+                        area.Add(candidate);
+                        frontier.Enqueue(candidate);
+                    }
+                }
+            }
+            areas[key] = area;
+            if (onCrown) insideHegemon++;
+        }
+        return areas;
     }
 
     /// <summary>

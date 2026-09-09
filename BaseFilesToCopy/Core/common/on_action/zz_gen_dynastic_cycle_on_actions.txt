@@ -1,0 +1,84 @@
+﻿# Keeps the Dynastic Cycle's participant lists free of characters the engine is about to delete.
+#
+# Vanilla adds courtiers to the cycle by hand (add_manual_participant: the hegemon's councillors and
+# ministers, tgp_dynastic_cycle.txt ~482 and 10_dlc_tgp_scripted_effects.txt ~1915) and takes them
+# out again only when they stop being ministers (title_on_actions.txt ~3521) or when the chaos
+# shattering strips the ministry. Nothing removes one who dies. A dead member stays valid for its
+# movement -- every movement's is_character_valid keeps anyone whose var:movement_member matches,
+# alive or not -- so the member sits in the group until the engine prunes the corpse, and a courtier
+# with no title history is pruned within a few years. The group and its movement_leader variable
+# then point at a character that no longer exists. Script sees "(no character) weak (Character - N)"
+# once a year from the situation's on_yearly; the Dynastic Cycle window dereferences it and the
+# game dies with an access violation the moment it opens (crash ck3_20260906_213827, member 3140 of
+# expansion_movement, 23 game-years after the character died).
+#
+# Landed and landless rulers do not need this: their title history keeps them unprunable, so a dead
+# ruler in a group is a dead character the engine can still show, not a dangling pointer.
+#
+# on_death fires with the character "just about to die" in root (death.txt line 1), so the removal
+# below goes through the normal leave path while the character is still a valid object.
+#
+# Appended, not redefined: an on_action key declared again adds its on_actions to vanilla's list.
+on_death = {
+	on_actions = {
+		gen_dynastic_cycle_participant_death
+	}
+}
+
+gen_dynastic_cycle_participant_death = {
+	# is_landed = no is vanilla's own proxy for "was added by hand" (title_on_actions.txt ~3521):
+	# rulers are auto-added and unprunable, courtiers are manual and prunable. is_manual_participant
+	# is not used: vanilla's debug_situation.txt calls it in situation scope with a character value,
+	# ck3-tiger types it as a character-scope bool, and a wrong reading would silently make this
+	# trigger false forever, and tiger is not the oracle. A landless adventurer who dies inside the
+	# cycle costs one harmless "not in the manual participants" warning in debug.log.
+	trigger = {
+		exists = situation:dynastic_cycle
+		is_landed = no
+		any_character_situation = { this = situation:dynastic_cycle }
+	}
+
+	effect = {
+		situation:dynastic_cycle = {
+			remove_manual_participant = root
+			# The group's on_leave re-runs update_movement_leader_effect, which picks the strongest
+			# remaining member. If nobody remains it has nothing to pick and the variable keeps
+			# pointing at the dying character; clear it. A leaderless movement takes the next member
+			# to join as its leader (set_movement_leader_and_power_effect, run from on_join).
+			every_participant_group = {
+				limit = { var:movement_leader ?= root }
+				save_scope_as = situation_participant_group
+				update_movement_leader_effect = yes
+				if = {
+					limit = { var:movement_leader ?= root }
+					remove_variable = movement_leader
+				}
+			}
+		}
+		remove_variable = movement_member
+	}
+}
+
+# Yearly guard for the leader pointer. Vanilla replaces a dead movement leader only while the group
+# still has members to choose from (tgp_dynastic_cycle.txt on_yearly); a group whose last member
+# died keeps pointing at the corpse. Root is the situation (dynastic_cycle_yearly_pulse is fired
+# from its on_yearly with trigger_event). A dead-member sweep was considered and dropped: script has
+# no way to tell a manually added corpse from an auto-added dead ruler, and dead rulers stay in
+# their groups forever, so removing "every dead member" would log a warning per dead ruler per year.
+dynastic_cycle_yearly_pulse = {
+	on_actions = {
+		gen_dynastic_cycle_clear_orphaned_leaders
+	}
+}
+
+gen_dynastic_cycle_clear_orphaned_leaders = {
+	effect = {
+		every_participant_group = {
+			limit = {
+				exists = var:movement_leader
+				NOT = { any_situation_group_participant = { is_alive = yes } }
+			}
+			remove_variable = movement_leader
+		}
+	}
+}

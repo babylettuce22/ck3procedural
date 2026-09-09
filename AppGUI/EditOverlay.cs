@@ -51,9 +51,20 @@ public sealed class EditOverlay
     /// </summary>
     public Dictionary<string, string> Governments { get; set; } = [];
 
+    /// <summary>Renamed dynasties and houses, by id and key; the generated name rides along as the guard.</summary>
+    public Dictionary<string, NameEdit> Dynasties { get; set; } = [];
+    public Dictionary<string, NameEdit> Houses { get; set; } = [];
+
+    /// <summary>A barony's special building slot and building, by province id.</summary>
+    public Dictionary<int, ProvinceEdit> Provinces { get; set; } = [];
+
+    /// <summary>Arms changed on a dynasty or house, whole, by its key.</summary>
+    public Dictionary<string, CoatOfArmsWriter.Coat> Coats { get; set; } = [];
+
     [JsonIgnore]
     public int Count => Titles.Count + Cultures.Count + Faiths.Count + Religions.Count
-                      + Rulers.Count + Governments.Count;
+                      + Rulers.Count + Governments.Count + Dynasties.Count + Houses.Count
+                      + Provinces.Count + Coats.Count;
 
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -88,9 +99,24 @@ public sealed class TitleEdit
 
     /// <summary>Present when any of the three was touched; they are edited as one.</summary>
     public TitleWords? Words { get; set; }
+
+    /// <summary>A county's start-date development level.</summary>
+    public int? Development { get; set; }
+
+    /// <summary>The county key a duchy or above was given as its de jure capital.</summary>
+    public string? Capital { get; set; }
 }
 
 public sealed record TitleWords(string? Form, string? Holder, string? HolderFemale);
+
+public sealed class NameEdit
+{
+    public required string Generated { get; set; }
+    public required string Name { get; set; }
+}
+
+/// <summary>Empty strings clear a line; null leaves it as generated.</summary>
+public sealed record ProvinceEdit(string? SpecialSlot, string? SpecialBuilding);
 
 public sealed class CultureEdit
 {
@@ -125,6 +151,9 @@ public sealed class FaithEdit
     public double[]? Color { get; set; }
     public string? Icon { get; set; }
     public List<string>? Tenets { get; set; }
+
+    /// <summary>The county key of each holy site, in slot order, when any was moved.</summary>
+    public List<string>? HolySites { get; set; }
 }
 
 public sealed class ReligionEdit

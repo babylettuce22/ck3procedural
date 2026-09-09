@@ -1,0 +1,100 @@
+﻿# Merit that vanilla grants inside a decision, granted at game start instead.
+#
+# ---- What this is ----
+#
+# A generated world writes its celestial hegemon straight into title history. Vanilla never seeds
+# merit in history either -- it seeds it inside claim_mandate_decision
+# (10_dlc_tgp_dynastic_cycle_scripted_effects.txt ~190): the new Son of Heaven has 25 courtiers
+# created at empire_starting_merit_value with completed exams, and every vassal it converts gets
+# assign_merit_based_on_tier_value plus age and skill bonuses. None of that runs for us, so every
+# character in a merit government starts at zero and stays there.
+#
+# ---- Why it matters ----
+#
+# Measured on the world in crash ck3_20260907_175647: 93% of characters at merit rank 0 or 1,
+# median merit 60 against a rank-1 floor of 100, and the hegemon's own court holding exactly two
+# characters at rank 3 or above across 37 courtiers -- for nine ministries. The AI is not choosing
+# badly; it has nobody to choose. Every appointment therefore trips one of the two Dynastic Cycle
+# catalysts (catalyst_hegemon_appointing_low_merit_councillor and _governor, fired from
+# title_on_actions.txt ~1913 and ~1950), each a minor_situation_catalyst_gain into corruption. The
+# Cycle then drifts to collapse on a timer instead of on events. Same class of gap as the
+# legitimacy one in Emit/RulerProfile.cs: a celestial hegemon written without a grant began at
+# zero Mandate.
+#
+# ---- The design ----
+#
+# * The numbers are vanilla's own, not invented, and they are already calibrated to the thing
+#   being tested. APPOINTMENT_MERIT_TIER = { 0 1 1 3 5 7 9 } wants rank 3 for a duchy, 5 for a
+#   kingdom, 7 for an empire; LEVELS_MERIT puts those ranks at 2000 / 5500 / 12000; and
+#   duchy_starting_merit_value / kingdom_ / empire_ are exactly 2000 / 5500 / 12000. A governor
+#   seeded at their own tier's value therefore clears their own appointment requirement and
+#   nothing beyond it. Nothing here picks a threshold.
+#
+# * The ruler sweep keys on `government_has_merit` rather than on celestial. The currency exists
+#   for meritocratic and steppe-admin too (and Ritsuryo, via 01_japan_government_types.txt), and
+#   starting those at zero is equally wrong -- it is only silent there, because nothing turns it
+#   into catalysts.
+#
+# * The bench is celestial-and-hegemony-tier only, mirroring claim_mandate's 25. Existing
+#   courtiers are topped up rather than 25 new characters created: our courts are already
+#   populated, and adding characters at game start would put them through the phenotype pass and
+#   the character pools for no gain. `max = 25`, best courtiers first, hands over a bench the same
+#   size vanilla does. `check_range_bounds = no` because a court smaller than 25 is fine.
+#
+# * Flat empire_starting_merit_value for the bench, with no age or skill bonus, because that is
+#   exactly what vanilla's created 25 get. The ruler sweep keeps vanilla's age*2 + skills*2,
+#   because that is what vanilla's converted vassals get. The two differ in vanilla and are left
+#   differing here.
+#
+# Appended, not redefined: an on_action key declared again adds its on_actions to vanilla's list.
+
+on_game_start_after_lobby = {
+	on_actions = {
+		gen_celestial_merit_seed
+	}
+}
+
+gen_celestial_merit_seed = {
+	effect = {
+		# Governors and the hegemon: their own tier's starting merit, vanilla's formula.
+		every_ruler = {
+			limit = {
+				government_has_flag = government_has_merit
+			}
+			change_merit = {
+				value = assign_merit_based_on_tier_value
+				add = {
+					value = age
+					multiply = 2
+				}
+				add = {
+					value = sum_of_all_skills_value
+					multiply = 2
+				}
+			}
+			assign_completed_exams_based_on_merit_effect = yes
+		}
+
+		# The ministry bench. Courtiers only -- a landless noble-family head is a ruler, was
+		# handled by the sweep above, and is barred from a ministry anyway by
+		# common/scripted_triggers/zz_gen_admin_conversion_triggers.txt.
+		every_ruler = {
+			limit = {
+				government_has_flag = government_is_celestial
+				highest_held_title_tier = tier_hegemony
+			}
+			ordered_courtier = {
+				limit = {
+					is_ruler = no
+					is_adult = yes
+				}
+				order_by = sum_of_all_skills_value
+				max = 25
+				check_range_bounds = no
+
+				change_merit = empire_starting_merit_value
+				assign_completed_exams_based_on_merit_effect = yes
+			}
+		}
+	}
+}

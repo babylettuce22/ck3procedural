@@ -1,0 +1,109 @@
+﻿# Two vanilla points of interest emptied, because they are lists of Earth province ids.
+#
+# ---- What was happening ----
+#
+# poi_battles_historical and poi_grand_city (travel_point_of_interest_types.txt) build their
+# province lists from literal ids -- Yarmuk is province 5954, Rome is 2575 -- and the engine
+# rebuilds those lists for every travel plan. On a generated map those ids are whatever county
+# happens to sit there or nothing at all, and each miss is an "add_to_list ... Scoped object is not
+# valid" entry in error.log: 4,900 of them in five minutes of play, the single largest source.
+#
+# ---- What this is ----
+#
+# Whole-object overrides of the two types. The database is last-wins and this directory has no
+# subfolders, so a zz_ file here replaces both without touching the vanilla file. The province
+# lists are empty and the on_visit blocks are vanilla's, kept so that anything scripted to look at
+# these types by key still finds a complete object. Neither type can fire: no province, no visit.
+#
+# A generated map does have grand cities and old battlefields; feeding them in here from the
+# generator is the follow-up, not this file.
+
+poi_grand_city = {
+	build_province_list = {
+	}
+	on_visit = {
+		trigger_event = {
+			on_action = on_visited_grand_city
+		}
+		if = {
+			limit = {
+				scope:province.county.holder != root
+			}
+			custom_tooltip = poi_grand_city_visit_event_tt
+		}
+		if = {
+			limit = {
+				NOT = {
+					has_trait = lifestyle_traveler
+				}
+			}
+			add_trait = lifestyle_traveler
+			traveler_travel_xp_effect = {
+				MIN = 1
+				MAX = 3
+			}
+			if = {
+				limit = {
+					is_landless_adventurer = yes
+					has_perk = organized_muster_rolls_perk
+				}
+				send_interface_toast = {
+					title = poi_grand_city.visit
+					left_icon = root
+					add_gold = minor_gold_laamps_value
+				}
+			}
+		}
+		else = {
+			send_interface_toast = {
+				title = poi_grand_city.visit
+				left_icon = root
+				traveler_travel_xp_effect = {
+					MIN = 3
+					MAX = 5
+				}
+				if = {
+					limit = {
+						has_government = landless_adventurer_government
+						has_perk = organized_muster_rolls_perk
+					}
+					add_gold = minor_gold_laamps_value
+				}
+			}
+		}
+		wanderer_lifestyle_destination_effect = yes
+		visiting_poi_effect = yes
+	}
+}
+
+poi_battles_historical = {
+	build_province_list = {
+	}
+	on_visit = {
+		send_interface_toast = {
+			title = travel_point_historical_name_visit_message
+			left_icon = root
+			if = {
+				limit = {
+					OR = {
+						has_variable = battle_poi_trait_gained
+						number_of_commander_traits > 1
+					}
+				}
+				add_poi_martial_experience_effect = yes
+			}
+			else = {
+				poi_lifestyle_experience_effect = {
+					LIFESTYLE = martial
+					VALUE = travel_minor_lifestyle_xp
+				}
+			}
+			traveler_danger_xp_effect = {
+				MIN = 1
+				MAX = 3
+			}
+			wanderer_lifestyle_destination_effect = yes
+		}
+		visiting_poi_effect = yes
+	}
+}

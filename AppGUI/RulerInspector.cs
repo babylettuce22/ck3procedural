@@ -1,4 +1,5 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
+using Ck3MapGen.Core;
 using Ck3MapGen.Emit;
 using Ck3MapGen.MapGen;
 
@@ -25,9 +26,21 @@ public sealed class RulerInspector : InspectorForm
     public RulerInspector(WorldEdits edits) : base(edits, "Ruler", new Size(400, 560))
     {
         _reroll.Click += (_, _) => Reroll();
-        _title.Click += (_, _) => { if (Single is { } r) GoTo(r.PrimaryTitle); };
-        _culture.Click += (_, _) => { if (Single is { } r) GoTo(r.Culture); };
-        _faith.Click += (_, _) => { if (Single is { } r) GoTo(r.Faith); };
+        _title.Click += (_, _) =>
+        {
+            if (Loaded is { } w) { if (LoadedOne is { } e && w.PrimaryOf(e) is { } primary) GoTo(primary); }
+            else if (Single is { } r) GoTo(r.PrimaryTitle);
+        };
+        _culture.Click += (_, _) =>
+        {
+            if (Loaded is { } w) { if (LoadedOne is { } e && w.Related(e, "Culture") is { } culture) GoTo(culture); }
+            else if (Single is { } r) GoTo(r.Culture);
+        };
+        _faith.Click += (_, _) =>
+        {
+            if (Loaded is { } w) { if (LoadedOne is { } e && w.Related(e, "Faith") is { } faith) GoTo(faith); }
+            else if (Single is { } r) GoTo(r.Faith);
+        };
 
         AddAction(_reroll);
         AddAction(_title);
@@ -49,6 +62,9 @@ public sealed class RulerInspector : InspectorForm
     protected override IEnumerable<object> Wrap(IReadOnlyList<object> targets)
         => targets.OfType<Ruler>().Select(r => new Fields(r, Edits, Realm));
 
+    protected override IEnumerable<object> WrapLoaded(IReadOnlyList<WorldEntry> entries)
+        => entries.Where(e => e.Kind == "Character").Select(e => new LoadedFields(e, Loaded!, Realm));
+
     protected override string Describe(IReadOnlyList<object> targets)
         => targets.Count == 1 && targets[0] is Ruler r
             ? $"{TitleInspector.TierName(r.PrimaryTitle)} {r.PrimaryTitle.Name} — {r.Id}"
@@ -58,6 +74,16 @@ public sealed class RulerInspector : InspectorForm
 
     protected override void Refreshed()
     {
+        if (Loaded is { } world)
+        {
+            var one = LoadedOne;
+            _title.Enabled = one is not null && world.PrimaryOf(one) is not null;
+            _culture.Enabled = one is not null && world.Related(one, "Culture") is not null;
+            _faith.Enabled = one is not null && world.Related(one, "Faith") is not null;
+            // From the mod's own name lists, for the culture and sex the file gives the character.
+            _reroll.Enabled = Selection.OfType<WorldEntry>().Any(world.CanReroll);
+            return;
+        }
         bool single = Edits.IsLoaded && Single is not null;
         _title.Enabled = single;
         _culture.Enabled = single;
@@ -72,6 +98,12 @@ public sealed class RulerInspector : InspectorForm
     /// </summary>
     private void Reroll()
     {
+        if (Loaded is { } world)
+        {
+            foreach (var entry in Selection.OfType<WorldEntry>().ToList()) world.RerollName(entry);
+            LoadedChanged();
+            return;
+        }
         foreach (var ruler in Selection.OfType<Ruler>().ToList())
         {
             var names = ruler.Female ? ruler.Culture.FemaleNames : ruler.Culture.MaleNames;
@@ -150,7 +182,7 @@ public sealed class RulerInspector : InspectorForm
     // --- Fields -------------------------------------------------------------------------------
 
     /// <inheritdoc cref="TitleInspector.Fields"/>
-    public sealed class Fields(Ruler ruler, WorldEdits edits, RealmGraph? realm)
+    public sealed class Fields(Ruler ruler, WorldEdits edits, RealmGraph? realm) : ILoadedChoices
     {
         private RulerProfile P => ruler.Profile;
 
@@ -179,6 +211,19 @@ public sealed class RulerInspector : InspectorForm
         [Description("Independent, or sworn to a liege.")]
         [ReadOnly(true)]
         public string Standing => ruler.Independent ? "(independent)" : "vassal";
+
+        // Read-only here and settable on the title, which is where a government belongs: it moves
+        // the whole realm and every capital holding in it. Shown all the same, because several
+        // rows on this window were decided from it — the purse, the legitimacy, the dread — and
+        // without it the reader cannot tell which government they were decided from.
+        [Category("Seat")]
+        [Description("What this ruler rules as. Change it on the title (Title…): a government "
+                     + "moves the whole realm and rebuilds its capital holdings.")]
+        [ReadOnly(true)]
+        public string Government
+            => edits.Governments is { } map
+                ? MapGen.GovernmentMap.DisplayName(map.For(ruler.Seat))
+                : "—";
 
         [Category("Seat")]
         [DisplayName("Styled as")]
@@ -383,7 +428,8 @@ public sealed class RulerInspector : InspectorForm
         // --- Standing ---
 
         [Category("Standing")]
-        [Description("Starting gold, already scaled for the government.")]
+        [Description("Starting gold. Scaled for the government the realm had when it was "
+                     + "generated, and not rescaled by a later change of government.")]
         public int Gold
         {
             get => ruler.Gold;
@@ -439,6 +485,316 @@ public sealed class RulerInspector : InspectorForm
         private static List<string> Clean(string[]? values)
             => [.. (values ?? []).Select(t => t.Trim()).Where(t => t.Length > 0)];
 
+        // --- Family ---
+
+        private DynastyHouseDef? HouseDef => Prehistory?.Houses.GetValueOrDefault(ruler.HouseKey);
+        private DynastyDef? DynastyDef => Prehistory?.Dynasties.GetValueOrDefault(ruler.DynastyId);
+
+        [Category("Family")]
+        [DisplayName("House name")]
+        [Description("The house's name shown in game. The key every file references stays.")]
+        public string HouseName
+        {
+            get => HouseDef?.LocalizedName ?? "—";
+            set { if (HouseDef is { } h) edits.RenameHouse(h, value); }
+        }
+
+        [Category("Family")]
+        [DisplayName("Dynasty name")]
+        [Description("The dynasty's name shown in game. Its main house shares the line.")]
+        public string DynastyName
+        {
+            get => DynastyDef?.LocalizedName ?? "—";
+            set { if (DynastyDef is { } d) edits.RenameDynasty(d, value); }
+        }
+
+        // --- Arms ---
+        //
+        // The house's shield, which is what the character shows: a main house bears its dynasty's
+        // arms and a cadet a differenced copy. Edited whole through the writer's own record.
+
+        private CoatOfArmsWriter.Coat? Coat => edits.CoatOf(ruler.HouseKey);
+        private void Arms(Func<CoatOfArmsWriter.Coat, CoatOfArmsWriter.Coat> change) => edits.EditCoat(ruler.HouseKey, change);
+
+        [Category("Arms")] [TypeConverter(typeof(ChoiceConverter))]
+        [Description("The field's pattern texture, from gfx/coat_of_arms/patterns.")]
+        public string Pattern { get => Coat?.Pattern ?? "—"; set => Arms(c => c with { Pattern = value.Trim() }); }
+
+        [Category("Arms")] [DisplayName("Field colour 1")] [TypeConverter(typeof(ChoiceConverter))]
+        public string FieldColor1 { get => Coat?.Color1 ?? "—"; set => Arms(c => c with { Color1 = value.Trim() }); }
+
+        [Category("Arms")] [DisplayName("Field colour 2")] [TypeConverter(typeof(ChoiceConverter))]
+        public string FieldColor2 { get => Coat?.Color2 ?? "—"; set => Arms(c => c with { Color2 = value.Trim() }); }
+
+        [Category("Arms")] [TypeConverter(typeof(ChoiceConverter))]
+        [Description("The charge laid over the field, from gfx/coat_of_arms/colored_emblems.")]
+        public string Emblem { get => Coat?.Emblem ?? "—"; set => Arms(c => c with { Emblem = value.Trim() }); }
+
+        [Category("Arms")] [DisplayName("Emblem colour")] [TypeConverter(typeof(ChoiceConverter))]
+        public string EmblemColor { get => Coat?.EmblemColor ?? "—"; set => Arms(c => c with { EmblemColor = value.Trim() }); }
+
+        public IReadOnlyList<(string Key, string Label)> Choices(string property) => property switch
+        {
+            nameof(Pattern) => CoatOfArmsWriter.Patterns.Select(p => (p, p)).ToList(),
+            nameof(Emblem) => CoatOfArmsWriter.Emblems.Select(e => (e, e)).ToList(),
+            nameof(FieldColor1) or nameof(FieldColor2) or nameof(EmblemColor) => CoatOfArmsWriter.Colors.Select(c => (c, c)).ToList(),
+            _ => [],
+        };
+
         public override string ToString() => ruler.Name;
+    }
+
+    /// <summary>
+    /// The editable face of an opened mod's character: what the history file holds, edited in
+    /// place. Skills, traits, culture and faith are the character's own values and change here;
+    /// the id, house, sex and dates are what other files and the bookmark screen reference, and
+    /// stay as written. Starting gold, prestige and the like live inside effect blocks and are
+    /// shown under References rather than pretending to be safe leaf edits.
+    /// </summary>
+    public sealed class LoadedFields(WorldEntry character, LoadedWorldView world, RealmGraph? realm) : ILoadedChoices
+    {
+        private Title? Seat => world.SeatOfCharacter(character);
+        private Title? Primary => world.PrimaryOf(character);
+
+        // --- Seat (read-only) ---
+
+        [Category("Seat")]
+        [Description("The county this ruler sits in, from the title history.")]
+        [ReadOnly(true)]
+        public string SeatCounty => Seat?.Name ?? "—";
+
+        [Category("Seat")]
+        [DisplayName("Primary title")]
+        [Description("The highest title held at the start date.")]
+        [ReadOnly(true)]
+        public string PrimaryTitle => Primary is { } p ? $"{TitleInspector.TierName(p)} {p.Name}" : "(unlanded)";
+
+        [Category("Seat")]
+        [Description("Independent, or sworn to a liege.")]
+        [ReadOnly(true)]
+        public string Standing => Seat is not { } s || realm is null ? "—"
+            : realm.LiegeSeat(s) is { } above ? $"vassal of {TitleInspector.TierName(realm.Primary(above))} {realm.Primary(above).Name}" : "(independent)";
+
+        [Category("Seat")]
+        [ReadOnly(true)]
+        public string Government
+            => Primary is { } p && world.GovernmentOf(p) is { } g
+                ? MapGen.GovernmentMap.DisplayName(g)
+                : "—";
+
+        [Category("Seat")]
+        [DisplayName("Styled as")]
+        [Description("How the game will name the primary title and this ruler — the title's own "
+                     + "word if it has one, else the top liege's culture's word for this government. "
+                     + "Change it on the culture (Culture…) or on the title (Title…).")]
+        [ReadOnly(true)]
+        public string StyledAs => Primary is { } p ? world.RendersAs(p) : "—";
+
+        [Category("Seat")]
+        [DisplayName("Character id")]
+        [Description("The history id every other file references. Fixed.")]
+        [ReadOnly(true)]
+        public string Id => character.Key;
+
+        [Category("Seat")]
+        [Description("The house the character is written into. Fixed — the house file, the ancestors and the heirs all point at it.")]
+        [ReadOnly(true)]
+        public string House => character.Value("dynasty_house");
+
+        // --- Identity ---
+
+        [Category("Identity")]
+        [Description("The given name. Renaming rewrites the character file and the bookmark screen; artifact and chronicle prose keeps the generated name.")]
+        public string Name
+        {
+            get => character.Name;
+            set => character.Field("Name")?.Write?.Invoke(value);
+        }
+
+        [Category("Identity")]
+        [Description("As written. The spouse and children the prehistory wrote around this character assume it.")]
+        [ReadOnly(true)]
+        public string Sex => character.Value("female") == "yes" ? "Female" : "Male";
+
+        [Category("Identity")]
+        [DisplayName("Birth date")]
+        [ReadOnly(true)]
+        public string BirthDate => character.Value("Birth date");
+
+        [Category("Identity")]
+        [DisplayName("Death date")]
+        [ReadOnly(true)]
+        public string DeathDate => character.Value("Death date") is { Length: > 0 } d ? d : "(alive at start)";
+
+        [Category("Identity")]
+        [Description("At the bookmark's start date.")]
+        [ReadOnly(true)]
+        public string Age
+        {
+            get
+            {
+                string birth = character.Value("Birth date");
+                return int.TryParse(birth.Split('.')[0], out int born) && int.TryParse(world.World.StartDate.Split('.')[0], out int start) && start < 9999
+                    ? (start - born).ToString() : "—";
+            }
+        }
+
+        [Category("Identity")]
+        [TypeConverter(typeof(ChoiceConverter))]
+        [Description("A culture defined in this world. The bookmark entry for this character follows it.")]
+        public string Culture
+        {
+            get => character.Value("culture");
+            set => character.Field("culture")?.Write?.Invoke(value);
+        }
+
+        [Category("Identity")]
+        [TypeConverter(typeof(ChoiceConverter))]
+        [Description("A faith defined in this world. The bookmark entry for this character follows it.")]
+        public string Faith
+        {
+            get => character.Value("religion");
+            set => character.Field("religion")?.Write?.Invoke(value);
+        }
+
+        // --- Traits ---
+
+        [Category("Traits")]
+        [Description("Every trait line in the file, one key per line — education, personality, "
+                     + "congenital and lifestyle alike. Lines are changed in place; adding or "
+                     + "removing one is a structural edit the file keeps as written.")]
+        public string[] Traits
+        {
+            get => TraitFields.Select(f => f.Read()).ToArray();
+            set
+            {
+                var fields = TraitFields;
+                var traits = (value ?? []).Select(t => t.Trim()).Where(t => t.Length > 0).ToList();
+                if (traits.Count != fields.Count)
+                    throw new ArgumentException($"This character has {fields.Count} trait lines; change them in place rather than adding or removing lines.");
+                for (int i = 0; i < traits.Count; i++) fields[i].Write?.Invoke(traits[i]);
+            }
+        }
+
+        private List<WorldField> TraitFields => character.Fields.Where(f => f.Name == "trait" || f.Name.StartsWith("trait ")).ToList();
+
+        // --- Skills ---
+
+        [Category("Skills")] public int Diplomacy { get => Skill("diplomacy"); set => SetSkill("diplomacy", value); }
+        [Category("Skills")] public int Martial { get => Skill("martial"); set => SetSkill("martial", value); }
+        [Category("Skills")] public int Stewardship { get => Skill("stewardship"); set => SetSkill("stewardship", value); }
+        [Category("Skills")] public int Intrigue { get => Skill("intrigue"); set => SetSkill("intrigue", value); }
+        [Category("Skills")] public int Learning { get => Skill("learning"); set => SetSkill("learning", value); }
+        [Category("Skills")] public int Prowess { get => Skill("prowess"); set => SetSkill("prowess", value); }
+
+        private int Skill(string key) => int.TryParse(character.Value(key), out int v) ? v : 0;
+        private void SetSkill(string key, int value)
+        {
+            if (character.Field(key) is { Write: { } write }) write(value.ToString());
+            else throw new ArgumentException($"This character's file has no {key} line to change.");
+        }
+
+        // --- Standing ---
+        //
+        // Leaves inside the character's dated effect block, bound by the loader; each writes in
+        // place. A line the file does not carry cannot be added, and says so.
+
+        private int Leaf(string name) => int.TryParse(character.Value(name), out int v) ? v : 0;
+        private void SetLeaf(string name, string value)
+        {
+            if (character.Field(name) is { Write: { } write }) write(value);
+            else throw new ArgumentException($"This character's start-date effect has no {name.ToLowerInvariant()} line; the editor changes lines rather than adding them.");
+        }
+
+        [Category("Standing")] [Description("Starting gold, granted on the start date.")]
+        public int Gold { get => Leaf("Gold"); set => SetLeaf("Gold", value.ToString()); }
+
+        [Category("Standing")] [Description("Starting prestige. Vanilla's levels sit at 1000, 2000, 5000, 10000, 25000.")]
+        public int Prestige { get => Leaf("Prestige"); set => SetLeaf("Prestige", value.ToString()); }
+
+        [Category("Standing")] [DisplayName("Dynasty prestige")] [Description("Starting dynasty prestige (renown). Only paid out to an independent ruler.")]
+        public int Renown { get => Leaf("Dynasty prestige"); set => SetLeaf("Dynasty prestige", value.ToString()); }
+
+        [Category("Standing")] [Description("Starting dread.")]
+        public int Dread { get => Leaf("Dread"); set => SetLeaf("Dread", value.ToString()); }
+
+        [Category("Standing")] [TypeConverter(typeof(LegitimacyConverter))]
+        [Description("A legitimacy script value granted at the start date.")]
+        public string Legitimacy { get => character.Value("Legitimacy"); set => SetLeaf("Legitimacy", value); }
+
+        [Category("Standing")] [DisplayName("Perk points")] [ReadOnly(true)]
+        [Description("Lifestyle perk points granted at game start, per tree. Each is its own line in the Properties below when present.")]
+        public string PerkPoints => string.Join(", ", character.Fields.Where(f => f.Name.StartsWith("Perk points (")).Select(f => $"{f.Name[13..^1]} {f.Read()}")) is { Length: > 0 } s ? s : "(none)";
+
+        [Category("Standing")] [DisplayName("Diplomacy perks")]
+        public int DiplomacyPerks { get => Leaf("Perk points (diplomacy)"); set => SetLeaf("Perk points (diplomacy)", value.ToString()); }
+        [Category("Standing")] [DisplayName("Martial perks")]
+        public int MartialPerks { get => Leaf("Perk points (martial)"); set => SetLeaf("Perk points (martial)", value.ToString()); }
+        [Category("Standing")] [DisplayName("Stewardship perks")]
+        public int StewardshipPerks { get => Leaf("Perk points (stewardship)"); set => SetLeaf("Perk points (stewardship)", value.ToString()); }
+        [Category("Standing")] [DisplayName("Intrigue perks")]
+        public int IntriguePerks { get => Leaf("Perk points (intrigue)"); set => SetLeaf("Perk points (intrigue)", value.ToString()); }
+        [Category("Standing")] [DisplayName("Learning perks")]
+        public int LearningPerks { get => Leaf("Perk points (learning)"); set => SetLeaf("Perk points (learning)", value.ToString()); }
+
+        // --- Family ---
+
+        private WorldEntry? HouseEntry => world.HouseOf(character);
+        private WorldEntry? DynastyEntry => world.DynastyOfCharacter(character);
+
+        [Category("Family")] [DisplayName("House name")]
+        [Description("The house's name shown in game — its English localization line. The key stays.")]
+        public string HouseName
+        {
+            get => HouseEntry?.Name ?? "—";
+            set { if (HouseEntry?.Field("Name") is { Write: { } write }) write(value); }
+        }
+
+        [Category("Family")] [DisplayName("Dynasty name")]
+        [Description("The dynasty's name shown in game. Its main house shares the line.")]
+        public string DynastyName
+        {
+            get => DynastyEntry?.Name ?? "—";
+            set { if (DynastyEntry?.Field("Name") is { Write: { } write }) write(value); }
+        }
+
+        // --- Arms ---
+
+        private WorldEntry? Coat => HouseEntry is { } house ? world.CoatOf(house) : null;
+        private string Arm(string field) => Coat?.Field(field) is not null ? Coat.Value(field) : "—";
+        private void SetArm(string field, string value)
+        {
+            if (Coat?.Field(field) is { Write: { } write }) write(value);
+            else if (value != "—") throw new ArgumentException("This house has no arms of its own in the mod's coat of arms file.");
+        }
+
+        [Category("Arms")] [TypeConverter(typeof(ChoiceConverter))]
+        [Description("The field's pattern texture, from gfx/coat_of_arms/patterns.")]
+        public string Pattern { get => Arm("pattern"); set => SetArm("pattern", value); }
+
+        [Category("Arms")] [DisplayName("Field colour 1")] [TypeConverter(typeof(ChoiceConverter))]
+        public string FieldColor1 { get => Arm("color1"); set => SetArm("color1", value); }
+
+        [Category("Arms")] [DisplayName("Field colour 2")] [TypeConverter(typeof(ChoiceConverter))]
+        public string FieldColor2 { get => Arm("color2"); set => SetArm("color2", value); }
+
+        [Category("Arms")] [TypeConverter(typeof(ChoiceConverter))]
+        [Description("The charge laid over the field, from gfx/coat_of_arms/colored_emblems.")]
+        public string Emblem { get => Arm("emblem texture"); set => SetArm("emblem texture", value); }
+
+        [Category("Arms")] [DisplayName("Emblem colour")] [TypeConverter(typeof(ChoiceConverter))]
+        public string EmblemColor { get => Arm("emblem color1"); set => SetArm("emblem color1", value); }
+
+        public IReadOnlyList<(string Key, string Label)> Choices(string property) => property switch
+        {
+            nameof(Culture) => world.World.Entries.Where(e => e.Kind == "Culture").Select(e => (e.Key, e.Name)).ToList(),
+            nameof(Faith) => world.World.Entries.Where(e => e.Kind == "Faith").Select(e => (e.Key, e.Name)).ToList(),
+            nameof(Pattern) => CoatOfArmsWriter.Patterns.Select(p => (p, p)).ToList(),
+            nameof(Emblem) => CoatOfArmsWriter.Emblems.Select(e => (e, e)).ToList(),
+            nameof(FieldColor1) or nameof(FieldColor2) or nameof(EmblemColor) => CoatOfArmsWriter.Colors.Select(c => (c, c)).ToList(),
+            _ => [],
+        };
+
+        public override string ToString() => character.Name;
     }
 }

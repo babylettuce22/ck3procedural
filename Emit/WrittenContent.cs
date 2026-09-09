@@ -71,7 +71,14 @@ public sealed record WrittenContent
     /// <see cref="ContentWriter.EmitProvinceHistory"/> — which is what a government changed after
     /// the fact needs, since each government seats its ruler in a different holding.
     /// </summary>
-    public required IReadOnlyList<ContentWriter.ProvinceRow> ProvinceHistory { get; init; }
+    public required List<ContentWriter.ProvinceRow> ProvinceHistory { get; init; }
+
+    /// <summary>
+    /// Arms changed in the ruler inspector after the write, by dynasty id or house key. Empty
+    /// until one is: the arms themselves are rolled from a stable seed at write time and never
+    /// stored, so only the differences need keeping — see <see cref="CoatOfArmsWriter.Compose"/>.
+    /// </summary>
+    public Dictionary<string, CoatOfArmsWriter.Coat> Coats { get; } = new(StringComparer.Ordinal);
 
     /// <inheritdoc cref="Wilderness"/>
     public required WorldCenterMap WorldCenters { get; init; }

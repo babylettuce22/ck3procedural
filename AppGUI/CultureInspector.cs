@@ -60,7 +60,9 @@ public sealed class CultureInspector : InspectorForm
 
     protected override void Refreshed()
     {
-        _heritage.Enabled = Selection.Count == 1;
+        // An opened mod's heritage is a key in the file, shown in the grid; the generated
+        // heritage object with its sibling cultures is not read back.
+        _heritage.Enabled = Loaded is null && Selection.Count == 1;
         _rerollWords.Enabled = Edits.IsLoaded && Selection.OfType<Culture>().Any();
     }
 
@@ -78,10 +80,15 @@ public sealed class CultureInspector : InspectorForm
 
         public override StandardValuesCollection GetStandardValues(ITypeDescriptorContext? context)
         {
-            string? government = context?.PropertyDescriptor?.Name is { } name
-                                 && name != nameof(Fields.RealmWords)
-                ? name.ToLowerInvariant()
-                : null;
+            // Matched against the government tokens rather than derived from the property name by
+            // lower-casing it. Two of the newer rows are named for governments whose token carries
+            // an underscore — SteppeAdmin is steppe_admin, JapanFeudal is japan_feudal — and the
+            // lower-cased name misses both, which would silently offer every ladder for them.
+            string? name = context?.PropertyDescriptor?.Name;
+            string? government = name is null || name == nameof(Fields.RealmWords)
+                ? null
+                : Emit.TitleTierWriter.Governments.FirstOrDefault(
+                    g => string.Equals(g.Replace("_", ""), name, StringComparison.OrdinalIgnoreCase));
 
             var labels = new List<string> { Vanilla };
             labels.AddRange(Emit.TitleTierWriter.Vocabularies
@@ -314,6 +321,31 @@ public sealed class CultureInspector : InspectorForm
 
         [Category("Realm titles")] [TypeConverter(typeof(RealmWordsConverter))]
         public string Nomad { get => Summary("nomad"); set => SetWords("nomad", value); }
+
+        // All Under Heaven's seven. A row each, because without one a realm the editor had put on
+        // one of these governments could never be given the culture's own words and always came
+        // out with vanilla's — and the property name is what the converter matches a government by,
+        // so each is named for its token rather than for the name shown beside it.
+        [Category("Realm titles")] [TypeConverter(typeof(RealmWordsConverter))]
+        public string Meritocratic { get => Summary("meritocratic"); set => SetWords("meritocratic", value); }
+
+        [Category("Realm titles")] [DisplayName("Steppe admin")] [TypeConverter(typeof(RealmWordsConverter))]
+        public string SteppeAdmin { get => Summary("steppe_admin"); set => SetWords("steppe_admin", value); }
+
+        [Category("Realm titles")] [TypeConverter(typeof(RealmWordsConverter))]
+        public string Celestial { get => Summary("celestial"); set => SetWords("celestial", value); }
+
+        [Category("Realm titles")] [DisplayName("Ritsuryō")] [TypeConverter(typeof(RealmWordsConverter))]
+        public string JapanAdministrative { get => Summary("japan_administrative"); set => SetWords("japan_administrative", value); }
+
+        [Category("Realm titles")] [DisplayName("Sōryō")] [TypeConverter(typeof(RealmWordsConverter))]
+        public string JapanFeudal { get => Summary("japan_feudal"); set => SetWords("japan_feudal", value); }
+
+        [Category("Realm titles")] [TypeConverter(typeof(RealmWordsConverter))]
+        public string Mandala { get => Summary("mandala"); set => SetWords("mandala", value); }
+
+        [Category("Realm titles")] [TypeConverter(typeof(RealmWordsConverter))]
+        public string Wanua { get => Summary("wanua"); set => SetWords("wanua", value); }
 
         /// <summary>The one vocabulary every government with a word shares, or null if they differ or none has one.</summary>
         private Emit.TitleVocabulary? Uniform()

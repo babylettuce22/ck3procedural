@@ -95,7 +95,7 @@ public static class FormationDecisions
             int settled = Titles.Flatten([hegemony])
                                 .Count(t => t.Tier == "c" && !wilderness.Contains(t));
 
-            if (settled >= MinSettledCounties) specs.Add(Hegemony(hegemony, empires, settled));
+            if (settled >= MinSettledCounties) specs.Add(Hegemony(hegemony, settled));
         }
 
         return specs;
@@ -272,18 +272,24 @@ public static class FormationDecisions
     }
 
     /// <summary>
-    /// The decision that makes one throne out of every empire on the map.
+    /// The decision that makes one throne out of the empires the hegemony covers.
     ///
     /// Shaped like <see cref="Formation"/> one rung up, and gated on empire *titles* rather than on
     /// a share of the world's ground. That is deliberate: an empire title already cost its holder a
     /// supermajority of its own de jure counties, so counting empires counts conquest that has
     /// already been paid for, and asks the claimant for something legible — most of the crowns —
     /// instead of a number only the tooltip can explain.
+    ///
+    /// Every count here is of the hegemony's own empires, not the map's. The crown covers a region
+    /// (<see cref="Titles.Crown"/>), so an emperor from the far side of the world holding two
+    /// crowns of his own has done nothing towards this one.
     /// </summary>
-    private static DecisionSpec Hegemony(Title hegemony, List<Title> empires, int settled)
+    private static DecisionSpec Hegemony(Title hegemony, int settled)
     {
         string key = KeyFor(hegemony);
         string title = $"title:{hegemony.Key}";
+
+        var empires = hegemony.Children.Where(c => c.Tier == "e").ToList();
 
         // Most of them, never fewer than two. Two is the floor because a hegemony over one empire
         // is the same realm drawn twice — the same reason Titles.Crown refuses to build one.
@@ -318,9 +324,9 @@ public static class FormationDecisions
 
                 using (b.Block("NOT")) b.Field("exists", $"{title}.holder");
 
-                // Emperors only, and no capital test beside it. The empire decisions ask whose
-                // empire this is so that a title does not appear in every neighbour's panel; a
-                // hegemony is de jure liege of the whole map, so that question has no answer here.
+                // Emperors only. The empire decisions ask whose empire this is so that a title does
+                // not appear in every neighbour's panel; the empire count in IsValid is that test
+                // here, and it is de jure rather than geographical, so it belongs there.
                 b.Field("highest_held_title_tier", "tier_empire");
             },
 
@@ -338,6 +344,10 @@ public static class FormationDecisions
                     {
                         b.Token($"count >= {empireGoal}");
                         b.Field("title_tier", "empire");
+
+                        // Its own empires, not any two. The hegemony is a region now, and an
+                        // emperor of the far side of the map has done nothing towards this crown.
+                        b.Field("target_is_de_jure_liege_or_above", title);
                     }
                 }
 
@@ -427,8 +437,8 @@ public static class FormationDecisions
             : $"${empires[0].Key}$ has never bowed to a throne above its own";
 
         return $"No one has ever worn it. {span} — {settled} settled [counties|E] and no ruler "
-             + $"above the rest. Hold enough of that, and ${hegemony.Key}$ stops being a word for "
-             + "the world and becomes a [de_jure|E] title: one crown above all crowns.";
+             + $"above the rest. Hold enough of that, and ${hegemony.Key}$ stops being a name for "
+             + "the lands between them and becomes a [de_jure|E] title: one crown above all crowns.";
     }
 
     /// <summary>

@@ -19,7 +19,8 @@ public sealed class DynastyDef
 {
     public required string Id { get; init; }
     public required string NameKey { get; init; }
-    public required string LocalizedName { get; init; }
+    /// <summary>Settable for the inspector: the key stays, only the English line behind it moves.</summary>
+    public required string LocalizedName { get; set; }
     public required string CultureKey { get; init; }
 
     /// <summary>
@@ -37,7 +38,8 @@ public sealed class DynastyHouseDef
 {
     public required string Key { get; init; }
     public required string NameKey { get; init; }
-    public required string LocalizedName { get; init; }
+    /// <inheritdoc cref="DynastyDef.LocalizedName"/>
+    public required string LocalizedName { get; set; }
     public required string DynastyId { get; init; }
     public string? Prefix { get; init; }
 
@@ -105,6 +107,37 @@ public sealed class HouseRelationDef
     public string? DescriptionKey { get; set; }
 }
 
+/// <summary>
+/// One noble family: the landless title a house head holds beside his land under a government that
+/// runs its appointments off houses rather than off vassal contracts.
+///
+/// Not a family in the sense the rest of this file uses the word — the people are already there, in
+/// <see cref="PrehistoryMap.Houses"/>. This is the title that makes the engine see them as one, and
+/// without it an administrative realm opens with an empty Noble Families screen: every caller of
+/// vanilla's <c>create_noble_family_effect</c> hangs off <c>on_title_gain</c>, a government change,
+/// a decision or the ruler designer, and none of those has fired yet on the start date. Vanilla
+/// does not seed them at game start either; it writes all sixty-one of Byzantium's into
+/// history/titles/01_admin_titles.txt by hand.
+/// </summary>
+public sealed class NobleFamilyDef
+{
+    public required string TitleKey { get; init; }
+
+    /// <summary>The seat of the house head who holds it — he holds this beside his own titles.</summary>
+    public required Title HolderCounty { get; init; }
+
+    public required string HouseKey { get; init; }
+
+    /// <summary>What the title is granted under, which is the holder's own government.</summary>
+    public required string Government { get; init; }
+
+    /// <summary>
+    /// The crown that granted it — the top liege's primary title, or null when the holder is the
+    /// sovereign and there is nobody above him to be a vassal of.
+    /// </summary>
+    public Title? Liege { get; init; }
+}
+
 public sealed class PrehistoryMap
 {
     public Dictionary<Title, HistoricalCharacter> Spouses { get; } = [];
@@ -117,6 +150,13 @@ public sealed class PrehistoryMap
     public Dictionary<string, DynastyHouseDef> Houses { get; } = [];
     public List<HistoricalCharacter> AllExtraCharacters { get; } = [];
     public List<HouseRelationDef> HouseRelations { get; } = [];
+
+    /// <summary>
+    /// The landless family titles, in county order. Rebuilt rather than fixed, because which realms
+    /// have any is a fact about the government map and the editor can change a government after the
+    /// world is written — see <see cref="RebuildNobleFamilies"/>.
+    /// </summary>
+    public List<NobleFamilyDef> NobleFamilies { get; private set; } = [];
 
     public Dictionary<Title, List<AllianceLink>> Alliances { get; } = [];
     public Dictionary<Title, List<DatedRelation>> Rivals { get; } = [];
@@ -156,6 +196,10 @@ public sealed class PrehistoryMap
 
         // 1. Build Dynasties and Cadet Houses
         BuildDynastiesAndHouses(map, rulerCounties, realms, cultures, rng);
+
+        // 1b. Noble Families — the landless title that makes a house a family to the engine.
+        // Straight after the houses, because it is a fact about them and nothing later moves one.
+        map.RebuildNobleFamilies(realms, governments, wilderness);
 
         // 2. Build Multi-Generational Ancestry (Deceased Parents & Sibling Bonds)
         BuildAncestryAndBrothers(map, rulerCounties, realms, cultures, faiths, cfg, rng);
@@ -216,6 +260,10 @@ public sealed class PrehistoryMap
         Console.WriteLine($"  pre-history: {totalDynasties} dynasties, {totalHouses} houses ({totalHouses - totalDynasties} cadet branches), " +
                           $"{map.Spouses.Count} marriages, {totalChildren} heirs/children, {totalFeuds} blood feuds, {totalRivalries} rivalries/quarrels, " +
                           $"{totalAmities} amities/friendships (remaining dynasties indifferent), {map.ActiveWars.Count} active wars");
+
+        if (map.NobleFamilies.Count > 0)
+            Console.WriteLine($"  pre-history: {map.NobleFamilies.Count} noble families seated across " +
+                              $"{map.NobleFamilies.Select(f => f.Government).Distinct().Count()} bureaucratic government(s)");
 
         return map;
     }
@@ -286,6 +334,80 @@ public sealed class PrehistoryMap
             }
             }
         }
+    }
+
+    /// <summary>
+    /// Works out which houses hold a landless family title, and replaces <see cref="NobleFamilies"/>
+    /// with the answer.
+    ///
+    /// Public and re-runnable because the government map is editable after the world is written: a
+    /// realm moved onto administrative gains families, and one moved off has to lose them, or the
+    /// title history goes on granting a landless <c>noble_family</c> duchy to a man the same file
+    /// now writes as feudal.
+    ///
+    /// Three gates, all of them vanilla's:
+    ///
+    ///   * the holder's own government declares <c>noble_families</c> — six do, and Sōryō is one of
+    ///     them despite being feudal in every other respect;
+    ///   * the crown above him does too, which is what <c>give_new_noble_family_title_effect</c>
+    ///     checks before minting one. A sovereign is exempt: an independent administrative ruler
+    ///     gets a family of his own in title_on_actions.txt without anyone to grant it;
+    ///   * his primary title reaches the government's <c>min_appointment_tier</c>.
+    ///
+    /// There is no house-head test, though the engine's effect has one, because there is nothing
+    /// here to test: this generator gives every ruler a house of his own — a cadet founds one
+    /// rather than sharing his liege's — so a house and its head are the same thing county for
+    /// county.
+    /// </summary>
+    /// <returns>
+    /// Whether the answer changed. What the editor's re-emit branches on: a family title carries a
+    /// localisation key and a coat of arms as well as a history entry, and those two files are
+    /// rewritten whole, so they are only worth touching when a government edit actually seated or
+    /// unseated somebody.
+    /// </returns>
+    public bool RebuildNobleFamilies(RealmMap realms, GovernmentMap governments, WildernessMap wilderness)
+    {
+        var families = new List<NobleFamilyDef>();
+
+        var seats = realms.HolderCounty.Values
+            .Distinct()
+            .Where(c => !wilderness.Contains(c))
+            .OrderBy(c => c.Index);
+
+        foreach (var county in seats)
+        {
+            string government = governments.For(county);
+            if (!GovernmentMap.AllowsNobleFamilies(government)) continue;
+
+            var topLiege = TopLiegeCounty(county, realms);
+            bool sovereign = topLiege == county;
+
+            if (!sovereign && !GovernmentMap.AllowsNobleFamilies(governments.For(topLiege))) continue;
+
+            // Duchy for the two Byzantine-descended bureaucracies, county for the four that carry
+            // government_has_county_tier_noble_families. The prefix is also the title's own tier:
+            // a family title is minted at the tier it is granted from.
+            string tier = GovernmentMap.NobleFamilyTier(government);
+            var primary = HistoryWriter.Primary(county, realms);
+            if (TierRank(primary.Tier) < TierRank(tier)) continue;
+
+            if (!CharacterHouseMap.TryGetValue(county, out var houseKey)) continue;
+
+            families.Add(new NobleFamilyDef
+            {
+                TitleKey = $"{tier}_nf_gen_{county.Index}",
+                HolderCounty = county,
+                HouseKey = houseKey,
+                Government = government,
+                Liege = sovereign ? null : HistoryWriter.Primary(topLiege, realms)
+            });
+        }
+
+        bool changed = !families.Select(f => f.TitleKey)
+            .SequenceEqual(NobleFamilies.Select(f => f.TitleKey), StringComparer.Ordinal);
+
+        NobleFamilies = families;
+        return changed;
     }
 
     private static void CreateDynastyAndMainHouse(PrehistoryMap map, Title county, CultureMap cultures)

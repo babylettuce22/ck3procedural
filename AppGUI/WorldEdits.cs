@@ -38,14 +38,15 @@ public sealed class WorldEdits
     }
 
     private sealed record TitleSnapshot(Title Target, string Name, (byte R, byte G, byte B) Color,
-        string? Form, string? Holder, string? HolderFemale) : ISnapshot
+        string? Form, string? Holder, string? HolderFemale, Title? Seat) : ISnapshot
     {
         public bool Differs()
             => !string.Equals(Target.Name, Name, StringComparison.Ordinal)
             || Target.Color != Color
             || Target.Form != Form
             || Target.Holder != Holder
-            || Target.HolderFemale != HolderFemale;
+            || Target.HolderFemale != HolderFemale
+            || !ReferenceEquals(Target.Seat, Seat);
 
         public void Restore()
         {
@@ -54,21 +55,68 @@ public sealed class WorldEdits
             Target.Form = Form;
             Target.Holder = Holder;
             Target.HolderFemale = HolderFemale;
+            Target.Seat = Seat;
         }
 
         public void Capture(EditOverlay into)
         {
             var t = Target;
-            into.Titles[t.Key] = new TitleEdit
-            {
-                Name = !string.Equals(t.Name, Name, StringComparison.Ordinal) ? t.Name : null,
-                Color = t.Color != Color ? [t.Color.R, t.Color.G, t.Color.B] : null,
-                Words = t.Form != Form || t.Holder != Holder || t.HolderFemale != HolderFemale
-                    ? new TitleWords(t.Form, t.Holder, t.HolderFemale)
-                    : null,
-            };
+            var edit = into.Titles.TryGetValue(t.Key, out var existing) ? existing : into.Titles[t.Key] = new TitleEdit();
+            edit.Name = !string.Equals(t.Name, Name, StringComparison.Ordinal) ? t.Name : null;
+            edit.Color = t.Color != Color ? [t.Color.R, t.Color.G, t.Color.B] : null;
+            edit.Words = t.Form != Form || t.Holder != Holder || t.HolderFemale != HolderFemale
+                ? new TitleWords(t.Form, t.Holder, t.HolderFemale)
+                : null;
+            edit.Capital = !ReferenceEquals(t.Seat, Seat) ? t.Capital?.Key : null;
         }
     }
+
+    /// <summary>
+    /// A county's start-date development, held in <see cref="WrittenContent.Development"/> rather
+    /// than on the title, so it is its own entry beside the county's <see cref="TitleSnapshot"/>
+    /// the way a realm's government is.
+    /// </summary>
+    private sealed record DevelopmentSnapshot(Dictionary<Title, int> Map, Title County, int Level) : ISnapshot
+    {
+        public bool Differs() => Map.GetValueOrDefault(County) != Level;
+        public void Restore() => Map[County] = Level;
+        public void Capture(EditOverlay into)
+        {
+            var edit = into.Titles.TryGetValue(County.Key, out var existing) ? existing : into.Titles[County.Key] = new TitleEdit();
+            edit.Development = Map.GetValueOrDefault(County);
+        }
+    }
+    private sealed record DevelopmentKey(Title County);
+
+    private sealed record NameSnapshot(object Target, string Generated, Func<string> Get, Action<string> Set, bool House) : ISnapshot
+    {
+        public bool Differs() => !string.Equals(Get(), Generated, StringComparison.Ordinal);
+        public void Restore() => Set(Generated);
+        public void Capture(EditOverlay into)
+        {
+            string key = Target is DynastyDef d ? d.Id : ((DynastyHouseDef)Target).Key;
+            (House ? into.Houses : into.Dynasties)[key] = new NameEdit { Generated = Generated, Name = Get() };
+        }
+    }
+
+    /// <summary>A barony's special building slot and building, one row of the captured province history.</summary>
+    private sealed record ProvinceSnapshot(List<ContentWriter.ProvinceRow> Rows, int Index, ContentWriter.ProvinceRow Original) : ISnapshot
+    {
+        public bool Differs() => Rows[Index] != Original;
+        public void Restore() => Rows[Index] = Original;
+        public void Capture(EditOverlay into)
+            => into.Provinces[Original.ProvinceId] = new ProvinceEdit(Rows[Index].SpecialSlot ?? "", Rows[Index].SpecialBuilding ?? "");
+    }
+    private sealed record ProvinceKey(int ProvinceId);
+
+    /// <summary>Arms on a dynasty or house: the rolled coat beside whatever now overrides it.</summary>
+    private sealed record CoatSnapshot(Dictionary<string, CoatOfArmsWriter.Coat> Overrides, string Key, CoatOfArmsWriter.Coat Rolled) : ISnapshot
+    {
+        public bool Differs() => Overrides.TryGetValue(Key, out var coat) && coat != Rolled;
+        public void Restore() => Overrides.Remove(Key);
+        public void Capture(EditOverlay into) { if (Overrides.TryGetValue(Key, out var coat)) into.Coats[Key] = coat; }
+    }
+    private sealed record CoatKey(string Key);
 
     private sealed record CultureSnapshot(Culture Target, string Name, (byte R, byte G, byte B) Color,
             string Ethos, string MartialCustom, string HeadDetermination, List<string> Traditions,
@@ -181,13 +229,14 @@ public sealed class WorldEdits
     private sealed record EthnicityKey(Culture Culture);
 
     private sealed record FaithSnapshot(Faith Target, string Name, (double R, double G, double B) Color,
-        string Icon, List<string> Tenets) : ISnapshot
+        string Icon, List<string> Tenets, List<(string Key, Title County)> HolySites) : ISnapshot
     {
         public bool Differs()
             => !string.Equals(Target.Name, Name, StringComparison.Ordinal)
             || Target.Color != Color
             || Target.Icon != Icon
-            || !Target.Tenets.SequenceEqual(Tenets);
+            || !Target.Tenets.SequenceEqual(Tenets)
+            || !Target.HolySites.SequenceEqual(HolySites);
 
         public void Restore()
         {
@@ -195,6 +244,9 @@ public sealed class WorldEdits
             Target.Color = Color;
             Target.Icon = Icon;
             Target.Tenets = [.. Tenets];
+            // In place: the list is get-only and shared with every writer that read it.
+            Target.HolySites.Clear();
+            Target.HolySites.AddRange(HolySites);
         }
 
         public void Capture(EditOverlay into)
@@ -207,6 +259,7 @@ public sealed class WorldEdits
                 Color = f.Color != Color ? [f.Color.R, f.Color.G, f.Color.B] : null,
                 Icon = f.Icon != Icon ? f.Icon : null,
                 Tenets = !f.Tenets.SequenceEqual(Tenets) ? [.. f.Tenets] : null,
+                HolySites = !f.HolySites.SequenceEqual(HolySites) ? f.HolySites.Select(s => s.County.Key).ToList() : null,
             };
         }
     }
@@ -382,12 +435,22 @@ public sealed class WorldEdits
     public bool WasEdited(object target)
         => (_originals.TryGetValue(target, out var snapshot) && snapshot.Differs())
         || (target is Culture c && _originals.TryGetValue(new EthnicityKey(c), out var eth) && eth.Differs())
-        || (GovernmentKeyOf(target) is { } gov && _originals.TryGetValue(gov, out var rule) && rule.Differs());
+        || (GovernmentKeyOf(target) is { } gov && _originals.TryGetValue(gov, out var rule) && rule.Differs())
+        || SideKeys(target).Any(k => _originals.TryGetValue(k, out var side) && side.Differs());
 
     public bool CanRevert(object target)
         => _originals.ContainsKey(target)
         || (target is Culture c && _originals.ContainsKey(new EthnicityKey(c)))
-        || (GovernmentKeyOf(target) is { } gov && _originals.ContainsKey(gov));
+        || (GovernmentKeyOf(target) is { } gov && _originals.ContainsKey(gov))
+        || SideKeys(target).Any(_originals.ContainsKey);
+
+    /// <summary>The entries filed beside a title rather than under it: a county's development, a barony's special building.</summary>
+    private static IEnumerable<object> SideKeys(object target)
+    {
+        if (target is not Title title) yield break;
+        if (title.Tier == "c") yield return new DevelopmentKey(title);
+        if (title.Tier == "b") yield return new ProvinceKey(title.ProvinceId);
+    }
 
     /// <summary>
     /// Where a title's government edit is filed: under the seat of whoever holds it, so that every
@@ -633,8 +696,12 @@ public sealed class WorldEdits
             }
         }
 
+        // The whole admin family, not administrative_government alone. Generation already puts a
+        // celestial or steppe-admin realm in the admin list, so testing the one key here made any
+        // edit that touched such a realm — including one that set it back to the government it
+        // already had — quietly drop it out of that list.
         map.MarkRealm(primary,
-            government == GovernmentMap.Administrative, government == GovernmentMap.Nomad);
+            GovernmentMap.IsAdminFamily(government), government == GovernmentMap.Nomad);
 
         _pending |= WorldAspect.Governments;
         Changed?.Invoke(WorldAspect.Governments);
@@ -646,6 +713,94 @@ public sealed class WorldEdits
             => of.SelectMany(c => c.Children)
                  .Select(b => b.ProvinceId)
                  .Where(written.Holdings.ContainsKey);
+    }
+
+    // --- Values that live beside the objects rather than on them ------------------------------
+
+    /// <summary>A county's development at the start date; the title history and province history follow it.</summary>
+    public void SetDevelopment(Title county, int level)
+    {
+        if (county.Tier != "c" || _written?.Development is not { } map) return;
+        int clamped = Math.Clamp(level, 0, 100);
+        Apply(new DevelopmentKey(county), () => new DevelopmentSnapshot(map, county, map.GetValueOrDefault(county)),
+            () => map[county] = clamped, WorldAspect.Governments);
+    }
+
+    public int Development(Title county) => _written?.Development.GetValueOrDefault(county) ?? 0;
+
+    /// <summary>
+    /// The de jure capital of a duchy or above: one of the counties beneath it. Written as the
+    /// first child in landed_titles, which is the engine's own default, so the file is rewritten
+    /// whole the way a recolour rewrites it.
+    /// </summary>
+    public void SetCapital(Title title, Title county)
+    {
+        if (title.Tier is not ("d" or "k" or "e" or "h") || county.Tier != "c") return;
+        bool inside = false;
+        for (var p = county.Parent; p is not null; p = p.Parent) if (ReferenceEquals(p, title)) { inside = true; break; }
+        if (!inside) throw new ArgumentException($"The capital has to be a county inside {title.Name}.");
+        var seat = county;
+        // The seat is a direct child at every rung: a kingdom's is the duchy holding the county.
+        while (seat.Parent is { } up && !ReferenceEquals(up, title)) seat = up;
+        Apply(title, () => Snapshot(title), () => title.Seat = seat, WorldAspect.TitleColors);
+    }
+
+    public void RenameDynasty(DynastyDef dynasty, string name)
+    {
+        string checkedName = Checked(name);
+        Apply(dynasty, () => new NameSnapshot(dynasty, dynasty.LocalizedName, () => dynasty.LocalizedName, v => dynasty.LocalizedName = v, false),
+            () => dynasty.LocalizedName = checkedName, WorldAspect.Dynasties);
+    }
+
+    public void RenameHouse(DynastyHouseDef house, string name)
+    {
+        string checkedName = Checked(name);
+        Apply(house, () => new NameSnapshot(house, house.LocalizedName, () => house.LocalizedName, v => house.LocalizedName = v, true),
+            () => house.LocalizedName = checkedName, WorldAspect.Dynasties);
+    }
+
+    /// <summary>Moves one of a faith's holy sites to another county. The site keeps its key, so every reference to it holds.</summary>
+    public void SetHolySite(Faith faith, int index, Title county)
+    {
+        if (index < 0 || index >= faith.HolySites.Count || county.Tier != "c") return;
+        Apply(faith, () => Snapshot(faith), () => faith.HolySites[index] = (faith.HolySites[index].Key, county), WorldAspect.Faiths);
+    }
+
+    /// <summary>A barony's special building slot and the building already standing in it; empty clears the line.</summary>
+    public void SetSpecialBuilding(Title barony, string? slot, string? building)
+    {
+        if (_written is null) return;
+        int index = _written.ProvinceHistory.FindIndex(r => r.ProvinceId == barony.ProvinceId);
+        if (index < 0) return;
+        var rows = _written.ProvinceHistory;
+        var current = rows[index];
+        string? Clean(string? v) => string.IsNullOrWhiteSpace(v) ? null : v.Trim();
+        var next = current with { SpecialSlot = slot is null ? current.SpecialSlot : Clean(slot), SpecialBuilding = building is null ? current.SpecialBuilding : Clean(building) };
+        Apply(new ProvinceKey(barony.ProvinceId), () => new ProvinceSnapshot(rows, index, current), () => rows[index] = next, WorldAspect.Governments);
+    }
+
+    public ContentWriter.ProvinceRow? ProvinceRow(Title barony)
+        => _written?.ProvinceHistory.FirstOrDefault(r => r.ProvinceId == barony.ProvinceId);
+
+    private Dictionary<string, CoatOfArmsWriter.Coat>? _rolledCoats;
+
+    /// <summary>A dynasty's or house's arms as they stand: the edit if there is one, else as the write rolled them.</summary>
+    public CoatOfArmsWriter.Coat? CoatOf(string key)
+    {
+        if (_written?.Prehistory is not { } prehistory) return null;
+        if (_written.Coats.TryGetValue(key, out var edited)) return edited;
+        _rolledCoats ??= CoatOfArmsWriter.Compose(prehistory);
+        return _rolledCoats.GetValueOrDefault(key);
+    }
+
+    public void EditCoat(string key, Func<CoatOfArmsWriter.Coat, CoatOfArmsWriter.Coat> change)
+    {
+        if (_written?.Prehistory is not { } prehistory) return;
+        _rolledCoats ??= CoatOfArmsWriter.Compose(prehistory);
+        if (!_rolledCoats.TryGetValue(key, out var rolled)) return;
+        var overrides = _written.Coats;
+        Apply(new CoatKey(key), () => new CoatSnapshot(overrides, key, rolled),
+            () => overrides[key] = change(CoatOf(key)!), WorldAspect.Coats);
     }
 
     public void EditRuler(Ruler ruler, Action<Ruler> change)
@@ -717,12 +872,12 @@ public sealed class WorldEdits
         => Apply(culture, () => Snapshot(culture), () => change(culture), WorldAspect.TitleWords);
 
     private static TitleSnapshot Snapshot(Title t)
-        => new(t, t.Name, t.Color, t.Form, t.Holder, t.HolderFemale);
+        => new(t, t.Name, t.Color, t.Form, t.Holder, t.HolderFemale, t.Seat);
 
     private static CultureSnapshot Snapshot(Culture c)
         => new(c, c.Name, c.Color, c.Ethos, c.MartialCustom, c.HeadDetermination, [.. c.Traditions],
                c.CoaGfx, c.BuildingGfx, c.ClothingGfx, c.UnitGfx, new(c.RealmWords));
-    private static FaithSnapshot Snapshot(Faith f) => new(f, f.Name, f.Color, f.Icon, [.. f.Tenets]);
+    private static FaithSnapshot Snapshot(Faith f) => new(f, f.Name, f.Color, f.Icon, [.. f.Tenets], [.. f.HolySites]);
 
     private static ReligionSnapshot Snapshot(Religion r)
         => new(r, r.Name, [.. r.Virtues], [.. r.Sins]);
@@ -796,7 +951,36 @@ public sealed class WorldEdits
                 if (edit.Color is { Length: 3 } c) Recolor(title, ((byte)c[0], (byte)c[1], (byte)c[2]));
                 if (edit.Words is { } w)
                     EditTitleWords(title, t => { t.Form = w.Form; t.Holder = w.Holder; t.HolderFemale = w.HolderFemale; });
+                if (edit.Development is { } level) SetDevelopment(title, level);
+                if (edit.Capital is { } capital && titles.TryGetValue(capital, out var county)) SetCapital(title, county);
             })) { missed++; continue; }
+            applied++;
+        }
+
+        var prehistory = _written!.Prehistory;
+        foreach (var (key, edit) in overlay.Dynasties)
+        {
+            if (prehistory?.Dynasties.GetValueOrDefault(key) is not { } dynasty || dynasty.LocalizedName != edit.Generated) { missed++; continue; }
+            if (!Try(() => RenameDynasty(dynasty, edit.Name))) { missed++; continue; }
+            applied++;
+        }
+        foreach (var (key, edit) in overlay.Houses)
+        {
+            if (prehistory?.Houses.GetValueOrDefault(key) is not { } house || house.LocalizedName != edit.Generated) { missed++; continue; }
+            if (!Try(() => RenameHouse(house, edit.Name))) { missed++; continue; }
+            applied++;
+        }
+        foreach (var (id, edit) in overlay.Provinces)
+        {
+            var barony = titles.Values.FirstOrDefault(t => t.Tier == "b" && t.ProvinceId == id);
+            if (barony is null || ProvinceRow(barony) is null) { missed++; continue; }
+            SetSpecialBuilding(barony, edit.SpecialSlot, edit.SpecialBuilding);
+            applied++;
+        }
+        foreach (var (key, coat) in overlay.Coats)
+        {
+            if (CoatOf(key) is null) { missed++; continue; }
+            EditCoat(key, _ => coat);
             applied++;
         }
 
@@ -854,6 +1038,9 @@ public sealed class WorldEdits
                         if (edit.Tenets is { } tenets) f.Tenets = [.. tenets];
                     });
                 }
+                if (edit.HolySites is { } sites)
+                    for (int i = 0; i < sites.Count && i < faith.HolySites.Count; i++)
+                        if (titles.TryGetValue(sites[i], out var county)) SetHolySite(faith, i, county);
             })) { missed++; continue; }
             applied++;
         }
@@ -944,6 +1131,7 @@ public sealed class WorldEdits
         // title and its realm's government are the same arrangement.
         if (target is Culture culture) RevertOne(new EthnicityKey(culture));
         if (GovernmentKeyOf(target) is { } government) RevertOne(government);
+        foreach (var side in SideKeys(target)) RevertOne(side);
 
         RevertOne(target);
     }
@@ -985,6 +1173,9 @@ public sealed class WorldEdits
         GovernmentKey => WorldAspect.Governments,
         Faith or Religion => WorldAspect.Faiths,
         Ruler => WorldAspect.Rulers,
+        DevelopmentKey or ProvinceKey => WorldAspect.Governments,
+        DynastyDef or DynastyHouseDef => WorldAspect.Dynasties,
+        CoatKey => WorldAspect.Coats,
         _ => WorldAspect.None,
     };
 }

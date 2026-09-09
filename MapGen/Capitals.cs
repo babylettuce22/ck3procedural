@@ -133,9 +133,9 @@ public static class Capitals
         ProvinceMap provinces, int[] order, int baronyCount, WorldCenterMap? worldCenters,
         AzgaarImport? azgaar)
     {
-        var roots = new List<Title>();
-        if (Titles.HegemonyOf(empires) is { } hegemony) roots.Add(hegemony);
-        else roots.AddRange(empires);
+        // The hegemony and every empire outside it: the crown covers a region rather than the map,
+        // so walking from it alone would leave the empires beyond its border unseated.
+        var roots = Titles.Roots(empires);
 
         var centres = new HashSet<Title>(worldCenters?.Centers.Select(c => c.County) ?? []);
 

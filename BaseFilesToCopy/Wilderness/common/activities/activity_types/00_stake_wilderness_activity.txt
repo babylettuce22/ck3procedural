@@ -293,13 +293,20 @@ activity_stake_wilderness = {
 	# GRAPHICS
 	###################
 
-	# One unconditional background, no `environment` or `ambience` line -- both are asset keys that
-	# have to exist, and inventing one is the quiet failure this file set is written to avoid. The
-	# texture is vanilla's own, for the same reason the overseeing activity uses vanilla's: a
+	# One unconditional background. `environment` and `ambience` are asset keys that have to exist,
+	# and inventing one is the quiet failure this file set is written to avoid -- so all three lines
+	# below are copied as a set from the entries that already ship this texture (chariot_race.txt,
+	# coronation.txt, feast.txt, festival.txt all pair forest.dds with exactly these two keys). The
+	# texture is vanilla's own for the same reason the overseeing activity uses vanilla's: a
 	# mechanic should not wait on art.
+	#
+	# Omitting `ambience` is not free: the engine still reads the field and logs
+	# activity_type.cpp:1233 "Activity background ambience is empty" at load, once per background.
 	background = {
 		trigger = { always = yes }
 		texture = "gfx/interface/illustrations/event_scenes/forest.dds"
+		environment = "environment_event_forest"
+		ambience = "event:/SFX/Events/Backgrounds/deciduous_forest_day"
 	}
 
 	window_characters = {
