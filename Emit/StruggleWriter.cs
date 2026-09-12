@@ -30,6 +30,9 @@ public static class StruggleWriter
     /// <summary>The event namespace and the id of the yearly drift ticker.</summary>
     private const string DriftEvent = "gen_struggle.1";
 
+    /// <summary>The post-phase-change chronicle check. See <see cref="WriteDriftEvent"/>.</summary>
+    private const string CheckEvent = "gen_struggle.2";
+
     public static void WriteAll(string modDir, string gameDir, MapConfig cfg, StruggleMap struggles,
             Flatmap flatmap, ProvinceMap provinces, int[] order)
     {
@@ -143,7 +146,22 @@ public static class StruggleWriter
                 // The drift ticker. Vanilla starts its equivalent from the struggle's own on_start and
                 // the event re-queues itself yearly; ours does the same rather than calling vanilla's
                 // neutral_struggle.0001, which also runs Persian and Great Pact logic we have no part in.
-                using (b.Block("on_start")) b.Field("trigger_event", DriftEvent);
+                using (b.Block("on_start"))
+                {
+                    b.Field("trigger_event", DriftEvent);
+                    // The chronicle's memory of the phase, seeded with the starting one so the
+                    // first yearly check narrates a change and not the state the map began in.
+                    b.Inline("set_variable",
+                        $"name = {ChronicleRuntimeWriter.StrugglePhaseVar} value = flag:{s.PhaseFor(s.StartMood).Key}");
+                }
+                b.Blank();
+
+                // The chronicle hook. Not the check itself: on_change_phase fires as the transition
+                // begins, and which phase is_struggle_phase reports at that instant is not
+                // something vanilla's own script relies on. A hundred days clears the three-month
+                // transition_state_duration above; the check then reads the settled phase.
+                using (b.Block("on_change_phase"))
+                    b.Inline("trigger_event", $"id = {CheckEvent} days = 100");
                 b.Blank();
 
                 b.Field("start_phase", s.PhaseFor(s.StartMood).Key);
@@ -363,6 +381,9 @@ public static class StruggleWriter
                     using (b.Block("effect"))
                     {
                         b.Raw(Reward(ending, s));
+                        // The chronicle line, before the struggle is ended: the entry carries the
+                        // struggle scope, which end_struggle takes away. See ChronicleRuntimeWriter.
+                        b.Field(ChronicleRuntimeWriter.StruggleEndingEffect(s, ending), "yes");
                         b.Inline($"struggle:{s.Key}", $"end_struggle = {ending.Key}");
                     }
 
@@ -943,10 +964,25 @@ public static class StruggleWriter
               			activate_struggle_catalyst = {{StruggleMap.DriftCatalyst}}
               		}
 
+              		# The chronicle's backstop: idempotent, so a phase the post-change check
+              		# somehow missed is narrated within the year rather than never.
+              		{{ChronicleRuntimeWriter.StruggleCheckEffect}} = yes
+
               		trigger_event = {
               			id = {{DriftEvent}}
               			years = 1
               		}
+              	}
+              }
+
+              # Queued by each struggle's on_change_phase, a hundred days out, so it reads the phase
+              # after the transition rather than during it. Narrates the change into the chronicle.
+              {{CheckEvent}} = {
+              	hidden = yes
+              	scope = struggle
+
+              	immediate = {
+              		{{ChronicleRuntimeWriter.StruggleCheckEffect}} = yes
               	}
               }
 

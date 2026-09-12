@@ -48,7 +48,7 @@ public static class SteppeWriter
     {
         if (steppe.IsEmpty)
         {
-            Console.WriteLine("  great steppe: none (no steppe belt worth a season)");
+            Console.WriteLine("  great steppe: none (no steppe belt worth a season, or no horde on it)");
             return;
         }
 

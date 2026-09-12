@@ -34,30 +34,88 @@
 # paid back two, so a single war took six good years to undo and two wars inside six years was a
 # ruin — which is most border counties, in most games.
 #
-# So a good year no longer pays points back. It sets the count to zero. What these numbers measure
-# now is an UNBROKEN run of bad years, and a county with one decent year in fifteen never falls at
+# So a good year no longer pays points back at a couple of points a year. What these numbers measure
+# is a sustained run of bad years, and a county that is genuinely put back together never falls at
 # all. That is the whole intent: ruination should mean nobody has held this place together for a
 # generation, and no running total can say that — it can only say that something bad once happened.
 #
+# ---- Forgiveness is two-tier, and that is the 2026-09-09 change ----
+#
+# It used to be one tier: ANY year that was not suffering set the count to zero. Measured over 50
+# years of one 1405-county world with the telemetry running, that turned out to be a hair trigger
+# firing on noise rather than on recovery. Eighteen counties accumulated past the old threshold of
+# fifteen and were wiped anyway — one of them (Vārdia) had THIRTY consecutive bad years erased in a
+# single year in which control moved from 3 to 8 and the county was still at development 3 with
+# opinion -15. Nothing about that county recovered. `county_control <= var:ruin_last_ctl + 2` simply
+# failed for one year because control wobbled up by three instead of two.
+#
+# The bar for total forgiveness is now what "put back together" actually looks like —
+# `gen_ruin_is_recovering_trigger`, control climbing hard or a healthy level of it or development
+# rising — and a year that is merely NOT BAD pays back `gen_ruin_decay_bleed` instead of everything.
+# So the counter is a leaky integrator with a hard reset on real governance, not a coin toss against
+# an annual signal that is noisy at the bottom.
+#
 # What the numbers buy:
 #
-#   neglect alone, unbroken        +1 a year         warned in 9 years, falls in 15
-#   besieged and looted as well    up to +5 a year   count is full in 3 — but see the shock veto
-#   one bad war, then a good year  reset to 0        never falls, whatever the war cost
+#   neglect alone, unbroken        +1 a year         warned in 13 years, falls in 22
+#   besieged and looted as well    up to +5 a year   count is full in 5 — but see the shock veto
+#   drifting, neither bad nor good -3 a year         three years of neglect undone per quiet year
+#   actually being governed        reset to 0        never falls, whatever came before
 #
-# The last row is the one to check after any retune, and it is now guaranteed rather than tuned: any
-# single year that is not suffering resets the count, so no amount of past violence can carry a
-# county to the threshold on its own.
-gen_ruin_decay_threshold = 15
-gen_ruin_decay_warning = 9
+# The last row is the one to check after any retune, and it is guaranteed rather than tuned: a
+# recovering year zeroes the count outright, so no amount of past violence can carry a county to the
+# threshold on its own so long as somebody eventually governs it.
+#
+# ---- Where 22 and 3 came from ----
+#
+# Replayed against the observed RUINLOG of that same 50-year world, using the technique in the
+# telemetry notes: reconstruct every county's year-by-year state from the log, apply a candidate
+# rule, count threshold crossings, and read the result as a RATIO against the same replay of the
+# shipped rule — never as an absolute, because the replay cannot see gen_ruin_can_fall_trigger, the
+# timing veto or the reprieve and overcounts by 3.14x on this world.
+#
+# Two-tier at the old threshold of 15 came out at 1.18x the shipped fall rate, so the threshold had
+# to rise to pay for it. 22 lands at 0.59x — about four falls per fifty years in a 1405-county world,
+# one ruin every twelve years or so, against the seven per fifty the shipped rule produced.
+#
+# The bleed is a weak lever and was chosen for meaning rather than for its effect on the rate: 2, 3,
+# 4 and 6 all land within a rounding error of each other, because a streak long enough to reach the
+# threshold rarely contains a drift year at all. Three is legible — a quiet year undoes three years
+# of neglect — and that is the whole reason it is three.
+gen_ruin_decay_threshold = 22
+gen_ruin_decay_warning = 13
 
 # What one unbroken year of being in a bad way is worth. One, because what the counter counts is
 # years — the shocks below are the only thing that can make a year worth more than a year.
-#
-# There is deliberately no recovery or relief value any more. Both existed to bleed a running total
-# back down at a few points a year, and both are meaningless against a reset: the tick's else branch
-# sets the count to zero outright, so a good year is worth every bad year that came before it.
 gen_ruin_decay_yearly = 1
+
+# What one year of drifting is worth back. A year that is not suffering but is not recovering either
+# — nobody is grinding the county down and nobody is putting it right.
+#
+# Three rather than one because the asymmetry is the mechanic: neglect has to be sustained to count,
+# so a year of quiet has to be worth more than a year of rot or the counter would creep upward on any
+# county that is merely mediocre forever. Three rather than the whole count because that was the old
+# behaviour and it is what this change exists to undo — see the two-tier note above.
+#
+# This is NOT the old `gen_ruin_decay_recovery`. That one bled a running total that never reset, so
+# it was the only brake and had to carry the whole design. This one is the middle rung of three, and
+# real recovery still zeroes the count outright.
+gen_ruin_decay_bleed = 3
+
+# ---- What counts as being put back together ----------------------------------------------------
+#
+# Read only by gen_ruin_is_recovering_trigger, which is asked only on a year that is already not
+# suffering. Neither of these is a rate lever — see the note on that trigger — so retuning the fall
+# rate means moving gen_ruin_decay_threshold, not these.
+#
+# A level of control at which the county is simply well held. Above the +2 slack in the suffering
+# arm by a wide margin, so the two can never both be true.
+gen_ruin_recovering_control_level = 20
+
+# Or a one-year gain in control this large. Five rather than three because the suffering arm already
+# forgives a gain of two as "treading water": the gap between them is the drift band, and collapsing
+# it to nothing would put the hair trigger straight back.
+gen_ruin_recovering_control_gain = 5
 
 # ---- What the world does to a county, outside the yearly tick -----------------------------------
 #

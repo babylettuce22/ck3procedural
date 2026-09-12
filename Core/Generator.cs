@@ -35,6 +35,13 @@ public sealed class GenerationOptions
     /// has been: with no path the generator behaves exactly as it does without one.
     /// </summary>
     public string? AzgaarJsonPath { get; set; }
+
+    /// <summary>
+    /// Climate the user painted on the Climate tab, or null for the model's own everywhere. Optional
+    /// in the same way the export is: with none the climate is exactly what it was before painting
+    /// existed. See <see cref="MapGen.ClimatePaint"/>.
+    /// </summary>
+    public MapGen.ClimatePaint? ClimatePaint { get; set; }
     public string ModName { get; set; } = DefaultModName;
 
     public const string DefaultModName = "Procedural Map";
@@ -117,14 +124,16 @@ public static class Generator
         var terra = Stage.Time("province elevation",
             () => TerrainData.FromElevation(image.ToElevation(cfg), cfg));
 
-        return FromTerrain(terra, cfg, azgaarJsonPath: options.AzgaarJsonPath);
+        return FromTerrain(terra, cfg, azgaarJsonPath: options.AzgaarJsonPath,
+            climatePaint: options.ClimatePaint);
     }
 
     public static GenerationResult FromTerrain(
             TerrainData terra,
             MapConfig cfg,
             Action<string, PreviewRenderer.Image>? onPreview = null,
-            string? azgaarJsonPath = null)
+            string? azgaarJsonPath = null,
+            MapGen.ClimatePaint? climatePaint = null)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var rng = new Rng(cfg.Seed);
@@ -154,7 +163,8 @@ public static class Generator
 
         // 3. Climate
         var climate = Stage.Time("climate",
-            () => MapGen.ClimateModel.Build(cfg, provinceElevation, landMask, new Rng(cfg.Seed ^ 0x0C11), azgaar));
+            () => MapGen.ClimateModel.Build(cfg, provinceElevation, landMask, new Rng(cfg.Seed ^ 0x0C11), azgaar,
+                climatePaint));
         onPreview?.Invoke("Climate", PreviewRenderer.RenderClimate(climate, cfg));
 
         // 4. Drainage & Major Rivers

@@ -1,272 +1,287 @@
-<img width="1790" height="935" alt="genguipic" src="https://github.com/user-attachments/assets/bece6c17-74fb-4f13-a539-60a07c044c55" />
-
 # CK3 Procedural Tool
 
-A generator that turns a single heightmap into a complete, playable Crusader Kings III total
-conversion — the map rasters, the de jure title hierarchy, the cultures and faiths that name it, the
-rivers and terrain it is painted with, the rulers who hold it on the start date, and the history that
-put them there.
+Generate and edit Crusader Kings III worlds from a heightmap. The tool builds provinces,
+rivers, terrain, titles, cultures, faiths, rulers, and history, then exports a total-conversion
+mod for CK3. It includes a Windows desktop interface and a command-line interface.
 
-It does not generate terrain. The heightmap is an input, drawn wherever you like — by hand, by
-Azgaar's Fantasy Map Generator, by another tool — and it is authoritative: it decides the map's size,
-its coastline and its relief, and everything the mod ships is derived from it rather than negotiated
-with it. What this program does is *interpret* that image, and then write the several hundred files
-CK3 needs in order to believe in it.
+You can import a heightmap PNG or create terrain with the embedded **CK3 Heightmap Forge**.
+An optional **Azgaar Full JSON export** supplies names, borders, cultures, religions, and other
+world data alongside the heightmap.
 
-A seed and a heightmap fully determine a world.
+<img width="1790" height="935" alt="CK3 Procedural Tool desktop interface and map preview" src="https://github.com/user-attachments/assets/bece6c17-74fb-4f13-a539-60a07c044c55" />
 
----
+## Getting started
 
-## What it produces
+The application runs on **Windows** and targets **CK3 1.19**. Mod export needs an installed
+copy of the game: the generator reads its culture, religion, military, and graphics data.
+This README describes the current source tree; packaged releases may contain an earlier feature set.
 
-A mod folder, plus the sibling `.mod` file the launcher needs to see it. Inside:
+For a packaged build, extract the complete release folder and run `Ck3MapGen.exe`. Keep the
+bundled assets and `BaseFilesToCopy` folders beside the executable. The release workflow
+builds a self-contained Windows x64 package.
 
-| Area | What is written |
-| --- | --- |
-| `map_data/` | `heightmap.png` and the packed/indirection atlas pair, `provinces.png`, `rivers.png`, `definition.csv`, `default.map`, `adjacencies.csv`, `island_region.txt`, `seasons.txt` |
-| `common/landed_titles/` | The full empire-to-barony de jure tree, named and coloured |
-| `common/culture/`, `common/religion/` | Generated cultures, heritages, name lists and languages; generated religions, faiths and holy sites |
-| `common/province_terrain/`, `history/provinces/` | Per-province terrain, holdings and development |
-| `history/titles/`, `history/characters/`, `common/dynasties/` | Who holds what on the start date, the dynasties they belong to, and generations of ancestors behind them |
-| `common/men_at_arms_types/`, `common/culture/innovations/` | A men-at-arms roster the world invented: one regiment per heritage, an elite for the cultures that earned one, and the innovations that unlock them |
-| `common/struggle/`, `common/decisions/` | A generated regional struggle where the map is genuinely contested, with its four phases, catalysts and three endings |
-| `common/artifacts/`, `common/coat_of_arms/` | Regalia carried by the rulers who inherited it, and arms for every house and title |
-| `common/buildings/` | Wonders — special buildings raised at the world's landmarks, with the meshes and locators to stand them on |
-| `common/bookmarks/`, `common/bookmark_portraits/` | A bookmark on the generated start date, with portraits |
-| `common/ethnicities/`, `gfx/portraits/` | Ethnicities per culture — and, optionally, fantasy races with their own morphology |
-| `gfx/map/terrain/` | Detail index and intensity textures, per-material masks (including `masks_gen`), colormap, flatmap |
-| `gfx/map/water/`, `gfx/map/textures/` | Foam, water colour and snow masks repainted for the new coastline |
-| `gfx/map/map_object_data/` | Locators for every holding, army and siege; trees, animals, weather effects, bridges and the map table |
-| `common/defines/`, `map_data/geographical_regions/` | The engine's world size, and re-declarations that keep vanilla and DLC script from erroring |
-| `localization/english/` | Names for everything generated, and a chronicle of the history behind it |
+1. Choose a PNG through **Heightmap…**, or create terrain in the **Heightmap** tab.
+2. Optionally select a matching Azgaar export through **Azgaar…**.
+3. Adjust the seed and settings, then use **Preview** to inspect the map.
+4. Check the detected installation through **Game folder…**.
+5. Use **Write mod** to export, then enable the generated mod in a CK3 launcher playset.
 
-Formats were verified byte-for-byte against vanilla 1.19 rather than taken from documentation,
-because CK3 fails opaquely on nearly all of them: a wrong pixel format, an out-of-range locator or a
-missing pathfinding graph produces no log line at all, just a load that stops with a core spinning.
+The preview offers physical, climate, de jure, and world map layers, with zoom, pan, and
+inspectors for titles, cultures, faiths, and rulers. World content becomes available as it is
+generated. Settings can be saved and loaded as presets.
 
-## The pipeline
+### Heightmaps and map size
 
-Generation splits in two, because reading a heightmap and writing a mod are separately useful — the
-GUI re-derives constantly while a setting is being tuned, and writing is by far the slower half.
+The heightmap supplies the map dimensions, coastline, and relief. Generation can rescale its
+heights and carve navigable rivers, so the exported heightmap is not necessarily identical
+to the input. A Forge preset supplies terrain in memory without a separate PNG export.
 
-**Derive** (`Core/Generator.Generate`)
+The code's known-rendering size list is **4096×2048, 5120×2560, 6144×3072, 8192×4096,
+9216×4608, and 18432×9216**. Other dimensions can produce missing terrain in CK3.
+Use `--fit-heightmap` to resample a PNG to a size in that list, or
+`--allow-unverified-size` to explicitly try its original dimensions. These options are
+mutually exclusive; fitting applies to PNG inputs, not Forge presets.
 
-1. **Heightmap** — decoded, and optionally rescaled onto CK3's height scale for maps drawn on
-   somebody else's (an Azgaar export puts sea level at the equivalent of 51/255 against CK3's 19,
-   and reads as almost entirely land without this).
-2. **Climate** — not latitude bands. Moisture is advected along the surface winds of a three-cell
-   circulation, and the temperature and rainfall that come out are classified by Köppen. Its
-   parameters are in real units — degrees Celsius, millimetres, degrees of latitude — so they can be
-   checked against a real climate atlas instead of tuned blind.
-3. **Drainage** — a depression-filled surface with a downslope receiver for every land cell and
-   discharge accumulated along it, weighted by rainfall so the great rivers avoid the deserts.
-4. **Rivers** — the largest courses are carved into the heightmap as navigable major-river provinces;
-   the rest are drawn into `rivers.png` as CK3's palette of widths, sources and tributary joins.
-5. **Provinces** — a terrain-weighted, Lloyd-relaxed partition. Province *size* follows habitability
-   (coasts, flat ground, river valleys, kind latitudes) rather than noise, because that is what makes
-   a map read as settled rather than as patterned.
-6. **Terrain classification** — climate × landform, which is also the matrix CK3's own `gen_*`
-   material family is organised along.
-7. **Titles** — baronies clustered up into counties, duchies, kingdoms and empires, allowed to reach
-   across straits at the top two tiers only.
+For images drawn on a different height scale, `--normalize-heightmap` or `--shift-heightmap`
+can adapt sea level. Each accepts an optional source sea level on a 0–255 scale. The GUI
+exposes the corresponding settings. An Azgaar JSON file must align with the heightmap;
+it does not replace it.
 
-**Write** (`Core/Generator.WriteMod`)
+### Painting the climate
 
-Development, then cultures, then ethnicities, then realms, then governments, then faiths — an order
-that is forced rather than chosen, since a title is named in the language of whoever lives there, and
-whether a faith starts unreformed depends on how tribal its counties are. Then the world's way of
-war — a men-at-arms roster grown from the ground each people holds, its temperament and its
-government — and then the rasters, the textures, the locators, the scattered map objects, and last
-the history: ancestors, rulers, wars, artifacts, the chronicle that ties them together, and any
-struggle the map has earned.
+The **Climate** tab paints the kind of environment you want over the heightmap, in Köppen-map
+colours: choose a climate from the palette (rainforest, monsoon, savanna, hot desert, steppe,
+Mediterranean, oceanic, humid subtropical, continental, subarctic, tundra, with cold desert,
+cold steppe and ice cap under *More climates*) and brush it over a region. Each brush is a
+climate profile — a sea-level temperature, a seasonal swing, a yearly rainfall and its summer
+share — rather than a finished biome, so the generator blends the paint into its own climate by
+stroke weight, applies the lapse rate from the real relief, and only then classifies. A rainforest
+brush over a range gives tropical lowland and cooler highland; overlapping soft strokes give a
+transition rather than a border. Three views show what you asked for (*Paint*), what the model
+now predicts (*Climate*), and an approximate landscape (*Landscape*); the prediction updates in
+the background after each stroke.
 
-Nothing in that roster is a number this program invented. Every stat, price and counter is read out
-of the installed game's own regiments of the same archetype and rearranged inside their budget, so a
-generated unit is a variant of a vanilla one rather than a guess at one — and a balance patch to CK3
-moves the generated roster with it.
+An unvisited tab changes nothing, unpainted ground stays automatic, and **Use automatic climate**
+bypasses the paint without deleting it. With an Azgaar export, its climate and biomes remain the
+starting point and painted areas take precedence locally. The paint is saved beside a preset as
+`<preset>.climate.png`, restored between sessions, and can be exported for `--climate-paint`.
 
-## Languages and names
+### Finding the game and output folder
 
-Every name on a generated map — people, houses, baronies up to empires, cultures, faiths, gods,
-rivers — comes out of one language per heritage, built in `MapGen/Language.cs` from three parts:
+`Core/GameLocator.cs` searches Steam libraries and common installation locations. It also
+resolves the user's Documents folder for the CK3 launcher mod directory, including redirected
+Documents folders. Use **Game folder…** or CLI `--game` if automatic detection finds the
+wrong installation.
 
-- **A phonology** (`Phonology.cs`): which sounds the language has and how often, what shapes a
-  syllable may take, which consonant clusters are legal, and how a seam between two morphemes is
-  mended. Words are held as phoneme lists until the very end, then spelled once by the language's
-  own orthography, so /k/ is "c" everywhere in one tongue and "k" everywhere in its neighbour.
-- **A lexicon** (`Lexicon.cs`): a root for every concept a place or person is named from (hill,
-  ford, wolf, bright…), the elements personal names are compounded of, the place-words each title
-  tier ends in, and the grammar words a CK3 name list needs (patronymic, "of").
-- **A flavour** (`LanguageFlavour.cs`): the family resemblance a language is born into. Seventeen
-  presets — Anglic, Norse, Germanic, Latinate, Hellenic, Slavic, Desert, Celtic, Steppe, Finnic,
-  Sanskritic, Iberic, Insular, Savanna, and the fantasy Sylvan, Dwarven and Harsh — each carrying
-  real name elements and place-words that are then fed through the same jittered machinery, which
-  is what makes them come out bastardised rather than borrowed. The culture-look theme chooses the
-  pool; fantasy flavours join it when fantasy ethnicities are on.
+Export produces a mod directory and a sibling `.mod` launcher file. On the CLI, a bare
+`--mod` name is placed in the detected launcher mod directory; a path selects a specific
+output directory. `--mod` without a value uses the default `proceduralmap` folder.
 
-Languages come in families. A heritage's tongue is often born a sister of a neighbour's (shared
-roots, a few sounds shifted through the whole stock), and every culture speaks a dialect of its
-heritage's language, so sister cultures read as kin without being copies. Kingdoms are named after
-their people where the language can manage it, a county seat usually carries its county's name,
-and a faith's words come from a liturgical register of the tongue spoken where it holds most
-ground. Every emitted name passes a filter for accidental English and for stutters.
+## Command-line use
 
-To hear a flavour without generating a world:
+These examples run from a source checkout. With a packaged build, replace `dotnet run --`
+with `.\Ck3MapGen.exe`.
 
+```powershell
+# Open the desktop interface.
+dotnet run -- --gui
+
+# Derive a map and write debug images without exporting a mod.
+dotnet run -- --heightmap "C:\Maps\heightmap.png" --seed 4242 --out "C:\Maps\preview"
+
+# Export a mod into the launcher's mod directory.
+dotnet run -- --heightmap "C:\Maps\heightmap.png" --seed 4242 --mod "My World"
+
+# Add Azgaar world data to the matching heightmap.
+dotnet run -- --heightmap "C:\Maps\heightmap.png" --azgaar "C:\Maps\world.json" --mod "Azgaar World"
+
+# Generate terrain directly from a Heightmap Forge preset.
+dotnet run -- --forge "C:\Maps\terrain.json" --seed 4242 --mod "Forge World"
+
+# Open an existing generated mod for editing.
+dotnet run -- --edit-world "C:\Maps\My World"
 ```
+
+Frequently used options:
+
+| Option | Purpose |
+| --- | --- |
+| `--heightmap <png>` / `--forge <json>` | Choose one terrain source. |
+| `--azgaar <json>` | Import optional Azgaar Full JSON world data. |
+| `--climate-paint <png>` | Apply climate paint exported from the Climate tab (or saved beside a preset). |
+| `--mod [name-or-directory]` | Export a mod; omitting this flag leaves the run as a preview/debug export. |
+| `--game <directory>` | Select CK3's `game` directory. |
+| `--seed <integer>` | Set the world-generation seed. |
+| `--out <directory>` | Choose a debug-image directory and enable debug images. |
+| `--debug-images` / `--no-debug-images` | Explicitly enable or disable debug PNGs. By default they are enabled only when no mod is written. |
+| `--county-scale <number>` | Scale barony size relative to vanilla; larger values produce fewer provinces. |
+| `--province-downscale <integer>` | Set the province-grid downscale factor. |
+| `--start-year <year>` / `--era-anchor <year>` | Set the start year and era calibration. |
+| `--gender historical\|mixed\|femaledominated` | Choose the world's gender-law profile. |
+| `--races off\|low\|high\|exotic` | Choose a fantasy-race preset. |
+| `--impassable-mask <png>` | Supply a painted impassable mask; `--impassable-mask-mode snap\|touch` controls how it applies. |
+| `--starting-hegemony` | Enable a starting hegemony. |
+| `--no-dynastic-cycle` / `--no-formation` | Disable the dynastic cycle or pre-start formation simulation. |
+| `--no-history` | Skip character history and related output, including bookmarks, artifacts, and chronicles. Useful for iteration. |
+| `--no-packed` | Skip packed heightmap output for diagnostic runs. |
+
+The desktop settings cover more configuration than the CLI. See `Program.cs` for the
+complete argument handling and `Config/MapConfig.cs` for defaults and setting descriptions.
+Diagnostic flags such as `--no-history` and `--no-packed` omit parts of a normal full export.
+
+## Editing worlds
+
+There are two editing paths:
+
+- **A world generated in the current session:** inspectors and edit overlays update the
+  generated world; the overwrite path re-emits affected content.
+- **An existing generated mod:** use **Open generated world… (WIP)** or
+  `--edit-world <directory>` to open its exported files. Edits
+  are applied to source ranges, preserving comments, whitespace, UTF-8 BOMs, and unknown
+  fields rather than regenerating the world.
+
+The existing-world editor exposes supported fields for titles, provinces, cultures, faiths,
+characters, dynasties, houses, holy sites, and coats of arms. Matching bookmark display names
+are updated when a character is renamed. **Save edits** writes changed files and backs up
+the originals under `%LOCALAPPDATA%\Ck3MapGen\WorldBackups`. It refuses to save if a loaded
+file has changed externally; reopen the world to load those changes.
+
+This is an editor for the generator's output layout, not an arbitrary CK3 mod or save-game
+editor. Opening a world requires `descriptor.mod`, `map_data/provinces.png`, and
+`common/landed_titles/00_landed_titles.txt`. Only map layers recoverable from the exported
+mod are available; unsaved simulation layers are not reconstructed. Editing does not
+regenerate historical prose or portrait DNA.
+
+## What is generated
+
+Output depends on the settings, available game data, and generated world. The main groups are:
+
+| Area | Content |
+| --- | --- |
+| Map data | Heightmap, packed/indirection atlases, province and river rasters, province definitions, adjacencies, terrain, and seasons. |
+| Map graphics | Terrain textures and masks, water and snow textures, flatmap, holding locators, trees, animals, bridges, and map objects. |
+| Titles and settlements | De jure hierarchy, realm borders, capitals, holdings, development, and title names and colours. |
+| Peoples and religions | Cultures, heritages, languages, name lists, faiths, doctrines, holy sites, and ethnicities. |
+| Characters and history | Rulers, houses, dynasties, ancestors, formation history, starting wars, bookmarks, portraits, and chronicles. |
+| Military and artifacts | Generated men-at-arms and associated innovations, regalia, and composed weapon and armour assets. |
+| Regional content | Centers of the World and wonders, regional struggles, routes, Silk Road and steppe content, and formation decisions. |
+| Governments | Government assignment, administrative and nomadic content, hegemony support, and dynastic-cycle integration. |
+| Optional systems | Wilderness and colonisation, county ruins, fantasy racial traits and morphology, and the society prototype. |
+| Integration | Localization, GUI changes, defines, and compatibility declarations and patches for the replacement world. |
+
+Many systems combine generated files with hand-maintained file sets in `BaseFilesToCopy/`.
+Wilderness, ruins, and fantasy content are gated by their settings; ruins also require
+wilderness. Fantasy ethnicities are off by default. Societies are a hand-written prototype,
+off by default and hidden in the normal settings; `--societies` enables it. The presence of
+a magic setting does not represent a completed procedural magic system.
+
+### Azgaar imports
+
+The importer uses the export's names and name bases, province and state domains, political
+hierarchy, government forms, religions and their ancestry, cultures, climate, and biomes.
+Imported climate is combined with the local model's seasonal and relief detail. Terrain
+relief still comes from the heightmap. Race tags on imported cultures can inform fantasy
+ethnicities when that feature is enabled.
+
+The generator fills in content the export does not supply, including CK3 characters,
+dynasties, and prehistory. Importing is a translation into CK3's hierarchy and systems;
+settings that conflict with imported data are identified in the GUI.
+
+### Languages and names
+
+Generated names use a phonology, lexicon, and language flavour. Heritages have related
+language families and cultures have dialects, so related peoples can share recognizable
+name elements. Faith names can use a liturgical register. Azgaar imports also use the
+export's names and Markov name bases.
+
+To sample a language without generating a map:
+
+```powershell
 dotnet run -- --languages Norse 4242 family
 ```
 
-prints sample names of every kind for that flavour, its sister language and a dialect; omit the
-name for all seventeen. An Azgaar import still names from the export's own Markov name bases, as
-before.
+Omit the flavour name to sample all flavours. The implementation lives in
+`MapGen/Language.cs`, `Phonology.cs`, `Lexicon.cs`, and `LanguageFlavour.cs`.
 
-## Importing an Azgaar map
+## Building from source
 
-An Azgaar Fantasy Map Generator export (`--azgaar`, or the Azgaar tab) is an **adjunct, never a
-requirement** — with no export given the generator behaves exactly as it did before. Given one, it
-stops inventing the things Azgaar already decided:
+Use Windows with the **.NET 10 SDK**. The project references the Heightmap Forge source
+projects and expects this sibling layout by default:
 
-- **Names** — cultures, faiths, states, provinces, burgs and water bodies, with a port of Azgaar's
-  own Markov name generator for everything the export did not name itself.
-- **Borders** — the province partition is grown *inside* Azgaar's own province and state domains, so
-  realm borders are pixel-accurate rather than approximate to within a barony, and every Azgaar
-  province gets at least one barony.
-- **Hierarchy** — Azgaar ranks its own states by area; a state at its tier T becomes a CK3 title at
-  tier T, subdivided below and grouped above by suzerainty, then culture, then landmass. States keep
-  their own colours, and the tier shading below them stays ours.
-- **Governments** — each state's form and formal name are read into a CK3 government type.
-- **Religions** — organised religions and folk faiths become CK3 religions with a founding faith;
-  heresies and cults become faiths inside the nearest ancestor, following the export's `origins`.
-- **Climate** — a *reanchoring* rather than a substitution: the export says where it is hot and where
-  it rains, and our model keeps the seasonal swing and the sub-grid relief detail it has none of.
-- **Vegetation** — the export's biome map paints what grows on the ground, broken up by the same
-  mosaic noise a generated map uses so its cell polygons do not show. Relief stays ours throughout:
-  beach, hills, mountains and the snow line are altitude facts our heightmap resolves far finer than
-  Azgaar's cells do. The climate zone is pulled along wherever it flatly contradicts the imported
-  vegetation, because the zone is what chooses the ground textures and the tree species — otherwise
-  a forest ends up with steppe soil painted under its canopy. It is kept everywhere the two can both
-  be true, since Koppen is the finer answer through the whole temperate range.
-- **Peoples** — one CK3 culture per culture the export drew, over the ground it drew them on. The
-  heritages above them come from the export's ancestry where it drew one; where every culture
-  descends from Wildlands — which is what Azgaar's own generator writes — from shared name bases, and
-  then from geography, never merging two peoples the export tagged as different races.
-
-Azgaar generates no characters or dynasties, so prehistory still builds those on top.
-
-## Fantasy races
-
-Off by default. Turned on (`--races low|high|exotic`), heritages and cultures are given races —
-including from an Azgaar fantasy preset, which tags its cultures "Dunirr (Dwarven)" and the like;
-the parenthetical is stripped from every display name and consumed as data. Races get their own
-morphology through CK3's gene system, a trait that is assigned at runtime to generated courtiers and
-adventurers as well as to the characters written into history, and the vocabulary to go with them.
-
-## Two front ends
-
-Both drive the same pipeline, so there is one definition of it rather than a console one and a window
-one that drift apart.
-
-The **GUI** (`Ck3MapGen.exe`, or `--gui`) is one window: every setting in a searchable grid, a
-zoomable preview with twenty-one map modes in four families — Physical, Climate, De Jure and World —
-and a log. Zoom and pan survive a rebuild and a view switch, because tuning is a loop of nudge a
-setting, rebuild, look at the same place. Progress and time remaining are learned from the previous
-run rather than hardcoded. Beyond looking:
-
-- **Click anything to inspect it.** Titles, cultures, faiths and rulers each open an inspector, and
-  a written mod can be edited through them — rename a culture, retune a faith, change a ruler — with
-  only the affected files re-emitted.
-- **A heightmap tab** hosting the CK3 Heightmap Forge, so a map can be drawn, eroded and shipped
-  without leaving the tool.
-
-The **CLI** covers the same ground for scripting and for measurement. `--heightmap`/`--forge`,
-`--azgaar`, `--mod`, `--game`, `--seed`, `--scale`, `--county-scale`, `--start-year`, `--era-anchor`,
-`--races`, `--impassable-mask`, `--normalize-heightmap`/`--shift-heightmap`, `--no-history`,
-`--no-packed` and a set of flags that exist purely so two ways of doing something can be generated
-from one binary on one seed and diffed. It also dumps debug PNGs — elevation, terrain, provinces,
-terrain classes, Köppen climate, drainage, rivers, rainfall and temperature — which are how a change
-gets eyeballed. `--mod` takes a bare name as well as a path, and puts a folder of that name in the
-launcher's mod folder.
-
-## Finding the game
-
-Neither directory the tool needs is hardcoded. `Core/GameLocator` looks for the CK3 install through
-Steam's registry keys and its `libraryfolders.vdf` — which is what knows about a library on a second
-drive — and then through the usual Steam, GOG, Epic and Paradox paths on every fixed drive. The
-launcher's mod folder is found the same way, following a Documents folder that has been redirected
-onto OneDrive or off C: entirely. The whole search is registry reads and a fixed list of existence
-checks, so it runs on every launch for about ten milliseconds.
-
-What it found is printed in the log at startup and carried on the *Game folder…* button, which is
-also how a wrong or missing answer is corrected — by hand, remembered for next time, and re-searched
-if the install later moves. A write refuses to start without a real game folder rather than failing
-several minutes in, because the mod is generated *against* vanilla's own culture and religion data.
-
-## Rules the code holds itself to
-
-- **Never invent an identifier that has to already exist.** A generated culture may invent its name,
-  its language and its words, because those are emitted too. It may not invent an ethos, a tradition,
-  a doctrine or a clothing set — those come from the base game and from DLC the player may not own.
-  So the installed game is read and its actual vocabulary recombined.
-- **Do not blank vanilla data — re-declare it.** A missing key is a hard script error, not a warning,
-  and base-game and DLC script hardcodes region and title keys everywhere. Cultures and faiths are
-  additive for the same reason; vanilla's stay declared and simply go unheld.
-- **`replace_path` is a scalpel, not a broom.** Dropping `map_data` would take vanilla's 44 MB
-  pathfinding graph with it. Dropping `gfx/map/map_object_data` is necessary, and everything under it
-  then has to be rebuilt or hand-kept.
-- **The BOM is not cosmetic.** Core `map_data` files carry none; script files under `common/`,
-  `history/` and `gfx/` need UTF-8 with one.
-- **Measure the engine; do not trust what it says about itself.** Vanilla's own comment on the water
-  level asserts two values that are not equal, and the false one had been believed here for months.
-  Where a number matters, it is read out of the shipped files or out of a frame capture, and the
-  measurement is written down beside the code that depends on it.
-- **Settings are calibrated against vanilla, and say so.** Barony density, impassable share, the
-  867 development curve, the ratio of cultures to heritages — the defaults aim at measured vanilla
-  numbers, and the reasoning is written down beside each one.
-- **Prove a change end to end.** The generator has no unit tests, because "it compiles" proves
-  nothing about the Paradox script it writes. A full headless run plus ck3-tiger validation takes
-  about two minutes, and a refactor that is meant to change nothing is expected to produce a
-  byte-identical mod.
-
-## Layout
-
-```
-Config/   MapConfig — every knob, with the vanilla figure it was calibrated against
-Core/     the pipeline, the seeded RNG, noise, phase timing, game location
-MapGen/   climate, drainage, rivers, provinces, terrain, habitability, titles, cultures,
-          faiths, governments, development, language, prehistory, rulers, chronicle,
-          struggles, and the Azgaar importer
-World/    the coarse simulation grid the climate model runs on
-Emit/     one writer per part of the mod
-Io/       PNG, DDS and Paradox-text encoders written by hand, for exact pixel formats
-Gui/      the WinForms front end, its inspectors and the embedded Heightmap Forge
-BaseFilesToCopy/  hand-kept files copied into the mod verbatim, in named sets
-docs/     design notes for mechanics beyond the map
+```text
+parent/
+  ck3procedural/      # this repository
+  noisetool/         # babylettuce22/ck3-heightmap-forge
+    NoiseTool.Core/
+    NoiseTool.Ui/
 ```
 
-Built on **.NET 10** (Windows, WinForms), with ImageSharp as the only package dependency — used for
-*reading* images; everything written is encoded by hand, because CK3 demands an exact pixel format
-per file and a general imaging library will not guarantee one. The heightmap pipeline is referenced
-as source from the CK3 Heightmap Forge repo beside this one (override `NoiseToolDir` if it lives
-elsewhere). Targets CK3 **1.19**, and reads the installed game for its culture and religion
-vocabulary.
+From the parent directory:
 
-## Where it is unfinished
+```powershell
+git clone https://github.com/babylettuce22/ck3procedural.git
+git clone https://github.com/babylettuce22/ck3-heightmap-forge.git noisetool
+cd ck3procedural
+dotnet build Ck3MapGen.csproj
+dotnet run -- --gui
+```
 
-- **Azgaar's history is parsed and unused.** Every export carries dated, named, located events —
-  campaigns with start and end years, zones for invasions and crusades and plagues, battlefield
-  markers whose legends name the war and the day. All of it is loaded and nothing reads it yet.
-- **Locators face due north.** Every holding and wonder is written with identity rotation; vanilla
-  varies yaw per instance.
-- **Editing a ruler does not re-emit the bookmark.** Rename a ruler in the inspector and the
-  character history updates while `00_bookmarks.txt` and its localisation go stale.
-- **Terrain wobbles in the last four rows.** Two runs on one seed and one build differ by a few
-  hundred pixels at the very bottom edge of the map, which quietly weakens the byte-identical
-  diffing everything else is verified with.
-- **Mechanics.** Everything generated so far is geography, people, titles and the history between
-  them. `docs/` sketches what else CK3's script layer would let a generator invent — men-at-arms,
-  buildings, innovations, dynasty legacies, succession laws, and a procedural magic system with its
-  own rules per world — none of which is implemented.
+For another Forge location, pass `-p:NoiseToolDir="C:\Source\noisetool\"` to the build.
+The main project targets `net10.0-windows`, uses Windows Forms, and references ImageSharp
+4.0.0. Its project file also configures a local `sixlabors.lic` path. CK3-specific image
+and text writers live in `Io/` and `Emit/`.
+
+## How generation works
+
+`Core/Generator.Generate` derives the map: terrain input, optional Azgaar binding, climate,
+drainage, major-river carving, province partitioning, terrain classification, and title
+hierarchy. Preview layers are published as these stages finish.
+
+`Core/Generator.WriteMod` exports the map and calls `Emit/ContentWriter.cs` to build and
+write the world content. Some raster work runs alongside content and history generation.
+The installed game's vocabulary and data influence cultures, faiths, regiments, graphics,
+and compatibility output.
+
+A seed is useful for repeatable comparisons, but **a seed and heightmap alone are not a
+complete reproducibility record**. Keep the configuration, optional Azgaar/Forge input,
+generator and Forge revisions, installed game data, and required assets as well. Exported
+watermarks include a generation timestamp, so whole-folder byte identity is not promised.
+
+### Repository layout
+
+| Directory | Responsibility |
+| --- | --- |
+| `AppGUI/` | Windows Forms interface, map previews, inspectors, and editing. |
+| `Config/` | Settings, defaults, descriptions, and property-grid behavior. |
+| `Core/` | Pipeline coordination, loaded-world model, RNG, timing, and game discovery. |
+| `MapGen/` | Geography, society and history generation, imports, names, and asset composition. |
+| `World/` | Coarse simulation grid. |
+| `Emit/` | Mod writers and compatibility patches. |
+| `Io/` | Image/text formats and source-preserving file edits. |
+| `GameGUI/` | Paradox GUI parsing and preview support. |
+| `BaseFilesToCopy/` | Bundled mod file sets: Core, Wilderness, Ruins, Fantasy, and Societies. |
+| `assets/` | Source assets used by the generator. |
+| `tools/` | World-editor checks and asset preparation scripts. |
+| `.github/workflows/` | Release build and packaging workflow. |
+
+### Validation and current limits
+
+The repository includes focused diagnostic checks:
+
+```powershell
+dotnet run -- --verify-world-editor
+dotnet run -- --verify-compose
+```
+
+The world-editor check exercises edits in a disposable fixture. An optional mod path also
+checks that opening and saving an unchanged existing world preserves bytes and timestamps.
+The composition check compares weapon attachment and merged geometry.
+
+These checks do not establish that a generated mod works in CK3. Changes to emitted content
+also need an export, validation with a matching **ck3-tiger**, and in-game inspection. Map
+rendering, locators, portraits, and scripted gameplay require runtime checks; a successful
+C# build cannot validate them. Generation time and memory use depend on map size and enabled
+features.
 
 ## Credits & Attributions
 

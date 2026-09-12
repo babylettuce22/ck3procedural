@@ -270,13 +270,18 @@ public static class Cultures
 
     public static CultureMap Build(List<Title> empires, ProvinceMap provinces, int[] order,
         int landCount, TerrainClass[] provinceTerrain, Dictionary<Title, int> development,
-        VanillaVocabulary vocab, MapConfig cfg, Rng rng, AzgaarImport? azgaar = null)
+        VanillaVocabulary vocab, MapConfig cfg, Rng rng, AzgaarImport? azgaar = null,
+        ClothingClimate.Climate[]? provinceClimate = null)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
         var counties = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
         var graph = BuildCountyGraph(counties, provinces, order, landCount, provinceTerrain,
             cfg.CultureTerrainWeight);
+
+        // Its own stream, so a culture being re-dressed for its climate costs no draw from the one
+        // every name and tradition below comes out of.
+        var dress = new Rng(cfg.Seed ^ 0xC107);
 
         // An export decides its own peoples, exactly as it decides its own borders.
         //
@@ -285,10 +290,12 @@ public static class Cultures
         // is why a twelve-culture export came out with forty-seven cultures whose names it had never
         // heard of. Where the export has cultures, they are the cultures.
         if (azgaar is not null
-            && ImportedCultures(counties, graph, provinceTerrain, development, vocab, cfg, rng, azgaar)
+            && ImportedCultures(counties, graph, provinceTerrain, development, vocab, cfg, rng, azgaar,
+                   provinceClimate, dress)
                is { } importedMap)
         {
             Report(importedMap.Heritages, importedMap.Cultures, counties.Count, sw.ElapsedMilliseconds);
+            ReportDress(importedMap.Cultures, provinceClimate);
             return importedMap;
         }
 
@@ -400,7 +407,8 @@ public static class Cultures
                 Key = $"heritage_gen_{heritages.Count}",
                 Name = RegionalName(baseName, (cx, cy), firstClaim, usedNames),
                 Language = language,
-                Look = rng.Pick(lookPool),
+                Look = ClothingClimate.PickLook(lookPool,
+                    ClothingClimate.Of(members.Select(i => counties[i]), provinceClimate), rng),
                 LanguageColor = vocab.LanguageColors.Count > 0 ? rng.Pick(vocab.LanguageColors) : null,
             };
             heritage.ImportedArchetype = imported.Exists
@@ -420,6 +428,8 @@ public static class Cultures
 
                 var culture = Create(heritage, owned, provinceTerrain, development, vocab,
                     allowedTraditions, usedNames, usedDynasties, cultures.Count, rng);
+                culture.ClothingGfx = ClothingClimate.ClothingFor(culture.ClothingGfx,
+                    ClothingClimate.Of(owned, provinceClimate), lookPool, dress);
 
                 heritage.Cultures.Add(culture);
                 cultures.Add(culture);
@@ -429,6 +439,7 @@ public static class Cultures
         }
 
         Report(heritages, cultures, counties.Count, sw.ElapsedMilliseconds);
+        ReportDress(cultures, provinceClimate);
         return new CultureMap { Heritages = heritages, Cultures = cultures, ByCounty = byCounty };
     }
 
@@ -454,7 +465,8 @@ public static class Cultures
     /// </summary>
     private static CultureMap? ImportedCultures(List<Title> counties, RegionGrowth.Graph graph,
         TerrainClass[] provinceTerrain, Dictionary<Title, int> development,
-        VanillaVocabulary vocab, MapConfig cfg, Rng rng, AzgaarImport azgaar)
+        VanillaVocabulary vocab, MapConfig cfg, Rng rng, AzgaarImport azgaar,
+        ClothingClimate.Climate[]? provinceClimate, Rng dress)
     {
         var live = azgaar.World.RealCultures.ToDictionary(c => c.I);
         if (live.Count == 0) return null;
@@ -547,7 +559,8 @@ public static class Cultures
                 Key = $"heritage_gen_{heritages.Count}",
                 Name = RegionalName(family_, (cx, cy), firstClaim, usedHeritageNames),
                 Language = language,
-                Look = rng.Pick(lookPool),
+                Look = ClothingClimate.PickLook(lookPool,
+                    ClothingClimate.Of(members.SelectMany(id => held[id]), provinceClimate), rng),
                 LanguageColor = vocab.LanguageColors.Count > 0 ? rng.Pick(vocab.LanguageColors) : null,
                 ImportedArchetype = AzgaarNaming.ParseRace(founder.Name),
             };
@@ -562,6 +575,8 @@ public static class Cultures
                 var source = live[id];
                 var culture = Create(heritage, owned, provinceTerrain, development, vocab,
                                      allowedTraditions, usedCultureNames, usedDynasties, cultures.Count, rng);
+                culture.ClothingGfx = ClothingClimate.ClothingFor(culture.ClothingGfx,
+                    ClothingClimate.Of(owned, provinceClimate), lookPool, dress);
 
                 // The export's word for this people, and its own colour, over the generated ones.
                 // Written after Create rather than threaded through it so the character the ground
@@ -1219,6 +1234,22 @@ public static class Cultures
         }
 
         return name;
+    }
+
+    /// <summary>How many peoples are dressed for their weather, and how many had to leave their kin's dress to be.</summary>
+    private static void ReportDress(List<Culture> cultures, ClothingClimate.Climate[]? provinceClimate)
+    {
+        if (provinceClimate is null || cultures.Count == 0) return;
+
+        int suited = 0, redressed = 0;
+        foreach (var culture in cultures)
+        {
+            if (culture.ClothingGfx != culture.Heritage.Look.ClothingGfx) redressed++;
+            if (ClothingClimate.Of(culture.Counties, provinceClimate) is { } at
+                && ClothingClimate.Suits(at, culture.ClothingGfx)) suited++;        }
+
+        Console.WriteLine($"    dress: {suited} of {cultures.Count} cultures wear clothing made for " +
+                          $"their climate, {redressed} re-dressed away from their heritage's");
     }
 
     private static void Report(List<Heritage> heritages, List<Culture> cultures, int counties,

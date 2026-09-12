@@ -267,16 +267,50 @@ gen_ruin_tick_county_effect = {
 			gen_ruin_debug_tally_year_effect = yes
 		}
 	}
+	# A year that is not bad is forgiven, but there are two ways to be forgiven and they are not the
+	# same year. A county somebody is actually governing has its count zeroed outright. A county that
+	# is merely drifting — nobody grinding it down, nobody putting it right — pays back
+	# gen_ruin_decay_bleed and keeps the rest.
+	#
+	# The old code had only the first branch and applied it to every not-bad year, which made "not
+	# actively getting worse" mean "healed". In a world where control sits near zero that is a
+	# hair trigger on a noisy signal, and it erased eighteen streaks of 16 to 34 years mid-collapse.
+	# See gen_ruin_is_recovering_trigger and the two-tier note in 00_ruins_values.txt.
 	else = {
-		# BEFORE the zeroing on the next line, which is the only reason this is a separate effect
-		# rather than a log line down there: how far the county had got is exactly what that line
-		# destroys, and it is the number that says whether the threshold is anywhere near right.
 		if = {
-			limit = { debug_only = yes }
-			gen_ruin_debug_log_reset_effect = yes
-		}
+			limit = { gen_ruin_is_recovering_trigger = yes }
 
-		set_variable = { name = ruin_decay value = 0 }
+			# BEFORE the zeroing on the next line, which is the only reason this is a separate
+			# effect rather than a log line down there: how far the county had got is exactly what
+			# that line destroys, and it is the number that says whether the threshold is anywhere
+			# near right.
+			if = {
+				limit = { debug_only = yes }
+				gen_ruin_debug_log_reset_effect = yes
+			}
+
+			set_variable = { name = ruin_decay value = 0 }
+		}
+		else = {
+			# Logged BEFORE the bleed, for the same reason and so the two kinds of forgiveness are
+			# directly comparable in the log: both lines report the count as it stood at the start
+			# of the year that forgave it.
+			if = {
+				limit = { debug_only = yes }
+				gen_ruin_debug_log_drift_effect = yes
+			}
+
+			change_variable = { name = ruin_decay subtract = gen_ruin_decay_bleed }
+
+			# `change_variable` does not clamp and a negative count would read as a county further
+			# from ruin than an untouched one, which nothing downstream expects — the forget check at
+			# the bottom of this effect asks `<= 0`, but the warning and threshold comparisons above
+			# would be comparing against a number that can only be produced by bleeding.
+			if = {
+				limit = { var:ruin_decay < 0 }
+				set_variable = { name = ruin_decay value = 0 }
+			}
+		}
 	}
 
 	# ---- Has it run out of years? ----
@@ -440,6 +474,12 @@ gen_ruin_forget_county_effect = {
 # county uses. Nothing here is a special case in the mechanic — it is a setback and a modifier.
 gen_ruin_reprieve_effect = {
 	$COUNTY$ ?= {
+		# ---- The chronicle ----
+		#
+		# The holder is the payer: gen_ruins.0005 goes to whoever holds the failing county and to
+		# nobody else. Realm books only, not the world's -- a rescue is local news.
+		gen_chr_push_up_effect = { TMPL = gen_chr_reprieved ACTOR = holder WORLD = no }
+
 		# ---- The price of the next one ----
 		#
 		# Read by gen_ruin_save_escalation, which is what makes a second save on the same county
@@ -573,6 +613,13 @@ gen_ruin_county_effect = {
 				}
 			}
 		}
+
+		# ---- And the chronicle ----
+		#
+		# Before the teardown, while `holder` still means the one who lost it. Into the county,
+		# its de jure lieges and the world: a county falling out of civilisation is the kind of
+		# thing every book above it should carry. Defined by Emit/ChronicleRuntimeWriter.cs.
+		gen_chr_push_up_effect = { TMPL = gen_chr_ruined ACTOR = holder WORLD = yes }
 	}
 
 	abandon_county_effect = { COUNTY = $COUNTY$ }
@@ -942,6 +989,32 @@ gen_ruin_debug_log_reset_effect = {
 		# and fails again five years later is a new streak and has to be counted as one, or every
 		# number here slowly becomes a lifetime total and stops meaning "unbroken run".
 		gen_ruin_debug_wipe_effect = yes
+	}
+}
+
+# County scope. A year that was neither bad nor a recovery. Called by the tick's else branch BEFORE
+# the bleed, so the count it reports is the one the year was forgiving.
+#
+# The fifth line, and the one that makes the two-tier change measurable. `reset` and `drift` together
+# are what the single old `reset` line used to be, so the question the next tuning pass has to answer
+# — is the bleed doing anything, or has the drift band swallowed the mechanic — is a matter of
+# counting two line kinds rather than re-instrumenting.
+#
+# It does NOT wipe the tally, which is the whole difference from the reset line above. A drift year
+# does not end the streak; it sets it back. Wiping here would make every drift year look like the
+# start of a new story and destroy exactly the multi-decade histories this change exists to preserve.
+#
+# Logged only for a streak that had actually started, for the same reason as the reset line: a county
+# parked on the watchlist at zero would otherwise emit one of these every year forever.
+gen_ruin_debug_log_drift_effect = {
+	if = {
+		limit = {
+			has_variable = ruin_decay
+			var:ruin_decay > 0
+		}
+
+		gen_ruin_debug_payload_effect = yes
+		debug_log = gen_ruin_log_drift
 	}
 }
 

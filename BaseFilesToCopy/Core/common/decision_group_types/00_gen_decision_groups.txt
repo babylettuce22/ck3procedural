@@ -1,0 +1,26 @@
+﻿# The decision group holding this mod's own reference windows.
+#
+# Three decisions live here -- the wonder index, the artifact index and the settings window -- and
+# what they have in common is that none of them is a decision in the ordinary sense. They cost
+# nothing, they change nothing about the world, and taking one opens a window. Left in vanilla's
+# default `decisions` group they sat interleaved with decisions that DO something, which is the
+# wrong reading of all three.
+#
+# Deliberately NOT the debug group. gen_debug_panel_decision stays there, because it is gated on
+# debug_only and is for the person building the generator; these are for the person playing.
+#
+# Adding a group needs no GUI work, unlike the council window: gui/window_decisions.gui draws the
+# groups from a datamodel over DecisionsView.GetDecisionGroupItems, so a new key appears on its own.
+#
+# Localisation is BY CONVENTION -- "decision_group_type_" + this key -- and a missing one renders
+# the raw key rather than erroring. See localization/english/gen_decision_groups_l_english.yml.
+
+gen_world = {
+	# Higher sorts first. 5 puts this under vanilla's `decisions` (10) and above `courtier` (1) and
+	# `debug` (-1): below everything that acts on the world, above the housekeeping.
+	sort_order = 5
+
+	# No gui_tags on purpose. The tags are button sizes -- `big_button` is 55px, `extra_big_button`
+	# 65, and no tag is 45 -- and the untagged size is what vanilla's own `decisions` group uses.
+	# These three belong at that weight, not shouting at the top of the panel.
+}

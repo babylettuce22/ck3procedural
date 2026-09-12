@@ -121,6 +121,14 @@ public sealed partial class MainForm : Form
     /// <summary>The Heightmap tab: CK3 Heightmap Forge, embedded. See <see cref="Forge.ForgePanel"/>.</summary>
     private readonly Forge.ForgePanel _forge = new() { Dock = DockStyle.Fill };
 
+    /// <summary>The Climate tab: paint the climate over the heightmap. See <see cref="ClimatePanel"/>.</summary>
+    private readonly ClimatePanel _climate = new() { Dock = DockStyle.Fill };
+    private TabPage _climateTab = null!;
+
+    /// <summary>Which source the Climate tab was last given terrain for; null when it needs a fresh one.</summary>
+    private string? _climateStamp;
+    private int _climateGeneration;
+
     private readonly ImageView _viewer = new() { Dock = DockStyle.Fill };
 
     private readonly FlowLayoutPanel _categoryStrip = new()
@@ -398,6 +406,9 @@ public sealed partial class MainForm : Form
 
             // The toolbar chip mirrors the grid row, whichever of them took the edit.
             if (changed == nameof(MapConfig.AzgaarJsonPath)) ApplyAzgaarChip();
+
+            // The Climate tab's prediction runs on the same settings; its cached model is stale.
+            _climate.InvalidateModel();
 
             if (!NormalizationSettings.Contains(changed)) return;
             InvalidateProcessed();
@@ -801,10 +812,10 @@ public sealed partial class MainForm : Form
         var tabs = _tabs = Theme.MakeTabs();
         tabs.Selecting += (_, e) =>
         {
-            if (_loadedWorld is not null && (e.TabPage == _sourceTab || e.TabPage == _forgeTab))
+            if (_loadedWorld is not null && (e.TabPage == _sourceTab || e.TabPage == _forgeTab || e.TabPage == _climateTab))
             {
                 e.Cancel = true;
-                _status.Text = "This loaded world is edited from the Map and Titles tabs; generation and heightmap tools are inactive.";
+                _status.Text = "This loaded world is edited from the Map and Titles tabs; generation, heightmap and climate tools are inactive.";
             }
         };
 
@@ -816,6 +827,7 @@ public sealed partial class MainForm : Form
         tabs.SelectedIndexChanged += (_, _) =>
         {
             if (tabs.SelectedTab == _forgeTab) _forge.EnsureStarted();
+            if (tabs.SelectedTab == _climateTab) _ = ShowClimateAsync();
 
             if (tabs.SelectedTab == _sourceTab && !_sourceShown)
             {
@@ -849,8 +861,17 @@ public sealed partial class MainForm : Form
         _forge.UseForGeneration += UseForgeForGeneration;
         _forge.PresetDir = _state.ForgePresetDir;
 
+        // The Climate tab paints over whatever heightmap is chosen. An unvisited tab changes
+        // nothing — see ClimatePanel.EffectivePaint — and a painted one says so in its title.
+        var climateTab = _climateTab = new TabPage("Climate") { BackColor = Theme.Background };
+        climateTab.Controls.Add(_climate);
+        _climate.PaintDir = _state.ClimatePaintDir;
+        _climate.UseAutomatic = _state.ClimateAutomatic;
+        _climate.PaintChanged += RefreshClimateTabTitle;
+
         tabs.TabPages.Add(mapTab);
         tabs.TabPages.Add(forgeTab);
+        tabs.TabPages.Add(climateTab);
         tabs.TabPages.Add(sourceTab);
         tabs.TabPages.Add(titleTab);
 
@@ -1278,6 +1299,7 @@ public sealed partial class MainForm : Form
         if (_state.ForgeLeftWidth > 0) _forge.LeftWidth = _state.ForgeLeftWidth;
 
         ReportFolders();
+        RestoreClimatePaint();
     }
 
     private void ReportFolders()
@@ -1404,6 +1426,17 @@ public sealed partial class MainForm : Form
         _state.ViewerHeight = _right.SplitterDistance;
         _state.ForgeLeftWidth = _forge.LeftWidth;
         _state.ForgePresetDir = _forge.PresetDir;
+        _state.ClimatePaintDir = _climate.PaintDir;
+        _state.ClimateAutomatic = _climate.UseAutomatic;
+        try
+        {
+            string autosave = GuiState.ClimatePaintAutosave;
+            if (!_climate.SavePaint(autosave) && File.Exists(autosave)) File.Delete(autosave);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Could not save the climate paint: {ex.Message}");
+        }
         _state.HeightmapPath = _lastHeightmapFile;
         _state.View = _view;
         _state.CategoryViews = new Dictionary<string, string>(_lastInCategory);
@@ -1429,6 +1462,7 @@ public sealed partial class MainForm : Form
         // The Heightmap tab owns the brush keys while it is the one on screen, and says so by
         // handling them; anything it passes on falls through to the window's own shortcuts.
         if (_tabs.SelectedTab == _forgeTab && !TypingInText() && _forge.HandleKey(key)) return true;
+        if (_tabs.SelectedTab == _climateTab && !TypingInText() && _climate.HandleKey(key)) return true;
 
         switch (key)
         {
@@ -1702,6 +1736,114 @@ public sealed partial class MainForm : Form
         ApplySource();
         InvalidateProcessed();
         if (_sourceShown) _ = ShowSourceAsync();
+
+        // The Climate tab paints over the source; a new one is read the next time the tab is
+        // looked at, or now if it is the tab on screen.
+        _climateStamp = null;
+        if (_tabs is not null && _tabs.SelectedTab == _climateTab) _ = ShowClimateAsync();
+    }
+
+    /// <summary>
+    /// Hands the Climate tab the current source at province resolution, decoding it if no run has
+    /// yet. Shares the decode cache with the run and the 3D tab, so a heightmap already read is
+    /// not read again; only the province downsample and the land mask are computed here.
+    /// </summary>
+    private async Task ShowClimateAsync()
+    {
+        if (_source is not { } source)
+        {
+            _climate.SetTerrain(null);
+            return;
+        }
+
+        var cfg = _options.Config;
+        string stamp = source.Stamp;
+        if (_climateStamp == stamp)
+        {
+            _climate.Activated();
+            return;
+        }
+
+        // Not during a run: the run is decoding and normalising the same heightmap on the same
+        // config, and a second decode beside it would race it for the cache and the settings.
+        // The stamp stays unset, so the tab is filled in when the run ends — see SetEnabled.
+        if (_busy)
+        {
+            _status.Text = "The Climate tab will load its heightmap when the current run finishes.";
+            return;
+        }
+
+        int generation = ++_climateGeneration;
+        _status.Text = "Reading the heightmap for the Climate tab…";
+
+        try
+        {
+            var (image, terrain) = await Task.Run(() =>
+            {
+                var loaded = _loaded is not null && _loadedStamp == stamp
+                    ? _loaded
+                    : source.Produce(cfg, CancellationToken.None, MapGen.ConsoleProgress.Instance);
+
+                MapGen.HeightmapSource.Apply(loaded, cfg);
+                var elevation = loaded.ToElevation(cfg);
+                var province = MapGen.Raster.ProvinceElevation(elevation, cfg);
+                var land = MapGen.Raster.LandMask(elevation, cfg);
+
+                return (loaded, new ClimatePanel.Terrain(cfg, province, land, stamp));
+            });
+
+            if (generation != _climateGeneration) return;
+
+            _loaded = image;
+            _loadedStamp = stamp;
+            _climateStamp = stamp;
+            _climate.SetTerrain(terrain);
+            _status.Text = $"Climate tab ready — {source.Label}";
+        }
+        catch (Exception error)
+        {
+            if (generation != _climateGeneration) return;
+            Console.WriteLine($"Could not read the heightmap for the Climate tab: {error.Message}");
+            _status.Text = "Could not read the heightmap for the Climate tab — see log";
+        }
+    }
+
+    /// <summary>The tab says when its paint will change the next run, the way editable map modes do.</summary>
+    private void RefreshClimateTabTitle()
+    {
+        if (_climateTab is null) return;
+        string title = _climate.EffectivePaint is not null ? "Climate ✎" : "Climate";
+        if (_climateTab.Text != title) _climateTab.Text = title;
+    }
+
+    /// <summary>Where a preset's climate paint lives: beside it, named after it.</summary>
+    private static string ClimateSidecar(string presetPath)
+        => Path.Combine(Path.GetDirectoryName(presetPath) ?? "",
+            Path.GetFileNameWithoutExtension(presetPath) + ".climate.png");
+
+    /// <summary>
+    /// Last session's paint, if the window closed with any. Restored rather than dropped because
+    /// losing an afternoon's painting to a restart is worse than a tab that remembers; the title
+    /// carries the pencil so it is never a silent influence on the next run.
+    /// </summary>
+    private void RestoreClimatePaint()
+    {
+        string path = GuiState.ClimatePaintAutosave;
+        if (!File.Exists(path)) return;
+
+        try
+        {
+            var paint = MapGen.ClimatePaint.Load(path);
+            if (paint.IsEmpty) return;
+
+            _climate.AdoptPaint(paint, "Climate paint restored from last session.");
+            Console.WriteLine("Climate paint restored from last session" +
+                              (_climate.UseAutomatic ? " (automatic climate switch is on, so it is not in use)" : "") + ".");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Could not restore last session's climate paint: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -2028,7 +2170,24 @@ public sealed partial class MainForm : Form
 
         Preset.Save(_options.Config, dialog.FileName);
         _state.PresetDir = Path.GetDirectoryName(dialog.FileName);
-        _status.Text = $"Saved settings to {Path.GetFileName(dialog.FileName)}";
+
+        // The climate paint travels with the preset, as a PNG beside it. Written when there is
+        // paint; removed when there is none, so a preset saved again after "Clear all" does not
+        // bring the old strokes back the next time it is loaded.
+        string sidecar = ClimateSidecar(dialog.FileName);
+        string note = "";
+        try
+        {
+            if (_climate.SavePaint(sidecar)) note = " and its climate paint";
+            else if (File.Exists(sidecar)) { File.Delete(sidecar); note = " (removed its old climate paint)"; }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Could not write {sidecar}: {ex.Message}");
+            note = " — climate paint could not be written, see log";
+        }
+
+        _status.Text = $"Saved settings to {Path.GetFileName(dialog.FileName)}{note}";
     }
 
     private void LoadPreset()
@@ -2055,8 +2214,34 @@ public sealed partial class MainForm : Form
             _advanced.Checked = _options.Config.ShowAdvancedSettings;
             ApplyAzgaarChip();
             RefreshSettings();
+            _climate.InvalidateModel();
 
-            _status.Text = $"Loaded {applied} settings from {Path.GetFileName(dialog.FileName)}";
+            // The paint beside the preset replaces what is on the tab; a preset with none clears
+            // it, so the preset means the same map every time it is loaded. Both are undoable.
+            string sidecar = ClimateSidecar(dialog.FileName);
+            string note = "";
+            if (File.Exists(sidecar))
+            {
+                // Its own try: the settings above are already applied, and a bad sidecar should
+                // say so without the status line claiming the whole preset failed.
+                try
+                {
+                    _climate.AdoptPaint(MapGen.ClimatePaint.Load(sidecar), $"Climate paint loaded with {Path.GetFileName(dialog.FileName)}.");
+                    note = " and its climate paint";
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Could not read {sidecar}: {ex.Message}");
+                    note = " — its climate paint could not be read, see log";
+                }
+            }
+            else if (_climate.HasPaint)
+            {
+                _climate.ClearPaint();
+                note = " — it carries no climate paint, so the tab's paint was cleared (Undo on the Climate tab restores it)";
+            }
+
+            _status.Text = $"Loaded {applied} settings from {Path.GetFileName(dialog.FileName)}{note}";
         }
         catch (Exception ex)
         {
@@ -2560,6 +2745,10 @@ public sealed partial class MainForm : Form
         // the longest phase of the lot. Say so first, as the tab's own export does.
         if (_source is MapGen.ForgeHeightmapProvider && !_forge.ConfirmStaleBakes(this)) return;
 
+        // Read on the UI thread before the run, and cloned: the tab stays enabled for panning but
+        // the paint must not change under the model mid-run.
+        var climatePaint = _climate.EffectivePaint?.Clone();
+
         var (result, cancelled) = await RunAsync(
             modDir is null ? "Building preview…" : "Writing mod…",
             () =>
@@ -2586,7 +2775,8 @@ public sealed partial class MainForm : Form
                 var terra = Stage.Time("province elevation",
                     () => MapGen.TerrainData.FromElevation(_loaded!.ToElevation(cfg), cfg));
 
-                var r = Generator.FromTerrain(terra, cfg, OnProgressivePreview);
+                var r = Generator.FromTerrain(terra, cfg, OnProgressivePreview,
+                    climatePaint: climatePaint);
 
                 _written = null;
                 if (modDir is not null) _written = Generator.WriteMod(r, _options, modDir);
@@ -2778,7 +2968,12 @@ public sealed partial class MainForm : Form
 
         _titles.Enabled = enabled;
         _forge.Enabled = enabled;
+        _climate.Enabled = enabled;
         ShowPending();
+
+        // A Climate tab opened mid-run was told to wait; the run is over.
+        if (enabled && _tabs is not null && _tabs.SelectedTab == _climateTab && _climateStamp is null)
+            _ = ShowClimateAsync();
 
         bool ready = enabled && _source is not null;
         _writeMod.Enabled = ready;

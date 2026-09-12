@@ -20,6 +20,16 @@ pmg_show_equipped_weapon_trigger = {
 	is_incapable = no
 	is_imprisoned = no
 
+	# The global master switch, thrown from the settings window -- see
+	# common/scripted_guis/00_gen_settings_panel_guis.txt. Checked FIRST because it outranks
+	# everything below it: while it is set no portrait in the world draws a weapon, including the
+	# characters carrying pmg_always_show_equipped_weapon.
+	#
+	# The variable stores the OFF state, so absent means shown. That is deliberate -- it is what
+	# lets a save made before the settings window existed load with the feature in the state its
+	# player already had, rather than switched off by a flag nothing had ever set.
+	NOT = { has_global_variable = gen_setting_no_portrait_weapons }
+
 	# explicit suppression always wins
 	NOT = { has_character_flag = pmg_hide_equipped_weapon }
 

@@ -70,6 +70,19 @@ public sealed class GuiState
     /// <inheritdoc cref="ForgeLeftWidth"/>
     public string? ForgePresetDir { get; set; }
 
+    /// <summary>Where the Climate tab's import/export dialogs open.</summary>
+    public string? ClimatePaintDir { get; set; }
+
+    /// <summary>
+    /// The Climate tab's "Use automatic climate" switch. Remembered beside the autosaved paint it
+    /// qualifies: restoring the paint without the switch would put a bypassed paint back in use.
+    /// </summary>
+    public bool ClimateAutomatic { get; set; }
+
+    /// <summary>Where the Climate tab's paint is kept between sessions, beside this file.</summary>
+    public static string ClimatePaintAutosave => System.IO.Path.Combine(
+        System.IO.Path.GetDirectoryName(Path_)!, "climate_paint.png");
+
     public string? LaunchArgs { get; set; } = "-debug_mode -developer -skip";
     public bool CloseOnLaunch { get; set; } = true;
     /// <summary>

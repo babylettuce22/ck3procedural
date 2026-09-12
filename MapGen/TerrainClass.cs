@@ -212,6 +212,13 @@ public static class TerrainClassifier
                     if (id >= 0 && id < biomeTable.Length) biome = biomeTable[id];
                 }
 
+                // Painted climate wins over an imported biome where the paint is strong. The user
+                // has said what this ground is, and the export's vegetation is the thing they
+                // painted over; elsewhere the export's opinion stands as before.
+                if (biome != AzgaarBiome.Kind.Unknown && climate.Painted is { } brushed
+                    && brushed.At(x, y, width, height) >= 0.5f)
+                    biome = AzgaarBiome.Kind.Unknown;
+
                 bool stated = AzgaarBiome.HasOpinion(biome);
                 if (stated) imported[y]++;
 

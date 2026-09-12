@@ -217,6 +217,21 @@ public static class Program
                     cfg.AzgaarJsonPath = options.AzgaarJsonPath;
                     break;
 
+                // Optional. A climate paint file saved by the GUI's Climate tab (the PNG beside a
+                // preset, or one exported from the tab). Where it is painted it sets the climate;
+                // everywhere else the model's own stands, as it does without the flag.
+                case "--climate-paint" when i + 1 < args.Length:
+                {
+                    string paintPath = args[++i];
+                    if (!File.Exists(paintPath))
+                    {
+                        Console.Error.WriteLine($"--climate-paint: no such file '{paintPath}'.");
+                        return 1;
+                    }
+                    options.ClimatePaint = MapGen.ClimatePaint.Load(paintPath);
+                    break;
+                }
+
                 // Optional. A black-and-white PNG painted over provinces.png saying where the
                 // impassable mountains go, for the ranges a relief score will not find on its own.
                 case "--impassable-mask" when i + 1 < args.Length:
@@ -331,6 +346,11 @@ public static class Program
                 // BaseFilesToCopy/Societies/README.txt.
                 case "--societies":
                     cfg.EnableSocieties = true;
+                    break;
+
+                // The Chronicle's off switch, so the stubbed build can be run through tiger.
+                case "--no-chronicle":
+                    cfg.EnableChronicle = false;
                     break;
 
                 // Ruination, off by default because it can take a county away from a player. The
@@ -636,7 +656,8 @@ public static class Program
             //
             // --societies here as well as on a full run: the HUD tab is a .gui edit, so it is one
             // of the things --gui-only exists to iterate on without regenerating a world.
-            GuiWriter.WriteAll(modDir, options.GameDir, cfg.EnableSocieties, cfg.EnableWilderness);
+            GuiWriter.WriteAll(modDir, options.GameDir, cfg.EnableSocieties, cfg.EnableWilderness,
+                cfg.EnableChronicle);
 
             return 0;
         }

@@ -98,7 +98,8 @@ public static class ContentWriter
         var cultures = Core.Stage.Time("cultures", () =>
         {
             var map = MapGen.Cultures.Build(empires, provinces, order, landCount, provinceTerrain,
-                development, vocabulary, cfg, new Rng(cfg.Seed ^ 0x0C17), azgaar);
+                development, vocabulary, cfg, new Rng(cfg.Seed ^ 0x0C17), azgaar,
+                MapGen.ClothingClimate.ByProvince(classified.Field, provinces, order, landCount));
 
             if (azgaar is not null)
             {
@@ -392,6 +393,9 @@ public static class ContentWriter
         // rather than off the situation. Not gated on MapConfig.DynasticCycle for that reason.
         Core.Stage.Time("hegemony flavour",
             () => HegemonyFlavourWriter.WriteAll(modDir, gameDir, empires));
+        // Mood music pools are gated on vanilla heritages a generated culture never has, plus a
+        // Dynastic Cycle branch that every independent satisfies. MusicWriter keys them on dress.
+        Core.Stage.Time("music pools", () => MusicWriter.WriteAll(modDir, gameDir));
 
         Core.Stage.Time("route files", () => RouteWriter.WriteAll(modDir, routes, crossings, silkRoad,
             provinces, order, baronyCount, provinceTerrain));
@@ -419,7 +423,8 @@ public static class ContentWriter
         Core.Stage.Time("faction rules", () => FactionWriter.WriteAll(modDir, gameDir, cfg));
         Core.Stage.Time("frontend", () => FrontendWriter.WriteFrontend(modDir, gameDir));
         Core.Stage.Time("GUI changes",
-            () => GuiWriter.WriteAll(modDir, gameDir, cfg.EnableSocieties, cfg.EnableWilderness));
+            () => GuiWriter.WriteAll(modDir, gameDir, cfg.EnableSocieties, cfg.EnableWilderness,
+                cfg.EnableChronicle));
 
         if (cfg.EnableFantasyEthnicities && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly)
         {
@@ -656,18 +661,36 @@ public static class ContentWriter
                 // Written after the struggles it reads, not after the chronicle it is made of: the
                 // lore panel closes with the name of the struggle a title is caught up in, and that
                 // name does not exist until the line above has run.
-                ChronicleWriter.WriteAll(modDir, chronicle, struggles, empires);
+                //
+                // Only this is gated, not the build above: the chronicle is also where struggles
+                // come from. The lore it writes is read by the Realm Lore panel and nothing else.
+                if (cfg.EnableChronicle)
+                    ChronicleWriter.WriteAll(modDir, chronicle, struggles, empires);
 
                 Core.Stage.Detail("  · struggle art",
                     () => StruggleWriter.WriteAll(modDir, gameDir, cfg, struggles, flatmap, provinces, order));
                 struggleCount = struggles.Struggles.Count;
+
+                // The half of the chronicle the game writes. After the struggles because it
+                // narrates their phase changes by name, and after the frontier for the same reason.
+                Core.Stage.Detail("  · chronicle (runtime)",
+                    () => ChronicleRuntimeWriter.WriteAll(modDir, cfg, struggles, frontier));
 
                 WarWriter.WriteAll(modDir, prehistory);
                 Core.Stage.Detail("  · portraits", () => PortraitWriter.WriteAll(
                     modDir, gameDir, bookmarkResult.PortraitRequests, ethnicities, cfg.Seed));
             });
         }
-        else Console.WriteLine("  history: SKIPPED (--no-history)");
+        else
+        {
+            Console.WriteLine("  history: SKIPPED (--no-history)");
+
+            // Still written: the Ruins and Wilderness sets call its effects, and the title panel
+            // and world window read its custom loc, whether or not there is a prehistory. Without
+            // struggles it narrates ruin and the frontier only.
+            Core.Stage.Time("chronicle (runtime)",
+                () => ChronicleRuntimeWriter.WriteAll(modDir, cfg, null, frontier));
+        }
         });
         }
         finally

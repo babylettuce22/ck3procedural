@@ -1,0 +1,122 @@
+﻿# The settings window: the switches a player is allowed to throw on a running game.
+#
+# Emit/GuiWindows/SettingsPanel.cs writes the window that calls every entry below, so these names
+# are a contract with it. A .gui naming a scripted_gui that does not exist logs nothing and
+# evaluates false, so a rename here does not fail loudly -- it produces a checkbox that is
+# permanently unticked and does nothing when clicked.
+#
+# THE SHAPE OF A SWITCH. One entry per switch, not two, and it must be written this way up:
+#
+#   is_shown  =  the feature is ON      -- the checkbox binds `checked` straight to this
+#   effect    =  flip it
+#
+# One entry owning both directions is what makes "the tick disagrees with the behaviour"
+# unrepresentable rather than merely unlikely. An entry written the other way up -- is_shown asking
+# whether the SUPPRESSION flag is set -- produces a window that is correct about everything except
+# which way the tick goes, and nothing anywhere reports it.
+#
+# THE FLAG IS THE SUPPRESSION, NOT THE FEATURE. Every switch here stores a global variable that
+# means "off", so that ABSENT reads as the default. That is what lets a save from before this file
+# existed load with every switch in the state the player already had, and it is why is_shown is a
+# NOT rather than a plain has_global_variable.
+#
+# AND THE VARIABLES ARE GLOBAL. Not a shortcut: a portrait weight block runs in the scope of the
+# character being DRAWN, not the character doing the looking, and there is no expression for "the
+# person whose screen this is" available at that point. A per-viewer setting is unrepresentable,
+# not merely inconvenient. In multiplayer one player's switch moves it for the table, which is
+# stated in the window rather than left to be discovered.
+
+
+# Is the settings window open for this character, and close it.
+#
+# One entry answering both directions, for the same reason as the switches: the window's `visible`
+# asks IsShown and the close button in its header runs Execute, and the failure mode of those two
+# disagreeing is a window with no way out of it.
+#
+# The open state is a character variable rather than a GUI VariableSystem flag because a DECISION
+# has to be able to set it, and a decision's effect cannot reach the GUI layer at all.
+gen_settings_panel_window = {
+	scope = character
+
+	is_shown = {
+		has_variable = gen_settings_panel_open
+	}
+
+	effect = {
+		remove_variable = gen_settings_panel_open
+	}
+}
+
+
+# Show equipped weapon artifacts on character portraits -- ALL of them, everyone's.
+#
+# The global master switch for the pmg_hold_*_idle items in
+# gfx/portraits/portrait_animations/zz_procedural_weapon_idle.txt. It is read by
+# pmg_show_equipped_weapon_trigger in common/scripted_triggers/zz_pmg_portrait_weapon_triggers.txt,
+# which every one of those weight blocks already asks -- so this file adds a switch without adding
+# a second place that decides whether a weapon is drawn.
+#
+# Distinct from the two toggles that already exist, and deliberately coarser than either:
+#
+#   gen_artifact_hide_on_portrait   one artifact, set from the artifact details window
+#   pmg_hide_equipped_weapon        one character, a character flag
+#   this                            the whole feature, the whole world
+#
+# The two finer ones keep working underneath it. Turning this off silences everything regardless of
+# what they say; turning it back on restores exactly the per-artifact and per-character choices the
+# player had made, because nothing here touches them.
+gen_settings_portrait_weapons = {
+	scope = character
+
+	is_shown = {
+		NOT = { has_global_variable = gen_setting_no_portrait_weapons }
+	}
+
+	is_valid = { always = yes }
+
+	effect = {
+		if = {
+			limit = { has_global_variable = gen_setting_no_portrait_weapons }
+			remove_global_variable = gen_setting_no_portrait_weapons
+		}
+		else = {
+			set_global_variable = {
+				name = gen_setting_no_portrait_weapons
+				value = yes
+			}
+		}
+	}
+}
+
+
+# Show the bone-attached pieces (pauldrons and the like) on illustrious armour -- everyone's.
+#
+# Read by the artifact modifiers in gfx/portraits/portrait_modifiers/zz_gen_pieces.txt, written by
+# Emit/ArtifactForge/BonePieceStep.cs, each of which carries NOT = { has_global_variable = ... }
+# beside its illustrious-armour gate. Only the pieces go: the armour garment and its recolour are a
+# different portrait modifier (ArmorForgeStep) and do not ask this.
+#
+# The pmg_wear_piece_<set> debug flags are deliberately NOT gated, so pmg_piece.0001 still forces a
+# set on for a placement check with this switched off.
+gen_settings_armor_pieces = {
+	scope = character
+
+	is_shown = {
+		NOT = { has_global_variable = gen_setting_no_armor_pieces }
+	}
+
+	is_valid = { always = yes }
+
+	effect = {
+		if = {
+			limit = { has_global_variable = gen_setting_no_armor_pieces }
+			remove_global_variable = gen_setting_no_armor_pieces
+		}
+		else = {
+			set_global_variable = {
+				name = gen_setting_no_armor_pieces
+				value = yes
+			}
+		}
+	}
+}

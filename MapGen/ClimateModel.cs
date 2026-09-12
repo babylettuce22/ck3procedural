@@ -14,6 +14,9 @@ public sealed class ClimateField
     public required float[] SummerMm { get; init; }
     public required float[] WinterMm { get; init; }
     public required float[] LatitudeDeg { get; init; }
+
+    /// <summary>Where the user painted the climate, or null when none was. See <see cref="ClimatePaintInfluence"/>.</summary>
+    public ClimatePaintInfluence? Painted { get; init; }
 }
 
 public static class ClimateModel
@@ -37,7 +40,76 @@ public static class ClimateModel
     private const double LandRecycling = 0.48;
     private const double ReliefBlurPixels = 140;
 
+    /// <summary>
+    /// Everything the model works out before the user's paint is heard from: the coarse-grid
+    /// temperatures and the two seasonal rainfall sweeps, plus the relief they are finished
+    /// against. Kept as a value so the Climate tab can run <see cref="Prepare"/> once for a
+    /// heightmap and <see cref="Finish"/> per stroke — the sweeps and the relief blur are the cost
+    /// of this stage and none of it depends on the paint.
+    /// </summary>
+    public sealed class Base
+    {
+        public required MapConfig Config { get; init; }
+        public required float[] PixelKm { get; init; }
+        public required float[] CoarseKm { get; init; }
+        public required byte[] LandMask { get; init; }
+        public required byte[] CoarseWater { get; init; }
+        public required float[] July { get; init; }
+        public required float[] January { get; init; }
+        public required float[] AnnualC { get; init; }
+        public required float[] SeasonalRange { get; init; }
+        public required int CoarseWidth { get; init; }
+        public required int CoarseHeight { get; init; }
+        public required int Width { get; init; }
+        public required int Height { get; init; }
+        public required bool Imported { get; init; }
+        public required AzgaarClimate.Framing? Framing { get; init; }
+        public required long PrepareMs { get; init; }
+    }
+
     public static ClimateField Build(MapConfig cfg, float[] provinceElevation, byte[] landMask, Rng rng,
+        AzgaarImport? azgaar = null, ClimatePaint? paint = null)
+        => Finish(Prepare(cfg, provinceElevation, landMask, rng, azgaar), paint);
+
+    /// <summary>
+    /// Lays the paint over a prepared model and assembles the finished field. With no paint this
+    /// is exactly what <see cref="Build"/> always did.
+    /// </summary>
+    /// <param name="report">Print the climate summary. Off for the Climate tab's per-stroke
+    /// previews, which would otherwise fill the log with the same three lines.</param>
+    public static ClimateField Finish(Base b, ClimatePaint? paint, bool report = true)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        var targets = paint is null || paint.IsEmpty ? null : paint.Targets(b.CoarseWidth, b.CoarseHeight);
+
+        var field = Assemble(b.Config, b.PixelKm, b.CoarseKm, b.LandMask, b.July, b.January, b.AnnualC,
+            b.SeasonalRange, b.CoarseWidth, b.CoarseHeight, b.Width, b.Height, b.Imported, b.Framing,
+            targets);
+
+        if (!report) return field;
+
+        Report(field, b.LandMask, b.Config, b.PrepareMs + sw.ElapsedMilliseconds, b.Framing);
+
+        if (targets is not null)
+        {
+            long land = 0, painted = 0;
+            for (int i = 0; i < targets.Weight.Length; i++)
+            {
+                if (b.CoarseWater[i] == 0) continue;
+                land++;
+                if (targets.Weight[i] > 0.02f) painted++;
+            }
+
+            Console.WriteLine($"    climate paint: {(land == 0 ? 0 : 100.0 * painted / land):F0}% of land " +
+                              "painted — the paint sets temperature and rainfall there, relief adds the rest");
+        }
+
+        return field;
+    }
+
+    /// <summary>The model up to, but not including, the user's paint. See <see cref="Base"/>.</summary>
+    public static Base Prepare(MapConfig cfg, float[] provinceElevation, byte[] landMask, Rng rng,
         AzgaarImport? azgaar = null)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -105,11 +177,25 @@ public static class ClimateModel
                               "climate is generated, not imported");
         }
 
-        var field = Assemble(cfg, pixelKm, kilometres, landMask, july, january, annualC,
-            seasonalRange, cw, ch, pw, ph, imported is not null, framing);
-
-        Report(field, landMask, cfg, sw.ElapsedMilliseconds, framing);
-        return field;
+        return new Base
+        {
+            Config = cfg,
+            PixelKm = pixelKm,
+            CoarseKm = kilometres,
+            LandMask = landMask,
+            CoarseWater = water,
+            July = july,
+            January = january,
+            AnnualC = annualC,
+            SeasonalRange = seasonalRange,
+            CoarseWidth = cw,
+            CoarseHeight = ch,
+            Width = pw,
+            Height = ph,
+            Imported = imported is not null,
+            Framing = framing,
+            PrepareMs = sw.ElapsedMilliseconds,
+        };
     }
 
     /// <summary>
@@ -383,7 +469,7 @@ public static class ClimateModel
     private static ClimateField Assemble(MapConfig cfg, float[] pixelKm, float[] coarseKm,
         byte[] landMask, float[] julyRain, float[] januaryRain, float[] annualC,
         float[] seasonalRange, int cw, int ch, int pw, int ph, bool imported,
-        AzgaarClimate.Framing? framing)
+        AzgaarClimate.Framing? framing, ClimatePaintTargets? paint = null)
     {
         // The blur is there to take the grain off our own advection sweeps, which resolve rainfall
         // cell by cell and come out noisy. An imported field has no such grain — it arrives off a
@@ -422,6 +508,22 @@ public static class ClimateModel
                 float m = (float)(meanUp[i] - correction);
                 float half = Math.Max(0f, rangeUp[i]) * 0.5f;
 
+                // The user's paint, blended in by its weight. The brush states a sea-level
+                // temperature and the pixel's own relief cools it at the same lapse rate the model
+                // uses everywhere else — so paint decides the climate and elevation still decides
+                // the local variation, and a rainforest brush over a range gives tropical lowland
+                // with cooler highland rather than jungle on the summits.
+                if (paint is not null)
+                {
+                    var p = paint.Sample(x, y, pw, ph);
+                    if (p.Weight > 0f)
+                    {
+                        float target = (float)(p.SeaLevelC - LapseCPerKm * pixelKm[i]);
+                        m += (target - m) * p.Weight;
+                        half += (p.RangeC * 0.5f - half) * p.Weight;
+                    }
+                }
+
                 mean[i] = m;
                 warm[i] = m + half;
                 cold[i] = m - half;
@@ -453,8 +555,37 @@ public static class ClimateModel
             }
         }
 
+        // Rain is painted after the rescale, not before: the brush speaks in millimetres and the
+        // field only acquires them at the line above. The blend is of the yearly total and of the
+        // summer share separately, so a monsoon brush makes a place both wetter and more seasonal.
+        // Blended locally, it leaves the map's median where the setting put it — the paint is a
+        // statement about the painted ground, not about the world's rainfall.
+        if (paint is not null)
+        {
+            Parallel.For(0, ph, y =>
+            {
+                for (int x = 0; x < pw; x++)
+                {
+                    var p = paint.Sample(x, y, pw, ph);
+                    if (p.Weight <= 0f) continue;
+
+                    int i = y * pw + x;
+                    float total = annual[i];
+                    float share = total > 0f ? summer[i] / total : 0.5f;
+
+                    total += (p.AnnualMm - total) * p.Weight;
+                    share += (p.SummerShare - share) * p.Weight;
+
+                    summer[i] = total * share;
+                    winter[i] = total * (1f - share);
+                    annual[i] = total;
+                }
+            });
+        }
+
         return new ClimateField
         {
+            Painted = paint is null ? null : new ClimatePaintInfluence(paint.Width, paint.Height, paint.Weight),
             Width = pw,
             Height = ph,
             MeanC = mean,

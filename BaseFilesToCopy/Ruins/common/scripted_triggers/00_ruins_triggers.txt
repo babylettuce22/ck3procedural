@@ -318,10 +318,66 @@ gen_ruin_suffer_devdrop_trigger = {
 	development_level < var:ruin_last_dev
 }
 
-# There was a gen_ruin_is_recovering_trigger here, asking whether a county was doing well enough to
-# pay points back FASTER than the ordinary drift. It has no meaning against a counter that resets:
-# a year that is not suffering now returns the county to zero outright, so there is no faster to be.
-# Its one caller was the tick's else branch, which is now a single set_variable.
+# County (title) scope. Is somebody actually putting this county back together?
+#
+# Asked ONLY on a year that is already not suffering, by the tick's else branch, to decide between
+# the two kinds of forgiveness: this answering yes zeroes the count outright, and this answering no
+# bleeds `gen_ruin_decay_bleed` off it instead.
+#
+# ---- Why this trigger exists at all (2026-09-09) ----
+#
+# A version of it was deleted once, on the reasoning that against a counter which resets on any
+# not-bad year there is no such thing as recovering faster. That was right about the old counter and
+# it is exactly what made the old counter wrong: "not actively getting worse" was being treated as
+# recovery, and in a tribal world where control sits near zero that describes a county which twitched
+# rather than one which healed. Measured over 50 years, eighteen counties had streaks of 16 to 34 bad
+# years erased by a single year of noise while still visibly dying. See the two-tier note in
+# 00_ruins_values.txt for the numbers.
+#
+# So the question this asks is deliberately NOT the negation of gen_ruin_is_suffering_trigger. There
+# is a gap between them — drifting — and the gap is the whole point. A county can be neither being
+# ground down nor being governed, and such a county should neither accumulate ruin nor be absolved
+# of it.
+#
+# ---- Opinion is not in here, and that is deliberate ----
+#
+# It is the obvious fourth clause and it is the wrong signal. county_opinion measures whether the
+# population likes whoever holds the title, not whether anyone is administering the place: Mokehe
+# fell in 923 at opinion +38, and three of the seven falls in that run had positive opinion at the
+# end. Popularity is not governance, and letting it absolve a county would forgive exactly the
+# well-liked absentee lord this mechanic is supposed to notice.
+#
+# ---- The control LEVEL clause is semantic, not a tuning lever ----
+#
+# Sweeping it across 15, 20 and 25 in the replay moved the predicted fall rate by literally nothing,
+# because a county on its way to the threshold never sees control that high in a good year — the
+# clause only ever fires on counties that were never going to fall. It is here so the trigger means
+# what its name says rather than to buy a rate, and it should not be reached for when retuning.
+gen_ruin_is_recovering_trigger = {
+	OR = {
+		# Well enough held that the question does not arise.
+		county_control >= gen_ruin_recovering_control_level
+
+		# Or climbing hard. `has_variable` first and in the same block, which is the shape the
+		# suffering arms already use and the one measured not to throw — see the note on
+		# gen_ruin_suffer_control_trigger. The gain has to clear the +2 slack that arm allows, or a
+		# county could be suffering and recovering in the same year.
+		AND = {
+			has_variable = ruin_last_ctl
+			county_control >= {
+				value = var:ruin_last_ctl
+				add = gen_ruin_recovering_control_gain
+			}
+		}
+
+		# Or getting richer. The mirror of gen_ruin_suffer_devdrop_trigger, and the one signal that
+		# means the same thing at every development level.
+		AND = {
+			has_variable = ruin_last_dev
+			development_level > var:ruin_last_dev
+		}
+	}
+}
 
 # County (title) scope. Are the stones standing here?
 #

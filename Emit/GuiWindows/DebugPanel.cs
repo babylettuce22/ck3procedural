@@ -515,6 +515,12 @@ public static class DebugPanel
         panel.Add(Action("gen_debug_panel_open_artifacts", player,
             "GEN_DEBUG_PANEL_ARTIFACTS", "GEN_DEBUG_PANEL_ARTIFACTS_TT"));
 
+        // Unconditional, unlike the wonder index below. The settings window ships on every map --
+        // see SettingsPanel, which writes it from GuiWriter rather than from ContentWriter
+        // precisely because nothing about it varies with the world.
+        panel.Add(Action("gen_debug_panel_open_settings", player,
+            "GEN_DEBUG_PANEL_SETTINGS", "GEN_DEBUG_PANEL_SETTINGS_TT"));
+
         // Conditional at GENERATION time, not at runtime. A map with no world centers has no
         // wonder index -- no window, no decision, no scripted_gui -- so the button is not written
         // at all rather than written and disabled. There is nothing for it to be disabled about.
@@ -997,6 +1003,28 @@ public static class DebugPanel
             		}
             	}
             }
+
+
+            # Opens the settings window from the tools tab. Same swap as above, same reason.
+            #
+            # The settings window is reachable on its own -- gen_settings_panel_decision is not
+            # debug_only -- so this is a shortcut rather than the way in. It is here because the
+            # Windows group is where the other windows are listed, and looking for it anywhere else
+            # would be the surprise.
+            gen_debug_panel_open_settings = {
+            	scope = character
+
+            	is_shown = { always = yes }
+
+            	effect = {
+            		remove_variable = gen_debug_panel_open
+
+            		set_variable = {
+            			name = gen_settings_panel_open
+            			value = yes
+            		}
+            	}
+            }
             WONDERS
 
             """.Replace("WONDERS", wonders) + FireEntries(events));
@@ -1376,6 +1404,10 @@ public static class DebugPanel
         loc.Add("GEN_DEBUG_PANEL_ARTIFACTS", "Open the artifact index");
         loc.Add("GEN_DEBUG_PANEL_ARTIFACTS_TT",
             "Closes this panel and opens the world's famed and illustrious treasures.");
+        loc.Add("GEN_DEBUG_PANEL_SETTINGS", "Open the settings window");
+        loc.Add("GEN_DEBUG_PANEL_SETTINGS_TT",
+            "Closes this panel and opens the switches a player can throw on a running game. "
+            + "Reachable without debug mode under World Decisions, as World Settings.");
         loc.Add("GEN_DEBUG_PANEL_WONDERS", "Open the wonder index");
         loc.Add("GEN_DEBUG_PANEL_WONDERS_TT",
             "Closes this panel and opens the great works this map placed.");

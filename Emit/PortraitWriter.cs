@@ -507,7 +507,11 @@ public static class PortraitWriter
         // Line() hands back the value with its braces on — "{ east_slavic_clothing_gfx
         // northern_clothing_gfx }" — so the chain is read out token by token rather than compared
         // whole against anything.
-        string chain = (culture.Heritage.Look.ClothingGfx ?? "").ToLowerInvariant();
+        //
+        // The culture's own chain, not its heritage look's: a culture can be re-dressed for its
+        // climate (ClothingClimate) or edited in the inspector, and either way the chain the
+        // culture file writes is the one its bookmark ruler has to agree with.
+        string chain = (culture.ClothingGfx ?? "").ToLowerInvariant();
         var seen = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (Match m in Regex.Matches(chain, @"([a-z0-9_]+)_clothing_gfx"))

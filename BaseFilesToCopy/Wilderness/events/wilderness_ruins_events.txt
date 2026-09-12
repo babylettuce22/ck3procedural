@@ -108,6 +108,14 @@ wilderness_ruins.0001 = {
 		# county on a map seeded with ruins at generation, and every county at all when the Ruins
 		# set is not shipping.
 		scope:gen_ruins_county ?= {
+			# ---- The chronicle ----
+			#
+			# `root` is the holder who cleared the stones (the building's on_complete sends the
+			# event to county.holder). Into the county, its lieges and the world, before the
+			# memory below is consumed. Defined by Emit/ChronicleRuntimeWriter.cs, which always
+			# ships -- the Ruins set need not be, and the effect is a no-op on nothing.
+			gen_chr_push_up_effect = { TMPL = gen_chr_reclaimed ACTOR = root WORLD = yes }
+
 			# `?=` does not guard `var:` — it suppresses the scope switch failing, not the variable
 			# fetch that feeds it, and the fetch throws first. Written bare, these two log
 			# `Failed to fetch variable ... due to not being set` for every ruin that has no memory:

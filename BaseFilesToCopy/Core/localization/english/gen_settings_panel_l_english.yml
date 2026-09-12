@@ -1,0 +1,18 @@
+﻿l_english:
+ # The settings window -- the decision that opens it, and the window's own furniture.
+ # See BaseFilesToCopy/Core/common/decisions/00_gen_settings_panel_decision.txt.
+
+ gen_settings_panel_decision:0 "World Settings"
+ gen_settings_panel_decision_desc:0 "How this world is presented, and how much of it you would rather not see, is yours to set down."
+ gen_settings_panel_decision_tooltip:0 "Open the settings for this generated world."
+ gen_settings_panel_decision_confirm:0 "Open settings"
+
+ GEN_SETTINGS_TITLE:0 "Settings"
+ GEN_SETTINGS_BLURB:0 "Switches for the parts of this world that are a matter of taste rather than a matter of history. Nothing here changes the map, the realms or the characters in it."
+ GEN_SETTINGS_NOTE:0 "Changes take hold as portraits are next drawn, so a face already on screen may keep its old look until you reopen the window it sits in. These settings are shared by everyone in a multiplayer game."
+
+ GEN_SETTINGS_HEAD_PORTRAITS:0 "Portraits"
+ GEN_SETTINGS_PORTRAIT_WEAPONS:0 "Show equipped weapons on portraits"
+ GEN_SETTINGS_PORTRAIT_WEAPONS_DESC:0 "Characters holding a sword, axe, mace or spear as an equipped artifact stand in a pose that shows it. Turn this off to return every portrait in the world to its ordinary idle, without disturbing the choices you have made for individual artifacts or characters."
+ GEN_SETTINGS_ARMOR_PIECES:0 "Show custom pieces on illustrious armour"
+ GEN_SETTINGS_ARMOR_PIECES_DESC:0 "Illustrious armour carries extra pieces of its own, such as pauldrons, over the garment it is worn with. Turn this off to show the armour without them. The armour itself, and its colours, are unaffected."

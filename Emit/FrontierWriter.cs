@@ -780,6 +780,9 @@ public static class FrontierWriter
         				left_icon = this
         			}
         		}
+
+        		# And into the chronicle, for everyone. See Emit/ChronicleRuntimeWriter.cs.
+        		gen_chr_wilds_effect = { PHASE = $PHASE$ }
         	}
         }
         """;

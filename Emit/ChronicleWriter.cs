@@ -49,7 +49,10 @@ public static class ChronicleWriter
         // Tree order here, not index order: this file is read by people as often as by the game
         // when something looks wrong, and an empire followed by its kingdoms is far easier to scan
         // than every title of one tier in a block.
-        foreach (var title in Titles.Flatten(empires))
+        // Roots, not the empire list. The hegemony is the empires' parent, so flattening from the
+        // empires walks straight past it: it had no key here, and the panel — whose button is
+        // gated on the key resolving, not on the key existing — showed `gen_lore_h_china` instead.
+        foreach (var title in Titles.Flatten(Titles.Roots(empires)))
         {
             if (title.Tier == "b") continue;
 

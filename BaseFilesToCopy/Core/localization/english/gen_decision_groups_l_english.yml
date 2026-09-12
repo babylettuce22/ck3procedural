@@ -1,0 +1,9 @@
+﻿l_english:
+ # The name of the decision group defined in
+ # BaseFilesToCopy/Core/common/decision_group_types/00_gen_decision_groups.txt.
+ #
+ # The key is not declared anywhere -- the engine builds it as "decision_group_type_" + the group's
+ # key -- so a rename of the group has to be made here too, and a mismatch shows the raw key in the
+ # decisions panel rather than logging anything.
+
+ decision_group_type_gen_world:0 "World Decisions"

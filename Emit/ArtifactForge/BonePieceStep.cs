@@ -986,6 +986,15 @@ public static class BonePieceStep
                             {
                                 b.Field("add", byCreator ? 1000 : 600);
 
+                                // The settings-window kill switch (gen_settings_armor_pieces in
+                                // Core/common/scripted_guis/00_gen_settings_panel_guis.txt). The
+                                // variable stores OFF, so a save that never touched it reads as on.
+                                // Only the artifact gate asks it: the debug flag above is a
+                                // deliberate test and should still win when the player has hidden
+                                // the garnish everywhere else.
+                                using (b.Block("NOT"))
+                                    b.Field("has_global_variable", "gen_setting_no_armor_pieces");
+
                                 using (b.Block("any_equipped_character_artifact"))
                                 {
                                     // THE SLOT FILTER, and leaving it out was a real bug: without

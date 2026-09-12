@@ -297,6 +297,22 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Editor(typeof(AzgaarJsonFileEditor), typeof(System.Drawing.Design.UITypeEditor))]
     public string AzgaarJsonPath { get; set; } = "";
 
+    /// <summary>
+    /// Ships the chronicle the player can see: the HUD's Chronicle tab and its world feed, the
+    /// Realm Lore button in the title window, and the narrators that write entries during play.
+    ///
+    /// Off removes what the player sees and nothing the world is made of. The generated history
+    /// (<see cref="MapGen.ChronicleMap"/>) is still built, because struggles are found in its
+    /// tension; and the narrator effects that other systems call — ruin, reclamation, wonders,
+    /// frontier eras, struggle phases and endings — are still defined, as empty stubs, so none
+    /// of those callers is left pointing at nothing. See
+    /// <see cref="Emit.ChronicleRuntimeWriter.WriteStubs"/>.
+    /// </summary>
+    [Category("01 General")]
+    [DisplayName("Chronicle")]
+    [Description("Ship the Chronicle: the HUD tab with the world's history feed, the Realm Lore button in the title window, and the entries the game writes as things happen. Off removes all of it from the game. Struggles and every other system still work; they just stop narrating.")]
+    public bool EnableChronicle { get; set; } = true;
+
 
     // =========================================================================
     // 02 World State

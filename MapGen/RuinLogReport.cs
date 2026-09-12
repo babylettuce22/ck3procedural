@@ -15,15 +15,24 @@ namespace Ck3MapGen.MapGen;
 /// this reads them back. See <c>BaseFilesToCopy/Ruins/common/scripted_effects/00_ruins_effects.txt</c>.
 /// </para>
 /// <para>
-/// ---- What the four kinds are for ----
+/// ---- What the five kinds are for ----
 /// </para>
 /// <para>
 /// <c>fall</c> alone is a biased sample: it is the output of a filter, and reading only it tells you
 /// what the threshold caught while saying nothing about what it nearly caught. <c>reset</c> is the
 /// counterfactual — a streak that ended without a fall, logged with the count it had reached — and
 /// the two together are what make the threshold judgeable. If resets cluster at one year and falls
-/// at fifteen, the bar is doing real work; if resets cluster at fourteen, most of the map is one
-/// unlucky year from ruin and the number is a coin toss.
+/// at the threshold, the bar is doing real work; if resets cluster just under it, most of the map is
+/// one unlucky year from ruin and the number is a coin toss.
+/// </para>
+/// <para>
+/// <c>drift</c> is the newest and exists because reading <c>reset</c> alone was itself misleading.
+/// Until 2026-09-09 any year that was not bad zeroed the counter, so one line kind covered both
+/// "somebody rebuilt this county" and "this county twitched" — and measurement showed the second
+/// case erasing streaks of 16 to 34 bad years on counties that were still visibly dying. Forgiveness
+/// is now two-tier and the two halves are logged apart: <c>reset</c> for a real recovery, which
+/// still zeroes the count, and <c>drift</c> for a year that was merely not bad, which now only bleeds
+/// it. Their ratio is the standing check on whether the drift band is the right width.
 /// </para>
 /// <para>
 /// ---- Reading the cause columns ----
@@ -176,12 +185,13 @@ public static class RuinLogReport
 
         var falls = entries.Where(e => e.Kind == "fall").ToList();
         var resets = entries.Where(e => e.Kind == "reset").ToList();
+        var drifts = entries.Where(e => e.Kind == "drift").ToList();
         var warns = entries.Where(e => e.Kind == "warn").ToList();
         var years = entries.Where(e => e.Kind == "year").ToList();
 
         Console.WriteLine($"=== {path}");
         Console.WriteLine($"{entries.Count} entries: {falls.Count} falls, {warns.Count} warnings, "
-            + $"{resets.Count} recoveries, {years.Count} bad years"
+            + $"{resets.Count} recoveries, {drifts.Count} drift years, {years.Count} bad years"
             + (malformed > 0 ? $", {malformed} malformed" : ""));
 
         int lo = entries.Min(e => e.Year), hi = entries.Max(e => e.Year);
@@ -209,6 +219,25 @@ public static class RuinLogReport
             Console.WriteLine("  or recovered. If the two overlap heavily the threshold is close to a coin toss.");
             Histogram("  falls  ", falls.Select(e => e.Decay));
             Histogram("  resets ", resets.Select(e => e.Decay));
+            Console.WriteLine();
+        }
+
+        // ---- Is the drift band swallowing the mechanic? ----
+        //
+        // The two-tier forgiveness split what used to be one `reset` line into a full reset and a
+        // partial bleed, and the failure mode it introduced is the opposite of the one it fixed: a
+        // drift band wide enough to catch most not-bad years would hold counties near the threshold
+        // forever and turn every marginal county into an eventual ruin. The ratio is the check, and
+        // it wants to stay well under half — most not-bad years should be real recoveries.
+        if (drifts.Count > 0 || resets.Count > 0)
+        {
+            int forgiving = drifts.Count + resets.Count;
+            Console.WriteLine("HOW NOT-BAD YEARS WERE FORGIVEN");
+            Console.WriteLine($"  {resets.Count} were recoveries (count zeroed), "
+                + $"{drifts.Count} were drift (count bled by gen_ruin_decay_bleed).");
+            Console.WriteLine($"  Drift is {drifts.Count * 100.0 / Math.Max(1, forgiving):0}% of forgiving years. "
+                + "Well under half is healthy; a high share means the");
+            Console.WriteLine("  recovery bar is too strict and counties are being held near the threshold.");
             Console.WriteLine();
         }
 

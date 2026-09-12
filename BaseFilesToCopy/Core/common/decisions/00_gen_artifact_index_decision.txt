@@ -22,8 +22,12 @@ gen_artifact_index_decision = {
 	selection_tooltip = gen_artifact_index_decision_tooltip
 	confirm_text = gen_artifact_index_decision_confirm
 
-	# Sorted low so it sits with the other informational decisions rather than above the ones that
-	# change the game state.
+	# World Decisions -- this mod's own group, defined in
+	# common/decision_group_types/00_gen_decision_groups.txt. That is what separates it from the
+	# decisions that act on the world; the sort_order below only orders it WITHIN the group, where
+	# all three tie and fall back to definition order.
+	decision_group_type = gen_world
+
 	sort_order = 10
 
 	# Hidden in a world with nothing worth indexing -- a map generated with artifacts switched off,

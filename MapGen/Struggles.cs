@@ -950,6 +950,27 @@ public sealed class StruggleMap
                 };
             }
 
+            // The hegemony stands a tier above the empires, so its struggles are its grandchildren:
+            // a seed is a kingdom, its parent an empire, and that empire's parent the crown. Same
+            // reasoning as the empire case, one generation further out — and the count matters more
+            // here, since a crown with quarrels in several of its empires is not the same claim as
+            // one with a single sore spot in a corner of it.
+            case "h":
+            {
+                var under = Struggles.Where(x => x.Seed.Parent?.Parent == title).ToList();
+
+                return under.Count switch
+                {
+                    0 => null,
+                    1 => Io.ParadoxText.Loc(
+                        $"The crown's peace has one hole in it: {under[0].InSentence} is being "
+                        + $"fought out in {under[0].Seed.Name}."),
+                    _ => Io.ParadoxText.Loc(
+                        "The crown covers more quarrels than it has settled: "
+                        + $"{List(under.Select(s => s.InSentence).ToList())}."),
+                };
+            }
+
             default:
                 return null;
         }

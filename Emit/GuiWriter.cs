@@ -47,12 +47,15 @@ public static class GuiWriter
     /// <param name="societies">Whether the society prototype is shipping. Gates the HUD tab, and
     /// nothing else here — a tab pointing at a panel whose scripted_guis were not copied would be
     /// a button that silently does nothing. See <see cref="PatchHudTabs"/>.</param>
+    /// <param name="chronicle">Whether the chronicle ships. Gates the Chronicle tab and window,
+    /// and the Realm Lore button and panel in the title window — every surface that reads the
+    /// chronicle's loc, which is not written when it is off. See <see cref="Config.MapConfig.EnableChronicle"/>.</param>
     public static void WriteAll(string modDir, string gameDir, bool societies = false,
-        bool wilderness = false)
+        bool wilderness = false, bool chronicle = true)
     {
         PatchCountyView(modDir, gameDir);
         PatchCharacterWindow(modDir, gameDir);
-        PatchTitleWindow(modDir, gameDir);
+        PatchTitleWindow(modDir, gameDir, chronicle);
         PatchCouncilWindow(modDir, gameDir);
         PatchBookmarkTab(modDir, gameDir);
         PatchArtifactDetailsWindow(modDir, gameDir);
@@ -61,12 +64,14 @@ public static class GuiWriter
         PatchDynastyHouseWindow(modDir, gameDir);
 
         if (wilderness) PatchSituationWindow(modDir, gameDir);
-        if (societies) PatchHudTabs(modDir, gameDir);
+        PatchHudTabs(modDir, gameDir, societies, chronicle);
         // The windows this project authors itself live in Emit/GuiWindows. Called from here so a
         // --gui-only run still emits them; the ones that need generator data are called from
         // ContentWriter instead, because this method has none.
 
         ArtifactIndex.Write(modDir);
+        SettingsPanel.Write(modDir);
+        if (chronicle) ChronicleWindow.Write(modDir, gameDir);
     }
 
     // ===========================================================================================
@@ -74,15 +79,30 @@ public static class GuiWriter
     // ===========================================================================================
 
     /// <summary>
-    /// Adds the society tab to the column of buttons down the right of the HUD, under Intrigue.
+    /// Adds our tabs to the column of buttons down the right of the HUD, under Intrigue: the
+    /// chronicle when it ships (on by default), and the society beneath it when the prototype
+    /// does. With neither, hud.gui and the two files that follow it are not patched at all.
     ///
     /// <code>
     /// Related base files:
     ///   Societies/common/scripted_guis/00_society_panel_guis.txt   society_panel_toggle, _window
-    ///   Societies/gui/gen_society_panel.gui                        the panel this opens
-    ///   Societies/gfx/interface/skinned/hud_maintab/maintab_gen_society.dds  the icon
+    ///   Societies/gui/gen_society_panel.gui                        the society panel
+    ///   Societies/gfx/interface/skinned/hud_maintab/maintab_gen_society.dds  its icon
     ///   Societies/localization/english/society_l_english.yml       SOCIETY_TAB_BUTTON
+    ///
+    /// Related generated files, written elsewhere:
+    ///   Emit/GuiWindows/ChronicleWindow.cs   the chronicle panel and its icon
+    ///   Emit/ChronicleRuntimeWriter.cs       GEN_CHRONICLE_TAB_BUTTON
     /// </code>
+    ///
+    /// ---- Two of ours, and they have to know about each other ----
+    ///
+    /// The engine makes its own views mutually exclusive and knows nothing about ours, so each of
+    /// our tabs closes the other panel on the way in — <c>Execute</c> on a panel's close
+    /// scripted_gui is a no-op when it is not open — and every <c>IsRightWindowOpen</c> in the HUD
+    /// is widened with an <c>Or</c> over both. The society half of that only exists when the
+    /// society ships; a tab pointing at a panel whose scripted_guis were not copied would be a
+    /// button that silently does nothing.
     ///
     /// ---- The tab cannot be a game view, and does not need to be ----
     ///
@@ -110,28 +130,98 @@ public static class GuiWriter
     /// never reaches this writer — and the panel now has no other door. Use <c>--gui-only</c> or a
     /// full run alongside it.
     /// </summary>
-    private static void PatchHudTabs(string modDir, string gameDir)
+    private static void PatchHudTabs(string modDir, string gameDir, bool societies, bool chronicle)
     {
+        // Nothing of ours to put in the column, so nothing to widen either: vanilla's hud.gui,
+        // outliner and notification feed stay vanilla's, rather than shipping as unchanged copies.
+        if (!societies && !chronicle) return;
+
         var doc = GuiDocument.Open(gameDir, "gui", "gui", "hud.gui");
         if (doc is null) return;
 
         var player = GuiScope.Root("GetPlayer");
-        var toggle = new ScriptedGui("society_panel_toggle", player);
-        var open = new ScriptedGui("society_panel_window", player);
+        var societyToggle = new ScriptedGui("society_panel_toggle", player);
+        var societyOpen = new ScriptedGui("society_panel_window", player);
 
         // Under Intrigue, which is where a player looks for anything conspiratorial, and above
         // Factions. Anchored on the tab rather than on the vbox that holds it: the vbox is one of
         // several unnamed ones in this file and an anchor that cannot name itself is an anchor
         // that can drift onto the wrong match.
-        doc.Widget("intrigue tab", "tab_intrigue").InsertAfter(SocietyTab(toggle, open));
+        //
+        // Society first and then the chronicle, both after Intrigue, which puts the chronicle
+        // directly under Intrigue and the society under that.
+        // The society tab still asks a scripted_gui rooted on GetPlayer, which logs an error on
+        // every frame without a player (see ChronicleWindow.IsOpen). It is gated behind the
+        // prototype flag and has never shipped, so it is left as it is rather than half-fixed;
+        // when the society graduates, its open state wants the same treatment.
+        if (societies)
+            doc.Widget("intrigue tab", "tab_intrigue").InsertAfter(MainTab(
+                "tab_gen_society", "gfx/interface/skinned/hud_maintab/maintab_gen_society.dds",
+                "SOCIETY_TAB_BUTTON", societyToggle.Execute(), societyOpen.IsShown(),
+                // Members only, asked of the same scripted_gui that does the toggling — so a
+                // non-member gets no tab rather than a tab onto an empty panel.
+                visible: societyToggle.IsShown(), alsoClose: chronicle ? [ChronicleWindow.Close] : []));
+
+        // The chronicle gets a group of its own at the very bottom of the column, below the
+        // situations tab. Vanilla's column is unnamed vboxes — realm / court / decisions — parted
+        // by a 15-high spacer carrying the small spike ornament, so "its own category" is one
+        // more of each after the last group. The last group is found by what it holds, since the
+        // vboxes have no names to anchor on, and the spacer is a clone of vanilla's own so the
+        // ornament and its visibility gate stay whatever Paradox says they are.
+        if (chronicle)
+        {
+            var lastGroup = doc.Find("last tab group",
+                n => n.Key == "vbox" && n.Children.Any(c => c.Name == "tab_situation"));
+            var spacer = doc.Find("tab group spacer",
+                n => n.Key == "widget"
+                  && n.Children.Any(c => c.Key == "icon"
+                      && c.Field("texture")?.Contains("hud_spike_big") == true));
+
+            var chronicleTab = MainTab(
+                "tab_gen_chronicle", ChronicleWindow.IconPath, "GEN_CHRONICLE_TAB_BUTTON",
+                ChronicleWindow.ToggleOpen, ChronicleWindow.IsOpen,
+                visible: null, alsoClose: societies ? [societyOpen.Execute()] : []);
+
+            // Two inserts after the same anchor, so the second lands between: group, spacer, ours.
+            // No fallback placement: a missed anchor is reported by name and the file refuses to
+            // ship, which is the house policy for every patch here.
+            lastGroup.InsertAfter(GuiBuilder.VBox().Add(chronicleTab));
+            if (spacer.Found) lastGroup.InsertAfter(spacer.Node!.Clone());
+        }
+
+        // At least one of the two is on — the early return above saw to that.
+        var ours = (societies, chronicle) switch
+        {
+            (true, true) => GuiExpr.Or(ChronicleWindow.IsOpen, societyOpen.IsShown()),
+            (true, false) => societyOpen.IsShown(),
+            _ => ChronicleWindow.IsOpen,
+        };
 
         // Everything vanilla hides for its own right-hand windows, hidden for ours too.
         Console.WriteLine("  gui: hud.gui — widened "
-            + WidenRightWindowChecks(doc, open) + " IsRightWindowOpen check(s)");
+            + WidenRightWindowChecks(doc, ours) + " IsRightWindowOpen check(s)");
 
         doc.Ship(modDir);
 
-        PatchRightSidebarBackdrop(modDir, gameDir, open);
+        PatchRightSidebarBackdrop(modDir, gameDir, ours);
+
+        // The other two files that ask the same question. hud_notification_templates.gui is what
+        // pushes the bottom-right message feed out of the way — a 630-wide `push_left` spacer
+        // that appears when a right window is open, a `push_up` one that disappears, and the
+        // feed's max_height halving — and hud_outliner.gui hides the outliner. Neither knew our
+        // panels were windows, so both sat exactly where they were while the panel drew over
+        // them (seen on screen, 2026-09-09). Same rewrite, same reason as hud.gui: every check in
+        // the file, not the four somebody has noticed so far.
+        foreach (string file in new[] { "hud_notification_templates.gui", "hud_outliner.gui" })
+        {
+            var other = GuiDocument.Open(gameDir, "gui", "gui", file);
+            if (other is null) continue;
+
+            Console.WriteLine($"  gui: {file} — widened "
+                + WidenRightWindowChecks(other, ours) + " IsRightWindowOpen check(s)");
+
+            other.Ship(modDir);
+        }
     }
 
     /// <summary>
@@ -196,9 +286,9 @@ public static class GuiWriter
     /// rewrites POSITIVE uses too — <c>hud_notification_templates.gui</c> shrinks a panel's
     /// max_height when a right window is open, which our panel should also do.
     /// </summary>
-    private static int WidenRightWindowChecks(GuiDocument doc, ScriptedGui open)
+    private static int WidenRightWindowChecks(GuiDocument doc, GuiExpr oursOpen)
     {
-        string ours = open.IsShown().Inner;
+        string ours = oursOpen.Inner;
         int changed = 0;
 
         foreach (var node in doc.Nodes())
@@ -215,14 +305,14 @@ public static class GuiWriter
         return changed;
     }
 
-    private static void PatchRightSidebarBackdrop(string modDir, string gameDir, ScriptedGui open)
+    private static void PatchRightSidebarBackdrop(string modDir, string gameDir, GuiExpr oursOpen)
     {
         var doc = GuiDocument.Open(gameDir, "gui", "gui", "hud_sidebars.gui");
         if (doc is null) return;
 
         doc.Widget("right sidebar backdrop", "sidebar_background_right")
             .Set("visible", GuiExpr.Raw(
-                "And( Or( IsRightWindowOpen, " + open.IsShown().Inner + " ), "
+                "And( Or( IsRightWindowOpen, " + oursOpen.Inner + " ), "
                 + "Not( IsGameViewOpen('struggle') ) )"));
 
         // NO layer override. Two were tried — `windows_layer`, then `top` — because HUD pieces
@@ -245,10 +335,11 @@ public static class GuiWriter
     /// <c>tab_council</c> and <c>tab_factions</c> — those put their own visibility on the outside
     /// too, because the template's block is the button and the widget is whether there is a button.
     /// </summary>
-    private static GuiNode SocietyTab(ScriptedGui toggle, ScriptedGui open)
+    private static GuiNode MainTab(string name, string icon, string tooltip,
+        GuiExpr toggle, GuiExpr open, GuiExpr? visible, GuiExpr[] alsoClose)
     {
         var button = GuiBuilder.BlockOverride("maintab_button")
-            .Quoted("texture", "gfx/interface/skinned/hud_maintab/maintab_gen_society.dds");
+            .Quoted("texture", icon);
 
         // Close whatever else is occupying the right-hand slot, then open ours.
         //
@@ -271,20 +362,23 @@ public static class GuiWriter
         foreach (string view in RightHandViews)
             button.OnClick($"[CloseGameView( '{view}' )]");
 
+        // And our own other panels, which CloseGameView cannot reach. Each entry is that panel's
+        // close action, a no-op when it is not open, so this is the same "not this one too" as
+        // the list above.
+        foreach (var other in alsoClose)
+            button.OnClick(other);
+
         button
-            .OnClick(toggle.Execute())
-            .Tooltip("SOCIETY_TAB_BUTTON")
+            .OnClick(toggle)
+            .Tooltip(tooltip)
             // Lit while the panel is up. Reads the panel's own open state rather than a state of
             // its own, so the X button and Escape both leave it correct.
-            .Quoted("down", open.IsShown().ToString());
+            .Quoted("down", open.ToString());
 
-        return GuiBuilder.Of("widget_hud_main_tab")
-            .Name("tab_gen_society")
-            // Members only, asked of the same scripted_gui that does the toggling — so a
-            // non-member gets no tab rather than a tab onto an empty panel.
-            .Visible(toggle.IsShown())
-            .Gap()
-            .Add(button);
+        var tab = GuiBuilder.Of("widget_hud_main_tab").Name(name);
+        if (visible is not null) tab.Visible(visible);
+
+        return tab.Gap().Add(button);
     }
 
     /// <summary>
@@ -971,20 +1065,27 @@ public static class GuiWriter
     ///
     /// The lore text comes from <see cref="ChronicleWriter"/>, which writes one
     /// <c>gen_lore_&lt;title key&gt;</c> per title into its own localisation file. Nothing else is
-    /// in the path: no scripted_gui, no variable, no on_action. The button asks whether that key
+    /// in that path: no scripted_gui, no variable, no on_action. The button asks whether that key
     /// resolves to anything and hides itself when it does not, which is what gives baronies and
     /// wilderness no button rather than an empty panel, and what lets the whole feature vanish
     /// cleanly under <c>--no-history</c>.
+    ///
+    /// Under the static text sit the entries the game writes during play — see
+    /// <see cref="ChronicleRuntimeWriter"/>. Those come through <c>Title.Custom('gen_chr_line_N')</c>,
+    /// one call per slot, which returns the slot's sentence or the empty string, so every row and
+    /// the button's second gate are the same <c>StringIsEmpty</c> test as the static half. The
+    /// panel still reads no variable directly.
     ///
     /// <code>
     /// Related base files:
     ///   Wilderness/common/scripted_guis/00_wilderness_scripted_gui.txt   wilderness_title
     ///
     /// Related generated files, written elsewhere:
-    ///   Emit/ChronicleWriter.cs   the `gen_lore_&lt;title key&gt;` loc the panel reads
+    ///   Emit/ChronicleWriter.cs          the `gen_lore_&lt;title key&gt;` loc the panel reads
+    ///   Emit/ChronicleRuntimeWriter.cs   gen_chr_line_N, and GEN_CHRONICLE_SINCE
     /// </code>
     /// </summary>
-    private static void PatchTitleWindow(string modDir, string gameDir)
+    private static void PatchTitleWindow(string modDir, string gameDir, bool chronicle)
     {
         var doc = GuiDocument.Open(gameDir, "gui", "gui", "window_title.gui");
         if (doc is null) return;
@@ -994,22 +1095,28 @@ public static class GuiWriter
 
         doc.NameField("window body", "title_view_main_tab").InsertVisible(wilderness.IsHidden());
 
+        var placeholder = Placeholder("WILDERNESS_TITLE_WINDOW", wilderness,
+            "[TitleViewWindow.Close]",
+            "[TitleViewWindow.CloseHistory]",
+            "[TitleViewWindow.CloseClaimants]");
+
         doc.Leaf("placeholder", "using", "Window_Background_Sidebar")
-           .InsertBefore(
-                Placeholder("WILDERNESS_TITLE_WINDOW", wilderness,
-                    "[TitleViewWindow.Close]",
-                    "[TitleViewWindow.CloseHistory]",
-                    "[TitleViewWindow.CloseClaimants]"),
-                TitleLorePanel(wilderness));
+           .InsertBefore(chronicle ? [placeholder, TitleLorePanel(wilderness)] : [placeholder]);
 
-        // One line into vanilla's `_show` state, so the panel starts closed every time the window
-        // opens. GetVariableSystem is global to the UI and outlives both the panel and the window,
-        // so without this the panel would follow you from title to title once opened. Vanilla
-        // clears `display_allegiance` in the same block for the same reason.
-        doc.Inline("lore reset", "position", "0", "0")
-           .InsertBefore(GuiNode.Leaf("on_start", GuiExpr.VariableClear("gen_title_lore").Quoted));
+        // Everything below is the lore panel's. With the chronicle off there is no gen_lore_ loc
+        // and no gen_chr_line_N custom loc for it to read, so none of it is written — the window
+        // keeps the wilderness placeholder above and is otherwise vanilla's.
+        if (chronicle)
+        {
+            // One line into vanilla's `_show` state, so the panel starts closed every time the
+            // window opens. GetVariableSystem is global to the UI and outlives both the panel and
+            // the window, so without this the panel would follow you from title to title once
+            // opened. Vanilla clears `display_allegiance` in the same block for the same reason.
+            doc.Inline("lore reset", "position", "0", "0")
+               .InsertBefore(GuiNode.Leaf("on_start", GuiExpr.VariableClear("gen_title_lore").Quoted));
 
-        doc.Block("lore button", "button_sidepanel_right").InsertBefore(TitleLoreButton());
+            doc.Block("lore button", "button_sidepanel_right").InsertBefore(TitleLoreButton());
+        }
 
         doc.Ship(modDir);
     }
@@ -1028,7 +1135,11 @@ public static class GuiWriter
     private static GuiNode TitleLoreButton()
         => GuiBuilder.Of("button_sidepanel_right", "gen_title_lore_button")
             .ParentAnchor("right")
-            .Gap().Visible(GuiExpr.Not(GuiExpr.StringIsEmpty(GuiExpr.Localize(LoreKey))))
+            // Either half of the book is enough for a button: a title with no prehistory can
+            // still have had something happen to it since.
+            .Gap().Visible(GuiExpr.Or(
+                GuiExpr.Not(GuiExpr.StringIsEmpty(GuiExpr.Localize(LoreKey))),
+                GuiExpr.Not(GuiExpr.StringIsEmpty(RuntimeLine(0)))))
             .OnClick(GuiExpr.VariableToggle("gen_title_lore"))
             .Tooltip("GEN_TITLE_LORE_TOOLTIP")
             .Gap().Add(GuiBuilder.BlockOverride("button_text")
@@ -1038,6 +1149,54 @@ public static class GuiWriter
     /// <summary>The localisation key ChronicleWriter files this title's lore under.</summary>
     private static GuiExpr LoreKey
         => GuiExpr.Concatenate(GuiExpr.Literal("gen_lore_"), GuiExpr.Raw("Title.GetKey"));
+
+    /// <summary>One runtime slot's sentence, or the empty string. Needs <c>Title</c> in context.</summary>
+    private static GuiExpr RuntimeLine(int slot)
+        => GuiExpr.Raw($"Title.Custom('{ChronicleRuntimeWriter.TitleLine(slot)}')");
+
+    /// <summary>
+    /// The panel's text: the static prehistory, then the runtime entries beneath a small heading.
+    ///
+    /// Oldest first — slot <see cref="ChronicleRuntimeWriter.TitleSlots"/>-1 down to 0 — so the
+    /// list continues the paragraphs above it chronologically. The world window reads the same
+    /// slots the other way, because it is consulted as a feed rather than read as a history.
+    /// </summary>
+    private static GuiBuilder LoreBook()
+    {
+        var staticLore = GuiExpr.Localize(LoreKey);
+        var newest = RuntimeLine(0);
+
+        var box = GuiBuilder.VBox()
+            .ExpandingH()
+            .Spacing(8)
+            .Gap().Add(
+                GuiBuilder.TextMulti()
+                    .ExpandingH()
+                    .AutoResize()
+                    .MaxWidth(370)
+                    .Visible(GuiExpr.Not(GuiExpr.StringIsEmpty(staticLore)))
+                    .Text(staticLore),
+                GuiBuilder.TextSingle()
+                    .ExpandingH()
+                    .Format("#weak")
+                    .Visible(GuiExpr.And(
+                        GuiExpr.Not(GuiExpr.StringIsEmpty(staticLore)),
+                        GuiExpr.Not(GuiExpr.StringIsEmpty(newest))))
+                    .Text("GEN_CHRONICLE_SINCE"));
+
+        for (int slot = ChronicleRuntimeWriter.TitleSlots - 1; slot >= 0; slot--)
+        {
+            var line = RuntimeLine(slot);
+            box.Add(GuiBuilder.TextMulti()
+                .ExpandingH()
+                .AutoResize()
+                .MaxWidth(370)
+                .Visible(GuiExpr.Not(GuiExpr.StringIsEmpty(line)))
+                .Text(line));
+        }
+
+        return box;
+    }
 
     /// <summary>
     /// The panel the button opens.
@@ -1115,11 +1274,7 @@ public static class GuiWriter
                         .ExpandingH()
                         .ExpandingV()
                         .Gap().Add(GuiBuilder.BlockOverride("scrollbox_content")
-                            .Add(GuiBuilder.TextMulti()
-                                .ExpandingH()
-                                .AutoResize()
-                                .MaxWidth(370)
-                                .Text(GuiExpr.Localize(LoreKey))))));
+                            .Add(LoreBook()))));
 
     // ===========================================================================================
     // The council window

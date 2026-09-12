@@ -186,7 +186,10 @@ public sealed class ChronicleMap
     {
         var map = new ChronicleMap();
 
-        var all = Titles.Flatten(empires).ToList();
+        // Roots, not the empire list: the hegemony sits above every empire it covers, so walking
+        // from the empires down never reaches it and it ends up the one title on the map with no
+        // opening line at all — a lore button on the hegemony window showing its own raw loc key.
+        var all = Titles.Flatten(Titles.Roots(empires)).ToList();
 
         // Index order, not tree order. The tree is rebuilt from scratch on every run and its
         // iteration order is stable only by accident; the index is assigned once and never moves,
@@ -248,7 +251,13 @@ public sealed class ChronicleMap
 
         // Duchies and up get an opening line of their own. Everything else they show is borrowed
         // upward from their counties by ChronicleMap.For.
-        foreach (var title in all.Where(t => t.Tier is "d" or "k" or "e").OrderBy(t => t.Index))
+        //
+        // The hegemony comes after the ordered pass rather than inside it. Its Index is a
+        // placeholder 0 (Titles.Crown never assigns it one) rather than a position in the index
+        // space the tiers below share, so sorting it with them would put it in front of the first
+        // empire and reroll the prose of every title after it for no reason.
+        foreach (var title in all.Where(t => t.Tier is "d" or "k" or "e").OrderBy(t => t.Index)
+                                 .Concat(all.Where(t => t.Tier == "h")))
         {
             if (title.Children.Count == 0) continue;
             if (Titles.Flatten([title]).Where(t => t.Tier == "c").All(wilderness.Contains)) continue;

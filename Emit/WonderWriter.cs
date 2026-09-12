@@ -153,7 +153,13 @@ public static class WonderWriter
                         // whole reason it can say more than "it".
                         b.Field("save_scope_as", "gen_wonder_site");
 
-                        using (b.Block("county")) b.Field("save_scope_as", "gen_wonder_county");
+                        using (b.Block("county"))
+                        {
+                            b.Field("save_scope_as", "gen_wonder_county");
+                            // And the chronicle: the county's book, its lieges' and the world's.
+                            // See Emit/ChronicleRuntimeWriter.cs.
+                            b.Inline("gen_chr_push_up_effect", "TMPL = gen_chr_wonder ACTOR = holder WORLD = yes");
+                        }
 
                         using (b.Block("county.holder"))
                             b.Field("trigger_event", "gen_wonder_events.0001");

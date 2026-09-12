@@ -190,6 +190,13 @@ public static class Steppe
     /// <summary>A component this large gets its own sub-region even when the total is small.</summary>
     private const int LargeComponent = 8;
 
+    /// <summary>
+    /// The whole belt has to reach this before the situation is started at all. One county that
+    /// happens to be grass is not the Great Steppe, and the window vanilla opens over it is not
+    /// safe to look at — see the horde rule below.
+    /// </summary>
+    private const int MinBelt = 8;
+
     /// <summary>How deep past the belt's edge an expansion region may reach, in counties.</summary>
     private const int FrontierDepth = 2;
 
@@ -274,6 +281,19 @@ public static class Steppe
             .Take(Slots.Length)
             .ToList();
 
+        // No belt, or a belt with no horde on it, and there is no situation. The second half is
+        // not taste: vanilla's window works out the player's home sub-region, and when the player
+        // is not a participant — which is every feudal player, and every observer — it falls back
+        // to the sub-region of situation_top_herd and dereferences that fallback without checking
+        // it. With no nomad anywhere there is no top herd, the fallback was never written, and
+        // opening the window is an access violation inside ck3.exe. Measured on a forest world
+        // whose belt came to one county: six steppe provinces out of 5,700, one nomad at 900, none
+        // left by 994, and a hard crash on the click. See Emit/SteppeWriter.cs, which writes
+        // nothing at all for an empty map, so the situation is never started.
+        int beltCounties = ordered.Sum(g => g.Count);
+        int beltNomads = ordered.Sum(g => g.Count(i => isNomad[i]));
+        if (beltCounties < MinBelt || beltNomads == 0) return SteppeMap.Empty;
+
         var slots = SlotOrder(ordered.Count);
         var owned = ordered.Select(g => g.Select(i => counties[i]).ToList()).ToList();
         var names = owned.Select(g => KingdomName(g, "Steppe")).ToList();
@@ -304,8 +324,7 @@ public static class Steppe
 
         var expansions = Expansions(graph, counties, ordered, subRegions, inBelt, rng);
 
-        int nomadCount = ordered.Sum(g => g.Count(i => isNomad[i]));
-        return new SteppeMap(subRegions, expansions, nomadCount);
+        return new SteppeMap(subRegions, expansions, beltNomads);
     }
 
     /// <summary>

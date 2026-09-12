@@ -506,7 +506,12 @@ public static class WonderIndex
             	selection_tooltip = gen_wonder_index_decision_tooltip
             	confirm_text = gen_wonder_index_decision_confirm
 
-            	# With the other two informational decisions, below the ones that change the game.
+            	# World Decisions -- this mod's own group, defined in the static file
+            	# common/decision_group_types/00_gen_decision_groups.txt. The group is what puts
+            	# this beside the artifact index and the settings window rather than among the
+            	# decisions that change the world; sort_order only orders it within the group.
+            	decision_group_type = gen_world
+
             	sort_order = 10
 
             	is_shown = {

@@ -1,0 +1,57 @@
+﻿# The front door to the settings window.
+#
+# All this decision does is raise a flag. The window watches for it -- see
+# gen_settings_panel_window in common/scripted_guis/00_gen_settings_panel_guis.txt, and the window
+# itself, which Emit/GuiWindows/SettingsPanel.cs writes to gui/gen_settings_panel.gui.
+#
+# It is a decision because a decision is the one surface a player can find without being told it
+# exists. There is no character interaction, no map click and no hotkey that would lead anyone to a
+# window like this. NOT debug_only, unlike gen_debug_panel_decision: these switches are for the
+# person playing the map, and a settings menu behind -debug_mode is not a settings menu.
+#
+# Static rather than generated, and it can be: every key it names is fixed, and what the window
+# shows is read at runtime out of global variables. So this file is identical on every map and
+# ships unchanged on maps generated before it existed.
+
+gen_settings_panel_decision = {
+	picture = {
+		reference = "gfx/interface/illustrations/decisions/decision_misc.dds"
+	}
+
+	desc = gen_settings_panel_decision_desc
+	selection_tooltip = gen_settings_panel_decision_tooltip
+	confirm_text = gen_settings_panel_decision_confirm
+
+	# World Decisions -- this mod's own group, defined in
+	# common/decision_group_types/00_gen_decision_groups.txt. Not the debug group: that one is
+	# gated on debug_only, and these switches are for the person playing.
+	decision_group_type = gen_world
+
+	sort_order = 10
+
+	# Always. Unlike the artifact index there is nothing to be empty of -- the switches exist
+	# whether or not the systems they govern shipped, and a switch for a system this map does not
+	# have simply has nothing to act on.
+	is_shown = {
+		always = yes
+	}
+
+	is_valid = {
+		always = yes
+	}
+
+	effect = {
+		set_variable = {
+			name = gen_settings_panel_open
+			value = yes
+		}
+	}
+
+	# Never. It costs nothing, does nothing to the world, and an AI ruler taking it would spend its
+	# yearly decision slot opening a window nobody is looking at.
+	ai_will_do = {
+		base = 0
+	}
+
+	ai_check_interval = 0
+}
