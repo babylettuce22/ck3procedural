@@ -406,11 +406,14 @@ public static class ContentWriter
                 () => InnovationWriter.WriteAll(modDir, retinues.Innovations));
         }
 
+        // After naming, so the calendar speaks the language the world's peoples ended up with.
+        var calendar = WorldCalendar.Build(cfg, azgaar, cultures);
+
         Core.Stage.Time("compatibility", () =>
         {
             CompatibilityWriter.WriteDefines(modDir, gameDir, cfg);
             CompatibilityWriter.WriteCultureEras(modDir, gameDir, cfg);
-            CompatibilityWriter.WriteCalendarLocalisation(modDir, azgaar);
+            CompatibilityWriter.WriteCalendarLocalisation(modDir, calendar);
             var regionMembers = steppe.RegionMembers();
             foreach (var (key, members) in silkRoad.RegionMembers()) regionMembers[key] = members;
             // The natural-disaster regions need terrain to sit on, neighbours to spread over, and
@@ -699,7 +702,7 @@ public static class ContentWriter
                 var bookmarkResult = Core.Stage.Detail("  · bookmarks", () => BookmarkWriter.WriteAll(
                     modDir, gameDir, cfg, provinces, order, empires,
                     realms, development, cultures, faiths, governments, wilderness, prehistory,
-                    rulers, azgaar));
+                    rulers, azgaar, calendar));
 
                 // Kept for the editor: re-emitting a ruler means re-emitting the bookmark that
                 // describes him, and the cast is the record of who that is.
@@ -831,6 +834,7 @@ public static class ContentWriter
             Steppe = steppe,
             Frontier = frontier,
             Bookmarks = bookmarks,
+            Calendar = calendar,
             BaronyCount = baronyCount,
             LandCount = landCount,
             RiverCount = riverCount,

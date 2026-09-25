@@ -310,6 +310,27 @@ public static class Program
                         args[++i].Replace("-", "").Replace("_", ""), ignoreCase: true);
                     break;
 
+                // CK3's months and AD rather than the world's own. See MapGen/WorldCalendar.cs.
+                case "--no-calendar":
+                    cfg.CalendarEnabled = false;
+                    break;
+
+                // The Calendar tab's fields: "Talvek Reckoning" or "Talvek Reckoning,TR", and up
+                // to twelve comma-separated months, January first. An empty slot is generated.
+                case "--calendar-era" when i + 1 < args.Length:
+                {
+                    string[] parts = args[++i].Split(',', 2);
+                    cfg.CalendarEraName = parts[0].Trim();
+                    cfg.CalendarEraShort = parts.Length > 1 ? parts[1].Trim() : "";
+                    break;
+                }
+                case "--calendar-months" when i + 1 < args.Length:
+                {
+                    string[] names = args[++i].Split(',');
+                    cfg.CalendarMonths = [.. Enumerable.Range(0, 12).Select(m => m < names.Length ? names[m].Trim() : "")];
+                    break;
+                }
+
                 // Where the world's peoples and faiths come from: generated (procedural, the
                 // default) or CK3's own settled onto the generated map (vanilla). See
                 // MapConfig.ContentSourceMode and MapGen/VanillaIdentities.cs.
@@ -723,6 +744,10 @@ public static class Program
                 "       [--gender historical|mixed|femaledominated]  which way the world's laws and rulers lean; historical is the default");
             Console.Error.WriteLine(
                 "       [--nomads]  nomadic hordes on the steppe, as the GUI's Enable Nomad Hordes; off by default");
+            Console.Error.WriteLine(
+                "       [--no-calendar]  keep CK3's month names and AD instead of the world's own calendar");
+            Console.Error.WriteLine(
+                "       [--calendar-era \"Name[,SHORT]\"] [--calendar-months \"Jan,Feb,...\"]  typed calendar names; blanks are generated");
             Console.Error.WriteLine(
                 "This tool builds a CK3 mod around a heightmap: one you supply as a 16-bit PNG, or "
                 + "one produced from a CK3 Heightmap Forge preset.");

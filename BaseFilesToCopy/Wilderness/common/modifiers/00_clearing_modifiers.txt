@@ -1,0 +1,176 @@
+﻿# County and character modifiers given out by events/wilderness_clearing_events.txt.
+#
+# All timed. Each one is what's left over from one decision about one clearing, and none of them
+# should outlive the colony by much.
+
+
+# --- Beasts ---
+
+clearing_fur_trade = {
+	icon = stewardship_positive
+	tax_mult = 0.10
+}
+
+clearing_unpaid_hunters = {
+	icon = county_modifier_opinion_negative
+	county_opinion_add = -10
+}
+
+clearing_hunting_reserve = {
+	icon = hunt_positive
+	monthly_prestige = 0.2
+}
+
+clearing_settlers_reassured = {
+	icon = county_modifier_opinion_positive
+	county_opinion_add = 10
+}
+
+clearing_settlers_frightened = {
+	icon = county_modifier_development_negative
+	development_growth_factor = -0.15
+	county_opinion_add = -5
+}
+
+
+# --- Bandits ---
+
+clearing_gallows = {
+	icon = county_modifier_control_mixed
+	monthly_county_control_growth_add = 0.3
+	county_opinion_add = -5
+}
+
+clearing_collaborators_punished = {
+	icon = county_modifier_control_mixed
+	monthly_county_control_growth_add = 0.2
+	county_opinion_add = -15
+}
+
+clearing_collaborators_pardoned = {
+	icon = county_modifier_opinion_positive
+	county_opinion_add = 15
+}
+
+clearing_goods_returned = {
+	icon = county_modifier_opinion_positive
+	county_opinion_add = 15
+	development_growth_factor = 0.10
+}
+
+clearing_robbed_settlers = {
+	icon = county_modifier_opinion_negative
+	county_opinion_add = -10
+}
+
+
+# --- Dense growth ---
+
+clearing_timber_stock = {
+	icon = county_modifier_development_positive
+	build_gold_cost = -0.20
+	build_speed = -0.20
+}
+
+clearing_ash_fields = {
+	icon = county_modifier_development_positive
+	development_growth_factor = 0.20
+}
+
+clearing_fire_damage = {
+	icon = county_modifier_development_negative
+	development_growth_factor = -0.10
+	county_opinion_add = -10
+}
+
+clearing_felled_holy_tree = {
+	icon = county_modifier_opinion_negative
+	county_opinion_add = -15
+}
+
+clearing_spared_holy_tree = {
+	icon = county_modifier_opinion_positive
+	county_opinion_add = 10
+}
+
+
+# --- Flooded lands ---
+
+clearing_drained_fields = {
+	icon = county_modifier_development_positive
+	development_growth_factor = 0.20
+	tax_mult = 0.10
+}
+
+clearing_fever_losses = {
+	icon = county_modifier_development_negative
+	development_growth_factor = -0.10
+	county_opinion_add = -10
+}
+
+clearing_bog_unease = {
+	icon = county_modifier_opinion_negative
+	county_opinion_add = -10
+}
+
+
+# --- Scree slopes ---
+
+clearing_stone_quarry = {
+	icon = county_modifier_development_positive
+	build_gold_cost = -0.15
+	build_speed = -0.10
+}
+
+clearing_rockslide_grief = {
+	icon = county_modifier_opinion_negative
+	county_opinion_add = -10
+}
+
+clearing_rockslide_rescue = {
+	icon = county_modifier_opinion_positive
+	county_opinion_add = 15
+}
+
+clearing_terraces = {
+	icon = county_modifier_development_positive
+	development_growth_factor = 0.15
+}
+
+clearing_hill_grazing = {
+	icon = stewardship_positive
+	tax_mult = 0.05
+	supply_limit_mult = 0.15
+}
+
+
+# --- Killing cold ---
+
+clearing_hard_rationing = {
+	icon = county_modifier_control_mixed
+	monthly_county_control_growth_add = 0.3
+	county_opinion_add = -15
+}
+
+clearing_full_granary = {
+	icon = county_modifier_development_positive
+	development_growth_factor = 0.10
+	county_opinion_add = 10
+}
+
+clearing_cold_lore = {
+	icon = county_modifier_development_positive
+	development_growth_factor = 0.10
+	supply_limit_mult = 0.20
+}
+
+clearing_herder_grudge = {
+	icon = county_modifier_opinion_negative
+	county_opinion_add = -10
+	travel_danger = 10
+}
+
+clearing_lost_party = {
+	icon = county_modifier_opinion_negative
+	county_opinion_add = -10
+}

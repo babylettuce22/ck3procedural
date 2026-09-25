@@ -1,0 +1,1691 @@
+﻿namespace = wilderness_clearing
+
+# What happens when the build queue finishes clearing an obstacle.
+#
+# Fired by wilderness_clearing_works_done_effect (common/scripted_effects/00_clearing_effects.txt)
+# from each `x_cleared` building's on_complete, for human holders only, about half the time. The
+# other half keeps the plain toast. Three events per obstacle:
+#
+#   01xx beast_dens    02xx bandit_camps    03xx dense_growth
+#   04xx flooded_lands 05xx scree_slopes    06xx killing_cold
+#
+# Scopes arriving from the building: scope:obstacle_province (the capital province, where the
+# building was) and scope:obstacle_county. wilderness_clearing_setup_effect adds scope:foreman, who
+# always exists, and scope:champion, who may not.
+#
+# House rules these follow:
+#   * Every roll ends in a toast, on the failure branch too, and a toast does not repeat what the
+#     event window already said.
+#   * A gamble has a sure option beside it. Where the risk is losing the clearance itself, it goes
+#     through wilderness_clearing_obstacle_returns_effect, whose tooltip names the blocker.
+#   * The immediate block sets a 15-year "seen" flag, which the dispatcher reads to make repeats less
+#     likely. The trigger asks only for the scopes, so a fired event cannot fail silently.
+
+
+# =====================================================================================
+#  Beasts
+# =====================================================================================
+
+# The Pack Leader: one animal the hunters could not kill.
+wilderness_clearing.0101 = {
+	type = character_event
+	title = wilderness_clearing.0101.t
+	desc = wilderness_clearing.0101.desc
+	theme = hunting
+	override_background = { reference = wilderness_forest }
+
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	right_portrait = {
+		character = scope:foreman
+		animation = worry
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:champion }
+		character = scope:champion
+	}
+
+	trigger = {
+		exists = scope:obstacle_province
+		exists = scope:obstacle_county
+	}
+
+	immediate = {
+		add_character_flag = { flag = wilderness_clearing_seen_0101 years = 15 }
+		wilderness_clearing_setup_effect = yes
+	}
+
+	# Go yourself
+	option = {
+		name = wilderness_clearing.0101.a
+		skill = prowess
+
+		duel = {
+			skill = prowess
+			value = decent_skill_rating
+			50 = {
+				desc = wilderness_clearing.0101.a.success
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = wilderness_clearing.0101.a.success
+					left_icon = root
+					right_icon = scope:obstacle_county
+					add_prestige = medium_prestige_gain
+					if = {
+						limit = { has_royal_court = yes }
+						custom_tooltip = wilderness_clearing.0101.a.pelt_tt
+						create_artifact_animal_hide_effect = {
+							OWNER = root
+							HUNTER = root
+							LEGENDARY = no
+							ANIMAL = flag:wolf
+						}
+					}
+				}
+			}
+			50 = {
+				desc = wilderness_clearing.0101.a.failure
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = wilderness_clearing.0101.a.failure
+					left_icon = root
+					right_icon = scope:obstacle_county
+					increase_wounds_no_death_effect = { REASON = wild_animal }
+					add_prestige = minor_prestige_loss
+					wilderness_clearing_obstacle_returns_effect = { OBSTACLE = beast_dens }
+				}
+			}
+		}
+		stress_impact = {
+			craven = medium_stress_impact_gain
+		}
+	}
+
+	# Send the champion
+	option = {
+		name = wilderness_clearing.0101.b
+		trigger = { exists = scope:champion }
+		highlight_portrait = scope:champion
+
+		scope:champion = {
+			duel = {
+				skill = prowess
+				value = decent_skill_rating
+				60 = {
+					desc = wilderness_clearing.0101.b.success
+					compare_modifier = {
+						value = scope:duel_value
+						multiplier = 3.5
+						min = -59
+					}
+					root = {
+						send_interface_toast = {
+							type = event_toast_effect_good
+							title = wilderness_clearing.0101.b.success
+							left_icon = scope:champion
+							right_icon = scope:obstacle_county
+							add_prestige = minor_prestige_gain
+							scope:champion = {
+								add_prestige = medium_prestige_gain
+								add_opinion = {
+									target = root
+									modifier = grateful_opinion
+									opinion = 15
+								}
+							}
+						}
+					}
+				}
+				40 = {
+					desc = wilderness_clearing.0101.b.failure
+					compare_modifier = {
+						value = scope:duel_value
+						multiplier = -3.5
+						min = -39
+					}
+					root = {
+						send_interface_toast = {
+							type = event_toast_effect_bad
+							title = wilderness_clearing.0101.b.failure
+							left_icon = scope:champion
+							right_icon = scope:obstacle_county
+							scope:champion = { increase_wounds_no_death_effect = { REASON = wild_animal } }
+							wilderness_clearing_obstacle_returns_effect = { OBSTACLE = beast_dens }
+						}
+					}
+				}
+			}
+		}
+	}
+
+	# Hire trappers
+	option = {
+		name = wilderness_clearing.0101.c
+		trigger = { gold >= minor_gold_value }
+		show_as_unavailable = { always = yes }
+
+		remove_short_term_gold = minor_gold_value
+		custom_tooltip = wilderness_clearing.0101.c.tt
+	}
+}
+
+
+# Bounty on Pelts: the settlers want paying for the work.
+wilderness_clearing.0102 = {
+	type = character_event
+	title = wilderness_clearing.0102.t
+	desc = wilderness_clearing.0102.desc
+	theme = stewardship
+	override_background = { reference = village }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:foreman
+		animation = personality_rational
+	}
+
+	trigger = {
+		exists = scope:obstacle_province
+		exists = scope:obstacle_county
+	}
+
+	immediate = {
+		add_character_flag = { flag = wilderness_clearing_seen_0102 years = 15 }
+		wilderness_clearing_setup_effect = yes
+	}
+
+	option = {
+		name = wilderness_clearing.0102.a
+		trigger = { gold >= minor_gold_value }
+		show_as_unavailable = { always = yes }
+
+		remove_short_term_gold = minor_gold_value
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_fur_trade
+				years = 10
+			}
+		}
+		stress_impact = {
+			greedy = minor_stress_impact_gain
+		}
+	}
+
+	option = {
+		name = wilderness_clearing.0102.b
+
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_unpaid_hunters
+				years = 3
+			}
+		}
+		stress_impact = {
+			generous = minor_stress_impact_gain
+		}
+	}
+
+	option = {
+		name = wilderness_clearing.0102.c
+
+		add_character_modifier = {
+			modifier = clearing_hunting_reserve
+			years = 10
+		}
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_unpaid_hunters
+				years = 5
+			}
+		}
+		stress_impact = {
+			lazy = minor_stress_impact_loss
+		}
+	}
+}
+
+
+# Taken from the Fields: a child is killed after the dens were declared empty.
+wilderness_clearing.0103 = {
+	type = character_event
+	title = wilderness_clearing.0103.t
+	desc = wilderness_clearing.0103.desc
+	theme = realm
+	override_background = { reference = farmland }
+
+	left_portrait = {
+		character = root
+		animation = sadness
+	}
+	right_portrait = {
+		character = scope:foreman
+		animation = grief
+	}
+
+	trigger = {
+		exists = scope:obstacle_province
+		exists = scope:obstacle_county
+	}
+
+	immediate = {
+		add_character_flag = { flag = wilderness_clearing_seen_0103 years = 15 }
+		wilderness_clearing_setup_effect = yes
+	}
+
+	# Hunt it down
+	option = {
+		name = wilderness_clearing.0103.a
+		skill = martial
+
+		random_list = {
+			60 = {
+				desc = wilderness_clearing.0103.a.success
+				modifier = {
+					martial >= decent_skill_rating
+					add = 15
+				}
+				modifier = {
+					martial >= high_skill_rating
+					add = 15
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = wilderness_clearing.0103.a.success
+					left_icon = root
+					right_icon = scope:obstacle_county
+					add_prestige = minor_prestige_gain
+					scope:obstacle_county = {
+						add_county_modifier = {
+							modifier = clearing_settlers_reassured
+							years = 5
+						}
+					}
+				}
+			}
+			40 = {
+				desc = wilderness_clearing.0103.a.failure
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = wilderness_clearing.0103.a.failure
+					left_icon = root
+					right_icon = scope:obstacle_county
+					scope:obstacle_county = {
+						add_county_modifier = {
+							modifier = clearing_settlers_frightened
+							years = 5
+						}
+					}
+					wilderness_clearing_obstacle_returns_effect = { OBSTACLE = beast_dens }
+				}
+			}
+		}
+	}
+
+	# Compensate and post watchmen
+	option = {
+		name = wilderness_clearing.0103.b
+		trigger = { gold >= minor_gold_value }
+		show_as_unavailable = { always = yes }
+
+		remove_short_term_gold = minor_gold_value
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_settlers_reassured
+				years = 5
+			}
+		}
+		stress_impact = {
+			compassionate = minor_stress_impact_loss
+			greedy = minor_stress_impact_gain
+		}
+	}
+
+	# The price of new land
+	option = {
+		name = wilderness_clearing.0103.c
+
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_settlers_frightened
+				years = 5
+			}
+		}
+		stress_impact = {
+			compassionate = medium_stress_impact_gain
+			callous = minor_stress_impact_loss
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Bandits
+# =====================================================================================
+
+# The Chief: the last bandit leader, taken alive.
+wilderness_clearing.0201 = {
+	type = character_event
+	title = wilderness_clearing.0201.t
+	desc = wilderness_clearing.0201.desc
+	theme = martial
+	override_background = { reference = army_camp }
+
+	left_portrait = {
+		character = root
+		animation = personality_honorable
+	}
+	right_portrait = {
+		character = scope:bandit_chief
+		animation = prisonhouse
+	}
+
+	trigger = {
+		exists = scope:obstacle_province
+		exists = scope:obstacle_county
+	}
+
+	immediate = {
+		add_character_flag = { flag = wilderness_clearing_seen_0201 years = 15 }
+		wilderness_clearing_setup_effect = yes
+		create_character = {
+			template = bandit_character
+			location = scope:obstacle_province
+			culture = scope:obstacle_county.culture
+			faith = scope:obstacle_county.faith
+			dynasty = none
+			save_scope_as = bandit_chief
+		}
+	}
+
+	# Hang them
+	option = {
+		name = wilderness_clearing.0201.a
+
+		scope:bandit_chief = {
+			death = {
+				death_reason = death_execution
+				killer = root
+			}
+		}
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_gallows
+				years = 10
+			}
+		}
+		add_dread = minor_dread_gain
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+			forgiving = minor_stress_impact_gain
+			vengeful = minor_stress_impact_loss
+		}
+	}
+
+	# Take their service
+	option = {
+		name = wilderness_clearing.0201.b
+
+		add_courtier = scope:bandit_chief
+		scope:bandit_chief = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 20
+			}
+		}
+		stress_impact = {
+			vengeful = minor_stress_impact_gain
+		}
+	}
+
+	# Let them go
+	option = {
+		name = wilderness_clearing.0201.c
+
+		random_list = {
+			70 = {
+				desc = wilderness_clearing.0201.c.success
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = wilderness_clearing.0201.c.success
+					left_icon = root
+					right_icon = scope:obstacle_county
+					add_piety = minor_piety_gain
+				}
+			}
+			30 = {
+				desc = wilderness_clearing.0201.c.failure
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = wilderness_clearing.0201.c.failure
+					left_icon = scope:bandit_chief
+					right_icon = scope:obstacle_county
+					wilderness_clearing_obstacle_returns_effect = { OBSTACLE = bandit_camps }
+				}
+			}
+		}
+		stress_impact = {
+			forgiving = minor_stress_impact_loss
+			compassionate = minor_stress_impact_loss
+			vengeful = medium_stress_impact_gain
+		}
+	}
+}
+
+
+# Friends in the Village: settlers were feeding the bandits.
+wilderness_clearing.0202 = {
+	type = character_event
+	title = wilderness_clearing.0202.t
+	desc = wilderness_clearing.0202.desc
+	theme = intrigue
+	override_background = { reference = village }
+
+	left_portrait = {
+		character = root
+		animation = anger
+	}
+	right_portrait = {
+		character = scope:foreman
+		animation = paranoia
+	}
+
+	trigger = {
+		exists = scope:obstacle_province
+		exists = scope:obstacle_county
+	}
+
+	immediate = {
+		add_character_flag = { flag = wilderness_clearing_seen_0202 years = 15 }
+		wilderness_clearing_setup_effect = yes
+	}
+
+	# Flog them
+	option = {
+		name = wilderness_clearing.0202.a
+
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_collaborators_punished
+				years = 10
+			}
+		}
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+			forgiving = minor_stress_impact_gain
+		}
+	}
+
+	# Pardon them
+	option = {
+		name = wilderness_clearing.0202.b
+
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_collaborators_pardoned
+				years = 5
+			}
+		}
+		random_list = {
+			75 = {
+				desc = wilderness_clearing.0202.b.success
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = wilderness_clearing.0202.b.success
+					left_icon = root
+					right_icon = scope:obstacle_county
+					add_prestige = minor_prestige_gain
+				}
+			}
+			25 = {
+				desc = wilderness_clearing.0202.b.failure
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = wilderness_clearing.0202.b.failure
+					left_icon = root
+					right_icon = scope:obstacle_county
+					wilderness_clearing_obstacle_returns_effect = { OBSTACLE = bandit_camps }
+				}
+			}
+		}
+		stress_impact = {
+			vengeful = minor_stress_impact_gain
+			forgiving = minor_stress_impact_loss
+		}
+	}
+
+	# Use them to find the rest
+	option = {
+		name = wilderness_clearing.0202.c
+		skill = intrigue
+
+		duel = {
+			skill = intrigue
+			value = medium_skill_rating
+			50 = {
+				desc = wilderness_clearing.0202.c.success
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = wilderness_clearing.0202.c.success
+					left_icon = root
+					right_icon = scope:obstacle_county
+					add_gold = minor_gold_value
+					add_prestige = minor_prestige_gain
+				}
+			}
+			50 = {
+				desc = wilderness_clearing.0202.c.failure
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = wilderness_clearing.0202.c.failure
+					left_icon = root
+					right_icon = scope:obstacle_county
+					wilderness_clearing_obstacle_returns_effect = { OBSTACLE = bandit_camps }
+				}
+			}
+		}
+	}
+}
+
+
+# The Hoard: the bandits' takings, and whose they were.
+wilderness_clearing.0203 = {
+	type = character_event
+	title = wilderness_clearing.0203.t
+	desc = wilderness_clearing.0203.desc
+	theme = stewardship
+	override_background = { reference = courtyard }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:foreman
+		animation = personality_rational
+	}
+
+	trigger = {
+		exists = scope:obstacle_province
+		exists = scope:obstacle_county
+	}
+
+	immediate = {
+		add_character_flag = { flag = wilderness_clearing_seen_0203 years = 15 }
+		wilderness_clearing_setup_effect = yes
+	}
+
+	option = {
+		name = wilderness_clearing.0203.a
+
+		add_gold = medium_gold_value
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_robbed_settlers
+				years = 10
+			}
+		}
+		stress_impact = {
+			generous = medium_stress_impact_gain
+			greedy = minor_stress_impact_loss
+		}
+	}
+
+	option = {
+		name = wilderness_clearing.0203.b
+
+		add_prestige = minor_prestige_gain
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_goods_returned
+				years = 10
+			}
+		}
+		stress_impact = {
+			greedy = medium_stress_impact_gain
+			generous = minor_stress_impact_loss
+		}
+	}
+
+	option = {
+		name = wilderness_clearing.0203.c
+
+		add_gold = minor_gold_value
+		add_prestige = minor_prestige_gain
+	}
+}
+
+
+# =====================================================================================
+#  Dense growth
+# =====================================================================================
+
+# Timber: more wood than anyone can use.
+wilderness_clearing.0301 = {
+	type = character_event
+	title = wilderness_clearing.0301.t
+	desc = wilderness_clearing.0301.desc
+	theme = stewardship_domain_focus
+	override_background = { reference = wilderness_forest_pine }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:foreman
+		animation = happiness
+	}
+
+	trigger = {
+		exists = scope:obstacle_province
+		exists = scope:obstacle_county
+	}
+
+	immediate = {
+		add_character_flag = { flag = wilderness_clearing_seen_0301 years = 15 }
+		wilderness_clearing_setup_effect = yes
+	}
+
+	option = {
+		name = wilderness_clearing.0301.a
+
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_timber_stock
+				years = 10
+			}
+		}
+	}
+
+	option = {
+		name = wilderness_clearing.0301.b
+
+		add_gold = medium_gold_value
+		stress_impact = {
+			greedy = minor_stress_impact_loss
+		}
+	}
+}
+
+
+# Burn It Off: fire is faster than grubbing stumps, until the wind turns.
+wilderness_clearing.0302 = {
+	type = character_event
+	title = wilderness_clearing.0302.t
+	desc = wilderness_clearing.0302.desc
+	theme = stewardship_domain_focus
+	override_background = { reference = wilderness_forest }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:foreman
+		animation = personality_bold
+	}
+
+	trigger = {
+		exists = scope:obstacle_province
+		exists = scope:obstacle_county
+	}
+
+	immediate = {
+		add_character_flag = { flag = wilderness_clearing_seen_0302 years = 15 }
+		wilderness_clearing_setup_effect = yes
+	}
+
+	# Burn it
+	option = {
+		name = wilderness_clearing.0302.a
+		skill = stewardship
+
+		random_list = {
+			65 = {
+				desc = wilderness_clearing.0302.a.success
+				modifier = {
+					stewardship >= decent_skill_rating
+					add = 10
+				}
+				modifier = {
+					stewardship >= high_skill_rating
+					add = 10
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = wilderness_clearing.0302.a.success
+					left_icon = root
+					right_icon = scope:obstacle_county
+					scope:obstacle_county = {
+						add_county_modifier = {
+							modifier = clearing_ash_fields
+							years = 10
+						}
+					}
+				}
+			}
+			35 = {
+				desc = wilderness_clearing.0302.a.failure
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = wilderness_clearing.0302.a.failure
+					left_icon = root
+					right_icon = scope:obstacle_county
+					remove_short_term_gold = minor_gold_value
+					scope:obstacle_county = {
+						add_county_modifier = {
+							modifier = clearing_fire_damage
+							years = 5
+						}
+					}
+				}
+			}
+		}
+		stress_impact = {
+			paranoid = minor_stress_impact_gain
+		}
+	}
+
+	# Dig them out
+	option = {
+		name = wilderness_clearing.0302.b
+		trigger = { gold >= minor_gold_value }
+		show_as_unavailable = { always = yes }
+
+		remove_short_term_gold = minor_gold_value
+		stress_impact = {
+			greedy = minor_stress_impact_gain
+		}
+	}
+}
+
+
+# The Great Tree: one tree the fellers will not touch.
+wilderness_clearing.0303 = {
+	type = character_event
+	title = wilderness_clearing.0303.t
+	desc = wilderness_clearing.0303.desc
+	theme = faith
+	override_background = { reference = wilderness_forest }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:foreman
+		animation = worry
+	}
+
+	trigger = {
+		exists = scope:obstacle_province
+		exists = scope:obstacle_county
+	}
+
+	immediate = {
+		add_character_flag = { flag = wilderness_clearing_seen_0303 years = 15 }
+		wilderness_clearing_setup_effect = yes
+	}
+
+	# Cut it down
+	option = {
+		name = wilderness_clearing.0303.a
+
+		add_gold = minor_gold_value
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_felled_holy_tree
+				years = 5
+			}
+		}
+		stress_impact = {
+			zealous = minor_stress_impact_loss
+			paranoid = minor_stress_impact_gain
+		}
+	}
+
+	# Leave it standing
+	option = {
+		name = wilderness_clearing.0303.b
+
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_spared_holy_tree
+				years = 10
+			}
+		}
+		stress_impact = {
+			zealous = minor_stress_impact_gain
+		}
+	}
+
+	# Bless it, then cut it
+	option = {
+		name = wilderness_clearing.0303.c
+		trigger = { piety >= minor_piety_value }
+		show_as_unavailable = { always = yes }
+
+		add_piety = minor_piety_loss
+		add_gold = minor_gold_value
+	}
+}
+
+
+# =====================================================================================
+#  Flooded lands
+# =====================================================================================
+
+# The Spring Flood: will the new dykes hold?
+wilderness_clearing.0401 = {
+	type = character_event
+	title = wilderness_clearing.0401.t
+	desc = wilderness_clearing.0401.desc
+	theme = stewardship
+	override_background = { reference = wilderness_wetlands }
+
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:foreman
+		animation = stress
+	}
+
+	trigger = {
+		exists = scope:obstacle_province
+		exists = scope:obstacle_county
+	}
+
+	immediate = {
+		add_character_flag = { flag = wilderness_clearing_seen_0401 years = 15 }
+		wilderness_clearing_setup_effect = yes
+	}
+
+	# Trust the dykes
+	option = {
+		name = wilderness_clearing.0401.a
+		skill = stewardship
+
+		random_list = {
+			60 = {
+				desc = wilderness_clearing.0401.a.success
+				modifier = {
+					stewardship >= decent_skill_rating
+					add = 15
+				}
+				modifier = {
+					stewardship >= high_skill_rating
+					add = 15
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = wilderness_clearing.0401.a.success
+					left_icon = root
+					right_icon = scope:obstacle_county
+					scope:obstacle_county = {
+						add_county_modifier = {
+							modifier = clearing_drained_fields
+							years = 15
+						}
+					}
+				}
+			}
+			40 = {
+				desc = wilderness_clearing.0401.a.failure
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = wilderness_clearing.0401.a.failure
+					left_icon = root
+					right_icon = scope:obstacle_county
+					wilderness_clearing_obstacle_returns_effect = { OBSTACLE = flooded_lands }
+				}
+			}
+		}
+	}
+
+	# Pay for more hands
+	option = {
+		name = wilderness_clearing.0401.b
+		trigger = { gold >= medium_gold_value }
+		show_as_unavailable = { always = yes }
+
+		remove_short_term_gold = medium_gold_value
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_drained_fields
+				years = 15
+			}
+		}
+		stress_impact = {
+			greedy = minor_stress_impact_gain
+		}
+	}
+}
+
+
+# Marsh Fever: the diggers are dying.
+wilderness_clearing.0402 = {
+	type = character_event
+	title = wilderness_clearing.0402.t
+	desc = wilderness_clearing.0402.desc
+	theme = physical_health
+	override_background = { reference = wilderness_wetlands }
+
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:foreman
+		animation = sick
+	}
+
+	trigger = {
+		exists = scope:obstacle_province
+		exists = scope:obstacle_county
+	}
+
+	immediate = {
+		add_character_flag = { flag = wilderness_clearing_seen_0402 years = 15 }
+		wilderness_clearing_setup_effect = yes
+	}
+
+	# Visit the sick
+	option = {
+		name = wilderness_clearing.0402.a
+
+		add_prestige = minor_prestige_gain
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_settlers_reassured
+				years = 5
+			}
+		}
+		random_list = {
+			75 = {
+				desc = wilderness_clearing.0402.a.success
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = wilderness_clearing.0402.a.success
+					left_icon = root
+					right_icon = scope:obstacle_county
+					custom_tooltip = wilderness_clearing.0402.a.success.tt
+				}
+			}
+			25 = {
+				desc = wilderness_clearing.0402.a.failure
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = wilderness_clearing.0402.a.failure
+					left_icon = root
+					right_icon = scope:obstacle_county
+					custom_tooltip = wilderness_clearing.0402.a.failure.tt
+					contract_disease_effect = { DISEASE = ill TREATMENT_EVENT = yes }
+				}
+			}
+		}
+		stress_impact = {
+			compassionate = minor_stress_impact_loss
+			craven = minor_stress_impact_gain
+		}
+	}
+
+	# Send money
+	option = {
+		name = wilderness_clearing.0402.b
+		trigger = { gold >= minor_gold_value }
+		show_as_unavailable = { always = yes }
+
+		remove_short_term_gold = minor_gold_value
+		custom_tooltip = wilderness_clearing.0402.b.tt
+	}
+
+	# Keep them working
+	option = {
+		name = wilderness_clearing.0402.c
+
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_fever_losses
+				years = 5
+			}
+		}
+		stress_impact = {
+			compassionate = medium_stress_impact_gain
+		}
+	}
+}
+
+
+# What the Bog Gave Back: a body in the peat.
+wilderness_clearing.0403 = {
+	type = character_event
+	title = wilderness_clearing.0403.t
+	desc = wilderness_clearing.0403.desc
+	theme = dread
+	override_background = { reference = wilderness_wetlands }
+
+	left_portrait = {
+		character = root
+		animation = shock
+	}
+	right_portrait = {
+		character = scope:foreman
+		animation = fear
+	}
+
+	trigger = {
+		exists = scope:obstacle_province
+		exists = scope:obstacle_county
+	}
+
+	immediate = {
+		add_character_flag = { flag = wilderness_clearing_seen_0403 years = 15 }
+		wilderness_clearing_setup_effect = yes
+	}
+
+	option = {
+		name = wilderness_clearing.0403.a
+
+		add_piety = minor_piety_gain
+		stress_impact = {
+			cynical = minor_stress_impact_gain
+		}
+	}
+
+	option = {
+		name = wilderness_clearing.0403.b
+
+		add_prestige = minor_prestige_gain
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_bog_unease
+				years = 5
+			}
+		}
+		stress_impact = {
+			zealous = minor_stress_impact_gain
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Scree slopes
+# =====================================================================================
+
+# Good Stone: there is a quarry under the rubble.
+wilderness_clearing.0501 = {
+	type = character_event
+	title = wilderness_clearing.0501.t
+	desc = wilderness_clearing.0501.desc
+	theme = stewardship_domain_focus
+	override_background = { reference = wilderness_mountains }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:foreman
+		animation = happiness
+	}
+
+	trigger = {
+		exists = scope:obstacle_province
+		exists = scope:obstacle_county
+	}
+
+	immediate = {
+		add_character_flag = { flag = wilderness_clearing_seen_0501 years = 15 }
+		wilderness_clearing_setup_effect = yes
+	}
+
+	option = {
+		name = wilderness_clearing.0501.a
+		trigger = { gold >= minor_gold_value }
+		show_as_unavailable = { always = yes }
+
+		remove_short_term_gold = minor_gold_value
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_stone_quarry
+				years = 20
+			}
+		}
+	}
+
+	option = {
+		name = wilderness_clearing.0501.b
+
+		add_gold = minor_gold_value
+		stress_impact = {
+			greedy = minor_stress_impact_loss
+		}
+	}
+}
+
+
+# Rockslide: people buried, and the slope still moving.
+wilderness_clearing.0502 = {
+	type = character_event
+	title = wilderness_clearing.0502.t
+	desc = wilderness_clearing.0502.desc
+	theme = realm
+	override_background = { reference = wilderness_mountains }
+
+	left_portrait = {
+		character = root
+		animation = shock
+	}
+	right_portrait = {
+		character = scope:foreman
+		animation = fear
+	}
+
+	trigger = {
+		exists = scope:obstacle_province
+		exists = scope:obstacle_county
+	}
+
+	immediate = {
+		add_character_flag = { flag = wilderness_clearing_seen_0502 years = 15 }
+		wilderness_clearing_setup_effect = yes
+	}
+
+	# Dig them out
+	option = {
+		name = wilderness_clearing.0502.a
+		skill = martial
+
+		random_list = {
+			50 = {
+				desc = wilderness_clearing.0502.a.success
+				modifier = {
+					martial >= decent_skill_rating
+					add = 15
+				}
+				modifier = {
+					martial >= high_skill_rating
+					add = 15
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = wilderness_clearing.0502.a.success
+					left_icon = root
+					right_icon = scope:obstacle_county
+					scope:obstacle_county = {
+						add_county_modifier = {
+							modifier = clearing_rockslide_rescue
+							years = 10
+						}
+					}
+				}
+			}
+			50 = {
+				desc = wilderness_clearing.0502.a.failure
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = wilderness_clearing.0502.a.failure
+					left_icon = root
+					right_icon = scope:obstacle_county
+					scope:obstacle_county = {
+						add_county_modifier = {
+							modifier = clearing_rockslide_grief
+							years = 5
+						}
+					}
+					wilderness_clearing_obstacle_returns_effect = { OBSTACLE = scree_slopes }
+				}
+			}
+		}
+		stress_impact = {
+			craven = minor_stress_impact_gain
+		}
+	}
+
+	# Nobody else goes up
+	option = {
+		name = wilderness_clearing.0502.b
+
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_rockslide_grief
+				years = 5
+			}
+		}
+		stress_impact = {
+			compassionate = medium_stress_impact_gain
+			brave = minor_stress_impact_gain
+		}
+	}
+}
+
+
+# Terraces: grain or goats.
+wilderness_clearing.0503 = {
+	type = character_event
+	title = wilderness_clearing.0503.t
+	desc = wilderness_clearing.0503.desc
+	theme = stewardship_domain_focus
+	override_background = { reference = wilderness_mountains }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:foreman
+		animation = personality_rational
+	}
+
+	trigger = {
+		exists = scope:obstacle_province
+		exists = scope:obstacle_county
+	}
+
+	immediate = {
+		add_character_flag = { flag = wilderness_clearing_seen_0503 years = 15 }
+		wilderness_clearing_setup_effect = yes
+	}
+
+	option = {
+		name = wilderness_clearing.0503.a
+		trigger = { gold >= minor_gold_value }
+		show_as_unavailable = { always = yes }
+
+		remove_short_term_gold = minor_gold_value
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_terraces
+				years = 20
+			}
+		}
+		stress_impact = {
+			lazy = minor_stress_impact_gain
+		}
+	}
+
+	option = {
+		name = wilderness_clearing.0503.b
+
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_hill_grazing
+				years = 10
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  Killing cold
+# =====================================================================================
+
+# The First Winter: enough food for a short one.
+wilderness_clearing.0601 = {
+	type = character_event
+	title = wilderness_clearing.0601.t
+	desc = wilderness_clearing.0601.desc
+	theme = realm
+	override_background = { reference = bp3_mountain_winter }
+
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:foreman
+		animation = shiver
+	}
+
+	trigger = {
+		exists = scope:obstacle_province
+		exists = scope:obstacle_county
+	}
+
+	immediate = {
+		add_character_flag = { flag = wilderness_clearing_seen_0601 years = 15 }
+		wilderness_clearing_setup_effect = yes
+	}
+
+	# Ration hard
+	option = {
+		name = wilderness_clearing.0601.a
+
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_hard_rationing
+				years = 5
+			}
+		}
+		stress_impact = {
+			gluttonous = minor_stress_impact_gain
+		}
+	}
+
+	# Buy grain
+	option = {
+		name = wilderness_clearing.0601.b
+		trigger = { gold >= medium_gold_value }
+		show_as_unavailable = { always = yes }
+
+		remove_short_term_gold = medium_gold_value
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_full_granary
+				years = 5
+			}
+		}
+		stress_impact = {
+			greedy = minor_stress_impact_gain
+		}
+	}
+
+	# Hope for a short winter
+	option = {
+		name = wilderness_clearing.0601.c
+
+		random_list = {
+			50 = {
+				desc = wilderness_clearing.0601.c.success
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = wilderness_clearing.0601.c.success
+					left_icon = root
+					right_icon = scope:obstacle_county
+					add_prestige = minor_prestige_gain
+				}
+			}
+			50 = {
+				desc = wilderness_clearing.0601.c.failure
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = wilderness_clearing.0601.c.failure
+					left_icon = root
+					right_icon = scope:obstacle_county
+					scope:obstacle_county = {
+						add_county_modifier = {
+							modifier = clearing_lost_party
+							years = 5
+						}
+					}
+					wilderness_clearing_obstacle_returns_effect = { OBSTACLE = killing_cold }
+				}
+			}
+		}
+	}
+}
+
+
+# Lost in the Snow: a work party that has not come back.
+wilderness_clearing.0602 = {
+	type = character_event
+	title = wilderness_clearing.0602.t
+	desc = wilderness_clearing.0602.desc
+	theme = realm
+	override_background = { reference = ep2_hunt_snowy_forest }
+
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:foreman
+		animation = shiver
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:champion }
+		character = scope:champion
+	}
+
+	trigger = {
+		exists = scope:obstacle_province
+		exists = scope:obstacle_county
+	}
+
+	immediate = {
+		add_character_flag = { flag = wilderness_clearing_seen_0602 years = 15 }
+		wilderness_clearing_setup_effect = yes
+	}
+
+	# Lead the search
+	option = {
+		name = wilderness_clearing.0602.a
+		skill = prowess
+
+		duel = {
+			skill = prowess
+			value = medium_skill_rating
+			50 = {
+				desc = wilderness_clearing.0602.a.success
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = wilderness_clearing.0602.a.success
+					left_icon = root
+					right_icon = scope:obstacle_county
+					add_prestige = minor_prestige_gain
+					scope:obstacle_county = {
+						add_county_modifier = {
+							modifier = clearing_settlers_reassured
+							years = 5
+						}
+					}
+				}
+			}
+			50 = {
+				desc = wilderness_clearing.0602.a.failure
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = wilderness_clearing.0602.a.failure
+					left_icon = root
+					right_icon = scope:obstacle_county
+					increase_wounds_no_death_effect = { REASON = wounds }
+					scope:obstacle_county = {
+						add_county_modifier = {
+							modifier = clearing_lost_party
+							years = 5
+						}
+					}
+				}
+			}
+		}
+		stress_impact = {
+			craven = medium_stress_impact_gain
+		}
+	}
+
+	# Send the champion
+	option = {
+		name = wilderness_clearing.0602.b
+		trigger = { exists = scope:champion }
+		highlight_portrait = scope:champion
+
+		scope:champion = {
+			duel = {
+				skill = prowess
+				value = medium_skill_rating
+				50 = {
+					desc = wilderness_clearing.0602.b.success
+					compare_modifier = {
+						value = scope:duel_value
+						multiplier = 3.5
+						min = -49
+					}
+					root = {
+						send_interface_toast = {
+							type = event_toast_effect_good
+							title = wilderness_clearing.0602.b.success
+							left_icon = scope:champion
+							right_icon = scope:obstacle_county
+							scope:champion = {
+								add_prestige = minor_prestige_gain
+								add_opinion = {
+									target = root
+									modifier = grateful_opinion
+									opinion = 15
+								}
+							}
+							scope:obstacle_county = {
+								add_county_modifier = {
+									modifier = clearing_settlers_reassured
+									years = 5
+								}
+							}
+						}
+					}
+				}
+				50 = {
+					desc = wilderness_clearing.0602.b.failure
+					compare_modifier = {
+						value = scope:duel_value
+						multiplier = -3.5
+						min = -49
+					}
+					root = {
+						send_interface_toast = {
+							type = event_toast_effect_bad
+							title = wilderness_clearing.0602.b.failure
+							left_icon = scope:champion
+							right_icon = scope:obstacle_county
+							scope:champion = { increase_wounds_no_death_effect = { REASON = wounds } }
+							scope:obstacle_county = {
+								add_county_modifier = {
+									modifier = clearing_lost_party
+									years = 5
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	# Wait for the snow to stop
+	option = {
+		name = wilderness_clearing.0602.c
+
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_lost_party
+				years = 5
+			}
+		}
+		stress_impact = {
+			compassionate = medium_stress_impact_gain
+			brave = minor_stress_impact_gain
+		}
+	}
+}
+
+
+# The Herders: people who already know how to live here.
+wilderness_clearing.0603 = {
+	type = character_event
+	title = wilderness_clearing.0603.t
+	desc = wilderness_clearing.0603.desc
+	theme = diplomacy
+	override_background = { reference = bp3_mountain_winter }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:foreman
+		animation = personality_rational
+	}
+
+	trigger = {
+		exists = scope:obstacle_province
+		exists = scope:obstacle_county
+	}
+
+	immediate = {
+		add_character_flag = { flag = wilderness_clearing_seen_0603 years = 15 }
+		wilderness_clearing_setup_effect = yes
+	}
+
+	# Pay them to teach
+	option = {
+		name = wilderness_clearing.0603.a
+		trigger = { gold >= minor_gold_value }
+		show_as_unavailable = { always = yes }
+
+		remove_short_term_gold = minor_gold_value
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_cold_lore
+				years = 20
+			}
+		}
+		stress_impact = {
+			arrogant = minor_stress_impact_gain
+		}
+	}
+
+	# Take what they have
+	option = {
+		name = wilderness_clearing.0603.b
+
+		add_gold = minor_gold_value
+		scope:obstacle_county = {
+			add_county_modifier = {
+				modifier = clearing_herder_grudge
+				years = 10
+			}
+		}
+		stress_impact = {
+			just = minor_stress_impact_gain
+			compassionate = minor_stress_impact_gain
+			greedy = minor_stress_impact_loss
+		}
+	}
+
+	# Send them on their way
+	option = {
+		name = wilderness_clearing.0603.c
+		stress_impact = {
+			arrogant = minor_stress_impact_loss
+		}
+	}
+}

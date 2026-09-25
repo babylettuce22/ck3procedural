@@ -269,7 +269,7 @@ public static class WorldOverwrite
         {
             BookmarkWriter.ReWrite(modDir, result.Config, cast, result.Titles, realms,
                 written.Cultures, written.Faiths, governments, written.Wilderness, castRulers,
-                result.Azgaar);
+                result.Azgaar, written.Calendar);
         }
 
         // Both files whole, from the words now on the cultures and titles. The writer is pure —

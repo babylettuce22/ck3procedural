@@ -153,7 +153,9 @@ beast_dens_cleared = {
 			}
 		}
 	on_complete = {
-		wilderness_obstacle_cleared_effect = yes
+		# A toast, or for a human one of three events in events/wilderness_clearing_events.txt.
+		# Called before the remove so the events see the province as it was finished.
+		wilderness_clearing_works_done_effect = { FIRST = 0101 SECOND = 0102 THIRD = 0103 }
 		remove_building = beast_dens_cleared  # <-- Deletes the building and frees the slot
 	}
 }
@@ -196,7 +198,7 @@ bandit_camps_cleared = {
 			}
 		}
 	on_complete = {
-		wilderness_obstacle_cleared_effect = yes
+		wilderness_clearing_works_done_effect = { FIRST = 0201 SECOND = 0202 THIRD = 0203 }
 		remove_building = bandit_camps_cleared
 	}
 }
@@ -243,7 +245,7 @@ dense_growth_cleared = {
 			}
 		}
 	on_complete = {
-		wilderness_obstacle_cleared_effect = yes
+		wilderness_clearing_works_done_effect = { FIRST = 0301 SECOND = 0302 THIRD = 0303 }
 		remove_building = dense_growth_cleared
 	}
 }
@@ -294,7 +296,7 @@ flooded_lands_cleared = {
 			}
 		}
 	on_complete = {
-		wilderness_obstacle_cleared_effect = yes
+		wilderness_clearing_works_done_effect = { FIRST = 0401 SECOND = 0402 THIRD = 0403 }
 		remove_building = flooded_lands_cleared
 	}
 }
@@ -342,7 +344,7 @@ scree_slopes_cleared = {
 			}
 		}
 	on_complete = {
-		wilderness_obstacle_cleared_effect = yes
+		wilderness_clearing_works_done_effect = { FIRST = 0501 SECOND = 0502 THIRD = 0503 }
 		remove_building = scree_slopes_cleared
 	}
 }
@@ -391,7 +393,7 @@ killing_cold_cleared = {
 			}
 		}
 	on_complete = {
-		wilderness_obstacle_cleared_effect = yes
+		wilderness_clearing_works_done_effect = { FIRST = 0601 SECOND = 0602 THIRD = 0603 }
 		remove_building = killing_cold_cleared
 	}
 }

@@ -117,6 +117,7 @@ Frequently used options:
 | `--county-scale <number>` | Scale barony size relative to vanilla; larger values produce fewer provinces. |
 | `--province-downscale <integer>` | Set the province-grid downscale factor. |
 | `--start-year <year>` / `--era-anchor <year>` | Set the start year and era calibration. |
+| `--no-calendar` | Keep CK3's month names and AD instead of generating the world's own calendar. |
 | `--gender historical\|mixed\|femaledominated` | Choose the world's gender-law profile. |
 | `--races off\|low\|high\|exotic` | Choose a fantasy-race preset. |
 | `--content procedural\|vanilla` | Generate the world's cultures and faiths, or settle the generated map with CK3's own. |
@@ -228,6 +229,13 @@ Generated names use a phonology, lexicon, and language flavour. Heritages have r
 language families and cultures have dialects, so related peoples can share recognizable
 name elements. Faith names can use a liturgical register. Azgaar imports also use the
 export's names and Markov name bases.
+
+The world also gets its own calendar in the language of its most widespread people: twelve
+month names, often built from that language's words for the season and for "moon", and an era
+after every year ("12 Talvenmoon 900 TR"). Names can be typed on the Calendar tab (or with
+`--calendar-era` and `--calendar-months`); anything left blank is generated, and an Azgaar
+export's own era is used before a generated one. Turn it off with World Calendar in World State,
+or `--no-calendar`. Worlds using vanilla cultures and faiths keep CK3's calendar.
 
 To sample a language without generating a map:
 

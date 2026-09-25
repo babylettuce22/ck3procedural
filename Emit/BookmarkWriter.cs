@@ -41,7 +41,7 @@ public static class BookmarkWriter
         RealmMap realms, Dictionary<Title, int> development,
         CultureMap cultures, FaithMap faiths, GovernmentMap governments,
         WildernessMap wilderness, PrehistoryMap prehistory, RulerMap rulers,
-        AzgaarImport? azgaar = null)
+        AzgaarImport? azgaar = null, WorldCalendar? calendar = null)
     {
         // Only realm seats have a character: a liege's demesne counties and every vassal-held
         // county under one man share his seat's ruler, and the character file writes nobody for
@@ -82,7 +82,7 @@ public static class BookmarkWriter
 
         WriteBookmarks(modDir, cfg, cast, realms, cultures, faiths, governments);
         WriteChallengeCharacter(modDir, cfg, cast.Challenge, realms, cultures, faiths, governments);
-        WriteBookmarkLocalisation(modDir, cfg, cast, azgaar,
+        WriteBookmarkLocalisation(modDir, cfg, cast, azgaar, calendar,
             TabSubtitle(cfg, seatCounties, governments),
             BookmarkTitle(cast.Slots, realms, azgaar));
         WriteBookmarkGraphics(modDir, gameDir);
@@ -136,7 +136,8 @@ public static class BookmarkWriter
     /// </summary>
     internal static void ReWrite(string modDir, MapConfig cfg, BookmarkCast cast,
         List<Title> empires, RealmMap realms, CultureMap cultures, FaithMap faiths,
-        GovernmentMap governments, WildernessMap wilderness, RulerMap rulers, AzgaarImport? azgaar)
+        GovernmentMap governments, WildernessMap wilderness, RulerMap rulers, AzgaarImport? azgaar,
+        WorldCalendar? calendar)
     {
         var seats = Titles.Flatten(empires)
             .Where(t => t.Tier == "c" && !wilderness.Contains(t) && rulers.Contains(t))
@@ -144,7 +145,7 @@ public static class BookmarkWriter
 
         WriteBookmarks(modDir, cfg, cast, realms, cultures, faiths, governments);
         WriteChallengeCharacter(modDir, cfg, cast.Challenge, realms, cultures, faiths, governments);
-        WriteBookmarkLocalisation(modDir, cfg, cast, azgaar,
+        WriteBookmarkLocalisation(modDir, cfg, cast, azgaar, calendar,
             TabSubtitle(cfg, seats, governments),
             BookmarkTitle(cast.Slots, realms, azgaar));
     }
@@ -438,7 +439,7 @@ public static class BookmarkWriter
     }
 
     private static void WriteBookmarkLocalisation(string modDir, MapConfig cfg, BookmarkCast cast,
-        AzgaarImport? azgaar, string subtitle, string title)
+        AzgaarImport? azgaar, WorldCalendar? calendar, string subtitle, string title)
     {
         string dir = Path.Combine(modDir, "localization", "english");
         Directory.CreateDirectory(dir);
@@ -449,8 +450,9 @@ public static class BookmarkWriter
         // bare year. The *short* era rides along when the world has one, because a world counting
         // from its own conquest wants the tab to say which calendar that number is on. Only the
         // short one: this line is the 155px-wide `text_single`, so "900 AC" fits where "900 After
-        // the Conquest" does not — the full name goes on the subtitle below it instead.
-        string era = azgaar?.EraShort.Trim() ?? "";
+        // the Conquest" does not — the full name goes on the subtitle below it instead. The same
+        // suffix the game clock carries (WorldCalendar), whether the export named it or we did.
+        string era = calendar?.EraShort ?? "";
         int year = Math.Max(1, cfg.StartYear);
         string dated = era.Length > 0 ? $"{year} {era}" : year.ToString();
         loc.AddBuilt(GroupKey, dated);

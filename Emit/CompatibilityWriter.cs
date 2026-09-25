@@ -1588,22 +1588,6 @@ public static partial class CompatibilityWriter
     }
 
     /// <summary>
-    /// What this world calls its era, short form — "BE", "AC", whatever the export named it.
-    /// Empty when the world is on vanilla's calendar and its years want no suffix at all.
-    ///
-    /// The full name is the fallback because an export may fill one field and not the other, and a
-    /// long era after a year still reads as a date; nothing after a year does not.
-    /// </summary>
-    public static string EraSuffix(MapGen.AzgaarImport? azgaar)
-    {
-        if (azgaar is null) return "";
-
-        string era = azgaar.EraShort.Trim();
-        if (era.Length == 0) era = azgaar.EraName.Trim();
-        return era;
-    }
-
-    /// <summary>
     /// The era's full name — "the Cladian Era", not "CE" — or empty when the export left it blank.
     /// <see cref="BookmarkWriter"/> puts this on the bookmark tab, where there is room for it and
     /// where the export naming its own age beats anything this generator would invent.
@@ -1612,8 +1596,8 @@ public static partial class CompatibilityWriter
         => azgaar?.EraName.Trim() ?? "";
 
     /// <summary>
-    /// <summary>
-    /// Puts the world's own era on the game clock.
+    /// Puts the world's own calendar on the game clock: its era after every year, and its month
+    /// names (<see cref="MapGen.WorldCalendar"/>).
     ///
     /// The year itself needs no arithmetic — <see cref="MapGen.AzgaarImport"/> already moved the
     /// bookmark onto the export's calendar, so the engine is counting the right number and only
@@ -1629,35 +1613,61 @@ public static partial class CompatibilityWriter
     /// Written into <c>localization/replace/</c>, which loads after the ordinary pass — these three
     /// are vanilla keys and have to win. The folder replaces *same-named* vanilla files, so a name
     /// of our own shadows nothing; it only buys the later slot.
+    ///
+    /// The months are the engine's own keys, <c>CW_DATE_January</c> and <c>CW_DATE_Jan</c>, which
+    /// live in <c>clausewitz/localization/</c> rather than the game's. There is no short key for
+    /// May — vanilla's "May" is already three letters, so the engine reads the long key for both
+    /// and so does ours: May's short date shows its full name. Weekdays are left alone; CK3 never
+    /// renders one.
     /// </summary>
-    public static void WriteCalendarLocalisation(string modDir, MapGen.AzgaarImport? azgaar)
+    public static void WriteCalendarLocalisation(string modDir, MapGen.WorldCalendar? calendar)
     {
-        if (azgaar is null) return;
+        if (calendar is null) return;
 
-        string era = EraSuffix(azgaar);
-        if (era.Length == 0) return;
+        var text = new StringBuilder("l_english:\n");
 
         // Literal rather than through vanilla's $ERA$ token. That token resolves to
         // GAME_DATE_STRING_ERA_CE or _BCE depending on sign, and only two of the three date strings
         // reference it at all -- the plain one carries no era and the short one asks for the BCE
         // form. Writing the suffix in directly makes all three agree without depending on which
         // token the engine happens to supply where.
-        string text =
-            $$"""
-              l_english:
-               GAME_DATE_STRING:0 "$DAY$ $MONTH$, $YEAR$ {{Io.ParadoxText.Loc(era)}}"
-               GAME_DATE_STRING_SHORT:0 "$DAY$ $MONTH_SHORT$ $YEAR$ {{Io.ParadoxText.Loc(era)}}"
-               GAME_DATE_STRING_LONG:0 "$DAY|O$ of $MONTH$, $YEAR$ {{Io.ParadoxText.Loc(era)}}"
+        string era = Io.ParadoxText.Loc(calendar.EraShort);
+        if (era.Length > 0)
+            text.Append($"""
+                 GAME_DATE_STRING:0 "$DAY$ $MONTH$, $YEAR$ {era}"
+                 GAME_DATE_STRING_SHORT:0 "$DAY$ $MONTH_SHORT$ $YEAR$ {era}"
+                 GAME_DATE_STRING_LONG:0 "$DAY|O$ of $MONTH$, $YEAR$ {era}"
 
-              """;
+                """);
+
+        if (calendar.Months is { } months && calendar.MonthsShort is { } shorts)
+        {
+            for (int m = 0; m < 12; m++)
+                text.Append($" CW_DATE_{MonthKeys[m]}:0 \"{Io.ParadoxText.Loc(months[m])}\"\n");
+            for (int m = 0; m < 12; m++)
+                if (MonthShortKeys[m] != MonthKeys[m])
+                    text.Append($" CW_DATE_{MonthShortKeys[m]}:0 \"{Io.ParadoxText.Loc(shorts[m])}\"\n");
+        }
 
         string dir = Path.Combine(modDir, "localization", "replace", "english");
         Directory.CreateDirectory(dir);
-        ParadoxText.WriteBom(Path.Combine(dir, "zz_gen_calendar_l_english.yml"), text);
+        ParadoxText.WriteBom(Path.Combine(dir, "zz_gen_calendar_l_english.yml"), text.ToString());
 
-        Console.WriteLine($"  calendar: dates suffixed \"{era}\"" +
-                          (azgaar.EraName.Length > 0 ? $" ({azgaar.EraName})" : ""));
+        if (era.Length > 0)
+            Console.WriteLine($"  calendar: dates suffixed \"{calendar.EraShort}\""
+                              + (calendar.EraName.Length > 0 ? $" ({calendar.EraName})" : ""));
+        if (calendar.Months is { } named)
+            Console.WriteLine($"  calendar: months {string.Join(", ", named)}");
     }
+
+    /// <summary>The engine's month keys, January first; see <see cref="WriteCalendarLocalisation"/>.</summary>
+    private static readonly string[] MonthKeys =
+        ["January", "February", "March", "April", "May", "June",
+         "July", "August", "September", "October", "November", "December"];
+
+    /// <summary>Short forms, January first. May has none of its own.</summary>
+    private static readonly string[] MonthShortKeys =
+        ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
     /// <summary>
     /// Pushes the end of the world out when the world's calendar would otherwise run into it.

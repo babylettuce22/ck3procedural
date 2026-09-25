@@ -355,6 +355,38 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Description("Which year on CK3's own timeline this world is as advanced as: innovations cultures already hold, the development baseline, and the feudal/tribal/nomad mix. Set it to follow the world year to keep the two together, which is how every map worked before this setting existed.")]
     public int EraAnchorYear { get; set; }
 
+    /// <summary>
+    /// Whether the world gets its own calendar: twelve month names and an era suffix after every
+    /// year. Each name is the one typed on the Calendar tab (<see cref="CalendarMonths"/>,
+    /// <see cref="CalendarEraName"/>, <see cref="CalendarEraShort"/>) where there is one, else
+    /// generated in the language of the world's most widespread people. See
+    /// <see cref="MapGen.WorldCalendar"/>. A world of vanilla peoples keeps vanilla's calendar.
+    /// </summary>
+    [Category("02 World State")]
+    [DisplayName("World Calendar")]
+    [Description("Gives the world its own calendar: month names and a year suffix (\"1 Talvenmoon 900 TR\" instead of \"1 January 900 AD\"). Type names on the Calendar tab; anything left blank is generated in the language of the world's most widespread people, and an Azgaar export's own era is used before a generated one. Off keeps CK3's months and AD. Not used with Content Source VanillaWorld.")]
+    public bool CalendarEnabled { get; set; } = true;
+
+    /// <summary>
+    /// The era, typed: "Talvek Reckoning". Blank means the export's era or a generated one. Edited
+    /// on the Calendar tab rather than the grid, which has no good shape for fifteen related
+    /// strings; still saved with presets, which take every read/write property.
+    /// </summary>
+    [Browsable(false)]
+    public string CalendarEraName { get; set; } = "";
+
+    /// <summary>
+    /// What follows every year: "TR". Blank means the initials of <see cref="CalendarEraName"/>
+    /// when that is typed, else the export's or a generated one.
+    /// </summary>
+    [Browsable(false)]
+    public string CalendarEraShort { get; set; } = "";
+
+    /// <summary>Twelve month names, January first; a blank one is generated. See
+    /// <see cref="CalendarEraName"/> for why it is not on the grid.</summary>
+    [Browsable(false)]
+    public string[] CalendarMonths { get; set; } = ["", "", "", "", "", "", "", "", "", "", "", ""];
+
     /// <summary>The year every advancement heuristic reads. See <see cref="EraAnchorYear"/>.</summary>
     [Browsable(false)]
     public int EraYear => EraAnchorYear > 0 ? EraAnchorYear : Math.Max(1, StartYear);

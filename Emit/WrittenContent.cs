@@ -137,6 +137,13 @@ public sealed record WrittenContent
     /// </summary>
     public BookmarkCast? Bookmarks { get; init; }
 
+    /// <summary>
+    /// The world's own era and months, or null on vanilla's calendar. Kept because the bookmark tab
+    /// shows the era after the year, and a re-emit of the bookmark must not drop it — nor draw a
+    /// new one, which would disagree with the calendar file already written.
+    /// </summary>
+    public MapGen.WorldCalendar? Calendar { get; init; }
+
     /// <summary>The province id boundaries the title localisation file is written against.</summary>
     public required int BaronyCount { get; init; }
 

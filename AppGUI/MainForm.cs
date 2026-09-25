@@ -123,6 +123,8 @@ public sealed partial class MainForm : Form
 
     /// <summary>The Climate tab: paint the climate over the heightmap. See <see cref="ClimatePanel"/>.</summary>
     private readonly ClimatePanel _climate = new() { Dock = DockStyle.Fill };
+    private readonly CalendarPanel _calendar = new() { Dock = DockStyle.Fill };
+    private TabPage _calendarTab = null!;
     private TabPage _climateTab = null!;
 
     /// <summary>Which source the Climate tab was last given terrain for; null when it needs a fresh one.</summary>
@@ -406,6 +408,9 @@ public sealed partial class MainForm : Form
 
             // The toolbar chip mirrors the grid row, whichever of them took the edit.
             if (changed == nameof(MapConfig.AzgaarJsonPath)) ApplyAzgaarChip();
+
+            if (changed is nameof(MapConfig.CalendarEnabled) or nameof(MapConfig.ContentSource)) SyncCalendarTab();
+            if (changed == nameof(MapConfig.StartYear)) _calendar.RefreshPreview();
 
             // The Climate tab's prediction runs on the same settings; its cached model is stale.
             _climate.InvalidateModel();
@@ -812,7 +817,8 @@ public sealed partial class MainForm : Form
         var tabs = _tabs = Theme.MakeTabs();
         tabs.Selecting += (_, e) =>
         {
-            if (_loadedWorld is not null && (e.TabPage == _sourceTab || e.TabPage == _forgeTab || e.TabPage == _climateTab))
+            if (_loadedWorld is not null && (e.TabPage == _sourceTab || e.TabPage == _forgeTab || e.TabPage == _climateTab
+                                             || e.TabPage == _calendarTab))
             {
                 e.Cancel = true;
                 _status.Text = "This loaded world is edited from the Map and Titles tabs; generation, heightmap and climate tools are inactive.";
@@ -869,11 +875,18 @@ public sealed partial class MainForm : Form
         _climate.UseAutomatic = _state.ClimateAutomatic;
         _climate.PaintChanged += RefreshClimateTabTitle;
 
+        // The Calendar tab edits the config directly; it is in the strip only while the World
+        // Calendar setting is on — see SyncCalendarTab.
+        _calendarTab = new TabPage("Calendar") { BackColor = Theme.Background };
+        _calendarTab.Controls.Add(_calendar);
+        _calendar.Bind(_options.Config);
+
         tabs.TabPages.Add(mapTab);
         tabs.TabPages.Add(forgeTab);
         tabs.TabPages.Add(climateTab);
         tabs.TabPages.Add(sourceTab);
         tabs.TabPages.Add(titleTab);
+        SyncCalendarTab();
 
         var logPane = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
         logPane.Controls.Add(_log);
@@ -2156,6 +2169,23 @@ public sealed partial class MainForm : Form
     /// </summary>
     private void RefreshSettings() => _grid.SelectedObject = _settingsView;
 
+    /// <summary>
+    /// Puts the Calendar tab in the strip, after Climate, exactly while the world will have a
+    /// calendar of its own: World Calendar on, and not a world of vanilla peoples, which keeps
+    /// CK3's. Typed names survive the tab being hidden; they are on the config, not the tab.
+    /// </summary>
+    private void SyncCalendarTab()
+    {
+        if (_tabs is null) return;
+
+        var cfg = _options.Config;
+        bool wanted = cfg.CalendarEnabled && cfg.ContentSource != MapConfig.ContentSourceMode.VanillaWorld;
+        bool shown = _tabs.TabPages.Contains(_calendarTab);
+
+        if (wanted && !shown) _tabs.TabPages.Insert(_tabs.TabPages.IndexOf(_climateTab) + 1, _calendarTab);
+        else if (!wanted && shown) _tabs.TabPages.Remove(_calendarTab);
+    }
+
     private void SavePreset()
     {
         using var dialog = new SaveFileDialog
@@ -2215,6 +2245,8 @@ public sealed partial class MainForm : Form
             ApplyAzgaarChip();
             RefreshSettings();
             _climate.InvalidateModel();
+            _calendar.Bind(_options.Config);
+            SyncCalendarTab();
 
             // The paint beside the preset replaces what is on the tab; a preset with none clears
             // it, so the preset means the same map every time it is loaded. Both are undoable.

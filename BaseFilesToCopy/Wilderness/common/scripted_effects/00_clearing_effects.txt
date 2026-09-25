@@ -1,0 +1,144 @@
+﻿# Obstacle clearing events: the plumbing behind events/wilderness_clearing_events.txt.
+#
+# Each natural blocker's `x_cleared` building calls wilderness_clearing_works_done_effect from its
+# on_complete, in place of the bare toast it used to send. A human holder then gets either the toast
+# or one of three events written for that obstacle; the AI always gets the toast.
+#
+# Only the build-queue route fires these. The pioneer and the Warden's council task clear through
+# wilderness_clear_hardest_obstacle_effect and report in their own voice — the council task loops for
+# the whole game, and hanging a story on it would bury the player in wolves.
+
+
+# Province scope (a `x_cleared` building's on_complete).
+#
+#   $FIRST$ $SECOND$ $THIRD$  the four-digit ids of the cleared obstacle's three events
+#
+# No $OBSTACLE$ parameter: nothing in here would read it, and the engine can crash on a parameter
+# that a scripted effect never uses (ck3-tiger reports this as fatal(macro)).
+#
+# Weighted 3 : 1 : 1 : 1, so a human sees a story half the time. An event the holder has seen in the
+# last fifteen years drops to a quarter weight, which hands its share back to the toast rather than to
+# a sibling — three events per obstacle is a small pool, and a repeat reads worse than a quiet year.
+#
+# Exactly one branch runs and every branch reports, so the roll is never silent.
+wilderness_clearing_works_done_effect = {
+	save_scope_as = obstacle_province
+	county ?= { save_scope_as = obstacle_county }
+
+	if = {
+		limit = {
+			exists = scope:obstacle_county
+			scope:obstacle_county.holder ?= { is_ai = no }
+		}
+		scope:obstacle_county.holder = {
+			random_list = {
+				3 = {
+					scope:obstacle_province = { wilderness_obstacle_cleared_effect = yes }
+				}
+				1 = {
+					modifier = {
+						factor = 0.25
+						has_character_flag = wilderness_clearing_seen_$FIRST$
+					}
+					trigger_event = wilderness_clearing.$FIRST$
+				}
+				1 = {
+					modifier = {
+						factor = 0.25
+						has_character_flag = wilderness_clearing_seen_$SECOND$
+					}
+					trigger_event = wilderness_clearing.$SECOND$
+				}
+				1 = {
+					modifier = {
+						factor = 0.25
+						has_character_flag = wilderness_clearing_seen_$THIRD$
+					}
+					trigger_event = wilderness_clearing.$THIRD$
+				}
+			}
+		}
+	}
+	else = {
+		wilderness_obstacle_cleared_effect = yes
+	}
+}
+
+
+# Character scope: the event's root, from its immediate block.
+#
+# scope:foreman is whoever is running the works. The colony's own leader if there is one, else the
+# best steward at court, else a local elder made on the spot, so every event always has somebody to
+# put in the right portrait. A new colonist's court can be empty.
+#
+# scope:champion is the best fighter at court, and may not exist. Options that send them are gated on
+# `exists = scope:champion`.
+wilderness_clearing_setup_effect = {
+	if = {
+		limit = {
+			scope:obstacle_county.var:colony_leader ?= {
+				is_alive = yes
+				is_available_ai_adult = yes
+			}
+		}
+		scope:obstacle_county.var:colony_leader = { save_scope_as = foreman }
+	}
+	else_if = {
+		limit = {
+			any_courtier = { is_available_ai_adult = yes }
+		}
+		ordered_courtier = {
+			limit = { is_available_ai_adult = yes }
+			order_by = stewardship
+			save_scope_as = foreman
+		}
+	}
+	else = {
+		create_character = {
+			template = settlement_elder_character
+			location = scope:obstacle_province
+			culture = scope:obstacle_county.culture
+			faith = scope:obstacle_county.faith
+			dynasty = none
+			save_scope_as = foreman
+		}
+	}
+
+	ordered_courtier = {
+		limit = {
+			is_available_ai_adult = yes
+			NOT = { this = scope:foreman }
+			prowess >= 8
+		}
+		order_by = prowess
+		save_scope_as = champion
+	}
+}
+
+
+# Any scope. The work is undone and the blocker is back on scope:obstacle_province.
+#
+#   $OBSTACLE$  the blocker to put back
+#
+# add_building ignores can_construct but not the slot count, and it fails silently on a full province.
+# That can happen here: the cleared building freed its slot, but the player may have queued something
+# into it before answering the event. So the blocker only goes back when there is room for it, and the
+# county has to still be a colony. A county promoted in the meantime has moved on, and putting a wolf
+# den on a finished castle would undo the promotion's own guarantee. In either case the county loses
+# development progress instead, which the tooltip draws for itself.
+wilderness_clearing_obstacle_returns_effect = {
+	scope:obstacle_province = {
+		if = {
+			limit = {
+				county ?= { is_colony_county_trigger = yes }
+				NOT = { has_building = $OBSTACLE$ }
+				free_building_slots > 0
+			}
+			custom_tooltip = wilderness_clearing_returns_$OBSTACLE$_tt
+			hidden_effect = { add_building = $OBSTACLE$ }
+		}
+		else = {
+			county ?= { change_development_progress = -50 }
+		}
+	}
+}

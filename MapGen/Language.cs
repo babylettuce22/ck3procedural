@@ -552,6 +552,93 @@ public sealed class Language
         }
     }
 
+    // --- The calendar --------------------------------------------------------------------------
+
+    /// <summary>
+    /// What each month is named for, January first, as lexicon concepts: two or three per month,
+    /// so a calendar can dodge a root it already spent without falling out of season. Northern and
+    /// temperate, like the game's own calendar — cold and storm at the turn of the year, green in
+    /// spring, fire and gold at the height of summer, field for the harvest, dark before the long
+    /// nights. Every concept is one the lexicon roots (<see cref="Lexicon.Build"/>).
+    /// </summary>
+    private static readonly string[][] MonthConcepts =
+    [
+        ["cold", "white", "wolf"],
+        ["storm", "grey", "raven"],
+        ["wild", "spring", "hawk"],
+        ["green", "meadow", "new"],
+        ["bright", "fair", "stag"],
+        ["sun", "high", "broad"],
+        ["fire", "hawk", "high"],
+        ["gold", "field", "red"],
+        ["field", "holy", "gold"],
+        ["red", "boar", "ash"],
+        ["dark", "black", "raven"],
+        ["long", "star", "holy"],
+    ];
+
+    /// <summary>
+    /// Twelve month names in this language, January first.
+    ///
+    /// One style for all twelve, chosen once, because a calendar reads as a calendar only when its
+    /// months rhyme with each other — September to December all end in -ber:
+    /// <list type="bullet">
+    /// <item>the season's root and the language's root for "moon" — the Old English habit
+    ///   (Hrēþmōnaþ, Wulfmōnaþ), so every month means something in the language;</item>
+    /// <item>the season's root and one shared ending, which reads like -ber without meaning moon;</item>
+    /// <item>twelve plain words, the calendar whose names nobody remembers the reason for.</item>
+    /// </list>
+    /// An imported (Markov) language has no roots and always takes the plain words.
+    /// </summary>
+    public string[] MonthNames(Rng rng)
+    {
+        var months = new string[12];
+        var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (_markov is not null)
+        {
+            for (int m = 0; m < 12; m++)
+                months[m] = Fresh(_ => Word(rng, 2, 3));
+            return months;
+        }
+
+        var p = Phonology!;
+        var lex = Lexicon!;
+        double style = rng.Double();
+        List<string>? tail = style < 0.5 ? lex.Roots["moon"] : style < 0.8 ? p.Element(rng) : null;
+
+        var spent = new HashSet<string>(StringComparer.Ordinal);
+        for (int m = 0; m < 12; m++)
+        {
+            if (tail is null)
+            {
+                months[m] = Fresh(_ => Word(rng, 2, 3));
+                continue;
+            }
+
+            string concept = MonthConcepts[m].FirstOrDefault(c => !spent.Contains(c)) ?? MonthConcepts[m][0];
+            spent.Add(concept);
+
+            // The concept's root first; a fresh head only if the compound comes out blocked, too
+            // long, or the same as a month already named — two roots can spell alike.
+            var root = lex.Roots[concept];
+            months[m] = Fresh(attempt => Spell(p.Join(attempt == 0 ? root : p.Word(rng, 1), tail, rng)));
+        }
+        return months;
+
+        string Fresh(Func<int, string> draw)
+        {
+            string best = "";
+            for (int attempt = 0; attempt < 12; attempt++)
+            {
+                best = draw(attempt);
+                if (best.Length is >= 3 and <= 12 && !Blocked(best) && !taken.Contains(best)) break;
+            }
+            taken.Add(best);
+            return best;
+        }
+    }
+
     // --- Plumbing ------------------------------------------------------------------------------
 
     private string Spell(List<string> ids)
