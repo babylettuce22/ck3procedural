@@ -5,7 +5,7 @@ namespace Ck3MapGen.Emit;
 
 public static class WarWriter
 {
-    public static void WriteAll(string modDir, PrehistoryMap prehistory)
+    public static void WriteAll(string modDir, PrehistoryMap prehistory, Config.MapConfig cfg)
     {
         // 1. Clean up old history/wars/ file so CK3-tiger doesn't complain about end_date
         string oldHistoryFile = Path.Combine(modDir, "history", "wars", "00_generated_wars.txt");
@@ -32,6 +32,7 @@ public static class WarWriter
 
         using (b.Block("gen_start_active_wars"))
         using (b.Block("effect"))
+        using (StartGate.LatestOnly(b, cfg))
         {
             foreach (var war in prehistory.ActiveWars)
             {

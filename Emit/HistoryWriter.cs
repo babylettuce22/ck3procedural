@@ -58,6 +58,7 @@ public static class HistoryWriter
         ContentWriter.WriteNobleFamilyTitles(modDir, prehistory);
         WriteTitleHistory(modDir, cfg, empires, development, realms, governments, faiths, wilderness, wild, prehistory);
         WriteDynastyLocalisation(modDir, prehistory);
+        if (prehistory.Eras is { } eras) WriteEraStartEffects(modDir, cfg, eras);
     }
 
     /// <summary>
@@ -276,7 +277,11 @@ public static class HistoryWriter
         // =========================================================================
         // 2. Deceased Ancestors (Fathers) — Stamped with historical birth and death
         // =========================================================================
-        foreach (var ancestor in prehistory.AllExtraCharacters.Where(c => c.IsDeadAncestor))
+        var eras = prehistory.Eras;
+        var ancestors = prehistory.AllExtraCharacters.Where(c => c.IsDeadAncestor);
+        if (eras is not null) ancestors = eras.Elders.Concat(ancestors);
+
+        foreach (var ancestor in ancestors)
         {
             using (b.Block(ancestor.Id))
             {
@@ -297,6 +302,14 @@ public static class HistoryWriter
                 var ancestorCulture = cultures.Cultures.FirstOrDefault(c => c.Key == ancestor.CultureKey);
                 if (ancestorCulture is not null)
                     b.Field("trait", GetPhenotypeTrait(ancestorCulture, ethnicities, cfg));
+
+                // An ancestor who rules on an earlier bookmark is written as a ruler would be.
+                if (eras is not null)
+                {
+                    if (eras.Profiles.TryGetValue(ancestor.Id, out var held)) WriteProfile(b, held);
+                    if (eras.ParentOf.TryGetValue(ancestor.Id, out var elder))
+                        b.Field(elder.Female ? "mother" : "father", elder.Id);
+                }
 
                 b.Inline(ancestor.BirthDate, "birth = yes");
 
@@ -569,6 +582,80 @@ public static class HistoryWriter
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_characters.txt"), b.ToString());
     }
+    /// <summary>What an earlier-bookmark ruler carries beyond an ancestor's name and dates.</summary>
+    private static void WriteProfile(JominiBuilder b, Ruler ruler)
+    {
+        var profile = ruler.Profile;
+        b.Field("dna", ruler.DnaKey);
+        b.Field("martial", profile.Martial);
+        b.Field("prowess", profile.Prowess);
+        b.Field("diplomacy", profile.Diplomacy);
+        b.Field("intrigue", profile.Intrigue);
+        b.Field("stewardship", profile.Stewardship);
+        b.Field("learning", profile.Learning);
+        b.Field("trait", profile.EducationTrait);
+        foreach (string trait in profile.PersonalityTraits) b.Field("trait", trait);
+        foreach (string trait in profile.OtherTraits) b.Field("trait", trait);
+    }
+
+    /// <summary>
+    /// The purse and standing an earlier-bookmark ruler starts with, granted only when that date is
+    /// the one being played. Written as history effects instead, a dead father's gold would be
+    /// inherited into the start-date game.
+    /// </summary>
+    private static void WriteEraStartEffects(string modDir, MapConfig cfg, BookmarkEras eras)
+    {
+        string dir = Path.Combine(modDir, "common", "on_action");
+        Directory.CreateDirectory(dir);
+
+        var b = new JominiBuilder();
+        b.Comment("Purses for the rulers of the earlier bookmarks, on their own start date only.");
+        b.Blank();
+
+        using (b.Block("on_game_start"))
+        using (b.Block("on_actions"))
+            b.Token("gen_earlier_bookmark_purses");
+
+        b.Blank();
+
+        using (b.Block("gen_earlier_bookmark_purses"))
+        using (b.Block("effect"))
+        {
+            var bounds = eras.Eras.Select(e => e.Date).Append(cfg.StartDate).ToList();
+            for (int i = 0; i < eras.Eras.Count; i++)
+            {
+                using (b.Block(i == 0 ? "if" : "else_if"))
+                {
+                    using (b.Block("limit")) b.Token($"current_date < {bounds[i + 1]}");
+
+                    foreach (var ruler in eras.Eras[i].Rulers.All)
+                    using (b.Block($"character:{ruler.Id}"))
+                    {
+                        b.Field("add_gold", ruler.Gold);
+                        b.Field("add_prestige", ruler.Prestige);
+                        if (ruler.Renown > 0 && ruler.Independent)
+                            b.Inline("dynasty", $"add_dynasty_prestige = {ruler.Renown}");
+                        if (ruler.Profile.Dread > 0) b.Field("add_dread", ruler.Profile.Dread);
+                        if (ruler.Profile.Legitimacy is not null)
+                            b.Field("add_legitimacy", $"{ruler.Profile.Legitimacy}");
+
+                        // The bookmark screen names him by it.
+                        b.Field("give_nickname", ruler.Profile.Nickname);
+
+                        if (ruler.Independent || ruler.Tier is "d" or "k" or "e" or "h")
+                            using (b.Block("add_character_modifier"))
+                            {
+                                b.Field("modifier", "gen_early_realm_stability");
+                                b.Field("years", ruler.Profile.StabilityYears);
+                            }
+                    }
+                }
+            }
+        }
+
+        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_earlier_bookmarks.txt"), b.ToString());
+    }
+
     private static void WriteHeadOfFaithCharacters(string modDir, MapConfig cfg,
         FaithMap faiths, CultureMap cultures, EthnicityMap ethnicities, List<Title> counties,
         RealmMap realms, WildernessMap wilderness)
@@ -794,6 +881,7 @@ public static class HistoryWriter
 
         int reignStartYear = Math.Max(1, cfg.StartYear - 5);
         string titleGrantDate = $"{reignStartYear}.1.1";
+        var eras = prehistory?.Eras;
 
         // The hegemony stands above the empires, so flattening from them never reaches it. It is
         // only ever in HolderCounty when the map was asked to start with one worn; unheld, the loop
@@ -811,23 +899,33 @@ public static class HistoryWriter
             realms.Liege.TryGetValue(title, out var liege);
             string government = governments.For(holder);
 
+            // With earlier bookmarks, one block per generation from the earliest date on; the
+            // liege and development go in the first, where every later date inherits them.
+            var succession = eras is not null && eras.Succession.TryGetValue(holder, out var line)
+                ? line
+                : [(titleGrantDate, CharacterId(holder))];
+
             using (b.Block(title.Key))
-            using (b.Block(titleGrantDate))
-            {
-                b.Field("holder", CharacterId(holder));
+                for (int i = 0; i < succession.Count; i++)
+                    using (b.Block(succession[i].Date))
+                    {
+                        b.Field("holder", succession[i].HolderId);
 
-                // Feudal is the engine's default, so saying so would be noise on most of the map.
-                if (government != GovernmentMap.Feudal) b.Field("government", government);
+                        // Feudal is the engine's default, so saying so would be noise on most of the map.
+                        if (government != GovernmentMap.Feudal) b.Field("government", government);
 
-                b.Field("liege", liege?.Key);
-                if (level > 0) b.Field("change_development_level", level);
+                        if (i == 0)
+                        {
+                            b.Field("liege", liege?.Key);
+                            if (level > 0) b.Field("change_development_level", level);
+                        }
 
-                // Once per ruler, on the one title that is theirs: the effect acts on the holder,
-                // and a man holding a kingdom and six counties would otherwise run it seven times.
-                if (government == GovernmentMap.Administrative
-                    && ReferenceEquals(title, Primary(holder, realms)))
-                    WriteAdministrativeFallback(b);
-            }
+                        // Once per ruler, on the one title that is theirs: the effect acts on the holder,
+                        // and a man holding a kingdom and six counties would otherwise run it seven times.
+                        if (government == GovernmentMap.Administrative
+                            && ReferenceEquals(title, Primary(holder, realms)))
+                            WriteAdministrativeFallback(b);
+                    }
         }
 
         // The noble families, granted on the same day their holders got their land.
@@ -885,9 +983,10 @@ public static class HistoryWriter
 
             void Seat(List<string> keys, string holder)
             {
+                // From the earliest bookmark when there are several, so no start finds them unheld.
                 foreach (string key in keys)
                     using (b.Block(key))
-                    using (b.Block(cfg.StartDate))
+                    using (b.Block(eras?.FirstDate ?? cfg.StartDate))
                     {
                         b.Field("holder", holder);
                         b.Field("government", "wilderness_government");

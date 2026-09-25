@@ -185,6 +185,9 @@ public sealed class PrehistoryMap
 
     public List<ActiveWar> ActiveWars { get; } = [];
 
+    /// <summary>The generations before the start date, when earlier bookmarks are on; else null.</summary>
+    public BookmarkEras? Eras { get; set; }
+
     private const int MaxRivalsPerRuler = 2;
     private const int MaxFriendsPerRuler = 2;
     private const int MaxAlliancesPerRuler = 3;

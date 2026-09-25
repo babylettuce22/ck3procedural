@@ -391,6 +391,32 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Browsable(false)]
     public int EraYear => EraAnchorYear > 0 ? EraAnchorYear : Math.Max(1, StartYear);
 
+    /// <summary>
+    /// Two more bookmarks before <see cref="StartYear"/>, held by the current rulers' parents and
+    /// grandparents on the same political map. See <see cref="MapGen.BookmarkEras"/>. Off writes
+    /// exactly what a run without it did.
+    /// </summary>
+    [Category("02 World State")]
+    [DisplayName("Earlier Bookmarks")]
+    [Description("Adds two earlier start dates (World Year − 45 and World Year − 20), each held by the previous generation of the same houses on the same political map. Off keeps the single start date. Not used with Content Source VanillaWorld or a World Year below 130.")]
+    public bool EarlierBookmarks { get; set; }
+
+    /// <summary>Whether this run actually writes the earlier bookmarks: the setting, where the world can carry it.</summary>
+    [Browsable(false)]
+    public bool UsesEarlierBookmarks =>
+        EarlierBookmarks && ContentSource == ContentSourceMode.Procedural && StartYear >= 130;
+
+    /// <summary>Years of the earlier bookmarks, oldest first. Only meaningful with <see cref="UsesEarlierBookmarks"/>.</summary>
+    [Browsable(false)]
+    public int[] EarlierBookmarkYears => [StartYear - 45, StartYear - 20];
+
+    /// <summary>
+    /// The date a game-start effect naming the start-date rulers must be gated to, or null when
+    /// there is only one start date and no gate is needed.
+    /// </summary>
+    [Browsable(false)]
+    public string? LatestBookmarkGate => UsesEarlierBookmarks ? StartDate : null;
+
     public enum ContentSourceMode
     {
         /// <summary>Every culture, faith, title and character is generated. The generator's

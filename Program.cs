@@ -301,6 +301,10 @@ public static class Program
                         System.Globalization.CultureInfo.InvariantCulture);
                     break;
 
+                case "--earlier-bookmarks":
+                    cfg.EarlierBookmarks = true;
+                    break;
+
                 // Which way the world's faiths, cultures and rulers lean on inheritance and
                 // knighthood; see GenderPreference. Historical is the default.
                 case "--gender" when i + 1 < args.Length:

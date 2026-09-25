@@ -619,6 +619,12 @@ public static class ContentWriter
                         VanillaCatalog.Read(gameDir), realms, rulers!, prehistory!, cultures, faiths, empires,
                         cfg.EraOffset, new Rng(cfg.Seed ^ 0x7A15)));
 
+                // The generations before the start date, for the earlier bookmarks. Null unless
+                // asked for, and it redraws nothing above, so the start-date world is unchanged.
+                if (cfg.UsesEarlierBookmarks)
+                    prehistory!.Eras = Core.Stage.Time("earlier bookmarks",
+                        () => BookmarkEras.Build(cfg, rulers!, prehistory!));
+
                 // Beside the artifacts rather than beside the roster: both are things the rulers
                 // already own on the start date, and both need the rulers to exist first.
                 if (retinues is not null)
@@ -678,7 +684,7 @@ public static class ContentWriter
                 BonePieceStep.WriteAll(modDir, gameDir, [.. cultures.Cultures.Select(c => c.Key)]);
                 ArtifactWriter.WriteModifiers(modDir, artifacts);
                 ArtifactWriter.WriteLocalisation(modDir, artifacts);
-                ArtifactWriter.WriteOnGameStart(modDir, artifacts);
+                ArtifactWriter.WriteOnGameStart(modDir, artifacts, cfg);
                 artifactCount = artifacts.AllArtifacts.Count;
 
                 if (forgedWeapons.Count > 0)
@@ -746,7 +752,7 @@ public static class ContentWriter
                 Core.Stage.Detail("  · chronicle (runtime)",
                     () => ChronicleRuntimeWriter.WriteAll(modDir, cfg, struggles, frontier));
 
-                WarWriter.WriteAll(modDir, prehistory);
+                WarWriter.WriteAll(modDir, prehistory, cfg);
                 Core.Stage.Detail("  · portraits", () => PortraitWriter.WriteAll(
                     modDir, gameDir, bookmarkResult.PortraitRequests, ethnicities, cfg.Seed));
             });

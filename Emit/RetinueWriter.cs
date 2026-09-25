@@ -201,6 +201,7 @@ public static class RetinueWriter
 
         using (b.Block("gen_grant_starting_retinues"))
         using (b.Block("effect"))
+        using (StartGate.LatestOnly(b, cfg))
         {
             foreach (var ruler in rulers.All)
             {

@@ -136,7 +136,7 @@ public static class ArtifactWriter
     /// realm rather than only the man. Without them the artifact panel is blank, which is what
     /// every generated artifact used to ship as.
     /// </summary>
-    public static void WriteOnGameStart(string modDir, ArtifactMap artifacts)
+    public static void WriteOnGameStart(string modDir, ArtifactMap artifacts, Config.MapConfig cfg)
     {
         string dir = Path.Combine(modDir, "common", "on_action");
         Directory.CreateDirectory(dir);
@@ -157,6 +157,7 @@ public static class ArtifactWriter
 
         using (b.Block("gen_spawn_startup_artifacts"))
         using (b.Block("effect"))
+        using (StartGate.LatestOnly(b, cfg))
         {
             foreach (var (county, arts) in artifacts.ByCounty)
             {

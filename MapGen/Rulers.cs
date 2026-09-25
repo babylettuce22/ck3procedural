@@ -173,6 +173,16 @@ public sealed class RulerMap
     public bool Contains(Title seat) => _bySeat.ContainsKey(seat);
 
     /// <summary>
+    /// Seats a ruler for an earlier bookmark (<see cref="BookmarkEras"/>). One man can hold
+    /// several seats there — brothers' father held both their lands — so he is listed once.
+    /// </summary>
+    internal void Seat(Title seat, Ruler ruler)
+    {
+        _bySeat[seat] = ruler;
+        if (!All.Contains(ruler)) All.Add(ruler);
+    }
+
+    /// <summary>
     /// Swaps a ruler for another seated in the same county, keeping its place in <see cref="All"/>.
     /// Only for the moment between building the roster and writing it: every writer reads rulers
     /// from here, so nothing has yet named the one being replaced.

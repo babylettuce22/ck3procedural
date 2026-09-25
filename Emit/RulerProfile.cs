@@ -128,9 +128,11 @@ public sealed record RulerProfile
     ];
 
     public static RulerProfile Build(
-        Title county, string tier, string government, string ethos, int age, bool hasVassals)
+        Title county, string tier, string government, string ethos, int age, bool hasVassals,
+        int salt = 0)
     {
-        var rng = new Rng(county.Index ^ 0x6F13);
+        // salt 0 is the start-date ruler; an earlier generation in the same seat passes its own.
+        var rng = new Rng(county.Index ^ 0x6F13 ^ salt);
         // 5 is the hegemon. Every rank switch below treats it as "an emperor, at least".
         int rank = tier switch { "h" => 5, "e" => 4, "k" => 3, "d" => 2, _ => 1 };
 

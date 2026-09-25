@@ -117,6 +117,7 @@ Frequently used options:
 | `--county-scale <number>` | Scale barony size relative to vanilla; larger values produce fewer provinces. |
 | `--province-downscale <integer>` | Set the province-grid downscale factor. |
 | `--start-year <year>` / `--era-anchor <year>` | Set the start year and era calibration. |
+| `--earlier-bookmarks` | Add two earlier start dates (start year − 45 and − 20), held by the previous two generations of the same houses on the same political map. Procedural content only. |
 | `--no-calendar` | Keep CK3's month names and AD instead of generating the world's own calendar. |
 | `--gender historical\|mixed\|femaledominated` | Choose the world's gender-law profile. |
 | `--races off\|low\|high\|exotic` | Choose a fantasy-race preset. |
