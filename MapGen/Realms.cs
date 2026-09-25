@@ -631,7 +631,15 @@ public static class Realms
         // been graded against the rank he used to have — leaving the duke level with him, which the
         // backstop below then had to fix by cutting the homage entirely. Ordering the walk is what
         // turns those from severed relations into correct ones.
-        int freed = 0;
+        //
+        // A vassal left with no tier to stand on is folded into his lord's realm, not set free.
+        // Freeing him was the old rule, and it was the single largest source of fragmentation on
+        // the map: eight or nine clients a world walked out of realms they sat in the middle of,
+        // which took independent realms from 18 to 26 and left every one of them an enclave inside
+        // its former lord. Folded, his ground is carved up by Interior like the lord's own, so the
+        // realm stays whole and his seat comes out a count (or a duke, under a king) inside it.
+        int folded = 0;
+        var gone = new HashSet<Polity>();
         foreach (var p in history.Polities.OrderBy(p => p.Depth).ThenBy(p => p.Capital.Index))
         {
             if (p.Suzerain is null) continue;
@@ -645,11 +653,19 @@ public static class Realms
             bool needsDuchy = p.Counties.Count > 1;
             if (rank[p] >= 1 && !(needsDuchy && rank[p] < 2)) continue;
 
-            p.Suzerain = null;
-            rank[p] = needsDuchy ? 2 : 1;
-            freed++;
+            // Only a ruler of duke tier or better can take counts as vassals, so climb past any
+            // single-county lord. An independent one at the top is promoted instead: holding the
+            // folded ground, he has more than one county, which is what FitTiers makes a duke of.
+            var into = p.Suzerain;
+            while (rank[into] < 2 && into.Suzerain is not null) into = into.Suzerain;
+            if (rank[into] < 2) rank[into] = 2;
+
+            Fold(p, into);
+            gone.Add(p);
+            folded++;
         }
 
+        history.Polities.RemoveAll(gone.Contains);
         IndexVassals();
 
         // --- Titles ---------------------------------------------------------------------------
@@ -671,25 +687,34 @@ public static class Realms
         }
 
         // --- Homage ----------------------------------------------------------------------------
-        foreach (var p in history.Polities.OrderBy(p => p.Capital.Index))
+        // Checked again against the titles actually claimed, not against the tiers asked for. A
+        // lord who wanted an empire and found every one taken comes out a king, and his king-tier
+        // vassal then has nowhere to stand. Folded for the same reason as above; his claimed title
+        // is handed back, since a vassal of equal rank cannot keep it inside the lord's realm.
+        //
+        // Lords before vassals again, so a vassal whose own lord was just folded is judged against
+        // the ruler he now answers to.
+        gone.Clear();
+        foreach (var p in history.Polities.OrderBy(p => p.Depth).ThenBy(p => p.Capital.Index))
         {
-            if (p.Suzerain is null) continue;
+            if (p.Suzerain is null || Rank(primaryOf[p]) < Rank(primaryOf[p.Suzerain])) continue;
 
-            // Checked again against the titles actually claimed, not against the tiers asked for.
-            // A lord who wanted an empire and found every one taken comes out a king, and his
-            // king-tier vassal then has nowhere to stand.
-            var mine = primaryOf[p];
-            var lord = primaryOf[p.Suzerain];
+            var into = p.Suzerain;
+            while (Rank(primaryOf[into]) < 2 && into.Suzerain is not null) into = into.Suzerain;
 
-            if (Rank(mine) >= Rank(lord))
-            {
-                p.Suzerain = null;
-                freed++;
-                continue;
-            }
-
-            map.SetLiege(mine, lord, LiegeOrigin.Conquest);
+            var title = primaryOf[p];
+            claimed.Remove(title);
+            holderCounty.Remove(title);
+            Fold(p, into);
+            gone.Add(p);
+            folded++;
         }
+
+        history.Polities.RemoveAll(gone.Contains);
+
+        foreach (var p in history.Polities.OrderBy(p => p.Capital.Index))
+            if (p.Suzerain is not null)
+                map.SetLiege(primaryOf[p], primaryOf[p.Suzerain], LiegeOrigin.Conquest);
 
         // --- The inside of each realm ----------------------------------------------------------
         double dukeChance = Math.Clamp(cfg.DuchyTitleShare + 0.35, 0.05, 0.95);
@@ -711,9 +736,9 @@ public static class Realms
             .Select(kv => kv.Key)
             .ToList();
 
-        if (unreachable > 0 || freed > 0)
-            Console.WriteLine($"  realms: {unreachable} vassals could not reach their lord, " +
-                              $"{freed} had no tier to stand on — all set free");
+        if (unreachable > 0 || folded > 0)
+            Console.WriteLine($"  realms: {unreachable} vassals could not reach their lord (set free), " +
+                              $"{folded} had no tier to stand on (folded into their lord's realm)");
 
         Console.WriteLine($"  realms: {history.Polities.Count} simulated realms titled — " +
                           $"{dukes} internal duchies, {counts} vassal counties");
@@ -724,6 +749,22 @@ public static class Realms
         return map;
 
         // -----------------------------------------------------------------------------------------
+
+        // Hands a vassal's counties, and his own vassals, to a ruler above him. The caller removes
+        // him from history.Polities; Owner is kept in step so the history still says who holds what.
+        void Fold(Polity p, Polity into)
+        {
+            foreach (var c in p.Counties)
+            {
+                into.Counties.Add(c);
+                history.Owner[c] = into;
+            }
+            p.Counties.Clear();
+
+            foreach (var v in history.Polities.Where(v => v.Suzerain == p))
+                v.Suzerain = into;
+            p.Suzerain = null;
+        }
 
         // The de jure title of the given rank that this realm covers most of, dropping a tier at a
         // time until something unclaimed turns up. The capital's own county title is the floor, and

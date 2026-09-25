@@ -216,6 +216,42 @@ yearly_playable_pulse = {
 		wilderness_yearly_control_check
 		wilderness_yearly_colonist_validity
 		wilderness_yearly_stranded_colony_check
+		wilderness_yearly_tribal_labour_sweep
+	}
+}
+
+# The backstop for colony_tribal_labour.
+#
+# Every transition calls colony_refresh_tribal_labour_effect itself; this exists for the change no
+# hook sees. A colonist's liege converting to or from tribalism changes which price the colony
+# should pay without anything happening to the colony, and saves from before the modifier existed
+# need it put on. Up to a year late in the first case, which is the same tolerance
+# wilderness_yearly_colonist_validity accepts.
+#
+# Cheap: a ruler with no colony fails the any_held_title test and goes no further.
+wilderness_yearly_tribal_labour_sweep = {
+	trigger = {
+		NOT = { has_trait = wilderness }
+		any_held_title = {
+			tier = tier_county
+			OR = {
+				is_colony_county_trigger = yes
+				has_county_modifier = colony_tribal_labour
+			}
+		}
+	}
+
+	effect = {
+		every_held_title = {
+			limit = {
+				tier = tier_county
+				OR = {
+					is_colony_county_trigger = yes
+					has_county_modifier = colony_tribal_labour
+				}
+			}
+			colony_refresh_tribal_labour_effect = { HOLDER = root }
+		}
 	}
 }
 
@@ -545,6 +581,19 @@ wilderness_on_title_gain = {
 					years = 10
 				}
 			}
+		}
+
+		# --- The tribal labour modifier follows the new holder ---------------------------------
+		#
+		# A colony a tribe conquers or inherits starts paying in prestige, and one a feudal lord
+		# takes off a tribe stops. Judged by root, not by the title's holder: see
+		# colony_refresh_tribal_labour_effect for why the gainer is named explicitly here.
+		if = {
+			limit = {
+				NOT = { has_trait = wilderness }
+				scope:title ?= { tier = tier_county }
+			}
+			scope:title = { colony_refresh_tribal_labour_effect = { HOLDER = root } }
 		}
 
 		# --- A colony changing hands -----------------------------------------------------------

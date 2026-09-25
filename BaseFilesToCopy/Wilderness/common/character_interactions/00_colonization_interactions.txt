@@ -270,6 +270,7 @@ promote_colony_to_city_interaction = {
 				set_holding_type = city_holding
 			}
 			set_color_from_title = de_jure_liege
+			colony_refresh_tribal_labour_effect = { HOLDER = holder }
 		}
 
 		# The government transition promote_colony_effect carries, which this path does NOT get for
@@ -355,6 +356,7 @@ promote_colony_to_temple_interaction = {
 				set_holding_type = church_holding
 			}
 			set_color_from_title = de_jure_liege
+			colony_refresh_tribal_labour_effect = { HOLDER = holder }
 		}
 
 		# See the note on the city button: the same missing government transition, for the same

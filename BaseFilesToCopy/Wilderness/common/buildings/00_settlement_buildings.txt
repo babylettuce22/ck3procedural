@@ -25,9 +25,15 @@ settlement_01 = {
 		building_slot_add = -1
 	}
 
+	# build_prestige_cost = -1 on all three rungs: the clearing buildings and settlement_02/03 list a
+	# prestige price beside their gold, and this cancels it for everybody. A tribal colony's
+	# colony_tribal_labour modifier puts it back and takes 60% off the gold. See that modifier for
+	# the whole scheme. One of the three rungs is always standing while a colony is building
+	# anything, and none survives promotion, which is what confines the cancellation to colonies.
 	county_modifier = {
 		travel_danger = 20
 		development_growth_factor = -0.95
+		build_prestige_cost = -1
 	}
 
 	character_modifier = {
@@ -40,7 +46,7 @@ settlement_01 = {
 
 settlement_02 = {
 	construction_time = slow_construction_time
-	cost = { gold = { value = settlement_upgrade_gold }  prestige = { value = settlement_upgrade_prestige } }
+	cost = { gold = settlement_upgrade_cost  prestige = settlement_upgrade_cost }
 
 	can_construct = { wilderness_can_grow_settlement_trigger = yes }
 	can_construct_potential = { wilderness_can_grow_settlement_trigger = yes }
@@ -68,6 +74,7 @@ settlement_02 = {
 	county_modifier = {
 		travel_danger = 10
 		development_growth_factor = -0.85
+		build_prestige_cost = -1
 	}
 
 	character_modifier = {
@@ -86,7 +93,7 @@ settlement_02 = {
 
 settlement_03 = {
 	construction_time = very_slow_construction_time
-	cost = { gold = { value = settlement_upgrade_gold }  prestige = { value = settlement_upgrade_prestige } }
+	cost = { gold = settlement_upgrade_cost  prestige = settlement_upgrade_cost }
 
 	can_construct = { wilderness_can_grow_settlement_trigger = yes }
 	can_construct_potential = { wilderness_can_grow_settlement_trigger = yes }
@@ -107,6 +114,7 @@ settlement_03 = {
 
 	county_modifier = {
 		development_growth_factor = -0.80
+		build_prestige_cost = -1
 	}
 
 	character_modifier = {

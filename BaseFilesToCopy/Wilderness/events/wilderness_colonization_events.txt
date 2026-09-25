@@ -58,7 +58,8 @@ wilderness_colonization.0010 = {
 				value = scope:expedition_leader
 			}
 		}
-		custom_tooltip = colonize_expedition_odds_tt
+		# In the leader's scope so the tooltip's SCOPE is him, and the chance printed is his.
+		scope:expedition_leader = { custom_tooltip = colonize_expedition_odds_tt }
 	}
 
 	# --- Somebody who can handle what is out there ---------------------------------------------
@@ -78,7 +79,7 @@ wilderness_colonization.0010 = {
 			set_variable = { name = colony_led_by_soldier }
 		}
 
-		custom_tooltip = colonize_expedition_soldier_tt
+		scope:expedition_soldier = { custom_tooltip = colonize_expedition_soldier_tt }
 	}
 
 	# --- Let them sort it out themselves -------------------------------------------------------
@@ -277,8 +278,12 @@ wilderness_colonization.0029 = {
 				}
 				increase_wounds_effect = { REASON = fight }
 				add_trait = ill
-				# Core, not full: the duel already decided root's fate, and 0013 would repeat this.
-				colony_settling_failure_core_effect = yes
+				# Surviving the push means the column REACHED the palisade, so the colony takes. This
+				# branch used to run the failure core, which made "press on" a strictly worse retreat:
+				# the same lost colony as option A, plus illness and a death roll, under a button that
+				# promises "we reach the palisade or die trying". The wound and the illness are the
+				# price of the winter; the settlement is what was bought with them.
+				colony_settling_success_effect = yes
 			}
 			30 = {
 				desc = wilderness_starvation_death_desc

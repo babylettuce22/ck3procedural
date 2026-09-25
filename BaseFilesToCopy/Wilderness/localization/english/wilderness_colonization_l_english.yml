@@ -218,9 +218,9 @@
  wilderness_colonization.0010.b:0 "Send [expedition_soldier.GetFirstName]. It is not the winter I am worried about."
  wilderness_colonization.0010.c:0 "They can choose their own leader on the road."
 
- colonize_expedition_odds_tt:0 "#V [expedition_leader.GetShortUIName]#! leads the expedition"
- colonize_expedition_soldier_tt:0 "#V [expedition_soldier.GetShortUIName]#! leads the expedition. If the colony holds, one obstacle will already have been dealt with"
- colonize_expedition_none_tt:0 "Nobody leads the expedition. Poorer odds, but no one of ours is out there when it goes wrong"
+ colonize_expedition_odds_tt:0 "#V [expedition_leader.GetShortUIName]#! leads the expedition: #V [SCOPE.ScriptValue('colony_settling_chance')|0]%#! chance the colony takes, before the road"
+ colonize_expedition_soldier_tt:0 "#V [expedition_soldier.GetShortUIName]#! leads the expedition: #V [SCOPE.ScriptValue('colony_settling_chance')|0]%#! chance the colony takes, before the road. If the colony holds, one obstacle will already have been dealt with"
+ colonize_expedition_none_tt:0 "Nobody leads the expedition: #V 45%#! chance the colony takes, before the road. Poorer odds, but no one of ours is out there when it goes wrong"
 
  # --- Word from the road ---------------------------------------------------------------------
  # Three months out, one of these arrives. Each asks for a different thing: money, a decision
@@ -289,6 +289,8 @@
  # Lines in the odds breakdown, from `desc` on an add in 00_colonization_values.txt.
  colonize_no_leader_desc:0 "Nobody in charge of them"
  colonize_riding_after_desc:0 "Three months of road to make up"
+ colony_tribal_labour:0 "Kin Labour"
+ colony_tribal_labour_desc:0 "The work here is done by the chief's own people, paid in feasts, gifts and standing rather than in silver. Building costs less gold and more prestige."
  settlers_promised_land:0 "Promised Their Own Land"
  settlers_promised_land_desc:0 "They were told, on a bad road a long way from here, that this country would be theirs. Some of it will have to be."
 
@@ -302,9 +304,9 @@ wilderness_colonization.0029.t:0 "The Starving Winter"
  wilderness_colonization.0029.a:0 "Butcher the horses, ditch the wagons, and march home on foot."
  wilderness_colonization.0029.b:0 "Press forward through the whiteout! We reach the palisade or die trying!"
 
- colonize_starvation_retreat_tt:0 "#P Guaranteed Survival#!:\n• You abandon the expedition and limp back to court.\n• Suffer wounds and #N Malnutrition#!, but you #P survive#!."
- colonize_starvation_gamble_tt:0 "#bold Desperate Defiance#!:\n• #N High risk of death by freezing/starvation!#!\n• Evaluated against your #V Prowess#! and constitution."
- wilderness_starvation_survival_desc:0 "You drag yourself out of the drifts frostbitten and battered, but breathing."
+ colonize_starvation_retreat_tt:0 "#P Guaranteed Survival#!:\n• You abandon the expedition and limp back to court. #N The colony is lost.#!\n• You are wounded, but you #P survive#!."
+ colonize_starvation_gamble_tt:0 "#bold Desperate Defiance#!:\n• If you live, the column #P reaches the palisade and the colony is founded#!, but you arrive wounded and #N Ill#!.\n• #N If you do not, you die in the snow and the colony is lost.#!\n• Your chance of living rests on your #V Prowess#!."
+ wilderness_starvation_survival_desc:0 "You drag yourself out of the drifts frostbitten and battered, but breathing, and the palisade is in sight."
  wilderness_starvation_death_desc:0 "The cold seeps into your bones. Your march ends in the snow."
  wilderness_colonization.0013.t:0 "Nothing Came Back"
  wilderness_colonization.0013.desc:0 "What is left of the party came out of [colony.GetName] in ones and twos over the spring, and what they say does not entirely agree.\n\nThe stores went early. After that it is a matter of which thing got them — the cold, the water, the people who were already there — and by then it hardly mattered which.\n\nThe ground is as it was. So is the ledger, minus what we spent."
@@ -459,7 +461,7 @@ wilderness_colonization.0029.t:0 "The Starving Winter"
  wilderness_colonization.0015.a:0 "Let [colonist.GetHerHim] make something of it."
 
 wilderness_colonization.0010.d:0 "I will lead the column myself. No one else has more at stake."
- colonize_expedition_self_tt:0 "#V You#! lead the expedition personally. Your own attributes and traits determine its odds of survival."
+ colonize_expedition_self_tt:0 "#V You#! lead the expedition personally: #V [SCOPE.ScriptValue('colony_settling_chance')|0]%#! chance the colony takes, before the road. If it fails, you are caught in the winter yourself."
 
  wilderness_colonization.0012.a:0 "The county stays in our own hands."
  wilderness_colonization.0012.b:0 "Invest [expedition_leader.GetFirstName] as its first lord."

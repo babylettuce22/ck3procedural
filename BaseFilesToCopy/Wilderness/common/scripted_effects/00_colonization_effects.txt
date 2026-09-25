@@ -420,6 +420,37 @@ colony_clear_expedition_effect = {
 #  Transition 1: wilderness -> colony
 # =====================================================================================
 
+# COUNTY scope. Puts colony_tribal_labour on this county if it is a colony held for a tribe, and
+# takes it off otherwise.
+#
+#   $HOLDER$  the character to judge the county by
+#
+# The one place that decides the modifier, so no caller can disagree with another about which
+# colonies are tribal. It is idempotent and it removes as readily as it adds, so every caller just
+# calls it after changing something: a colony founded, a colony changing hands, a colony
+# promoted, abandoned or turned to pasture. The yearly sweep calls it too, and that is what
+# catches the change no hook sees — a colonist's liege converting to or from tribalism.
+#
+# $HOLDER$ rather than the title's `holder`, because on_title_gain fires before the new holder is
+# reliably the title's holder; the caller names the character it already knows. Anywhere the
+# holder is settled, pass `holder`.
+colony_refresh_tribal_labour_effect = {
+	if = {
+		limit = {
+			is_colony_county_trigger = yes
+			$HOLDER$ ?= { colony_sponsor_is_tribal_trigger = yes }
+		}
+		if = {
+			limit = { NOT = { has_county_modifier = colony_tribal_labour } }
+			add_county_modifier = { modifier = colony_tribal_labour }
+		}
+	}
+	else_if = {
+		limit = { has_county_modifier = colony_tribal_labour }
+		remove_county_modifier = colony_tribal_labour
+	}
+}
+
 colonize_county_effect = {
 	$COUNTY$ = { save_scope_as = colony }
 	$COLONIZER$ = { save_scope_as = colonizer }
@@ -460,6 +491,9 @@ colonize_county_effect = {
 		every_county_province = {
 			barony ?= { generate_coa = yes }
 		}
+
+		# After the holding swap, which is what makes is_colony_county_trigger true.
+		colony_refresh_tribal_labour_effect = { HOLDER = scope:colonizer }
 
 		# --- Set Baseline Authority & Rebound Protection ---
 		if = {
@@ -640,6 +674,9 @@ promote_colony_effect = {
 			}
 		}
 		set_color_from_title = de_jure_liege
+
+		# No longer a colony, so this takes the tribal labour modifier off.
+		colony_refresh_tribal_labour_effect = { HOLDER = holder }
 
 		# The Wilds situation counts it as won. See Emit/FrontierWriter.cs.
 		wilds_situation_colony_promoted_effect = { COUNTY = this }
@@ -1208,6 +1245,9 @@ abandon_county_effect = {
 				}
 			}
 
+			# Wilderness again, not a colony, so this takes the tribal labour modifier off.
+			colony_refresh_tribal_labour_effect = { HOLDER = holder }
+
 			# The Wilds situation hears of the loss. See Emit/FrontierWriter.cs.
 			wilds_situation_colony_abandoned_effect = { COUNTY = this }
 		}
@@ -1288,6 +1328,9 @@ colony_convert_to_pasture_effect = {
 				set_holding_type = nomad_holding
 			}
 		}
+
+		# Pasture now, not a colony, so this takes the tribal labour modifier off.
+		colony_refresh_tribal_labour_effect = { HOLDER = holder }
 
 		wilds_situation_colony_promoted_effect = { COUNTY = this }
 	}

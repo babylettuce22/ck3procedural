@@ -116,73 +116,21 @@ wilderness_clear_cost_dear = 250
 
 settlement_upgrade_cost = 200
 
-# --- The same four prices as a building actually charges them ---------------------------------
+# ---- A building's `cost` takes a number or a CONSTANT, and nothing else ----
 #
-# The four constants above are the PRICE of each job and stay plain numbers, because the liege-aid
-# event (wilderness_colonization_events.txt, colony_aid_cost) quotes them as the gold a liege is
-# asked to send. The values below are what a building's `cost` block charges, and those split by
-# who is paying: a colony held for a tribe (colony_sponsor_is_tribal_trigger) pays most of the
-# price in prestige and a share of it in gold, the way vanilla prices a tribe's own buildings —
-# longhouses are 200 prestige + 75 gold where a comparable castle building is ~150-200 gold.
+# Found the hard way, 2026-09-25, trying to charge tribal colonies prestige for clearing and for
+# settlement_02/03. Two shapes were tried in a building's `cost = { gold = ... }`, and the engine
+# refused both at load, leaving the line at 0 — every obstacle and both upgrades free, for every
+# government:
 #
-# ---- Root is the paying character, not the province ----
+#   gold = some_calculated_value            -> "Matching scriptvalue [x], but of wrong type"
+#   gold = { value = some_calculated_value } -> "Failed to read named value or literal from {"
 #
-# A building's `cost` block is evaluated with the builder as root — vanilla's own scripted
-# building price (rebuild_cost in tgp_great_project_buildings.txt) tests `is_ai` at root, and
-# ck3-tiger reads `cost` as character scope (probed 2026-09-25: a province trigger there is
-# flagged, a character trigger is not). So these ask the trigger directly, with no scope:holder.
-# Do not call them from province scope.
-#
-# ---- A building's cost must WRAP these: `gold = { value = x }`, never `gold = x` ----
-#
-# A bare name in a `cost` line is read as "named value or literal", and that reader accepts only
-# CONSTANT script values. Pointed at one of these calculated values, the engine logs
-# `Matching scriptvalue [x], but of wrong type` at load and the cost line reads as 0. That shipped
-# once: every obstacle and both settlement upgrades became free for everybody, and ck3-tiger said
-# nothing. An inline `{ }` block is parsed as a script value instead, and inside one a calculated
-# value may be named freely. The plain constants (colony_hall_gold_tier_1 and the rest) are fine
-# bare.
-#
-# The prestige half is 0 for everyone else, and a zero line is not shown in the cost tooltip — the
-# colonize decision already charges `prestige = colonize_prestige_cost` the same way.
-@tribal_colony_gold_share = 0.4
-@tribal_colony_prestige_share = 1
-
-wilderness_clear_gold_cheap = {
-	value = wilderness_clear_cost_cheap
-	if = { limit = { colony_sponsor_is_tribal_trigger = yes } multiply = @tribal_colony_gold_share }
-}
-wilderness_clear_prestige_cheap = {
-	value = 0
-	if = { limit = { colony_sponsor_is_tribal_trigger = yes } add = { value = wilderness_clear_cost_cheap multiply = @tribal_colony_prestige_share } }
-}
-
-wilderness_clear_gold_standard = {
-	value = wilderness_clear_cost_standard
-	if = { limit = { colony_sponsor_is_tribal_trigger = yes } multiply = @tribal_colony_gold_share }
-}
-wilderness_clear_prestige_standard = {
-	value = 0
-	if = { limit = { colony_sponsor_is_tribal_trigger = yes } add = { value = wilderness_clear_cost_standard multiply = @tribal_colony_prestige_share } }
-}
-
-wilderness_clear_gold_dear = {
-	value = wilderness_clear_cost_dear
-	if = { limit = { colony_sponsor_is_tribal_trigger = yes } multiply = @tribal_colony_gold_share }
-}
-wilderness_clear_prestige_dear = {
-	value = 0
-	if = { limit = { colony_sponsor_is_tribal_trigger = yes } add = { value = wilderness_clear_cost_dear multiply = @tribal_colony_prestige_share } }
-}
-
-settlement_upgrade_gold = {
-	value = settlement_upgrade_cost
-	if = { limit = { colony_sponsor_is_tribal_trigger = yes } multiply = @tribal_colony_gold_share }
-}
-settlement_upgrade_prestige = {
-	value = 0
-	if = { limit = { colony_sponsor_is_tribal_trigger = yes } add = { value = settlement_upgrade_cost multiply = @tribal_colony_prestige_share } }
-}
+# ck3-tiger accepted both. Vanilla's one scripted building price is `rebuild_cost` on great
+# projects, which is a different field; `cost` is read once at load, as a literal or a named
+# constant, so it cannot know who is paying. A building costs the same for every government.
+# Per-payer pricing has to come from somewhere else — cost MODIFIERS (build_gold_cost,
+# build_prestige_cost) on the province, or a separate building per government.
 
 # --- Colony Infrastructure Building Costs ---------------------------------------------------
 
