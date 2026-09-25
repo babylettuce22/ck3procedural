@@ -135,28 +135,15 @@ public static class HoldingModelWriter
     ///
     /// Brace counting rather than a regex because three of these carry nested <c>state</c> and
     /// <c>locator</c> blocks — the ones with smoke particles — and those have to come across
-    /// intact. Comments are not skipped: nothing in vanilla's holding assets puts a brace in one.
+    /// intact. <see cref="ScriptScan"/> skips comments and strings, so a brace in either is harmless.
     /// </summary>
     private static IEnumerable<string> EntityBlocks(string text)
     {
         foreach (Match match in EntityStart.Matches(text))
         {
-            int open = text.IndexOf('{', match.Index);
-            int end = BlockEnd(text, open);
+            int end = ScriptScan.BlockEnd(text, match.Index);
             if (end > 0) yield return text[match.Index..end];
         }
-    }
-
-    /// <summary>The index one past the block whose opening brace is at <paramref name="open"/>.</summary>
-    private static int BlockEnd(string text, int open)
-    {
-        int depth = 0;
-        for (int i = open; i < text.Length; i++)
-        {
-            if (text[i] == '{') depth++;
-            else if (text[i] == '}' && --depth == 0) return i + 1;
-        }
-        return -1;
     }
 
     /// <summary>
@@ -193,7 +180,7 @@ public static class HoldingModelWriter
     {
         foreach (Match match in ScaleValue.Matches(block))
         {
-            if (Depth(block, match.Index) != 1) continue;
+            if (ScriptScan.DepthAt(block, match.Index) != 1) continue;
 
             var number = match.Groups[1];
             if (double.TryParse(number.Value, NumberStyles.Float, CultureInfo.InvariantCulture,
@@ -202,19 +189,5 @@ public static class HoldingModelWriter
         }
 
         return null;
-    }
-
-    /// <summary>Brace depth at <paramref name="index"/>. Quadratic in principle; these blocks are
-    /// three lines long.</summary>
-    private static int Depth(string block, int index)
-    {
-        int depth = 0;
-        for (int i = 0; i < index; i++)
-        {
-            if (block[i] == '{') depth++;
-            else if (block[i] == '}') depth--;
-        }
-
-        return depth;
     }
 }

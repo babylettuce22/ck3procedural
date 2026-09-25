@@ -278,7 +278,7 @@ public sealed class RulerMap
                 _ => rng.Int(150, 450)
             };
 
-            switch (government)
+            switch (GovernmentMap.Family(government))
             {
                 case GovernmentMap.Tribal:
                     gold = (int)(gold * 0.45);

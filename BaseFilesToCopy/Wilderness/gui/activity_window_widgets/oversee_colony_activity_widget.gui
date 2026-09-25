@@ -115,7 +115,7 @@
 
 				text_single = {
 					layoutpolicy_horizontal = expanding
-					text = "@development_icon! #positive +15%#!  @control_icon! #positive +0.5#!"
+					text = "@development_icon! #positive +30%#!  @control_icon! #positive +0.5#!"
 					using = Font_Size_Small
 				}
 			}

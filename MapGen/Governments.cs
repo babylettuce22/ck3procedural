@@ -111,6 +111,11 @@ public sealed class GovernmentMap
     /// <c>mercenary</c> and <c>holy_order</c>, plus <c>herder</c>, which is a vassal government
     /// under a horde rather than one a realm is put on.
     ///
+    /// The generator itself reaches twelve of the fourteen: the base seven, plus meritocratic,
+    /// steppe-admin, mandala and wanua through the variety pass in <see cref="Governments.Build"/>,
+    /// and celestial for a crowned hegemon. Ritsuryō and Sōryō are left to the editor, since
+    /// their Japanese layers stay quiet on a generated map.
+    ///
     /// Absent from generation is not the same as unreachable in play: meritocratic and Ritsuryō
     /// (and Sōryō through it) can also be ADOPTED on a generated map, because
     /// BaseFilesToCopy/Core/common/scripted_triggers/zz_gen_admin_conversion_triggers.txt
@@ -178,17 +183,35 @@ public sealed class GovernmentMap
 
     public string For(Title county) => byCounty.GetValueOrDefault(county, Feudal);
 
-    public bool IsTribal(Title county) => For(county) == Tribal;
+    public bool IsTribal(Title county) => Family(For(county)) == Tribal;
     public bool IsAdministrative(Title county) => For(county) == Administrative;
     public bool IsNomad(Title county) => For(county) == Nomad;
+
+    /// <summary>
+    /// The vanilla government a variety is a variety of: Wanua is a tribe, Mandala and Sōryō are
+    /// feudal, and every bureaucracy is administrative. The seven base governments answer
+    /// themselves.
+    ///
+    /// For the generator's own calibration — how many holdings a tribe builds, what a ruler studies,
+    /// what the bookmark screen calls an age — which was written against the base seven and should
+    /// read a wanua chieftain as a chieftain. Never for anything the game checks: a script that
+    /// tests <c>has_government</c> wants the real key, and so does the title history.
+    /// </summary>
+    public static string Family(string government) => government switch
+    {
+        Wanua => Tribal,
+        Mandala or JapanFeudal => Feudal,
+        _ when IsAdminFamily(government) => Administrative,
+        _ => government,
+    };
 
     /// <summary>
     /// The bureaucracies that behave alike: one government across the whole realm, castle seats, and
     /// noble families rather than ordinary vassals.
     ///
     /// Ritsuryō belongs here on every count — <c>administrative = yes</c>, <c>noble_families</c>,
-    /// a castle seat — though the cascade never produces it, so today this only answers for the
-    /// editor. Sōryō does not: it is the feudal half of that pair, and its vassals are ordinary.
+    /// a castle seat — though the cascade never produces it, so it only answers for the editor.
+    /// Sōryō does not: it is the feudal half of that pair, and its vassals are ordinary.
     /// </summary>
     public static bool IsAdminFamily(string government)
         => government is Administrative or Meritocratic or SteppeAdmin or Celestial
@@ -336,11 +359,18 @@ public static class Governments
         return total == 0 ? 0 : arid / (double)total;
     }
 
-    private static bool IsCoastal(Title county, TerrainClass[] provinceTerrain)
+    /// <summary>
+    /// Whether any of the county's baronies touches open sea, from <see cref="ProvinceSurvey.Coastal"/>.
+    ///
+    /// Not from the terrain: this used to ask for a Beach province, and the province terrain vote
+    /// excludes beach pixels by design (a thin shoreline must not decide a province's character),
+    /// so no province was ever Beach and no county was ever coastal. Republics and wanua both hung
+    /// off it and neither was ever generated.
+    /// </summary>
+    private static bool IsCoastal(Title county, bool[] coastal)
     {
         foreach (var barony in county.Children)
-            if (barony.ProvinceId >= 0 && barony.ProvinceId < provinceTerrain.Length
-                && provinceTerrain[barony.ProvinceId] == TerrainClass.Beach)
+            if (barony.ProvinceId >= 1 && barony.ProvinceId < coastal.Length && coastal[barony.ProvinceId])
                 return true;
 
         return false;
@@ -351,6 +381,7 @@ public static class Governments
         List<Title> counties,
         RealmMap realms,
         TerrainClass[] provinceTerrain,
+        bool[] coastal,
         Dictionary<Title, int> development,
         CultureMap? cultures,
         WorldCenterMap? worldCenters,
@@ -575,6 +606,11 @@ public static class Governments
                     ? GovernmentMap.SteppeAdmin
                     : GovernmentMap.Celestial;
             }
+            else
+            {
+                realmGovernment = Variety(topLiege, realmGovernment, realmCounties, capitalDomTerrain,
+                    avgDev, steppeShare);
+            }
 
             // Assign the unified government to all constituent counties
             foreach (var county in realmCounties)
@@ -612,9 +648,74 @@ public static class Governments
 
         bool IsRepublic(Title county, int level, Rng draw)
             => cfg.RepublicShare > 0
-               && IsCoastal(county, provinceTerrain)
+               && IsCoastal(county, coastal)
                && level >= 10
                && draw.NextDouble() < cfg.RepublicShare;
+
+        // All Under Heaven's regional varieties, laid over the government the cascade chose. Each
+        // is the vanilla government it varies with a regional twist, so each is only offered to a
+        // realm already on that base: a meritocracy is an administrative empire that examines its
+        // officials, a mandala a feudal or tribal realm in the jungle, a wanua a tribe that lives
+        // on the sea. None of them needs a per-title guard — vanilla's game-start sweep turns every
+        // one back into feudal or tribal for anyone without the expansion.
+        //
+        // Its own stream, salted apart from the realm's: the nomad clause has already drawn from
+        // `draw`, and reseeding with the same value would hand this the same first number, so a
+        // realm that just missed being a horde would always just miss being a steppe
+        // administration too.
+        string Variety(Title topLiege, string government, List<Title> realmCounties,
+            TerrainClass capitalTerrain, double avgDev, double steppeShare)
+        {
+            var roll = new Rng(topLiege.Index ^ salt ^ 0x41554821);
+            var primary = HistoryWriter.Primary(topLiege, realms);
+
+            switch (government)
+            {
+                // Checked before the meritocracy, so a steppe empire keeps the one exception vanilla
+                // makes for the same reason the hegemon branch above does.
+                case GovernmentMap.Administrative when steppeShare >= 0.20 && roll.Chance(cfg.SteppeAdminShare):
+                    return GovernmentMap.SteppeAdmin;
+
+                case GovernmentMap.Administrative when roll.Chance(cfg.MeritocraticShare):
+                    return GovernmentMap.Meritocratic;
+
+                // A horde that has settled enough to run a chancery: the Khitan path. Kingdom tier or
+                // higher because an independent bureaucracy below a kingdom is force-converted by the
+                // engine, and gated on the same start year as the administrative empires, since it is
+                // one. The realm stops being a horde, so it leaves the nomad list and joins the
+                // administrative one — both lists are what the editor reads to say what a realm is.
+                case GovernmentMap.Nomad
+                    when primary.Tier is "k" or "e" or "h"
+                         && avgDev >= 8.0
+                         && cfg.EraYear >= cfg.AdministrativeMinStartYear
+                         && roll.Chance(cfg.SteppeAdminShare):
+                    nomadTitles.Remove(primary);
+                    adminTitles.Add(primary);
+                    return GovernmentMap.SteppeAdmin;
+
+                case GovernmentMap.Feudal or GovernmentMap.Tribal
+                    when (capitalTerrain == TerrainClass.Jungle || Share(realmCounties, TerrainClass.Jungle) >= 1 / 3.0)
+                         && roll.Chance(cfg.MandalaShare):
+                    return GovernmentMap.Mandala;
+
+                // The capital has to be on the water, not merely somewhere in the realm: wanua's
+                // cheap embarkation and safe seas are the ruler's, and they mean nothing to a
+                // chieftain seated inland.
+                case GovernmentMap.Tribal
+                    when IsCoastal(topLiege, coastal)
+                         && realmCounties.Count(c => IsCoastal(c, coastal)) >= realmCounties.Count / 2.0
+                         && roll.Chance(cfg.WanuaShare):
+                    return GovernmentMap.Wanua;
+
+                default:
+                    return government;
+            }
+        }
+
+        double Share(List<Title> realmCounties, TerrainClass terrain)
+            => realmCounties.Count == 0 ? 0
+                : realmCounties.Count(c => Development.DominantTerrain(c, provinceTerrain) == terrain)
+                  / (double)realmCounties.Count;
     }
 
     private static Title TopLiege(Title county, RealmMap realms)

@@ -40,7 +40,7 @@ settlement_01 = {
 
 settlement_02 = {
 	construction_time = slow_construction_time
-	cost = { gold = settlement_upgrade_cost }
+	cost = { gold = { value = settlement_upgrade_gold }  prestige = { value = settlement_upgrade_prestige } }
 
 	can_construct = { wilderness_can_grow_settlement_trigger = yes }
 	can_construct_potential = { wilderness_can_grow_settlement_trigger = yes }
@@ -86,7 +86,7 @@ settlement_02 = {
 
 settlement_03 = {
 	construction_time = very_slow_construction_time
-	cost = { gold = settlement_upgrade_cost }
+	cost = { gold = { value = settlement_upgrade_gold }  prestige = { value = settlement_upgrade_prestige } }
 
 	can_construct = { wilderness_can_grow_settlement_trigger = yes }
 	can_construct_potential = { wilderness_can_grow_settlement_trigger = yes }
@@ -126,12 +126,17 @@ settlement_03 = {
 #  Colony-Specific Infrastructure: Timber & Masonry Works
 # =====================================================================================
 
+# Settled (non-tribal) colonies only. A tribe's colony builds colony_hunting_camps in this slot
+# instead; see the tribal section at the foot of this file for the split and why the entry tier
+# alone carries it.
 colony_timber_works_01 = {
 	construction_time = quick_construction_time
 	cost = { gold = settlement_cost_cheap_tier_1 }
 
 	can_construct_potential = {
 		has_holding_type = settlement_holding
+		NOT = { colony_is_tribal_trigger = yes }
+		NOT = { has_building_or_higher = colony_hunting_camps_01 }
 	}
 	can_construct = {
 		has_holding_type = settlement_holding
@@ -258,12 +263,15 @@ colony_pallisade_02 = {
 #  Colony-Specific Infrastructure: Colonial Administration
 # =====================================================================================
 
+# Settled (non-tribal) colonies only. A tribe's colony builds colony_hall in this slot instead.
 colony_office_01 = {
 	construction_time = quick_construction_time
 	cost = { gold = settlement_cost_tier_2 }
 
 	can_construct_potential = {
 		has_holding_type = settlement_holding
+		NOT = { colony_is_tribal_trigger = yes }
+		NOT = { has_building_or_higher = colony_hall_01 }
 	}
 	can_construct = {
 		has_holding_type = settlement_holding
@@ -369,6 +377,315 @@ colony_office_03 = {
 
 	ai_value = {
 		base = 1800
+		modifier = {
+			add = 700
+			scope:holder ?= { is_colonist_trigger = yes }
+		}
+	}
+}
+
+# =====================================================================================
+#  Tribal colonies: Chieftain's Hall, Hunting Camps, Kin Muster
+# =====================================================================================
+#
+# A colony held for a tribe (colony_is_tribal_trigger — a tribal holder, or a colonist whose liege
+# is tribal) builds these instead of the office and the timber works. Two reasons, and the first is
+# the one that mattered in play:
+#
+#   * Price. The office chain is 1150 gold and is also the colony's only flat development_growth,
+#     so it IS the promotion clock (see the note on colony_office_03). A chief cannot pay that, so a
+#     tribal colony simply stalled. These are priced like vanilla's own tribal buildings — mostly
+#     prestige, a token of gold — see colony_hall_* in 00_colonization_values.txt.
+#   * Fit. A tribe does not run its frontier through scribes and a chancery. The same growth comes
+#     from a chief's hall, the hunters who feed the first winters, and the kin who follow.
+#
+# ---- The hall carries the office's development numbers exactly ----
+#
+# 0.1/0.3/0.5 flat and 0.15/0.30/0.40 factor, identical to the office. The flat figure is the
+# numerator of the whole promotion clock, so matching it keeps one clock for every colony; what the
+# hall gives up is gold (poor-tax band, not the office's 1.5) and what it gets back is prestige and
+# control. The extra speed a tribe needs — its neighbours are thinly developed — comes from the kin
+# muster's FACTOR, never from a second flat source.
+#
+# ---- The split lives on the entry tier only ----
+#
+# The government test and the mutual exclusion sit on each chain's _01. Upgrades ask only for the
+# holding: a chain a ruler has started is one his successor can finish, whatever government the
+# successor keeps. Gating the upgrades too would strand a colony at hall_01 the day its chief
+# adopted feudalism — with the office also shut to it, because the hall already fills that role.
+# The has_building_or_higher lines are what stop a colony that changed hands from stacking both
+# development chains.
+
+colony_hall_01 = {
+	construction_time = quick_construction_time
+	cost = {
+		gold = colony_hall_gold_tier_1
+		prestige = colony_hall_prestige_tier_1
+	}
+
+	can_construct_potential = {
+		has_holding_type = settlement_holding
+		colony_is_tribal_trigger = yes
+		NOT = { has_building_or_higher = colony_office_01 }
+	}
+	can_construct = {
+		has_holding_type = settlement_holding
+	}
+
+	next_building = colony_hall_02
+
+	province_modifier = {
+		monthly_income = 0.25
+	}
+
+	county_modifier = {
+		development_growth_factor = 0.15
+		development_growth = 0.1
+		monthly_county_control_growth_add = 0.1
+	}
+
+	character_modifier = {
+		monthly_prestige = 0.1
+	}
+
+	type_icon = "icon_building_longhouses.dds"
+
+	ai_value = {
+		base = 1800
+		modifier = {
+			add = 700
+			scope:holder ?= { is_colonist_trigger = yes }
+		}
+	}
+}
+
+colony_hall_02 = {
+	construction_time = standard_construction_time
+	cost = {
+		gold = colony_hall_gold_tier_2
+		prestige = colony_hall_prestige_tier_2
+	}
+
+	can_construct_potential = {
+		has_holding_type = settlement_holding
+	}
+	can_construct = {
+		has_holding_type = settlement_holding
+	}
+
+	next_building = colony_hall_03
+
+	province_modifier = {
+		monthly_income = 0.4
+	}
+
+	county_modifier = {
+		development_growth_factor = 0.30
+		development_growth = 0.3
+		monthly_county_control_growth_add = 0.2
+	}
+
+	character_modifier = {
+		monthly_prestige = 0.2
+	}
+
+	type_icon = "icon_building_longhouses.dds"
+
+	ai_value = {
+		base = 1800
+		modifier = {
+			add = 700
+			scope:holder ?= { is_colonist_trigger = yes }
+		}
+	}
+}
+
+colony_hall_03 = {
+	construction_time = standard_construction_time
+	cost = {
+		gold = colony_hall_gold_tier_3
+		prestige = colony_hall_prestige_tier_3
+	}
+
+	can_construct_potential = {
+		has_holding_type = settlement_holding
+	}
+	can_construct = {
+		has_holding_type = settlement_holding
+	}
+
+	province_modifier = {
+		monthly_income = 0.55
+	}
+
+	# The office's ceiling figures — see colony_office_03 for why these two are the limit.
+	county_modifier = {
+		development_growth_factor = 0.40
+		development_growth = 0.5
+		monthly_county_control_growth_add = 0.3
+	}
+
+	character_modifier = {
+		monthly_prestige = 0.3
+	}
+
+	type_icon = "icon_building_longhouses.dds"
+
+	ai_value = {
+		base = 1800
+		modifier = {
+			add = 700
+			scope:holder ?= { is_colonist_trigger = yes }
+		}
+	}
+}
+
+# The tribal counterpart of the timber works. Same development factor; the cost discount is on
+# prestige rather than gold, because prestige is what the hall and the kin muster are paid in.
+# `build_prestige_cost` sits in county_modifier because that is where vanilla's one use of it
+# (00_special_buildings.txt) puts it.
+colony_hunting_camps_01 = {
+	construction_time = quick_construction_time
+	cost = {
+		gold = colony_hunting_camps_gold_tier_1
+		prestige = colony_hunting_camps_prestige_tier_1
+	}
+
+	can_construct_potential = {
+		has_holding_type = settlement_holding
+		colony_is_tribal_trigger = yes
+		NOT = { has_building_or_higher = colony_timber_works_01 }
+	}
+	can_construct = {
+		has_holding_type = settlement_holding
+	}
+
+	next_building = colony_hunting_camps_02
+
+	province_modifier = {
+		supply_limit = 250
+		holding_build_speed = -0.05
+	}
+
+	county_modifier = {
+		development_growth_factor = 0.08
+		build_prestige_cost = -0.1
+	}
+
+	type_icon = "icon_building_hunting_grounds.dds"
+
+	ai_value = {
+		base = 1800
+		modifier = {
+			add = 700
+			scope:holder ?= { is_colonist_trigger = yes }
+		}
+	}
+}
+
+colony_hunting_camps_02 = {
+	construction_time = standard_construction_time
+	cost = {
+		gold = colony_hunting_camps_gold_tier_2
+		prestige = colony_hunting_camps_prestige_tier_2
+	}
+
+	can_construct_potential = {
+		has_holding_type = settlement_holding
+	}
+	can_construct = {
+		has_holding_type = settlement_holding
+	}
+
+	province_modifier = {
+		supply_limit = 500
+		holding_build_speed = -0.15
+	}
+
+	county_modifier = {
+		development_growth_factor = 0.15
+		build_prestige_cost = -0.15
+	}
+
+	type_icon = "icon_building_hunting_grounds.dds"
+
+	ai_value = {
+		base = 2200
+		modifier = {
+			add = 800
+			scope:holder ?= { is_colonist_trigger = yes }
+		}
+	}
+}
+
+# Tribal only, with no settled counterpart — this is the compensation for where tribal colonies
+# sit. A tribe's frontier borders thinly developed country, so its colonies grow slower than a
+# kingdom's on the same buildings. The muster answers with a development FACTOR (+0.10/+0.20) and
+# levies, never a flat figure: the hall's flat growth stays the only numerator, as the office's is.
+#
+# Needs the hall first. The kin come to a chief who has somewhere to seat them.
+colony_kin_muster_01 = {
+	construction_time = quick_construction_time
+	cost = {
+		gold = colony_kin_muster_gold_tier_1
+		prestige = colony_kin_muster_prestige_tier_1
+	}
+
+	can_construct_potential = {
+		has_holding_type = settlement_holding
+		colony_is_tribal_trigger = yes
+	}
+	can_construct = {
+		has_holding_type = settlement_holding
+		has_building_or_higher = colony_hall_01
+	}
+
+	next_building = colony_kin_muster_02
+
+	levy = 50
+	max_garrison = 50
+
+	county_modifier = {
+		development_growth_factor = 0.10
+	}
+
+	type_icon = "icon_building_warcamps.dds"
+
+	ai_value = {
+		base = 1500
+		modifier = {
+			add = 700
+			scope:holder ?= { is_colonist_trigger = yes }
+		}
+	}
+}
+
+colony_kin_muster_02 = {
+	construction_time = standard_construction_time
+	cost = {
+		gold = colony_kin_muster_gold_tier_2
+		prestige = colony_kin_muster_prestige_tier_2
+	}
+
+	can_construct_potential = {
+		has_holding_type = settlement_holding
+	}
+	can_construct = {
+		has_holding_type = settlement_holding
+		has_building_or_higher = colony_hall_02
+	}
+
+	levy = 100
+	max_garrison = 100
+
+	county_modifier = {
+		development_growth_factor = 0.20
+	}
+
+	type_icon = "icon_building_warcamps.dds"
+
+	ai_value = {
+		base = 1500
 		modifier = {
 			add = 700
 			scope:holder ?= { is_colonist_trigger = yes }

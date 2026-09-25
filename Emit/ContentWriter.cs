@@ -222,7 +222,8 @@ public static class ContentWriter
             Console.WriteLine($"  vanilla titles: {VanillaTitles.Fragmentation(empires, realms)}");
 
         var governments = Core.Stage.Time("governments", () => MapGen.Governments.Build(
-            empires, counties, realms, provinceTerrain, development, cultures,
+            empires, counties, realms, provinceTerrain,
+            MapGen.ProvinceSurvey.Take(provinces, order, baronyCount, null).Coastal, development, cultures,
             worldCenters, cfg, new Rng(cfg.Seed ^ 0x6017), azgaar, stateGovernments));
 
         Console.WriteLine("  governments: " + string.Join(", ",
@@ -1622,7 +1623,7 @@ public static class ContentWriter
         else if (ratio >= 1.20) score += 2;
         else if (ratio >= 1.10) score += 1;
 
-        switch (governments.For(wonder.County))
+        switch (GovernmentMap.Family(governments.For(wonder.County)))
         {
             case GovernmentMap.Administrative: score += 2; break;
             case GovernmentMap.Feudal:

@@ -28,16 +28,13 @@ public static class Economy
     /// <item>tribal_holding → tribe_01 → poor_building_tax_tier_1 → 0.25, and only under
     /// <c>government_is_tribal_excluding_wanua</c>, which every generated tribal county satisfies</item>
     /// <item>temple_citadel_holding → temple_citadel_01 → super_poor_building_tax_tier_1 →
-    /// 0.25 / 2. Never generated — a mandala realm is only ever an editor choice — but the editor
-    /// rebuilds that realm's capitals as temple citadels, so the wealth readout would otherwise
-    /// report them as earning nothing. The building's <c>tax_per_piety_level</c> on top is left
-    /// out, the way every other piety- and prestige-scaled bonus here is.</item>
+    /// 0.25 / 2, the capital of every mandala realm. The building's <c>tax_per_piety_level</c> on
+    /// top is left out, the way every other piety- and prestige-scaled bonus here is.</item>
     /// </list>
     ///
-    /// One known overstatement, and the reason it is left standing: tribe_01 pays a WANUA holder
-    /// <c>poor_building_tax_halved_tier_1</c> rather than the full tier, so an editor-made wanua
-    /// realm reads twice what it earns. Correcting it means passing the government down into
-    /// <see cref="CountyIncome"/> and its callers for one government the generator never produces.
+    /// tribe_01 pays a WANUA holder <c>poor_building_tax_halved_tier_1</c> rather than the full
+    /// tier, which this table cannot see; <see cref="CountyIncome"/> halves it when told the
+    /// county's government.
     ///
     /// Nomads and wilderness earn nothing here, and that is not an omission: nomadic_camp_01
     /// declares no <c>monthly_income</c> at all — a horde's purse comes from its herds — and our own
@@ -69,15 +66,21 @@ public static class Economy
     /// <param name="holdings">Holding key by barony province id, as the province history wrote it.
     /// A barony missing from it — or written <c>none</c> — contributes nothing, which is the point:
     /// an empty holding slot is empty.</param>
+    /// <param name="government">The county's government, where known — only wanua reads
+    /// differently, on its tribal holdings.</param>
     public static double CountyIncome(Title county, IReadOnlyDictionary<int, string> holdings,
-        int development)
+        int development, string? government = null)
     {
         double gross = 0;
 
         foreach (var barony in county.Children)
         {
             if (barony.ProvinceId >= 1 && holdings.TryGetValue(barony.ProvinceId, out var holding))
-                gross += HoldingIncome(holding);
+            {
+                double income = HoldingIncome(holding);
+                if (government == GovernmentMap.Wanua && holding == "tribal_holding") income /= 2;
+                gross += income;
+            }
         }
 
         return gross * DevelopmentTaxMultiplier(development);

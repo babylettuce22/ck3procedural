@@ -2349,7 +2349,7 @@ public sealed class MapConfig : CustomTypeDescriptor
                     "administrative government, so an imported map has none however this is set. Read again " +
                     "only for counties no state claims.")]
     [Description("Earliest start year for Administrative Governments to emerge across the realm. Empires before this year default to Feudal/Clan unless they host an Imperial World Center.")]
-    public int AdministrativeMinStartYear { get; set; } = 800;
+    public int AdministrativeMinStartYear { get; set; } = 899;
 
     [Category("11 Rulers")]
     [Description("Enable Nomadic horde realms across steppes and arid plains (requires nomadic DLC; safely degrades to Tribal/Clan if DLC is absent).")]
@@ -2362,6 +2362,35 @@ public sealed class MapConfig : CustomTypeDescriptor
                     "again only for counties no state claims.")]
     [Description("Share of qualifying steppe and arid realms that start as Nomads. Qualifying means a real pastoral majority: a fifth of the realm on steppe, or three fifths on steppe/desert/drylands together, or a steppe capital. Early starts add up to +0.25 to this and late starts subtract up to 0.25.")]
     public double NomadSteppeShare { get; set; } = 0.3;
+
+    // All Under Heaven's regional varieties. Each is laid over a realm the cascade has already
+    // decided, so these can only redistribute what the settings above produce — a world with no
+    // administrative empires has no meritocracies whatever MeritocraticShare says. Every one of
+    // them reverts to its base government for players without the expansion.
+
+    [Category("11 Rulers")]
+    [AzgaarIncompat("Governments come from each state's own form and type, and no Azgaar form word maps to " +
+                    "an All Under Heaven government. Read again only for counties no state claims.")]
+    [Description("Share of Administrative empires (other than a crowned hegemon) that run on merit instead: Meritocratic government, with imperial examinations and merit-graded appointments. Requires All Under Heaven; becomes Feudal without it.")]
+    public double MeritocraticShare { get; set; } = 0.5;
+
+    [Category("11 Rulers")]
+    [AzgaarIncompat("Governments come from each state's own form and type, and no Azgaar form word maps to " +
+                    "an All Under Heaven government. Read again only for counties no state claims.")]
+    [Description("Share of eligible steppe powers that start as Steppe Administrations — a bureaucracy grown out of the grasslands. Eligible means an Administrative empire standing on a fifth or more steppe, or a developed horde of kingdom rank or higher after the Administrative start year. Requires All Under Heaven; becomes Feudal without it.")]
+    public double SteppeAdminShare { get; set; } = 0.2;
+
+    [Category("11 Rulers")]
+    [AzgaarIncompat("Governments come from each state's own form and type, and no Azgaar form word maps to " +
+                    "an All Under Heaven government. Read again only for counties no state claims.")]
+    [Description("Share of feudal and tribal realms seated in the jungle that start as Mandalas: tributary overlordship and radiance, with temple citadels for capitals. Eligible means a jungle capital or a realm a third or more jungle. Requires All Under Heaven; becomes Feudal without it.")]
+    public double MandalaShare { get; set; } = 0.2;
+
+    [Category("11 Rulers")]
+    [AzgaarIncompat("Governments come from each state's own form and type, and no Azgaar form word maps to " +
+                    "an All Under Heaven government. Read again only for counties no state claims.")]
+    [Description("Share of seafaring tribal realms that start as Wanua: barter, cheap embarkation and safer seas. Eligible means a coastal capital and at least half the realm's counties on the coast. Requires All Under Heaven; becomes Tribal without it.")]
+    public double WanuaShare { get; set; } = 0.2;
 
 
     // =========================================================================

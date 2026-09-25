@@ -72,6 +72,13 @@ public static class CoronationWriter
         var crown = VanillaReligions(text, "coronation_proper_artifact_crown_trigger");
         var regalia = VanillaReligions(text, "coronation_proper_artifact_regalia_trigger");
 
+        // Still written without them — the generated religions need these triggers either way —
+        // but vanilla's own religions drop out of both, which only a vanilla-world map would show.
+        foreach (string key in new[] { "coronation_proper_artifact_crown_trigger", "coronation_proper_artifact_regalia_trigger" })
+            if (GovernmentWriter.Block(text, key) is null)
+                Console.WriteLine($"  coronations: WARNING vanilla's {key} not found in {Path.GetFileName(source)} — "
+                    + "re-declared with the generated religions only");
+
         crown.AddRange(faiths.Religions.Where(r => r.CoronationCrown).Select(r => r.Key));
         regalia.AddRange(faiths.Religions.Where(r => !r.CoronationCrown).Select(r => r.Key));
 

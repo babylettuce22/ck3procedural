@@ -87,14 +87,13 @@ public static partial class BuildingStripWriter
         int depth = 0;
         foreach (string raw in text.Split('\n'))
         {
-            string line = raw;
-            int hash = line.IndexOf('#');
-            if (hash >= 0) line = line[..hash];
+            string line = ScriptScan.StripComment(raw);
+            bool opened = false;
 
             if (depth == 0)
             {
                 var m = TopKey().Match(line);
-                if (m.Success) { key = m.Groups[1].Value; type = ""; }
+                if (m.Success) { key = m.Groups[1].Value; type = ""; opened = true; }
             }
             else if (depth == 1 && key is not null)
             {
@@ -102,14 +101,15 @@ public static partial class BuildingStripWriter
                 if (m.Success) type = m.Groups[1].Value;
             }
 
-            foreach (char c in line)
+            // Closed on this line: either it was open coming in, or it opened and shut here
+            // (`key = { }`).
+            int before = depth;
+            depth += ScriptScan.BraceDelta(line);
+
+            if ((before > 0 || opened) && depth == 0 && key is not null)
             {
-                if (c == '{') depth++;
-                else if (c == '}' && --depth == 0 && key is not null)
-                {
-                    yield return (key, type);
-                    key = null;
-                }
+                yield return (key, type);
+                key = null;
             }
         }
     }

@@ -364,7 +364,7 @@ public static class Development
         // Ramped across the development range rather than switched at a threshold, so there is no
         // single number where counties suddenly all sprout a town.
         double chance = Math.Clamp((development - 6) / 18.0, 0.0, 0.85);
-        if (government == GovernmentMap.Tribal) chance = Math.Min(chance, 0.12);
+        if (GovernmentMap.Family(government) == GovernmentMap.Tribal) chance = Math.Min(chance, 0.12);
         if (rng.NextDouble() > chance) return "none";
 
         return Distinct(SettledKind(terrain, rng), capital);

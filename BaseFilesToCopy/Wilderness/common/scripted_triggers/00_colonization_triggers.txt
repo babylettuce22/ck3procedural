@@ -299,15 +299,34 @@ wilderness_can_grow_settlement_trigger = {
 # reached for the county's culture instead, but culture has no tribal/feudal axis in CK3 — the
 # liege's government is the fact that actually exists.
 colony_promotes_to_tribe_trigger = {
-	scope:colony_promoter ?= {
-		OR = {
-			government_has_flag = government_is_tribal
-			AND = {
-				is_colonist_trigger = yes
-				liege ?= { government_has_flag = government_is_tribal }
-			}
+	scope:colony_promoter ?= { colony_sponsor_is_tribal_trigger = yes }
+}
+
+# Character scope. Is this colony holder working on a tribe's behalf — tribal himself, or a colonist
+# sent out by a tribal liege?
+#
+# The one reading of "tribal colony". colony_promotes_to_tribe_trigger asks it to decide what seat
+# a colony becomes; colony_is_tribal_trigger below asks it to decide which buildings the colony may
+# raise on the way there. Those two must agree — a colony built up with a chieftain's hall and then
+# promoted to a castle would be a contradiction — so the rule has one home.
+colony_sponsor_is_tribal_trigger = {
+	OR = {
+		government_has_flag = government_is_tribal
+		AND = {
+			is_colonist_trigger = yes
+			liege ?= { government_has_flag = government_is_tribal }
 		}
 	}
+}
+
+# Province scope, from a building's can_construct_potential. Is this colony's holder building for
+# a tribe?
+#
+# Splits the colony build menu in two: the tribal chains (hall, hunting camps, kin muster) require
+# it, the settled chains (office, timber works) require its negation. The palisade and the
+# settlement_01-03 spine are shared and ask neither.
+colony_is_tribal_trigger = {
+	scope:holder ?= { colony_sponsor_is_tribal_trigger = yes }
 }
 
 can_promote_colony_trigger = {

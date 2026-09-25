@@ -172,15 +172,9 @@ public static class ArmorCatalogue
                 int open = text.LastIndexOf('{', at);
                 if (open < 0) continue;
 
-                int depth = 0, i = open;
-
-                for (; i < text.Length; i++)
-                {
-                    if (text[i] == '{') depth++;
-                    else if (text[i] == '}' && --depth == 0) break;
-                }
-
-                if (i >= text.Length) continue;
+                int end = Io.ScriptScan.BlockEnd(text, open);
+                if (end < 0) continue;
+                int i = end - 1;
 
                 // Everything inside the braces except the entity's own name line, which we replace.
                 string body = text[(open + 1)..i];

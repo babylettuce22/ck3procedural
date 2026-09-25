@@ -145,7 +145,7 @@ public static class Cultivation
 
             // Tribes do not terrace and ditch; vanilla's farmland sits under settled government.
             string government = governments.For(county);
-            if (government == GovernmentMap.Tribal) continue;
+            if (GovernmentMap.Family(government) == GovernmentMap.Tribal) continue;
 
             int dev = development.GetValueOrDefault(county, 0);
 

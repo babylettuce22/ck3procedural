@@ -241,7 +241,7 @@
 # --- Short Rations 0016 Text & Tooltips ---
  wilderness_colonization.0016.c:0 "Order the hunters to fan out and live off the wild."
 
- colonize_relief_column_breakdown_tt:0 "#bold Dispatch Relief Wagons#! (#N -50 Gold#!):\n• #V [SCOPE.ScriptValue('colony_relief_column_chance')|0]%#! Chance Carts Arrive in Time (based on Realm Stewardship)\n• #P Success#!: Supplies reach the column (#P +20#! Expedition Fortune)\n• #N Failure#!: Carts arrive late or lose wagons in drifts (#P +2#! Fortune; gold spent)"
+ colonize_relief_column_breakdown_tt:0 "#bold Dispatch Relief Wagons#!:\n• #V [SCOPE.ScriptValue('colony_relief_column_chance')|0]%#! Chance Carts Arrive in Time (based on Realm Stewardship)\n• #P Success#!: Supplies reach the column (#P +20#! Expedition Fortune)\n• #N Failure#!: Carts arrive late or lose wagons in drifts (#P +2#! Fortune; gold spent)"
 
  colonize_forage_breakdown_tt:0 "#bold Forage & Hunt the Wilderness#!:\n• #V [SCOPE.ScriptValue('colony_self_rule_chance')|0]%#! Chance of Bountiful Game\n• #P Success#!: Scouts bring down wild game (#P +12#! Expedition Fortune)\n• #N Failure#!: Game is scarce; scouts suffer frostbite (#N -8#! Expedition Fortune)"
 
@@ -543,7 +543,7 @@ wilderness_colonization.0051.t:0 "A Plea from the Palisade"
  building_type_colony_timber_works_02_desc:0 "Local logging and stoneworks reducing settlement construction costs."
 
 # Walls
-building_colony_pallisade_01:0 "Frontier Palisade"
+ building_colony_pallisade_01:0 "Frontier Palisade"
  building_colony_pallisade_01_desc:0 "Stakes cut from the nearest treeline, sharpened and driven deep into a shallow ditch. It will not stop an army, but it turns a raid into a decision, and a wolf pack into someone else's problem. The settlers sleep behind it because sleeping in front of it is worse."
  building_type_colony_pallisade_01:0 "Palisade"
  building_type_colony_pallisade_01_desc:0 "A wall of timber and earth thrown up around a young settlement. Cheap, quick, and temporary — when the colony grows into something worth defending properly, the palisade comes down and stone goes up in its place."
@@ -565,6 +565,41 @@ building_colony_office_01:0 "Colonial Bailiff's Office"
  building_colony_office_03_desc:0 "A sprawling administrative complex housing ministries, exchequer clerks, and civil courts. By subsidizing incoming settlers and coordinating large-scale public works, the colony finally breaks through frontier stagnation to become a thriving regional capital."
  building_type_colony_office_03:0 "Colonial Administration"
  building_type_colony_office_03_desc:0 "Administrative offices that oversee taxation, legal registry, and organized settlement growth."
+
+# Tribal colonies: these replace the office and the timber works when the colony is held for a tribe
+# Chieftain's Hall (replaces the office)
+ building_colony_hall_01:0 "Headman's Hall"
+ building_colony_hall_01_desc:0 "A long timber hall with a hearth down the middle. The headman eats there, hears disputes there, and hands out the land there. New families come to it first."
+ building_type_colony_hall_01:0 "Chieftain's Hall"
+ building_type_colony_hall_01_desc:0 "The seat of the tribe's authority in a new settlement. Draws settlers and holds them."
+ building_colony_hall_02:0 "Chieftain's Hall"
+ building_colony_hall_02_desc:0 "The hall has been lengthened twice and has carved posts at the door. Feasts are held here, and oaths are sworn here. People now come from other valleys to settle."
+ building_type_colony_hall_02:0 "Chieftain's Hall"
+ building_type_colony_hall_02_desc:0 "The seat of the tribe's authority in a new settlement. Draws settlers and holds them."
+ building_colony_hall_03:0 "Great Mead Hall"
+ building_colony_hall_03_desc:0 "A hall large enough to seat every household in the county at one feast. The name of the chief who raised it is known well beyond the frontier, and families arrive every season asking for land."
+ building_type_colony_hall_03:0 "Chieftain's Hall"
+ building_type_colony_hall_03_desc:0 "The seat of the tribe's authority in a new settlement. Draws settlers and holds them."
+
+# Hunting Camps (replaces the timber works)
+ building_colony_hunting_camps_01:0 "Hunting Camps"
+ building_colony_hunting_camps_01_desc:0 "Lean-tos and drying racks along the game trails. The hunters keep the settlers fed through the first winters and bring back timber and hides on the same trips."
+ building_type_colony_hunting_camps_01:0 "Hunting Camps"
+ building_type_colony_hunting_camps_01_desc:0 "Hunters and trappers who feed the settlement and supply it from the surrounding wilds."
+ building_colony_hunting_camps_02:0 "Hunting Lodges"
+ building_colony_hunting_camps_02_desc:0 "Permanent lodges with smokehouses and store pits. The hunters know every trail within three days' walk, and the settlement no longer goes hungry in a bad year."
+ building_type_colony_hunting_camps_02:0 "Hunting Camps"
+ building_type_colony_hunting_camps_02_desc:0 "Hunters and trappers who feed the settlement and supply it from the surrounding wilds."
+
+# Kin Muster (tribal only)
+ building_colony_kin_muster_01:0 "Kin Encampment"
+ building_colony_kin_muster_01_desc:0 "Cousins, in-laws and sworn men of the chief's clan have pitched their tents near the hall. They clear land, and they fight when called."
+ building_type_colony_kin_muster_01:0 "Kin Muster"
+ building_type_colony_kin_muster_01_desc:0 "Clan households who follow the chief to new land, speeding settlement and swelling the levy."
+ building_colony_kin_muster_02:0 "Clan Steadings"
+ building_colony_kin_muster_02_desc:0 "The tents have become farmsteads, each held by a family bound to the chief by blood or oath. When the horn sounds, every steading sends its men."
+ building_type_colony_kin_muster_02:0 "Kin Muster"
+ building_type_colony_kin_muster_02_desc:0 "Clan households who follow the chief to new land, speeding settlement and swelling the levy."
 
   # --- wilderness event 30 -----------------------------------------------------------------
  wilderness_colonization.0030.t:0 "Winter at the Palisade"
@@ -692,7 +727,7 @@ return_home_from_colony_decision:0 "Return Home from the Colony"
  
 OVERSEE_COLONY_ACTIVITY_STATUS:0 "You are dwelling among the settlers, directing the expansion firsthand."
  OVERSEEING_THE_SETTLEMENT_TOOLTIP:0 "#T Overseeing the Settlement#!\n#positive @gold_icon! +2.0#! Monthly Income\n#negative @prestige_icon! -0.5#! Monthly Prestige\n\n#flavor The lord dwells in the palisade, directing the work firsthand.#!"
- SETTLEMENT_OVERSEEN_TOOLTIP:0 "#T Colony Growth#!\n#positive @development_icon! +15%#! Development Growth\n#positive @control_icon! +0.5#! Monthly Control Growth\n#positive +20#! County Opinion\n#positive -15%#! Construction Time\n\n#flavor A colony develops rapidly when its lord is present to govern it.#!"
+ SETTLEMENT_OVERSEEN_TOOLTIP:0 "#T Colony Growth#!\n#positive @development_icon! +30%#! Development Growth\n#positive @control_icon! +0.5#! Monthly Control Growth\n#positive +20#! County Opinion\n#positive -15%#! Construction Time\n\n#flavor A colony develops rapidly when its lord is present to govern it.#!"
  
  # --- Was promised colony, now what
  wilderness_colonization.0025.t: "The Pioneer's Charter"
@@ -701,9 +736,9 @@ OVERSEE_COLONY_ACTIVITY_STATUS:0 "You are dwelling among the settlers, directing
  wilderness_colonization.0025.b: "Offer a purse of silver to every family in exchange for the charter."
  wilderness_colonization.0025.c: "They were hired laborers, not lords. Enforce standard feudal tithes."
 
- colonize_honor_charter_tt: "You grant freeholder rights to the pioneer families:\n$EFFECT_LIST_BULLET$Lightens holding taxes by #negative_value 15%#!\n$EFFECT_LIST_BULLET$Boosts Development Growth by #positive_value 25%#!\n$EFFECT_LIST_BULLET$Grants #positive_value +20#! Popular Opinion for 25 years"
+ colonize_honor_charter_tt: "You grant freeholder rights to the pioneer families."
  colonize_commute_charter_tt: "You buy out the settlers' charters with coin, avoiding popular unrest without sacrificing future tax rights."
- colonize_break_charter_tt: "You extract full feudal taxes, but betraying your word causes #negative_value severe unrest#!, drops Control by #negative_value 30#!, and gains #negative_value Tyranny#!."
+ colonize_break_charter_tt: "You extract full feudal taxes, and the settlers learn what your word was worth."
 
  # Personally leading expedition
  # --- Player-Led Expedition Events ---
@@ -765,23 +800,19 @@ OVERSEE_COLONY_ACTIVITY_STATUS:0 "You are dwelling among the settlers, directing
  colony_law_balanced_effects: "The outpost balances labor evenly between security patrols, clearing the brush, and sowing crops."
 
  colony_law_garrison: "Martial Vigilance"
- colony_law_garrison_effects: "Armed patrols escort work crews and sentinels man the ditch day and night:\n$EFFECT_LIST_BULLET$Control Growth: #positive_value +0.35/month#!\n$EFFECT_LIST_BULLET$Garrison Size: #positive_value +40%#!\n$EFFECT_LIST_BULLET$Defender Advantage: #positive_value +6#!\n$EFFECT_LIST_BULLET$Development Growth: #negative_value -15%#!\n$EFFECT_LIST_BULLET$Building Costs: #negative_value +15%#!"
+ # The _effects keys are flavour only. The law window already lists every modifier from the law's
+ # `modifier` block under this text, so a hand-typed bullet list here printed each effect twice
+ # (and drifted from the script whenever a number was retuned).
+ colony_law_garrison_effects: "Armed patrols escort work crews and sentinels man the ditch day and night."
 
  colony_law_corvee: "Corvée Clearance Gangs"
- # The opinion line said -25 and the law applies -15. Corrected to the law rather than the other way
- # round: -15 is what has been in play, and moving the script instead would retune the choice against
- # colony_law_extraction's -10 on the strength of a loc string. If -25 was the intent,
- # 00_colonial_laws.txt is the half to change — and then this line goes back.
- #
- # Every other number across all five laws' _effects keys was checked against the script and matches.
- # The "+30%" here now does too: build_speed is construction TIME, so the law's -0.30 IS 30% faster.
- colony_law_corvee_effects: "Settlers and laborers are worked relentlessly to clear the wilderness at maximum speed:\n$EFFECT_LIST_BULLET$Construction Speed: #positive_value +30%#!\n$EFFECT_LIST_BULLET$Building & Clearance Cost: #positive_value -20%#!\n$EFFECT_LIST_BULLET$Popular Opinion: #negative_value -15#!\n$EFFECT_LIST_BULLET$Health Penalty: #negative_value -0.15#!\n$EFFECT_LIST_BULLET$Stress Gain: #negative_value +20%#!"
+ colony_law_corvee_effects: "Settlers and laborers are worked relentlessly to clear the wilderness at maximum speed."
 
  colony_law_homestead: "Pioneer Homesteading"
- colony_law_homestead_effects: "Settlers are granted private plots, warm cabins, and grain reserves:\n$EFFECT_LIST_BULLET$Development Growth: #positive_value +30%#!\n$EFFECT_LIST_BULLET$Popular Opinion: #positive_value +20#!\n$EFFECT_LIST_BULLET$Stress Loss: #positive_value +15%#!\n$EFFECT_LIST_BULLET$Holding Taxes: #negative_value -25%#!\n$EFFECT_LIST_BULLET$Garrison Size: #negative_value -20%#!"
+ colony_law_homestead_effects: "Settlers are granted private plots, warm cabins, and grain reserves."
 
  colony_law_extraction: "Commercial Extraction"
- colony_law_extraction_effects: "The outpost is dedicated to harvesting furs, hardwood timber, and surface minerals for immediate sale:\n$EFFECT_LIST_BULLET$Holding Revenue: #positive_value +35%#!\n$EFFECT_LIST_BULLET$Control Growth: #negative_value -0.15/month#!\n$EFFECT_LIST_BULLET$Popular Opinion: #negative_value -10#!\n$EFFECT_LIST_BULLET$Defender Advantage: #negative_value -3#!"
+ colony_law_extraction_effects: "The outpost is dedicated to harvesting furs, hardwood timber, and surface minerals for immediate sale."
 
   colony_law_garrison_duel_desc: "Martial Vigilance: Palisade sentinels and patrols are prepared for combat"
  colony_law_corvee_duel_desc: "Corvée Clearance: Brutalized laborers fight back with mutinous fury"
@@ -793,17 +824,17 @@ OVERSEE_COLONY_ACTIVITY_STATUS:0 "You are dwelling among the settlers, directing
  # Level 0
  colony_subsidy_neglected: "Neglected Outpost"
  colony_subsidy_neglected_short: "Neglected"
- colony_subsidy_neglected_desc: "The Crown provides zero financial upkeep to the settlement, forcing the pioneers to survive on their own:\n$EFFECT_LIST_BULLET$Liege Upkeep: #positive_value 0.0 gold/month#!\n$EFFECT_LIST_BULLET$Development Growth: #negative_value -20%#!\n$EFFECT_LIST_BULLET$Building & Clearance Cost: #negative_value +20%#!\n$EFFECT_LIST_BULLET$Secession Risk: #negative_value +15%#!\n$EFFECT_LIST_BULLET$Vassal Opinion: #negative_value -15#!"
+ colony_subsidy_neglected_desc: "The Crown provides nothing toward the settlement's upkeep, and the pioneers must survive on their own."
 
  # Level 1
  colony_subsidy_standard: "Standard Subsidy"
  colony_subsidy_standard_short: "Standard"
- colony_subsidy_standard_desc: "The Crown sends regular relief wagons and tools to maintain basic infrastructure:\n$EFFECT_LIST_BULLET$Liege Upkeep: #negative_value -0.3 gold/month#!\n$EFFECT_LIST_BULLET$Standard Development & Clearance rates\n$EFFECT_LIST_BULLET$Vassal Opinion: #negative_value -5#!"
+ colony_subsidy_standard_desc: "The Crown sends regular relief wagons and tools to maintain basic infrastructure."
 
  # Level 2
  colony_subsidy_heavy: "Heavy Patronage"
  colony_subsidy_heavy_short: "Heavy Patronage"
- colony_subsidy_heavy_desc: "The Crown heavily funds the colony with gold, masonry, and armed escorts:\n$EFFECT_LIST_BULLET$Liege Upkeep: #negative_value -0.75 gold/month#!\n$EFFECT_LIST_BULLET$Development Growth: #positive_value +25%#!\n$EFFECT_LIST_BULLET$Building & Clearance Cost: #positive_value -20%#!\n$EFFECT_LIST_BULLET$Control Growth: #positive_value +0.20/month#!\n$EFFECT_LIST_BULLET$Secession Risk: #positive_value -10%#!\n$EFFECT_LIST_BULLET$Vassal Opinion: #positive_value +25#!"
+ colony_subsidy_heavy_desc: "The Crown heavily funds the colony with gold, masonry, and armed escorts."
 
  ###################################################
  # War for the colony: the offer of fealty (0070-0073)

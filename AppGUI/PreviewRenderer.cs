@@ -533,7 +533,10 @@ public static class PreviewRenderer
 
         var stateGovernments = azgaar is null ? null : MapGen.AzgaarGovernments.ByState(azgaar, cfg);
 
-        return MapGen.Governments.Build(empires, counties, realms, provinceTerrain,
+        var coastal = MapGen.ProvinceSurvey.Take(result.Provinces, result.ProvinceOrder,
+            result.BaronyCount, null).Coastal;
+
+        return MapGen.Governments.Build(empires, counties, realms, provinceTerrain, coastal,
             development, cultures, worldCenters, cfg, new Rng(cfg.Seed ^ 0x6017),
             azgaar, stateGovernments);
     }
@@ -756,7 +759,7 @@ public static class PreviewRenderer
 
         var image = RenderByCounty(result, written.Wilderness, county => WealthColour(
             (float)Economy.CountyIncome(county, written.Holdings,
-                written.Development.GetValueOrDefault(county))));
+                written.Development.GetValueOrDefault(county), written.Governments?.For(county))));
 
         DrawWorldCenters(image, result, written.WorldCenters);
         return image;

@@ -116,6 +116,74 @@ wilderness_clear_cost_dear = 250
 
 settlement_upgrade_cost = 200
 
+# --- The same four prices as a building actually charges them ---------------------------------
+#
+# The four constants above are the PRICE of each job and stay plain numbers, because the liege-aid
+# event (wilderness_colonization_events.txt, colony_aid_cost) quotes them as the gold a liege is
+# asked to send. The values below are what a building's `cost` block charges, and those split by
+# who is paying: a colony held for a tribe (colony_sponsor_is_tribal_trigger) pays most of the
+# price in prestige and a share of it in gold, the way vanilla prices a tribe's own buildings —
+# longhouses are 200 prestige + 75 gold where a comparable castle building is ~150-200 gold.
+#
+# ---- Root is the paying character, not the province ----
+#
+# A building's `cost` block is evaluated with the builder as root — vanilla's own scripted
+# building price (rebuild_cost in tgp_great_project_buildings.txt) tests `is_ai` at root, and
+# ck3-tiger reads `cost` as character scope (probed 2026-09-25: a province trigger there is
+# flagged, a character trigger is not). So these ask the trigger directly, with no scope:holder.
+# Do not call them from province scope.
+#
+# ---- A building's cost must WRAP these: `gold = { value = x }`, never `gold = x` ----
+#
+# A bare name in a `cost` line is read as "named value or literal", and that reader accepts only
+# CONSTANT script values. Pointed at one of these calculated values, the engine logs
+# `Matching scriptvalue [x], but of wrong type` at load and the cost line reads as 0. That shipped
+# once: every obstacle and both settlement upgrades became free for everybody, and ck3-tiger said
+# nothing. An inline `{ }` block is parsed as a script value instead, and inside one a calculated
+# value may be named freely. The plain constants (colony_hall_gold_tier_1 and the rest) are fine
+# bare.
+#
+# The prestige half is 0 for everyone else, and a zero line is not shown in the cost tooltip — the
+# colonize decision already charges `prestige = colonize_prestige_cost` the same way.
+@tribal_colony_gold_share = 0.4
+@tribal_colony_prestige_share = 1
+
+wilderness_clear_gold_cheap = {
+	value = wilderness_clear_cost_cheap
+	if = { limit = { colony_sponsor_is_tribal_trigger = yes } multiply = @tribal_colony_gold_share }
+}
+wilderness_clear_prestige_cheap = {
+	value = 0
+	if = { limit = { colony_sponsor_is_tribal_trigger = yes } add = { value = wilderness_clear_cost_cheap multiply = @tribal_colony_prestige_share } }
+}
+
+wilderness_clear_gold_standard = {
+	value = wilderness_clear_cost_standard
+	if = { limit = { colony_sponsor_is_tribal_trigger = yes } multiply = @tribal_colony_gold_share }
+}
+wilderness_clear_prestige_standard = {
+	value = 0
+	if = { limit = { colony_sponsor_is_tribal_trigger = yes } add = { value = wilderness_clear_cost_standard multiply = @tribal_colony_prestige_share } }
+}
+
+wilderness_clear_gold_dear = {
+	value = wilderness_clear_cost_dear
+	if = { limit = { colony_sponsor_is_tribal_trigger = yes } multiply = @tribal_colony_gold_share }
+}
+wilderness_clear_prestige_dear = {
+	value = 0
+	if = { limit = { colony_sponsor_is_tribal_trigger = yes } add = { value = wilderness_clear_cost_dear multiply = @tribal_colony_prestige_share } }
+}
+
+settlement_upgrade_gold = {
+	value = settlement_upgrade_cost
+	if = { limit = { colony_sponsor_is_tribal_trigger = yes } multiply = @tribal_colony_gold_share }
+}
+settlement_upgrade_prestige = {
+	value = 0
+	if = { limit = { colony_sponsor_is_tribal_trigger = yes } add = { value = settlement_upgrade_cost multiply = @tribal_colony_prestige_share } }
+}
+
 # --- Colony Infrastructure Building Costs ---------------------------------------------------
 
 settlement_cost_cheap_tier_1 = 75
@@ -123,6 +191,32 @@ settlement_cost_tier_1 = 125
 settlement_cost_tier_2 = 225
 settlement_cost_tier_3 = 375
 settlement_cost_tier_4 = 550
+
+# The tribal chains, priced the way vanilla prices a tribe's own buildings: mostly prestige, a
+# token of gold. Vanilla's longhouses/palisades/war camps are 200p+75g then 350p+100g
+# (expensive_building_tier_1/2_cost + tribal_building_tier_1/2_cost); the hall's third tier extends
+# that ladder by one more step of each.
+#
+# The office chain these stand beside costs 1150 gold in all, which a chief earning two or three
+# gold a month cannot reach inside a lifetime — and the office is the colony's whole development
+# numerator, so a tribal colony that could not afford it never matured. The hall costs 300 gold
+# and 1050 prestige: the same investment, in the currency the government is built to accumulate.
+colony_hall_gold_tier_1 = 75
+colony_hall_gold_tier_2 = 100
+colony_hall_gold_tier_3 = 125
+colony_hall_prestige_tier_1 = 200
+colony_hall_prestige_tier_2 = 350
+colony_hall_prestige_tier_3 = 500
+
+colony_hunting_camps_gold_tier_1 = 50
+colony_hunting_camps_gold_tier_2 = 75
+colony_hunting_camps_prestige_tier_1 = 150
+colony_hunting_camps_prestige_tier_2 = 250
+
+colony_kin_muster_gold_tier_1 = 50
+colony_kin_muster_gold_tier_2 = 75
+colony_kin_muster_prestige_tier_1 = 150
+colony_kin_muster_prestige_tier_2 = 300
 
 # What it costs to turn a finished colony into a real holding.
 promote_colony_cost = {

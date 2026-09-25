@@ -1123,16 +1123,9 @@ public sealed class VanillaVocabulary
         var open = Regex.Match(text, $@"(^|\n)\s*{Regex.Escape(name)}\s*=\s*\{{");
         if (!open.Success) return null;
 
-        int start = text.IndexOf('{', open.Index) + 1;
-        int depth = 1;
-
-        for (int i = start; i < text.Length; i++)
-        {
-            if (text[i] == '{') depth++;
-            else if (text[i] == '}' && --depth == 0) return text[start..i];
-        }
-
-        return null;
+        int brace = text.IndexOf('{', open.Index);
+        int end = Io.ScriptScan.BlockEnd(text, brace);
+        return end < 0 ? null : text[(brace + 1)..(end - 1)];
     }
 
     /// <summary>A single-line `name = { a b c }` assignment, returned verbatim after the `=`.</summary>
@@ -1150,32 +1143,10 @@ public sealed class VanillaVocabulary
     {
         var lines = text.Replace("\r\n", "\n").Split('\n');
 
-        for (int i = 0; i < lines.Length; i++)
+        foreach (var (key, first, last, closed) in Io.ScriptScan.TopLevelDeclarations(
+                     lines, c => char.IsLetterOrDigit(c) || c is '_' or '-'))
         {
-            string line = lines[i];
-            if (line.Length == 0 || char.IsWhiteSpace(line[0]) || line[0] == '#') continue;
-
-            int equals = line.IndexOf('=');
-            if (equals <= 0 || !line.Contains('{')) continue;
-
-            string key = line[..equals].Trim().TrimStart('﻿');
-            if (key.Length == 0 || !key.All(c => char.IsLetterOrDigit(c) || c is '_' or '-')) continue;
-
-            int depth = 0;
-            int start = i;
-            for (int j = i; j < lines.Length; j++)
-            {
-                string body = lines[j];
-                int hash = body.IndexOf('#');
-                if (hash >= 0) body = body[..hash];
-
-                depth += body.Count(c => c == '{') - body.Count(c => c == '}');
-                if (depth > 0) continue;
-
-                yield return (key, string.Join('\n', lines[start..(j + 1)]));
-                i = j;
-                break;
-            }
+            if (closed) yield return (key, string.Join('\n', lines[first..(last + 1)]));
         }
     }
 }

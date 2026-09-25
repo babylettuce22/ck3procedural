@@ -75,12 +75,7 @@ public static class GeneSplice
 
         for (int i = open; i < lines.Count; i++)
         {
-            foreach (char c in lines[i])
-            {
-                if (c == '{') depth++;
-                else if (c == '}') depth--;
-            }
-
+            depth += ScriptScan.BraceDelta(lines[i]);
             if (depth != 0) continue;
 
             close = i;

@@ -284,7 +284,7 @@ public static class MapModes
     private static string WealthProbe(Emit.WrittenContent written, Title county)
     {
         double gold = Economy.CountyIncome(county, written.Holdings,
-            written.Development.GetValueOrDefault(county));
+            written.Development.GetValueOrDefault(county), written.Governments?.For(county));
 
         var holdings = Economy.CountyHoldings(county, written.Holdings)
             .Select(h => h.Replace("_holding", "").Replace('_', ' '))

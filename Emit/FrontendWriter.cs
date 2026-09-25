@@ -114,11 +114,7 @@ public static class FrontendWriter
             int end = -1, depth = 0;
             for (int i = start; i < lines.Count; i++)
             {
-                string body = lines[i];
-                int hash = body.IndexOf('#');
-                if (hash >= 0) body = body[..hash];
-
-                depth += body.Count(c => c == '{') - body.Count(c => c == '}');
+                depth += ScriptScan.BraceDelta(lines[i]);
                 if (depth > 0) continue;
                 end = i;
                 break;

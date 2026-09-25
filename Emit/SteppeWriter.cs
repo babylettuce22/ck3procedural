@@ -54,8 +54,8 @@ public static class SteppeWriter
 
         if (!WriteSituationType(modDir, gameDir, steppe))
         {
-            Console.WriteLine("  great steppe: WARNING vanilla situation file not found under " +
-                              $"'{gameDir}'; the situation is not started");
+            Console.WriteLine("  great steppe: WARNING vanilla's situation could not be patched (above); " +
+                              "the situation is not started");
             return;
         }
 
@@ -122,14 +122,22 @@ public static class SteppeWriter
     private static bool WriteSituationType(string modDir, string gameDir, SteppeMap steppe)
     {
         string source = Path.Combine(gameDir, "common", "situation", "situations", $"{TypeKey}.txt");
-        if (!File.Exists(source)) return false;
+        if (!File.Exists(source))
+        {
+            Console.WriteLine($"  great steppe: {source} not found");
+            return false;
+        }
 
         // Vanilla's file opens with a byte-order mark; WriteBom puts one back, so strip it here or
         // the shipped file carries two and the parser sees garbage before the first key.
         string text = File.ReadAllText(source).TrimStart((char)0xFEFF);
 
         string? original = SubRegionsBlock(text, out int start, out int end);
-        if (original is null) return false;
+        if (original is null)
+        {
+            Console.WriteLine($"  great steppe: no `sub_regions` block in vanilla's {TypeKey}.txt — it has changed shape");
+            return false;
+        }
 
         var block = new JominiBuilder(startDepth: 1);
         using (block.Block("sub_regions"))
@@ -189,22 +197,12 @@ public static class SteppeWriter
             at = after;
         }
 
-        int open = text.IndexOf('{', at);
-        if (open < 0) return null;
+        int close = ScriptScan.BlockEnd(text, at);
+        if (close < 0) return null;
 
-        int depth = 0;
-        for (int i = open; i < text.Length; i++)
-        {
-            if (text[i] == '{') depth++;
-            else if (text[i] == '}' && --depth == 0)
-            {
-                start = at;
-                end = i + 1;
-                return text[start..end];
-            }
-        }
-
-        return null;
+        start = at;
+        end = close;
+        return text[start..end];
     }
 
     /// <summary>

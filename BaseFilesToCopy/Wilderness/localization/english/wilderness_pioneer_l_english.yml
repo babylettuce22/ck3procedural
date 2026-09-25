@@ -96,7 +96,7 @@
 
  pioneer_found_dig_in_tt:0 "#bold Dig In First#!:\n• Ditches, roofs and a store before anything else\n• #P +12#! Hold\n• Costs nothing but the season"
  pioneer_found_the_line_tt:0 "#bold Every Hand on the Treeline#!:\n• #P Clears the worst obstacle on the county outright#! — and it stays cleared for every winter after this one\n• #N -8#! Hold: nothing else got done\n• #N One of your followers does not come back from it#!"
- pioneer_found_send_back_tt:0 "#bold Send Back Down the Road#! (#N -250 Gold#!):\n• Grain, iron and two more carts, bought at frontier prices\n• #P +25#! Hold"
+ pioneer_found_send_back_tt:0 "#bold Send Back Down the Road#!:\n• Grain, iron and two more carts, bought at frontier prices\n• #P +25#! Hold"
 
  # =====================================================================================
  #  0011 — The season
@@ -108,7 +108,7 @@
  wilderness_pioneer.0011.b:0 "Send the strongest out. There is game in there somewhere."
  wilderness_pioneer.0011.c:0 "Half rations, and everyone endures it."
 
- pioneer_supply_breakdown_tt:0 "#bold Buy From the Trappers#! (#N -150 Gold#!):\n• #V [SCOPE.ScriptValue('pioneer_supply_chance')|0]%#! Chance They Deal Honestly (Stewardship)\n• #P Success#!: Grain, salt and hides at a robber's price (#P +20#! Hold)\n• #N Failure#!: Short weight and watered ale (#P +5#! Hold; the gold goes either way)"
+ pioneer_supply_breakdown_tt:0 "#bold Buy From the Trappers#!:\n• #V [SCOPE.ScriptValue('pioneer_supply_chance')|0]%#! Chance They Deal Honestly (Stewardship)\n• #P Success#!: Grain, salt and hides at a robber's price (#P +20#! Hold)\n• #N Failure#!: Short weight and watered ale (#P +5#! Hold; the gold goes either way)"
  pioneer_forage_breakdown_tt:0 "#bold Send the Strongest Out#!:\n• #V [SCOPE.ScriptValue('pioneer_forage_chance')|0]%#! Chance They Bring Something Back (Martial, Prowess)\n• #P Success#!: Meat enough to change the arithmetic (#P +16#! Hold)\n• #N Failure#!: They find nothing, and one of them finds something (#N -10#! Hold, #N a follower dies#!)"
  pioneer_endure_breakdown_tt:0 "#bold Half Rations#!:\n• #V [SCOPE.ScriptValue('pioneer_endure_chance')|0]%#! Chance the Stores Stretch (Stewardship, temperament)\n• #P Success#!: Discipline gets them to the thaw (#P +9#! Hold)\n• #N Failure#!: Hunger, and then the arguments (#N -12#! Hold, Stress)"
 
@@ -123,7 +123,7 @@
  wilderness_pioneer.0012.c:0 "Wall up. They can have the outskirts."
 
  pioneer_stand_breakdown_tt:0 "#bold Go Out and Finish It#!:\n• #V [SCOPE.ScriptValue('pioneer_stand_chance')|0]%#! Chance You Settle It (Prowess, Martial)\n• #P Success#!: #P The obstacle is cleared for good#! (#P +18#! Hold, Prestige)\n• #N Failure#!: You come back carried (#N -14#! Hold, #N you are wounded#!, a follower dies, Stress)"
- pioneer_pay_them_off_tt:0 "#bold Buy the Problem Away#! (#N -150 Gold#!):\n• Silver for the ones who can be paid, fire and noise for the ones who cannot\n• #P +10#! Hold\n• #N The ground itself is unchanged#! — whatever is out there is still out there next year"
+ pioneer_pay_them_off_tt:0 "#bold Buy the Problem Away#!:\n• Silver for the ones who can be paid, fire and noise for the ones who cannot\n• #P +10#! Hold\n• #N The ground itself is unchanged#! — whatever is out there is still out there next year"
  pioneer_wall_up_breakdown_tt:0 "#bold Wall Up#!:\n• #V [SCOPE.ScriptValue('pioneer_endure_chance')|0]%#! Chance the Ditch Holds (Stewardship, temperament)\n• #P Success#!: A hard month, and then quiet (#P +7#! Hold)\n• #N Failure#!: They come over it (#N -9#! Hold, a follower dies)"
 
  # =====================================================================================
@@ -137,7 +137,7 @@
  wilderness_pioneer.0013.c:0 "Make an example of the loudest."
 
  pioneer_promise_land_tt:0 "#bold Promise Them Land#!:\n• #P +22#! Hold, and no roll — a man will winter anywhere for a field of his own\n• #N The promise is real#!: when this place is finally a holding, they will come to collect, and what they are owed will have to come out of it"
- pioneer_pay_wages_tt:0 "#bold Pay Them#! (#N -[SCOPE.ScriptValue('pioneer_wages_cost')|0] Gold#!):\n• A season's wages for a season's ditch-digging\n• #P +14#! Hold\n• Buys this year and only this year"
+ pioneer_pay_wages_tt:0 "#bold Pay Them#!:\n• A season's wages for a season's ditch-digging\n• #P +14#! Hold\n• Buys this year and only this year"
  pioneer_make_example_breakdown_tt:0 "#bold Make an Example#!:\n• #V [SCOPE.ScriptValue('pioneer_hold_company_chance')|0]%#! Chance It Silences the Rest (Martial, Intrigue, Dread)\n• #P Success#!: Nobody else says it (#P +18#! Hold, #P Dread#!)\n• #N Failure#!: It goes the other way (#N -16#! Hold, a follower disappears, Stress)"
 
  # =====================================================================================

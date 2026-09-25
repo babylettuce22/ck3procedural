@@ -131,10 +131,42 @@ gen_ruins_place_effect = {
 			}
 		}
 
+		gen_ruins_make_room_effect = yes
+
 		random_list = {
 			50 = { add_building = ruins_large }
 			50 = { add_building = ruins_small }
 		}
+	}
+}
+
+# PROVINCE scope. Frees one building slot for a ruin by dropping one natural obstacle, if the
+# province is full.
+#
+# ---- Why a ruin can find no room ----
+#
+# Every caller places the ruin AFTER the obstacles: gen_ruin_county_effect runs
+# abandon_county_effect first, and the game-start pass runs after wilderness_on_game_start. An
+# unsettled capital province holds two obstacles (measured — see wilderness_seed_obstacle_effect),
+# and on forest, jungle, taiga, hills and mountains the seeding fills both. add_building then fails
+# with "No building slots available", and the county reaches the ruins realm with no ruin on it —
+# the one state this file set must never ship, because everything downstream reads the building.
+#
+# Dropping an obstacle costs nothing the county was owed: both ruin rungs carry `flag = obstacle`
+# themselves, so the county is exactly as blocked as before, by the ruin instead of by one of the
+# natural blockers. The order is cheapest-to-clear first, so the ruin replaces the least of what
+# was there. `_cleared` buildings are never dropped: one only exists while somebody is working,
+# and pulling it would silently throw that work away.
+gen_ruins_make_room_effect = {
+	if = {
+		limit = { free_building_slots <= 0 }
+
+		if = { limit = { has_building = beast_dens }        remove_building = beast_dens }
+		else_if = { limit = { has_building = bandit_camps } remove_building = bandit_camps }
+		else_if = { limit = { has_building = dense_growth } remove_building = dense_growth }
+		else_if = { limit = { has_building = scree_slopes } remove_building = scree_slopes }
+		else_if = { limit = { has_building = flooded_lands } remove_building = flooded_lands }
+		else_if = { limit = { has_building = killing_cold } remove_building = killing_cold }
 	}
 }
 

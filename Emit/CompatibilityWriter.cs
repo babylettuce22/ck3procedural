@@ -247,18 +247,22 @@ public static partial class CompatibilityWriter
         string text = File.ReadAllText(source);
 
         int start = text.IndexOf("GOVERNMENT_TYPES", StringComparison.Ordinal);
-        if (start < 0) return "";
+        int open = start < 0 ? -1 : text.IndexOf('{', start);
+        int end = open < 0 ? -1 : ScriptScan.BlockEnd(text, open);
 
-        int open = text.IndexOf('{', start);
-        int close = text.IndexOf('}', open);
-        if (open < 0 || close < 0) return "";
-
-        var entries = System.Text.RegularExpressions.Regex
-            .Matches(text[(open + 1)..close], "\"([^\"]+)\"")
+        List<string> entries = end < 0 ? [] : System.Text.RegularExpressions.Regex
+            .Matches(text[(open + 1)..(end - 1)], "\"([^\"]+)\"")
             .Select(m => m.Groups[1].Value)
             .ToList();
 
-        if (entries.Count == 0) return "";
+        if (entries.Count == 0)
+        {
+            // Said out loud: without this list the wilderness and colony governments are never
+            // registered, and the game only half-loads them, with errors pointing elsewhere.
+            Console.WriteLine("  defines: WARNING no GOVERNMENT_TYPES list found in 00_defines.txt — "
+                + "vanilla has changed shape; wilderness_government and colony_government are not registered");
+            return "";
+        }
 
         // Both of ours, and both from BaseFilesToCopy/Wilderness/common/governments — which is why
         // they are gated on EnableWilderness above. colony_government was missing here while its
@@ -1369,31 +1373,11 @@ public static partial class CompatibilityWriter
     {
         var lines = text.Split('\n');
 
-        for (int i = 0; i < lines.Length; i++)
+        foreach (var (key, first, last, _) in ScriptScan.TopLevelDeclarations(
+                     lines, c => char.IsLetterOrDigit(c) || c is '_' or '-'))
         {
-            string line = lines[i];
-            if (line.Length == 0 || char.IsWhiteSpace(line[0]) || line[0] is '#' or '@') continue;
-
-            int equals = line.IndexOf('=');
-            if (equals <= 0 || !line.Contains('{')) continue;
-
-            string key = line[..equals].Trim();
-            if (key.Length == 0 || !key.All(c => char.IsLetterOrDigit(c) || c is '_' or '-')) continue;
-
             var body = new StringBuilder();
-            int depth = 0;
-
-            for (int j = i; j < lines.Length; j++)
-            {
-                string code = lines[j];
-                int hash = code.IndexOf('#');
-                if (hash >= 0) code = code[..hash];
-
-                body.Append(code).Append('\n');
-
-                depth += code.Count(c => c == '{') - code.Count(c => c == '}');
-                if (depth <= 0) { i = j; break; }
-            }
+            for (int j = first; j <= last; j++) body.Append(ScriptScan.StripComment(lines[j])).Append('\n');
 
             yield return (key, body.ToString());
         }
@@ -1421,6 +1405,9 @@ public static partial class CompatibilityWriter
         {
             char c = body[i];
 
+            // The body is comment-free already (ScanDecisions strips them); a string still has to
+            // be stepped over, or a brace in one shifts the depth for the rest of the decision.
+            if (c == '"') { i = ScriptScan.StringEnd(body, i); continue; }
             if (c == '{') { depth++; continue; }
             if (c == '}') { depth--; continue; }
 
@@ -1450,14 +1437,8 @@ public static partial class CompatibilityWriter
         int at = FieldValueAt(body, name);
         if (at < 0 || body[at] != '{') return "";
 
-        int depth = 0;
-        for (int j = at; j < body.Length; j++)
-        {
-            if (body[j] == '{') depth++;
-            else if (body[j] == '}' && --depth == 0) return body[at..(j + 1)];
-        }
-
-        return body[at..];
+        int end = ScriptScan.BlockEnd(body, at);
+        return end < 0 ? body[at..] : body[at..end];
     }
 
     /// <summary>
@@ -1549,9 +1530,7 @@ public static partial class CompatibilityWriter
 
             foreach (string line in File.ReadAllLines(path))
             {
-                string code = line;
-                int hash = code.IndexOf('#');
-                if (hash >= 0) code = code[..hash];
+                string code = ScriptScan.StripComment(line);
 
                 // Drop barony targets outright; ours never share vanilla's keys.
                 if (Regex.IsMatch(code, @"^\s*barony\s*=")) continue;
@@ -1585,6 +1564,12 @@ public static partial class CompatibilityWriter
 
         Console.WriteLine($"  holy sites: {sites} re-declared, {rebound} rebound onto {targetCounties.Count} holy site counties"
                           + (kept > 0 ? $", {kept} placed where their vanilla faith keeps them" : ""));
+
+        // Every copy above still ships; one with nothing rebound is vanilla's, pointing its sites
+        // at counties this map does not have.
+        if (sites > 0 && rebound + kept == 0)
+            Console.WriteLine("  holy sites: WARNING no `county =` line was rebound — vanilla's holy_sites "
+                + "files have changed shape and their sites point at vanilla counties");
     }
 
     /// <summary>
@@ -1765,6 +1750,10 @@ public static partial class CompatibilityWriter
 
         Console.WriteLine($"  culture eras: {moved} thresholds moved by {cfg.EraOffset:+#;-#;0} years " +
                           $"(world year {cfg.StartYear}, as advanced as {cfg.EraYear})");
+
+        if (moved == 0)
+            Console.WriteLine("  culture eras: WARNING no era `year =` field matched — vanilla's era files "
+                + "have changed shape, and the eras stay on vanilla's calendar");
     }
 
     [System.Text.RegularExpressions.GeneratedRegex(@"^([ \t]+)year\s*=\s*(-?\d+)\s*$")]
@@ -2207,29 +2196,17 @@ public static partial class CompatibilityWriter
         var result = new List<Region>();
         var lines = text.Split('\n');
 
-        for (int i = 0; i < lines.Length; i++)
+        foreach (var (key, first, last, _) in ScriptScan.TopLevelDeclarations(
+                     lines, c => char.IsLetterOrDigit(c) || c is '_' or '-' or '&'))
         {
-            string line = lines[i];
-            // Top-level blocks start at column 0.
-            if (line.Length == 0 || char.IsWhiteSpace(line[0]) || line[0] == '#') continue;
-
-            int equals = line.IndexOf('=');
-            if (equals <= 0 || !line.Contains('{')) continue;
-
-            string key = line[..equals].Trim();
-            if (key.Length == 0 || !key.All(c => char.IsLetterOrDigit(c) || c is '_' or '-' or '&')) continue;
-
             // Walk the block to its closing brace, noting the flags we must preserve.
             bool generateModifiers = false;
             bool graphical = false;
             bool rememberOrder = false;
             string? color = null;
-            int depth = 0;
-            for (int j = i; j < lines.Length; j++)
+            for (int j = first; j <= last; j++)
             {
-                string body = lines[j];
-                int hash = body.IndexOf('#');
-                if (hash >= 0) body = body[..hash];
+                string body = ScriptScan.StripComment(lines[j]);
 
                 if (body.Contains("generate_modifiers")) generateModifiers = true;
                 if (body.Contains("graphical") && body.Contains("yes")) graphical = true;
@@ -2242,9 +2219,6 @@ public static partial class CompatibilityWriter
                     int close = open >= 0 ? body.IndexOf('}', open) : -1;
                     if (close > open) color = body[(open + 1)..close].Trim();
                 }
-
-                depth += body.Count(c => c == '{') - body.Count(c => c == '}');
-                if (depth <= 0) { i = j; break; }
             }
 
             result.Add(new Region(key, generateModifiers, graphical, color, rememberOrder));

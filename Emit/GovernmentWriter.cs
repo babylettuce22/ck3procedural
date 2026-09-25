@@ -90,16 +90,7 @@ public static class GovernmentWriter
         else if (start < 0) return null;
         else start++;
 
-        int open = text.IndexOf('{', start);
-        if (open < 0) return null;
-
-        int depth = 0;
-        for (int i = open; i < text.Length; i++)
-        {
-            if (text[i] == '{') depth++;
-            else if (text[i] == '}' && --depth == 0) return text[start..(i + 1)];
-        }
-
-        return null;
+        int end = ScriptScan.BlockEnd(text, start);
+        return end < 0 ? null : text[start..end];
     }
 }

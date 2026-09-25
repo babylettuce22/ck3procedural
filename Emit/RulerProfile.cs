@@ -101,6 +101,8 @@ public sealed record RulerProfile
         GovernmentMap.Feudal, GovernmentMap.Clan, GovernmentMap.Tribal,
         GovernmentMap.Administrative, GovernmentMap.Nomad,
         GovernmentMap.Celestial, GovernmentMap.Meritocratic, GovernmentMap.SteppeAdmin,
+        GovernmentMap.JapanAdministrative, GovernmentMap.JapanFeudal, GovernmentMap.Mandala,
+        GovernmentMap.Wanua,
     ];
 
     // Mutually exclusive opposing personality pairs in CK3
@@ -326,7 +328,7 @@ public sealed record RulerProfile
         }
 
         // 2. Commander traits (martial rulers, nomads, tribes, high rank)
-        if (lifestyle == MartialLifestyle || government is GovernmentMap.Nomad or GovernmentMap.Tribal)
+        if (lifestyle == MartialLifestyle || GovernmentMap.Family(government) is GovernmentMap.Nomad or GovernmentMap.Tribal)
         {
             double commanderChance = (rank >= 3 ? 0.60 : 0.35) + (age >= 30 ? 0.15 : 0.0);
             if (rng.Chance(commanderChance))
@@ -392,7 +394,7 @@ public sealed record RulerProfile
 
     private static string PickLifestyle(Rng rng, string government, string ethos, string? exclude)
     {
-        int[] w = government switch
+        int[] w = GovernmentMap.Family(government) switch
         {
             GovernmentMap.Tribal => [16, 42, 14, 16, 12],
             GovernmentMap.Nomad => [14, 44, 12, 20, 10],
@@ -464,7 +466,7 @@ public sealed record RulerProfile
         };
 
         if (lifestyle == MartialLifestyle) prowess += rng.Int(1, 3);
-        if (government is GovernmentMap.Tribal or GovernmentMap.Nomad or GovernmentMap.Clan)
+        if (GovernmentMap.Family(government) is GovernmentMap.Tribal or GovernmentMap.Nomad or GovernmentMap.Clan)
             prowess += rng.Int(1, 2);
 
         return prowess;

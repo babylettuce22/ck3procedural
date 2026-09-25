@@ -68,8 +68,8 @@ public static class SilkRoadWriter
 
         if (!WriteSituationType(modDir, gameDir, road))
         {
-            Console.WriteLine("  silk road: WARNING vanilla situation file not found under " +
-                              $"'{gameDir}'; the situation is not started");
+            Console.WriteLine("  silk road: WARNING vanilla's situation could not be patched (above); " +
+                              "the situation is not started");
             return;
         }
 
@@ -91,10 +91,18 @@ public static class SilkRoadWriter
     private static bool WriteSituationType(string modDir, string gameDir, SilkRoadMap road)
     {
         string source = Path.Combine(gameDir, "common", "situation", "situations", "tgp_silk_road.txt");
-        if (!File.Exists(source)) return false;
+        if (!File.Exists(source))
+        {
+            Console.WriteLine($"  silk road: {source} not found");
+            return false;
+        }
 
         string text = File.ReadAllText(source).TrimStart((char)0xFEFF);
-        if (SteppeWriter.SubRegionsBlock(text, out int start, out int end) is null) return false;
+        if (SteppeWriter.SubRegionsBlock(text, out int start, out int end) is null)
+        {
+            Console.WriteLine("  silk road: no `sub_regions` block in vanilla's tgp_silk_road.txt — it has changed shape");
+            return false;
+        }
 
         var block = new JominiBuilder(startDepth: 1);
         using (block.Block("sub_regions"))

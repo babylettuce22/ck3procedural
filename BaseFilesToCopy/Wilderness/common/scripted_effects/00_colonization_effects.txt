@@ -8,7 +8,28 @@
 #  Seeding: what is in the way
 # =====================================================================================
 
+# ---- Slot-aware, because a wilderness capital holds TWO obstacles, not three ----
+#
+# Measured from error.log, 2026-09-25: 54 of 167 wilderness counties logged "No building slots
+# available" at game start, every one on the optional third call in wilderness_seed_province_effect,
+# and every one on forest, jungle, taiga, hills or mountains — the terrains where three different
+# arms below are eligible. On plains and steppe only bandits (and floods by a river) qualify, so the
+# third call finds nothing new to add and never reaches the slot check. 131 counties on the
+# multi-arm terrains x the 40% roll predicts 52 failures; 54 were logged. So an unsettled capital
+# province has room for two obstacles, whatever COUNTY_BUILDING_SLOTS = 3 in the defines suggests.
+#
+# add_building on a full province fails with an error and adds nothing, so the guard changes no
+# outcome; it only stops the log spam, and it makes a slot freed by any later change usable
+# without editing this. It also matters for the ruins file set: gen_ruins_place_effect needs a
+# slot AFTER this has run, and makes one by dropping an obstacle — see the note there.
 wilderness_seed_obstacle_effect = {
+	if = {
+		limit = { free_building_slots > 0 }
+		wilderness_seed_obstacle_roll_effect = yes
+	}
+}
+
+wilderness_seed_obstacle_roll_effect = {
 	random_list = {
 		# Cold kills before anything else does.
 		10 = {
@@ -81,7 +102,10 @@ wilderness_seed_province_effect = {
 	if = {
 		limit = { always = yes }
 		random = {
-			chance = 40 # 40% chance of a third blocker
+			# 40% chance of a third blocker — which never lands today: the first two fill the
+			# province (see wilderness_seed_obstacle_effect). Kept, guarded, so that giving
+			# unsettled provinces a third slot would bring the designed odds back with no edit here.
+			chance = 40
 			wilderness_seed_obstacle_effect = yes
 		}
 	}

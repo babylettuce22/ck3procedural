@@ -370,9 +370,10 @@ public static class BookmarkWriter
         int total = Math.Max(1, seats.Count);
 
         // The governments the seats actually hold, commonest first. Ties break on the key so two
-        // runs of the same seed cannot disagree about which age it is.
+        // runs of the same seed cannot disagree about which age it is. Counted by family, so a
+        // world of tribes and wanua is one tribal age rather than two minorities.
         var ranked = seats
-            .GroupBy(governments.For)
+            .GroupBy(s => GovernmentMap.Family(governments.For(s)))
             .Select(g => (Key: g.Key, Count: g.Count()))
             .OrderByDescending(g => g.Count)
             .ThenBy(g => g.Key, StringComparer.Ordinal)

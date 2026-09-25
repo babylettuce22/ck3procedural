@@ -210,7 +210,7 @@ public static class MapTableWriter
             int start = text.IndexOf("object={", at, StringComparison.Ordinal);
             if (start < 0) break;
 
-            int end = BlockEnd(text, start);
+            int end = ScriptScan.BlockEnd(text, start);
             if (end < 0) break;
 
             string block = text[start..end];
@@ -241,22 +241,6 @@ public static class MapTableWriter
 
     private static readonly Regex Entity =
         new("entity=\"([^\"]*)\"", RegexOptions.Compiled);
-
-    /// <summary>
-    /// The index one past the <c>object={ ... }</c> block starting at <paramref name="start"/>.
-    /// Plain brace counting is enough: the only quoted values in these files are names, layers,
-    /// entities and the transform, and none of them contains a brace.
-    /// </summary>
-    private static int BlockEnd(string text, int start)
-    {
-        int depth = 0;
-        for (int i = start; i < text.Length; i++)
-        {
-            if (text[i] == '{') depth++;
-            else if (text[i] == '}' && --depth == 0) return i + 1;
-        }
-        return -1;
-    }
 
     /// <summary>A <c>layer={ ... }</c> block. No nesting in this file, so a brace-to-brace match is
     /// the whole block.</summary>

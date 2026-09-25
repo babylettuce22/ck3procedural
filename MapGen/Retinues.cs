@@ -456,7 +456,7 @@ public static class Retinues
             var votes = new Dictionary<string, int>(StringComparer.Ordinal);
             foreach (var county in culture.Counties)
             {
-                string g = governments.For(county);
+                string g = GovernmentMap.Family(governments.For(county));
                 votes[g] = votes.GetValueOrDefault(g) + 1;
             }
 

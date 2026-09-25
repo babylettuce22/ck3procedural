@@ -63,6 +63,17 @@ settlement_holding = {
 		colony_office_01
 		colony_office_02
 		colony_office_03
+
+		# The tribal chains. Which set a colony sees is decided in the buildings' own
+		# can_construct_potential (colony_is_tribal_trigger), not here — a holding's list cannot
+		# ask who holds it.
+		colony_hall_01
+		colony_hall_02
+		colony_hall_03
+		colony_hunting_camps_01
+		colony_hunting_camps_02
+		colony_kin_muster_01
+		colony_kin_muster_02
 	}
 
 	# ---- There is no `can_be_built` here, and there cannot be ----

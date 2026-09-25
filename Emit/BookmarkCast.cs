@@ -149,7 +149,7 @@ public sealed class BookmarkCast
             ["bm_char_frontier"] = playable.Where(frontier.Contains).ToList(),
             ["bm_char_vassal"] = playable.Where(c => realms.Liege.ContainsKey(HistoryWriter.Primary(c, realms))).ToList(),
             ["bm_char_magnate"] = playable.OrderByDescending(c => development.GetValueOrDefault(c, 0)).ToList(),
-            ["bm_char_warlord"] = playable.Where(c => governments.For(c) == GovernmentMap.Tribal).ToList(),
+            ["bm_char_warlord"] = playable.Where(c => GovernmentMap.Family(governments.For(c)) == GovernmentMap.Tribal).ToList(),
         };
 
         var chosen = new List<(string Key, Title County, int X, int Y)>();
@@ -304,7 +304,7 @@ public sealed class BookmarkCast
 
                 if (War is not null) hardship += 2;
                 if (Rival is not null && HistoryWriter.Rank(Rival.PrimaryTitle) > rank) hardship += 1;
-                if (Government == GovernmentMap.Tribal) hardship += 1;
+                if (GovernmentMap.Family(Government) == GovernmentMap.Tribal) hardship += 1;
 
                 // Skills are rolled against tier, so they are graded against tier too — otherwise
                 // this would just be counting the crown twice.
@@ -397,7 +397,7 @@ public sealed class BookmarkCast
             // bookmark screen is usually the biggest realm a player is offered rather than the biggest
             // there is, and saying "master of the realm" there would be a quiet overstatement.
             { Vassals: >= 5 } => female ? "Lady of Many Banners" : "Lord of Many Banners",
-            { Government: GovernmentMap.Tribal } => "First Among the Clans",
+            _ when GovernmentMap.Family(f.Government) == GovernmentMap.Tribal => "First Among the Clans",
             { Frontier: true } => "Guardian of the Frontier",
             { Wealthy: true } => "Keeper of the Trade Routes",
             { Vassals: >= 1 } => "Answerable to No Crown",
@@ -433,7 +433,7 @@ public sealed class BookmarkCast
             pressures.Add($"Past {p.Possessive} borders the map gives out into unclaimed wilds.");
         if (f.Wealthy)
             pressures.Add($"{p.PossessiveCap} lands are among the richest anyone has surveyed.");
-        if (f.Government == GovernmentMap.Tribal)
+        if (GovernmentMap.Family(f.Government) == GovernmentMap.Tribal)
             pressures.Add($"{p.PossessiveCap} authority rests on the assent of the clans and on "
                         + "nothing written down.");
         if (f.Ally is { } ally)
@@ -787,6 +787,6 @@ public sealed class BookmarkCast
         return dx * dx + dy * dy;
     }
 
-    private static bool IsPlayable(string government) => government
+    private static bool IsPlayable(string government) => GovernmentMap.Family(government)
         is GovernmentMap.Feudal or GovernmentMap.Clan or GovernmentMap.Tribal;
 }

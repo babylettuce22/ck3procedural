@@ -4,7 +4,8 @@
 #
 # Each obstacle is a PAIR: `x` is the obstacle itself, `x_cleared` is the work of removing it.
 # `next_building` makes the second an upgrade of the first, so clearing a wolf den is, mechanically,
-# constructing over one — which means it costs time and gold, shows in the build queue, and can be
+# constructing over one — which means it costs time and gold (mostly prestige, for a tribe — see
+# wilderness_clear_gold_* in 00_colonization_values.txt), shows in the build queue, and can be
 # interrupted by a siege, all without a line of script.
 #
 # ONLY the `x` half carries `flag = obstacle`. That flag is the whole interface: nothing downstream
@@ -139,7 +140,7 @@ beast_dens = {
 
 beast_dens_cleared = {
 	construction_time = quick_construction_time
-	cost = { gold = wilderness_clear_cost_cheap }
+	cost = { gold = { value = wilderness_clear_gold_cheap }  prestige = { value = wilderness_clear_prestige_cheap } }
 
 	can_construct = { wilderness_can_clear_obstacle_trigger = yes }
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
@@ -184,7 +185,7 @@ bandit_camps = {
 
 bandit_camps_cleared = {
 	construction_time = standard_construction_time
-	cost = { gold = wilderness_clear_cost_standard }
+	cost = { gold = { value = wilderness_clear_gold_standard }  prestige = { value = wilderness_clear_prestige_standard } }
 
 	can_construct = { wilderness_can_clear_obstacle_trigger = yes }
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
@@ -231,7 +232,7 @@ dense_growth = {
 
 dense_growth_cleared = {
 	construction_time = standard_construction_time
-	cost = { gold = wilderness_clear_cost_standard }
+	cost = { gold = { value = wilderness_clear_gold_standard }  prestige = { value = wilderness_clear_prestige_standard } }
 
 	can_construct = { wilderness_can_clear_obstacle_trigger = yes }
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
@@ -282,7 +283,7 @@ flooded_lands = {
 
 flooded_lands_cleared = {
 	construction_time = slow_construction_time
-	cost = { gold = wilderness_clear_cost_dear }
+	cost = { gold = { value = wilderness_clear_gold_dear }  prestige = { value = wilderness_clear_prestige_dear } }
 
 	can_construct = { wilderness_can_clear_obstacle_trigger = yes }
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
@@ -330,7 +331,7 @@ scree_slopes = {
 
 scree_slopes_cleared = {
 	construction_time = slow_construction_time
-	cost = { gold = wilderness_clear_cost_dear }
+	cost = { gold = { value = wilderness_clear_gold_dear }  prestige = { value = wilderness_clear_prestige_dear } }
 
 	can_construct = { wilderness_can_clear_obstacle_trigger = yes }
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
@@ -379,7 +380,7 @@ killing_cold = {
 killing_cold_cleared = {
 	# The dearest and slowest of the six. You do not clear the cold; you build against it.
 	construction_time = very_slow_construction_time
-	cost = { gold = wilderness_clear_cost_dear }
+	cost = { gold = { value = wilderness_clear_gold_dear }  prestige = { value = wilderness_clear_prestige_dear } }
 
 	can_construct = { wilderness_can_clear_obstacle_trigger = yes }
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
@@ -483,7 +484,7 @@ ruins_large = {
 # when it should be and false everywhere else.
 ruins_small = {
 	construction_time = slow_construction_time
-	cost = { gold = wilderness_clear_cost_dear }
+	cost = { gold = { value = wilderness_clear_gold_dear }  prestige = { value = wilderness_clear_prestige_dear } }
 
 	can_construct = {
 		wilderness_can_clear_obstacle_trigger = yes
@@ -524,7 +525,7 @@ ruins_small = {
 
 ruins_cleared = {
 	construction_time = standard_construction_time
-	cost = { gold = wilderness_clear_cost_standard }
+	cost = { gold = { value = wilderness_clear_gold_standard }  prestige = { value = wilderness_clear_prestige_standard } }
 
 	# No `has_building` guard here, unlike ruins_small above, and the asymmetry is deliberate: this
 	# rung is only ever reachable as ruins_small's next_building — no other building's ladder ends

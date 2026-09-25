@@ -1,0 +1,65 @@
+﻿# The starting Mandala Temple Complex, given to generated mandala kings the way vanilla gives it to
+# its own.
+#
+# ---- What this is ----
+#
+# Vanilla hands its mandala realms their first temple complex in on_game_start_after_lobby
+# (game_start.txt ~6863), by fixed province id -- province:10822 for Dvaravati, province:9550 for
+# Pagan, and so on. On a generated map those ids are whatever of our provinces happen to carry
+# them, so no generated mandala realm starts with one. The government still works without it:
+# vanilla's generic mandala setup (legitimacy, the starter decree, succession) keys on the
+# government flag and runs for ours. What is missing is the building's own modifiers (+1 domain
+# limit, +1 vassal cap, levies and garrison) and the AI God-king story, which vanilla only creates
+# for a ruler who already has a temple (has_mandala_capital_trigger).
+#
+# ---- The design ----
+#
+# * Kingdom tier and above, the same line vanilla's God-king story draws. A mandala duke builds his
+#   own as a great project, as he would in vanilla.
+#
+# * on_game_start, not _after_lobby, so the temple exists before vanilla's after-lobby pass looks
+#   for it. That pass then gives the AI kings their God-king story itself, and nothing here has to
+#   create one or guard against a duplicate.
+#
+# * Gated on the expansion as well as on the government. Without All Under Heaven vanilla's own
+#   on_game_start sweep turns these realms feudal, but the relative order of that sweep and this
+#   one is not something to rely on.
+#
+# * less_than_max_amount_of_mandala_capitals_trigger is vanilla's per-de-jure-kingdom cap, the same
+#   one that governs rebuilding. Honoured so two mandala kings in one de jure kingdom do not both
+#   start with a complex that vanilla would never let the second one build.
+#
+# * Added to mandala_poi_list the way vanilla adds each of its own, so the travel point of
+#   interest can find it.
+#
+# Appended, not redefined: an on_action key declared again adds its on_actions to vanilla's list.
+
+on_game_start = {
+	on_actions = {
+		gen_mandala_starting_temples
+	}
+}
+
+gen_mandala_starting_temples = {
+	effect = {
+		if = {
+			limit = { has_tgp_dlc_trigger = yes }
+			every_ruler = {
+				limit = {
+					government_has_flag = government_is_mandala
+					highest_held_title_tier >= tier_kingdom
+					exists = capital_province
+					has_mandala_capital_trigger = no
+					less_than_max_amount_of_mandala_capitals_trigger = yes
+				}
+				capital_province = {
+					add_great_building = mandala_capital_01
+					add_to_global_variable_list = {
+						name = mandala_poi_list
+						target = this
+					}
+				}
+			}
+		}
+	}
+}
