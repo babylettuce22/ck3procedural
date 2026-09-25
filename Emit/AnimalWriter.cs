@@ -247,41 +247,15 @@ public static class AnimalWriter
     private static void Append(StringBuilder sb, Species species,
         List<(float X, float Z, float Angle, float Scale)>[] buckets)
     {
-        var culture = CultureInfo.InvariantCulture;
-        string clamp = species.ClampToWater ? "yes" : "no";
-
         for (int b = 0; b < buckets.Length; b++)
         {
             var instances = buckets[b];
-            string name = species.Variants[b].Entity.Replace("_entity", "");
+            string entity = species.Variants[b].Entity;
 
-            sb.Append("object={\n");
-            sb.Append($"\tname=\"{name}\"\n");
-            sb.Append("\trender_pass=Map\n");
-            sb.Append($"\tclamp_to_water_level={clamp}\n");
-            sb.Append("\tgenerated_content=no\n");
-            sb.Append("\tlayer=\"unit_layer\"\n");
-            sb.Append($"\tentity=\"{species.Variants[b].Entity}\"\n");
-            sb.Append($"\tcount={instances.Count}\n");
+            MapObjectBlock.AppendHeader(sb, entity.Replace("_entity", ""), "Map", species.ClampToWater,
+                generatedContent: false, "unit_layer", "entity", entity, instances.Count);
             sb.Append("\ttransform=\"");
-
-            for (int i = 0; i < instances.Count; i++)
-            {
-                var (x, z, angle, scale) = instances[i];
-
-                double qy = Math.Sin(angle / 2.0);
-                double qw = Math.Cos(angle / 2.0);
-
-                if (i > 0) sb.Append('\n');
-                sb.Append(x.ToString("F6", culture)).Append(" 0.000000 ")
-                  .Append(z.ToString("F6", culture)).Append(" 0.000000 ")
-                  .Append(qy.ToString("F6", culture)).Append(" 0.000000 ")
-                  .Append(qw.ToString("F6", culture)).Append(' ')
-                  .Append(scale.ToString("F6", culture)).Append(' ')
-                  .Append(scale.ToString("F6", culture)).Append(' ')
-                  .Append(scale.ToString("F6", culture));
-            }
-
+            MapObjectBlock.AppendTransforms(sb, instances);
             sb.Append("\"}\n");
         }
     }

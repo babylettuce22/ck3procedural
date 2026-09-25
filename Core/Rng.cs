@@ -98,6 +98,27 @@ public sealed class Rng
     /// <summary>Port of pickFrom(arr).</summary>
     public T Pick<T>(IReadOnlyList<T> items) => items[Int(0, items.Count - 1)];
 
+    /// <summary>
+    /// Index of a pick proportional to <paramref name="weight"/>, using one <see cref="Int"/> draw.
+    /// Negative weights count as zero. When no weight is positive, returns -1 *without drawing*, so
+    /// each caller keeps its own fallback — and the stream stays where that fallback expects it.
+    /// </summary>
+    public int WeightedIndex<T>(IReadOnlyList<T> items, Func<T, int> weight)
+    {
+        int total = 0;
+        foreach (var item in items) total += Math.Max(0, weight(item));
+        if (total <= 0) return -1;
+
+        int roll = Int(0, total - 1);
+        for (int i = 0; i < items.Count; i++)
+        {
+            roll -= Math.Max(0, weight(items[i]));
+            if (roll < 0) return i;
+        }
+
+        return items.Count - 1;
+    }
+
     /// <summary>True with probability <paramref name="p"/>.</summary>
     public bool Chance(double p) => NextDouble() < p;
 

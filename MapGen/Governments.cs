@@ -377,7 +377,7 @@ public static class Governments
         if (azgaar is not null && stateGovernments is not null)
         {
             foreach (var (state, title) in azgaar.StateTitles
-                         .OrderByDescending(kv => TierRank(kv.Value.Tier))
+                         .OrderByDescending(kv => Title.TierRank(kv.Value.Tier))
                          .ThenBy(kv => kv.Key))
             {
                 if (!stateGovernments.TryGetValue(state, out string? government)) continue;
@@ -616,12 +616,6 @@ public static class Governments
                && level >= 10
                && draw.NextDouble() < cfg.RepublicShare;
     }
-
-    /// <summary>Title tiers as a number, so a hierarchy can be walked biggest-first.</summary>
-    private static int TierRank(string tier) => tier switch
-    {
-        "h" => 5, "e" => 4, "k" => 3, "d" => 2, "c" => 1, _ => 0,
-    };
 
     private static Title TopLiege(Title county, RealmMap realms)
     {

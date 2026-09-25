@@ -1,3 +1,4 @@
+using Ck3MapGen.Core;
 using Ck3MapGen.MapGen;
 using NoiseTool.Core;
 using NoiseTool.Pipeline;
@@ -106,7 +107,7 @@ public sealed class ForgeSession : IDisposable
     public ForgeSession()
     {
         Pipeline.Changed += (_, _) => OnPipelineChanged();
-        _debounce.Tick += (_, _) => { _debounce.Stop(); _ = RunPreviewAsync(); };
+        _debounce.Tick += (_, _) => { _debounce.Stop(); RunPreviewAsync().Forget("Forge preview"); };
     }
 
     private void OnPipelineChanged()
@@ -215,7 +216,7 @@ public sealed class ForgeSession : IDisposable
     {
         if (ViewMode == mode) return;
         ViewMode = mode;
-        _ = RedrawAsync();
+        RedrawAsync().Forget("Forge redraw");
     }
 
     // ------------------------------------------------------------------- stages

@@ -1,5 +1,6 @@
 ﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
+using static Ck3MapGen.MapGen.UniqueNames;
 
 namespace Ck3MapGen.MapGen;
 
@@ -1474,27 +1475,6 @@ public static class Faiths
         }
 
         return picked;
-    }
-
-    /// <summary>A fresh draw until one is free: a collision costs a re-roll, not a numeral on the map.</summary>
-    private static string UniqueFrom(Func<string> draw, HashSet<string> used)
-    {
-        string name = draw();
-        for (int attempt = 0; attempt < 16 && used.Contains(name); attempt++) name = draw();
-        return Unique(name, used);
-    }
-
-    private static string Unique(string name, HashSet<string> used)
-    {
-        if (used.Add(name)) return name;
-
-        for (int suffix = 2; suffix < 100; suffix++)
-        {
-            string candidate = $"{name}{suffix}";
-            if (used.Add(candidate)) return candidate;
-        }
-
-        return name;
     }
 
     private static void Report(List<Religion> religions, List<Faith> faiths, int counties,

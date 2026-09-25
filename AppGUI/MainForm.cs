@@ -417,7 +417,7 @@ public sealed partial class MainForm : Form
 
             if (!NormalizationSettings.Contains(changed)) return;
             InvalidateProcessed();
-            if (_sourceShown) _ = ShowSourceAsync();
+            if (_sourceShown) ShowSourceAsync().Forget("source view");
         };
 
         _options.Config.Seed = Random.Shared.Next(1, int.MaxValue);
@@ -521,7 +521,7 @@ public sealed partial class MainForm : Form
 
         // ---- File -----------------------------------------------------------------------
         var chooseHeightmap = MenuItem("Choose heightmap…", PickHeightmap);
-        var editWorld = MenuItem("Open generated world… (WIP)", () => _ = OpenGeneratedWorldAsync());
+        var editWorld = MenuItem("Open generated world… (WIP)", () => OpenGeneratedWorldAsync().Forget("open generated world"));
         var closeWorld = MenuItem("Return to generator", CloseLoadedWorld);
         var recent = Submenu("Recent heightmaps", RecentMenuItems);
         var azgaar = Submenu("Azgaar export", AzgaarMenuItems);
@@ -549,8 +549,8 @@ public sealed partial class MainForm : Form
         };
 
         // ---- Generate -------------------------------------------------------------------
-        var preview = MenuItem("Preview", () => _ = PreviewAsync(), "F5");
-        var writeMod = MenuItem("Write mod", () => _ = WriteModAsync(), "Ctrl+S");
+        var preview = MenuItem("Preview", () => PreviewAsync().Forget("preview"), "F5");
+        var writeMod = MenuItem("Write mod", () => WriteModAsync().Forget("write mod"), "Ctrl+S");
         var cancelRun = MenuItem("Cancel run", RequestCancel, "Esc");
         var roll = MenuItem("New random seed", RollSeed);
 
@@ -833,7 +833,7 @@ public sealed partial class MainForm : Form
         tabs.SelectedIndexChanged += (_, _) =>
         {
             if (tabs.SelectedTab == _forgeTab) _forge.EnsureStarted();
-            if (tabs.SelectedTab == _climateTab) _ = ShowClimateAsync();
+            if (tabs.SelectedTab == _climateTab) ShowClimateAsync().Forget("climate view");
 
             if (tabs.SelectedTab == _sourceTab && !_sourceShown)
             {
@@ -846,7 +846,7 @@ public sealed partial class MainForm : Form
                 }
                 else if (!_processedPending)
                 {
-                    _ = ShowSourceAsync();
+                    ShowSourceAsync().Forget("source view");
                 }
                 // else: a build just finished and its processed heightmap is still being prepared;
                 // that task publishes here itself when it lands, now that the tab is live.
@@ -1480,11 +1480,11 @@ public sealed partial class MainForm : Form
         switch (key)
         {
             case Keys.F5 when _preview.Enabled:
-                _ = PreviewAsync();
+                PreviewAsync().Forget("preview");
                 return true;
 
             case Keys.Control | Keys.S when _writeMod.Enabled:
-                _ = WriteModAsync();
+                WriteModAsync().Forget("write mod");
                 return true;
 
             case Keys.Escape when _busy:
@@ -1748,12 +1748,12 @@ public sealed partial class MainForm : Form
 
         ApplySource();
         InvalidateProcessed();
-        if (_sourceShown) _ = ShowSourceAsync();
+        if (_sourceShown) ShowSourceAsync().Forget("source view");
 
         // The Climate tab paints over the source; a new one is read the next time the tab is
         // looked at, or now if it is the tab on screen.
         _climateStamp = null;
-        if (_tabs is not null && _tabs.SelectedTab == _climateTab) _ = ShowClimateAsync();
+        if (_tabs is not null && _tabs.SelectedTab == _climateTab) ShowClimateAsync().Forget("climate view");
     }
 
     /// <summary>
@@ -1958,7 +1958,7 @@ public sealed partial class MainForm : Form
         _options.Config.Normalization = HeightmapNormalization.Stretch;
         RefreshSettings();
         InvalidateProcessed();
-        if (_sourceShown) _ = ShowSourceAsync();
+        if (_sourceShown) ShowSourceAsync().Forget("source view");
     }
 
     private void ApplyAzgaarChip()
@@ -2831,7 +2831,7 @@ public sealed partial class MainForm : Form
         ApplySource();
 
         // The 3D tab tracks the pipeline: the raw heightmap before a build, the shipped one after.
-        _ = ShowProcessedAsync(result);
+        ShowProcessedAsync(result).Forget("processed preview");
 
         _status.Text = modDir is null
             ? $"Preview — {result.Provinces.Count} provinces. Nothing written."
@@ -3005,7 +3005,7 @@ public sealed partial class MainForm : Form
 
         // A Climate tab opened mid-run was told to wait; the run is over.
         if (enabled && _tabs is not null && _tabs.SelectedTab == _climateTab && _climateStamp is null)
-            _ = ShowClimateAsync();
+            ShowClimateAsync().Forget("climate view");
 
         bool ready = enabled && _source is not null;
         _writeMod.Enabled = ready;

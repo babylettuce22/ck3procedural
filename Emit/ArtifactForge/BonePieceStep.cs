@@ -219,16 +219,7 @@ public static class BonePieceStep
         return baked.Count;
     }
 
-    private static string? Locate()
-    {
-        string[] roots =
-        [
-            Path.Combine(AppContext.BaseDirectory, "assets", SourceDir),
-            Path.Combine(Directory.GetCurrentDirectory(), "assets", SourceDir),
-        ];
-
-        return roots.FirstOrDefault(Directory.Exists);
-    }
+    private static string? Locate() => Core.AssetPaths.Directory(SourceDir);
 
     /// <summary>
     /// Every piece in the folder, by the slot its filename ends in.

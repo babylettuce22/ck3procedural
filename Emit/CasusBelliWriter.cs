@@ -83,7 +83,7 @@ public static class CasusBelliWriter
         WriteConquerorDecision(modDir, gameDir);
         WriteCasusBelliGroups(modDir, gameDir);
         WriteCasusBelliTypes(modDir, gameDir);
-        WriteScriptedTriggers(modDir);
+        WriteScriptedTriggers(modDir, gameDir);
     }
 
     /// <summary>
@@ -627,17 +627,28 @@ public static class CasusBelliWriter
     /// Overriding <c>herders_and_tributary_constraints</c> rather than declaring a trigger of our
     /// own is the point: vanilla's casus belli files already call it from every group, so one
     /// override reaches all of them without touching — or having to keep up with — a single CB file.
-    /// The herder and tributary clauses it originally carried are reproduced here, because an
-    /// override replaces the whole body and dropping them would quietly re-enable herder wars.
+    ///
+    /// The override is vanilla's own file with our clauses spliced in at the top of the trigger, so
+    /// everything vanilla's body says survives verbatim. It used to be a hand-written copy in a
+    /// file of its own, and the copy had flattened vanilla's tributary rules into a bare
+    /// <c>is_tributary = no</c> on the attacker: no tributary could declare any war at all, while
+    /// the clauses that stop a suzerain attacking its own tributaries, a confederation member's
+    /// tributaries, or a mandala liege's tributaries were gone.
     /// </summary>
-    private static void WriteScriptedTriggers(string modDir)
+    private static void WriteScriptedTriggers(string modDir, string gameDir)
     {
-        string targetDir = Path.Combine(modDir, "common", "scripted_triggers");
-        Directory.CreateDirectory(targetDir);
+        var patch = VanillaPatch.Open(gameDir, "war rules",
+            "common", "scripted_triggers", "00_war_and_peace_triggers.txt");
 
-        string triggers = "# Overrides vanilla trigger to globally forbid CBs against or by the wilderness holder\nherders_and_tributary_constraints = {\n\t# Attacker constraints\n\tNOT = { has_trait = wilderness }\n\tNOT = { government_has_flag = government_is_wilderness }\n\ttrigger_if = {\n\t\tlimit = { government_has_flag = government_is_herder }\n\t\tcustom_tooltip = {\n\t\t\ttext = is_a_herder_actor_cb_tt\n\t\t\talways = no\n\t\t}\n\t}\n\tis_tributary = no\n\n\t# Defender constraints (when evaluated in CB scope)\n\ttrigger_if = {\n\t\tlimit = { exists = scope:defender }\n\t\tscope:defender = {\n\t\t\tNOT = { has_trait = wilderness }\n\t\t\tNOT = { government_has_flag = government_is_wilderness }\n\t\t}\n\t}\n}";
+        if (patch is null) return;
 
-        ParadoxText.WriteBom(Path.Combine(targetDir, "zz_wilderness_war_triggers.txt"), triggers);
-        Console.WriteLine("  war rules: wilderness blocked across all Casus Belli groups via scripted_triggers");
+        // Attacker side at the trigger's root, defender side through scope:defender, as before.
+        // The herder-attacker clause is ours, not vanilla's; vanilla only stops herders defending.
+        string guard = "\n\t# Procedural map: the wilderness holder neither declares nor receives a war\n\tNOT = { has_trait = wilderness }\n\tNOT = { government_has_flag = government_is_wilderness }\n\ttrigger_if = {\n\t\tlimit = { government_has_flag = government_is_herder }\n\t\tcustom_tooltip = {\n\t\t\ttext = is_a_herder_actor_cb_tt\n\t\t\talways = no\n\t\t}\n\t}\n\ttrigger_if = {\n\t\tlimit = { exists = scope:defender }\n\t\tscope:defender = {\n\t\t\tNOT = { has_trait = wilderness }\n\t\t\tNOT = { government_has_flag = government_is_wilderness }\n\t\t}\n\t}";
+
+        patch.InsertAfter("herders_and_tributary_constraints", guard,
+            "herders_and_tributary_constraints = {");
+
+        patch.Ship(modDir);
     }
 }

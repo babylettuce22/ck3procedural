@@ -1,3 +1,5 @@
+using static Ck3MapGen.MapGen.Planar;
+
 namespace Ck3MapGen.MapGen;
 
 /// <summary>A market: a duchy capital, at its seat barony's province.</summary>
@@ -592,11 +594,5 @@ public static class Routes
         double length = 0;
         for (int i = 1; i < path.Count; i++) length += Distance(position[path[i - 1]], position[path[i]]);
         return length;
-    }
-
-    private static double Distance((double X, double Y) a, (double X, double Y) b)
-    {
-        double dx = a.X - b.X, dy = a.Y - b.Y;
-        return Math.Sqrt(dx * dx + dy * dy);
     }
 }

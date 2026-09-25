@@ -92,19 +92,16 @@ public static class ModWriter
         if (!Directory.Exists(modDir)) return;
 
         var entries = Directory.EnumerateFileSystemEntries(modDir).ToList();
-        if (entries.Count == 0) return;
+        if (entries.All(e => Keep.Contains(Path.GetFileName(e), StringComparer.OrdinalIgnoreCase))) return;
 
-        // Every mod this tool writes has a descriptor.mod, and every completed run leaves a
-        // proctool.txt. A non-empty folder with neither is either a hand-built mod or a mistyped
-        // output path, and emptying it would be far worse than refusing to.
-        bool ours = File.Exists(Path.Combine(modDir, "descriptor.mod"))
-                    || File.Exists(Path.Combine(modDir, Core.RunLog.FileName));
-
-        if (!ours)
+        // Only this tool's own run record proves the folder is ours. A descriptor.mod proves
+        // nothing — every CK3 mod has one, so trusting it emptied any existing mod whose name was
+        // typed into the Write dialog. A folder without the record is someone else's mod or a
+        // mistyped output path, and emptying it would be far worse than refusing to.
+        if (!Core.RunLog.WroteFolder(modDir))
             throw new IOException(
-                $"'{modDir}' is not empty but holds no descriptor.mod or {Core.RunLog.FileName}, "
-                + "so it does not look like a folder this tool wrote. Point the output elsewhere, "
-                + "or empty it yourself first.");
+                $"'{modDir}' is not empty and was not written by this tool (it holds no "
+                + $"{Core.RunLog.FileName} of ours). Point the output elsewhere, or empty it yourself first.");
 
         int files = 0, dirs = 0;
         foreach (string entry in entries)
@@ -127,6 +124,31 @@ public static class ModWriter
         }
 
         Console.WriteLine($"  cleared {dirs} folders and {files} files from {modDir}");
+    }
+
+    /// <summary>
+    /// Refuses a mod folder that sits inside the CK3 install, or that contains it. The first would
+    /// write a mod over the game's own files; the second would let <see cref="ClearModDir"/> reach
+    /// the install. <paramref name="gameDir"/> is the <c>game</c> folder, so its parent — the
+    /// install root, which also holds the launcher and the DLC — is what is guarded.
+    /// </summary>
+    public static void RefuseGameFolder(string modDir, string gameDir)
+    {
+        string mod = Normalize(modDir);
+        string game = Normalize(gameDir);
+        string install = Path.GetDirectoryName(game.TrimEnd(Path.DirectorySeparatorChar)) is { } parent
+            ? Normalize(parent)
+            : game;
+
+        if (mod.StartsWith(install, StringComparison.OrdinalIgnoreCase)
+            || game.StartsWith(mod, StringComparison.OrdinalIgnoreCase))
+            throw new IOException(
+                $"'{modDir}' is inside the Crusader Kings III install (or contains it). Mods belong "
+                + "in Documents\\Paradox Interactive\\Crusader Kings III\\mod; point the output there.");
+
+        static string Normalize(string dir)
+            => Path.GetFullPath(dir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+               + Path.DirectorySeparatorChar;
     }
 
     public static void WriteDescriptors(string modDir, string name = "Procedural Map")

@@ -175,7 +175,9 @@ public static class DdsReader
         }
     }
 
-    private static void Decode565(ushort c, out byte r, out byte g, out byte b)
+    /// <summary>An RGB565 endpoint widened to 8 bits a channel by truncation. Shared with
+    /// <see cref="Emit.TextureSampler"/>; <c>DdsWriter</c> rounds instead, and keeps its own.</summary>
+    internal static void Decode565(ushort c, out byte r, out byte g, out byte b)
     {
         r = (byte)(((c >> 11) & 31) * 255 / 31);
         g = (byte)(((c >> 5) & 63) * 255 / 63);

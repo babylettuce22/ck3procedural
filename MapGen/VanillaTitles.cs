@@ -581,10 +581,8 @@ public static class VanillaTitles
         return false;
     }
 
-    private static int TierRank(string key) => key.Length > 1 ? key[0] switch
-    {
-        'h' => 5, 'e' => 4, 'k' => 3, 'd' => 2, 'c' => 1, _ => 0,
-    } : 0;
+    /// <summary>The rank of a title key by its tier prefix ("k_francia" is a kingdom).</summary>
+    private static int TierRank(string key) => key.Length > 1 ? Title.TierRank(key[..1]) : 0;
 
     private static string RegionName(VanillaCatalog catalog, VanillaCatalog.TitleDef county)
     {

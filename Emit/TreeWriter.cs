@@ -475,41 +475,16 @@ public static class TreeWriter
             foreach (var bucket in buckets) capacity += bucket.Count * 96;
 
         var sb = new StringBuilder(capacity);
-        var culture = CultureInfo.InvariantCulture;
 
         foreach (var (generator, buckets) in blocks)
         for (int b = 0; b < buckets.Length; b++)
         {
             var instances = buckets[b];
 
-            sb.Append("object={\n");
-            sb.Append($"\tname=\"{generator.Prefix}_{b}\"\n");
-            sb.Append("\trender_pass=Map\n");
-            sb.Append("\tclamp_to_water_level=no\n");
-            sb.Append("\tgenerated_content=yes\n");
-            sb.Append($"\tlayer=\"{generator.Layer}\"\n");
-            sb.Append($"\tpdxmesh=\"{generator.Meshes[b]}\"\n");
-            sb.Append($"\tcount={instances.Count}\n");
+            MapObjectBlock.AppendHeader(sb, $"{generator.Prefix}_{b}", "Map", clampToWater: false,
+                generatedContent: true, generator.Layer, "pdxmesh", generator.Meshes[b], instances.Count);
             sb.Append("\ttransform=\"");
-
-            for (int i = 0; i < instances.Count; i++)
-            {
-                var (x, z, angle, scale) = instances[i];
-
-                // Rotation about the vertical axis only, so the quaternion has no X or Z part.
-                double qy = Math.Sin(angle / 2.0);
-                double qw = Math.Cos(angle / 2.0);
-
-                if (i > 0) sb.Append('\n');
-                sb.Append(x.ToString("F6", culture)).Append(" 0.000000 ")
-                  .Append(z.ToString("F6", culture)).Append(" 0.000000 ")
-                  .Append(qy.ToString("F6", culture)).Append(" 0.000000 ")
-                  .Append(qw.ToString("F6", culture)).Append(' ')
-                  .Append(scale.ToString("F6", culture)).Append(' ')
-                  .Append(scale.ToString("F6", culture)).Append(' ')
-                  .Append(scale.ToString("F6", culture));
-            }
-
+            MapObjectBlock.AppendTransforms(sb, instances);
             sb.Append("\"}\n");
         }
 

@@ -1,6 +1,7 @@
 ﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 using Ck3MapGen.Io;
+using static Ck3MapGen.MapGen.UniqueNames;
 
 namespace Ck3MapGen.MapGen;
 
@@ -1155,17 +1156,6 @@ public static class Cultures
     }
 
     /// <summary>
-    /// A fresh draw until one is free, so a collision costs a re-roll and not a "2" on the map.
-    /// Numbering survives only for the pathological case where the language is out of words.
-    /// </summary>
-    private static string UniqueFrom(Func<string> draw, HashSet<string> used)
-    {
-        string name = draw();
-        for (int attempt = 0; attempt < 16 && used.Contains(name); attempt++) name = draw();
-        return Unique(name, used);
-    }
-
-    /// <summary>
     /// Keeps every displayed name distinct across the world. Two cultures called the same thing is
     /// the single most obvious generation artefact there is, and the phonology will collide
     /// eventually because a language only has so many short words in it.
@@ -1267,19 +1257,6 @@ public static class Cultures
                 _ => true
             };
         }
-    }
-
-    private static string Unique(string name, HashSet<string> used)
-    {
-        if (used.Add(name)) return name;
-
-        for (int suffix = 2; suffix < 100; suffix++)
-        {
-            string candidate = $"{name}{suffix}";
-            if (used.Add(candidate)) return candidate;
-        }
-
-        return name;
     }
 
     /// <summary>How many peoples are dressed for their weather, and how many had to leave their kin's dress to be.</summary>

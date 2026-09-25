@@ -23,6 +23,16 @@ public static class RunLog
 {
     public const string FileName = "proctool.txt";
 
+    /// <summary>The first line of every record. <see cref="WroteFolder"/> keys on it.</summary>
+    private const string Header = "CK3 Procedural Map Tool — generation record";
+
+    /// <summary>
+    /// The refusal <see cref="Emit.ModWriter.ClearModDir"/> used to throw. Versions up to 0.87 wrote
+    /// a record into the folder they had just refused, and that record then vouched for the folder
+    /// on the next run; one carrying this text proves nothing.
+    /// </summary>
+    private const string LegacyRefusal = "does not look like a folder this tool wrote";
+
     private static readonly object Gate = new();
     private static readonly StringBuilder Buffer = new();
     private static TextWriter? _installed;
@@ -62,16 +72,63 @@ public static class RunLog
     /// as "completed" or "cancelled", so a half-written folder says why it is half-written.
     ///
     /// Does nothing when the folder does not exist — a run cancelled before anything was written
-    /// should not leave a folder containing only a log.
+    /// should not leave a folder containing only a log — and nothing when the folder is not one
+    /// this tool wrote. The record is what <see cref="WroteFolder"/> trusts, so writing one into a
+    /// folder the run refused would hand the next run permission to empty it.
     /// </summary>
     public static void Write(string modDir, GenerationOptions options, string outcome)
     {
-        if (!Directory.Exists(modDir)) return;
+        if (!Directory.Exists(modDir) || !WroteFolder(modDir)) return;
+        WriteRecord(modDir, options, outcome);
+    }
 
+    /// <summary>
+    /// Marks a folder as this tool's the moment it has been emptied for a write, before any of the
+    /// mod exists. Without it a run killed mid-write would leave a folder with no record, and the
+    /// next write would refuse to clear it. <see cref="Write"/> overwrites the outcome when the
+    /// run ends; one that still reads "in progress" was interrupted.
+    /// </summary>
+    public static void Claim(string modDir, GenerationOptions options)
+        => WriteRecord(modDir, options, "in progress — if this is still the outcome, the run was interrupted");
+
+    /// <summary>
+    /// Whether <paramref name="modDir"/> holds a record this tool wrote, which is the only thing
+    /// that allows <see cref="Emit.ModWriter.ClearModDir"/> to empty it. A descriptor.mod is not
+    /// enough: every CK3 mod has one.
+    /// </summary>
+    public static bool WroteFolder(string modDir)
+    {
+        string path = Path.Combine(modDir, FileName);
+        if (!File.Exists(path)) return false;
+
+        try
+        {
+            using var reader = new StreamReader(path);
+
+            // Tolerate a '#' comment block in front of the header, such as the watermark's, so a
+            // record that picked one up still counts. The watermark pass itself now skips it.
+            string? first;
+            while ((first = reader.ReadLine()) is not null && (first.Length == 0 || first[0] == '#')) { }
+            if (first?.StartsWith(Header, StringComparison.Ordinal) != true) return false;
+
+            for (string? line; (line = reader.ReadLine()) is not null && line.Length > 0; )
+                if (line.StartsWith("Outcome:", StringComparison.Ordinal))
+                    return !line.Contains(LegacyRefusal, StringComparison.Ordinal);
+
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static void WriteRecord(string modDir, GenerationOptions options, string outcome)
+    {
         var cfg = options.Config;
         var text = new StringBuilder();
 
-        text.AppendLine("CK3 Procedural Map Tool — generation record");
+        text.AppendLine(Header);
         text.AppendLine($"Tool version:  {ToolVersion()}");
         text.AppendLine($"Started:       {_started:yyyy-MM-dd HH:mm:ss zzz}");
         text.AppendLine($"Finished:      {DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz}");

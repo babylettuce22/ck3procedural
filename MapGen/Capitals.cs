@@ -1,3 +1,5 @@
+using static Ck3MapGen.MapGen.Planar;
+
 namespace Ck3MapGen.MapGen;
 
 /// <summary>
@@ -247,11 +249,5 @@ public static class Capitals
         }
 
         return dist.Count < inside.Count ? int.MaxValue / 2 + farthest : farthest;
-    }
-
-    private static double Distance((double X, double Y) a, (double X, double Y) b)
-    {
-        double dx = a.X - b.X, dy = a.Y - b.Y;
-        return Math.Sqrt(dx * dx + dy * dy);
     }
 }

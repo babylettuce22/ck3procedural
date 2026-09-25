@@ -938,25 +938,7 @@ public static class WeaponForgeStep
     /// copied beside the built exe, but a <c>dotnet run</c> from the repo resolves it from the
     /// working directory instead.
     /// </summary>
-    public static string? Locate(string relPath)
-    {
-        string rel = relPath.Replace('/', Path.DirectorySeparatorChar);
-
-        string[] candidates =
-        [
-            Path.Combine(AppContext.BaseDirectory, "assets", rel),
-            Path.Combine(Directory.GetCurrentDirectory(), "assets", rel),
-            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "assets", rel),
-        ];
-
-        foreach (string c in candidates)
-        {
-            string full = Path.GetFullPath(c);
-            if (File.Exists(full)) return full;
-        }
-
-        return null;
-    }
+    public static string? Locate(string relPath) => Core.AssetPaths.File(relPath);
 
 
     /// <summary>

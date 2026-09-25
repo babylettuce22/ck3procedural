@@ -183,11 +183,20 @@ internal sealed class ModNameDialog : Form
         _path.Text = dir;
         _ok.Enabled = true;
 
-        if (Directory.Exists(dir))
+        if (Directory.Exists(dir) && Directory.EnumerateFileSystemEntries(dir).Any()
+            && !Core.RunLog.WroteFolder(dir))
+        {
+            // The writer would refuse it anyway; saying so here saves a failed run.
+            _note.ForeColor = Theme.Danger;
+            _note.Text = "This folder holds something this tool did not write, so it will not be "
+                         + "touched. Choose another name.";
+            _ok.Enabled = false;
+        }
+        else if (Directory.Exists(dir))
         {
             _note.ForeColor = Theme.Danger;
-            _note.Text = "This folder already exists. Writing replaces the map files in it — "
-                         + "anything else you have put there is left alone.";
+            _note.Text = "This folder already holds a mod written by this tool. Writing replaces "
+                         + $"everything in it except your hand edits ({EditOverlay.FileName}).";
         }
         else if (!folder.Equals(_name.Text.Trim(), StringComparison.Ordinal))
         {

@@ -406,7 +406,7 @@ public sealed class PrehistoryMap
             // a family title is minted at the tier it is granted from.
             string tier = GovernmentMap.NobleFamilyTier(government);
             var primary = HistoryWriter.Primary(county, realms);
-            if (TierRank(primary.Tier) < TierRank(tier)) continue;
+            if (Title.TierRank(primary.Tier) < Title.TierRank(tier)) continue;
 
             if (!CharacterHouseMap.TryGetValue(county, out var houseKey)) continue;
 
@@ -1153,7 +1153,7 @@ public sealed class PrehistoryMap
                 .Where(v => !HasRelation(map.Rivals, khan, v)
                             && !HasRelation(map.Nemeses, khan, v)
                             && !HasRelation(map.Friends, khan, v))
-                .OrderByDescending(v => TierRank(HistoryWriter.Primary(v, realms).Tier))
+                .OrderByDescending(v => Title.TierRank(HistoryWriter.Primary(v, realms).Tier))
                 .ThenBy(v => v.Index)
                 .ToList();
 
@@ -1199,11 +1199,6 @@ public sealed class PrehistoryMap
         if (!listA.Any(r => r.TargetCounty == b)) listA.Add(new DatedRelation { TargetCounty = b, Date = date });
         if (!listB.Any(r => r.TargetCounty == a)) listB.Add(new DatedRelation { TargetCounty = a, Date = date });
     }
-
-    private static int TierRank(string tier) => tier switch
-    {
-        "h" => 5, "e" => 4, "k" => 3, "d" => 2, "c" => 1, _ => 0,
-    };
 
     private static void BuildInternalDrama(
         PrehistoryMap map,

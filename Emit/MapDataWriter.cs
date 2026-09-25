@@ -273,6 +273,22 @@ public static class MapDataWriter
         int scaleX = cfg.Width / pw, scaleY = cfg.Height / ph;
         long changed = 0;
 
+        // The shore test below reads a window of rows around each pixel while other rows are
+        // being rewritten on other threads, so reading `height` directly made the outcome depend
+        // on thread timing — the heightmap.png nondeterminism. It reads this snapshot of the
+        // coastline as it stood before the pass instead. One bit a pixel, padded per row so each
+        // row's words are written by one thread: ~21 MB at 18432x9216, where a clone would be 340.
+        int wordsPerRow = (cfg.Width + 63) >> 6;
+        var wasLand = new ulong[(long)wordsPerRow * cfg.Height];
+        Parallel.For(0, cfg.Height, y =>
+        {
+            long row = (long)y * cfg.Width, words = (long)y * wordsPerRow;
+            for (int x = 0; x < cfg.Width; x++)
+                if (height[row + x] > WaterLevel16) wasLand[words + (x >> 6)] |= 1UL << (x & 63);
+        });
+
+        bool WasLand(int x, int y) => (wasLand[(long)y * wordsPerRow + (x >> 6)] & (1UL << (x & 63))) != 0;
+
         Parallel.For(0, cfg.Height, () => 0L, (y, _, local) =>
         {
             int py = Math.Min(y / scaleY, ph - 1);
@@ -286,8 +302,7 @@ public static class MapDataWriter
                 bool provinceIsLand = seed.IsLand;
 
                 long i = row + x;
-                ushort v = height[i];
-                bool heightmapIsLand = v > WaterLevel16;
+                bool heightmapIsLand = WasLand(x, y);
 
                 if (heightmapIsLand == provinceIsLand) continue;
                 if (seed.IsMajorRiver && heightmapIsLand) continue;
@@ -296,11 +311,10 @@ public static class MapDataWriter
                 for (int dy = -scaleY; dy <= scaleY && !nearNaturalShore; dy++)
                 {
                     int ny = Math.Clamp(y + dy, 0, cfg.Height - 1);
-                    long nrow = (long)ny * cfg.Width;
                     for (int dx = -scaleX; dx <= scaleX; dx++)
                     {
                         int nx = Math.Clamp(x + dx, 0, cfg.Width - 1);
-                        if ((height[nrow + nx] > WaterLevel16) != heightmapIsLand)
+                        if (WasLand(nx, ny) != heightmapIsLand)
                         {
                             nearNaturalShore = true;
                             break;

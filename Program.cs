@@ -11,6 +11,11 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        // Before anything else: the exception mode must be set before the first control exists,
+        // and the console must be attached before RunLog tees Console.Out.
+        CrashLog.Install();
+        if (args.Length > 0 && !args.Contains("--gui") && !args.Contains("--edit-world"))
+            CrashLog.AttachParentConsole();
 
         var options = new GenerationOptions();
         var cfg = options.Config;

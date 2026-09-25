@@ -358,16 +358,7 @@ public static class CustomArmorStep
 
     /// <summary>The assets folder, checked next to the binary first — see the weapon forge's note
     /// on stale copies: a piece added since the last build is invisible until one.</summary>
-    private static string? Locate()
-    {
-        string[] roots =
-        [
-            Path.Combine(AppContext.BaseDirectory, "assets", SourceDir),
-            Path.Combine(Directory.GetCurrentDirectory(), "assets", SourceDir),
-        ];
-
-        return roots.FirstOrDefault(Directory.Exists);
-    }
+    private static string? Locate() => Core.AssetPaths.Directory(SourceDir);
 
     // -------------------------------------------------------------------------------------
 

@@ -395,39 +395,15 @@ public static class CityScatterWriter
         Dictionary<string, List<(float X, float Z, float Angle, float Scale)>> placedByMesh)
     {
         var sb = new StringBuilder(16384);
-        var culture = CultureInfo.InvariantCulture;
 
         // Same block shape as vanilla's Constantinople sprawl, which is this exact route:
         // a buildings-atlas mesh addressed by pdxmesh name from a map_object_data file.
         foreach (var (mesh, instances) in placedByMesh.OrderBy(kv => kv.Key, StringComparer.Ordinal))
         {
-            sb.Append("object={\n");
-            sb.Append($"\tname=\"city scatter {mesh}\"\n");
-            sb.Append("\trender_pass=MapUnderWater\n");
-            sb.Append("\tclamp_to_water_level=no\n");
-            sb.Append("\tgenerated_content=no\n");
-            sb.Append("\tlayer=\"building_layer\"\n");
-            sb.Append($"\tpdxmesh=\"{mesh}\"\n");
-            sb.Append($"\tcount={instances.Count}\n");
+            MapObjectBlock.AppendHeader(sb, $"city scatter {mesh}", "MapUnderWater", clampToWater: false,
+                generatedContent: false, "building_layer", "pdxmesh", mesh, instances.Count);
             sb.Append("\ttransform=\"");
-
-            for (int i = 0; i < instances.Count; i++)
-            {
-                var (x, z, angle, scale) = instances[i];
-                double qy = Math.Sin(angle / 2.0);
-                double qw = Math.Cos(angle / 2.0);
-
-                // Y 0: the engine snaps map objects to the full-resolution heightmap at load.
-                if (i > 0) sb.Append('\n');
-                sb.Append(x.ToString("F6", culture)).Append(" 0.000000 ")
-                  .Append(z.ToString("F6", culture)).Append(" 0.000000 ")
-                  .Append(qy.ToString("F6", culture)).Append(" 0.000000 ")
-                  .Append(qw.ToString("F6", culture)).Append(' ')
-                  .Append(scale.ToString("F6", culture)).Append(' ')
-                  .Append(scale.ToString("F6", culture)).Append(' ')
-                  .Append(scale.ToString("F6", culture));
-            }
-
+            MapObjectBlock.AppendTransforms(sb, instances);
             sb.Append("\"}\n");
         }
 

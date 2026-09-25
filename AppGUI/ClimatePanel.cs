@@ -178,7 +178,7 @@ public sealed class ClimatePanel : UserControl
         _canvas.EmptyText = "Choose a heightmap, then open this tab to paint its climate.";
 
         WireCanvas();
-        _debounce.Tick += (_, _) => { _debounce.Stop(); _ = RunPreviewAsync(); };
+        _debounce.Tick += (_, _) => { _debounce.Stop(); RunPreviewAsync().Forget("climate preview"); };
 
         SelectBrush(FindBrush(KoppenClass.Oceanic));
         SelectView(View.Paint);

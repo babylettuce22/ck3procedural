@@ -301,9 +301,5 @@ public class TextureSampler
     }
 
     private static void Decode565(ushort c, out byte r, out byte g, out byte b)
-    {
-        r = (byte)(((c >> 11) & 0x1F) * 255 / 31);
-        g = (byte)(((c >> 5) & 0x3F) * 255 / 63);
-        b = (byte)((c & 0x1F) * 255 / 31);
-    }
+        => Io.DdsReader.Decode565(c, out r, out g, out b);
 }

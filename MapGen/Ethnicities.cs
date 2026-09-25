@@ -1459,18 +1459,8 @@ public static class Ethnicities
 
     private static string PickWeighted(IReadOnlyList<(string Template, int Weight)> options, Rng rng)
     {
-        int total = 0;
-        foreach (var (_, weight) in options) total += Math.Max(0, weight);
-        if (total <= 0) return options[0].Template;
-
-        int roll = rng.Int(0, total - 1);
-        foreach (var (template, weight) in options)
-        {
-            roll -= Math.Max(0, weight);
-            if (roll < 0) return template;
-        }
-
-        return options[^1].Template;
+        int i = rng.WeightedIndex(options, o => o.Weight);
+        return options[i < 0 ? 0 : i].Template;
     }
 
     /// <summary>

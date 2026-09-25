@@ -1,4 +1,5 @@
 using Ck3MapGen.Core;
+using static Ck3MapGen.MapGen.Planar;
 
 namespace Ck3MapGen.MapGen;
 
@@ -271,11 +272,5 @@ public static class Frontier
         double x = 0, y = 0;
         foreach (int i in nodes) { x += graph.Position[i].X; y += graph.Position[i].Y; }
         return (x / nodes.Count, y / nodes.Count);
-    }
-
-    private static double Distance((double X, double Y) a, (double X, double Y) b)
-    {
-        double dx = a.X - b.X, dy = a.Y - b.Y;
-        return Math.Sqrt(dx * dx + dy * dy);
     }
 }

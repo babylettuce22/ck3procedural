@@ -558,15 +558,12 @@ public static class ForgedWeaponRecolour
 
     private static T PickWeighted<T>(IReadOnlyList<T> pool, Func<T, int> weight, Rng rng)
     {
-        int total = pool.Sum(weight);
-        int roll = rng.Int(1, Math.Max(total, 1));
+        int i = rng.WeightedIndex(pool, weight);
+        if (i >= 0) return pool[i];
 
-        foreach (var item in pool)
-        {
-            roll -= weight(item);
-            if (roll <= 0) return item;
-        }
-
+        // No positive weight. The old inline version still spent a draw here before falling
+        // through to the last entry; keep spending it so seeds stay put.
+        rng.Int(1, 1);
         return pool[^1];
     }
 

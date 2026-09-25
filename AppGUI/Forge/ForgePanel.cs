@@ -1,4 +1,5 @@
 ﻿using NoiseTool.Core;
+using Ck3MapGen.Core;
 using NoiseTool.Pipeline;
 using NoiseTool.Stages;
 using NoiseTool.UI;
@@ -387,7 +388,7 @@ public sealed class ForgePanel : UserControl
         _tips.SetToolTip(reset, "Reset the selected stage's settings");
 
         _bake.Visible = false;
-        _bake.Click += (_, _) => { if (SelectedStage() is { } s) _ = Session.BakeAsync(s); };
+        _bake.Click += (_, _) => { if (SelectedStage() is { } s) Session.BakeAsync(s).Forget("Forge bake"); };
 
         buttons.Controls.AddRange([add, remove, up, down, reset, _bake]);
 
@@ -545,13 +546,13 @@ public sealed class ForgePanel : UserControl
         };
         _tips.SetToolTip(_auto, "Regenerate the preview automatically when anything changes");
 
-        _generate.Click += (_, _) => _ = Session.RunPreviewAsync();
+        _generate.Click += (_, _) => Session.RunPreviewAsync().Forget("Forge preview");
         _tips.SetToolTip(_generate, "Regenerate the preview now");
 
         var fit = Theme.MakeButton("Fit", 40);
         fit.Click += (_, _) => _canvas.Fit();
 
-        _export.Click += (_, _) => _ = ExportAsync();
+        _export.Click += (_, _) => ExportAsync().Forget("Forge export");
         _tips.SetToolTip(_export, "Run the pipeline at full size and write a 16-bit heightmap PNG");
 
         _use.Click += (_, _) => RequestUseForGeneration();
@@ -898,7 +899,7 @@ public sealed class ForgePanel : UserControl
         // The one pipeline run per stroke. Immediate rather than debounced: the gesture is
         // over, so there is nothing left to coalesce with.
         Session.NotifyPainted();
-        _ = Session.RunPreviewAsync();
+        Session.RunPreviewAsync().Forget("Forge preview");
     }
 
     private static (float X, float Y) Normalise(PointF imagePoint, int width, int height)
@@ -994,7 +995,7 @@ public sealed class ForgePanel : UserControl
                 return true;
 
             case Keys.F5:
-                _ = Session.RunPreviewAsync();
+                Session.RunPreviewAsync().Forget("Forge preview");
                 return true;
 
             default:

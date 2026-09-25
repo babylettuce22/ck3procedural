@@ -266,17 +266,8 @@ public static class PortraitWriter
 
     private static T PickWeighted<T>(List<T> items, Func<T, int> weight, Rng rng)
     {
-        int total = 0;
-        foreach (var i in items) total += Math.Max(0, weight(i));
-        if (total <= 0) return items[rng.Int(0, items.Count - 1)];
-
-        int roll = rng.Int(0, total - 1);
-        foreach (var i in items)
-        {
-            roll -= Math.Max(0, weight(i));
-            if (roll < 0) return i;
-        }
-        return items[^1];
+        int i = rng.WeightedIndex(items, weight);
+        return i < 0 ? rng.Pick(items) : items[i];
     }
 
     /// <summary>

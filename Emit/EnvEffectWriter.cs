@@ -152,36 +152,13 @@ public static class EnvEffectWriter
     private static void AppendBlock(StringBuilder sb, EffectSpec spec,
         List<(float X, float Z, float Angle, float Scale)> instances)
     {
-        var culture = CultureInfo.InvariantCulture;
-
-        sb.Append("object={\n");
-        sb.Append($"\tname=\"{spec.Name}\"\n");
-        sb.Append("\trender_pass=Map\n");
-        sb.Append("\tclamp_to_water_level=yes\n");
-        sb.Append("\tgenerated_content=no\n");
-        sb.Append($"\tlayer=\"{spec.Layer}\"\n");
-        sb.Append($"\tentity=\"{spec.Entity}\"\n");
-        sb.Append($"\tcount={instances.Count}\n");
+        MapObjectBlock.AppendHeader(sb, spec.Name, "Map", clampToWater: true,
+            generatedContent: false, spec.Layer, "entity", spec.Entity, instances.Count);
 
         if (instances.Count > 0)
         {
             sb.Append("\ttransform=\"");
-            for (int i = 0; i < instances.Count; i++)
-            {
-                var (x, z, angle, scale) = instances[i];
-
-                double qy = Math.Sin(angle / 2.0);
-                double qw = Math.Cos(angle / 2.0);
-
-                if (i > 0) sb.Append('\n');
-                sb.Append(x.ToString("F6", culture)).Append(" 0.000000 ")
-                  .Append(z.ToString("F6", culture)).Append(" 0.000000 ")
-                  .Append(qy.ToString("F6", culture)).Append(" 0.000000 ")
-                  .Append(qw.ToString("F6", culture)).Append(' ')
-                  .Append(scale.ToString("F6", culture)).Append(' ')
-                  .Append(scale.ToString("F6", culture)).Append(' ')
-                  .Append(scale.ToString("F6", culture));
-            }
+            MapObjectBlock.AppendTransforms(sb, instances);
             sb.Append("\"\n");
         }
 

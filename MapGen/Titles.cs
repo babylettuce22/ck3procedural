@@ -17,6 +17,13 @@ public sealed class Title
     public List<Title> Children = [];
     public Title? Parent;
 
+    /// <summary>Title tiers as a number, so a hierarchy can be walked biggest-first. Baronies and
+    /// anything unrecognised rank 0.</summary>
+    public static int TierRank(string tier) => tier switch
+    {
+        "h" => 5, "e" => 4, "k" => 3, "d" => 2, "c" => 1, _ => 0,
+    };
+
     /// <summary>
     /// The child that is this title's capital: a county's seat barony, a duchy's capital county,
     /// and so on up. Null means the first child, which is CK3's own default.

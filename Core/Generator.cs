@@ -96,7 +96,9 @@ public static class Generator
             .EnumerateFiles("*.*", SearchOption.AllDirectories)
             .Where(f => Path.GetExtension(f.Name).ToLowerInvariant() is ".txt" or ".yml" or ".gui")
             // Skip blanked vanilla overrides (which only contain a single newline)
-            .Where(f => f.Length > 4);
+            .Where(f => f.Length > 4)
+            // The run record is not mod script, and its first line is what marks the folder as ours.
+            .Where(f => !f.Name.Equals(RunLog.FileName, StringComparison.OrdinalIgnoreCase));
 
         // Parallel because this is a read-modify-write of every script file in the mod and nothing
         // else: the CPU spends the whole pass waiting on the disk \u2014 and, on Windows, on the
@@ -283,10 +285,16 @@ public static class Generator
         Console.WriteLine($"Writing mod to {modDir}");
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
+        Emit.ModWriter.RefuseGameFolder(modDir, options.GameDir);
+
         // Before anything is written, not after: a run that fails halfway should leave a folder
         // holding only this run's output, never this run's mixed with the last one's.
         Emit.ModWriter.ClearModDir(modDir);
         Directory.CreateDirectory(modDir);
+
+        // Straight after the clear, so the folder is marked as ours even if this run dies before
+        // it ends — otherwise the next write would refuse to clear what this one half wrote.
+        RunLog.Claim(modDir, options);
 
         Emit.ModWriter.WriteDescriptors(modDir, options.ModName);
 
