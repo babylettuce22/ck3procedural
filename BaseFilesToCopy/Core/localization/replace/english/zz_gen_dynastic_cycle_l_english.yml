@@ -33,7 +33,7 @@
  dynastic_cycle_sub_region_core_desc: "All [counties|E] integrated into the [de_jure|E] hierarchy of [GetTitleByKey('h_china').GetDefinitiveName]"
  dynastic_cycle_sub_region_peripheries: "$h_china_adj$ Peripheries"
  dynastic_cycle_sub_region_peripheries_desc: "All [counties|E] that are not a part of the [GetSituation('dynastic_cycle').GetSubRegionByKey( 'core' ).GetName], but still owned by [son_of_heaven|E]"
- situation_parameter_dynastic_cycle_more_common_calamities: "[calamities|E] occur more frequently in $h_china$"
+ situation_parameter_dynastic_cycle_more_common_calamities: "[disasters|E] occur more frequently in $h_china$"
  celestial_government_desc: "\n$game_concept_celestial_government_desc$\n\n#F The $celestial_government$ system refers to the centralized Administrative government of $h_china$, overseen by the Son of Heaven.#!"
  DYNASTIC_CYCLE_WINDOW_UNITE_CHINA_FAVORED_PHASE_TOOLTIP: "If [Character.GetShortUIName] united $h_china$, [Character.GetSheHe] would choose to begin an [dynastic_cycle_era_short|E] of [SituationPhaseType.GetName|V]"
  DYNASTIC_CYCLE_WINDOW_HEGEMON_FAVORED_PHASE_TOOLTIP: "If [Character.GetShortUIName] stabilized $h_china$, [Character.GetSheHe] would choose to begin an [dynastic_cycle_era_short|E] of [SituationPhaseType.GetName|V]"

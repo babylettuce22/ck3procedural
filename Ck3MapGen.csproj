@@ -35,7 +35,7 @@
     <PackageProjectUrl>https://github.com/babylettuce22/ck3procedural</PackageProjectUrl>
     <RepositoryUrl>https://github.com/babylettuce22/ck3procedural</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <Version Condition="'$(Version)' == ''">0.7.0</Version>
+    <Version Condition="'$(Version)' == ''">0.87</Version>
   </PropertyGroup>
 
   <PropertyGroup>

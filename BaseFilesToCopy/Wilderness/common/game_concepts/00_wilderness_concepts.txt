@@ -30,8 +30,9 @@
 # for one 20px image. The widget carries its own `icon` instead, the way vanilla's neighbouring
 # domain-limit widget carries `icon_domain.dds`.
 #
-# `texture` is what the concept shows in its own tooltip header, and points at the holding icon this
-# set already ships.
+# `texture` is what the concept shows in its own tooltip header: vanilla's purple claim flag, the
+# icon The Wilds' frontiers wear, and the same one the HUD widget draws. Not the settlement holding
+# icon — every file under holding_types_tab/ is black on alpha and renders as a black blot.
 #
 # Related files:
 #   BaseFilesToCopy/Wilderness/localization/english/wilderness_colonization_l_english.yml
@@ -42,5 +43,5 @@
 
 gen_colony_limit = {
 	alias = { gen_colony_limit_count colony_limit colony_limits }
-	texture = "gfx/interface/icons/holding_types_tab/settlement_holding.dds"
+	texture = "gfx/interface/icons/casus_bellis/county_expansion.dds"
 }

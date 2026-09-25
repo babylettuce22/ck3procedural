@@ -259,7 +259,7 @@ public static class GuiWriter
     ///       game_concept_gen_colony_limit_count — the digits themselves
     ///   Wilderness/common/script_values/00_colonization_values.txt
     ///       wilderness_settlement_count, wilderness_settlement_limit
-    ///   Wilderness/gfx/interface/icons/holding_types_tab/settlement_holding.dds
+    ///   gfx/interface/icons/casus_bellis/county_expansion.dds (vanilla)  the icon
     /// </code>
     ///
     /// ---- Why this is a lodger in the domain cap and not a segment of its own ----
@@ -354,8 +354,11 @@ public static class GuiWriter
                 .Visible(counter.IsValid())
                 .Using("Status_Bad")
                 .MarginBottom(-3))
+            // The purple claim flag The Wilds' frontiers already wear (FrontierWriter), so the
+            // counter reads as the same mechanic. Full-colour art: every holding_types_tab icon,
+            // settlement_holding.dds included, is black on alpha and drew as a black blot here.
             .Add(GuiBuilder.Icon()
-                .Texture("gfx/interface/icons/holding_types_tab/settlement_holding.dds")
+                .Texture("gfx/interface/icons/casus_bellis/county_expansion.dds")
                 .Size(20, 20))
             // A game concept alias, not a datafunction — `[treasury_i]` in this same file is the
             // vanilla precedent for the spelling, and a `.gui` `text` resolves both. The digits
