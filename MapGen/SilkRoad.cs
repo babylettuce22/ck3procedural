@@ -112,6 +112,10 @@ public static class SilkRoad
     /// the market building placed there, and the colour its map mode paints. The stream is
     /// china → tibet → india and china → central_asia → transcaspia → occident.
     /// </summary>
+    /// <summary>The six vanilla county keys this pass gives its bazaar counties. Reserved: a world of
+    /// vanilla titles (<see cref="VanillaTitles"/>) must not hand one to another county first.</summary>
+    public static IReadOnlySet<string> ReservedCountyKeys => Slots.Select(s => s.CountyKey).ToHashSet(StringComparer.Ordinal);
+
     private static readonly (string Suffix, string CountyKey, string Market, (int R, int G, int B) Color)[] Slots =
     [
         ("china", "c_jingzhao", "changan_market_01", (0, 168, 107)),
@@ -367,6 +371,12 @@ public static class SilkRoad
             // county keeps its generated name, and nothing has written the old key yet — the
             // landed titles, history and localisation are all written after this runs.
             hub.County.Key = slot.CountyKey;
+
+            // On a world of vanilla titles the hub may already have borrowed another vanilla county
+            // (VanillaTitles). That county's declaration does not belong under this key; the hub is
+            // a county of this map that answers to the bazaar's key and keeps the name it had.
+            hub.County.Inherited = false;
+            hub.County.InheritedFields = [];
 
             stops.Add(new SilkRoadStop
             {

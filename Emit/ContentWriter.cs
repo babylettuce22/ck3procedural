@@ -95,6 +95,9 @@ public static class ContentWriter
 
         Dictionary<(string Culture, string Government), string>? tierForms = null;
 
+        // Set by the culture stage on a world of vanilla titles; read by the realm and faith stages.
+        VanillaTitles.Plan? titlePlan = null;
+
         var cultures = Core.Stage.Time("cultures", () =>
         {
             var map = MapGen.Cultures.Build(empires, provinces, order, landCount, provinceTerrain,
@@ -107,6 +110,15 @@ public static class ContentWriter
                 Console.WriteLine($"  azgaar: {renamed} of {map.Cultures.Count} cultures named from the export");
             }
 
+            // A world of vanilla peoples keeps the cultural geography just grown and swaps who lives
+            // in it. Here, before anything is named, so titles, rivers and houses come out in those
+            // peoples' own languages. See MapGen/VanillaIdentities.cs.
+            var grown = map;
+            if (cfg.ContentSource == MapConfig.ContentSourceMode.VanillaWorld)
+                map = VanillaIdentities.SettleCultures(map, VanillaCatalog.Read(gameDir),
+                    CountyPosition(provinces, order, landCount), provinces.Width, provinces.Height,
+                    new Rng(cfg.Seed ^ 0x7A11));
+
             // Which word each culture-and-government will render for a rank, decided once here so
             // the title names below can leave that word out rather than repeating it.
             tierForms = azgaar is null || stateGovernments is null
@@ -117,7 +129,9 @@ public static class ContentWriter
             // decided here and stored on the objects — before naming, which leaves a state's word
             // out of its name because the tier will say it — and written out by TitleTierWriter
             // further down.
-            TitleTierWriter.Assign(map, new Rng(cfg.Seed ^ 0x7117), tierForms, azgaar);
+            // Declared cultures only: a vanilla culture already has its words, in vanilla's
+            // title-holder flavourization, and a drawn ladder would override them.
+            TitleTierWriter.Assign(map.Declared(), new Rng(cfg.Seed ^ 0x7117), tierForms, azgaar);
 
             // Worked out for the whole hierarchy at once rather than title by title, so each state
             // and burg goes to the title that actually contains most of it — see AzgaarNaming.
@@ -131,6 +145,26 @@ public static class ContentWriter
             if (borrowed is not null)
                 Console.WriteLine($"  azgaar: {borrowed.Count} of {Titles.Flatten(empires).Count()} " +
                                   "titles named from the export, the rest from its name bases");
+
+            // Then the real world laid over it: every title becomes a vanilla title, and every
+            // county takes the culture its vanilla county had at the start date. After naming,
+            // because the generated names are only the fallback for a title vanilla ran out of.
+            // See MapGen/VanillaTitles.cs.
+            if (cfg.ContentSource == MapConfig.ContentSourceMode.VanillaWorld)
+            {
+                var catalog = VanillaCatalog.Read(gameDir);
+                titlePlan = VanillaTitles.Match(empires, grown, development, catalog,
+                    CountyPosition(provinces, order, landCount), cfg.EraYear, MapGen.SilkRoad.ReservedCountyKeys,
+                    new Rng(cfg.Seed ^ 0x7A13));
+
+                if (titlePlan is not null)
+                {
+                    VanillaTitles.Apply(titlePlan, empires);
+                    map = VanillaIdentities.RecastCultures(map,
+                        titlePlan.State.ToDictionary(kv => kv.Key, kv => kv.Value.Culture),
+                        titlePlan.Projected, development, catalog, new Rng(cfg.Seed ^ 0x7A14));
+                }
+            }
 
             return map;
         });
@@ -163,15 +197,29 @@ public static class ContentWriter
             int moved = MapGen.Capitals.SeatRealms(empires, development, provinces, order, baronyCount,
                 worldCenters, azgaar);
             Console.WriteLine($"  realm capitals: {moved} titles above county had their capital moved");
+
+            // A vanilla title is ruled from vanilla's capital when this map has it: France from Paris.
+            if (titlePlan is not null)
+                Console.WriteLine($"  realm capitals: {VanillaTitles.SeatLikeVanilla(empires, VanillaCatalog.Read(gameDir))} " +
+                                  "vanilla titles seated on their own vanilla capital");
         });
+
+        // On a world of vanilla titles the countries are vanilla's own at the start date — unless an
+        // Azgaar export drew its own, which is its call to make.
+        var vanillaRealms = titlePlan is not null && azgaar is null
+            ? VanillaTitles.Countries(titlePlan, VanillaCatalog.Read(gameDir), wilderness, empires, development)
+            : null;
 
         var realms = Core.Stage.Time("realms", () => Realms.Build(
                     empires, development, wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17), provinces, order,
-                    baronyCount, azgaar, cultures));
+                    baronyCount, azgaar, cultures, vanillaRealms));
 
         // After the realm pass, never during it — see Realms.CrownHegemon for why granting it any
         // earlier would have made one ruler the liege of the whole map.
         if (cfg.StartingHegemony) Realms.CrownHegemon(realms, empires, wilderness);
+
+        if (titlePlan is not null)
+            Console.WriteLine($"  vanilla titles: {VanillaTitles.Fragmentation(empires, realms)}");
 
         var governments = Core.Stage.Time("governments", () => MapGen.Governments.Build(
             empires, counties, realms, provinceTerrain, development, cultures,
@@ -208,6 +256,13 @@ public static class ContentWriter
                               $"{namedReligions} of {faiths.Religions.Count} religions named from the export");
         }
 
+        // The religious geography just grown, settled with vanilla faiths chosen by how the vanilla
+        // peoples now living there pray. Before the unsettled faith is added, which stays ours.
+        if (cfg.ContentSource == MapConfig.ContentSourceMode.VanillaWorld)
+            faiths = Core.Stage.Time("vanilla faiths", () => VanillaIdentities.SettleFaiths(faiths, cultures,
+                development, VanillaCatalog.Read(gameDir), vocabulary, new Rng(cfg.Seed ^ 0x7A12),
+                titlePlan?.State.ToDictionary(kv => kv.Key, kv => kv.Value.Faith)));
+
         if (wilderness.Count > 0)
         {
             var unsettledCulture = MapGen.Cultures.CreateUnsettled(
@@ -227,7 +282,7 @@ public static class ContentWriter
         // Who fights and who inherits, settled here because it is the first point at which both
         // halves of the question exist: the culture was drawn before any faith did, and the answer
         // has to be the same one its people's religion gives. See MapGen/Cultures.AlignGender.
-        Core.Stage.Time("gender", () => MapGen.Cultures.AlignGender(cultures, faiths, vocabulary,
+        Core.Stage.Time("gender", () => MapGen.Cultures.AlignGender(cultures.Declared(), faiths, vocabulary,
             new Rng(cfg.Seed ^ 0x6E1D)));
 
         // Farmland and oases, placed from settlement and drainage rather than from climate. Runs
@@ -336,12 +391,12 @@ public static class ContentWriter
         // the culture files below have to carry the innovations it invents. Nothing downstream of
         // it changes a culture, so this is the earliest point at which its inputs are all final.
         var retinues = cfg.EnableGeneratedRetinues
-            ? Core.Stage.Time("retinues", () => MapGen.Retinues.Build(cultures, governments,
+            ? Core.Stage.Time("retinues", () => MapGen.Retinues.Build(cultures.Declared(), governments,
                 provinceTerrain, vocabulary, cfg, new Rng(cfg.Seed ^ 0x3AA7)))
             : null;
 
         Core.Stage.Time("culture files",
-            () => CultureWriter.WriteAll(modDir, cfg, cultures, ethnicities, vocabulary,
+            () => CultureWriter.WriteAll(modDir, cfg, cultures.Declared(), ethnicities, vocabulary,
                 new Rng(cfg.Seed ^ 0x0C1A), retinues?.Innovations));
 
         if (retinues is not null)
@@ -400,15 +455,18 @@ public static class ContentWriter
         Core.Stage.Time("route files", () => RouteWriter.WriteAll(modDir, routes, crossings, silkRoad,
             provinces, order, baronyCount, provinceTerrain));
 
-        Core.Stage.Time("religion files", () => ReligionWriter.WriteAll(modDir, faiths));
+        Core.Stage.Time("religion files", () => ReligionWriter.WriteAll(modDir, faiths.Declared()));
 
         // After the religions, whose crown-or-regalia answer it writes into CK3's triggers, and
         // after the titles it reads seats off. It writes nothing anything else reads.
         Core.Stage.Time("coronation files",
-            () => CoronationWriter.WriteAll(modDir, gameDir, empires, faiths));
+            () => CoronationWriter.WriteAll(modDir, gameDir, empires, faiths.Declared()));
 
+        // Vanilla heads of faith a vanilla faith kept are declared in landed_titles above, as real
+        // titles with a seat and a holder; shimming them too would declare each one twice.
         Core.Stage.Time("vanilla titulars",
-            () => CompatibilityWriter.WriteVanillaTitulars(modDir, gameDir, empires));
+            () => CompatibilityWriter.WriteVanillaTitulars(modDir, gameDir, empires,
+                faiths.Faiths.Where(f => f.Head is { Inherited: true }).Select(f => f.Head!.TitleKey)));
 
         // Once, for both the locators and the city scatter: a slope field and a distance transform
         // over the whole province raster, which each of them used to run for itself off the same
@@ -548,6 +606,14 @@ public static class ContentWriter
                 // from this rather than each drawing the man again.
                 rulers = Core.Stage.Time("rulers", () => RulerMap.Build(
                     counties, cfg, realms, cultures, faiths, governments, wilderness, prehistory));
+
+                // On a world of vanilla titles, the holders are vanilla's own people: whoever held
+                // each title in vanilla's history on the start date, with their house and family.
+                // Right after the roster and before anything names a ruler. See VanillaCharacters.
+                if (titlePlan is not null)
+                    Core.Stage.Time("vanilla characters", () => VanillaCharacters.Import(titlePlan,
+                        VanillaCatalog.Read(gameDir), realms, rulers!, prehistory!, cultures, faiths, empires,
+                        cfg.EraOffset, new Rng(cfg.Seed ^ 0x7A15)));
 
                 // Beside the artifacts rather than beside the roster: both are things the rulers
                 // already own on the start date, and both need the rulers to exist first.
@@ -801,6 +867,31 @@ public static class ContentWriter
     /// moves the claimant's realm capital there — and the de jure default is whatever county the
     /// first empire happens to be seated in, nomad camp included.
     /// </param>
+    /// <summary>Where a county sits on the map: the mean of its baronies' province seeds, in pixels.
+    /// Null for a county with no land province.</summary>
+    private static Func<Title, (double X, double Y)?> CountyPosition(ProvinceMap provinces, int[] order, int landCount)
+    {
+        var seedOf = new int[landCount + 1];
+        for (int label = 0; label < order.Length; label++)
+            if (order[label] is >= 1 and var id && id <= landCount) seedOf[id] = label;
+
+        return county =>
+        {
+            double x = 0, y = 0;
+            int n = 0;
+            foreach (var barony in county.Children)
+            {
+                int id = barony.ProvinceId;
+                if (id < 1 || id > landCount) continue;
+                var seed = provinces.Seeds[seedOf[id]];
+                x += seed.X;
+                y += seed.Y;
+                n++;
+            }
+            return n == 0 ? null : (x / n, y / n);
+        };
+    }
+
     internal static void WriteLandedTitles(string modDir, List<Title> empires, FaithMap faiths,
         WildernessMap wilderness, Title? hegemonSeat = null)
     {
@@ -830,9 +921,19 @@ public static class ContentWriter
 
             using (jb.Block(faith.Head.TitleKey))
             {
-                jb.Inline("color", F(r), F(g), F(bl));
-                jb.Field("capital", faith.Head.Seat.Key);
-                jb.Field("landless", "yes");
+                // A vanilla head keeps vanilla's own declaration — its colour, its regnal names, its
+                // succession fields — and only the capital is ours. See HeadOfFaith.InheritedFields.
+                if (faith.Head.Inherited)
+                {
+                    jb.Field("capital", faith.Head.Seat.Key);
+                    foreach (string field in faith.Head.InheritedFields) jb.Token(field);
+                }
+                else
+                {
+                    jb.Inline("color", F(r), F(g), F(bl));
+                    jb.Field("capital", faith.Head.Seat.Key);
+                    jb.Field("landless", "yes");
+                }
             }
 
             jb.Blank();
@@ -902,10 +1003,12 @@ public static class ContentWriter
                     // `province` is the only barony key here. Wonders are placed by province history
                     // (see WriteProvinceHistory) — landed_titles has no special_building key.
                     jb.Field("province", title.ProvinceId);
+                    foreach (string field in title.InheritedFields) jb.Token(field);
                 }
                 else
                 {
-                    if (title.Tier == "c") jb.Field("definite_form", "no");
+                    // A vanilla county says what it says about itself; vanilla's default is no.
+                    if (title.Tier == "c" && !title.Inherited) jb.Field("definite_form", "no");
 
                     // Stated as vanilla states it on its own duchies and above, though the engine
                     // would take the first county anyway: the two agree because MapGen/Capitals
@@ -934,6 +1037,11 @@ public static class ContentWriter
                         jb.Inline("can_create", "always = no");
                         jb.Inline("can_create_on_partition", "always = no");
                     }
+
+                    // A vanilla title's own declaration — cultural names, succession flags, its
+                    // creation trigger — ahead of the children this map gives it. Empty for a
+                    // generated title. See VanillaTitles.
+                    foreach (string field in title.InheritedFields) jb.Token(field);
 
                     // The capital first: for a county that is the whole declaration of its seat,
                     // since baronies carry no capital field. Write-time order only.
@@ -1053,11 +1161,15 @@ public static class ContentWriter
     {
         var all = Titles.Flatten(empires);
 
-        int faithHeads = faiths.Faiths
+        // By tier prefix: a generated head is always a duchy, but a vanilla one kept by a world of
+        // vanilla faiths can be a kingdom (k_papal_state, k_orthodox).
+        var headKeys = faiths.Faiths
             .Where(f => f.Head is not null)
             .Select(f => f.Head!.TitleKey)
             .Distinct(StringComparer.Ordinal)
-            .Count();
+            .ToList();
+        int faithHeads = headKeys.Count(k => k.StartsWith("d_", StringComparison.Ordinal));
+        int faithHeadKingdoms = headKeys.Count(k => k.StartsWith("k_", StringComparison.Ordinal));
 
         return new DebugPanel.Facts
         {
@@ -1095,6 +1207,7 @@ public static class ContentWriter
             // database keeps one title either way.
             Empires = all.Count(t => t.Tier == "e"),
             Kingdoms = all.Count(t => t.Tier == "k")
+                     + faithHeadKingdoms
                      + (wilderness.Unsettled.Any() ? 1 : 0)
                      + (wilderness.RuinsEnabled && wilderness.Counties.Any() ? 1 : 0),
             Duchies = all.Count(t => t.Tier == "d") + faithHeads,
@@ -1774,7 +1887,9 @@ public static class ContentWriter
                 continue;
             }
 
-            loc.AddBuilt(title.Key, name);
+            // A vanilla title's name and adjective are vanilla's own localisation, which this mod does
+            // not replace; a copy here would log as a duplicate key on every launch.
+            if (!title.Inherited) loc.AddBuilt(title.Key, name);
 
             if (title.Tier == "b" && title.ProvinceId > 0)
                 loc.AddBuilt($"prov_{title.ProvinceId}", name);

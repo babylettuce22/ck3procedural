@@ -334,3 +334,45 @@ colony_council = {
 		is_colonist_trigger = yes
 	}
 }
+
+
+# Character scope: the player. The colony counter in the top-right resource bar.
+#
+# Emit/GuiWriter.cs (PatchHudResourceBar) injects a widget into the domain-limit cap of vanilla's
+# hud.gui whose `visible` is this `IsShown` and whose warning background is this `IsValid`. The name
+# is a contract with that writer.
+#
+# ---- Two states, not one, and that is the whole design ----
+#
+# `is_shown` answers "does this player have anything to count", so a ruler who has never sent an
+# expedition gets no extra number in a bar that is already crowded. `is_valid` answers "are they
+# over the cap", and drives ONLY the red Status_Bad background behind the number — nothing is
+# hidden or disabled by it. Splitting the two is what lets one widget be both an ambient readout
+# and a warning; AGOT's agot_settlement_count does the same thing for the same reason.
+#
+# ---- Why this reads script values live rather than a cached variable ----
+#
+# wilderness_settlement_count walks every_held_title and every_vassal, and the HUD re-evaluates
+# this every frame. AGOT pays for that with a cached character variable (num_settled_wilderness)
+# plus four effects and two on_action hooks to keep it honest — a resync on title gain for both the
+# new and the previous holder, a game-start pass, and a debug interaction to force a recount.
+#
+# That cache is a correctness liability bought with performance, and the trade is only worth making
+# once the performance problem is real. The live read cannot drift, because there is nothing to
+# drift from: it is the same script value can_hold_another_colony_trigger reads, so the bar and the
+# button can never disagree about whether there is room. If this ever shows up in a profile, the
+# cache is the known fix and AGOT is the reference implementation — but measure first.
+#
+# No is_valid guard for "is this character a colonist" and no ai_is_valid: this is a question, not
+# a button. See wilderness_county at the top of this file for why the indirection exists at all.
+colony_limit_hud = {
+	scope = character
+
+	is_shown = {
+		wilderness_settlement_count > 0
+	}
+
+	is_valid = {
+		wilderness_settlement_headroom < 0
+	}
+}

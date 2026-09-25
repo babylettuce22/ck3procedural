@@ -101,6 +101,22 @@ wilderness_yearly_cleanup = {
 			}
 		}
 
+		# And wars. wilderness_war_on_dummy ends one the moment it starts, but only from the tick it
+		# ships in: a save made before it — or made before the two decision filters that stop the
+		# selecting content reaching a dummy at all — can be carrying a siege of the wilderness that
+		# no on_action will ever fire for again. Ended here rather than left to run, because an
+		# attacker will eventually win it and take counties off a character whose whole purpose is
+		# to hold them.
+		every_ruler = {
+			limit = {
+				has_trait = wilderness
+				any_character_war = { always = yes }
+			}
+			every_character_war = {
+				end_war = invalidated
+			}
+		}
+
 		# And regencies. The `incapable` trait the dummy is given at game start is what makes it
 		# unreachable by most interactions, and vanilla reads that same trait as a reason to appoint
 		# a regent — so the trait that hides it also hands it a diarch, drawn from a court this file
@@ -199,6 +215,42 @@ yearly_playable_pulse = {
 		wilderness_yearly_colonist_development_aid_check
 		wilderness_yearly_control_check
 		wilderness_yearly_colonist_validity
+		wilderness_yearly_stranded_colony_check
+	}
+}
+
+# The backstop for a colony that has ended up under a government which cannot finish it.
+#
+# Same shape and same reason as wilderness_yearly_colonist_validity below: the state is reachable
+# without anything this file set owns being asked, so a sweep is the only thing that sees it.
+# can_colonize_at_all_trigger stops a nomad or a herder PLANTING a colony — both governments carry
+# `buildings = no`, so every step of finishing one is closed to them — but conquest, inheritance and
+# a tribal ruler converting to nomad_government all hand somebody a colony without passing through
+# it. Left alone that county is a permanent settlement_holding paying nothing, with obstacles on it
+# that no building in the game can remove for its holder.
+#
+# Cheap in the same way: the first line is a pair of government-flag lookups, so a world of feudal
+# lords costs two tests each and the held-title sweep is only reached by an actual nomad.
+wilderness_yearly_stranded_colony_check = {
+	trigger = {
+		OR = {
+			government_has_flag = government_is_nomadic
+			government_has_flag = government_is_herder
+		}
+		any_held_title = {
+			tier = tier_county
+			is_colony_county_trigger = yes
+		}
+	}
+
+	effect = {
+		every_held_title = {
+			limit = {
+				tier = tier_county
+				is_colony_county_trigger = yes
+			}
+			colony_convert_to_pasture_effect = { COUNTY = this }
+		}
 	}
 }
 
@@ -798,6 +850,70 @@ wilderness_yearly_colonist_development_aid_check = {
 on_war_started = {
 	on_actions = {
 		wilderness_colony_war_started
+		wilderness_war_on_dummy
+	}
+}
+
+# --- The backstop for a war nobody declared --------------------------------------------------------
+#
+# Every other wilderness war guard sits in a PERMISSION field — `allowed_against_character` on the
+# 121 casus belli types, `allowed_for_character` on the 19 groups, the declare-war interaction. All
+# three answer the question "may this character declare this war", and all three are therefore
+# skipped entirely by a scripted `start_war`, which declares nothing and asks nobody.
+#
+# There are 139 `start_war` blocks across the game's events, decisions and scripted effects. Most
+# aim at a character the story already has in hand — an actor, a recipient, a liege, a claimant —
+# and a dummy can never be one of those. A handful select a target themselves, and those are the
+# ones that have found the wilderness: the nomad Dominate Title decision and the coronation warhound
+# both did, and both now have a filter of their own in Emit/CasusBelliWriter.cs. The rest of the
+# selecting family aims at `location.county.holder` — whoever holds the ground the character is
+# standing on — which is a hole that opens every time an adventurer walks into unsettled land.
+#
+# Patching each of those is whack-a-mole with a list that grows with every DLC. This is the layer
+# that does not care how the war started: if the thing being fought is a dummy, the war ends the
+# moment it begins. It is a backstop and not a substitute — an invalidated war still cost the
+# attacker whatever the decision or event charged for it, which is why the reachable selection sites
+# are still fixed at the source.
+#
+# `invalidated` rather than `white_peace`: this is not a war that was fought to a draw, it is a war
+# that should never have existed, and vanilla's own message for that reads correctly.
+#
+# Primary defender only. A dummy dragged in as a CO-defender by `add_defender` (the shape both
+# domination decisions use) would take a real war down with it, and the two decisions that do that
+# already filter the dummy out of their target lists.
+wilderness_war_on_dummy = {
+	trigger = {
+		exists = scope:war
+		exists = scope:defender
+
+		scope:defender = {
+			OR = {
+				has_trait = wilderness
+				government_has_flag = government_is_wilderness
+			}
+		}
+	}
+
+	effect = {
+		scope:war = { end_war = invalidated }
+
+		# Told, not silently undone. A player who has just spent a decision on this needs to know
+		# why the war vanished, and an AI attacker's toast goes nowhere and costs nothing.
+		if = {
+			limit = {
+				exists = scope:attacker
+				scope:attacker = { is_ai = no }
+			}
+
+			scope:attacker = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = wilderness_war_refused_toast
+					desc = wilderness_war_refused_toast_desc
+					left_icon = this
+				}
+			}
+		}
 	}
 }
 

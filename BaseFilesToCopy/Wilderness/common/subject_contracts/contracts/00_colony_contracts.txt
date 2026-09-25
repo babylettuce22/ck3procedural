@@ -1,4 +1,32 @@
-﻿colony_sponsorship = {
+﻿# What a sponsor owes a colony he planted, and what the colony owes him back.
+#
+# ---- Which way the desires point, and the report that caught them pointing the wrong way ----
+#
+# `ai_liege_desire` and `ai_subject_desire` are "how much does THAT side want this level", and the
+# engine reads them exactly that literally: `_subject_contracts.info` says it looks at the levels
+# adjacent to the current one, ignores any whose desire is <= 0, and moves toward the most desired
+# one — which for the subject means spending a hook on the liege to demand it.
+#
+# They were written as though they were a cost to that side rather than a want. A colonist therefore
+# desired `neglected` at 10 and `heavy` at 1, so the first thing an AI colonist did with a hook on
+# his sponsor was force the sponsor to STOP PAYING him — into a level carrying -15 opinion, -20%
+# development growth and worse control, all of which the same file says the colony dislikes. The
+# liege's column was inverted in the same motion: 10 for the level that costs him 0.75 gold a month
+# for nothing, 1 for the cheap one. Reported from play as "he spent a hook to make me neglect him",
+# which is precisely what the numbers asked for.
+#
+# The rule for reading this file from here on: the desire columns must agree with `subject_opinion`
+# and `score` in the same block. A level the subject is written to dislike cannot be a level the
+# subject is written to demand.
+#
+# ---- Why the two columns are not simply mirrored ----
+#
+# A flat mirror would make every AI sponsor neglect every colony on sight, since the liege saves
+# money at every level below standard. Standard is the default and both sides sit at 3 there, so a
+# move off it has to be argued for: the liege only wants neglect when he is poor or grasping, and he
+# only wants to pay heavy patronage when he is rich enough for it to be pocket money. The colony
+# always wants more.
+colony_sponsorship = {
 	display_mode = tree
 
 	obligation_levels = {
@@ -19,8 +47,26 @@
 			subject_opinion = -15
 			score = -10
 
-			ai_liege_desire = 1
-			ai_subject_desire = 10
+			# A neglected outpost is the cheap option for the sponsor and a punishment for the
+			# colony, so only a sponsor with a reason wants it — and the colony never does.
+			# Zero rather than 1: the info file is explicit that desires <= 0 are not considered
+			# at all, which is the only way to say "never ask for this" rather than "rarely".
+			ai_liege_desire = {
+				value = 1
+				if = {
+					limit = { scope:liege = { gold < 100 } }
+					add = 4
+				}
+				if = {
+					limit = { scope:liege = { has_trait = greedy } }
+					add = 3
+				}
+				if = {
+					limit = { scope:liege = { ai_greed > 50 } }
+					add = 2
+				}
+			}
+			ai_subject_desire = 0
 		}
 
 		# --- Position 1: Standard Subsidy (Default) ---
@@ -39,8 +85,10 @@
 			subject_opinion = -5
 			score = 0
 
-			ai_liege_desire = 5
-			ai_subject_desire = 5
+			# The default, and the baseline both sides are measured against: a level either side
+			# wants to leave has to beat a 3.
+			ai_liege_desire = 3
+			ai_subject_desire = 3
 		}
 
 		# --- Position 2: Heavy Crown Patronage ---
@@ -65,8 +113,25 @@
 			subject_opinion = 25
 			score = 10
 
-			ai_liege_desire = 10
-			ai_subject_desire = 1
+			# The colony's standing ask — this is the level a colonist spends a hook to reach.
+			# The sponsor pays for it out of vanity or generosity, never out of arithmetic: there
+			# is no tax or levy return on the extra 0.45 a month, only a settlement that grows.
+			ai_liege_desire = {
+				value = 1
+				if = {
+					limit = { scope:liege = { gold > 1000 } }
+					add = 4
+				}
+				if = {
+					limit = { scope:liege = { has_trait = generous } }
+					add = 2
+				}
+				if = {
+					limit = { scope:liege = { ai_greed < 25 } }
+					add = 1
+				}
+			}
+			ai_subject_desire = 8
 		}
 	}
 }

@@ -146,6 +146,14 @@ public static class CultureWriter
                 b.Field("building_gfx", culture.BuildingGfx);
                 b.Field("clothing_gfx", culture.ClothingGfx);
                 b.Field("unit_gfx", culture.UnitGfx);
+
+                if (HouseFrameFor(culture) is { } frame)
+                {
+                    b.Field("house_coa_frame", frame.Frame);
+                    if (frame.MaskOffset is not null) b.Field("house_coa_mask_offset", frame.MaskOffset);
+                    if (frame.MaskScale is not null) b.Field("house_coa_mask_scale", frame.MaskScale);
+                }
+
                 b.Blank();
 
                 // One generated ethnicity rather than the vanilla culture's whole weighted list. The
@@ -160,6 +168,35 @@ public static class CultureWriter
         }
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_cultures.txt"), b.ToString());
+    }
+
+    /// <summary>
+    /// The shield this culture's houses are drawn on, or null for the engine's standard one.
+    ///
+    /// CK3 has no per-dynasty or per-house shape: the frame belongs to the culture, and the house
+    /// window reads it off the culture of the house. So variety across a map comes from its peoples,
+    /// as it does in vanilla.
+    ///
+    /// Read off the vanilla culture whose heraldry this one wears — its <c>coa_gfx</c>, not the
+    /// whole look, so that retyping the heraldry in the inspector brings the matching shield with
+    /// it. The heritage's own source culture first, so sister cultures share one shield; then any
+    /// vanilla culture with the same heraldry that sets a frame, since ten do not.
+    ///
+    /// <see cref="VanillaVocabulary.Current"/> rather than a parameter because the editor's
+    /// rewrite path (<see cref="WorldOverwrite"/>) has no vocabulary in hand; it is always read
+    /// before anything is generated.
+    /// </summary>
+    internal static VanillaVocabulary.HouseFrame? HouseFrameFor(Culture culture)
+    {
+        if (VanillaVocabulary.Current is not { } vocab) return null;
+
+        var sources = vocab.Looks.Where(l => l.CoaGfx == culture.CoaGfx).Select(l => l.SourceCulture);
+        if (culture.Heritage.Look.CoaGfx == culture.CoaGfx) sources = sources.Prepend(culture.Heritage.Look.SourceCulture);
+
+        foreach (string source in sources)
+            if (vocab.HouseFrames.TryGetValue(source, out var frame)) return frame;
+
+        return null;
     }
 
     /// <summary>

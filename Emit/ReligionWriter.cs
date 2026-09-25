@@ -166,10 +166,11 @@ public static class ReligionWriter
                             {
                                 foreach (var (key, _) in faith.HolySites) b.Field("holy_site", key);
                             }
-                            else if (faiths.Faiths.Any(f => f.HolySites.Count > 0))
+                            else if ((faiths.Whole ?? faiths).Faiths.Any(f => f.HolySites.Count > 0))
                             {
-                                // Fallback to avoid fatal error on empty dummy faiths
-                                var fallbackSite = faiths.Faiths.First(f => f.HolySites.Count > 0).HolySites[0];
+                                // Fallback to avoid fatal error on empty dummy faiths. From the whole
+                                // map: in a world of vanilla faiths the only sites are theirs.
+                                var fallbackSite = (faiths.Whole ?? faiths).Faiths.First(f => f.HolySites.Count > 0).HolySites[0];
                                 b.Field("holy_site", fallbackSite.Key);
                             }
 

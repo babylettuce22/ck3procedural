@@ -38,6 +38,22 @@ public sealed class VanillaVocabulary
     public List<string> HeadDeterminations { get; } = [];
     public List<string> Traditions { get; } = [];
     public List<Look> Looks { get; } = [];
+
+    /// <summary>
+    /// The shield a vanilla culture's houses are drawn on: the frame, and the offset and scale that
+    /// seat the arms inside it. The two numbers are null where vanilla leaves them at the default.
+    /// </summary>
+    public sealed record HouseFrame(string Frame, string? MaskOffset, string? MaskScale);
+
+    /// <summary>
+    /// <see cref="HouseFrame"/> by vanilla culture key — 234 of the 244 set one, from 29 numbered
+    /// frames plus <c>house_china</c> and <c>house_japan</c>, and each frame always comes with the
+    /// same offset and scale. A side table rather than a field on <see cref="Look"/>: looks are
+    /// de-duplicated as a set, and a new field would split one into two and move every heritage's
+    /// pick. Only frames whose art is on disk are kept.
+    /// </summary>
+    public Dictionary<string, HouseFrame> HouseFrames { get; } = new(StringComparer.Ordinal);
+
     public List<string> FaithIcons { get; } = [];
 
     /// <summary>Temple model sets a generated religion may point its faiths at.</summary>
@@ -284,7 +300,8 @@ public sealed class VanillaVocabulary
         v.ReadNamedColors(Path.Combine(gameDir, "common", "named_colors"));
 
         v.ReadPillars(Path.Combine(gameDir, "common", "culture", "pillars"));
-        v.ReadCultures(Path.Combine(gameDir, "common", "culture", "cultures"));
+        v.ReadCultures(Path.Combine(gameDir, "common", "culture", "cultures"),
+            Path.Combine(gameDir, "gfx", "interface", "coat_of_arms", "frames"));
         v.ReadDoctrines(Path.Combine(gameDir, "common", "religion", "doctrine_group_types"));
         v.ReadDoctrineConflicts(Path.Combine(gameDir, "common", "religion", "doctrine_types"));
         v.ReadReligions(Path.Combine(gameDir, "common", "religion", "religion_types"));
@@ -376,7 +393,7 @@ public sealed class VanillaVocabulary
         }
     }
 
-    private void ReadCultures(string dir)
+    private void ReadCultures(string dir, string framesDir)
     {
         if (!Directory.Exists(dir)) return;
 
@@ -404,6 +421,14 @@ public sealed class VanillaVocabulary
                 if (coa is not null && building is not null && clothing is not null
                     && unit is not null && ethnicities is not null)
                     looks.Add(new Look(key, coa, building, clothing, unit, ethnicities.Trim()));
+
+                // The engine wants both the frame and its _mask beside it; a frame missing either
+                // would draw no shield at all, which is worse than the standard one.
+                if (Line(body, "house_coa_frame") is { } frame
+                    && File.Exists(Path.Combine(framesDir, frame + ".dds"))
+                    && File.Exists(Path.Combine(framesDir, frame + "_mask.dds")))
+                    HouseFrames[key] = new HouseFrame(frame,
+                        Line(body, "house_coa_mask_offset"), Line(body, "house_coa_mask_scale"));
             }
         }
 

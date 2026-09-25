@@ -16,6 +16,20 @@ public sealed class HeadOfFaith
     /// Abrahamic-shaped religion with lay clergy mints one.
     /// </summary>
     public bool Temporal { get; init; }
+
+    /// <summary>
+    /// Vanilla's own title — <c>k_papal_state</c>, <c>d_sunni</c> — rather than one minted here.
+    /// It is still declared by this mod, because common/landed_titles is replaced wholesale, but
+    /// from vanilla's fields rather than ours, and vanilla's localisation names it.
+    /// </summary>
+    public bool Inherited { get; init; }
+
+    /// <summary>
+    /// For an <see cref="Inherited"/> head, vanilla's declaration minus its <c>capital</c>, one
+    /// field per line with comments dropped and <c>@</c> constants resolved (the file that defined
+    /// them is replaced along with every other landed_titles file). Empty for a generated head.
+    /// </summary>
+    public IReadOnlyList<string> InheritedFields { get; init; } = [];
 }
 
 public sealed class Faith
@@ -37,6 +51,27 @@ public sealed class Faith
 
     public bool IsOrganized { get; set; } = true;
     public bool IsDominant { get; set; } = false;
+
+    /// <summary>
+    /// Declared by the base game rather than by this mod: vanilla's faith, referenced by key and
+    /// never written. Its holy sites are vanilla's keys rebound onto this map's counties, and its
+    /// head, when it has one, is vanilla's title declared here with a seat of our choosing. See
+    /// <see cref="VanillaIdentities"/>.
+    /// </summary>
+    public bool Inherited { get; init; }
+
+    /// <summary>
+    /// Doctrines this faith sets over its religion's, by doctrine group. Vanilla faiths override
+    /// their religion's baseline in the faith block (a heresy that ordains women, say); generated
+    /// faiths never do, so this is empty for them.
+    /// </summary>
+    public Dictionary<string, string> DoctrineOverrides { get; init; } = [];
+
+    /// <summary>The doctrine this faith actually holds in <paramref name="group"/>: its own
+    /// override, else its religion's, else <paramref name="fallback"/>.</summary>
+    public string DoctrineOf(string group, string fallback = "")
+        => DoctrineOverrides.TryGetValue(group, out string? own) ? own
+            : Religion.Doctrines.GetValueOrDefault(group, fallback);
 }
 
 /// <summary>A generated religion: a liturgical language, a doctrine baseline, and its faiths.</summary>
@@ -96,6 +131,9 @@ public sealed class Religion
     public required Dictionary<string, string> LocalizationText { get; init; }
 
     public List<Faith> Faiths { get; } = [];
+
+    /// <summary>Declared by the base game rather than by this mod; see <see cref="Faith.Inherited"/>.</summary>
+    public bool Inherited { get; init; }
 }
 
 public sealed class FaithMap
@@ -110,6 +148,34 @@ public sealed class FaithMap
     /// a majority vote they were built from could only move them away.
     /// </summary>
     public bool ImportedStructure { get; init; }
+
+    /// <summary>
+    /// The part of this map the mod has to declare: every religion and faith that is not
+    /// <see cref="Faith.Inherited"/>. What the religion writers are handed. Returns this same
+    /// instance when nothing is inherited, so a procedural world's writers see exactly what they
+    /// always did. See <see cref="CultureMap.Declared"/>.
+    /// </summary>
+    public FaithMap Declared()
+    {
+        if (!Faiths.Any(f => f.Inherited) && !Religions.Any(r => r.Inherited)) return this;
+
+        return new FaithMap
+        {
+            Religions = Religions.Where(r => !r.Inherited).ToList(),
+            Faiths = Faiths.Where(f => !f.Inherited).ToList(),
+            ByCounty = ByCounty.Where(kv => !kv.Value.Inherited)
+                               .ToDictionary(kv => kv.Key, kv => kv.Value),
+            ImportedStructure = ImportedStructure,
+            Whole = this,
+        };
+    }
+
+    /// <summary>
+    /// The full map a <see cref="Declared"/> projection was cut from, for the few lookups that
+    /// reach past what is being written — the unsettled faith borrowing a holy site, which CK3
+    /// requires every faith to have. Null on the full map itself.
+    /// </summary>
+    public FaithMap? Whole { get; init; }
 
     public Faith For(Title title)
     {
@@ -1363,7 +1429,7 @@ public static class Faiths
     /// like, and is the answer that changes nothing.
     /// </summary>
     public static string GenderOf(Faith faith)
-        => faith.Religion.Doctrines.GetValueOrDefault("doctrine_gender", "doctrine_gender_male_dominated");
+        => faith.DoctrineOf("doctrine_gender", "doctrine_gender_male_dominated");
 
     private static string Prefer(List<string> members, string[] preferred, Rng rng)
     {

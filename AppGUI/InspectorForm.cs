@@ -224,13 +224,34 @@ public abstract class InspectorForm : Form
 
         // PropertyGrid merges the wrappers itself, showing a shared value where the selection
         // agrees and a blank where it does not, and writing to every one of them.
-        _grid.SelectedObjects = [.. Wrap(Selection)];
+        var wrapped = Wrap(Selection).ToList();
+
+        // A vanilla culture or faith is shown, never edited: the writers skip it, so an edit would
+        // look accepted and ship nothing. An instance-level ReadOnly makes the grid grey every row.
+        bool inherited = Selection.Any(IsInherited);
+        if (inherited)
+        {
+            foreach (object w in wrapped)
+                System.ComponentModel.TypeDescriptor.AddAttributes(w, System.ComponentModel.ReadOnlyAttribute.Yes);
+            _heading.Text += " — base game, read-only";
+        }
+
+        _grid.SelectedObjects = [.. wrapped];
 
         foreach (Control c in _actions.Controls) c.Enabled = Edits.IsLoaded;
         _revert.Enabled = Edits.IsLoaded && Selection.Any(Edits.CanRevert);
 
         Refreshed();
+
+        if (inherited)
+            foreach (Control c in _actions.Controls) c.Enabled = false;
     }
+
+    /// <summary>
+    /// Whether a target is defined by the base game rather than by this world — a vanilla culture
+    /// or faith on a map settled by them (see <see cref="MapGen.VanillaIdentities"/>).
+    /// </summary>
+    protected virtual bool IsInherited(object target) => false;
 
     /// <summary>The editable faces of a selection, one per object, all of the same type.</summary>
     protected abstract IEnumerable<object> Wrap(IReadOnlyList<object> targets);

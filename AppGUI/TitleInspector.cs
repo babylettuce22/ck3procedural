@@ -312,7 +312,16 @@ public sealed class TitleInspector : InspectorForm
         public string Name
         {
             get => title.Name;
-            set => edits.Rename(title, value);
+            set
+            {
+                // A vanilla title's name is the base game's localisation, which this mod does not
+                // write; a rename here would look accepted and ship nothing. Said, not swallowed.
+                if (title.Inherited)
+                    throw new InvalidOperationException(
+                        $"{title.Key} is a vanilla title: its name comes from the base game's localisation " +
+                        "(and its culture-specific names), so it cannot be renamed here.");
+                edits.Rename(title, value);
+            }
         }
 
         [Category("Identity")]

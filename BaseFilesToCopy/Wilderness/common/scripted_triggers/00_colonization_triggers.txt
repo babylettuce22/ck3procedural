@@ -137,6 +137,34 @@ can_colonize_at_all_trigger = {
 	is_adult = yes
 	is_alive = yes
 	NOT = { government_has_flag = government_is_uninteractable }
+
+	# ---- Nobody who cannot build can plant a colony ----
+	#
+	# A colony is a construction project wearing a county's clothes: it arrives as
+	# settlement_holding with between one and three obstacles standing on it, and every step from
+	# there — clear the beasts, raise settlement_02, raise settlement_03 — is a building. Two
+	# vanilla governments carry `buildings = no` in their rules, and they are exactly the two
+	# flagged here: nomad_government and herder_government.
+	#
+	# So a nomad who colonised got a county he could never work: the obstacles could not be
+	# cleared, settlement_02 could not be started, development stayed at 0, and
+	# can_promote_colony_trigger could therefore never be satisfied. A permanent settlement_holding
+	# in a realm whose `valid_holdings` does not contain one — 0 tax, 0 levies, no way out, and the
+	# county view stacking this file set's four colony buttons on top of the nomad fertility and
+	# herd rows until the window ran off the bottom of the screen. Reported from play; the
+	# screenshot is the whole argument.
+	#
+	# Phrased as the two flags rather than as one "can this government build" test because CK3 has
+	# no trigger for the latter. If a third such government ever appears it needs a line here, and
+	# the rule to check it against is the `buildings` entry in its government_rules.
+	#
+	# This is a permanent fact about a ruler, so it belongs in this trigger rather than in
+	# is_valid: a nomad will never pass it, and a control that can never apply is one to hide
+	# rather than to grey. It takes the decision off the nomad's list and takes nomads out of the
+	# AI's yearly pulse in the same line, which is the whole of the fix — see
+	# wilderness_yearly_stranded_colony_check for the counties that arrive by other doors.
+	NOT = { government_has_flag = government_is_nomadic }
+	NOT = { government_has_flag = government_is_herder }
 }
 
 # Character scope. Is this ruler free to send a party out?

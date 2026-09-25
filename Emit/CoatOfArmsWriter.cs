@@ -37,13 +37,16 @@ public static class CoatOfArmsWriter
 
     /// <summary>
     /// The marks a cadet lays over its father's arms. Every one of them is a real brisure — the
-    /// label of Orleans, the bordure of Valois, the bend of Bourbon, the canton — and every one is
-    /// drawn by vanilla full frame at the same position and scale as the arms beneath, which is why
-    /// none of them needs geometry of its own.
+    /// bordure of Valois, the bend of Bourbon, the canton — and every one is drawn by vanilla full
+    /// frame at the same position and scale as the arms beneath, which is why none of them needs
+    /// geometry of its own.
+    ///
+    /// Not the label (<c>ce_label_03</c>), though it is the most famous of them. It sat first, and
+    /// the mark is picked by <c>n / 7</c>, so every one of a dynasty's first seven cadets drew it —
+    /// in practice every cadet on the map flew the same strip across the top of its shield.
     /// </summary>
     private static readonly string[] VerifiedBrisures =
     [
-        "ce_label_03.dds",
         "ce_border_shield.dds",
         "ce_ordinary_bend_dexter_5.dds",
         "ce_ordinary_canton.dds"
@@ -162,6 +165,12 @@ public static class CoatOfArmsWriter
             AppendCoa(b, family.TitleKey, parent, difference, overrides, overrideKey: house.Key);
         }
 
+        // Vanilla houses and dynasties of historical rulers that vanilla leaves to be rolled at game
+        // start: the bookmark screen draws a blank shield for a house with no defined arms, so these
+        // get arms of their own. See VanillaCharacters.
+        foreach (string key in prehistory.HistoricalCoaKeys)
+            AppendCoa(b, key, new Rng(Rng.StableHash(key) ^ 0x51A3UL), overrides: overrides);
+
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_coas.txt"), b.ToString());
     }
 
@@ -171,7 +180,7 @@ public static class CoatOfArmsWriter
     /// what makes two branches of one dynasty unable to come out alike, and the arms underneath
     /// have to match the parent's, so nothing may walk the stream that produced them.
     ///
-    /// Differences run out after a full turn of the palette times the marks — twenty-eight branches
+    /// Differences run out after a full turn of the palette times the marks — twenty-one branches
     /// of one dynasty, which no realm on a generated map comes near.
     /// </param>
     /// <summary>The same colour a fixed number of steps along the palette, wrapping.</summary>

@@ -161,8 +161,14 @@ public static class Realms
         int[]? order = null,
         int baronyCount = 0,
         AzgaarImport? azgaar = null,
-        CultureMap? cultures = null)
+        CultureMap? cultures = null,
+        StatedCountries? stated = null)
     {
+        // An Azgaar export's states when it drew any; otherwise whatever countries the caller
+        // stated (vanilla's own realms, on a world of vanilla titles); otherwise none, and realms
+        // are grown. See StatedCountries.
+        stated ??= StatedCountries.FromAzgaar(azgaar);
+
         var all = Titles.Flatten(empires).ToList();
         var weight = Weigh(empires, development, wilderness);
         var nonWildCounties = all.Where(t => t.Tier == "c" && !wilderness.Contains(t)).ToList();
@@ -208,7 +214,7 @@ public static class Realms
 
         // Read before the simulation branch as well as by Step 0 below, because "did the export
         // draw countries" is what decides which of the two ways of making realms runs at all.
-        var stateTitles = azgaar?.StateTitles is { Count: > 0 } bound ? bound : null;
+        var stateTitles = stated?.Titles is { Count: > 0 } bound ? bound : null;
         bool fromExport = stateTitles is not null;
 
         // --- Realms grown rather than allocated ---
@@ -253,18 +259,36 @@ public static class Realms
             // contains it goes looking for one, and the kingdom then steps around it. Without this a
             // small country inside a larger neighbour's de jure kingdom shares its ruler, and one of
             // the two stops existing.
-            foreach (var top in stateTitles.OrderBy(kv => Rank(kv.Value)).ThenBy(kv => kv.Key)
-                                           .Select(kv => kv.Value))
+            foreach (var (countryId, top) in stateTitles.OrderBy(kv => Rank(kv.Value)).ThenBy(kv => kv.Key))
             {
                 if (weight.GetValueOrDefault(top) <= 0) continue;
 
                 var foreign = countries.Where(t => t != top).ToHashSet();
+                if (stated!.Seats is { } seats && seats.TryGetValue(countryId, out var seat)
+                    && RealizeAt(top, seat, realized, holderCounty, foreign))
+                    continue;
+
                 RealizeChain(top, realized, holderCounty, weight, foreign,
                              MainBlock(top, countyAdj, weight, foreign));
             }
 
             // Internal vassals: most duchies inside a country get their own duke, so a kingdom is a
-            // realm with a court rather than one character holding everything.
+            // realm with a court rather than one character holding everything. When the source says
+            // which titles its vassals held (vanilla's history does), exactly those — kingdoms
+            // before duchies — rather than a roll.
+            if (stated!.VassalTitles is { } vassalTitles)
+            {
+                foreach (var title in vassalTitles.Where(t => t.Tier is "k" or "d")
+                                                  .OrderByDescending(Rank).ThenBy(t => t.Index))
+                {
+                    if (weight.GetValueOrDefault(title) <= 0 || realized.Contains(title)) continue;
+                    if (countries.Contains(title)) continue;
+
+                    RealizeChain(title, realized, holderCounty, weight,
+                                 avoid: null, MainBlock(title, countyAdj, weight));
+                }
+            }
+            else
             foreach (var (_, top) in stateTitles.OrderBy(kv => kv.Key))
             {
                 holderCounty.TryGetValue(top, out var capital);
@@ -428,10 +452,10 @@ public static class Realms
                 // Narrow on purpose. It fires only where the export names *both* ends as the same
                 // country, so ground Azgaar left unclaimed is still governed by the terrain test —
                 // an empty island is not a province of whoever happens to own it de jure.
-                bool sameCountry = azgaar is not null
+                bool sameCountry = stated is not null
                                 && countryOf.TryGetValue(above, out int state)
                                 && state > 0
-                                && azgaar.For(county)?.State.Id == state;
+                                && stated.CountryOf(county) == state;
 
                 // Ensure realm contiguity: never link across wilderness
                 if (!sameCountry && countyAdj != null && !IsReachable(county, lord, countyAdj))
@@ -451,13 +475,9 @@ public static class Realms
             int outranked = 0;
             var suzerained = new HashSet<Title>();
 
-            foreach (var state in azgaar!.World.RealStates)
+            foreach (var (vassalId, suzerain) in stated!.Vassalage)
             {
-                var relations = state.Relations;
-                int suzerain = Array.IndexOf(relations, "Vassal");
-                if (suzerain <= 0) continue;
-
-                if (!stateTitles.TryGetValue(state.I, out var vassalTitle)) continue;
+                if (!stateTitles.TryGetValue(vassalId, out var vassalTitle)) continue;
                 if (!stateTitles.TryGetValue(suzerain, out var suzerainTitle)) continue;
                 if (vassalTitle == suzerainTitle) continue;
 
@@ -519,7 +539,7 @@ public static class Realms
                 Console.WriteLine($"  realms: {outranked} states the export made vassals of a realm " +
                                   "of their own rank — left independent, CK3 cannot seat them");
 
-            Console.WriteLine($"  realms: bound to {stateTitles.Count} azgaar states — " +
+            Console.WriteLine($"  realms: bound to {stateTitles.Count} {stated.Source} — " +
                               $"{independent} independent, {vassals} vassal to a suzerain");
         }
 
@@ -1098,6 +1118,35 @@ public static class Realms
     /// realized in that case: a title with no seat of its own is better left unheld than seated in
     /// somebody else's capital.
     /// </summary>
+    /// <summary>
+    /// <see cref="RealizeChain"/> with the seat given rather than found: every title from
+    /// <paramref name="title"/> down to <paramref name="seat"/> is held from that county. False —
+    /// and nothing changed — when the seat is not under the title, is already someone's, or the
+    /// way down passes through another country's title.
+    /// </summary>
+    private static bool RealizeAt(Title title, Title seat, HashSet<Title> realized,
+        Dictionary<Title, Title> holderCounty, HashSet<Title> foreign)
+    {
+        var path = new List<Title>();
+        for (var t = seat.Parent; t is not null; t = t.Parent)
+        {
+            path.Add(t);
+            if (t == title) break;
+        }
+
+        if (path.Count == 0 || path[^1] != title) return false;
+        if (path.Any(t => t != title && foreign.Contains(t))) return false;
+        if (path.Any(t => t != title && realized.Contains(t))) return false;
+
+        foreach (var step in path)
+        {
+            realized.Add(step);
+            holderCounty[step] = seat;
+        }
+
+        return true;
+    }
+
     private static bool RealizeChain(
         Title title,
         HashSet<Title> realized,
@@ -1683,7 +1732,7 @@ public static class Realms
         }
     }
 
-    private static int Rank(Title title) => title.Tier switch
+    internal static int Rank(Title title) => title.Tier switch
     {
         "h" => 5,
         "e" => 4,
@@ -1714,5 +1763,59 @@ public static class Realms
                           $"{dukes} dukes ({indepDukes} petty kings), " +
                           $"{counts} counts ({indepCounts} indep) " +
                           $"— {totalIndependent} independent realms, {totalVassals} vassals total");
+    }
+}
+/// <summary>
+/// Countries a source states outright, for <see cref="Realms.Build"/> to realise instead of growing
+/// its own: an Azgaar export's states, or the independent realms of vanilla's own history on a world
+/// of vanilla titles (<see cref="VanillaTitles"/>). One realm per country, its top title the one
+/// given here; the source's vassalage between countries is applied over the de jure walk.
+/// </summary>
+public sealed class StatedCountries
+{
+    /// <summary>Each country's top title, by the source's own id for the country.</summary>
+    public required IReadOnlyDictionary<int, Title> Titles { get; init; }
+
+    /// <summary>Which country a county belongs to, or null for ground the source left unclaimed.</summary>
+    public required Func<Title, int?> CountryOf { get; init; }
+
+    /// <summary>(vassal country, suzerain country) pairs, in the source's order.</summary>
+    public List<(int Vassal, int Suzerain)> Vassalage { get; init; } = [];
+
+    /// <summary>
+    /// Titles the source says were held by someone under a country's ruler — a duke inside a
+    /// kingdom. Null when the source does not say, and most duchies are then given a duke by chance.
+    /// </summary>
+    public HashSet<Title>? VassalTitles { get; init; }
+
+    /// <summary>What the countries are, for the log: "azgaar states", "vanilla realms".</summary>
+    public required string Source { get; init; }
+
+    /// <summary>
+    /// Where each country's ruler sits, when the source knows — vanilla's capital, or the county
+    /// its ruler held in person. The ruler takes that county's people and faith, so this is what
+    /// makes the Byzantine emperor Greek. Null: the strongest county down the de jure tree, as
+    /// before. A seat outside its country's top title is ignored the same way.
+    /// </summary>
+    public IReadOnlyDictionary<int, Title>? Seats { get; init; }
+
+    public static StatedCountries? FromAzgaar(AzgaarImport? azgaar)
+    {
+        if (azgaar is null) return null;
+
+        var vassalage = new List<(int, int)>();
+        foreach (var state in azgaar.World.RealStates)
+        {
+            int suzerain = Array.IndexOf(state.Relations, "Vassal");
+            if (suzerain > 0) vassalage.Add((state.I, suzerain));
+        }
+
+        return new StatedCountries
+        {
+            Titles = azgaar.StateTitles,
+            CountryOf = county => azgaar.For(county)?.State.Id,
+            Vassalage = vassalage,
+            Source = "azgaar states",
+        };
     }
 }

@@ -312,6 +312,10 @@ wilderness_colonization.0029.t:0 "The Starving Winter"
 
  promote_colony_toast:0 "A Colony Comes of Age"
  colonize_obstacle_cleared_toast:0 "The Way Is Clear"
+ colonize_pasture_toast:0 "The Herds Move In"
+ wilderness_war_refused_toast:0 "There Is No One To Fight"
+ wilderness_war_refused_toast_desc:0 "Our banners were raised against empty country. There is no lord out there to answer them, no court to humble and no army to meet — only trees, and weather, and whatever lives in it. The war is called off before it has begun."
+ colonize_conqueror_no_foe_tt:0 "There is no lord here to conquer — this is unsettled country"
 
  # --- Requirement tooltips -----------------------------------------------------------------
  colonize_expedition_out_tt:0 "We already have a party on the road; we will know how they fared before long..."
@@ -320,6 +324,26 @@ wilderness_colonization.0029.t:0 "The Starving Winter"
  colonize_not_while_at_war_tt:0 "We cannot spare settlers while at war"
  colonize_cannot_afford_tt:0 "We cannot afford to outfit an expedition"
  colonize_cannot_afford_prestige_tt:0 "We lack the standing to call men out to empty country"
+
+ # --- The colony counter in the top-right resource bar ----------------------------------------
+ # The concept is defined in common/game_concepts/00_wilderness_concepts.txt; the widget that
+ # draws `_count` is injected into vanilla's hud.gui by Emit/GuiWriter.cs (PatchHudResourceBar).
+ #
+ # `_count` is read inside a widget whose datacontext is [GetPlayer], which is what makes the bare
+ # `Character` resolve. `_desc` deliberately uses NO datafunctions: a concept tooltip is rendered
+ # in a tooltip context that does not carry the widget's data context, so a Character read there
+ # would resolve to nothing.
+ #
+ # The count is colonies held PLUS colonists sent out as vassals — see wilderness_settlement_count.
+ # The wording says "under way" rather than "held" for exactly that reason.
+ # One key per alias, or ck3-tiger reports a missing-localization per unnamed one. `colony_limit`
+ # and `colony_limits` exist so event and decision prose can write `[colony_limit|E]` and get the
+ # underline and the tooltip; only `_count` is read by the HUD.
+ game_concept_gen_colony_limit:0 "Colony Limit"
+ game_concept_colony_limit:0 "Colony Limit"
+ game_concept_colony_limits:0 "Colony Limits"
+ game_concept_gen_colony_limit_count:0 "[Character.MakeScope.ScriptValue('wilderness_settlement_count')|0]/[Character.MakeScope.ScriptValue('wilderness_settlement_limit')|0]"
+ game_concept_gen_colony_limit_desc:0 "How many colonies a ruler can keep under way at one time. A colony counts against the limit from the day the expedition leaves until the day it is raised to a proper holding — and a colonist sent out as a vassal counts too, for as long as that charter lasts.\n\nThe limit is set by the highest title held:\n\n$EFFECT_LIST_BULLET$A #bold [count|E]#! may have #V 1#! colony under way.\n$EFFECT_LIST_BULLET$A #bold [duke|E]#! may have #V 2#!.\n$EFFECT_LIST_BULLET$A #bold [king|E]#! may have #V 3#!.\n$EFFECT_LIST_BULLET$An #bold [emperor|E]#! may have #V 4#!.\n\nEmpty country does not settle itself, and the men who go out to it are not replaceable. At the limit no new expedition can be raised until one of those already out comes good."
 
  # --- The Settle button on the county view ---------------------------------------------------
  # Emit/GuiWriter.cs injects a button carrying this text into a copy of vanilla's county window.

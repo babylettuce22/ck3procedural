@@ -304,7 +304,11 @@ public static class BookmarkWriter
         using (b.Block("character"))
         {
             b.Quoted("name", slot.Key);
-            b.Field("dynasty_house", ruler.HouseKey);
+            // A historical ruler of vanilla's may belong to a dynasty with no house of its own named
+            // in history — the engine makes one — so the dynasty is what can be pointed at.
+            // A lowborn one has neither, and then neither is written.
+            if (ruler.HouseKey.Length > 0) b.Field("dynasty_house", ruler.HouseKey);
+            else if (ruler.DynastyId.Length > 0) b.Field("dynasty", ruler.DynastyId);
             b.Field("dynasty_splendor_level", SplendorLevel(ruler.Renown));
             b.Field("type", ruler.Female ? "female" : "male");
 
@@ -314,8 +318,10 @@ public static class BookmarkWriter
             b.Field("birth", ruler.BirthDate);
             b.Field("title", HistoryWriter.Primary(slot.County, realms).Key);
             b.Field("government", governments.For(slot.County));
-            b.Field("culture", cultures.For(slot.County).Key);
-            b.Field("religion", faiths.For(slot.County).Key);
+            // The ruler's own, which for a generated ruler is the seat's and for a historical one is
+            // who vanilla says they were — the Byzantine emperor stays Greek in an Italian seat.
+            b.Field("culture", ruler.Culture.Key);
+            b.Field("religion", ruler.Faith.Key);
             b.Quoted("difficulty", slot.Difficulty);
             b.Field("history_id", ruler.Id);
 
@@ -334,7 +340,7 @@ public static class BookmarkWriter
                     // in neither — the character writer makes the same choice character by
                     // character, and this follows it.
                     if (mate.DynastyHouseKey is not null) b.Field("dynasty_house", mate.DynastyHouseKey);
-                    else b.Field("dynasty", mate.DynastyId);
+                    else if (mate.DynastyId.Length > 0) b.Field("dynasty", mate.DynastyId);
 
                     b.Field("type", mate.Female ? "female" : "male");
                     b.Field("birth", mate.BirthDate);

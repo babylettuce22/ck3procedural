@@ -27,6 +27,13 @@ public sealed class Heritage
     /// guesses races from terrain — the export's own answer outranks the guess.
     /// </summary>
     public RaceArchetype? ImportedArchetype { get; set; }
+
+    /// <summary>
+    /// Declared by the base game rather than by this mod: <see cref="Key"/> is vanilla's heritage
+    /// pillar and <see cref="Language"/>'s key its language pillar. Nothing writes an inherited
+    /// heritage; the mod only references it. See <see cref="VanillaIdentities"/>.
+    /// </summary>
+    public bool Inherited { get; init; }
 }
 
 /// <summary>
@@ -130,6 +137,24 @@ public sealed class Culture
 
     /// <summary>Counties speaking this culture at the start date.</summary>
     public List<Title> Counties { get; } = [];
+
+    /// <summary>
+    /// Declared by the base game rather than by this mod. <see cref="Key"/> is the vanilla culture's
+    /// own, and its definition, name list, ethnicities and innovation history are vanilla's — the
+    /// mod references the key from province and character history and never writes it. The
+    /// fields here are a read-only copy for the generator's own use (naming, governments, dress).
+    /// See <see cref="VanillaIdentities"/>.
+    /// </summary>
+    public bool Inherited { get; init; }
+
+    /// <summary>
+    /// For an <see cref="Inherited"/> culture, each given name's display text to the vanilla
+    /// localisation key it is listed under ("Berenguer Ramon" to <c>Berenguer_Ramon</c>).
+    /// Character history writes the key, which the game resolves and a validator can check;
+    /// prose keeps the display text. Empty for a generated culture, whose names are written as
+    /// they are.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> NameKeys { get; init; } = new Dictionary<string, string>();
 }
 
 /// <summary>The finished cultural geography, and the lookup everything downstream reads.</summary>
@@ -138,6 +163,27 @@ public sealed class CultureMap
     public required List<Heritage> Heritages { get; init; }
     public required List<Culture> Cultures { get; init; }
     public required Dictionary<Title, Culture> ByCounty { get; init; }
+
+    /// <summary>
+    /// The part of this map the mod itself has to declare: every culture and heritage that is not
+    /// <see cref="Culture.Inherited"/>. What the culture writers are handed, so a vanilla culture
+    /// placed on the map is referenced and never redefined.
+    ///
+    /// Returns this same instance when nothing is inherited, which is every procedural world — the
+    /// writers then see exactly the lists they always did, in the same order.
+    /// </summary>
+    public CultureMap Declared()
+    {
+        if (!Cultures.Any(c => c.Inherited) && !Heritages.Any(h => h.Inherited)) return this;
+
+        return new CultureMap
+        {
+            Heritages = Heritages.Where(h => !h.Inherited).ToList(),
+            Cultures = Cultures.Where(c => !c.Inherited).ToList(),
+            ByCounty = ByCounty.Where(kv => !kv.Value.Inherited)
+                               .ToDictionary(kv => kv.Key, kv => kv.Value),
+        };
+    }
 
     /// <summary>
     /// The culture of any title, by majority of the counties beneath it. A duchy is named in the

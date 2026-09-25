@@ -119,6 +119,7 @@ Frequently used options:
 | `--start-year <year>` / `--era-anchor <year>` | Set the start year and era calibration. |
 | `--gender historical\|mixed\|femaledominated` | Choose the world's gender-law profile. |
 | `--races off\|low\|high\|exotic` | Choose a fantasy-race preset. |
+| `--content procedural\|vanilla` | Generate the world's cultures and faiths, or settle the generated map with CK3's own. |
 | `--impassable-mask <png>` | Supply a painted impassable mask; `--impassable-mask-mode snap\|touch` controls how it applies. |
 | `--starting-hegemony` | Enable a starting hegemony. |
 | `--no-dynastic-cycle` / `--no-formation` | Disable the dynastic cycle or pre-start formation simulation. |
@@ -186,6 +187,40 @@ ethnicities when that feature is enabled.
 The generator fills in content the export does not supply, including CK3 characters,
 dynasties, and prehistory. Importing is a translation into CK3's hierarchy and systems;
 settings that conflict with imported data are identified in the GUI.
+
+### Vanilla cultures and faiths
+
+`ContentSource` (`--content vanilla`) lays a region of CK3's real world onto the generated
+map. The generator picks a window of vanilla's map holding about as many counties as the
+generated map has, shaped like its land, and projects the map onto it. Several seeded windows
+are tried, and the one whose peoples best suit the generated land wins.
+
+- **Titles.** Every empire, kingdom, duchy, county and barony is a vanilla title with its
+  vanilla name, arms and culture-specific names. They are laid on top down: the map's empires
+  take vanilla empires, their kingdoms that empire's kingdoms, and so on, so every title keeps
+  the generated map's shape and sits inside its real parent.
+- **Characters.** Each ruler is the character vanilla's history has holding that title at the
+  start date, written with their vanilla traits, parents, marriages and dynasty, plus enough
+  of their family (ancestors, siblings, children, spouses) to make a house. A title vanilla gives
+  nobody, or a county vanilla keeps in a king's demesne, keeps a generated ruler.
+- **Cultures and faiths.** Each county has the culture and faith its vanilla county had at the
+  Advancement Year. Vanilla definitions, name lists, innovations, doctrines and localisation are
+  used unchanged; the mod only references their keys.
+- **Realms.** The independent realms and their vassal dukes are vanilla's own at that date. Each
+  ruler sits in the realm's vanilla capital, or in a county of the real ruler's own people and
+  faith, so the Byzantine emperor is Greek and Orthodox.
+- **Holy sites and heads of faith.** Holy sites stand in their vanilla counties when the map has
+  them, and heads of faith such as the Papacy are seated in their vanilla capitals.
+
+With an Azgaar import the export's hierarchy and states are kept and vanilla titles are laid
+onto them the same way. The mode cannot be combined with fantasy ethnicities.
+
+To see what the installed game offers, or one culture or faith in full:
+
+```powershell
+dotnet run -- --vanilla-catalog
+dotnet run -- --vanilla-catalog catholic
+```
 
 ### Languages and names
 

@@ -60,6 +60,18 @@ public sealed class Title
 
     /// <inheritdoc cref="Form"/>
     public string? HolderFemale;
+
+    /// <summary>
+    /// A vanilla title laid onto this one: <see cref="Key"/> is vanilla's, its name, adjective and
+    /// arms are vanilla's localisation and heraldry, and <see cref="InheritedFields"/> carries the
+    /// rest of vanilla's declaration. The de jure children, capital and province are still this
+    /// map's. Set by <see cref="VanillaTitles"/> on a world of vanilla titles.
+    /// </summary>
+    public bool Inherited;
+
+    /// <summary>Vanilla's fields for an <see cref="Inherited"/> title, one per line; see
+    /// <see cref="VanillaCatalog.TitleDef.Fields"/>.</summary>
+    public IReadOnlyList<string> InheritedFields = [];
 }
 
 public static class Titles

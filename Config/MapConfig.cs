@@ -359,6 +359,40 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Browsable(false)]
     public int EraYear => EraAnchorYear > 0 ? EraAnchorYear : Math.Max(1, StartYear);
 
+    public enum ContentSourceMode
+    {
+        /// <summary>Every culture, faith, title and character is generated. The generator's
+        /// original behaviour, and byte for byte its original output.</summary>
+        Procedural,
+
+        /// <summary>
+        /// A region of CK3's real world laid onto the generated map. The cultural and religious
+        /// geography is first grown exactly as under <see cref="Procedural"/> and settled with
+        /// vanilla peoples and faiths chosen to fit it (<see cref="MapGen.VanillaIdentities"/>).
+        /// Then, when vanilla's map can be read, a window of it holding about as many counties as
+        /// this map is projected onto it (<see cref="MapGen.VanillaTitles"/>): every title takes a
+        /// vanilla title's key inside vanilla's own de jure tree, every county the culture and
+        /// faith its vanilla county had at <see cref="EraYear"/>, the realms are vanilla's own at
+        /// that date, and holy sites and heads of faith stand where vanilla puts them. Vanilla's
+        /// definitions, name lists, innovations, doctrines and localisation are used as they are;
+        /// the mod references their keys and writes none of them.
+        /// </summary>
+        VanillaWorld,
+    }
+
+    /// <summary>
+    /// Where the world's content comes from. See <see cref="ContentSourceMode"/>. Stored in presets
+    /// as its number, so the member names can change without breaking a saved preset.
+    ///
+    /// A vanilla world needs the installed game's files and cannot carry fantasy races: a vanilla
+    /// culture's ethnicities are vanilla's, so a race stamped on its rulers would describe people
+    /// the game renders as human. Generation refuses that combination rather than half-doing it.
+    /// </summary>
+    [Category("02 World State")]
+    [DisplayName("Content Source")]
+    [Description("Procedural generates every culture, faith, title and character. VanillaWorld lays a region of CK3's real world onto the generated map, sized to fit it: every title is a vanilla title (the Kingdom of France, the Duchy of Normandy, down to the baronies) inside vanilla's own de jure tree, every county has the culture and faith its vanilla county had at the Advancement Year, the independent realms and the rulers who hold them are vanilla's own historical characters at that date, with their families and dynasties, and holy sites and heads of faith are vanilla's. Needs the installed game; not compatible with fantasy ethnicities.")]
+    public ContentSourceMode ContentSource { get; set; } = ContentSourceMode.Procedural;
+
     /// <summary>
     /// How far the world's calendar has been slid off vanilla's, and therefore how far every
     /// date-keyed thing the *game* reads has to slide with it.

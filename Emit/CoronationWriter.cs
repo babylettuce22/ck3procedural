@@ -120,7 +120,7 @@ public static class CoronationWriter
     }
 
     /// <summary>The <c>religion:x</c> references inside one trigger, in the order they are written.</summary>
-    private static List<string> VanillaReligions(string text, string key)
+    internal static List<string> VanillaReligions(string text, string key)
     {
         string? body = GovernmentWriter.Block(text, key);
         if (body is null) return [];

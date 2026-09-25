@@ -62,6 +62,20 @@ public static class Program
                 case "--verify-world-editor":
                     return Tools.WorldEditorChecks.Run(i + 1 < args.Length && !args[i + 1].StartsWith("--") ? args[++i] : null);
 
+                // Reads the installed game's cultures, faiths, holy sites and heads of faith the
+                // way --content vanilla will, prints what it found, and exits. Needs no heightmap.
+                // Pass a culture or faith key to see that one entry in full.
+                case "--vanilla-catalog":
+                {
+                    string? probe = i + 1 < args.Length && !args[i + 1].StartsWith("--") ? args[++i] : null;
+                    if (!GameLocator.IsGameDir(options.GameDir))
+                    {
+                        Console.Error.WriteLine($"No CK3 install at '{options.GameDir}'; pass --game <path> first.");
+                        return 1;
+                    }
+                    return MapGen.VanillaCatalog.Probe(options.GameDir, probe) ? 0 : 1;
+                }
+
                 // Draw a .gui widget to an HTML page instead of generating anything. Takes a widget
                 // name from the indexed files, or the path to a .gui file.
                 case "--preview" when i + 1 < args.Length:
@@ -295,6 +309,18 @@ public static class Program
                     cfg.FaithShaping = Enum.Parse<MapConfig.FaithShape>(
                         args[++i].Replace("-", "").Replace("_", ""), ignoreCase: true);
                     break;
+
+                // Where the world's peoples and faiths come from: generated (procedural, the
+                // default) or CK3's own settled onto the generated map (vanilla). See
+                // MapConfig.ContentSourceMode and MapGen/VanillaIdentities.cs.
+                case "--content" when i + 1 < args.Length:
+                {
+                    string value = args[++i].Replace("-", "").Replace("_", "");
+                    cfg.ContentSource = value.Equals("vanilla", StringComparison.OrdinalIgnoreCase)
+                        ? MapConfig.ContentSourceMode.VanillaWorld
+                        : Enum.Parse<MapConfig.ContentSourceMode>(value, ignoreCase: true);
+                    break;
+                }
 
                 // Which real-world looks the world's humans are drawn from; see HumanLook.
                 // Fantasy races are unaffected either way. Varied is the default.

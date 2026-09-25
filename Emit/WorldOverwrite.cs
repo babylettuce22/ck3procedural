@@ -183,10 +183,12 @@ public static class WorldOverwrite
                 written.Wilderness,
                 written.Realms is { } crowned ? ContentWriter.HegemonSeat(result.Titles, crowned) : null);
 
+        // Declared() throughout: a vanilla culture or faith on the map is the game's to define, and
+        // re-emitting it here would redefine it under our name list. See VanillaIdentities.
         if (aspects.HasFlag(WorldAspect.Cultures))
         {
-            CultureWriter.WriteCultures(modDir, written.Cultures, written.Ethnicities);
-            CultureWriter.WriteLocalisation(modDir, written.Cultures);
+            CultureWriter.WriteCultures(modDir, written.Cultures.Declared(), written.Ethnicities);
+            CultureWriter.WriteLocalisation(modDir, written.Cultures.Declared());
         }
 
         // The ethnicity file whole, plus the cultures file — a retemplated culture points at
@@ -198,15 +200,15 @@ public static class WorldOverwrite
             EthnicityWriter.WriteAll(modDir, written.Ethnicities);
 
             if (!aspects.HasFlag(WorldAspect.Cultures))
-                CultureWriter.WriteCultures(modDir, written.Cultures, written.Ethnicities);
+                CultureWriter.WriteCultures(modDir, written.Cultures.Declared(), written.Ethnicities);
         }
 
         // WriteAll covers the faith localisation as well, so a faith edit subsumes the rewrite a
         // title rename would otherwise need. Only when it did not run does that have to happen
         // separately — holy site names are read live off the county title.
-        if (aspects.HasFlag(WorldAspect.Faiths)) ReligionWriter.WriteAll(modDir, written.Faiths);
+        if (aspects.HasFlag(WorldAspect.Faiths)) ReligionWriter.WriteAll(modDir, written.Faiths.Declared());
         else if (aspects.HasFlag(WorldAspect.TitleNames))
-            ReligionWriter.WriteLocalisation(modDir, written.Faiths);
+            ReligionWriter.WriteLocalisation(modDir, written.Faiths.Declared());
 
         // The character file whole — ancestors, rulers, spouses and children — from the same
         // function that wrote it, with the rulers' current values. Everything the block around a

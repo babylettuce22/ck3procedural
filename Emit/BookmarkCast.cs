@@ -28,7 +28,9 @@ public sealed record BookmarkCompanion(
         : ParadoxText.Loc(Character!.Name);
 
     public string HistoryId => Ruler?.Id ?? Character!.Id;
-    public string? DynastyHouseKey => Ruler?.HouseKey ?? Character!.DynastyHouseKey;
+    // A historical ruler may have no house of their own in vanilla's history (the engine makes one
+    // from the dynasty); an empty key would be written as `dynasty_house =` and end the file.
+    public string? DynastyHouseKey => Ruler is { } r ? (r.HouseKey.Length > 0 ? r.HouseKey : null) : Character!.DynastyHouseKey;
     public string DynastyId => Ruler?.DynastyId ?? Character!.DynastyId;
     public bool Female => Ruler?.Female ?? Character!.Female;
     public string BirthDate => Ruler?.BirthDate ?? Character!.BirthDate;

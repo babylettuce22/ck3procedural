@@ -10,7 +10,9 @@ namespace Ck3MapGen.Emit;
 /// notion of ground nobody owns — so left alone, every neighbour sees a weak landless ruler with
 /// counties worth taking, and the map is carved up within a decade of play.
 ///
-/// Three layers, because the first two were both incomplete in ways that only showed up in play.
+/// Five layers, because each of the first three was incomplete in a way that only showed up in play,
+/// and the last two are wars that are never declared at all — script starts them outright, so no
+/// permission field is ever consulted.
 ///
 /// 1. <see cref="WriteCharacterInteraction"/> hides and blocks the declare-war button. That is the
 ///    player's route, and only the player's — the AI does not declare war through the interaction.
@@ -23,6 +25,28 @@ namespace Ck3MapGen.Emit;
 ///
 /// 3. <see cref="WriteScriptedTriggers"/> overrides `herders_and_tributary_constraints`, which stays
 ///    as a backstop and as the attacker-side guard.
+///
+/// 4. <see cref="WriteNomadDominationDecision"/> guards the nomad Dominate Title decision, which
+///    picks its own defenders and calls `start_war` directly, so layers 1-3 are never consulted.
+///
+/// 5. <see cref="WriteCoronationWarhound"/> does the same for the coronation event where a guest
+///    pledges a war on a neighbour, and <see cref="WriteConquerorDecision"/> for the landless
+///    adventurer's "Become a Conqueror", which wars whoever holds the ground he is standing on.
+///
+/// The generalisation from 4 and 5, and the thing to check first the next time the wilderness turns
+/// up in somebody's war: a scripted `start_war` asks no permission. `allowed_against_character` and
+/// `allowed_for_character` gate the act of DECLARING, so any vanilla content that selects a target
+/// itself needs its own selection filter patched, and the search term that finds them is `start_war`
+/// in `events/` and `common/decisions/`, not the casus belli files. All 139 such blocks were audited
+/// on 2026-09-15; the three patched here are the ones a generated map reaches, and the reasoning for
+/// the rest is written up on <see cref="WriteConquerorDecision"/>.
+///
+/// 6. `wilderness_war_on_dummy` (BaseFilesToCopy/Wilderness/common/on_action) is the layer that does
+///    not care how a war started: any war whose primary defender is a dummy ends as `invalidated`
+///    the tick it begins, with a yearly sweep behind it for saves already carrying one. It is the
+///    backstop for the selecting content this file does not patch — and for whatever the next DLC
+///    adds — rather than a replacement for 4 and 5, since an invalidated war still cost the attacker
+///    whatever the decision charged him for it.
 ///
 /// ---- Why layer 3 was not enough on its own ----
 ///
@@ -54,6 +78,9 @@ public static class CasusBelliWriter
 
         WriteCharacterInteraction(modDir, gameDir);
         WriteMigrationInteraction(modDir, gameDir);
+        WriteNomadDominationDecision(modDir, gameDir);
+        WriteCoronationWarhound(modDir, gameDir);
+        WriteConquerorDecision(modDir, gameDir);
         WriteCasusBelliGroups(modDir, gameDir);
         WriteCasusBelliTypes(modDir, gameDir);
         WriteScriptedTriggers(modDir);
@@ -289,6 +316,170 @@ public static class CasusBelliWriter
 
         patch.InsertAfter("migration_interaction is_valid_showing_failures_only", guard,
             "migration_interaction = {", "is_valid_showing_failures_only = {");
+
+        patch.Ship(modDir);
+    }
+
+    /// <summary>
+    /// The nomad Dominate Title decision, which picks its own war targets and so never asks the
+    /// casus belli layers anything.
+    ///
+    /// ---- Why none of the three layers catches this ----
+    ///
+    /// `nomad_higher_tier_title_decision` takes the de jure liege of the nomad's primary title and,
+    /// when that title has no holder, wars *every independent de jure county holder inside it* at
+    /// once — `start_war = { cb = domination_cb }` straight out of a `hidden_effect`, with the rest
+    /// added through `add_defender`. A scripted `start_war` does not consult
+    /// `allowed_against_character`, which is the field the 121-type layer lives in, and it is not
+    /// the declare-war interaction either. So the one guard that would have applied is vanilla's own
+    /// candidate filter, and its exclusion list is `top_liege`, `top_suzerain`, `is_allied_to` and
+    /// `government_is_herder` — none of which the wilderness dummy is.
+    ///
+    /// The dummy is landed, independent, and holds de jure counties in every half-empty duchy and
+    /// kingdom on the map, so it is a candidate in most of them, and being the weakest ruler alive
+    /// it is frequently the `order_by = current_military_strength` pick for `main_defender` as well.
+    /// Reported from play as a nomad declaring war on the wilds.
+    ///
+    /// ---- What the guard does, and what it deliberately leaves alone ----
+    ///
+    /// One more arm on each of the two NOR blocks — the candidate test and the `add_to_list` limit,
+    /// which vanilla writes twice and which must stay identical or the decision can select a war it
+    /// then cannot populate. Nothing else in the decision is touched.
+    ///
+    /// A nomad whose target title is *entirely* unsettled now falls through to vanilla's own
+    /// last branch, which mints the title and hands it over without a war. That is the correct
+    /// reading rather than a hole: it is the same branch vanilla uses when every de jure county is
+    /// already yours or your ally's, i.e. when there is nobody to fight, and a crown over empty
+    /// steppe is exactly that. The counties themselves stay the dummy's; only the title moves.
+    ///
+    /// The first branch — the one for a target title that DOES have a holder — is left unguarded on
+    /// purpose. The dummies hold counties and two titular kingdoms with no de jure land
+    /// (MapGen/Wilderness.cs), and `abandon_county_effect` is the only path that transfers anything
+    /// to them, county-tier only. So no county's de jure liege is ever a dummy, and a guard there
+    /// would be an untestable branch whose failure mode — falling through to the free-title branch
+    /// and taking a held title without war — is worse than the state it guards against.
+    /// </summary>
+    private static void WriteNomadDominationDecision(string modDir, string gameDir)
+    {
+        var patch = VanillaPatch.Open(gameDir, "war rules (dominate title)",
+            "common", "decisions", "dlc_decisions", "mpo", "mpo_decisions.txt");
+
+        if (patch is null) return;
+
+        // Both splices land INSIDE a NOR, alongside vanilla's `government_has_flag =
+        // government_is_herder`, so the arms are the positive tests for what is being excluded —
+        // a `NOT` here would read as "must be the wilderness" and select nothing else. Root is the
+        // candidate holder in both, so neither test needs a scope, and the trait arm covers the
+        // ruins dummy for free (MapGen/Wilderness.cs gives both dummies the same trait).
+        patch.InsertAfter("dominate title candidate filter",
+            "\n\t\t\t\t\t\t\thas_trait = wilderness"
+            + "\n\t\t\t\t\t\t\tgovernment_has_flag = government_is_wilderness",
+            "nomad_higher_tier_title_decision = {", "any_de_jure_county_holder = {",
+            "government_has_flag = government_is_herder");
+
+        patch.InsertAfter("dominate title war target list",
+            "\n\t\t\t\t\t\t\t\thas_trait = wilderness"
+            + "\n\t\t\t\t\t\t\t\tgovernment_has_flag = government_is_wilderness",
+            "nomad_higher_tier_title_decision = {", "every_de_jure_county_holder = {",
+            "government_has_flag = government_is_herder");
+
+        patch.Ship(modDir);
+    }
+
+    /// <summary>
+    /// The coronation warhound — a guest at your crowning who pledges to go and thrash somebody,
+    /// and the second script-driven war the casus belli layers never see.
+    ///
+    /// `coronation_events.6020` picks a neighbouring ruler for a vassal to swear vengeance on, hands
+    /// the vassal an unpressed claim on one of that ruler's counties and starts the war for them.
+    /// Reported from play with "The Wilds" in the slot: a queen's coronation where a chieftess
+    /// offered to sound her warhorn against the wilderness, and the wilderness lost 30 opinion of
+    /// the queen for allowing it.
+    ///
+    /// Every candidate goes through one scripted trigger — `coronation_events_6020_foe_trigger`,
+    /// called at all eight selection sites in the file — so the guard is one insert at the top of
+    /// it. Root there is the candidate foe (vanilla's own first test is an unscoped
+    /// `government_has_flag = government_is_herder`), which is why these two are unwrapped, and a
+    /// plain NOT rather than a NOR arm because this block is a conjunction, not vanilla's exclusion
+    /// list further down.
+    ///
+    /// Note what this does NOT need to be: the trigger already refuses herders and, for a
+    /// sedentary chooser, nomads — so the shape "some governments are not somebody you invade at a
+    /// party" is vanilla's own, and the wilderness is simply another. The claim half needs no
+    /// separate guard either; `abandon_county_effect` strips claims on ground that goes back to a
+    /// dummy, and a claim never created is a claim that cannot outlive the county.
+    /// </summary>
+    private static void WriteCoronationWarhound(string modDir, string gameDir)
+    {
+        var patch = VanillaPatch.Open(gameDir, "war rules (coronation warhound)",
+            "events", "activities", "coronation_activity", "coronation_events_6.txt");
+
+        if (patch is null) return;
+
+        patch.InsertAfter("coronation_events_6020_foe_trigger",
+            "\n\tNOT = { has_trait = wilderness }"
+            + "\n\tNOT = { government_has_flag = government_is_wilderness }",
+            "scripted_trigger coronation_events_6020_foe_trigger = {");
+
+        patch.Ship(modDir);
+    }
+
+    /// <summary>
+    /// "Become a Conqueror", the landless adventurer's 5,000-prestige decision to war whoever holds
+    /// the ground he is standing on — and the one member of the third scripted-war family that a
+    /// generated map actually reaches.
+    ///
+    /// An audit of all 139 `start_war` blocks in the game (2026-09-15) sorts them into four groups.
+    /// Most aim at a character the story already holds — actor, recipient, liege, claimant, secret
+    /// target — which a dummy can never be. Fourteen aim at a claim's holder, and claims on dummy
+    /// ground are stripped at the source. Fourteen name a vanilla title or character outright
+    /// (`title:e_byzantium.holder`, Hasan Sabbah) and resolve to nothing on a map that re-declares
+    /// those as never-held shims. The remaining family selects a target, and its commonest shape is
+    /// `location.county.holder`: whoever holds the ground the character is standing on.
+    ///
+    /// That is a hole every time an adventurer walks into unsettled land, and this decision is where
+    /// it bites hardest — 5,000 prestige for a war on the wilds, plus a pressed claim on a
+    /// wilderness county. The guard mirrors the effect's own kingdom / duchy / county ladder as a
+    /// `trigger_if` chain in `is_valid_showing_failures_only`, so the decision greys out with a
+    /// reason while the adventurer is standing in the wilds and is untouched everywhere else. It is
+    /// deliberately not a flat "not in a wilderness county" test: if the duchy above it IS held by a
+    /// real ruler, the decision wars that ruler and is perfectly legitimate.
+    ///
+    /// The event the decision fires (`ep3_laamp_decision_event.1110`) carries the three `start_war`
+    /// branches themselves, and is NOT patched — this decision is its only caller, so guarding the
+    /// door is enough, and the alternative is copying a 21,000-line vanilla event file for three
+    /// lines. `wilderness_war_on_dummy` in 00_colonization_on_actions.txt is the layer that catches
+    /// it if that reasoning is ever wrong, along with the rest of the location family.
+    /// </summary>
+    private static void WriteConquerorDecision(string modDir, string gameDir)
+    {
+        var patch = VanillaPatch.Open(gameDir, "war rules (conqueror decision)",
+            "common", "decisions", "dlc_decisions", "ep_3", "06_ep3_laamp_decisions.txt");
+
+        if (patch is null) return;
+
+        // One tooltip around the whole ladder rather than three: the player does not need to know
+        // which tier resolved, only that there is nobody here to conquer.
+        patch.InsertAfter("become_conqueror_decision is_valid_showing_failures_only",
+            """
+
+                    custom_tooltip = {
+                        text = colonize_conqueror_no_foe_tt
+                        trigger_if = {
+                            limit = { exists = location.kingdom.holder }
+                            NOT = { location.kingdom.holder = { has_trait = wilderness } }
+                        }
+                        trigger_else_if = {
+                            limit = { exists = location.duchy.holder }
+                            NOT = { location.duchy.holder = { has_trait = wilderness } }
+                        }
+                        trigger_else = {
+                            exists = location.county.holder
+                            NOT = { location.county.holder = { has_trait = wilderness } }
+                        }
+                    }
+            """.Replace("    ", "\t"),
+            "become_conqueror_decision = {", "is_valid_showing_failures_only = {");
 
         patch.Ship(modDir);
     }

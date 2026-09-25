@@ -46,7 +46,7 @@ public static class GuiWriter
 {
     /// <param name="societies">Whether the society prototype is shipping. Gates the HUD tab, and
     /// nothing else here — a tab pointing at a panel whose scripted_guis were not copied would be
-    /// a button that silently does nothing. See <see cref="PatchHudTabs"/>.</param>
+    /// a button that silently does nothing. See <see cref="PatchHud"/>.</param>
     /// <param name="chronicle">Whether the chronicle ships. Gates the Chronicle tab and window,
     /// and the Realm Lore button and panel in the title window — every surface that reads the
     /// chronicle's loc, which is not written when it is off. See <see cref="Config.MapConfig.EnableChronicle"/>.</param>
@@ -64,7 +64,7 @@ public static class GuiWriter
         PatchDynastyHouseWindow(modDir, gameDir);
 
         if (wilderness) PatchSituationWindow(modDir, gameDir);
-        PatchHudTabs(modDir, gameDir, societies, chronicle);
+        PatchHud(modDir, gameDir, societies, chronicle, wilderness);
         // The windows this project authors itself live in Emit/GuiWindows. Called from here so a
         // --gui-only run still emits them; the ones that need generator data are called from
         // ContentWriter instead, because this method has none.
@@ -130,15 +130,37 @@ public static class GuiWriter
     /// never reaches this writer — and the panel now has no other door. Use <c>--gui-only</c> or a
     /// full run alongside it.
     /// </summary>
-    private static void PatchHudTabs(string modDir, string gameDir, bool societies, bool chronicle)
+    private static void PatchHud(string modDir, string gameDir, bool societies, bool chronicle,
+        bool wilderness)
     {
-        // Nothing of ours to put in the column, so nothing to widen either: vanilla's hud.gui,
-        // outliner and notification feed stay vanilla's, rather than shipping as unchanged copies.
-        if (!societies && !chronicle) return;
+        // Nothing of ours to put in the column and no colony counter to add, so nothing to widen
+        // either: vanilla's hud.gui, outliner and notification feed stay vanilla's, rather than
+        // shipping as unchanged copies.
+        if (!societies && !chronicle && !wilderness) return;
 
         var doc = GuiDocument.Open(gameDir, "gui", "gui", "hud.gui");
         if (doc is null) return;
 
+        // One open, one Ship, however many patches. hud.gui is the one vanilla file two unrelated
+        // features both want, and opening it twice would silently mean the second writer shipping
+        // over the first — both read from gameDir, so the loser's edits simply are not in the file.
+        if (wilderness) AddColonyCounter(doc);
+
+        // The rest is the tab column, which the wilderness has no part in.
+        if (societies || chronicle)
+            AddPanelTabs(modDir, gameDir, doc, societies, chronicle);
+
+        doc.Ship(modDir);
+    }
+
+    /// <summary>
+    /// The tab column half of <see cref="PatchHud"/>: our tabs, the widened
+    /// <c>IsRightWindowOpen</c> checks, and the two sibling HUD files that ask the same question.
+    /// Patches <paramref name="doc"/> in place and leaves the shipping to its caller.
+    /// </summary>
+    private static void AddPanelTabs(string modDir, string gameDir, GuiDocument doc,
+        bool societies, bool chronicle)
+    {
         var player = GuiScope.Root("GetPlayer");
         var societyToggle = new ScriptedGui("society_panel_toggle", player);
         var societyOpen = new ScriptedGui("society_panel_window", player);
@@ -201,8 +223,6 @@ public static class GuiWriter
         Console.WriteLine("  gui: hud.gui — widened "
             + WidenRightWindowChecks(doc, ours) + " IsRightWindowOpen check(s)");
 
-        doc.Ship(modDir);
-
         PatchRightSidebarBackdrop(modDir, gameDir, ours);
 
         // The other two files that ask the same question. hud_notification_templates.gui is what
@@ -223,6 +243,141 @@ public static class GuiWriter
             other.Ship(modDir);
         }
     }
+
+    // ===========================================================================================
+    // The colony counter in the top-right resource bar
+    // ===========================================================================================
+
+    /// <summary>
+    /// Puts <c>colonies / limit</c> in the top-right resource bar, beside the domain-limit number.
+    ///
+    /// <code>
+    /// Related base files:
+    ///   Wilderness/common/scripted_guis/00_wilderness_scripted_gui.txt   colony_limit_hud
+    ///   Wilderness/common/game_concepts/00_wilderness_concepts.txt       gen_colony_limit
+    ///   Wilderness/localization/english/wilderness_colonization_l_english.yml
+    ///       game_concept_gen_colony_limit_count — the digits themselves
+    ///   Wilderness/common/script_values/00_colonization_values.txt
+    ///       wilderness_settlement_count, wilderness_settlement_limit
+    ///   Wilderness/gfx/interface/icons/holding_types_tab/settlement_holding.dds
+    /// </code>
+    ///
+    /// ---- Why this is a lodger in the domain cap and not a segment of its own ----
+    ///
+    /// The bar is an hbox of fixed-size <c>widget</c>s, each drawing one slice of a three-part
+    /// skinned texture — <c>resource_panel_start</c>, then <c>_piece</c> per resource, then
+    /// <c>_end</c> for the domain cap. A new resource looks like it should be a new
+    /// <c>_piece</c>, and that is the tempting mistake: every segment is unconditional in vanilla,
+    /// because an hbox gives an invisible child its space anyway, so a conditional segment either
+    /// leaves a hole in the bar or widens the whole thing permanently for a mechanic most rulers
+    /// never touch.
+    ///
+    /// So this goes inside the existing end cap, in the gap vanilla's centred domain number leaves
+    /// — 112px holding about 65px of content. AGOT reached the same conclusion
+    /// (<c>agot_hud_settlement_limit</c> inside <c>agot_hud_domain_limit</c>) and it is the
+    /// strongest evidence the fit is real rather than arithmetic: that mod has shipped the same
+    /// two numbers in the same cap for years.
+    ///
+    /// ---- Where AGOT's version and this one part company ----
+    ///
+    /// AGOT comments out vanilla's entire domain vbox and re-declares it, their own settlement
+    /// number folded in. That works and costs them the domain widget: any change Paradox makes to
+    /// it — a different tooltip, a new warning state — stops reaching them, silently, because
+    /// their copy is what renders.
+    ///
+    /// This inserts one sibling before the domain hbox instead and touches nothing else, so the
+    /// domain half stays whatever vanilla says it is. The anchor is the hbox holding
+    /// <c>icon_domain.dds</c>, which occurs exactly once in the file; landing before it and after
+    /// the leading <c>expand</c> centres the pair together, which is the same result AGOT gets by
+    /// rebuilding the row.
+    ///
+    /// ---- The one vanilla field this does change, and why it has to ----
+    ///
+    /// <c>ignoreinvisible = yes</c> on the row. A box container reserves space for an invisible
+    /// child unless told not to — hud.gui says so 27 times — so without it a ruler with no
+    /// colonies would still have the domain number shoved off-centre by a widget they cannot see.
+    /// The row's vanilla children are two <c>expand</c>s and the domain hbox, none of which is
+    /// ever invisible, so the field changes nothing about vanilla's own layout.
+    /// </summary>
+    private static void AddColonyCounter(GuiDocument doc)
+    {
+        // The cap sits inside `hbox name = "military"`, whose datacontext is [GetPlayer]. That is
+        // what puts `Character` in scope — for the scripted_gui below and, just as importantly,
+        // for the `Character.MakeScope.ScriptValue` reads inside the loc key the text resolves to.
+        var counter = new ScriptedGui("colony_limit_hud", GuiScope.Root("Character"));
+
+        // Two nodes, one step apart, and the difference matters: `ignoreinvisible` belongs on the
+        // ROW — the container that decides whether an invisible child costs space — while the
+        // insertion goes before the domain hbox INSIDE it. Setting the field on the domain box
+        // instead is a no-op that looks identical in the diff, because that box has no invisible
+        // children of its own to ignore.
+        //
+        // `icon_domain.dds` occurs exactly once in hud.gui, so the row that holds the box that
+        // holds it is unique too, and Unique will say so by name if that ever stops being true.
+        var row = doc.Unique("domain limit row",
+            n => n.IsBlock && n.Key == "hbox" && n.Children.Any(IsDomainBox));
+
+        row.Set("ignoreinvisible", "yes");
+
+        doc.At("domain limit number", row.Node?.Children.First(IsDomainBox))
+            .InsertBefore(GuiBuilder.HBox("gen_colony_limit")
+            // Observers have no player, and a scripted_gui rooted on one that does not exist logs
+            // an error every frame rather than merely evaluating false. Vanilla guards the cap
+            // itself with IsLandlessAdventurer and AGOT guards its counter with Not(IsObserver);
+            // this is the latter, for the same reason.
+            .Visible(GuiExpr.And(GuiExpr.Not(GuiExpr.Raw("IsObserver")), counter.IsShown()))
+            // ---- The fit, as arithmetic, because it is tight and nothing here can measure it ----
+            //
+            // The cap is 112 wide. Vanilla's domain box spends 5 + 25 (icon) + 5 (spacing) + about
+            // 30 ("4/12" at fontsize 15, ~7.5px a glyph) + 5 = ~70 of it. That leaves ~42, and a
+            // copy of vanilla's own spacing would want ~62 — over by twenty.
+            //
+            // So this is deliberately narrower than its neighbour: a 20px icon, 2px side margins
+            // and 3px spacing put it at ~48, for a pair of ~118. That is AGOT's geometry rather
+            // than vanilla's, and the reason to trust it is that AGOT ships the same two numbers
+            // in the same 112px cap and has for years — so a handful of pixels past the nominal
+            // width is evidently absorbed by the end cap's own transparent shoulder rather than
+            // clipped.
+            //
+            // "Evidently" is doing work in that sentence: this is the one part of the feature an
+            // offline check cannot settle, and the numbers are here so that a look in game has
+            // something to disagree with. If the pair reads cramped or the domain digits lose
+            // their last character, the icon and these two margins are the knobs.
+            .Margin(2, 5)
+            .Spacing(3)
+            // Over the cap. Status_Bad is the template vanilla uses two widgets along for exactly
+            // this — domain size over domain limit — so the two warnings match without a colour
+            // being chosen here. Nothing is hidden or disabled by it: the bar reports, the Settle
+            // button is what refuses, and can_hold_another_colony_trigger is the single rule both
+            // of them read.
+            .Add(GuiBuilder.Background()
+                .Visible(counter.IsValid())
+                .Using("Status_Bad")
+                .MarginBottom(-3))
+            .Add(GuiBuilder.Icon()
+                .Texture("gfx/interface/icons/holding_types_tab/settlement_holding.dds")
+                .Size(20, 20))
+            // A game concept alias, not a datafunction — `[treasury_i]` in this same file is the
+            // vanilla precedent for the spelling, and a `.gui` `text` resolves both. The digits
+            // live in the .yml, which is what gets the concept's tooltip for free: nothing else
+            // can explain a bare "3/4" in the top bar, and the domain number beside it has
+            // `Character.GetDomainLimitTooltip` for exactly the same reason. See the header of
+            // 00_wilderness_concepts.txt.
+            //
+            // Shaped after the domain number beside it: same align, same margin, same max_width.
+            .Add(GuiBuilder.TextSingle("value")
+                .Text("[gen_colony_limit_count]")
+                .Align("nobaseline")
+                .MarginBottom(1)
+                .MaxWidth(110))
+            .Node);
+    }
+
+    /// <summary>Vanilla's domain-size-over-domain-limit box, found by the icon it draws.</summary>
+    private static bool IsDomainBox(GuiNode node)
+        => node.IsBlock && node.Key == "hbox"
+           && node.Children.Any(c => c.IsBlock && c.Key == "icon"
+               && c.Field("texture")?.Contains("icon_domain.dds") == true);
 
     /// <summary>
     /// Lets vanilla's right-hand backdrop appear for the society panel as well as for its own
@@ -1341,20 +1496,28 @@ public static class GuiWriter
         doc.Widget("court chaplain seat", "tutorial_court_chaplain")
            .AndVisible(colony.IsHidden());
 
-        // Two loose seats rather than a row of their own, because the anchor is itself a seat in
+        // ONE loose seat rather than a row of its own, because the anchor is itself a seat in
         // vanilla's top row. The spouse stays, the nomad spymaster and the chaplain beside them go
         // invisible for a colonist, and a box container gives invisible children no width — so the
-        // row a colonist reads is Spouse, Warden, Quartermaster. That is the same mechanism
-        // vanilla's own vizier/spouse swap relies on.
-        doc.BlockWithComment("warden and quartermaster",
+        // row a colonist reads is Spouse, Warden. That is the same mechanism vanilla's own
+        // vizier/spouse swap relies on.
+        //
+        // Exactly one, because a council row fits exactly two. See CouncilRow.
+        doc.BlockWithComment("warden seat",
                 "widget_councillor_item = { # Spymaster (If Nomadic it's moved up here)")
-           .InsertBefore(
-                CouncilSeat(colony, "councillor_colony_warden", "bg_council_marshal.dds"),
-                CouncilSeat(colony, "councillor_colony_quartermaster", "bg_council_steward.dds"));
+           .InsertBefore(CouncilSeat(colony, "councillor_colony_warden", "bg_council_marshal.dds"));
 
-        // A whole new row above vanilla's hidden ones. Two rows of three is vanilla's own shape.
-        doc.BlockWithComment("speaker/pathfinder/preacher row", "hbox = { # Chancellor + Steward")
-           .InsertBefore(CouncilRow(colony));
+        // Two whole new rows above vanilla's hidden ones. Three rows of two is vanilla's own shape,
+        // and with the Warden riding along in the top row that is six cells for spouse + five
+        // offices — the same grid a privy council draws, in the same space.
+        doc.BlockWithComment("quartermaster/speaker row", "hbox = { # Chancellor + Steward")
+           .InsertBefore(
+                CouncilRow(colony, last: false,
+                    CouncilSeat(colony, "councillor_colony_quartermaster", "bg_council_steward.dds"),
+                    CouncilSeat(colony, "councillor_colony_speaker", "bg_council_chancellor.dds")),
+                CouncilRow(colony, last: true,
+                    CouncilSeat(colony, "councillor_colony_pathfinder", "bg_council_spymaster.dds"),
+                    CouncilSeat(colony, "councillor_colony_preacher", "bg_council_chaplain.dds")));
 
         doc.Ship(modDir);
     }
@@ -1400,24 +1563,34 @@ public static class GuiWriter
                     .Alpha("0.3"));
 
     /// <summary>
-    /// Speaker, Pathfinder and Camp Preacher, as a row of their own.
+    /// One row of colony seats, in the shape of the Chancellor/Steward row it stands in place of.
     ///
-    /// The <c>visible</c> sits on the hbox rather than on each of the three, so the row is one
-    /// question asked once. Its margins are copied from the Marshal/Spymaster row it stands in place
-    /// of, so a colony council occupies the same space on screen as a privy council does.
+    /// <b>Two seats, never three.</b> <c>widget_councillor_item</c> is declared
+    /// <c>size = { 260 250 }</c> and its <c>layoutpolicy_horizontal = expanding</c> only ever grows
+    /// it — nothing in Jomini shrinks a widget below its declared size to make a row fit. The
+    /// council window is <c>Window_Size_MainTab</c>, 655 wide, of which about 600 survives the
+    /// margins: two seats and their spacing come to 525, and a third hangs off the right edge of
+    /// the frame, drawn and out of reach. That was the bug the colony council shipped with — six
+    /// offices laid out three and three, two of them out of frame.
+    ///
+    /// The <c>visible</c> sits on the hbox rather than on each seat, so the row is one question
+    /// asked once. <paramref name="last"/> adds the <c>margin_bottom</c> vanilla puts on the last
+    /// council row only, so a colony council occupies the same space on screen as a privy council.
     /// </summary>
-    private static GuiNode CouncilRow(ScriptedGui colony)
-        => GuiBuilder.HBox()
-            .Comment("Colony council — Speaker, Pathfinder, Camp Preacher")
+    private static GuiNode CouncilRow(ScriptedGui colony, bool last, params GuiNode[] seats)
+    {
+        var row = GuiBuilder.HBox()
+            .Comment("Colony council")
             .Expanding()
-            .Margin(10, 0)
-            .MarginBottom(5)
+            .Margin(10, 0);
+
+        if (last) row.MarginBottom(5);
+
+        return row
             .Spacing(5)
             .Gap().Visible(colony.IsShown())
-            .Gap().Add(
-                CouncilSeat(colony, "councillor_colony_speaker", "bg_council_chancellor.dds"),
-                CouncilSeat(colony, "councillor_colony_pathfinder", "bg_council_spymaster.dds"),
-                CouncilSeat(colony, "councillor_colony_preacher", "bg_council_chaplain.dds"));
+            .Gap().Add(seats);
+    }
 
     // ===========================================================================================
     // The bookmark tab

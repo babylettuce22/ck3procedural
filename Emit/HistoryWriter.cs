@@ -95,7 +95,7 @@ public static class HistoryWriter
     /// </summary>
     public static bool ClergyIsFemale(Faith faith)
     {
-        string clerical = faith.Religion.Doctrines.GetValueOrDefault("doctrine_clerical_gender", "");
+        string clerical = faith.DoctrineOf("doctrine_clerical_gender");
         if (clerical == "doctrine_clerical_gender_female_only") return true;
         if (clerical == "doctrine_clerical_gender_male_only") return false;
 
@@ -169,6 +169,19 @@ public static class HistoryWriter
 
     public static string CharacterId(Title county) => $"gen_char_{county.Index}";
 
+    /// <summary>
+    /// What a character's name is written as: the vanilla localisation key for a name a vanilla
+    /// culture's list supplied (<see cref="Culture.NameKeys"/>), else the name itself. Map-wide
+    /// rather than per culture, because a wife's name comes from her own people's list.
+    /// </summary>
+    private static Func<string, string> NameTokens(CultureMap cultures)
+    {
+        var keys = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var culture in cultures.Cultures)
+            foreach (var (name, key) in culture.NameKeys) keys.TryAdd(name, key);
+        return name => keys.GetValueOrDefault(name, name);
+    }
+
     public static string DynastyId(Title county) => $"gen_dynasty_{county.Index}";
 
     public static int GetRulerBirthYear(int countyIndex, int startYear)
@@ -197,6 +210,10 @@ public static class HistoryWriter
             b.Blank();
         }
 
+        // Vanilla's own, for the historical characters a world of vanilla titles seats. Verbatim:
+        // their names, prefixes and mottos are vanilla's localisation keys. See VanillaCharacters.
+        foreach (string block in prehistory.HistoricalDynasties) b.Raw(block.TrimStart() + "\n\n");
+
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_dynasties.txt"), b.ToString());
     }
 
@@ -221,6 +238,8 @@ public static class HistoryWriter
             b.Blank();
         }
 
+        foreach (string block in prehistory.HistoricalHouses) b.Raw(block.TrimStart() + "\n\n");
+
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_houses.txt"), b.ToString());
     }
 
@@ -232,6 +251,7 @@ public static class HistoryWriter
     {
         string dir = Path.Combine(modDir, "history", "characters");
         Directory.CreateDirectory(dir);
+        var nameToken = NameTokens(cultures);
 
         // 1. Clean up old leftover spouse files so CK3-tiger doesn't flag duplicate character IDs
         string oldSpousesFile = Path.Combine(dir, "04_generated_spouses.txt");
@@ -260,7 +280,7 @@ public static class HistoryWriter
         {
             using (b.Block(ancestor.Id))
             {
-                b.Quoted("name", ancestor.Name);
+                b.Quoted("name", nameToken(ancestor.Name));
                 if (ancestor.Female) b.Field("female", "yes");
 
                 // A house and a dynasty are different keys to CK3, and pointing dynasty_house at
@@ -305,7 +325,21 @@ public static class HistoryWriter
 
             using (b.Block(ruler.Id))
             {
-                b.Quoted("name", ruler.Name);
+                // A ruler out of vanilla's history is vanilla's own block — traits, skills, parents,
+                // marriages, dated events — under this seat's id. Only the name (while unedited it
+                // is vanilla's key), the sex and the DNA the bookmark portrait was painted from are
+                // written here. See MapGen/VanillaCharacters.cs.
+                if (ruler.IsHistorical)
+                {
+                    b.Quoted("name", ruler.Name == ruler.HistoricalName && ruler.HistoricalNameKey is { } historicalKey
+                        ? historicalKey : nameToken(ruler.Name));
+                    if (ruler.Female) b.Field("female", "yes");
+                    b.Field("dna", ruler.DnaKey);
+                    b.Raw(ruler.HistoricalBody!);
+                }
+                else
+                {
+                b.Quoted("name", nameToken(ruler.Name));
                 if (ruler.Female) b.Field("female", "yes");
 
                 b.Field("dna", ruler.DnaKey);
@@ -342,6 +376,7 @@ public static class HistoryWriter
 
                 // --- Character Birth Date ---
                 b.Inline(ruler.BirthDate, "birth = yes");
+                }
 
                 // --- Simulated Wedding Date ---
                 //
@@ -416,7 +451,8 @@ public static class HistoryWriter
                         // dynasty on the map start equally renowned.
                         bool independent = ruler.Independent;
 
-                        if (ruler.Renown > 0 && independent)
+                        // A lowborn historical ruler has no dynasty to give it to.
+                        if (ruler.Renown > 0 && independent && ruler.DynastyId.Length > 0)
                             b.Inline("dynasty", $"add_dynasty_prestige = {ruler.Renown}");
 
                         // Lifestyle perk points, in the tree his education belongs to. Vanilla already
@@ -481,8 +517,9 @@ public static class HistoryWriter
                     }
 
                     // A byname, for the few who have earned one. Sits beside the effect block rather than
-                    // inside it because that is where vanilla's own history puts give_nickname.
-                    b.Field("give_nickname", profile.Nickname);
+                    // inside it because that is where vanilla's own history puts give_nickname. A
+                    // historical ruler has vanilla's own, dated, in the body already.
+                    if (!ruler.IsHistorical) b.Field("give_nickname", profile.Nickname);
                 }
 
                 // Living characters do NOT have death = yes
@@ -498,7 +535,7 @@ public static class HistoryWriter
         {
             using (b.Block(character.Id))
             {
-                b.Quoted("name", character.Name);
+                b.Quoted("name", nameToken(character.Name));
                 if (character.Female) b.Field("female", "yes");
                 b.Field("dna", character.DnaKey);
 
@@ -524,6 +561,11 @@ public static class HistoryWriter
 
             b.Blank();
         }
+
+        // =========================================================================
+        // 5. Vanilla's own people — the families of historical rulers, already cleaned
+        // =========================================================================
+        foreach (string block in prehistory.HistoricalCharacters) b.Raw(block);
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_characters.txt"), b.ToString());
     }
@@ -556,7 +598,7 @@ public static class HistoryWriter
 
             using (b.Block($"gen_hof_{hofIndex++}"))
             {
-                b.Quoted("name", firstName);
+                b.Quoted("name", NameTokens(cultures)(firstName));
                 if (female) b.Field("female", "yes");
 
                 b.Field("trait", GetPhenotypeTrait(culture, ethnicities, cfg));

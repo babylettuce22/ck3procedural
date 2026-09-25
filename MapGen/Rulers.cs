@@ -111,6 +111,47 @@ public sealed class Ruler
 
     public string Tier => PrimaryTitle.Tier;
 
+    /// <summary>
+    /// For a ruler who is a character out of vanilla's own history (<see cref="VanillaCharacters"/>):
+    /// the body of their vanilla history block — traits, skills, parents, marriages, dated events —
+    /// cleaned of every reference this world cannot resolve, written in place of the generated
+    /// identity. Null for a generated ruler. The block is written under <see cref="Id"/>, so every
+    /// file that already names this seat's ruler names the historical one.
+    /// </summary>
+    public string? HistoricalBody { get; init; }
+
+    /// <summary>The vanilla id the historical ruler has in vanilla's own files.</summary>
+    public string? HistoricalId { get; init; }
+
+    /// <summary>The name key vanilla writes for them ("E_douard"), used while <see cref="Name"/>
+    /// is still the name they were imported with.</summary>
+    public string? HistoricalNameKey { get; init; }
+
+    /// <summary>The display name at import, to tell an edit from the original.</summary>
+    public string? HistoricalName { get; init; }
+
+    public bool IsHistorical => HistoricalBody is not null;
+
+    /// <summary>
+    /// This ruler as a historical character: the same seat, titles, standing and purse, with the
+    /// identity — name, sex, birth, people, faith, house — of a vanilla character. Built once, right
+    /// after the roster, before any file has named the old identity; see <see cref="RulerMap.Replace"/>.
+    /// </summary>
+    public Ruler AsHistorical(string vanillaId, string body, string name, string? nameKey, bool female,
+        (int Year, int Month, int Day) birth, Culture culture, Faith faith, string dynastyId, string houseKey)
+        => new()
+        {
+            Seat = Seat, PrimaryTitle = PrimaryTitle, Id = Id,
+            Culture = culture, Faith = faith, Government = Government,
+            DynastyId = dynastyId, HouseKey = houseKey,
+            ParentId = null, ParentIsMother = false,
+            Independent = Independent, HasVassals = HasVassals,
+            Name = name, Female = female,
+            BirthYear = birth.Year, BirthMonth = birth.Month, BirthDay = birth.Day,
+            Profile = Profile, Gold = Gold, Prestige = Prestige, Renown = Renown, DnaKey = DnaKey,
+            HistoricalBody = body, HistoricalId = vanillaId, HistoricalNameKey = nameKey, HistoricalName = name,
+        };
+
     public override string ToString() => Name;
 }
 
@@ -130,6 +171,19 @@ public sealed class RulerMap
     public bool TryGet(Title seat, out Ruler ruler) => _bySeat.TryGetValue(seat, out ruler!);
 
     public bool Contains(Title seat) => _bySeat.ContainsKey(seat);
+
+    /// <summary>
+    /// Swaps a ruler for another seated in the same county, keeping its place in <see cref="All"/>.
+    /// Only for the moment between building the roster and writing it: every writer reads rulers
+    /// from here, so nothing has yet named the one being replaced.
+    /// </summary>
+    public void Replace(Ruler old, Ruler replacement)
+    {
+        if (old.Seat != replacement.Seat) throw new ArgumentException("A replacement must sit in the same seat.");
+        _bySeat[old.Seat] = replacement;
+        int at = All.IndexOf(old);
+        if (at >= 0) All[at] = replacement;
+    }
 
     /// <summary>
     /// Decides every ruler from the same seeded streams the character writer used to draw them

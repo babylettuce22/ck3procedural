@@ -1008,7 +1008,12 @@ public static partial class CompatibilityWriter
         "e_minister_of_war", "e_minister_of_justice", "e_minister_of_works",
     };
 
-    public static void WriteVanillaTitulars(string modDir, string gameDir, List<Title> empires)
+    /// <param name="declaredElsewhere">Vanilla keys the mod declares for real elsewhere — the heads of
+    /// faith a world of vanilla faiths keeps, written by ContentWriter.WriteLandedTitles with a seat
+    /// and a holder. A shim for one would declare it twice and the guard would strip it off its
+    /// pope.</param>
+    public static void WriteVanillaTitulars(string modDir, string gameDir, List<Title> empires,
+        IEnumerable<string>? declaredElsewhere = null)
     {
         string source = Path.Combine(gameDir, "common", "landed_titles");
         if (!Directory.Exists(source)) return;
@@ -1017,6 +1022,7 @@ public static partial class CompatibilityWriter
         if (counties.Count == 0) return;
 
         var generated = Titles.Flatten(empires).Select(t => t.Key).ToHashSet(StringComparer.Ordinal);
+        if (declaredElsewhere is not null) generated.UnionWith(declaredElsewhere);
 
         // The hegemony stands above the empires, so flattening from them never reaches it. A shim
         // for a key the map really generated would declare the same title twice, and the guard below
@@ -1526,7 +1532,16 @@ public static partial class CompatibilityWriter
             targetCounties = counties.Take(Math.Min(5, counties.Count)).ToList();
         }
 
-        int rebound = 0, sites = 0;
+        // Sites a vanilla faith placed on this map carry vanilla's own key, and go exactly where
+        // VanillaIdentities put them — one county per key however many faiths name it. Generated
+        // sites are keyed gen_hs_*, which no vanilla file declares, so on a procedural world this
+        // is empty and every site takes the round-robin below as before.
+        var placed = new Dictionary<string, Title>(StringComparer.Ordinal);
+        foreach (var faith in faiths?.Faiths.Where(f => f.Inherited) ?? [])
+            foreach (var (key, county) in faith.HolySites) placed.TryAdd(key, county);
+
+        int rebound = 0, sites = 0, kept = 0;
+        string? site = null;
 
         foreach (string path in Directory.GetFiles(source, "*.txt"))
         {
@@ -1544,19 +1559,32 @@ public static partial class CompatibilityWriter
                 var match = Regex.Match(code, @"^(\s*)county\s*=\s*[A-Za-z_0-9&-]+");
                 if (match.Success)
                 {
+                    if (site is not null && placed.TryGetValue(site, out var home))
+                    {
+                        output.Append($"{match.Groups[1].Value}county = {home.Key}\n");
+                        kept++;
+                        continue;
+                    }
+
                     // Target only the designated holy site counties
                     output.Append($"{match.Groups[1].Value}county = {targetCounties[rebound++ % targetCounties.Count].Key}\n");
                     continue;
                 }
 
-                if (Regex.IsMatch(code, @"^[A-Za-z_0-9&-]+\s*=\s*\{")) sites++;
+                var opener = Regex.Match(code, @"^([A-Za-z_0-9&-]+)\s*=\s*\{");
+                if (opener.Success)
+                {
+                    sites++;
+                    site = opener.Groups[1].Value;
+                }
                 output.Append(line).Append('\n');
             }
 
             ParadoxText.WriteBom(Path.Combine(destination, Path.GetFileName(path)), output.ToString());
         }
 
-        Console.WriteLine($"  holy sites: {sites} re-declared, {rebound} rebound onto {targetCounties.Count} holy site counties");
+        Console.WriteLine($"  holy sites: {sites} re-declared, {rebound} rebound onto {targetCounties.Count} holy site counties"
+                          + (kept > 0 ? $", {kept} placed where their vanilla faith keeps them" : ""));
     }
 
     /// <summary>

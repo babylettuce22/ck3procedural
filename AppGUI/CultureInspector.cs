@@ -51,6 +51,8 @@ public sealed class CultureInspector : InspectorForm
     protected override IEnumerable<object> Wrap(IReadOnlyList<object> targets)
         => targets.OfType<Culture>().Select(c => new Fields(c, Edits));
 
+    protected override bool IsInherited(object target) => target is Culture { Inherited: true };
+
     protected override string Describe(IReadOnlyList<object> targets)
         => targets.Count == 1 && targets[0] is Culture c
             ? $"Culture — {c.Key}"
@@ -231,6 +233,11 @@ public sealed class CultureInspector : InspectorForm
             get => culture.CoaGfx;
             set => edits.EditCulture(culture, c => c.CoaGfx = value.Trim());
         }
+
+        [Category("Visual Appearance")]
+        [Description("The shield shape this culture's houses are drawn on. Follows the coat of arms "
+                     + "styling above — it is the frame of the vanilla culture that styling came from.")]
+        public string HouseShield => Emit.CultureWriter.HouseFrameFor(culture)?.Frame ?? "(standard shield)";
 
         [Category("Character")]
         [Description("The culture's ethos pillar — a CK3 script key such as ethos_bellicose.")]

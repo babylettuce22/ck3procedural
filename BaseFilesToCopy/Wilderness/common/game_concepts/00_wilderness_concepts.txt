@@ -1,0 +1,46 @@
+﻿# Game concepts for the colonisation system.
+#
+# A game concept is three things at once: an underlined word, a tooltip, and a loc key that can be
+# dropped into any text. That third property is why the HUD readout is built on one rather than on a
+# bare text widget — see the `_count` alias below.
+#
+# ---- The whole point of the alias ----
+#
+# `Emit/GuiWriter.cs` injects a `text_single` into vanilla's top-right resource bar whose entire
+# content is `[gen_colony_limit_count]`. That is not a datafunction; it is this concept's alias,
+# resolved as localisation, and the numbers live in the .yml rather than in the .gui.
+#
+# The numbers could have gone straight into the widget: a `.gui` `text =` is localisation-formatted
+# rather than a bare key lookup, which is how vanilla's neighbouring domain number writes
+# `[Character.GetDomainSize]/[Character.GetDomainLimit]` with a literal slash between two
+# datafunctions and no complaint. So this is not a workaround. It buys two things:
+#
+#  * Hovering the number gets the concept tooltip — `game_concept_gen_colony_limit_desc`, which
+#    spells out the per-tier ladder — for free. Nothing in the .gui asks for it, and there is no
+#    other way to explain a bare "3/4" sitting in the top bar.
+#
+#  * The rule and its wording live together. Retuning `wilderness_settlement_limit` means editing
+#    the ladder in the tooltip, and both are in this set; neither is in a patched vanilla file that
+#    only a --gui-only run rewrites.
+#
+# The icon is NOT in the loc key, unlike AGOT's equivalent (`settlement_holding_limit_i`, which
+# opens with a `@hud_wilderness!` texticon). Vanilla's `_i` aliases are icon-only by convention, so
+# an `_i` holding digits would read as the opposite of what it says; and a texticon has to be
+# declared in a top-level `texticon = {}` block, which means shipping another global-registry file
+# for one 20px image. The widget carries its own `icon` instead, the way vanilla's neighbouring
+# domain-limit widget carries `icon_domain.dds`.
+#
+# `texture` is what the concept shows in its own tooltip header, and points at the holding icon this
+# set already ships.
+#
+# Related files:
+#   BaseFilesToCopy/Wilderness/localization/english/wilderness_colonization_l_english.yml
+#       game_concept_gen_colony_limit, _count, _desc
+#   BaseFilesToCopy/Wilderness/common/script_values/00_colonization_values.txt
+#       wilderness_settlement_count, wilderness_settlement_limit — the two numbers
+#   Emit/GuiWriter.cs  PatchHudResourceBar — the widget that reads the alias
+
+gen_colony_limit = {
+	alias = { gen_colony_limit_count colony_limit colony_limits }
+	texture = "gfx/interface/icons/holding_types_tab/settlement_holding.dds"
+}

@@ -284,8 +284,12 @@ public sealed class LoadedWorldView
         "Realms" => PreviewRenderer.RenderRealms(_provinces, Realm),
         "Dynasties" => PreviewRenderer.RenderByCounty(_provinces, c => DynastyAt(c) is { } dynasty ? PreviewRenderer.DynastyColour(dynasty.Key) : null),
         "Development" => PreviewRenderer.RenderByCounty(_provinces, c => PreviewRenderer.DevelopmentColour(DevelopmentOf(c))),
-        "Cultures" => PreviewRenderer.RenderByCounty(_provinces, c => Rgb(CultureOf(c))),
-        "Faiths" => PreviewRenderer.RenderByCounty(_provinces, c => Rgb(FaithOf(c))),
+        // A vanilla culture or faith has no entry in the mod to carry a colour, so it gets a stable
+        // one from its key — the same hashing dynasties use — rather than drawing as blank land.
+        "Cultures" => PreviewRenderer.RenderByCounty(_provinces, c => CultureOf(c) is { } e ? Rgb(e)
+            : Inherited(ProvinceOf(c)?.Value("culture"), World.InheritedCultures)),
+        "Faiths" => PreviewRenderer.RenderByCounty(_provinces, c => FaithOf(c) is { } e ? Rgb(e)
+            : Inherited(ProvinceOf(c)?.Value("religion"), World.InheritedFaiths)),
         "Government" => PreviewRenderer.RenderByCounty(_provinces, c => PreviewRenderer.GovernmentColour(GovernmentOf(c) ?? "")),
         "Wilderness" => PreviewRenderer.RenderByCounty(_provinces, _ => ((byte)108, (byte)114, (byte)122)),
         _ => PreviewRenderer.RenderTitles(_provinces, "c"),
@@ -306,6 +310,10 @@ public sealed class LoadedWorldView
         if (county is null) return line;
         if (mode == "Cultures" && CultureOf(county) is { } culture) return $"{line} · {culture.Name}";
         if (mode == "Faiths" && FaithOf(county) is { } faith) return $"{line} · {faith.Name}";
+        if (mode == "Cultures" && ProvinceOf(county)?.Value("culture") is { Length: > 0 } vanillaCulture)
+            return $"{line} · {vanillaCulture} (vanilla)";
+        if (mode == "Faiths" && ProvinceOf(county)?.Value("religion") is { Length: > 0 } vanillaFaith)
+            return $"{line} · {vanillaFaith} (vanilla)";
         // By the legend's name, not the raw key: the hover text and the colour key beside it were
         // calling the same government two different things.
         if (mode == "Government" && GovernmentOf(county) is { } government)
@@ -321,6 +329,9 @@ public sealed class LoadedWorldView
     }
 
     // --- Colours ------------------------------------------------------------------------------------
+
+    private static (byte R, byte G, byte B) Inherited(string? key, SortedSet<string> inherited)
+        => key is not null && inherited.Contains(key) ? PreviewRenderer.DynastyColour(key) : Rgb(null);
 
     private static (byte R, byte G, byte B) Rgb(WorldEntry? entry)
     {

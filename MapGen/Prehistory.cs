@@ -152,6 +152,23 @@ public sealed class PrehistoryMap
     public List<HouseRelationDef> HouseRelations { get; } = [];
 
     /// <summary>
+    /// Characters out of vanilla's own history — the families of the historical rulers a world of
+    /// vanilla titles seats (<see cref="VanillaCharacters"/>) — as whole, already-cleaned history
+    /// blocks. Written after the generated characters, into the same file, so a re-emit from the
+    /// editor writes them again with everything else.
+    /// </summary>
+    public List<string> HistoricalCharacters { get; } = [];
+
+    /// <summary>Vanilla's dynasty and house definitions those characters belong to, as source text;
+    /// written after the generated ones. See <see cref="VanillaCatalog.DynastySource"/>.</summary>
+    public List<string> HistoricalDynasties { get; } = [];
+    public List<string> HistoricalHouses { get; } = [];
+
+    /// <summary>Historical rulers' houses and dynasties vanilla gives no predefined arms; the
+    /// bookmark screen needs some. See <see cref="Emit.CoatOfArmsWriter"/>.</summary>
+    public List<string> HistoricalCoaKeys { get; } = [];
+
+    /// <summary>
     /// The landless family titles, in county order. Rebuilt rather than fixed, because which realms
     /// have any is a fact about the government map and the editor can change a government after the
     /// world is written — see <see cref="RebuildNobleFamilies"/>.

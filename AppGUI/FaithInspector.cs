@@ -33,6 +33,8 @@ public sealed class FaithInspector : InspectorForm
     protected override IEnumerable<object> Wrap(IReadOnlyList<object> targets)
         => targets.OfType<Faith>().Select(f => new Fields(f, Edits));
 
+    protected override bool IsInherited(object target) => target is Faith { Inherited: true };
+
     protected override string Describe(IReadOnlyList<object> targets)
         => targets.Count == 1 && targets[0] is Faith f
             ? $"Faith — {f.Key}"

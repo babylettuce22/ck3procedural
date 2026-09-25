@@ -1192,6 +1192,98 @@ abandon_county_effect = {
 
 
 # =====================================================================================
+#  Transition 4: colony -> pasture
+# =====================================================================================
+#
+# The exit for a colony that has ended up under a government which cannot finish it.
+#
+# `can_colonize_at_all_trigger` keeps nomads and herders from starting one — the two governments
+# vanilla writes `buildings = no` for, which means no obstacle can ever be cleared and no
+# settlement_02 can ever be raised, so the colony can never satisfy can_promote_colony_trigger and
+# is stuck as a 0-tax, 0-levy settlement_holding for ever. That gate is the whole fix for the
+# colonies a nomad would plant himself.
+#
+# It is not the fix for the ones that arrive by the other doors, and there are three: conquest of a
+# colonist's county, inheritance across a marriage, and a tribal ruler adopting nomad_government
+# while already holding a colony. None of those asks a colonisation trigger anything.
+#
+# So the county stops being a colony and becomes what that ruler's government actually holds: the
+# settlement is struck, the herds move in. That is the honest outcome rather than a punishment —
+# nothing is taken from the conqueror, the county keeps its holder, its culture and its faith, and
+# a nomad ends up with the kind of ground a nomad works. The Wilds situation is told through the
+# PROMOTED catalyst, not the abandoned one: a county that leaves the colony state by becoming a
+# working holding is the frontier advancing, whichever holding it turns into.
+#
+# ---- Why both building families are named here ----
+#
+# gen_strip_buildings_effect deliberately skips two sets — the obstacle family, because the callers
+# it was written for are about to place obstacles, and every holding's own level building, because
+# the holding it is clearing is keeping its type. Both exclusions are wrong for this caller: the
+# holding type is changing, and nothing will ever place or clear an obstacle here again. Left
+# standing, the six blockers would keep applying their penalties to a nomad who has no building in
+# the game that could remove them, and settlement_01 would sit on a nomad_holding as a building
+# belonging to a holding type the province no longer is.
+colony_convert_to_pasture_effect = {
+	$COUNTY$ = {
+		save_scope_as = pastured_county
+		holder ?= { save_scope_as = pasture_holder }
+
+		if = { limit = { has_county_modifier = settlement_overseen }  remove_county_modifier = settlement_overseen }
+		if = { limit = { has_variable = colony_just_founded }     remove_variable = colony_just_founded }
+		if = { limit = { has_variable = settlers_were_promised }  remove_variable = settlers_were_promised }
+		if = { limit = { has_variable = colony_leader }           remove_variable = colony_leader }
+		if = { limit = { has_variable = colony_led_by_soldier }   remove_variable = colony_led_by_soldier }
+
+		title_province ?= {
+			gen_strip_buildings_effect = yes
+
+			# The settlement chain. Skipped by the strip effect as settlement_holding's own level
+			# building, which it no longer is once the line below has run.
+			if = { limit = { has_building = settlement_03 }  remove_building = settlement_03 }
+			if = { limit = { has_building = settlement_02 }  remove_building = settlement_02 }
+			if = { limit = { has_building = settlement_01 }  remove_building = settlement_01 }
+
+			# The six blockers. Not the ladder in wilderness_clear_hardest_obstacle_effect — that
+			# one takes the hardest and stops, which is right for a season's work and wrong here.
+			if = { limit = { has_building = killing_cold }   remove_building = killing_cold }
+			if = { limit = { has_building = flooded_lands }  remove_building = flooded_lands }
+			if = { limit = { has_building = bandit_camps }   remove_building = bandit_camps }
+			if = { limit = { has_building = beast_dens }     remove_building = beast_dens }
+			if = { limit = { has_building = dense_growth }   remove_building = dense_growth }
+			if = { limit = { has_building = scree_slopes }   remove_building = scree_slopes }
+
+			# A herder is a nomad's vassal and holds herder_holding, not nomad_holding; handing him
+			# his liege's holding type would leave him as badly off as the colony did. Read from the
+			# holder saved above rather than from `holder` — this is province scope, where that
+			# would resolve through the county and cost a step for a scope already in hand.
+			if = {
+				limit = { scope:pasture_holder ?= { government_has_flag = government_is_herder } }
+				set_holding_type = herder_holding
+			}
+			else = {
+				set_holding_type = nomad_holding
+			}
+		}
+
+		wilds_situation_colony_promoted_effect = { COUNTY = this }
+	}
+
+	if = {
+		limit = { exists = scope:pasture_holder }
+
+		scope:pasture_holder = {
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = colonize_pasture_toast
+				left_icon = this
+				right_icon = scope:pastured_county
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
 #  Upkeep & AI Housekeeping
 # =====================================================================================
 

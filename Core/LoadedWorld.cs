@@ -109,6 +109,7 @@ public sealed class LoadedWorld
         world.ReadEntries("common/dynasty_houses/00_generated_houses.txt", "House");
         world.ReadEntries("common/religion/holy_site_types/01_generated_holy_sites.txt", "HolySite");
         world.ReadEntries("common/coat_of_arms/coat_of_arms/00_generated_coas.txt", "CoatOfArms");
+        world.ReadInheritedIdentities();
         world.ReadNameLists();
         world.ReadTitleHistory();
         world.ReadDefinition();
@@ -200,6 +201,31 @@ public sealed class LoadedWorld
             AddLocalisation(entry, $"gen_flav_{node.Key}_{tier}_female", "Ruler style (female)", RealmWordsCategory, applies);
         }
         foreach (var child in node.Children) AddTitle(file, child, entry);
+    }
+
+    /// <summary>
+    /// Vanilla cultures and faiths this world's history names without declaring — a world settled
+    /// by the base game's own peoples (MapConfig.ContentSource). Offered in the culture and religion
+    /// dropdowns and accepted when chosen, but never opened as entries: the game defines them, and
+    /// this mod has no file of theirs to edit.
+    /// </summary>
+    public SortedSet<string> InheritedCultures { get; } = new(StringComparer.Ordinal);
+    public SortedSet<string> InheritedFaiths { get; } = new(StringComparer.Ordinal);
+
+    private void ReadInheritedIdentities()
+    {
+        var cultures = Entries.Where(e => e.Kind == "Culture").Select(e => e.Key).ToHashSet(StringComparer.Ordinal);
+        var faiths = Entries.Where(e => e.Kind == "Faith").Select(e => e.Key).ToHashSet(StringComparer.Ordinal);
+
+        foreach (var entry in Entries.Where(e => e.Kind is "Province" or "Character"))
+        {
+            if (entry.Value("culture") is { Length: > 0 } c && !cultures.Contains(c)) InheritedCultures.Add(c);
+            if (entry.Value("religion") is { Length: > 0 } f && !faiths.Contains(f)) InheritedFaiths.Add(f);
+        }
+
+        if (InheritedCultures.Count + InheritedFaiths.Count > 0)
+            Notes.Add($"This world is settled by {InheritedCultures.Count} vanilla cultures and {InheritedFaiths.Count} vanilla faiths. " +
+                      "They can be assigned to provinces and characters, but their definitions are the base game's and are not edited here.");
     }
 
     private void ReadEntries(string relative, string kind)
@@ -601,8 +627,8 @@ public sealed class LoadedWorld
         var vocabulary = () => MapGen.VanillaVocabulary.Current;
         return key switch
         {
-            "culture" => () => Kind("Culture"),
-            "religion" => () => Kind("Faith"),
+            "culture" => () => [.. Kind("Culture"), .. InheritedCultures.Select(k => (k, k + " (vanilla)"))],
+            "religion" => () => [.. Kind("Faith"), .. InheritedFaiths.Select(k => (k, k + " (vanilla)"))],
             "holding" => () => Plain(Holdings),
             "county" => () => Counties(null),
             "capital" => () => Counties(entry),
@@ -655,7 +681,9 @@ public sealed class LoadedWorld
             if (key is "culture" or "religion")
             {
                 string referencedKind = key == "culture" ? "Culture" : "Faith";
-                if (!Entries.Any(e => e.Kind == referencedKind && e.Key == value.Trim()) && value.Trim() != Unquote(node.Value ?? ""))
+                var inherited = key == "culture" ? InheritedCultures : InheritedFaiths;
+                if (!Entries.Any(e => e.Kind == referencedKind && e.Key == value.Trim()) && !inherited.Contains(value.Trim())
+                    && value.Trim() != Unquote(node.Value ?? ""))
                     throw new ArgumentException($"Choose a {referencedKind.ToLowerInvariant()} defined in this world.");
             }
             if (key == "holding" && !Holdings.Contains(value.Trim()))

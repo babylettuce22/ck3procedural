@@ -117,6 +117,17 @@ public static class Generator
             ?? throw new InvalidOperationException("No heightmap given.");
 
         var cfg = options.Config;
+
+        // Refused up front rather than discovered at the culture stage minutes in. A vanilla
+        // culture's ethnicities are vanilla's, so a fantasy race stamped on its rulers would put an
+        // elf trait on someone the game draws as a human — and a half-fantasy world is not a thing
+        // anyone asked for. See MapConfig.ContentSource.
+        if (cfg.ContentSource == MapConfig.ContentSourceMode.VanillaWorld
+            && cfg.EnableFantasyEthnicities && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly)
+            throw new InvalidOperationException(
+                "Vanilla cultures and faiths cannot carry fantasy races: turn off EnableFantasyEthnicities " +
+                "(or set RaceMode to HumanOnly), or use ContentSource = Procedural.");
+
         var image = Stage.Time(source.PhaseName,
             () => source.Produce(cfg, Stage.Cancellation, ConsoleProgress.Instance));
         HeightmapSource.Diagnose(image, cfg);
