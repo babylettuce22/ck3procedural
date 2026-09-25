@@ -2350,6 +2350,25 @@ wilderness_colonization.0051 = {
 			}
 		}
 
+		# The Wilds situation's catalyst, when the aid clears a blocker rather than upgrading the
+		# settlement. Fired here rather than inside the ladder below, once, the same as every other
+		# clearance route. See wilderness_clear_hardest_obstacle_effect.
+		if = {
+			limit = {
+				scope:struggling_colony = {
+					OR = {
+						has_variable = clearing_beast_dens
+						has_variable = clearing_bandit_camps
+						has_variable = clearing_dense_growth
+						has_variable = clearing_flooded_lands
+						has_variable = clearing_scree_slopes
+						has_variable = clearing_killing_cold
+					}
+				}
+			}
+			wilds_situation_obstacle_cleared_effect = { COUNTY = scope:struggling_colony }
+		}
+
 		scope:struggling_colony = {
 			title_province = {
 				if = {
@@ -2443,6 +2462,23 @@ wilderness_colonization.0051 = {
 		add_hook = {
 			target = scope:petitioning_colonist
 			type = favor_hook
+		}
+
+		# The Wilds catalyst, as in option a.
+		if = {
+			limit = {
+				scope:struggling_colony = {
+					OR = {
+						has_variable = clearing_beast_dens
+						has_variable = clearing_bandit_camps
+						has_variable = clearing_dense_growth
+						has_variable = clearing_flooded_lands
+						has_variable = clearing_scree_slopes
+						has_variable = clearing_killing_cold
+					}
+				}
+			}
+			wilds_situation_obstacle_cleared_effect = { COUNTY = scope:struggling_colony }
 		}
 
 		scope:struggling_colony = {

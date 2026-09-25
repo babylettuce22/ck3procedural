@@ -25,6 +25,12 @@ wilderness_clearing_works_done_effect = {
 	save_scope_as = obstacle_province
 	county ?= { save_scope_as = obstacle_county }
 
+	# The Wilds situation's catalyst, once per clearance, the same one the pioneer and the Warden fire
+	# through wilderness_clear_hardest_obstacle_effect. Not in wilderness_obstacle_cleared_effect, which
+	# the council task calls as well as the ladder and would count twice. Silent, and no recount: a
+	# clearance changes nothing the recount measures. See Emit/FrontierWriter.cs.
+	county ?= { wilds_situation_obstacle_cleared_effect = { COUNTY = this } }
+
 	if = {
 		limit = {
 			exists = scope:obstacle_county
