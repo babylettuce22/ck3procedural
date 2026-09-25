@@ -129,8 +129,11 @@ settlement_upgrade_cost = 200
 # ck3-tiger accepted both. Vanilla's one scripted building price is `rebuild_cost` on great
 # projects, which is a different field; `cost` is read once at load, as a literal or a named
 # constant, so it cannot know who is paying. A building costs the same for every government.
-# Per-payer pricing has to come from somewhere else — cost MODIFIERS (build_gold_cost,
-# build_prestige_cost) on the province, or a separate building per government.
+#
+# So the tribal price is done with modifiers instead: the clearing buildings and settlement_02/03
+# list gold AND an equal prestige, settlement_01-03 cancel the prestige for everyone, and
+# colony_tribal_labour (00_colonization_modifiers.txt) restores it and takes 60% off the gold for a
+# colony held for a tribe. The constants above are therefore both halves of those prices.
 
 # --- Colony Infrastructure Building Costs ---------------------------------------------------
 
@@ -147,8 +150,10 @@ settlement_cost_tier_4 = 550
 #
 # The office chain these stand beside costs 1150 gold in all, which a chief earning two or three
 # gold a month cannot reach inside a lifetime — and the office is the colony's whole development
-# numerator, so a tribal colony that could not afford it never matured. The hall costs 300 gold
+# numerator, so a tribal colony that could not afford it never matured. The hall lists 300 gold
 # and 1050 prestige: the same investment, in the currency the government is built to accumulate.
+# A tribe actually pays 40% of the listed gold, because colony_tribal_labour takes 60% off every
+# gold price in a tribal colony, these included.
 colony_hall_gold_tier_1 = 75
 colony_hall_gold_tier_2 = 100
 colony_hall_gold_tier_3 = 125

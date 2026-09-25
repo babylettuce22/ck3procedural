@@ -96,10 +96,26 @@ public static class Titles
     public const int MaxKingdomsPerEmpire = 5;
 
     /// <summary>
-    /// Builds barony-to-barony land adjacency graph.
-    /// Only directly touching playable land baronies (1..baronyCount) share an edge.
+    /// The province-to-province land adjacency graph: provinces 1..<paramref name="baronyCount"/>
+    /// that share a pixel edge. Pass the passable barony count for baronies only, or the land count
+    /// to take impassable provinces in too.
+    ///
+    /// Built once per map and shared by every stage that asks — see
+    /// <see cref="ProvinceMap.AdjacencyCache"/>. It is therefore read-only: a caller that wants to
+    /// prune or extend it copies what it needs first (AzgaarHierarchy's Restrict does).
+    /// Thread-safe, because ContentWriter's branches ask for it concurrently.
     /// </summary>
-    public static Dictionary<int, HashSet<int>> BuildAdjacency(ProvinceMap map, int baronyCount, int[] order)
+    public static IReadOnlyDictionary<int, HashSet<int>> LandAdjacency(ProvinceMap map, int baronyCount, int[] order)
+    {
+        lock (map.AdjacencyCache)
+        {
+            if (!map.AdjacencyCache.TryGetValue((order, baronyCount), out var graph))
+                map.AdjacencyCache[(order, baronyCount)] = graph = BuildAdjacency(map, baronyCount, order);
+            return graph;
+        }
+    }
+
+    private static Dictionary<int, HashSet<int>> BuildAdjacency(ProvinceMap map, int baronyCount, int[] order)
     {
         var adjacency = new Dictionary<int, HashSet<int>>();
         for (int i = 1; i <= baronyCount; i++) adjacency[i] = [];
@@ -238,7 +254,7 @@ public static class Titles
         }
     }
 
-    private static int Overseas(List<List<int>> clusters, Dictionary<int, HashSet<int>> landAdjacency)
+    private static int Overseas(List<List<int>> clusters, IReadOnlyDictionary<int, HashSet<int>> landAdjacency)
     {
         int split = 0;
 
@@ -264,7 +280,7 @@ public static class Titles
     }
 
     internal static Dictionary<int, HashSet<int>> Union(
-        Dictionary<int, HashSet<int>> land, Dictionary<int, HashSet<int>> sea)
+        IReadOnlyDictionary<int, HashSet<int>> land, IReadOnlyDictionary<int, HashSet<int>> sea)
     {
         var merged = new Dictionary<int, HashSet<int>>(land.Count);
         foreach (var (key, values) in land) merged[key] = [.. values];
@@ -282,7 +298,7 @@ public static class Titles
 
     internal static List<List<int>> Cluster(
         IReadOnlyList<int> members,
-        Dictionary<int, HashSet<int>> adjacency,
+        IReadOnlyDictionary<int, HashSet<int>> adjacency,
         int minSize,
         int maxSize,
         Rng rng,
@@ -352,7 +368,7 @@ public static class Titles
         return clusters;
     }
 
-    private static void Settle(List<List<int>> clusters, Dictionary<int, HashSet<int>> adjacency,
+    private static void Settle(List<List<int>> clusters, IReadOnlyDictionary<int, HashSet<int>> adjacency,
         (double X, double Y)[] positions, int minSize, int maxSize)
     {
         var owner = new Dictionary<int, int>();
@@ -406,7 +422,7 @@ public static class Titles
     }
 
     private static bool StaysConnected(List<int> cluster, int dropped,
-        Dictionary<int, HashSet<int>> adjacency)
+        IReadOnlyDictionary<int, HashSet<int>> adjacency)
     {
         var remaining = new HashSet<int>(cluster);
         remaining.Remove(dropped);
@@ -439,7 +455,7 @@ public static class Titles
         => member >= 0 && member < positions.Length ? positions[member] : (0, 0);
 
     internal static List<List<int>> AbsorbUndersized(List<List<int>> clusters,
-        Dictionary<int, HashSet<int>> adjacency, int minSize, int maxSize,
+        IReadOnlyDictionary<int, HashSet<int>> adjacency, int minSize, int maxSize,
         (double X, double Y)[]? positions = null)
     {
         var owner = new Dictionary<int, int>();
@@ -556,7 +572,7 @@ public static class Titles
     }
 
     internal static Dictionary<int, HashSet<int>> LiftAdjacency(
-        List<List<int>> clusters, Dictionary<int, HashSet<int>> below)
+        List<List<int>> clusters, IReadOnlyDictionary<int, HashSet<int>> below)
     {
         var owner = new Dictionary<int, int>();
         for (int i = 0; i < clusters.Count; i++)
@@ -584,7 +600,7 @@ public static class Titles
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
         // 1. Strict land-to-land adjacency for baronies (no crossing major rivers)
-        var adjacency = BuildAdjacency(map, baronyCount, order);
+        var adjacency = LandAdjacency(map, baronyCount, order);
 
         // 2. Sea-only bridges (strait crossings) for higher tiers
         int bridge = (int)Math.Round(cfg.Scaled(cfg.SeaBridgePixelsAtVanilla));
@@ -1005,7 +1021,7 @@ public static class Titles
     /// <see cref="Crown"/>, which has only titles to work with.
     /// </summary>
     internal static Dictionary<Title, HashSet<Title>> ByTitle(
-        IReadOnlyList<Title> titles, Dictionary<int, HashSet<int>> graph)
+        IReadOnlyList<Title> titles, IReadOnlyDictionary<int, HashSet<int>> graph)
     {
         var result = new Dictionary<Title, HashSet<Title>>(titles.Count);
         foreach (var title in titles) result[title] = [];

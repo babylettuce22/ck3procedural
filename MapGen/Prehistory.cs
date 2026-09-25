@@ -1444,7 +1444,7 @@ public sealed class PrehistoryMap
         var adjacency = new Dictionary<Title, HashSet<Title>>();
         foreach (var c in counties) adjacency[c] = [];
 
-        foreach (var (province, others) in Titles.BuildAdjacency(provinces, landCount, order))
+        foreach (var (province, others) in Titles.LandAdjacency(provinces, landCount, order))
         {
             if (!countyOfProvince.TryGetValue(province, out var c1)) continue;
             foreach (int other in others)

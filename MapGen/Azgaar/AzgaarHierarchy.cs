@@ -41,7 +41,7 @@ public static class AzgaarHierarchy
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var plan = azgaar.Plan!;
 
-        var adjacency = Titles.BuildAdjacency(map, baronyCount, order);
+        var adjacency = Titles.LandAdjacency(map, baronyCount, order);
         int bridge = (int)Math.Round(cfg.Scaled(cfg.SeaBridgePixelsAtVanilla));
         var seaAdjacency = Titles.BuildSeaAdjacency(map, baronyCount, order, bridge);
 
@@ -672,7 +672,7 @@ public static class AzgaarHierarchy
 
     /// <summary>The adjacency graph with everything outside <paramref name="members"/> cut away.</summary>
     private static Dictionary<int, HashSet<int>> Restrict(
-        Dictionary<int, HashSet<int>> full, IReadOnlyCollection<int> members)
+        IReadOnlyDictionary<int, HashSet<int>> full, IReadOnlyCollection<int> members)
     {
         var allowed = new HashSet<int>(members);
         var result = new Dictionary<int, HashSet<int>>(members.Count);

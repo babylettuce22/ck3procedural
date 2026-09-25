@@ -96,13 +96,13 @@ public static class Realms
             }
         }
 
-        var landAdj = Titles.BuildAdjacency(map, baronyCount, order);
+        var landAdj = Titles.LandAdjacency(map, baronyCount, order);
         var seaAdj = Titles.BuildSeaAdjacency(map, baronyCount, order, bridgeDistance);
 
         var countyAdj = new Dictionary<Title, HashSet<Title>>();
         foreach (var c in counties) countyAdj[c] = [];
 
-        void AddLinks(Dictionary<int, HashSet<int>> adj)
+        void AddLinks(IReadOnlyDictionary<int, HashSet<int>> adj)
         {
             foreach (var (bA, neighbors) in adj)
             {

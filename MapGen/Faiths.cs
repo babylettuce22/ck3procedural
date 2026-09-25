@@ -797,37 +797,8 @@ public static class Faiths
     private static RegionGrowth.Graph CountyGraph(List<Title> counties, ProvinceMap provinces,
         int[] order, int landCount, TerrainClass[] provinceTerrain, double terrainWeight)
     {
-        var countyOfProvince = new Dictionary<int, int>();
-        for (int i = 0; i < counties.Count; i++)
-            foreach (var barony in counties[i].Children)
-                if (barony.ProvinceId > 0) countyOfProvince[barony.ProvinceId] = i;
-
-        var seedOfProvince = new int[landCount + 1];
-        for (int label = 0; label < order.Length; label++)
-        {
-            int id = order[label];
-            if (id >= 1 && id <= landCount) seedOfProvince[id] = label;
-        }
-
-        var neighbours = new List<int>[counties.Count];
-        for (int i = 0; i < neighbours.Length; i++) neighbours[i] = [];
-
-        var linked = new HashSet<(int, int)>();
-        foreach (var (province, others) in Titles.BuildAdjacency(provinces, landCount, order))
-        {
-            if (!countyOfProvince.TryGetValue(province, out int a)) continue;
-
-            foreach (int other in others)
-            {
-                if (!countyOfProvince.TryGetValue(other, out int b) || a == b) continue;
-
-                var pair = a < b ? (a, b) : (b, a);
-                if (!linked.Add(pair)) continue;
-
-                neighbours[a].Add(b);
-                neighbours[b].Add(a);
-            }
-        }
+        var neighbours = CountyNetwork.Neighbours(counties, provinces, order, landCount);
+        var seedOfProvince = CountyNetwork.SeedOfProvince(order, landCount);
 
         var cost = new double[counties.Count];
         var position = new (double X, double Y)[counties.Count];

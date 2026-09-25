@@ -208,10 +208,11 @@ wilderness_oversee = {
             holder = root
         }
         is_colonist_trigger = no
-        # Correct way to check if already in the activity:
+        # `?=`, not `exists = involved_activity` beside it. A NOT with two children is a NOR, so
+        # both were evaluated for a character with no activity, and the second logged "Failed
+        # context switch" every frame the county view was open: 11,000 lines in one session.
         NOT = {
-            exists = involved_activity
-            involved_activity = {
+            involved_activity ?= {
                 has_activity_type = activity_oversee_colony
                 activity_location.county ?= scope:wilderness.county
             }
@@ -234,8 +235,7 @@ wilderness_return_home = {
 			holder = root
 		}
 		is_colonist_trigger = no
-		exists = involved_activity
-		involved_activity = {
+		involved_activity ?= {
 			has_activity_type = activity_oversee_colony
 			activity_host = root
 			activity_location.county ?= scope:wilderness.county

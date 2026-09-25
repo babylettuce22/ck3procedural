@@ -76,6 +76,15 @@ public sealed class ProvinceMap
     public int Count => Seeds.Count;
 
     /// <summary>
+    /// <see cref="Titles.LandAdjacency"/>'s graphs, one per (province order, province count). A
+    /// dozen stages ask for the same graph and each one used to rescan every pixel for it. Keyed
+    /// on the order array's identity, so a caller holding a freshly built order just builds again.
+    /// Valid only because <see cref="Label"/> is final once the order exists: nothing rewrites it
+    /// after <see cref="Provinces"/> has finished partitioning.
+    /// </summary>
+    internal readonly Dictionary<(int[] Order, int Count), IReadOnlyDictionary<int, HashSet<int>>> AdjacencyCache = [];
+
+    /// <summary>
     /// Whether two provinces may exchange pixels — that is, whether they grew in the same region.
     ///
     /// Every tidy-up pass after the partition used to ask <c>Seeds[a].IsLand == Seeds[b].IsLand</c>

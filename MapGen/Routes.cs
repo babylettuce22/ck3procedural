@@ -161,7 +161,7 @@ public static class Routes
         CrossingMap crossings)
     {
         var survey = ProvinceSurvey.Take(provinces, order, baronyCount, drainage);
-        var adjacency = Titles.BuildAdjacency(provinces, baronyCount, order);
+        var adjacency = Titles.LandAdjacency(provinces, baronyCount, order);
         var water = WaterGraph(provinces, order, baronyCount);
 
         var position = new (double X, double Y)[provinces.Count + 1];

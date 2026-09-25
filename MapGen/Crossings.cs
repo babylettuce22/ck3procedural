@@ -72,7 +72,7 @@ public static class Crossings
             foreach (var b in county.Children)
                 if (b.ProvinceId >= 1 && b.ProvinceId <= baronyCount) countyOf[b.ProvinceId] = county;
 
-        var landAdjacency = Titles.BuildAdjacency(provinces, baronyCount, order);
+        var landAdjacency = Titles.LandAdjacency(provinces, baronyCount, order);
 
         // Which water provinces touch which baronies, so a crossing can be checked to pass
         // through a province that borders both its shores — the engine's requirement.

@@ -148,7 +148,7 @@ public static class Capitals
                 if (b.ProvinceId >= 1 && b.ProvinceId <= baronyCount) countyOf[b.ProvinceId] = county;
 
         var adjacent = new Dictionary<Title, HashSet<Title>>();
-        foreach (var (province, others) in Titles.BuildAdjacency(provinces, baronyCount, order))
+        foreach (var (province, others) in Titles.LandAdjacency(provinces, baronyCount, order))
         {
             if (!countyOf.TryGetValue(province, out var a)) continue;
             foreach (int other in others)

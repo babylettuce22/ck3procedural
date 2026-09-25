@@ -609,7 +609,7 @@ public static class SilkRoad
             set.Add(cb);
         }
 
-        foreach (var (province, others) in Titles.BuildAdjacency(provinces, baronyCount, order))
+        foreach (var (province, others) in Titles.LandAdjacency(provinces, baronyCount, order))
             foreach (int other in others)
                 Link(province, other);
 
