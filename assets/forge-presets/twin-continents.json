@@ -27,7 +27,7 @@
         "fragmentation": 0.12,
         "fragmentScale": 5,
         "minFeature": 0.004,
-        "landHeight": 0.1,
+        "landHeight": 0.14,
         "coastRamp": 0.0047,
         "inlandRise": 0.04,
         "inlandScale": 0.15,
@@ -50,13 +50,29 @@
       "enabled": true,
       "params": {
         "seed": 4242,
-        "frequency": 3,
-        "octaves": 5,
-        "gain": 0.5,
-        "warp": 0.35,
-        "amplitude": 0.08,
-        "shoreFade": 0.02,
+        "frequency": 2,
+        "octaves": 4,
+        "gain": 0.45,
+        "warp": 0.5,
+        "amplitude": 0.2,
+        "shoreFade": 0.03,
         "landOnly": true
+      }
+    },
+    {
+      "type": "ContrastStage",
+      "name": "Contrast",
+      "enabled": true,
+      "params": {
+        "mode": 2,
+        "contrast": 3.7621,
+        "gamma": 1.1669,
+        "bias": -0.17580001,
+        "pivotMode": 0,
+        "customPivot": 0.5,
+        "targetArea": 0,
+        "ceiling": 0.95,
+        "keepCoastline": true
       }
     },
     {
@@ -91,10 +107,10 @@
         "lacunarity": 2.07,
         "gain": 0.5,
         "ridgeWarp": 0.21,
-        "sharpness": 1.6,
+        "sharpness": 1.95,
         "amplitude": 1.0,
         "basinDepth": 0.096,
-        "followElevation": 0.7,
+        "followElevation": 0.55,
         "followInland": 0.6,
         "inlandScale": 0.01,
         "ceiling": 1,

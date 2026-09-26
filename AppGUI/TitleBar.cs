@@ -1,7 +1,7 @@
 namespace Ck3MapGen.AppGUI;
 
 /// <summary>
-/// The window's own caption: icon, menu bar, title and the three caption buttons, in one row.
+/// The window's own caption: icon, menu bar (or, on a palette, its title) and the caption buttons, in one row.
 ///
 /// The Windows frame is kept, not replaced — <see cref="ChromeForm"/> only takes away its caption
 /// strip (WM_NCCALCSIZE) — so resizing, Aero Snap, the shadow and the rounded corners are the
@@ -40,8 +40,8 @@ internal sealed class TitleBar : Control
     private Icon? _iconSource;
 
     /// <summary>
-    /// With a <paramref name="menu"/>, the main window's row: menus beside the icon, the title dim
-    /// and centred. Without one, a palette's row — the inspectors — where the title is the name of
+    /// With a <paramref name="menu"/>, the main window's row: menus beside the icon and no title
+    /// at all. Without one, a palette's row — the inspectors — where the title is the name of
     /// what is being inspected and so is the thing to read: left-aligned, full strength.
     /// </summary>
     public TitleBar(Form form, MenuStrip? menu = null)
@@ -172,28 +172,14 @@ internal sealed class TitleBar : Control
         const TextFormatFlags flags = TextFormatFlags.NoPadding | TextFormatFlags.SingleLine
             | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
 
+        // The main window's row carries no title: the icon and the menus say what the application
+        // is, and the name still shows in the taskbar and Alt+Tab. A palette's title is the name of
+        // what is being inspected, which is worth the room.
         if (_menu is null)
         {
             var area = Rectangle.FromLTRB(IconBounds.Right + Scale(6), 0, ButtonsLeft - Scale(8), Height);
             if (area.Width > 0)
                 TextRenderer.DrawText(g, _form.Text, Theme.UiBold, area, active ? Theme.Text : Theme.TextDim, flags);
-        }
-        else
-        {
-            // Centred on the window when there is room, as Windows 11 does; otherwise left-aligned
-            // in the gap between the menu and the buttons, and cut short rather than run under either.
-            int gapLeft = _menu.Right + Scale(16);
-            int gapRight = ButtonsLeft - Scale(16);
-            if (gapRight > gapLeft)
-            {
-                int textWidth = TextRenderer.MeasureText(_form.Text, Theme.Ui, Size.Empty, flags).Width;
-                int centred = (Width - textWidth) / 2;
-                var area = centred >= gapLeft && centred + textWidth <= gapRight
-                    ? new Rectangle(centred, 0, textWidth + 2, Height)
-                    : new Rectangle(gapLeft, 0, gapRight - gapLeft, Height);
-
-                TextRenderer.DrawText(g, _form.Text, Theme.Ui, area, active ? Theme.TextDim : Theme.Border, flags);
-            }
         }
 
         foreach (var (hit, bounds) in Buttons())
