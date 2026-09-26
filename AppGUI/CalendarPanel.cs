@@ -4,7 +4,8 @@ using Ck3MapGen.MapGen;
 namespace Ck3MapGen.AppGUI;
 
 /// <summary>
-/// The Calendar tab: the world's era and its twelve months, typed.
+/// The Calendar page of the settings list: the world's era and its twelve months, typed. It fills
+/// the settings column in place of the grid, so it lays out to whatever width that column is.
 ///
 /// Every box may be left blank, and a blank one is generated at build time in the language of the
 /// world's most widespread people (<see cref="WorldCalendar.Build"/>). So the tab cannot show the
@@ -13,7 +14,7 @@ namespace Ck3MapGen.AppGUI;
 ///
 /// Writes straight into the live <see cref="MapConfig"/>, the same object the settings grid edits,
 /// so presets carry the names with everything else. Shown only while
-/// <see cref="MapConfig.CalendarEnabled"/> is on; see MainForm.SyncCalendarTab.
+/// <see cref="MapConfig.CalendarEnabled"/> is on; see MainForm.SyncCalendarSection.
 /// </summary>
 public sealed class CalendarPanel : UserControl
 {
@@ -36,13 +37,13 @@ public sealed class CalendarPanel : UserControl
         var layout = new TableLayoutPanel
         {
             ColumnCount = 2,
+            Dock = DockStyle.Top,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Padding = new Padding(16, 12, 16, 16),
-            Location = new Point(0, 0),
+            Padding = new Padding(12, 10, 12, 16),
         };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 240));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
         void Span(Control control)
         {
@@ -128,9 +129,20 @@ public sealed class CalendarPanel : UserControl
         RefreshPreview();
     }
 
+    /// <summary>The notes wrap to the column: a label's wrap width is a maximum size, not its container's.</summary>
+    protected override void OnLayout(LayoutEventArgs e)
+    {
+        int width = Math.Max(120, ClientSize.Width - 36);
+        foreach (var note in _notes)
+            if (note.MaximumSize.Width != width) note.MaximumSize = new Size(width, 0);
+        base.OnLayout(e);
+    }
+
+    private readonly List<Label> _notes = [];
+
     private static TextBox Box(string placeholder) => new()
     {
-        Width = 230,
+        Anchor = AnchorStyles.Left | AnchorStyles.Right,
         Font = Theme.Ui,
         BackColor = Theme.Surface,
         ForeColor = Theme.Text,
@@ -145,9 +157,14 @@ public sealed class CalendarPanel : UserControl
         Margin = new Padding(3, 14, 3, 4),
     };
 
-    private static Label Note(string text) => new()
+    private Label Note(string text)
     {
-        Text = text, AutoSize = true, MaximumSize = new Size(370, 0), Font = Theme.Ui,
-        ForeColor = Theme.TextDim, Margin = new Padding(3, 3, 3, 6),
-    };
+        var note = new Label
+        {
+            Text = text, AutoSize = true, MaximumSize = new Size(300, 0), Font = Theme.Ui,
+            ForeColor = Theme.TextDim, Margin = new Padding(3, 3, 3, 6),
+        };
+        _notes.Add(note);
+        return note;
+    }
 }

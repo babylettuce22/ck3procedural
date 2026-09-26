@@ -141,7 +141,7 @@ public sealed class ClimatePanel : UserControl
             BackColor = Theme.Surface,
             ForeColor = Theme.TextDim,
             AutoEllipsis = true,
-            Text = "Choose a heightmap first — the Climate tab paints over it.",
+            Text = "Choose a heightmap first (World ▸ Choose heightmap, or Terrain) — climate is painted over it.",
         };
 
         _readout = new Label
@@ -175,7 +175,7 @@ public sealed class ClimatePanel : UserControl
         split.Panel2.Controls.Add(BuildRight());
 
         Controls.Add(split);
-        _canvas.EmptyText = "Choose a heightmap, then open this tab to paint its climate.";
+        _canvas.EmptyText = "Choose a heightmap, then come back here to paint its climate.";
 
         WireCanvas();
         _debounce.Tick += (_, _) => { _debounce.Stop(); RunPreviewAsync().Forget("climate preview"); };
@@ -195,7 +195,7 @@ public sealed class ClimatePanel : UserControl
         var file = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(4, 2, 4, 6) };
         file.Controls.Add(_import);
         file.Controls.Add(_export);
-        _tips.SetToolTip(_import, "Load a climate paint PNG saved from this tab or beside a preset");
+        _tips.SetToolTip(_import, "Load a climate paint PNG saved from here or beside a preset");
         _tips.SetToolTip(_export, "Save the paint as a PNG — usable with --climate-paint on the command line");
         _import.Click += (_, _) => ImportPaint();
         _export.Click += (_, _) => ExportPaint();
@@ -399,7 +399,7 @@ public sealed class ClimatePanel : UserControl
             _predicted = null;
             _landscape = null;
             _canvas.SetImage(null);
-            _status.Text = "Choose a heightmap first — the Climate tab paints over it.";
+            _status.Text = "Choose a heightmap first (World ▸ Choose heightmap, or Terrain) — climate is painted over it.";
             return;
         }
 

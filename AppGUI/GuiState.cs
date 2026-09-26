@@ -22,7 +22,13 @@ public sealed class GuiState
     public bool Maximized { get; set; }
 
     public int SettingsWidth { get; set; } = 430;
-    public int ViewerHeight { get; set; } = 620;
+    /// <summary>The log's height while open; it folds to its header row when <see cref="LogOpen"/> is off.</summary>
+    public int LogHeight { get; set; } = 200;
+    public bool LogOpen { get; set; }
+
+    /// <summary>The <see cref="Workspace"/> and World view on screen at close, by name.</summary>
+    public string? Workspace { get; set; }
+    public string? WorldView { get; set; }
 
     public string? HeightmapPath { get; set; }
 

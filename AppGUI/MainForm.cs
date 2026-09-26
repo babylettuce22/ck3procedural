@@ -114,18 +114,32 @@ public sealed partial class MainForm : Form
 
     private AzgaarGuide? _guide;
     private WelcomeGuide? _welcome;
-    private TabControl _tabs = null!;
-    private TabPage _sourceTab = null!;
-    private TabPage _forgeTab = null!;
 
-    /// <summary>The Heightmap tab: CK3 Heightmap Forge, embedded. See <see cref="Forge.ForgePanel"/>.</summary>
+    /// <summary>The top row; see <see cref="WorkspaceBar"/> for why it is up there.</summary>
+    private readonly WorkspaceBar _workspaceBar = new();
+    private readonly Dictionary<Workspace, Control> _workspacePages = [];
+    private Workspace _workspace = Workspace.World;
+
+    /// <summary>What the World workspace's canvas is showing. The settings sidebar stays for all three.</summary>
+    private enum WorldView { Map, ThreeD, Titles }
+
+    private WorldView _worldView = WorldView.Map;
+    private readonly Dictionary<WorldView, Control> _worldViewPages = [];
+    private readonly Dictionary<WorldView, Button> _worldViewButtons = [];
+
+    /// <summary>The Terrain workspace: CK3 Heightmap Forge, embedded. See <see cref="Forge.ForgePanel"/>.</summary>
     private readonly Forge.ForgePanel _forge = new() { Dock = DockStyle.Fill };
 
-    /// <summary>The Climate tab: paint the climate over the heightmap. See <see cref="ClimatePanel"/>.</summary>
+    /// <summary>The Climate workspace: paint the climate over the heightmap. See <see cref="ClimatePanel"/>.</summary>
     private readonly ClimatePanel _climate = new() { Dock = DockStyle.Fill };
-    private readonly CalendarPanel _calendar = new() { Dock = DockStyle.Fill };
-    private TabPage _calendarTab = null!;
-    private TabPage _climateTab = null!;
+
+    /// <summary>
+    /// The world's calendar, shown in place of the settings grid when its entry in the sections
+    /// list is picked. It is a short form, not a workspace, so it lives with the other settings.
+    /// </summary>
+    private readonly CalendarPanel _calendar = new() { Dock = DockStyle.Fill, Visible = false };
+
+    private const string CalendarSection = "Calendar";
 
     /// <summary>Which source the Climate tab was last given terrain for; null when it needs a fresh one.</summary>
     private string? _climateStamp;
@@ -229,7 +243,18 @@ public sealed partial class MainForm : Form
 
     private RunProgress? _progressModel;
     private SplitContainer _body = null!;
+
+    /// <summary>The World canvas over the log. The log half collapses; see <see cref="SetLogOpen"/>.</summary>
     private SplitContainer _right = null!;
+
+    private Panel _viewArea = null!;
+    private Panel _logPane = null!;
+    private Control _logBar = null!;
+    private readonly Button _logToggle = Theme.MakeButton("Log", 64);
+    private bool _logOpen;
+
+    /// <summary>The log's height while open, kept across collapses and sessions.</summary>
+    private int _logHeight = 200;
 
     private readonly Dictionary<string, Button> _viewButtons = [];
     private readonly Dictionary<string, Button> _categoryButtons = [];
@@ -376,6 +401,7 @@ public sealed partial class MainForm : Form
         _sections.Items.Add("All");
         foreach (var section in SettingsView.Sections)
             _sections.Items.Add(SettingsView.DisplayName(section));
+        SyncCalendarSection();
 
         _sections.SelectedIndex =
             _state.SettingsSection is { } saved && _sections.Items.IndexOf(saved) is var found and > 0
@@ -384,8 +410,11 @@ public sealed partial class MainForm : Form
         ApplySection();
 
         _sections.SelectedIndexChanged += (_, _) => ApplySection();
+        StyleSections();
         _settingsSearch.TextChanged += (_, _) =>
         {
+            // The search runs over the grid, so it cannot be answered while the calendar hides it.
+            if (_calendar.Visible && _settingsSearch.TextLength > 0) _sections.SelectedIndex = 0;
             _settingsView.Search = _settingsSearch.Text;
             RefreshSettings();
         };
@@ -409,7 +438,7 @@ public sealed partial class MainForm : Form
             // The toolbar chip mirrors the grid row, whichever of them took the edit.
             if (changed == nameof(MapConfig.AzgaarJsonPath)) ApplyAzgaarChip();
 
-            if (changed is nameof(MapConfig.CalendarEnabled) or nameof(MapConfig.ContentSource)) SyncCalendarTab();
+            if (changed is nameof(MapConfig.CalendarEnabled) or nameof(MapConfig.ContentSource)) SyncCalendarSection();
             if (changed == nameof(MapConfig.StartYear)) _calendar.RefreshPreview();
 
             // The Climate tab's prediction runs on the same settings; its cached model is stale.
@@ -482,12 +511,11 @@ public sealed partial class MainForm : Form
             _category = rememberedMode.Category;
         }
 
-        Controls.Add(BuildBody());
-        Controls.Add(BuildPendingBar());
-        Controls.Add(BuildToolbar());
+        Controls.Add(BuildWorkspaces());
+        Controls.Add(BuildWorkspaceBar());
 
         // Docking lays out from the last control back, so the menu bar has to be added after the
-        // toolbar to end up above it.
+        // workspace bar to end up above it.
         Controls.Add(BuildMenuBar());
         Controls.Add(BuildStatusBar());
 
@@ -546,6 +574,36 @@ public sealed partial class MainForm : Form
             exportView.Enabled = !_busy;
             savePreset.Enabled = _savePreset.Enabled;
             loadPreset.Enabled = _loadPreset.Enabled;
+        };
+
+        // ---- View -----------------------------------------------------------------------
+        var terrain = MenuItem("Terrain", () => SelectWorkspace(Workspace.Terrain), "Ctrl+1");
+        var climate = MenuItem("Climate", () => SelectWorkspace(Workspace.Climate), "Ctrl+2");
+        var world = MenuItem("World", () => SelectWorkspace(Workspace.World), "Ctrl+3");
+        var mapView = MenuItem("Map", () => SelectWorldView(WorldView.Map));
+        var solidView = MenuItem("3D", () => SelectWorldView(WorldView.ThreeD));
+        var titlesView = MenuItem("Titles", () => SelectWorldView(WorldView.Titles));
+        var showLog = MenuItem("Log", () => SetLogOpen(!_logOpen, remember: true), "Ctrl+L");
+
+        var view = TopMenu(menu, "&View",
+            terrain, climate, world, new ToolStripSeparator(),
+            mapView, solidView, titlesView, new ToolStripSeparator(),
+            showLog);
+
+        view.DropDownOpening += (_, _) =>
+        {
+            terrain.Visible = _workspaceBar.IsAvailable(Workspace.Terrain);
+            climate.Visible = _workspaceBar.IsAvailable(Workspace.Climate);
+            terrain.Checked = _workspace == Workspace.Terrain;
+            climate.Checked = _workspace == Workspace.Climate;
+            world.Checked = _workspace == Workspace.World;
+
+            bool inWorld = _workspace == Workspace.World;
+            mapView.Checked = inWorld && _worldView == WorldView.Map;
+            solidView.Checked = inWorld && _worldView == WorldView.ThreeD;
+            titlesView.Checked = inWorld && _worldView == WorldView.Titles;
+            solidView.Enabled = _worldViewButtons[WorldView.ThreeD].Enabled;
+            showLog.Checked = _logOpen;
         };
 
         // ---- Generate -------------------------------------------------------------------
@@ -661,16 +719,33 @@ public sealed partial class MainForm : Form
     private void RollSeed() => _seed.Value = Random.Shared.Next(1, int.MaxValue);
 
     /// <summary>
-    /// The toolbar, cut back to the commands a run needs within reach: what the world is built
-    /// *from* and the runs that build it on the left, what to do with the built mod on the right.
-    /// Everything else moved to <see cref="BuildMenuBar"/>.
+    /// The top row: the workspaces on the left, and on the right what to do with the built mod —
+    /// commands that belong to no one workspace, so they stay put whichever is showing.
     ///
-    /// Two of these are chips rather than buttons — they appear only when they have something to
-    /// report. The Azgaar chip shows up once an export is loaded, to name it; the game folder chip
-    /// shows up only when CK3 could not be found, in red, because that is the one time anyone
-    /// needs to go looking for it. Both actions stay in the menus at all times.
+    /// The game folder chip appears only when CK3 could not be found, in red, because that is the
+    /// one time anyone needs to go looking for it. Mod ▸ Game folder… works either way.
     /// </summary>
-    private Control BuildToolbar()
+    private Control BuildWorkspaceBar()
+    {
+        // Right to left, so the group hugs the window edge; visually it reads
+        // "Open mod folder · Launch CK3", with the game folder chip ahead of them only when the
+        // install could not be found.
+        _workspaceBar.Trailing.Controls.Add(_gameFolder);
+        _workspaceBar.Trailing.Controls.Add(_launchGame);
+        _workspaceBar.Trailing.Controls.Add(_openMod);
+
+        _workspaceBar.Picked += SelectWorkspace;
+        return _workspaceBar;
+    }
+
+    /// <summary>
+    /// The World workspace's toolbar, cut back to the commands a run needs within reach: what the
+    /// world is built *from* and the runs that build it on the left, which view of it is showing on
+    /// the right. Everything else lives in <see cref="BuildMenuBar"/>.
+    ///
+    /// The Azgaar button is a chip: once an export is loaded it wears the export's name.
+    /// </summary>
+    private Control BuildWorldToolbar()
     {
         var bar = new Panel
         {
@@ -702,27 +777,38 @@ public sealed partial class MainForm : Form
         build.Controls.Add(_writeMod);
         build.Controls.Add(_cancel);
 
-        // Right to left, so the group hugs the window edge; visually it reads
-        // "Open mod folder · Launch CK3", with the game folder chip appearing ahead of them only
-        // when the install could not be found.
-        var made = new FlowLayoutPanel
+        var views = new FlowLayoutPanel
         {
             Dock = DockStyle.Right,
-            FlowDirection = FlowDirection.RightToLeft,
             AutoSize = true,
             // Without this the docked panel settles at one button wide and quietly wraps the
             // rest below the 40 px bar, where they render as nothing at all.
             WrapContents = false,
-            Padding = new Padding(0, 5, 6, 5),
+            Padding = new Padding(0, 3, 8, 3),
             BackColor = Color.Transparent,
         };
 
-        made.Controls.Add(_gameFolder);
-        made.Controls.Add(_launchGame);
-        made.Controls.Add(_openMod);
+        var options = new (WorldView View, string Text, string Tip)[]
+        {
+            (WorldView.Map, "Map", "The generated map, one mode at a time"),
+            (WorldView.ThreeD, "3D", "The heightmap in relief — as loaded before a build, as shipped after one"),
+            (WorldView.Titles, "Titles", "The title tree: rename, recolour and rearrange"),
+        };
+
+        foreach (var (view, text, tip) in options)
+        {
+            var button = new Theme.SegmentButton { Text = text, Width = 64, Name = $"view{view}" };
+            button.Click += (_, _) => SelectWorldView(view);
+            button.EnabledChanged += (_, _) => Theme.StyleSegment(button, view == _worldView);
+            _tips.SetToolTip(button, tip);
+            _worldViewButtons[view] = button;
+        }
+
+        views.Controls.Add(Theme.MakeSegmented(_worldViewButtons.Values));
 
         bar.Controls.Add(build);
-        bar.Controls.Add(made);
+        bar.Controls.Add(views);
+        bar.Controls.Add(new Panel { Dock = DockStyle.Bottom, Height = 1, BackColor = Theme.Border });
 
         return bar;
     }
@@ -754,7 +840,47 @@ public sealed partial class MainForm : Form
         return _pendingBar;
     }
 
-    private Control BuildBody()
+    /// <summary>
+    /// The three workspaces, stacked in one host with only the current one visible. Each owns the
+    /// whole area under the workspace bar: Terrain and Climate are their panels alone, with none of
+    /// the generator's settings, seed or log around them; World is the generator.
+    /// </summary>
+    private Control BuildWorkspaces()
+    {
+        var host = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
+
+        _forge.UseForGeneration += UseForgeForGeneration;
+        _forge.PresetDir = _state.ForgePresetDir;
+
+        // Climate paints over whatever heightmap is chosen. An unvisited workspace changes nothing
+        // — see ClimatePanel.EffectivePaint — and a painted one says so in its label.
+        _climate.PaintDir = _state.ClimatePaintDir;
+        _climate.UseAutomatic = _state.ClimateAutomatic;
+        _climate.PaintChanged += RefreshClimateLabel;
+
+        _workspacePages[Workspace.Terrain] = Page(_forge);
+        _workspacePages[Workspace.Climate] = Page(_climate);
+        _workspacePages[Workspace.World] = BuildWorld();
+
+        // All three start visible, so the first layout sizes every one of them — the splitters
+        // placed in OnLoad clamp to the size they are given, and a page that has never been laid
+        // out is 150 px wide. OnLoad hides all but the current one once they are placed.
+        foreach (var page in _workspacePages.Values) host.Controls.Add(page);
+        return host;
+
+        static Control Page(Control content)
+        {
+            var page = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
+            page.Controls.Add(content);
+            return page;
+        }
+    }
+
+    /// <summary>
+    /// The World workspace: its toolbar across the top, settings on the left, and on the right the
+    /// canvas — map, 3D or titles — over a log that folds away to one row.
+    /// </summary>
+    private Control BuildWorld()
     {
         var presets = new FlowLayoutPanel
         {
@@ -781,6 +907,8 @@ public sealed partial class MainForm : Form
         // top and left bars their edges before the grid takes what remains.
         var settings = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Surface };
         settings.Controls.Add(_grid);
+        settings.Controls.Add(_calendar);
+        _calendar.Bind(_options.Config);
         settings.Controls.Add(_sections);
         settings.Controls.Add(settingsHeader);
         settings.Controls.Add(presets);
@@ -814,92 +942,47 @@ public sealed partial class MainForm : Form
         viewer.Controls.Add(_modeStrip);
         viewer.Controls.Add(_categoryStrip);
 
-        var tabs = _tabs = Theme.MakeTabs();
-        tabs.Selecting += (_, e) =>
+        var titles = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
+        titles.Controls.Add(_titles);
+
+        _worldViewPages[WorldView.Map] = viewer;
+        _worldViewPages[WorldView.ThreeD] = BuildSourceView();
+        _worldViewPages[WorldView.Titles] = titles;
+
+        var canvas = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
+        foreach (var (view, page) in _worldViewPages)
         {
-            if (_loadedWorld is not null && (e.TabPage == _sourceTab || e.TabPage == _forgeTab || e.TabPage == _climateTab
-                                             || e.TabPage == _calendarTab))
-            {
-                e.Cancel = true;
-                _status.Text = "This loaded world is edited from the Map and Titles tabs; generation, heightmap and climate tools are inactive.";
-            }
-        };
+            page.Visible = view == _worldView;
+            canvas.Controls.Add(page);
+        }
 
-        // Loaded when the tab is first opened, not at startup: decoding a vanilla-sized heightmap
-        // is several seconds, and a window that takes that long to appear for a view nobody asked
-        // for is a worse trade than a view that takes a moment to fill in. The Heightmap tab is
-        // lazy for the same reason — its first preview is a noise pass nobody asked for until
-        // they open it.
-        tabs.SelectedIndexChanged += (_, _) =>
-        {
-            if (tabs.SelectedTab == _forgeTab) _forge.EnsureStarted();
-            if (tabs.SelectedTab == _climateTab) ShowClimateAsync().Forget("climate view");
+        _logPane = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
+        _logPane.Controls.Add(_log);
 
-            if (tabs.SelectedTab == _sourceTab && !_sourceShown)
-            {
-                _sourceShown = true;
-
-                if (_processedSource is not null)
-                {
-                    SetSourceStage(processed: true);
-                    _solid.SetField(_processedSource, _processedPacked, "Nothing to show.");
-                }
-                else if (!_processedPending)
-                {
-                    ShowSourceAsync().Forget("source view");
-                }
-                // else: a build just finished and its processed heightmap is still being prepared;
-                // that task publishes here itself when it lands, now that the tab is live.
-            }
-        };
-
-        var mapTab = new TabPage("Map") { BackColor = Theme.Background };
-        mapTab.Controls.Add(viewer);
-
-        var titleTab = new TabPage("Titles") { BackColor = Theme.Background };
-        titleTab.Controls.Add(_titles);
-
-        var sourceTab = _sourceTab = new TabPage("3D render") { BackColor = Theme.Background };
-        sourceTab.Controls.Add(BuildSourceView());
-
-        var forgeTab = _forgeTab = new TabPage("Heightmap (WIP)") { BackColor = Theme.Background };
-        forgeTab.Controls.Add(_forge);
-        _forge.UseForGeneration += UseForgeForGeneration;
-        _forge.PresetDir = _state.ForgePresetDir;
-
-        // The Climate tab paints over whatever heightmap is chosen. An unvisited tab changes
-        // nothing — see ClimatePanel.EffectivePaint — and a painted one says so in its title.
-        var climateTab = _climateTab = new TabPage("Climate") { BackColor = Theme.Background };
-        climateTab.Controls.Add(_climate);
-        _climate.PaintDir = _state.ClimatePaintDir;
-        _climate.UseAutomatic = _state.ClimateAutomatic;
-        _climate.PaintChanged += RefreshClimateTabTitle;
-
-        // The Calendar tab edits the config directly; it is in the strip only while the World
-        // Calendar setting is on — see SyncCalendarTab.
-        _calendarTab = new TabPage("Calendar") { BackColor = Theme.Background };
-        _calendarTab.Controls.Add(_calendar);
-        _calendar.Bind(_options.Config);
-
-        tabs.TabPages.Add(mapTab);
-        tabs.TabPages.Add(forgeTab);
-        tabs.TabPages.Add(climateTab);
-        tabs.TabPages.Add(sourceTab);
-        tabs.TabPages.Add(titleTab);
-        SyncCalendarTab();
-
-        var logPane = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
-        logPane.Controls.Add(_log);
-        logPane.Controls.Add(BuildLogHeader());
-
+        // The log keeps its own height when the window is resized: it is a drawer under the map,
+        // and the map is what should take the extra room.
         _right = new SplitContainer
         {
             Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,
             BackColor = Theme.Border,
+            FixedPanel = FixedPanel.Panel2,
         };
-        _right.Panel1.Controls.Add(tabs);
-        _right.Panel2.Controls.Add(logPane);
+        _right.Panel1.Controls.Add(canvas);
+        _right.Panel2.Controls.Add(_logPane);
+        _right.SplitterMoved += (_, _) =>
+        {
+            if (_logOpen) _logHeight = _right.Panel2.Height;
+        };
+
+        _viewArea = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
+        _viewArea.Controls.Add(_right);
+        _logBar = BuildLogHeader();
+
+        // Open for the first layout, like the workspaces, so OnLoad can place the splitter against
+        // real sizes; it folds the log to the saved state from there.
+        _logOpen = true;
+        _logPane.Controls.Add(_logBar);
 
         _body = new SplitContainer
         {
@@ -908,9 +991,110 @@ public sealed partial class MainForm : Form
             FixedPanel = FixedPanel.Panel1,
         };
         _body.Panel1.Controls.Add(settings);
-        _body.Panel2.Controls.Add(_right);
+        _body.Panel2.Controls.Add(_viewArea);
 
-        return _body;
+        var world = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
+        world.Controls.Add(_body);
+        world.Controls.Add(BuildPendingBar());
+        world.Controls.Add(BuildWorldToolbar());
+        return world;
+    }
+
+    /// <summary>
+    /// Shows one workspace and hides the other two. Terrain and Climate are filled the first time
+    /// they are opened, not at startup: the Forge's first preview is a noise pass and the Climate
+    /// panel decodes the heightmap, and neither is worth paying for until someone looks.
+    /// </summary>
+    private void SelectWorkspace(Workspace workspace)
+    {
+        if (!_workspaceBar.IsAvailable(workspace))
+        {
+            _status.Text = "An opened mod is edited in the World workspace; terrain and climate tools are for generating.";
+            return;
+        }
+
+        bool changed = workspace != _workspace || !_workspacePages[workspace].Visible;
+        _workspace = workspace;
+        _workspaceBar.SetCurrent(workspace);
+
+        if (!changed) return;
+
+        SuspendLayout();
+        foreach (var (key, page) in _workspacePages) page.Visible = key == workspace;
+        ResumeLayout();
+
+        if (workspace == Workspace.Terrain) _forge.EnsureStarted();
+        if (workspace == Workspace.Climate) ShowClimateAsync().Forget("climate view");
+        if (workspace == Workspace.World && _worldView == WorldView.ThreeD) EnsureSourceShown();
+    }
+
+    /// <summary>Switches the World canvas between the map, the 3D view and the title tree.</summary>
+    private void SelectWorldView(WorldView view)
+    {
+        if (_workspace != Workspace.World) SelectWorkspace(Workspace.World);
+        if (!_worldViewButtons[view].Enabled) return;
+
+        _worldView = view;
+        foreach (var (key, page) in _worldViewPages) page.Visible = key == view;
+        foreach (var (key, button) in _worldViewButtons) Theme.StyleSegment(button, key == view);
+
+        if (view == WorldView.ThreeD) EnsureSourceShown();
+    }
+
+    /// <summary>
+    /// Loaded when the 3D view is first opened, not at startup: decoding a vanilla-sized heightmap
+    /// is several seconds, and a window that takes that long to appear for a view nobody asked
+    /// for is a worse trade than a view that takes a moment to fill in.
+    /// </summary>
+    private void EnsureSourceShown()
+    {
+        if (_sourceShown) return;
+        _sourceShown = true;
+
+        if (_processedSource is not null)
+        {
+            SetSourceStage(processed: true);
+            _solid.SetField(_processedSource, _processedPacked, "Nothing to show.");
+        }
+        else if (!_processedPending)
+        {
+            ShowSourceAsync().Forget("source view");
+        }
+        // else: a build just finished and its processed heightmap is still being prepared; that
+        // task publishes here itself when it lands, now that the view is live.
+    }
+
+    private bool ShowingSolid => _workspace == Workspace.World && _worldView == WorldView.ThreeD;
+
+    /// <summary>
+    /// Opens or folds the log. Folded, its header row stays at the foot of the canvas — Clear,
+    /// Copy and Search still in reach — and the map takes the room. <paramref name="remember"/>
+    /// is for the user's own clicks; a run opening it for its duration does not change what the
+    /// next session starts with.
+    /// </summary>
+    private void SetLogOpen(bool open, bool remember = false)
+    {
+        if (remember) _state.LogOpen = open;
+        if (open == _logOpen) return;
+        _logOpen = open;
+
+        SuspendLayout();
+        if (open)
+        {
+            _right.Panel2Collapsed = false;
+            _logPane.Controls.Add(_logBar);      // added last, so it docks first: above the text
+            Place(_right, 120, 80, _right.Height - _right.SplitterWidth - _logHeight);
+        }
+        else
+        {
+            _right.Panel2Collapsed = true;
+            _viewArea.Controls.Add(_logBar);     // under the canvas, at the foot of the view
+        }
+
+        _logBar.Dock = open ? DockStyle.Top : DockStyle.Bottom;
+        _logToggle.Text = open ? "Log  ▾" : "Log  ▴";
+        _tips.SetToolTip(_logToggle, open ? "Fold the log away (Ctrl+L)" : "Show the log (Ctrl+L)");
+        ResumeLayout();
     }
 
     /// <summary>
@@ -1189,18 +1373,28 @@ public sealed partial class MainForm : Form
             }
         };
 
-        var header = new FlowLayoutPanel
+        _logToggle.FlatAppearance.BorderSize = 0;
+        _logToggle.BackColor = Theme.Surface;
+        _logToggle.Font = Theme.UiBold;
+        _logToggle.Click += (_, _) => SetLogOpen(!_logOpen, remember: true);
+
+        var row = new FlowLayoutPanel
         {
-            Dock = DockStyle.Top,
-            Height = 32,
-            Padding = new Padding(4, 3, 4, 0),
+            Dock = DockStyle.Fill,
+            WrapContents = false,
+            Padding = new Padding(4, 2, 4, 0),
             BackColor = Theme.Surface,
         };
-        header.Controls.Add(Caption("Log"));
-        header.Controls.Add(clear);
-        header.Controls.Add(copy);
-        header.Controls.Add(Caption("Search"));
-        header.Controls.Add(_logSearch);
+        row.Controls.Add(_logToggle);
+        row.Controls.Add(Separator());
+        row.Controls.Add(clear);
+        row.Controls.Add(copy);
+        row.Controls.Add(Caption("Search"));
+        row.Controls.Add(_logSearch);
+
+        var header = new Panel { Dock = DockStyle.Top, Height = 33, BackColor = Theme.Surface };
+        header.Controls.Add(row);
+        header.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 1, BackColor = Theme.Border });
         return header;
     }
 
@@ -1307,9 +1501,27 @@ public sealed partial class MainForm : Form
         Theme.ApplyLightTitleBar(this);
         RestorePlacement();
 
+        // Every page is still visible here (see BuildWorkspaces), so each splitter is placed
+        // against its real size before the pages that are not current are hidden.
+        PerformLayout();
         Place(_body, 300, 400, _state.SettingsWidth);
-        Place(_right, 200, 80, _state.ViewerHeight);
+        if (_state.LogHeight > 0) _logHeight = _state.LogHeight;
+        Place(_right, 120, 80, _right.Height - _right.SplitterWidth - _logHeight);
         if (_state.ForgeLeftWidth > 0) _forge.LeftWidth = _state.ForgeLeftWidth;
+
+        _logOpen = !_state.LogOpen;          // so the call below always applies, either way
+        SetLogOpen(_state.LogOpen);
+
+        // An opened mod can be adopted before the window is shown (--edit-world), and it has only
+        // the World workspace; a saved Terrain or Climate would leave no page showing at all.
+        var workspace = Enum.TryParse(_state.Workspace, out Workspace saved) && _workspaceBar.IsAvailable(saved)
+            ? saved
+            : Workspace.World;
+        var worldView = Enum.TryParse(_state.WorldView, out WorldView savedView) ? savedView : WorldView.Map;
+        SelectWorldView(worldView);
+
+        foreach (var page in _workspacePages.Values) page.Visible = false;
+        SelectWorkspace(workspace);
 
         ReportFolders();
         RestoreClimatePaint();
@@ -1436,7 +1648,9 @@ public sealed partial class MainForm : Form
         _state.Height = bounds.Height;
         _state.Maximized = WindowState == FormWindowState.Maximized;
         _state.SettingsWidth = _body.SplitterDistance;
-        _state.ViewerHeight = _right.SplitterDistance;
+        _state.LogHeight = _logHeight;
+        _state.Workspace = _workspace.ToString();
+        _state.WorldView = _worldView.ToString();
         _state.ForgeLeftWidth = _forge.LeftWidth;
         _state.ForgePresetDir = _forge.PresetDir;
         _state.ClimatePaintDir = _climate.PaintDir;
@@ -1472,13 +1686,31 @@ public sealed partial class MainForm : Form
 
     protected override bool ProcessCmdKey(ref Message message, Keys key)
     {
-        // The Heightmap tab owns the brush keys while it is the one on screen, and says so by
-        // handling them; anything it passes on falls through to the window's own shortcuts.
-        if (_tabs.SelectedTab == _forgeTab && !TypingInText() && _forge.HandleKey(key)) return true;
-        if (_tabs.SelectedTab == _climateTab && !TypingInText() && _climate.HandleKey(key)) return true;
+        // Terrain and Climate own the brush keys while they are on screen, and say so by handling
+        // them; anything they pass on falls through to the window's own shortcuts.
+        if (_workspace == Workspace.Terrain && !TypingInText() && _forge.HandleKey(key)) return true;
+        if (_workspace == Workspace.Climate && !TypingInText() && _climate.HandleKey(key)) return true;
+
+        bool onMap = _workspace == Workspace.World && _worldView == WorldView.Map;
 
         switch (key)
         {
+            case Keys.Control | Keys.D1:
+                SelectWorkspace(Workspace.Terrain);
+                return true;
+
+            case Keys.Control | Keys.D2:
+                SelectWorkspace(Workspace.Climate);
+                return true;
+
+            case Keys.Control | Keys.D3:
+                SelectWorkspace(Workspace.World);
+                return true;
+
+            case Keys.Control | Keys.L:
+                SetLogOpen(!_logOpen, remember: true);
+                return true;
+
             case Keys.F5 when _preview.Enabled:
                 PreviewAsync().Forget("preview");
                 return true;
@@ -1491,24 +1723,24 @@ public sealed partial class MainForm : Form
                 RequestCancel();
                 return true;
 
-            case Keys.Escape when _view == "Realms" && _realmFocus.Count > 0:
+            case Keys.Escape when onMap && _view == "Realms" && _realmFocus.Count > 0:
                 _realmFocus.RemoveAt(_realmFocus.Count - 1);
                 SelectView("Realms");
                 return true;
 
-            case Keys.Oem4 when !TypingInText():   // [
+            case Keys.Oem4 when onMap && !TypingInText():   // [
                 CycleMode(-1);
                 return true;
 
-            case Keys.Oem6 when !TypingInText():   // ]
+            case Keys.Oem6 when onMap && !TypingInText():   // ]
                 CycleMode(+1);
                 return true;
 
-            case Keys.Control | Keys.Oem4:
+            case Keys.Control | Keys.Oem4 when onMap:
                 CycleCategory(-1);
                 return true;
 
-            case Keys.Control | Keys.Oem6:
+            case Keys.Control | Keys.Oem6 when onMap:
                 CycleCategory(+1);
                 return true;
 
@@ -1750,10 +1982,10 @@ public sealed partial class MainForm : Form
         InvalidateProcessed();
         if (_sourceShown) ShowSourceAsync().Forget("source view");
 
-        // The Climate tab paints over the source; a new one is read the next time the tab is
-        // looked at, or now if it is the tab on screen.
+        // Climate paints over the source; a new one is read the next time the workspace is looked
+        // at, or now if it is the one on screen.
         _climateStamp = null;
-        if (_tabs is not null && _tabs.SelectedTab == _climateTab) ShowClimateAsync().Forget("climate view");
+        if (_workspace == Workspace.Climate) ShowClimateAsync().Forget("climate view");
     }
 
     /// <summary>
@@ -1782,12 +2014,12 @@ public sealed partial class MainForm : Form
         // The stamp stays unset, so the tab is filled in when the run ends — see SetEnabled.
         if (_busy)
         {
-            _status.Text = "The Climate tab will load its heightmap when the current run finishes.";
+            _status.Text = "Climate will load its heightmap when the current run finishes.";
             return;
         }
 
         int generation = ++_climateGeneration;
-        _status.Text = "Reading the heightmap for the Climate tab…";
+        _status.Text = "Reading the heightmap for Climate…";
 
         try
         {
@@ -1811,23 +2043,19 @@ public sealed partial class MainForm : Form
             _loadedStamp = stamp;
             _climateStamp = stamp;
             _climate.SetTerrain(terrain);
-            _status.Text = $"Climate tab ready — {source.Label}";
+            _status.Text = $"Climate ready — {source.Label}";
         }
         catch (Exception error)
         {
             if (generation != _climateGeneration) return;
-            Console.WriteLine($"Could not read the heightmap for the Climate tab: {error.Message}");
-            _status.Text = "Could not read the heightmap for the Climate tab — see log";
+            Console.WriteLine($"Could not read the heightmap for Climate: {error.Message}");
+            _status.Text = "Could not read the heightmap for Climate — see log";
         }
     }
 
-    /// <summary>The tab says when its paint will change the next run, the way editable map modes do.</summary>
-    private void RefreshClimateTabTitle()
-    {
-        if (_climateTab is null) return;
-        string title = _climate.EffectivePaint is not null ? "Climate ✎" : "Climate";
-        if (_climateTab.Text != title) _climateTab.Text = title;
-    }
+    /// <summary>The workspace says when its paint will change the next run, the way editable map modes do.</summary>
+    private void RefreshClimateLabel()
+        => _workspaceBar.SetLabel(Workspace.Climate, _climate.EffectivePaint is not null ? "Climate ✎" : "Climate");
 
     /// <summary>Where a preset's climate paint lives: beside it, named after it.</summary>
     private static string ClimateSidecar(string presetPath)
@@ -1870,7 +2098,7 @@ public sealed partial class MainForm : Form
     {
         _forge.EnsureStarted();
         SetSource(_forge.Session.ProviderForGeneration(allowUnverifiedSize));
-        _status.Text = $"Building from the Heightmap tab's pipeline ({_forge.Session.Name}) — " +
+        _status.Text = $"Building from the Terrain workspace's pipeline ({_forge.Session.Name}) — " +
                        "press Preview to generate from it" +
                        (allowUnverifiedSize ? " (at a size CK3 is not known to render, to test it)" : "");
     }
@@ -2047,13 +2275,13 @@ public sealed partial class MainForm : Form
 
         items.Add(new ToolStripSeparator());
 
-        var forge = MenuItem("Use the Heightmap tab's pipeline", () =>
+        var forge = MenuItem("Use the Terrain workspace's pipeline", () =>
         {
             // Through the panel, so an export size CK3 is not known to render gets the same
             // question here as from the panel's own button, rather than none.
             _forge.EnsureStarted();
             _forge.RequestUseForGeneration();
-            _tabs.SelectedTab = _forgeTab;
+            SelectWorkspace(Workspace.Terrain);
         });
         forge.Enabled = _source is not MapGen.ForgeHeightmapProvider;
         items.Add(forge);
@@ -2061,13 +2289,13 @@ public sealed partial class MainForm : Form
         return [.. items];
     }
 
-    /// <summary>Saves whatever the active tab is showing — a map mode or the 3D frame — as a PNG.</summary>
+    /// <summary>Saves whatever the World canvas is showing — a map mode or the 3D frame — as a PNG.</summary>
     private void ExportView()
     {
         Bitmap? frame;
         string name;
 
-        if (_tabs.SelectedTab == _sourceTab)
+        if (ShowingSolid)
         {
             frame = _solid.CurrentFrame;
             name = "terrain-3d";
@@ -2148,7 +2376,7 @@ public sealed partial class MainForm : Form
             ? "Choose heightmap…"
             : Clipped(_source.Label, 30);
 
-        _tips.SetToolTip(_browse, _source?.Detail ?? "The heightmap the whole mod is built from: a 16-bit PNG, or the Heightmap tab's pipeline.");
+        _tips.SetToolTip(_browse, _source?.Detail ?? "The heightmap the whole mod is built from: a 16-bit PNG, or the Terrain workspace's pipeline.");
 
         _openMod.Enabled = ModFolderToOpen() is not null;
         SetEnabled(!_busy);
@@ -2158,9 +2386,55 @@ public sealed partial class MainForm : Form
 
     private void ApplySection()
     {
-        int index = _sections.SelectedIndex;
-        _settingsView.Section = index <= 0 ? null : SettingsView.Sections[index - 1];
+        string? picked = _sections.SelectedIndex > 0 ? _sections.SelectedItem as string : null;
+
+        bool calendar = picked == CalendarSection;
+        _calendar.Visible = calendar;
+        _grid.Visible = !calendar;
+        if (calendar)
+        {
+            _calendar.RefreshPreview();
+            return;
+        }
+
+        // By name rather than position: the Calendar entry sits among the sections when it is shown.
+        _settingsView.Section = picked is null
+            ? null
+            : SettingsView.Sections.FirstOrDefault(s => SettingsView.DisplayName(s) == picked);
         RefreshSettings();
+    }
+
+    /// <summary>
+    /// The sections list, owner-drawn for the room a stock ListBox will not give: a stock row is
+    /// the font's height with the text against the window edge, and its selection is the same
+    /// solid blue as the map mode on screen. Here the chosen section wears the pale accent.
+    /// </summary>
+    private void StyleSections()
+    {
+        _sections.DrawMode = DrawMode.OwnerDrawFixed;
+        _sections.ItemHeight = 24;
+        _sections.Width = 132;
+        _sections.EnabledChanged += (_, _) => _sections.Invalidate();
+
+        _sections.DrawItem += (_, e) =>
+        {
+            if (e.Index < 0) return;
+            bool on = (e.State & DrawItemState.Selected) != 0;
+            string text = _sections.Items[e.Index] as string ?? "";
+
+            using (var back = new SolidBrush(on ? Theme.AccentSoft : Theme.Surface))
+                e.Graphics.FillRectangle(back, e.Bounds);
+            if (on)
+            {
+                using var edge = new SolidBrush(Theme.Accent);
+                e.Graphics.FillRectangle(edge, e.Bounds.X, e.Bounds.Y, 3, e.Bounds.Height);
+            }
+
+            var area = Rectangle.FromLTRB(e.Bounds.X + 12, e.Bounds.Y, e.Bounds.Right - 4, e.Bounds.Bottom);
+            TextRenderer.DrawText(e.Graphics, text, on ? Theme.UiBold : Theme.Ui, area,
+                !_sections.Enabled ? Theme.TextDim : on ? Theme.Accent : Theme.Text,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+        };
     }
 
     /// <summary>
@@ -2170,20 +2444,26 @@ public sealed partial class MainForm : Form
     private void RefreshSettings() => _grid.SelectedObject = _settingsView;
 
     /// <summary>
-    /// Puts the Calendar tab in the strip, after Climate, exactly while the world will have a
+    /// Puts Calendar in the sections list, after World State, exactly while the world will have a
     /// calendar of its own: World Calendar on, and not a world of vanilla peoples, which keeps
-    /// CK3's. Typed names survive the tab being hidden; they are on the config, not the tab.
+    /// CK3's. Typed names survive the entry being hidden; they are on the config, not the panel.
     /// </summary>
-    private void SyncCalendarTab()
+    private void SyncCalendarSection()
     {
-        if (_tabs is null) return;
-
         var cfg = _options.Config;
         bool wanted = cfg.CalendarEnabled && cfg.ContentSource != MapConfig.ContentSourceMode.VanillaWorld;
-        bool shown = _tabs.TabPages.Contains(_calendarTab);
+        int at = _sections.Items.IndexOf(CalendarSection);
 
-        if (wanted && !shown) _tabs.TabPages.Insert(_tabs.TabPages.IndexOf(_climateTab) + 1, _calendarTab);
-        else if (!wanted && shown) _tabs.TabPages.Remove(_calendarTab);
+        if (wanted && at < 0)
+        {
+            int after = _sections.Items.IndexOf("World State");
+            _sections.Items.Insert(after >= 0 ? after + 1 : _sections.Items.Count, CalendarSection);
+        }
+        else if (!wanted && at >= 0)
+        {
+            if (_sections.SelectedIndex == at) _sections.SelectedIndex = 0;
+            _sections.Items.RemoveAt(at);
+        }
     }
 
     private void SavePreset()
@@ -2246,7 +2526,7 @@ public sealed partial class MainForm : Form
             RefreshSettings();
             _climate.InvalidateModel();
             _calendar.Bind(_options.Config);
-            SyncCalendarTab();
+            SyncCalendarSection();
 
             // The paint beside the preset replaces what is on the tab; a preset with none clears
             // it, so the preset means the same map every time it is loaded. Both are undoable.
@@ -2270,7 +2550,7 @@ public sealed partial class MainForm : Form
             else if (_climate.HasPaint)
             {
                 _climate.ClearPaint();
-                note = " — it carries no climate paint, so the tab's paint was cleared (Undo on the Climate tab restores it)";
+                note = " — it carries no climate paint, so the painted climate was cleared (Undo in Climate restores it)";
             }
 
             _status.Text = $"Loaded {applied} settings from {Path.GetFileName(dialog.FileName)}{note}";
@@ -2879,6 +3159,14 @@ public sealed partial class MainForm : Form
         _log.Clear();
         _status.Text = message;
 
+        // A run is watched from World, whichever workspace it was started from (F5 works in all
+        // three), and its log opens for the duration. It folds again afterwards unless the run
+        // failed — then the log is the thing worth reading.
+        SelectWorkspace(Workspace.World);
+        bool logWasOpen = _logOpen;
+        bool failed = false;
+        SetLogOpen(true);
+
         _progressModel = new RunProgress(
             Plan(writing),
             () => _options.Config.ProvinceWidth / 1000.0 * _options.Config.ProvinceHeight / 1000.0);
@@ -2923,11 +3211,14 @@ public sealed partial class MainForm : Form
             Console.WriteLine();
             Console.WriteLine(ex);
             _status.Text = "Failed — see log";
+            failed = true;
             if (modDir is not null) RunLog.Write(modDir, _options, $"failed: {ex.Message}");
             return (null, false);
         }
         finally
         {
+            if (!failed && !logWasOpen) SetLogOpen(false);
+
             Stage.Cancellation = CancellationToken.None;
             _cancellation.Dispose();
             _cancellation = null;
@@ -3004,7 +3295,7 @@ public sealed partial class MainForm : Form
         ShowPending();
 
         // A Climate tab opened mid-run was told to wait; the run is over.
-        if (enabled && _tabs is not null && _tabs.SelectedTab == _climateTab && _climateStamp is null)
+        if (enabled && _workspace == Workspace.Climate && _climateStamp is null)
             ShowClimateAsync().Forget("climate view");
 
         bool ready = enabled && _source is not null;
@@ -3208,10 +3499,12 @@ public sealed partial class MainForm : Form
         foreach (var (key, button) in _categoryButtons)
         {
             button.Enabled = _loadedWorld is null || MapModes.All.Any(m => m.Category == key && Available(m));
+            // The pale accent, one step quieter than the mode under it: the category only says which
+            // row of modes is showing, and the mode is the thing actually on the map.
             bool on = key == _category;
-            button.BackColor = on ? Theme.Accent : Theme.SurfaceHigh;
-            button.ForeColor = on ? Theme.AccentText : Theme.Text;
-            button.FlatAppearance.MouseOverBackColor = on ? Theme.Accent : Theme.Border;
+            button.BackColor = on ? Theme.AccentSoft : Theme.Surface;
+            button.ForeColor = on ? Theme.Accent : Theme.Text;
+            button.FlatAppearance.MouseOverBackColor = on ? Theme.AccentSoft : Theme.SurfaceHigh;
         }
 
         _modeStrip.SuspendLayout();

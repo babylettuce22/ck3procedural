@@ -25,6 +25,13 @@ internal static class Theme
     public static readonly Color TextDim = Color.FromArgb(115, 122, 132);
     public static readonly Color Accent = Color.FromArgb(30, 110, 210);
     public static readonly Color AccentText = Color.FromArgb(255, 255, 255);
+
+    /// <summary>
+    /// A pale wash of <see cref="Accent"/>, for "selected" one level above a leaf: the map category
+    /// whose modes are showing, the settings section being read. The solid accent stays with the
+    /// one thing actually on screen, so a row of selectors reads top-down instead of all at once.
+    /// </summary>
+    public static readonly Color AccentSoft = Color.FromArgb(222, 234, 250);
     public static readonly Color Danger = Color.FromArgb(200, 65, 55);
 
     /// <summary>
@@ -151,42 +158,69 @@ internal static class Theme
         };
 
     /// <summary>
-    /// A tab strip that matches the view buttons rather than the Windows default.
-    ///
-    /// <see cref="TabControl"/> is the fourth control that ignores BackColor: the strip is drawn by
-    /// the OS theme and comes out as a raised grey ridge regardless of what the palette says. Owner
-    /// drawing is the only way to get a flat tab, and once it is on, *both* states have to be
-    /// painted by hand — an unhandled DrawItem leaves the unselected tabs blank.
-    ///
-    /// Only the tab headers are owner-drawn. The page body is a normal container and takes its
-    /// BackColor like anything else.
+    /// A segmented control: a grey track holding a row of options, the chosen one lifted out in
+    /// white. A shape of its own, so it cannot be mistaken for the workspace row above it or the
+    /// map-mode buttons below it. Returns the track; the host adds it and restyles on change with
+    /// <see cref="StyleSegment"/>.
     /// </summary>
-    public static TabControl MakeTabs()
+    public static FlowLayoutPanel MakeSegmented(IEnumerable<Button> options)
     {
-        var tabs = new TabControl
+        var track = new FlowLayoutPanel
         {
-            Dock = DockStyle.Fill,
-            Font = Ui,
-            DrawMode = TabDrawMode.OwnerDrawFixed,
-            ItemSize = new Size(96, 26),
-            SizeMode = TabSizeMode.Fixed,
-            Padding = new Point(0, 0),
+            AutoSize = true,
+            WrapContents = false,
+            Padding = new Padding(2),
+            Margin = new Padding(3, 4, 3, 3),
+            BackColor = SurfaceHigh,
         };
 
-        tabs.DrawItem += (_, e) =>
+        foreach (var option in options)
         {
-            var page = tabs.TabPages[e.Index];
-            bool selected = e.Index == tabs.SelectedIndex;
+            option.AutoSize = false;
+            option.Height = 24;
+            option.FlatStyle = FlatStyle.Flat;
+            option.FlatAppearance.BorderSize = 0;
+            option.UseVisualStyleBackColor = false;
+            option.Margin = new Padding(0);
+            option.Font = Ui;
+            track.Controls.Add(option);
+        }
 
-            using var back = new SolidBrush(selected ? Accent : SurfaceHigh);
-            e.Graphics.FillRectangle(back, e.Bounds);
+        return track;
+    }
 
-            TextRenderer.DrawText(e.Graphics, page.Text, Ui, e.Bounds,
-                selected ? AccentText : Text,
+    /// <summary>
+    /// A segment option. It never takes focus: a flat button that has it draws a black box round
+    /// itself, and a click on the view switch should not pull focus out of the grid being edited.
+    /// It paints its own text, because a disabled Button draws its text in a system grey that
+    /// ignores ForeColor and is barely lighter than the enabled options beside it.
+    /// </summary>
+    public sealed class SegmentButton : Button
+    {
+        private bool _hover;
+
+        public SegmentButton() => SetStyle(ControlStyles.Selectable, false);
+        protected override bool ShowFocusCues => false;
+
+        protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _hover = false; Invalidate(); base.OnMouseLeave(e); }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var back = _hover && Enabled ? FlatAppearance.MouseOverBackColor : BackColor;
+            e.Graphics.Clear(back.IsEmpty ? BackColor : back);
+            TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle,
+                Enabled ? ForeColor : Color.FromArgb(175, 181, 190),
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
-        };
+        }
+    }
 
-        return tabs;
+    public static void StyleSegment(Button option, bool on)
+    {
+        option.BackColor = on ? Surface : SurfaceHigh;
+        option.ForeColor = !option.Enabled ? TextDim : on ? Accent : Text;
+        option.Font = on ? UiBold : Ui;
+        option.FlatAppearance.MouseOverBackColor = on ? Surface : Border;
     }
 
     private sealed class LightColours : ProfessionalColorTable

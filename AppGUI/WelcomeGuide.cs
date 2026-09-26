@@ -26,7 +26,7 @@ public sealed class WelcomeGuide : GuideForm
               + "progress bar learns your machine's pace as it goes.");
         Step(3, "Read the result. Map modes group into Physical, Climate, De Jure and World; "
               + "the [ and ] keys flip through a group. Hover the map for what is under the "
-              + "cursor, and check the 3D render tab — its Surface picker can drape any map mode "
+              + "cursor, and check the 3D view — its Surface picker can drape any map mode "
               + "over the relief.");
         Step(4, "Tune and go again. Settings sit in sections on the left, searchable, with an "
               + "Advanced toggle for the deep knobs. Roll the seed for a different world from the "

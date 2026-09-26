@@ -23,6 +23,9 @@ public sealed partial class MainForm
         _loadedWorld = loaded;
         _lastModDir = loaded.World.DirectoryPath;
         _titles.LoadExisting(loaded.Roots);
+
+        // The grid carries the loaded world's summary, so it has to be the thing on show.
+        if (_calendar.Visible) _sections.SelectedIndex = 0;
         _grid.SelectedObject = new
         {
             World = Path.GetFileName(loaded.World.DirectoryPath),
@@ -32,7 +35,11 @@ public sealed partial class MainForm
             Characters = loaded.World.Characters.Count,
             Mode = "Editing existing files. Generation settings are inactive.",
         };
-        _tabs.SelectedIndex = 0;
+        // Terrain and Climate make inputs to generation, which an opened mod does not have. They
+        // leave the bar rather than sitting there refusing clicks.
+        _workspaceBar.SetSingle(true);
+        SelectWorkspace(Workspace.World);
+        SelectWorldView(WorldView.Map);
         Text = $"CK3 Procedural Map Tool — editing {Path.GetFileName(loaded.World.DirectoryPath)}";
         SelectLoadedView("Counties");
         ConfigureLoadedControls(true);
@@ -49,6 +56,9 @@ public sealed partial class MainForm
         _seed.Enabled = _roll.Enabled = _browse.Enabled = _recent.Enabled = _azgaar.Enabled = false;
         _savePreset.Enabled = _loadPreset.Enabled = _preview.Enabled = _drape.Enabled = false;
         _forge.Enabled = false;
+
+        // The 3D view shows a heightmap source, and an opened mod is edited without one.
+        _worldViewButtons[WorldView.ThreeD].Enabled = false;
         _writeMod.Text = "Save edits";
         _writeMod.Enabled = enabled;
         _browse.Text = "Existing world";
@@ -180,7 +190,9 @@ public sealed partial class MainForm
         // ApplySource restores the heightmap button's label and tooltip and re-enables every
         // control the loaded mode switched off, through SetEnabled.
         ApplySource();
-        _tabs.SelectedIndex = 0;
+        _workspaceBar.SetSingle(false);
+        _worldViewButtons[WorldView.ThreeD].Enabled = true;
+        SelectWorldView(WorldView.Map);
         SelectView("Relief");
         _status.Text = "Generator ready — choose a heightmap or build a preview";
     }

@@ -122,7 +122,7 @@ public sealed class ForgeHeightmapProvider(HeightPipeline pipeline, string name,
         get
         {
             var (w, h) = Pipeline.OutputSize();
-            return $"Heightmap produced by the Forge pipeline on the Heightmap tab: {w}×{h}, " +
+            return $"Heightmap produced by the Forge pipeline in the Terrain workspace: {w}×{h}, " +
                    $"{Pipeline.Stages.Count(s => s.Enabled)} stage(s), seed {Pipeline.MasterSeed}.";
         }
     }

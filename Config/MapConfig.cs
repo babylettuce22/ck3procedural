@@ -399,7 +399,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// </summary>
     [Category("02 World State")]
     [DisplayName("World Calendar")]
-    [Description("Gives the world its own calendar: month names and a year suffix (\"1 Talvenmoon 900 TR\" instead of \"1 January 900 AD\"). Type names on the Calendar tab; anything left blank is generated in the language of the world's most widespread people, and an Azgaar export's own era is used before a generated one. Off keeps CK3's months and AD. Not used with Content Source VanillaWorld.")]
+    [Description("Gives the world its own calendar: month names and a year suffix (\"1 Talvenmoon 900 TR\" instead of \"1 January 900 AD\"). Type names on the Calendar page of the settings list; anything left blank is generated in the language of the world's most widespread people, and an Azgaar export's own era is used before a generated one. Off keeps CK3's months and AD. Not used with Content Source VanillaWorld.")]
     public bool CalendarEnabled { get; set; } = true;
 
     /// <summary>
