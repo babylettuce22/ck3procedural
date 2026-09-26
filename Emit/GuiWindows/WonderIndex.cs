@@ -194,42 +194,14 @@ public static class WonderIndex
 
         foreach (var center in wonders) list.Gap().Add(Row(center.Wonder));
 
-        doc.Add(GuiBuilder.Types("gen_wonder_index").Add(
+        // The gather does not fill the LIST — the rows were written when the map was. It fills the
+        // province variables the rows click through to, which have to exist before the first hover
+        // and cannot be left to game start: a save begun before this feature existed would never
+        // have run that, and a blank tooltip looks exactly like a broken datafunction.
+        doc.Add(GuiBuilder.Types("gen_wonder_index").Add(CentredWindow.Types("gen_wonder_index", WindowWidth, 720,
+            window, gather,
 
-            GuiBuilder.Type("gen_wonder_index_host", "window")
-                .Name("gen_wonder_index_host")
-                .AllowOutside()
-                .ParentAnchor("center")
-                .Size(0, 0)
-                .Gap().Visible(GuiExpr.Raw(
-                    "And( Not( IsPauseMenuShown ), And( Or( Not( IsObserver ), GetPlayer.IsValid ), "
-                    + "IsDefaultGUIMode ) )"))
-                .Gap().Add(GuiBuilder.Of("gen_wonder_index_window")),
-
-            GuiBuilder.Type("gen_wonder_index_window", "window")
-                .Gapped()
-                .Name("gen_wonder_index_window")
-                .AllowOutside()
-                .Movable()
-                .ParentAnchor("center")
-                .Position(0, -40)
-                .Size(WindowWidth, 720)
-                .Using("Window_Background", "Window_Decoration_Spike")
-                .Gap().Visible(window.IsShown())
-
-                // The gather does not fill the LIST — the rows were written when the map was. It
-                // fills the province variables the rows click through to, which have to exist
-                // before the first hover and cannot be left to game start: a save begun before this
-                // feature existed would never have run that, and a blank tooltip looks exactly like
-                // a broken datafunction.
-                .Gap().Add(GuiBuilder.State("_show")
-                    .Using("Animation_FadeIn_Quick", "Sound_WindowShow_Standard")
-                    .Quoted("on_start", gather.Execute().ToString()))
-
-                .Gap().Add(GuiBuilder.State("_hide")
-                    .Using("Animation_FadeOut_Quick", "Sound_WindowHide_Standard"))
-
-                .Gap().Add(GuiBuilder.VBox()
+                GuiBuilder.VBox()
                     .Using("Window_Margins")
 
                     .Gap().Add(GuiBuilder.Of("header_standard")

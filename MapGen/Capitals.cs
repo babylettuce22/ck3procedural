@@ -45,6 +45,9 @@ public static class Capitals
     /// <summary>An imported state capital is its duchy's capital, and its kingdom's.</summary>
     private const double StateCapitalBonus = 100;
 
+    /// <summary>Wilderness loses to any settled county whatever else it has; see <see cref="SeatRealms"/>.</summary>
+    private const double WildPenalty = 1_000_000;
+
     /// <summary>
     /// Puts the best town site first in every county.
     ///
@@ -130,10 +133,13 @@ public static class Capitals
     /// duchy, so a seat sits among its duchy rather than at its edge. A kingdom's capital is the
     /// best of its duchies' capitals, and so on up.
     /// </summary>
+    /// <param name="wilderness">Counties nobody holds. A capital goes on one only when the title has
+    /// nothing else: development alone ranks a wild county like any other, and a duchy gone wholly
+    /// wild could otherwise seat its kingdom out in land the wilderness dummy holds.</param>
     /// <returns>How many titles above county had their capital moved.</returns>
     public static int SeatRealms(List<Title> empires, Dictionary<Title, int> development,
         ProvinceMap provinces, int[] order, int baronyCount, WorldCenterMap? worldCenters,
-        AzgaarImport? azgaar)
+        AzgaarImport? azgaar, WildernessMap? wilderness = null)
     {
         // The hegemony and every empire outside it: the crown covers a region rather than the map,
         // so walking from it alone would leave the empires beyond its border unseated.
@@ -142,28 +148,15 @@ public static class Capitals
         var centres = new HashSet<Title>(worldCenters?.Centers.Select(c => c.County) ?? []);
 
         // County-to-county adjacency, lifted from the barony graph, for the centrality tie-break.
-        var countyOf = new Dictionary<int, Title>();
-        foreach (var county in Titles.Flatten(roots).Where(t => t.Tier == "c"))
-            foreach (var b in county.Children)
-                if (b.ProvinceId >= 1 && b.ProvinceId <= baronyCount) countyOf[b.ProvinceId] = county;
-
-        var adjacent = new Dictionary<Title, HashSet<Title>>();
-        foreach (var (province, others) in Titles.LandAdjacency(provinces, baronyCount, order))
-        {
-            if (!countyOf.TryGetValue(province, out var a)) continue;
-            foreach (int other in others)
-            {
-                if (!countyOf.TryGetValue(other, out var b) || ReferenceEquals(a, b)) continue;
-                if (!adjacent.TryGetValue(a, out var set)) adjacent[a] = set = [];
-                set.Add(b);
-            }
-        }
+        var adjacent = CountyNetwork.ByTitle(Titles.Flatten(roots).Where(t => t.Tier == "c"), baronyCount,
+            [Titles.LandAdjacency(provinces, baronyCount, order)]);
 
         double CountyScore(Title county)
         {
             double score = development.GetValueOrDefault(county);
             if (centres.Contains(county)) score += WorldCentreBonus;
             if (azgaar?.For(county)?.Burgs.Any(b => b.IsCapital) == true) score += StateCapitalBonus;
+            if (wilderness?.Contains(county) == true) score -= WildPenalty;
             return score;
         }
 

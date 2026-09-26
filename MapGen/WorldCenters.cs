@@ -200,7 +200,7 @@ public sealed class WorldCenterMap
             var (county, score, _) = chosen[i];
             var barony = county.Capital ?? county;
             var culture = cultures.For(county);
-            var centerRng = new Rng(county.Index ^ 0x5C07 ^ (i * 7919));
+            var centerRng = Rng.For(cfg.Seed, 0x5C07, county.Index, i);
 
             var (coastal, mountainous) = Relief(county, provinceTerrain);
             var archetype = PickArchetype(coastal, mountainous, cfg, centerRng);

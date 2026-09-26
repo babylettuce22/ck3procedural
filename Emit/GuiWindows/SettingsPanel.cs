@@ -126,45 +126,16 @@ public static class SettingsPanel
         var player = GuiScope.Root("GetPlayer");
         var window = new ScriptedGui("gen_settings_panel_window", player);
 
-        doc.Add(GuiBuilder.Types("gen_settings_panel").Add(
-
-            GuiBuilder.Type("gen_settings_panel_host", "window")
-                .Name("gen_settings_panel_host")
-                .AllowOutside()
-                .ParentAnchor("center")
-                .Size(0, 0)
-                // The host is always instantiated, so it carries the conditions under which no
-                // custom window should be on screen at all.
-                .Gap().Visible(GuiExpr.Raw(
-                    "And( Not( IsPauseMenuShown ), And( Or( Not( IsObserver ), GetPlayer.IsValid ), "
-                    + "IsDefaultGUIMode ) )"))
-                .Gap().Add(GuiBuilder.Of("gen_settings_panel_window")),
-
-            GuiBuilder.Type("gen_settings_panel_window", "window")
-                .Gapped()
-                .Name("gen_settings_panel_window")
-                .AllowOutside()
-                .Movable()
-                .ParentAnchor("center")
-                .Position(0, -40)
-                // Both figures stated in pixels, and the height COMPUTED from the switch list
-                // rather than left to autoresize. A window sized to its own content is the exact
-                // shape that has silently mis-rendered here three times -- a size decided relative
-                // to something that is itself still being decided. The switches are a fixed set
-                // known at write time, so the arithmetic is available and the guess is not needed.
-                .Size(WindowWidth, WindowHeight())
-                .Using("Window_Background", "Window_Decoration_Spike")
-                .Gap().Visible(window.IsShown())
-
-                // No _show state. The index windows rebuild a list when they appear; this one has
-                // nothing to rebuild, because every checkbox reads its own scripted_gui live.
-                .Gap().Add(GuiBuilder.State("_show")
-                    .Using("Animation_FadeIn_Quick", "Sound_WindowShow_Standard"))
-
-                .Gap().Add(GuiBuilder.State("_hide")
-                    .Using("Animation_FadeOut_Quick", "Sound_WindowHide_Standard"))
-
-                .Gap().Add(Body(window, player))));
+        // Both figures stated in pixels, and the height COMPUTED from the switch list rather than
+        // left to autoresize. A window sized to its own content is the exact shape that has
+        // silently mis-rendered here three times -- a size decided relative to something that is
+        // itself still being decided. The switches are a fixed set known at write time, so the
+        // arithmetic is available and the guess is not needed.
+        //
+        // No gather. The index windows rebuild a list when they appear; this one has nothing to
+        // rebuild, because every checkbox reads its own scripted_gui live.
+        doc.Add(GuiBuilder.Types("gen_settings_panel").Add(CentredWindow.Types("gen_settings_panel",
+            WindowWidth, WindowHeight(), window, gather: null, Body(window, player))));
 
         // The bare instantiation the registry resolves. Without it the file parses, loads, reports
         // that loading is complete, and then the registry says
@@ -283,19 +254,6 @@ public static class SettingsPanel
                         .Text(setting.Description)));
     }
 
-    /// <summary>The same heading shape the debug panel uses, so the two windows read as a set.</summary>
-    private static GuiBuilder Heading(string key)
-        => GuiBuilder.VBox()
-            .ExpandingH()
-            .Align("left")
-            .Spacing(2)
-            .MarginBottom(4)
-            .Add(GuiBuilder.TextSingle()
-                    .ExpandingH()
-                    .Align("left")
-                    .Using("Font_Size_Medium")
-                    .Format("#high")
-                    .Text(key),
-                 GuiBuilder.Of("divider_light")
-                    .ExpandingH());
+    /// <summary>The debug panel's heading, so the two windows read as a set.</summary>
+    private static GuiBuilder Heading(string key) => DebugPanel.Heading(key);
 }

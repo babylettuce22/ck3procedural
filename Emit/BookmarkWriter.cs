@@ -65,7 +65,7 @@ public static class BookmarkWriter
         var countyPositions = CalculateCountyScreenPositions(
             allCounties.Where(c => !wilderness.Contains(c)).ToList(), provinces, order, cfg);
         var cast = BookmarkCast.Build(seatCounties, realms, governments, development, wilderness,
-                                      prehistory, rulers, cultures, cfg.StartYear, countyPositions);
+                                      prehistory, rulers, cultures, cfg.StartYear, cfg.Seed, countyPositions);
 
         if (cast is null)
         {
@@ -92,7 +92,7 @@ public static class BookmarkWriter
             {
                 var eraSeats = allCounties.Where(c => !wilderness.Contains(c) && era.Rulers.Contains(c)).ToList();
                 era.Cast = BookmarkCast.Build(eraSeats, era.Realms, era.Governments, development, wilderness,
-                    new PrehistoryMap(), era.Rulers, cultures, era.Year, countyPositions, era.Tag);
+                    new PrehistoryMap(), era.Rulers, cultures, era.Year, cfg.Seed, countyPositions, era.Tag);
 
                 if (era.Cast is null) continue;
                 foreach (var slot in era.Cast.All) slot.Ruler.DnaKey = $"dna_{slot.Key}";

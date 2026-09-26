@@ -4,6 +4,20 @@ using System.Text;
 namespace Ck3MapGen.MapGen;
 
 /// <summary>
+/// An applied history's wars, truces and claims, resolved to the seats of the start date's rulers —
+/// what <see cref="PrehistoryMap.Build"/> writes in place of the ones it would invent. See
+/// <see cref="AppliedHistory.DiplomacyFor"/>.
+/// </summary>
+public sealed record SimDiplomacy(
+    List<SimDiplomacy.OngoingWar> Wars,
+    List<(Title A, Title B, int Days)> Truces,
+    List<(Title Claimant, Title Target)> Claims)
+{
+    /// <summary>A war under way on the start date, by the seats of its two sides and the county fought from.</summary>
+    public sealed record OngoingWar(Title Attacker, Title Defender, Title Target, int Started, double Score, string Name);
+}
+
+/// <summary>
 /// The realms as the History workspace left them in some year, to be written as the world's start
 /// in place of the realms the formation grew.
 ///
@@ -104,6 +118,96 @@ public sealed class AppliedHistory
     /// saved before drift was simulated.
     /// </summary>
     public Dictionary<string, string> DeJure { get; init; } = [];
+
+    /// <summary>
+    /// County indices wild at the history's start and settled by its end — see
+    /// <see cref="HistorySim.Settled"/>. Empty in a file saved before the frontier was simulated.
+    /// </summary>
+    public int[] Settled { get; init; } = [];
+
+    /// <summary>
+    /// The culture of the people who settled each of <see cref="Settled"/>, by county index: the
+    /// realm that settled it, whoever holds it by the end.
+    /// </summary>
+    public Dictionary<int, string> SettlerCultures { get; init; } = [];
+
+    /// <summary>
+    /// County indices that fell to ruin during the history and are wild at its end — see
+    /// <see cref="HistorySim.Fallen"/>. Empty in a file saved before the frontier was simulated.
+    /// </summary>
+    public int[] Fallen { get; init; } = [];
+
+    /// <summary>A war under way on the applied date, by realm id and county index. See <see cref="SimWar"/>.</summary>
+    public sealed record War(int Attacker, int Defender, int Target, int[] Goal, int Started, double Score, string Name);
+
+    /// <summary>The wars under way on the applied date. Empty in a file saved before wars were simulated.</summary>
+    public List<War> Wars { get; init; } = [];
+
+    /// <summary>A truce between two realms, by id, and the year it ends.</summary>
+    public sealed record Truce(int A, int B, int Until);
+
+    /// <summary>A claim: the county, the claimant realm's id, and the year it lapses.</summary>
+    public sealed record Claim(int County, int Claimant, int Until);
+
+    /// <summary>The truces running on the applied date. Records, not tuples: the file's serialiser skips tuple fields.</summary>
+    public List<Truce> Truces { get; init; } = [];
+
+    /// <summary>The claims standing on the applied date.</summary>
+    public List<Claim> Claims { get; init; } = [];
+
+    /// <summary>
+    /// The wars, truces and claims on the applied date, handed to the people of the start date: each
+    /// war is fought on from the first day as a claim war — the attacker holds a pressed claim on
+    /// the county it went to war from, which any government may press, where the conquest wars a
+    /// duchy war would be in CK3 are open only to tribes, clans and nomads — each truce runs out its
+    /// remaining days, and each claim is pressed. Realms are found by the seat they are ruled from;
+    /// one titling left without a ruler of its own is dropped along with what it was party to.
+    /// </summary>
+    /// <returns>Null when the history carried none of the three — saved before wars were simulated,
+    /// or run with them off — so the start date keeps the starting wars it would invent.</returns>
+    public SimDiplomacy? DiplomacyFor(IReadOnlyDictionary<int, Title> capitals, IEnumerable<Title> counties)
+    {
+        if (Wars.Count == 0 && Truces.Count == 0 && Claims.Count == 0) return null;
+
+        var byIndex = counties.Where(c => c.Tier == "c").ToDictionary(c => c.Index);
+        var wars = new List<SimDiplomacy.OngoingWar>();
+        foreach (var war in Wars)
+        {
+            if (!capitals.TryGetValue(war.Attacker, out var attacker) || !capitals.TryGetValue(war.Defender, out var defender)) continue;
+            var target = war.Goal.Contains(war.Target) ? war.Target : war.Goal.DefaultIfEmpty(war.Target).Min();
+            if (!byIndex.TryGetValue(target, out var county)) continue;
+            wars.Add(new SimDiplomacy.OngoingWar(attacker, defender, county, war.Started, war.Score, war.Name));
+        }
+
+        var truces = Truces
+            .Where(t => t.Until > Year && capitals.ContainsKey(t.A) && capitals.ContainsKey(t.B))
+            .Select(t => (capitals[t.A], capitals[t.B], (t.Until - Year) * 365))
+            .ToList();
+
+        var claims = Claims
+            .Where(c => c.Until > Year && capitals.ContainsKey(c.Claimant) && byIndex.ContainsKey(c.County))
+            .Select(c => (capitals[c.Claimant], byIndex[c.County]))
+            .ToList();
+
+        return new SimDiplomacy(wars, truces, claims);
+    }
+
+    /// <summary>Whether the history moved the edge of the wild at all.</summary>
+    public bool MovesWilds => Settled.Length > 0 || Fallen.Length > 0;
+
+    /// <summary>
+    /// The wilderness at the applied date: <paramref name="generated"/> with the settled counties
+    /// taken out and the fallen put back in as ruins. The same object when nothing moved, so a
+    /// history that never touched the frontier writes exactly what it always did.
+    /// </summary>
+    public WildernessMap WildernessOver(WildernessMap generated, IEnumerable<Title> counties)
+    {
+        if (!MovesWilds) return generated;
+        var byIndex = counties.Where(c => c.Tier == "c").ToDictionary(c => c.Index);
+        return generated.After(
+            Settled.Select(i => byIndex[i]).ToHashSet(),
+            Fallen.Select(i => byIndex[i]).ToHashSet());
+    }
 
     /// <summary>
     /// Moves the titles <see cref="DeJure"/> says have drifted to their new parents, in the tree
@@ -232,6 +336,14 @@ public sealed class AppliedHistory
             SeatLineage = seatLineage,
             Reigns = PastReigns(sim),
             DeJure = sim.DeJureMap().ToDictionary(kv => kv.Key.Key, kv => kv.Value.Key),
+            Wars = [.. sim.Wars.Select(w => new War(w.Attacker.Id, w.Defender.Id, w.Target.Index,
+                [.. w.Goal.Select(c => c.Index).Order()], w.Started, w.Score, w.Name))],
+            Truces = [.. sim.Truces.Select(t => new Truce(t.A, t.B, t.Until))],
+            Claims = [.. sim.Claims.Select(c => new Claim(c.County.Index, c.Claimant.Id, c.Until))],
+            Settled = [.. sim.Settled.Select(c => c.Index).Order()],
+            SettlerCultures = sim.Settled.Where(c => sim.SettlerCulture(c) is not null)
+                .ToDictionary(c => c.Index, c => sim.SettlerCulture(c)!.Key),
+            Fallen = [.. sim.Fallen.Select(c => c.Index).Order()],
             Colours = colours?.ToDictionary(kv => kv.Key, kv => kv.Value.R << 16 | kv.Value.G << 8 | kv.Value.B) ?? [],
         };
     }
@@ -271,7 +383,7 @@ public sealed class AppliedHistory
     /// on — are written: a later one would sit between the grant and the start and contradict it.
     /// </summary>
     public List<PastRuler> PastRulersFor(IReadOnlyDictionary<int, Title> capitals, RealmMap realms,
-        FaithMap faiths, int grantYear, int startYear)
+        FaithMap faiths, int grantYear, int startYear, int seed)
     {
         var seats = realms.HolderCounty.Values.ToHashSet();
         var result = new List<PastRuler>();
@@ -290,7 +402,7 @@ public sealed class AppliedHistory
                 if (start.Item1 >= grantYear) break;
 
                 string id = $"gen_char_hist_{reign.RealmId}_{n++}_{FromYear}";
-                var rng = new Core.Rng(unchecked((int)Core.Rng.StableHash(id)));
+                var rng = Core.Rng.For(seed, 0, Core.Rng.StableHash(id));
                 (int Y, int M, int D) death = (Math.Min(reign.Died, startYear - 1), rng.Int(1, 12), rng.Int(1, 28));
                 if (Before(death, NextDay(start))) death = NextDay(start);
                 var birth = (Math.Min(reign.Born, start.Item1 - 1), rng.Int(1, 12), rng.Int(1, 28));
@@ -370,7 +482,7 @@ public sealed class AppliedHistory
     /// folded into its lord — a younger brother with no tier left to stand on — still sits in its
     /// capital as a lord inside the realm, and is still of its house.</param>
     public Dictionary<Title, Lineage> LineageFor(RealmMap realms, IReadOnlyDictionary<int, Title> capitals,
-        WildernessMap wilderness)
+        WildernessMap wilderness, int seed)
     {
         var polityAt = capitals.ToDictionary(kv => kv.Value, kv => kv.Key);
         double endures = Math.Clamp(1.0 - (Year - FromYear) / 280.0, 0.1, 0.9);
@@ -381,11 +493,42 @@ public sealed class AppliedHistory
             if (polityAt.TryGetValue(seat, out int id) && RealmLineage.TryGetValue(id, out var realm))
                 result[seat] = realm;
             else if (SeatLineage.TryGetValue(seat.Index, out var local)
-                     && new Core.Rng(seat.Index ^ 0x51D1 ^ Year).NextDouble() < endures)
+                     && Core.Rng.For(seed, 0x51D1, seat.Index, Year).NextDouble() < endures)
                 result[seat] = local;
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// The formation's county cultures with every county settled in the history given its
+    /// settlers' culture — see <see cref="SettlerCultures"/> — or, in a file without them, the
+    /// culture of the realm holding it now.
+    /// </summary>
+    private Dictionary<Title, Culture> SettledCultures(Dictionary<Title, Culture> generated, Dictionary<Title, Polity> owner)
+    {
+        var byKey = generated.Values.GroupBy(c => c.Key).ToDictionary(g => g.Key, g => g.First());
+        var cultures = new Dictionary<Title, Culture>(generated);
+        foreach (var (county, realm) in owner)
+            if (!cultures.ContainsKey(county))
+                cultures[county] = SettlerCultures.TryGetValue(county.Index, out string? key)
+                                   && byKey.TryGetValue(key, out var settlers) ? settlers : realm.Culture;
+        return cultures;
+    }
+
+    /// <summary>
+    /// The culture each settled county was settled by, keyed by the county, resolved against the
+    /// world's cultures; a county whose settlers' culture this world lacks is left out.
+    /// </summary>
+    public Dictionary<Title, Culture> SettlerCulturesOver(IEnumerable<Title> counties, CultureMap cultures)
+    {
+        var byIndex = counties.Where(c => c.Tier == "c").ToDictionary(c => c.Index);
+        var byKey = cultures.Cultures.GroupBy(c => c.Key).ToDictionary(g => g.Key, g => g.First());
+        var settlers = new Dictionary<Title, Culture>();
+        foreach (var (index, key) in SettlerCultures)
+            if (byIndex.TryGetValue(index, out var county) && byKey.TryGetValue(key, out var culture))
+                settlers[county] = culture;
+        return settlers;
     }
 
     /// <summary>
@@ -411,8 +554,13 @@ public sealed class AppliedHistory
     /// <param name="generated">The formation this world grew on its own. Its rules are kept, so
     /// the History workspace can run on again from the applied date; its realms are what this
     /// replaces, and the ground they cover is the ground the applied realms must cover too.</param>
+    /// <param name="wilderness">The wilderness at the applied date (see <see cref="WildernessOver"/>):
+    /// the realms must cover everything else. Null to take the generated realms' ground.</param>
+    /// <param name="adjacent">The settled counties' neighbours on that ground, when it is not the
+    /// ground <paramref name="generated"/> stood on — the next history run on from this one walks
+    /// them. Null to keep <paramref name="generated"/>'s.</param>
     public FormationHistory? Resolve(List<Title> counties, CultureMap cultures, FormationHistory? generated,
-        out string? problem)
+        out string? problem, WildernessMap? wilderness = null, Dictionary<Title, HashSet<Title>>? adjacent = null)
     {
         problem = null;
 
@@ -478,10 +626,13 @@ public sealed class AppliedHistory
             polities[realm.Id] = p;
         }
 
-        // The same ground the generated realms cover: every settled county, and no wilderness. A
-        // county the history never held, or one this world made wild, would leave the titling step
-        // with a county nobody rules or a ruler of empty land.
-        var expected = generated.Owner.Keys.ToHashSet();
+        // The same ground the generated realms cover — every settled county, and no wilderness —
+        // or, when the history moved the frontier, every county outside the wilderness it left
+        // (see WildernessOver). A county the history never held, or one this world made wild,
+        // would leave the titling step with a county nobody rules or a ruler of empty land.
+        var expected = wilderness is null
+            ? generated.Owner.Keys.ToHashSet()
+            : byIndex.Values.Where(c => !wilderness.Contains(c)).ToHashSet();
         if (!expected.SetEquals(owner.Keys))
         {
             int missing = expected.Count(c => !owner.ContainsKey(c));
@@ -521,9 +672,9 @@ public sealed class AppliedHistory
             FirstYear = generated.FirstYear,
             Rules = new FormationRules
             {
-                Adjacent = rules.Adjacent,
+                Adjacent = adjacent ?? rules.Adjacent,
                 Development = rules.Development,
-                CountyCulture = rules.CountyCulture,
+                CountyCulture = MovesWilds ? SettledCultures(rules.CountyCulture, owner) : rules.CountyCulture,
                 AvgKingdom = rules.AvgKingdom,
                 Reach = rules.Reach,
                 Aggression = rules.Aggression,

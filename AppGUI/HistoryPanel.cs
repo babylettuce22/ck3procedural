@@ -54,7 +54,7 @@ internal sealed class HistoryPanel : Panel
 
     private readonly CheckBox _showConquests = new()
     {
-        Text = "County conquests",
+        Text = "Declarations and conquests",
         AutoSize = true,
         Font = Theme.Ui,
         ForeColor = Theme.TextDim,
@@ -91,6 +91,8 @@ internal sealed class HistoryPanel : Panel
     private static readonly (string Section, RealmRules Rule, string Name, string Tip)[] RuleChoices =
     [
         ("Realms", RealmRules.Conquest, "Conquest", "Realms take counties from their neighbours by force"),
+        ("Realms", RealmRules.Wars, "Wars and truces", "Conquest is fought as wars over a de jure duchy or lost land, won or lost "
+            + "over years, followed by a five-year truce. Off, counties change hands one at a time"),
         ("Realms", RealmRules.Homage, "Homage", "A realm several times a neighbour's size takes it as a vassal, whole"),
         ("Realms", RealmRules.Secession, "Secession", "An overstretched realm loses a block of its edge, which becomes a realm of its own"),
         ("Realms", RealmRules.Collapse, "Collapse", "An unstable realm's vassals all walk out at once"),
@@ -98,6 +100,10 @@ internal sealed class HistoryPanel : Panel
             + "Off, rulers still die, and one heir of the same house takes everything"),
         ("Titles", RealmRules.DeJureDrift, "De jure drift", "A duchy held for a century by a realm based in another de jure kingdom "
             + "becomes part of that kingdom, as in CK3; kingdoms drift into empires the same way"),
+        ("Wilds", RealmRules.Colonisation, "Colonisation", "Realms settle the wilderness on their borders, never by war. "
+            + "Settled land takes its settlers' culture and faith"),
+        ("Wilds", RealmRules.Ruination, "Ruination", "A county of an unstable realm can be abandoned and fall to ruin. "
+            + "Never a realm's seat or a de jure capital. Needs a world written with ruins on"),
     ];
 
     /// <summary>
@@ -117,6 +123,10 @@ internal sealed class HistoryPanel : Panel
             4.0, s => s.Crises, (s, v) => s with { Crises = v }),
         ("Titles", "Drift pace", "How fast titles drift: CK3's century divided by this — 2× drifts in fifty years",
             3.0, s => s.DriftPace, (s, v) => s with { DriftPace = v }),
+        ("Wilds", "Settling pace", "How fast realms settle the wilderness on their borders",
+            4.0, s => s.Colonisation, (s, v) => s with { Colonisation = v }),
+        ("Wilds", "Ruin", "How often neglected land is abandoned",
+            4.0, s => s.Ruination, (s, v) => s with { Ruination = v }),
     ];
 
     /// <summary>What the map is coloured by: realms as they stand, or the de jure tree as drift has left it.</summary>
@@ -157,6 +167,12 @@ internal sealed class HistoryPanel : Panel
     private GenerationResult? _result;
     private RealmMap? _realms;
     private MapGen.WildernessMap? _wilderness;
+
+    /// <summary>The wilderness the world was generated with, which an applied history records its frontier against.</summary>
+    private MapGen.WildernessMap? _generatedWilderness;
+
+    /// <summary>The frontier the history runs over; null on a world with no wilderness.</summary>
+    private WildsGround? _wildsGround;
 
     /// <summary>The start date's people, whose houses realms that endure are still ruled by. See <see cref="AppliedHistory.Capture"/>.</summary>
     private RulerMap? _rulers;
@@ -217,7 +233,8 @@ internal sealed class HistoryPanel : Panel
         tips.SetToolTip(_play, "Run history forward, or stop it (Space)");
         tips.SetToolTip(_step, "Advance one year (→)");
         tips.SetToolTip(_reset, "Go back to the start date. The same history plays out again unless something is changed.");
-        tips.SetToolTip(_showConquests, "List every county that changes hands, not only the realm-level events");
+        tips.SetToolTip(_showConquests, "List every war declared and every war abandoned, not only the peaces that "
+            + "move borders — and, with wars off, every county that changes hands");
         tips.SetToolTip(_showSuccessions, "List every ruler's death and heir, not only the partitions and usurpations");
         tips.SetToolTip(_apply, "Make the realms as they stand now the world's start, and write the mod with them");
         tips.SetToolTip(_discard, "Go back to the realms the generator grows; takes effect when the mod is next written");
@@ -322,6 +339,8 @@ internal sealed class HistoryPanel : Panel
         _result = result;
         _realms = written?.Realms;
         _wilderness = written?.Wilderness;
+        _generatedWilderness = written?.World?.Wilderness;
+        _wildsGround = null;
         _rulers = written?.Rulers;
         _prehistory = written?.Prehistory;
         _keptColours = written?.World?.RealmColours;
@@ -401,12 +420,23 @@ internal sealed class HistoryPanel : Panel
 
         int ticket = ++_canvasFor;
         var raster = PreviewRenderer.ProvinceRaster.From(_result, _wilderness);
+        var result = _result;
+        var (wilderness, generated) = (_wilderness, _generatedWilderness ?? _wilderness);
         UseWaitCursor = true;
         try
         {
             var canvas = await Task.Run(() => new CountyCanvas(raster));
+
+            // The frontier's neighbours: every county, wild ones included, which the realms' own
+            // adjacency leaves out. Only for a world with a wilderness to settle.
+            var wilds = wilderness is { Count: > 0 } && generated is not null
+                ? await Task.Run(() => new WildsGround(wilderness, generated, Realms.BuildCountyAdjacency(
+                    [.. Titles.Flatten(result.Titles).Where(t => t.Tier == "c")], result.Provinces, result.BaronyCount,
+                    result.ProvinceOrder, (int)Math.Round(result.Config.Scaled(result.Config.SeaBridgePixelsAtVanilla)))))
+                : null;
             if (ticket != _canvasFor) return;
             _canvas = canvas;
+            _wildsGround = wilds;
             Reset();
         }
         catch (Exception ex)
@@ -428,7 +458,7 @@ internal sealed class HistoryPanel : Panel
         if (_realms is null || _canvas is null) return;
 
         Pause();
-        _sim = HistorySim.Resume(_realms, _startYear, rulers: _rulers, prehistory: _prehistory);
+        _sim = HistorySim.Resume(_realms, _startYear, rulers: _rulers, prehistory: _prehistory, wilds: _wildsGround);
         _colourOf.Clear();
         _nextColour = 0;
         _shownEvents = 0;
@@ -594,15 +624,28 @@ internal sealed class HistoryPanel : Panel
         // visibly flips them where the switches were made.
         _settingBoxes = true;
         var next = _sim is null ? SimSettings.Default : SettingsFor(_sim.Year + 1);
+        // The frontier's rules only where the world has one: wilderness to settle, and the ruins
+        // system for land to fall into.
+        bool Available(RealmRules rule) => rule switch
+        {
+            RealmRules.Colonisation => _sim?.HasWilds == true,
+            RealmRules.Ruination => _sim?.CanRuin == true,
+            _ => true,
+        };
         foreach (var (rule, box) in _ruleBoxes)
         {
-            box.Enabled = ready;
-            box.Checked = next.Rules.HasFlag(rule);
+            box.Enabled = ready && Available(rule);
+            box.Checked = next.Rules.HasFlag(rule) && Available(rule);
         }
         foreach (var (_, name, _, _, get, _) in Dials)
         {
             var (bar, value) = _dials[name];
-            bar.Enabled = ready;
+            bar.Enabled = ready && name switch
+            {
+                "Settling pace" => Available(RealmRules.Colonisation),
+                "Ruin" => Available(RealmRules.Ruination),
+                _ => true,
+            };
             bar.Value = Math.Clamp((int)Math.Round(get(next) * 10), bar.Minimum, bar.Maximum);
             value.Text = $"{get(next):0.0}×";
         }
@@ -637,11 +680,14 @@ internal sealed class HistoryPanel : Panel
 
         if (_sim.OwnerOf(county) is not { } owner)
         {
-            _readout.Text = $"{county.Name} — wilderness";
+            _readout.Text = _sim.IsRuin(county)
+                ? $"{county.Name} — ruins" + (_sim.FellIn(county) is { } fell ? $", abandoned in {fell}" : "")
+                : $"{county.Name} — wilderness";
             return;
         }
 
         string text = $"{county.Name} — held by the realm of {owner.Capital.Name} ({owner.Counties.Count} counties, founded {owner.Founded})";
+        if (_sim.SettledIn(county) is { } settled) text += $", settled {settled}";
         if (owner.Suzerain is { } lord) text += $", sworn to {lord.Capital.Name}";
         if (owner.Root != owner && owner.Root != owner.Suzerain) text += $" under {owner.Root.Capital.Name}";
         if (_sim.RulerOf(owner) is { } ruler)
@@ -652,6 +698,11 @@ internal sealed class HistoryPanel : Panel
                         SuccessionLaw.Elective => " · elective",
                         _ => " · single heir",
                     });
+        if (_sim.WarOver(county) is { } war)
+            text += $" · fought over in {war.Name}, {war.Attacker.Capital.Name} against {war.Defender.Capital.Name}, "
+                    + $"war score {war.Score:+0;-0;0}";
+        if (_sim.ClaimOn(county) is { } claim && claim.Claimant.Root != owner.Root)
+            text += $" · claimed by {claim.Claimant.Capital.Name} until {claim.Until}";
         if (_sim.DeJureOf(county, "k") is { } kingdom)
             text += $" · de jure {kingdom.Name}" + (_sim.DeJureOf(county, "e") is { } empire ? $", {empire.Name}" : "");
         _readout.Text = text;
@@ -759,15 +810,19 @@ internal sealed class HistoryPanel : Panel
     {
         if (_sim is null) return;
 
+        int from = _sim.Year + 1;
+
+        // A switch greyed out for a world without a frontier shows off, but is not a choice:
+        // it keeps what is in force, so it never schedules a change nobody made.
+        var current = SettingsFor(from);
         var rules = RealmRules.None;
         foreach (var (rule, box) in _ruleBoxes)
-            if (box.Checked) rules |= rule;
+            if (box.Enabled ? box.Checked : current.Rules.HasFlag(rule)) rules |= rule;
 
         var settings = SimSettings.Default with { Rules = rules };
-        foreach (var (_, name, _, _, _, set) in Dials)
-            settings = set(settings, _dials[name].Bar.Value / 10.0);
+        foreach (var (_, name, _, _, get, set) in Dials)
+            settings = set(settings, _dials[name].Bar.Enabled ? _dials[name].Bar.Value / 10.0 : get(current));
 
-        int from = _sim.Year + 1;
         foreach (int year in _schedule.Keys.Where(y => y >= from).ToList()) _schedule.Remove(year);
         if (settings != SettingsFor(from)) _schedule[from] = settings;
     }
@@ -852,7 +907,11 @@ internal sealed class HistoryPanel : Panel
             FormationKind.Collapsed => $"The realm of {subject} came apart; its vassals went their own ways",
             FormationKind.Absorbed => $"The realm of {actor} fell to {other}",
             FormationKind.Succeeded => _showSuccessions.Checked ? e.Note : null,
-            FormationKind.Partitioned or FormationKind.Usurped or FormationKind.Drifted => e.Note,
+            // A war's peace is the event; its declaration, and a war that simply lapsed, are detail.
+            FormationKind.WarDeclared => _showConquests.Checked ? e.Note : null,
+            FormationKind.WarEnded => _showConquests.Checked || e.Note?.Contains(" was abandoned:") != true ? e.Note : null,
+            FormationKind.Partitioned or FormationKind.Usurped or FormationKind.Drifted
+                or FormationKind.Colonised or FormationKind.Ruined => e.Note,
             _ => null,
         };
 

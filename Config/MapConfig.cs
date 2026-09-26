@@ -2602,8 +2602,10 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// <summary>
     /// Share of counties left unsettled, as a fraction of the whole map.
     ///
-    /// A target rather than a guarantee: the clumping pass below discards anything too small to
-    /// read as a region, so the delivered share lands a little under this. Zero disables placement
+    /// A target rather than a guarantee, but a close one: the clumping pass gives back anything too
+    /// small to read as a region without counting it, and widens its search until the share is met,
+    /// so it lands under this only on a map with no room for it. It can land a little over when a
+    /// region strands counties a title needs, which are absorbed. Zero disables placement
     /// while still shipping the scripts — but with <see cref="EnableWilderness"/> on, at least one
     /// county is always placed, because a wilderness system with no wilderness in it is
     /// indistinguishable from a broken one and there would be nothing to test against.
@@ -2611,7 +2613,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Category("12 Wilderness")]
     [AzgaarIncompat("Wilderness is the ground the export left unclaimed, which is a statement rather than " +
                     "the habitability guess this scores. Read again only if the export claims every county.")]
-    [Description("Share of counties left as unsettled wilderness. A target, not a guarantee — clumps too small to read as a region are discarded, so the delivered share lands slightly under this.")]
+    [Description("Share of counties left as unsettled wilderness, placed on the least liveable ground. Clumps too small to read as a region are given back and replaced, so the delivered share lands close to this.")]
     public double WildernessShare { get; set; } = 0.12;
 
     /// <summary>
@@ -2631,9 +2633,11 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// <summary>
     /// How strongly hostile ground attracts wilderness, against everything else.
     ///
-    /// The other half of the placement score. At 0 wilderness lands wherever the position bias
-    /// says regardless of terrain, which produces empty farmland; at 1 it follows the mountains,
-    /// ice and marsh and ignores where they are.
+    /// The main term of the placement score: how unliveable a county is, from its terrain and how
+    /// little development its ground supports. Position — <see cref="WildernessEdgeBias"/> and
+    /// <see cref="WildernessAvoidRealmInteriors"/> — is scaled down to break ties between similar
+    /// ground, so at the default it never outweighs a real difference in terrain. At 0 wilderness
+    /// lands wherever the position bias says regardless of terrain, which produces empty farmland.
     /// </summary>
     [AdvancedSetting]
     [Category("12 Wilderness")]
@@ -2649,6 +2653,10 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// worst N speckles single wild counties through settled land, which reads as a generation
     /// fault rather than as a frontier; growing clumps from seeds and discarding the runts is what
     /// makes the result look deliberate. 1 disables the check and restores the speckle.
+    ///
+    /// A clump with no settled land around it is not a runt at any size: a county that is its
+    /// whole island reads as an island nobody settled, and one beside wilderness already placed
+    /// is part of that region.
     /// </summary>
     [AdvancedSetting]
     [Category("12 Wilderness")]

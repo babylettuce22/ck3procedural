@@ -696,7 +696,9 @@ public static class DebugPanel
             .Format("#weak")
             .Text(key);
 
-    private static GuiBuilder Heading(string key)
+    /// <summary>A section heading: medium, bright, and ruled off. <see cref="SettingsPanel"/> uses it
+    /// too, so the two windows read as a set.</summary>
+    internal static GuiBuilder Heading(string key)
         => GuiBuilder.VBox()
             .ExpandingH()
             .Align("left")

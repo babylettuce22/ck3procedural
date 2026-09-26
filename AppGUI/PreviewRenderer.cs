@@ -466,7 +466,7 @@ public static class PreviewRenderer
         Dictionary<MapGen.Faith, byte[]> generated;
         try
         {
-            generated = Emit.FaithIconWriter.RenderPreview(faiths, FaithIconSize);
+            generated = Emit.FaithIconWriter.RenderPreview(faiths, result.Config.Seed, FaithIconSize);
         }
         catch (Exception ex)
         {

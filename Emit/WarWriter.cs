@@ -14,10 +14,16 @@ public static class WarWriter
             File.Delete(oldHistoryFile);
         }
 
-        if (prehistory.ActiveWars.Count == 0) return;
-
-        // 2. Emit wars as a live on_game_start action
+        // 2. Emit wars as a live on_game_start action — and with none, take away any an earlier write
+        // left, since applying a history rewrites this layer over the mod rather than clearing it.
         string dir = Path.Combine(modDir, "common", "on_action");
+        string file = Path.Combine(dir, "00_generated_starting_wars.txt");
+        if (prehistory.ActiveWars.Count == 0)
+        {
+            if (File.Exists(file)) File.Delete(file);
+            return;
+        }
+
         Directory.CreateDirectory(dir);
 
         var b = new JominiBuilder();
@@ -58,6 +64,6 @@ public static class WarWriter
             }
         }
 
-        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_starting_wars.txt"), b.ToString());
+        ParadoxText.WriteBom(file, b.ToString());
     }
 }

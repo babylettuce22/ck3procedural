@@ -497,7 +497,7 @@ public static class CultureWriter
                 : [];
             if (laterYears.Count > 0)
             {
-                var later = new Rng(Rng.StableHash(culture.Key) ^ 0x1A7EUL);
+                var later = Rng.For(cfg.Seed, 0x1A7E, Rng.StableHash(culture.Key));
                 int eraIndex = currentEraIndex;
 
                 foreach (int year in laterYears)

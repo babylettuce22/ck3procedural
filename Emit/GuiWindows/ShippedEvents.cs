@@ -107,10 +107,11 @@ public static class ShippedEvents
                 continue;
             }
 
+            // The shared string scan: it steps over an escaped quote, and stops at the line's end
+            // rather than letting a stray quote swallow the rest of the file.
             if (c == '"')
             {
-                i++;
-                while (i < text.Length && text[i] != '"') i++;
+                i = Io.ScriptScan.StringEnd(text, i);
                 continue;
             }
 

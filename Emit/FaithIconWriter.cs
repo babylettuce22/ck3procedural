@@ -29,9 +29,9 @@ public static class FaithIconWriter
     /// <summary>Supersampling canvas: 8x the icon, enough for engraving to survive the downsample.</summary>
     public const int CanvasSize = 800;
 
-    public static void WriteAll(string modDir, FaithMap faiths)
+    public static void WriteAll(string modDir, FaithMap faiths, int seed)
     {
-        var recipes = FaithIcons.Recipes(faiths).Where(r => FaithIcons.HasGeneratedIcon(r.Faith)).ToList();
+        var recipes = FaithIcons.Recipes(faiths, seed).Where(r => FaithIcons.HasGeneratedIcon(r.Faith)).ToList();
         if (recipes.Count == 0) return;
 
         var sw = Stopwatch.StartNew();
@@ -91,9 +91,9 @@ public static class FaithIconWriter
     /// faiths as they stand now — so an edit shows before it is saved. Faiths showing a vanilla
     /// icon are absent; the caller loads those from the game.
     /// </summary>
-    public static Dictionary<Faith, byte[]> RenderPreview(FaithMap faiths, int size)
+    public static Dictionary<Faith, byte[]> RenderPreview(FaithMap faiths, int seed, int size)
     {
-        var recipes = FaithIcons.Recipes(faiths).Where(r => FaithIcons.HasGeneratedIcon(r.Faith)).ToList();
+        var recipes = FaithIcons.Recipes(faiths, seed).Where(r => FaithIcons.HasGeneratedIcon(r.Faith)).ToList();
         var result = new Dictionary<Faith, byte[]>();
         var missing = new List<(FaithIconRecipe Recipe, string Key)>();
 

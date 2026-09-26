@@ -65,41 +65,12 @@ public static class ArtifactIndex
 
         var entries = GuiExpr.Raw("GetGlobalList( 'gen_artifact_index_list' )");
 
-        doc.Add(GuiBuilder.Types("gen_artifact_index").Add(
+        // The gather is the refresh. A decision cannot reach the GUI layer, so it sets a flag and
+        // the window does the work when the flag makes it appear.
+        doc.Add(GuiBuilder.Types("gen_artifact_index").Add(CentredWindow.Types("gen_artifact_index", 780, 720,
+            window, gather,
 
-            GuiBuilder.Type("gen_artifact_index_host", "window")
-                .Name("gen_artifact_index_host")
-                .AllowOutside()
-                .ParentAnchor("center")
-                .Size(0, 0)
-                // The host is always instantiated, so it carries the conditions under which no
-                // custom window should be on screen at all.
-                .Gap().Visible(GuiExpr.Raw(
-                    "And( Not( IsPauseMenuShown ), And( Or( Not( IsObserver ), GetPlayer.IsValid ), "
-                    + "IsDefaultGUIMode ) )"))
-                .Gap().Add(GuiBuilder.Of("gen_artifact_index_window")),
-
-            GuiBuilder.Type("gen_artifact_index_window", "window")
-                .Gapped()
-                .Name("gen_artifact_index_window")
-                .AllowOutside()
-                .Movable()
-                .ParentAnchor("center")
-                .Position(0, -40)
-                .Size(780, 720)
-                .Using("Window_Background", "Window_Decoration_Spike")
-                .Gap().Visible(window.IsShown())
-
-                // The refresh. A decision cannot reach the GUI layer, so it sets a flag and this
-                // does the work when the flag makes the window appear.
-                .Gap().Add(GuiBuilder.State("_show")
-                    .Using("Animation_FadeIn_Quick", "Sound_WindowShow_Standard")
-                    .Quoted("on_start", gather.Execute().ToString()))
-
-                .Gap().Add(GuiBuilder.State("_hide")
-                    .Using("Animation_FadeOut_Quick", "Sound_WindowHide_Standard"))
-
-                .Gap().Add(GuiBuilder.VBox()
+                GuiBuilder.VBox()
                     .Using("Window_Margins")
 
                     .Gap().Add(GuiBuilder.Of("header_standard")

@@ -135,6 +135,20 @@ public sealed class WildernessMap
 
     /// <summary>Nothing is wilderness. Used when the feature is switched off.</summary>
     public static WildernessMap Empty => new([]);
+
+    /// <summary>
+    /// This map after a history: <paramref name="settled"/> taken out of the wild and
+    /// <paramref name="fallen"/> put back in as ruins. Order is kept — the survivors in the order
+    /// they stood, fallen counties after the old ruins by index — because the writers that name a
+    /// titular capital take the first.
+    /// </summary>
+    public WildernessMap After(IReadOnlySet<Title> settled, IReadOnlySet<Title> fallen)
+    {
+        var unsettled = new HashSet<Title>(counties.Where(c => !settled.Contains(c) && !fallen.Contains(c)));
+        var ruins = new HashSet<Title>(ruined.Where(c => !settled.Contains(c)));
+        foreach (var county in fallen.OrderBy(c => c.Index)) ruins.Add(county);
+        return new WildernessMap(unsettled, ruins, RuinsEnabled);
+    }
 }
 
 public static class Wilderness
@@ -277,13 +291,21 @@ public static class Wilderness
         var (neighbours, centroid) = CountyGraph(counties, provinces, order, landCount);
 
         // --- Pass 1: score every county -------------------------------------------------------
+        //
+        // How unliveable the ground is comes first, and position only orders counties that are
+        // about as unliveable as each other. The two used to be summed at equal weight, and the
+        // position half — edge of the map, border of a kingdom — then decided placement on its own:
+        // it is highest along thin one-county strips, so the best-scoring counties lay scattered
+        // along borders, every clump grown from them was a runt, and a map asked for 12 % delivered
+        // 2 % of a wilderness that did not follow the terrain at all. Unliveable ground comes in
+        // regions — ice caps, deserts, ranges — so ranking on it first is also what makes clumps.
         double edgeWeight = Math.Abs(cfg.WildernessEdgeBias);
         bool towardEdge = cfg.WildernessEdgeBias >= 0;
+        int richest = Math.Max(1, counties.Max(c => development.GetValueOrDefault(c)));
 
         var score = new double[counties.Count];
         for (int i = 0; i < counties.Count; i++)
         {
-            double hostility = MeanHostility(counties[i], provinceTerrain);
             double edgeness = Edgeness(centroid[i]);
             double placement = towardEdge ? edgeness : 1.0 - edgeness;
 
@@ -291,102 +313,159 @@ public static class Wilderness
             // bisecting multi-kingdom empires.
             double interior = Interiority(i, neighbours, counties);
 
-            score[i] = cfg.WildernessTerrainWeight * hostility
-                     - cfg.WildernessAvoidRealmInteriors * interior
-                     + edgeWeight * placement
+            double position = edgeWeight * placement - cfg.WildernessAvoidRealmInteriors * interior;
+
+            score[i] = cfg.WildernessTerrainWeight * Unliveable(counties[i], provinceTerrain, development, richest)
+                     + PositionWeight * position
                      + rng.Decimal(0.0, 0.05);
         }
 
         // --- Pass 2: grow clumps from the worst ground ------------------------------------------
+        //
+        // Clumps grow only through ground inside a pool of the worst-scoring counties, and a runt
+        // is given back without counting against the target. When the pool runs out of seeds that
+        // grow into regions, it widens and the search runs again, so the share asked for is the
+        // share delivered whenever the map has room for it.
         int target = Math.Max(1, (int)Math.Round(cfg.WildernessShare * counties.Count));
-
-        var ranked = Enumerable.Range(0, counties.Count).OrderByDescending(i => score[i]).ToList();
-        double floor = score[ranked[Math.Min(target, ranked.Count - 1)]];
-
-        var chosen = new HashSet<int>();
-        var clumps = new List<List<int>>();
-
-        foreach (int seed in ranked)
-        {
-            if (chosen.Count >= target) break;
-            if (chosen.Contains(seed)) continue;
-
-            var clump = new List<int>();
-            var frontier = new PriorityQueue<int, double>();
-            frontier.Enqueue(seed, -score[seed]);
-
-            while (frontier.Count > 0 && chosen.Count + clump.Count < target)
-            {
-                int at = frontier.Dequeue();
-                if (chosen.Contains(at) || clump.Contains(at)) continue;
-                if (clump.Count > 0 && score[at] < floor) continue;
-
-                clump.Add(at);
-
-                foreach (int next in neighbours[at])
-                    if (!chosen.Contains(next) && !clump.Contains(next) && score[next] >= floor)
-                        frontier.Enqueue(next, -score[next]);
-            }
-
-            foreach (int i in clump) chosen.Add(i);
-            clumps.Add(clump);
-        }
-
-        // --- Give back the runts ----------------------------------------------------------------
-        var kept = clumps.Where(c => c.Count >= cfg.WildernessMinClump).ToList();
-        if (kept.Count == 0 && clumps.Count > 0)
-            kept = [clumps.OrderByDescending(c => c.Count).First()];
-
-        // --- Give back the ones that cut a realm in half ----------------------------------------
+        int minClump = Math.Max(1, cfg.WildernessMinClump);
         int budget = Math.Max(target, (int)Math.Round(target * 1.35));
 
-        int refused = 0, absorbed = 0;
+        var ranked = Enumerable.Range(0, counties.Count).OrderByDescending(i => score[i]).ToList();
+
         var accepted = new List<List<int>>();
         var taken = new HashSet<int>();
+        List<int>? largestRunt = null;
+        int refused = 0, absorbed = 0, runts = 0;
 
-        foreach (var clump in kept.OrderByDescending(c => c.Average(i => score[i])))
+        for (int pool = Math.Min(counties.Count, target * 2); ; pool = Math.Min(counties.Count, pool * 2))
         {
-            if (taken.Count >= target) break;
+            double floor = score[ranked[pool - 1]];
+            var tried = new HashSet<int>();
 
-            var trial = new HashSet<int>(taken);
-            foreach (int i in clump) trial.Add(i);
-
-            var stranded = StrandedBy(trial, neighbours, counties);
-
-            // Only refuse a clump if it causes runaway stranding that exceeds budget
-            if (stranded.Count > clump.Count * 2 && taken.Count + clump.Count + stranded.Count > budget)
+            foreach (int seed in ranked.Take(pool))
             {
-                refused++;
-                continue;
+                if (taken.Count >= target) break;
+                if (taken.Contains(seed) || tried.Contains(seed)) continue;
+
+                // Never cut the last region below the smallest one that reads as a region.
+                int room = Math.Max(target - taken.Count, minClump);
+                var clump = Grow(seed, room, floor, score, neighbours, taken);
+                foreach (int i in clump) tried.Add(i);
+
+                // A runt is a small clump with settled land around it. One that fills its island,
+                // or touches wilderness already taken, is not one: an empty island reads as
+                // nobody's, and a county beside a region is part of it.
+                if (clump.Count < minClump && BordersSettled(clump, neighbours, taken))
+                {
+                    runts++;
+                    if (largestRunt is null || clump.Count > largestRunt.Count) largestRunt = clump;
+                    continue;
+                }
+
+                // --- Give back the ones that cut a realm in half --------------------------------
+                var trial = new HashSet<int>(taken);
+                foreach (int i in clump) trial.Add(i);
+
+                var stranded = StrandedBy(trial, neighbours, counties);
+
+                // Only refuse a clump if it causes runaway stranding that exceeds budget
+                if (stranded.Count > clump.Count * 2 && taken.Count + clump.Count + stranded.Count > budget)
+                {
+                    refused++;
+                    continue;
+                }
+
+                accepted.Add(clump);
+                foreach (int i in clump) taken.Add(i);
+
+                if (stranded.Count > 0 && taken.Count + stranded.Count <= budget)
+                {
+                    accepted[^1].AddRange(stranded);
+                    foreach (int i in stranded) taken.Add(i);
+                    absorbed += stranded.Count;
+                }
             }
 
-            accepted.Add(clump);
-            foreach (int i in clump) taken.Add(i);
-
-            if (stranded.Count > 0 && taken.Count + stranded.Count <= budget)
-            {
-                accepted[^1].AddRange(stranded);
-                foreach (int i in stranded) taken.Add(i);
-                absorbed += stranded.Count;
-            }
+            if (taken.Count >= target || pool == counties.Count) break;
         }
 
-        if (accepted.Count == 0 && kept.Count > 0)
-            accepted = [kept.OrderByDescending(c => c.Count).First()];
-
-        kept = accepted;
+        if (accepted.Count == 0 && largestRunt is not null)
+            accepted = [largestRunt];
 
         var result = new HashSet<Title>();
-        foreach (var clump in kept)
+        foreach (var clump in accepted)
             foreach (int i in clump)
                 result.Add(counties[i]);
 
-        Console.WriteLine($"  wilderness: {result.Count} counties in {kept.Count} regions "
+        Console.WriteLine($"  wilderness: {result.Count} counties in {accepted.Count} regions "
             + $"({(double)result.Count / counties.Count:P1} of the map, target {cfg.WildernessShare:P0})"
             + (absorbed > 0 ? $", {absorbed} absorbed to keep titles whole" : "")
-            + (refused > 0 ? $", {refused} regions refused on budget" : ""));
+            + (refused > 0 ? $", {refused} regions refused on budget" : "")
+            + (runts > 0 ? $", {runts} runts given back" : ""));
+        Console.WriteLine($"    terrain under it: {TerrainShares(result, provinceTerrain)}");
 
         return new WildernessMap(result);
+    }
+
+    /// <summary>
+    /// How far position can move a county's score at full bias, against terrain's 0..1 times
+    /// <see cref="Config.MapConfig.WildernessTerrainWeight"/>. At the default knobs that is about
+    /// one step of <see cref="Hostility"/> — taiga against jungle, forest against steppe — so the
+    /// edge of the map and a kingdom's border choose between similar ground and never put
+    /// wilderness on farmland while ice or desert is left settled.
+    /// </summary>
+    private const double PositionWeight = 0.25;
+
+    /// <summary>
+    /// How unliveable a county is, 0 to 1: its terrain's <see cref="Hostility"/> mostly, and how
+    /// little its ground supports settlement — its development against the richest county's —
+    /// for the rest. Development already reads the terrain, but it also reads what terrain does
+    /// not: the coast and the rivers that make a hard county a lived-in one.
+    /// </summary>
+    private static double Unliveable(Title county, TerrainClass[] provinceTerrain,
+        Dictionary<Title, int> development, int richest)
+        => 0.7 * MeanHostility(county, provinceTerrain)
+         + 0.3 * (1.0 - (double)development.GetValueOrDefault(county) / richest);
+
+    /// <summary>
+    /// A clump grown from <paramref name="seed"/> through counties scoring at least
+    /// <paramref name="floor"/> that nobody has taken, worst ground first, up to
+    /// <paramref name="room"/> counties.
+    /// </summary>
+    private static List<int> Grow(int seed, int room, double floor, double[] score, List<int>[] neighbours,
+        HashSet<int> taken)
+    {
+        var clump = new List<int>();
+        var inClump = new HashSet<int>();
+        var frontier = new PriorityQueue<int, double>();
+        frontier.Enqueue(seed, -score[seed]);
+
+        while (frontier.Count > 0 && clump.Count < room)
+        {
+            int at = frontier.Dequeue();
+            if (!inClump.Add(at)) continue;
+            clump.Add(at);
+
+            foreach (int next in neighbours[at])
+                if (!taken.Contains(next) && !inClump.Contains(next) && score[next] >= floor)
+                    frontier.Enqueue(next, -score[next]);
+        }
+
+        return clump;
+    }
+
+    /// <summary>Whether any county of <paramref name="clump"/> has a land neighbour that is neither in it nor already wild.</summary>
+    private static bool BordersSettled(List<int> clump, List<int>[] neighbours, HashSet<int> taken)
+        => clump.Any(i => neighbours[i].Any(n => !taken.Contains(n) && !clump.Contains(n)));
+
+    /// <summary>The terrain classes under the wilderness, by share of its baronies, for the log.</summary>
+    private static string TerrainShares(HashSet<Title> wild, TerrainClass[] provinceTerrain)
+    {
+        var ids = wild.SelectMany(c => c.Children).Select(b => b.ProvinceId)
+            .Where(id => id > 0 && id < provinceTerrain.Length).ToList();
+        if (ids.Count == 0) return "none";
+        return string.Join(", ", ids.GroupBy(id => provinceTerrain[id]).OrderByDescending(g => g.Count())
+            .Select(g => $"{g.Key} {100.0 * g.Count() / ids.Count:F0}%"));
     }
 
     /// <summary>
@@ -410,6 +489,12 @@ public static class Wilderness
 
     /// <summary>
     /// Would making this clump wilderness leave some de jure title in two disconnected pieces?
+    ///
+    /// Only pieces the wilderness itself cuts off count. A title that already spans the sea — every
+    /// kingdom on an archipelago map does — is in pieces before any county goes wild, and counting
+    /// those pieces used to make any clump in such a kingdom "strand" its other islands: regions
+    /// were refused for it, and whole settled islands were absorbed as wilderness to keep a title
+    /// "whole" that the wilderness had never touched.
     /// </summary>
     private static HashSet<int> StrandedBy(HashSet<int> wild, List<int>[] neighbours,
         List<Title> counties)
@@ -429,50 +514,60 @@ public static class Wilderness
 
             foreach (var title in titles)
             {
-                var members = new HashSet<int>();
+                var all = new HashSet<int>();
                 for (int i = 0; i < counties.Count; i++)
-                {
-                    if (wild.Contains(i) || stranded.Contains(i)) continue;
                     if (ReferenceEquals(counties[i].Parent, title)
                         || ReferenceEquals(Kingdom(counties[i]), title))
-                        members.Add(i);
-                }
+                        all.Add(i);
 
+                var members = all.Where(i => !wild.Contains(i) && !stranded.Contains(i)).ToHashSet();
                 if (members.Count <= 1) continue;
 
-                var pieces = new List<List<int>>();
-                var seen = new HashSet<int>();
-
-                foreach (int start in members)
+                // Each piece of the title as generated, then the pieces of what is left of it.
+                foreach (var whole in Pieces(all, all, neighbours))
                 {
-                    if (!seen.Add(start)) continue;
+                    var left = whole.Where(members.Contains).ToHashSet();
+                    var pieces = Pieces(left, left, neighbours);
+                    if (pieces.Count <= 1) continue;
 
-                    var piece = new List<int> { start };
-                    var queue = new Queue<int>();
-                    queue.Enqueue(start);
-
-                    while (queue.Count > 0)
-                        foreach (int next in neighbours[queue.Dequeue()])
-                            if (members.Contains(next) && seen.Add(next))
-                            {
-                                piece.Add(next);
-                                queue.Enqueue(next);
-                            }
-
-                    pieces.Add(piece);
+                    foreach (var piece in pieces.OrderByDescending(p => p.Count).Skip(1))
+                        foreach (int i in piece)
+                            stranded.Add(i);
                 }
-
-                if (pieces.Count <= 1) continue;
-
-                foreach (var piece in pieces.OrderByDescending(p => p.Count).Skip(1))
-                    foreach (int i in piece)
-                        stranded.Add(i);
             }
 
             if (stranded.Count == before) break;
         }
 
         return stranded;
+    }
+
+    /// <summary>The connected pieces of <paramref name="starts"/>, walking only through <paramref name="within"/>.</summary>
+    private static List<List<int>> Pieces(IEnumerable<int> starts, HashSet<int> within, List<int>[] neighbours)
+    {
+        var pieces = new List<List<int>>();
+        var seen = new HashSet<int>();
+
+        foreach (int start in starts)
+        {
+            if (!seen.Add(start)) continue;
+
+            var piece = new List<int> { start };
+            var queue = new Queue<int>();
+            queue.Enqueue(start);
+
+            while (queue.Count > 0)
+                foreach (int next in neighbours[queue.Dequeue()])
+                    if (within.Contains(next) && seen.Add(next))
+                    {
+                        piece.Add(next);
+                        queue.Enqueue(next);
+                    }
+
+            pieces.Add(piece);
+        }
+
+        return pieces;
     }
 
     /// <summary>A county's de jure kingdom, or null if the tree is shallower than that.</summary>

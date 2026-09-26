@@ -4,9 +4,17 @@ using System.Runtime.InteropServices;
 
 namespace Ck3MapGen.Io;
 
+/// <summary>
+/// The one DDS decoder: the top mip of a BC1, BC3 or uncompressed 32-bit texture, with or without
+/// a DX10 header, to BGRA. <see cref="Emit.TextureSampler"/> used to carry a second copy that knew
+/// DX10 and channel masks where this one did not, and got BC1's transparent colour wrong; this is
+/// the union of the two, each case as the correct one had it.
+/// </summary>
 public static class DdsReader
 {
     public readonly record struct DecodedImage(int Width, int Height, byte[] Bgra);
+
+    private const uint Dxt1 = 0x31545844, Dxt5 = 0x35545844, Dx10 = 0x30315844;
 
     public static DecodedImage? Load(string path)
     {
@@ -19,7 +27,12 @@ public static class DdsReader
             return FromBitmap(bmp);
         }
 
-        byte[] data = File.ReadAllBytes(path);
+        return Decode(File.ReadAllBytes(path));
+    }
+
+    /// <summary>A DDS file's top mip as BGRA, or null when it is not one this can read.</summary>
+    public static DecodedImage? Decode(byte[] data)
+    {
         if (data.Length < 128 || BitConverter.ToUInt32(data, 0) != 0x20534444) // "DDS "
             return null;
 
@@ -27,32 +40,48 @@ public static class DdsReader
         int width = BitConverter.ToInt32(data, 16);
         uint fourCC = BitConverter.ToUInt32(data, 84);
         uint rgbBitCount = BitConverter.ToUInt32(data, 88);
+        uint redMask = BitConverter.ToUInt32(data, 92);
 
         byte[] bgra = new byte[width * height * 4];
 
-        // 1. Uncompressed 32-bit BGRA / RGBA
-        if (fourCC == 0 && rgbBitCount == 32)
+        switch (fourCC)
         {
-            int pixelDataLen = Math.Min(bgra.Length, data.Length - 128);
-            Array.Copy(data, 128, bgra, 0, pixelDataLen);
-            return new DecodedImage(width, height, bgra);
+            case Dxt1:
+                DecodeDxt1(data, 128, width, height, bgra);
+                break;
+
+            // Common in CK3 icons.
+            case Dxt5:
+                DecodeDxt5(data, 128, width, height, bgra);
+                break;
+
+            // The extended header: a DXGI format after the 128 bytes, and the pixels after that.
+            case Dx10 when data.Length >= 148:
+                int dxgiFormat = BitConverter.ToInt32(data, 128);
+                if (dxgiFormat is 70 or 71 or 72) DecodeDxt1(data, 148, width, height, bgra);
+                else if (dxgiFormat is 76 or 77 or 78) DecodeDxt5(data, 148, width, height, bgra);
+                else Array.Copy(data, 148, bgra, 0, Math.Min(bgra.Length, data.Length - 148));
+                break;
+
+            // Uncompressed: BGRA as written, or RGBA when the red mask sits in the low byte.
+            case 0 when rgbBitCount == 32:
+                CopyUncompressed(data, 128, bgra, rgba: redMask == 0x000000FF);
+                break;
+
+            default:
+                return null;
         }
 
-        // 2. DXT5 (BC3) - Common in CK3 icons
-        if (fourCC == 0x35545844) // "DXT5"
-        {
-            DecodeDxt5(data, 128, width, height, bgra);
-            return new DecodedImage(width, height, bgra);
-        }
+        return new DecodedImage(width, height, bgra);
+    }
 
-        // 3. DXT1 (BC1)
-        if (fourCC == 0x31545844) // "DXT1"
-        {
-            DecodeDxt1(data, 128, width, height, bgra);
-            return new DecodedImage(width, height, bgra);
-        }
-
-        return null;
+    private static void CopyUncompressed(byte[] src, int offset, byte[] dst, bool rgba)
+    {
+        int length = Math.Min(dst.Length, src.Length - offset);
+        Array.Copy(src, offset, dst, 0, length);
+        if (!rgba) return;
+        for (int o = 0; o + 3 < length; o += 4)
+            (dst[o], dst[o + 2]) = (dst[o + 2], dst[o]);
     }
 
     private static DecodedImage FromBitmap(Bitmap bmp)
@@ -175,9 +204,9 @@ public static class DdsReader
         }
     }
 
-    /// <summary>An RGB565 endpoint widened to 8 bits a channel by truncation. Shared with
-    /// <see cref="Emit.TextureSampler"/>; <c>DdsWriter</c> rounds instead, and keeps its own.</summary>
-    internal static void Decode565(ushort c, out byte r, out byte g, out byte b)
+    /// <summary>An RGB565 endpoint widened to 8 bits a channel by truncation. <c>DdsWriter</c>
+    /// rounds instead, and keeps its own.</summary>
+    private static void Decode565(ushort c, out byte r, out byte g, out byte b)
     {
         r = (byte)(((c >> 11) & 31) * 255 / 31);
         g = (byte)(((c >> 5) & 63) * 255 / 63);

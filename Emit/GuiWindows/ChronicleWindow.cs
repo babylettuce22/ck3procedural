@@ -79,9 +79,7 @@ public static class ChronicleWindow
                 // would pull the panel out from under this host and break the anchor; absent, the
                 // panel draws over the HUD.
                 .Field("layer", "windows_layer")
-                .Gap().Visible(GuiExpr.Raw(
-                    "And( Not( IsPauseMenuShown ), And( Or( Not( IsObserver ), GetPlayer.IsValid ), "
-                    + "IsDefaultGUIMode ) )"))
+                .Gap().Visible(CentredWindow.ScreenIsFree)
                 .Gap().Add(GuiBuilder.Of(WindowName)),
 
             GuiBuilder.Type(WindowName, "window")

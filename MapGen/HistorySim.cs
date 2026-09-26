@@ -102,36 +102,26 @@ public sealed partial class HistorySim
     /// <param name="rulers">The start date's rulers and <paramref name="prehistory"/> their families,
     /// which the realms begin under — see <see cref="SeatStartRulers"/>. Without them every realm
     /// starts under a ruler and house drawn here.</param>
+    /// <param name="wilds">The wilderness and every county's neighbours, wild ones included, for
+    /// colonisation and ruination; without it neither ever happens. See <see cref="WildsGround"/>.</param>
     public static HistorySim? Resume(RealmMap realms, int startYear, int tickYears = 1,
-        RulerMap? rulers = null, PrehistoryMap? prehistory = null)
+        RulerMap? rulers = null, PrehistoryMap? prehistory = null, WildsGround? wilds = null)
     {
         if (realms.History is not { Rules: { } rules } start) return null;
 
-        var copies = new Dictionary<Polity, Polity>();
-        foreach (var p in start.Polities.Where(p => p.Alive).OrderBy(p => p.Capital.Index))
-        {
-            var q = new Polity
-            {
-                Id = p.Id, Capital = p.Capital, Culture = p.Culture, Founded = p.Founded, Peak = p.Peak,
-            };
-            q.Counties.UnionWith(p.Counties);
-            copies[p] = q;
-        }
+        var (polities, owner) = Formation.CopyLiving(start.Polities);
 
-        var owner = new Dictionary<Title, Polity>();
-        foreach (var (p, q) in copies)
-        {
-            q.Suzerain = p.Suzerain is { } s && copies.TryGetValue(s, out var sq) ? sq : null;
-            foreach (var c in q.Counties) owner[c] = q;
-        }
-
+        // Settling and abandoning land adds counties to the realm simulation's ground and takes them
+        // away, so a history that can do either works on its own copies: the rules are the written
+        // world's and are read again by the next Resume. Copies enumerate as the originals do.
         var sim = new Formation.Sim
         {
-            Polities = [.. copies.Values],
+            Polities = polities,
             Owner = owner,
-            Adjacent = rules.Adjacent,
+            Adjacent = wilds is null ? rules.Adjacent
+                : rules.Adjacent.ToDictionary(kv => kv.Key, kv => new HashSet<Title>(kv.Value)),
             Development = rules.Development,
-            CountyCulture = rules.CountyCulture,
+            CountyCulture = wilds is null ? rules.CountyCulture : new Dictionary<Title, Culture>(rules.CountyCulture),
             Events = [],
             AvgKingdom = rules.AvgKingdom,
             Reach = rules.Reach,
@@ -145,6 +135,8 @@ public sealed partial class HistorySim
         var history = new HistorySim(sim, rules.Seed, startYear);
         history.SeatStartRulers(rulers, prehistory);
         history.SeatDeJure();
+        history.SeatWilds(wilds);
+        history.SeatWars();
         return history;
     }
 
@@ -157,6 +149,10 @@ public sealed partial class HistorySim
         // the formation's so the two never replay each other's dice.
         var rng = new Rng(_seed ^ 0x4157 ^ unchecked((int)((uint)_sim.Year * 0x9E3779B1u)));
         Formation.Step(_sim, rng);
+
+        // The wars the year's conquests declared or fought, and the peaces that end them, before the
+        // dead are cleared: a peace can take a realm's last county like any conquest.
+        WarsYear();
 
         // What Formation.Run does once at the end, done every tick here because every tick is an
         // end someone may look at. A realm dies only by conquest, and Act hands its vassals on as
@@ -172,6 +168,10 @@ public sealed partial class HistorySim
         // The people's year, after the realms': rulers for realms born this year, then deaths and
         // successions. On its own stream, so switching Succession changes no realm's dice.
         RulersYear();
+
+        // The frontier's year: land settled and land abandoned, after the wars and successions and
+        // on its own stream, so switching either changes nothing else's dice this year.
+        WildsYear();
 
         // Last: drift reads who holds what once the year's conquests and partitions are done, and
         // changes no realm, so nothing after it could depend on it.
@@ -222,6 +222,8 @@ public sealed partial class HistorySim
 
         CheckRulers(alive, problems);
         CheckDeJure(problems);
+        CheckWilds(problems);
+        CheckWars(problems);
         return problems;
     }
 

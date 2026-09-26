@@ -206,9 +206,9 @@ public static class WorldOverwrite
         // WriteAll covers the faith localisation as well, so a faith edit subsumes the rewrite a
         // title rename would otherwise need. Only when it did not run does that have to happen
         // separately — holy site names are read live off the county title.
-        if (aspects.HasFlag(WorldAspect.Faiths)) ReligionWriter.WriteAll(modDir, written.Faiths.Declared());
+        if (aspects.HasFlag(WorldAspect.Faiths)) ReligionWriter.WriteAll(modDir, written.Faiths.Declared(), result.Config.Seed);
         else if (aspects.HasFlag(WorldAspect.TitleNames))
-            ReligionWriter.WriteLocalisation(modDir, written.Faiths.Declared());
+            ReligionWriter.WriteLocalisation(modDir, written.Faiths.Declared(), result.Config.Seed);
 
         // The character file whole — ancestors, rulers, spouses and children — from the same
         // function that wrote it, with the rulers' current values. Everything the block around a
@@ -241,8 +241,8 @@ public static class WorldOverwrite
                 && seated.RebuildNobleFamilies(governed, edited, written.Wilderness))
             {
                 ContentWriter.WriteNobleFamilyTitles(modDir, seated);
-                HistoryWriter.WriteDynastyLocalisation(modDir, seated);
-                CoatOfArmsWriter.WriteAll(modDir, seated, written.Coats, written.Cultures, written.Faiths);
+                HistoryWriter.WriteDynastyLocalisation(modDir, seated, written.Calendar);
+                CoatOfArmsWriter.WriteAll(modDir, seated, result.Config.Seed, written.Coats, written.Cultures, written.Faiths);
             }
 
             HistoryWriter.ReWriteTitleHistory(modDir, result.Config, result.Titles,
@@ -282,8 +282,8 @@ public static class WorldOverwrite
         // the arms are rolled again from the same seeds with the edited ones laid over.
         if (written.Prehistory is { } families)
         {
-            if (aspects.HasFlag(WorldAspect.Dynasties)) HistoryWriter.WriteDynastyLocalisation(modDir, families);
-            if (aspects.HasFlag(WorldAspect.Coats)) CoatOfArmsWriter.WriteAll(modDir, families, written.Coats, written.Cultures, written.Faiths);
+            if (aspects.HasFlag(WorldAspect.Dynasties)) HistoryWriter.WriteDynastyLocalisation(modDir, families, written.Calendar);
+            if (aspects.HasFlag(WorldAspect.Coats)) CoatOfArmsWriter.WriteAll(modDir, families, result.Config.Seed, written.Coats, written.Cultures, written.Faiths);
         }
     }
 

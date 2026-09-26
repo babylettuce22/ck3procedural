@@ -126,35 +126,75 @@ public static class FormationDecisions
 
     private static DecisionSpec Formation(Title empire, List<Title> kingdoms, int settled)
     {
-        string key = KeyFor(empire);
-        string title = $"title:{empire.Key}";
-
-        int countyGoal = Math.Max(1, (int)Math.Ceiling(settled * CountyShare));
-
         // Half its kingdoms, at least two, and never more than it has. Held rather than merely
         // controlled: a kingdom title that nobody has created is a kingdom nobody has united, and
         // an emperor of nothing but counties is what found_empire_decision is for.
         int kingdomGoal = Math.Min(kingdoms.Count, Math.Max(2, (kingdoms.Count + 1) / 2));
 
+        return Crown(new Crowning(
+            Crown: empire,
+            Parts: kingdoms,
+            PartTier: "kingdom",
+            PartGoal: kingdomGoal,
+            PartsTooltip: $"You hold at least #V {kingdomGoal}#! of the [de_jure|E] [kingdoms|E] of ${empire.Key}$",
+            CountyGoal: Math.Max(1, (int)Math.Ceiling(settled * CountyShare)),
+            Settled: settled,
+            Name: $"Found the {Word(empire)} of ${empire.Key}$",
+            Description: Description(empire, kingdoms, settled),
+            SelectionTooltip: $"${empire.Key}$ becomes a [de_jure|E] [empire|E] under your rule.",
+            ConfirmText: "Let it be one realm.",
+            Cost: Cost(settled),
+
+            // Vanilla's own cadence for found_empire_decision: only a king is ever a candidate, so
+            // only the kingdom tier pays for the check, and it pays every five years rather than
+            // constantly — the county test walks the whole de jure empire.
+            Ai: AiCheck.PerTier(barony: 0, county: 0, duchy: 0, kingdom: 60, empire: 0, hegemony: 0),
+
+            // Kings only, as vanilla's own empire decisions have it. A duke has not yet earned the
+            // question, and an emperor is already answering it somewhere else.
+            ClaimantTier: "tier_kingdom",
+
+            // Whose empire this is. Capital rather than "holds any county in it", because the
+            // second offers every neighbouring king a claim on the same title and the decisions
+            // panel fills up with other people's countries.
+            ByCapital: true,
+            Prestige: 4));
+    }
+
+    /// <summary>
+    /// What one crown's formation decision is made of, everything that differs between an empire's
+    /// and the hegemony's. <see cref="Crown"/> builds the decision; the two were one recipe written
+    /// out twice, and a fix to one had to be remembered in the other.
+    /// </summary>
+    /// <param name="Parts">The de jure titles one tier down, which the claimant must hold
+    /// <paramref name="PartGoal"/> of and which the effect draws back under the crown.</param>
+    /// <param name="PartTier">Their tier, as <c>title_tier</c> and the concept link spell it.</param>
+    /// <param name="ClaimantTier">The only tier that is ever offered the decision.</param>
+    /// <param name="ByCapital">Offered only to a claimant whose capital lies in the crown's de jure land.</param>
+    private sealed record Crowning(Title Crown, List<Title> Parts, string PartTier, int PartGoal,
+        string PartsTooltip, int CountyGoal, int Settled, string Name, string Description, string SelectionTooltip,
+        string ConfirmText, DecisionCost Cost, AiCheck Ai, string ClaimantTier, bool ByCapital, int Prestige);
+
+    private static DecisionSpec Crown(Crowning c)
+    {
+        string key = KeyFor(c.Crown);
+        string title = $"title:{c.Crown.Key}";
+
+        string partsTooltip = $"{key}_{c.PartTier}s_tt";
         string countyTooltip = $"{key}_counties_tt";
-        string kingdomTooltip = $"{key}_kingdoms_tt";
         string deJureTooltip = $"{key}_de_jure_tt";
 
         return new DecisionSpec
         {
             Key = key,
-            Name = $"Found the {Word(empire)} of ${empire.Key}$",
-            Description = Description(empire, kingdoms, settled),
-            SelectionTooltip = $"${empire.Key}$ becomes a [de_jure|E] [empire|E] under your rule.",
-            ConfirmText = "Let it be one realm.",
+            Name = c.Name,
+            Description = c.Description,
+            SelectionTooltip = c.SelectionTooltip,
+            ConfirmText = c.ConfirmText,
             Pictures = [new(DecisionsWriter.RealmPicture)],
             Group = "major",
-            Cost = Cost(settled),
-
-            // Vanilla's own cadence for found_empire_decision: only a king is ever a candidate, so
-            // only the kingdom tier pays for the check, and it pays every five years rather than
-            // constantly — the county test below walks the whole de jure empire.
-            Ai = AiCheck.PerTier(barony: 0, county: 0, duchy: 0, kingdom: 60, empire: 0, hegemony: 0),
+            Cost = c.Cost,
+            Ai = c.Ai,
             AiPotential = DecisionsWriter.AlwaysYes,
             AiWillDo = DecisionsWriter.Weight(100),
 
@@ -166,15 +206,11 @@ public static class FormationDecisions
                 // The whole gate, and the reason no start-date filtering happens at build time.
                 using (b.Block("NOT")) b.Field("exists", $"{title}.holder");
 
-                // Kings only, as vanilla's own empire decisions have it. A duke has not yet earned
-                // the question, and an emperor is already answering it somewhere else.
-                b.Field("highest_held_title_tier", "tier_kingdom");
+                b.Field("highest_held_title_tier", c.ClaimantTier);
 
-                // Whose empire this is. Capital rather than "holds any county in it", because the
-                // second offers every neighbouring king a claim on the same title and the decisions
-                // panel fills up with other people's countries.
-                using (b.Block("capital_county"))
-                    b.Field("target_is_de_jure_liege_or_above", title);
+                if (c.ByCapital)
+                    using (b.Block("capital_county"))
+                        b.Field("target_is_de_jure_liege_or_above", title);
             },
 
             IsValid = b =>
@@ -182,16 +218,19 @@ public static class FormationDecisions
                 // Token, not Field: a comparison is a whole line, and `key = >= n` is what a
                 // Field call produces. CK3 parses it as a syntax error and drops the rest of the
                 // file, so the tell is every decision in the file going missing at once.
-                b.Token("prestige_level >= 4");
+                b.Token($"prestige_level >= {c.Prestige}");
 
                 using (b.Block("custom_tooltip"))
                 {
-                    b.Field("text", kingdomTooltip);
+                    b.Field("text", partsTooltip);
 
                     using (b.Block("any_held_title"))
                     {
-                        b.Token($"count >= {kingdomGoal}");
-                        b.Field("title_tier", "kingdom");
+                        b.Token($"count >= {c.PartGoal}");
+                        b.Field("title_tier", c.PartTier);
+
+                        // Its own, not any: an emperor of the far side of the map holding two
+                        // crowns of his own has done nothing towards this one.
                         b.Field("target_is_de_jure_liege_or_above", title);
                     }
                 }
@@ -203,7 +242,7 @@ public static class FormationDecisions
                     using (b.Block(title))
                     using (b.Block("any_de_jure_county"))
                     {
-                        b.Token($"count >= {countyGoal}");
+                        b.Token($"count >= {c.CountyGoal}");
 
                         // Realm, not demesne. An emperor rules through his vassals, and requiring
                         // the founder to hold the counties personally would require him to break
@@ -240,15 +279,15 @@ public static class FormationDecisions
                 b.Field("set_primary_title_to", title);
                 b.Blank();
 
-                // De jure drift can move a kingdom out of the empire over a long game, and an
-                // empire founded with holes in it is not the empire the map drew. Vanilla's
-                // Armenian decision repairs the same way. The repair is silent, so it is announced
-                // by hand — a hidden_effect writes no tooltip of its own.
+                // De jure drift can move a part out from under the crown over a long game, and a
+                // crown founded with holes in it is not the title the map drew. Vanilla's Armenian
+                // decision repairs the same way. The repair is silent, so it is announced by hand
+                // — a hidden_effect writes no tooltip of its own.
                 b.Field("custom_tooltip", deJureTooltip);
 
                 using (b.Block("hidden_effect"))
-                    foreach (var kingdom in kingdoms)
-                        using (b.Block($"title:{kingdom.Key}"))
+                    foreach (var part in c.Parts)
+                        using (b.Block($"title:{part.Key}"))
                         using (b.Block("if"))
                         {
                             using (b.Block("limit"))
@@ -261,11 +300,10 @@ public static class FormationDecisions
 
             ExtraLocalisation =
             [
-                (kingdomTooltip, $"You hold at least #V {kingdomGoal}#! of the [de_jure|E] "
-                               + $"[kingdoms|E] of ${empire.Key}$"),
-                (countyTooltip, $"Your realm holds at least #V {countyGoal}#! of the "
-                              + $"#V {settled}#! settled [counties|E] of ${empire.Key}$"),
-                (deJureTooltip, $"Every [de_jure|E] [kingdom|E] of ${empire.Key}$ that has drifted "
+                (partsTooltip, c.PartsTooltip),
+                (countyTooltip, $"Your realm holds at least #V {c.CountyGoal}#! of the "
+                              + $"#V {c.Settled}#! settled [counties|E] of ${c.Crown.Key}$"),
+                (deJureTooltip, $"Every [de_jure|E] [{c.PartTier}|E] of ${c.Crown.Key}$ that has drifted "
                               + "away returns to it"),
             ],
         };
@@ -286,139 +324,36 @@ public static class FormationDecisions
     /// </summary>
     private static DecisionSpec Hegemony(Title hegemony, int settled)
     {
-        string key = KeyFor(hegemony);
-        string title = $"title:{hegemony.Key}";
-
         var empires = hegemony.Children.Where(c => c.Tier == "e").ToList();
 
         // Most of them, never fewer than two. Two is the floor because a hegemony over one empire
         // is the same realm drawn twice — the same reason Titles.Crown refuses to build one.
         int empireGoal = Math.Max(2, empires.Count / 2 + 1);
-        int countyGoal = Math.Max(1, (int)Math.Ceiling(settled * HegemonyCountyShare));
 
-        string empireTooltip = $"{key}_empires_tt";
-        string countyTooltip = $"{key}_counties_tt";
-        string deJureTooltip = $"{key}_de_jure_tt";
-
-        return new DecisionSpec
-        {
-            Key = key,
-            Name = $"Proclaim the {Word(hegemony)} of ${hegemony.Key}$",
-            Description = HegemonyDescription(hegemony, empires, settled),
-            SelectionTooltip = $"${hegemony.Key}$ becomes a [de_jure|E] [hegemony|E] under your rule.",
-            ConfirmText = "Let there be one throne above the rest.",
-            Pictures = [new(DecisionsWriter.RealmPicture)],
-            Group = "major",
-            Cost = HegemonyCost(settled),
+        return Crown(new Crowning(
+            Crown: hegemony,
+            Parts: empires,
+            PartTier: "empire",
+            PartGoal: empireGoal,
+            PartsTooltip: $"You hold at least #V {empireGoal}#! of the #V {empires.Count}#! [empires|E] of ${hegemony.Key}$",
+            CountyGoal: Math.Max(1, (int)Math.Ceiling(settled * HegemonyCountyShare)),
+            Settled: settled,
+            Name: $"Proclaim the {Word(hegemony)} of ${hegemony.Key}$",
+            Description: HegemonyDescription(hegemony, empires, settled),
+            SelectionTooltip: $"${hegemony.Key}$ becomes a [de_jure|E] [hegemony|E] under your rule.",
+            ConfirmText: "Let there be one throne above the rest.",
+            Cost: HegemonyCost(settled),
 
             // Only an emperor is ever a candidate, so only that tier pays for the check — and it is
             // a check that walks every settled county on the map, so it pays rarely.
-            Ai = AiCheck.PerTier(barony: 0, county: 0, duchy: 0, kingdom: 0, empire: 120, hegemony: 0),
-            AiPotential = DecisionsWriter.AlwaysYes,
-            AiWillDo = DecisionsWriter.Weight(100),
+            Ai: AiCheck.PerTier(barony: 0, county: 0, duchy: 0, kingdom: 0, empire: 120, hegemony: 0),
+            ClaimantTier: "tier_empire",
 
-            IsShown = b =>
-            {
-                b.Field("is_playable_character", "yes");
-                b.Field("is_landed_or_landless_administrative", "yes");
-
-                using (b.Block("NOT")) b.Field("exists", $"{title}.holder");
-
-                // Emperors only. The empire decisions ask whose empire this is so that a title does
-                // not appear in every neighbour's panel; the empire count in IsValid is that test
-                // here, and it is de jure rather than geographical, so it belongs there.
-                b.Field("highest_held_title_tier", "tier_empire");
-            },
-
-            IsValid = b =>
-            {
-                // Token, not Field, for the same reason as Formation: a comparison is a whole line,
-                // and `key = >= n` is a syntax error that eats the rest of the file.
-                b.Token("prestige_level >= 5");
-
-                using (b.Block("custom_tooltip"))
-                {
-                    b.Field("text", empireTooltip);
-
-                    using (b.Block("any_held_title"))
-                    {
-                        b.Token($"count >= {empireGoal}");
-                        b.Field("title_tier", "empire");
-
-                        // Its own empires, not any two. The hegemony is a region now, and an
-                        // emperor of the far side of the map has done nothing towards this crown.
-                        b.Field("target_is_de_jure_liege_or_above", title);
-                    }
-                }
-
-                using (b.Block("custom_tooltip"))
-                {
-                    b.Field("text", countyTooltip);
-
-                    using (b.Block(title))
-                    using (b.Block("any_de_jure_county"))
-                    {
-                        b.Token($"count >= {countyGoal}");
-                        b.Field("holder.top_liege", "root");
-                    }
-                }
-            },
-
-            IsValidShowingFailuresOnly = b =>
-            {
-                b.Field("top_liege", "this");
-                b.Field("is_available_adult", "yes");
-                b.Field("is_at_war", "no");
-            },
-
-            Effect = b =>
-            {
-                using (b.Block("create_title_and_vassal_change"))
-                {
-                    b.Field("type", "created");
-                    b.Field("save_scope_as", "title_change");
-                    b.Field("add_claim_on_loss", "no");
-                }
-
-                using (b.Block(title))
-                using (b.Block("change_title_holder"))
-                {
-                    b.Field("holder", "root");
-                    b.Field("change", "scope:title_change");
-                }
-
-                b.Field("resolve_title_and_vassal_change", "scope:title_change");
-                b.Field("set_primary_title_to", title);
-                b.Blank();
-
-                // Same repair as the empire decision, one tier up: de jure drift can walk an empire
-                // out from under the hegemony over a long game, and the title the map drew should
-                // be the title that gets proclaimed.
-                b.Field("custom_tooltip", deJureTooltip);
-
-                using (b.Block("hidden_effect"))
-                    foreach (var empire in empires)
-                        using (b.Block($"title:{empire.Key}"))
-                        using (b.Block("if"))
-                        {
-                            using (b.Block("limit"))
-                            using (b.Block("NOT"))
-                                b.Field("target_is_de_jure_liege_or_above", title);
-
-                            b.Field("set_de_jure_liege_title", title);
-                        }
-            },
-
-            ExtraLocalisation =
-            [
-                (empireTooltip, $"You hold at least #V {empireGoal}#! of the #V {empires.Count}#! "
-                              + $"[empires|E] of ${hegemony.Key}$"),
-                (countyTooltip, $"Your realm holds at least #V {countyGoal}#! of the "
-                              + $"#V {settled}#! settled [counties|E] of ${hegemony.Key}$"),
-                (deJureTooltip, $"Every [de_jure|E] [empire|E] of ${hegemony.Key}$ that has drifted "
-                              + "away returns to it"),
-            ],
-        };
+            // No capital test. The empire decisions ask whose empire this is so that a title does
+            // not appear in every neighbour's panel; the empire count is that test here, and it is
+            // de jure rather than geographical, so it belongs in IsValid.
+            ByCapital: false,
+            Prestige: 5));
     }
 
     /// <summary>What proclaiming the world costs. Vanilla prices a hegemony at 2400 gold.</summary>

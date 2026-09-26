@@ -69,6 +69,24 @@ public sealed record WorldModel
     /// </summary>
     public IReadOnlyDictionary<Title, (byte R, byte G, byte B)>? RealmColours { get; init; }
 
+    /// <summary>
+    /// Under an applied history, the wilderness it left and the county cultures, faiths and wilds
+    /// that follow — what the realm layer writes from. <see cref="Wilderness"/>, <see cref="Cultures"/>,
+    /// <see cref="Faiths"/> and <see cref="Frontier"/> stay the generated ones every cached layer
+    /// was decided from. Null for a generated world, whose realm layer reads those.
+    /// </summary>
+    internal ContentWriter.WildsLayer? AppliedWilds { get; init; }
+
+    /// <summary>
+    /// Under an applied history, the wars, truces and claims it left, which the prehistory writes
+    /// in place of the ones it invents. Null for a generated world, or a history that carried none.
+    /// </summary>
+    internal SimDiplomacy? AppliedDiplomacy { get; init; }
+
+    /// <summary>What the realm layer writes from: <see cref="AppliedWilds"/>, or the generated maps.</summary>
+    internal ContentWriter.WildsLayer RealmLayer
+        => AppliedWilds ?? ContentWriter.WildsLayer.Unmoved(Wilderness, Cultures, Faiths, Frontier);
+
     /// <summary>One government map per additional bookmark, or null without them.</summary>
     public Dictionary<int, GovernmentMap>? EraGovernments { get; init; }
     public double? HegemonShare { get; init; }
@@ -262,7 +280,7 @@ public static partial class ContentWriter
         Core.Stage.Time("realm capitals", () =>
         {
             int moved = MapGen.Capitals.SeatRealms(empires, development, provinces, order, baronyCount,
-                worldCenters, azgaar);
+                worldCenters, azgaar, wilderness);
             Console.WriteLine($"  realm capitals: {moved} titles above county had their capital moved");
 
             // A vanilla title is ruled from vanilla's capital when this map has it: France from Paris.
@@ -458,10 +476,12 @@ public static partial class ContentWriter
         IReadOnlyDictionary<Title, AppliedHistory.Lineage>? lineage = null;
         List<PastRuler>? pastRulers = null;
         IReadOnlyDictionary<Title, (byte R, byte G, byte B)>? realmColours = null;
+        WildsLayer? appliedWilds = null;
+        SimDiplomacy? appliedDiplomacy = null;
         if (applied is not null)
-            (realms, governments, hegemonShare, lineage, pastRulers, realmColours, _) = ApplyRealms(applied, realms, cfg, empires,
-                counties, provinces, order, baronyCount, provinceTerrain, development, cultures, worldCenters,
-                wilderness, azgaar, stateGovernments, faiths);
+            (realms, governments, hegemonShare, lineage, pastRulers, realmColours, _, appliedWilds, appliedDiplomacy) = ApplyRealms(applied,
+                realms, cfg, empires, counties, provinces, order, baronyCount, provinceTerrain, development, cultures,
+                worldCenters, wilderness, azgaar, stateGovernments, faiths, landCount, frontier);
 
         return new WorldModel
         {
@@ -469,6 +489,8 @@ public static partial class ContentWriter
             Lineage = lineage,
             PastRulers = pastRulers,
             RealmColours = realmColours,
+            AppliedWilds = appliedWilds,
+            AppliedDiplomacy = appliedDiplomacy,
             ProvinceTerrain = provinceTerrain,
             Vocabulary = vocabulary,
             Counties = counties,

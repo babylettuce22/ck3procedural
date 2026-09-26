@@ -253,7 +253,11 @@ public static class SilkRoad
         Segment(Tibet, India, branch);
 
         // --- Sub-regions ---------------------------------------------------------------------
-        var adjacent = CountyAdjacency(counties, countyOf, provinces, order, baronyCount, crossings);
+        // As the game has it: the barony raster, plus the straits and river crossings adjacencies.csv
+        // declares. Without the crossings a road that ferries over a river would cut its own
+        // sub-region in two at the bank.
+        var adjacent = CountyNetwork.ByTitle(counties, baronyCount, [Titles.LandAdjacency(provinces, baronyCount, order)],
+            crossings.Crossings.Select(c => (c.From, c.To)));
         var region = new Dictionary<Title, int>(stopOfCounty);
 
         // The duchies the road crosses, each to the stop with the most road in it.
@@ -591,34 +595,6 @@ public static class SilkRoad
         }
 
         return pieces;
-    }
-
-    /// <summary>
-    /// County-to-county adjacency as the game has it: the barony raster, plus the straits and
-    /// river crossings adjacencies.csv declares. Without the crossings a road that ferries over
-    /// a river would cut its own sub-region in two at the bank.
-    /// </summary>
-    private static Dictionary<Title, HashSet<Title>> CountyAdjacency(List<Title> counties,
-        Dictionary<int, Title> countyOf, ProvinceMap provinces, int[] order, int baronyCount, CrossingMap crossings)
-    {
-        var adjacent = new Dictionary<Title, HashSet<Title>>();
-        void Link(int a, int b)
-        {
-            if (!countyOf.TryGetValue(a, out var ca) || !countyOf.TryGetValue(b, out var cb) || ReferenceEquals(ca, cb)) return;
-            if (!adjacent.TryGetValue(ca, out var set)) adjacent[ca] = set = [];
-            set.Add(cb);
-        }
-
-        foreach (var (province, others) in Titles.LandAdjacency(provinces, baronyCount, order))
-            foreach (int other in others)
-                Link(province, other);
-
-        foreach (var c in crossings.Crossings)
-        {
-            Link(c.From, c.To);
-            Link(c.To, c.From);
-        }
-        return adjacent;
     }
 
     /// <summary>The de jure kingdom holding most of a set of counties, by name, or null.</summary>

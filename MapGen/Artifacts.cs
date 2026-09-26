@@ -366,7 +366,7 @@ public sealed class ArtifactMap
             // then a scattering of faith relics on top.
             if (isEmperor || isKing)
             {
-                var courtRng = new Rng((int)(county.Index ^ 0x2B91));
+                var courtRng = Rng.For(cfg.Seed, 0x2B91, county.Index);
                 var court = new List<ArtifactCategory>();
 
                 // A relic is the commonest court piece in vanilla and the one that says which faith

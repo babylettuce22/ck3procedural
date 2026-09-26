@@ -79,6 +79,9 @@ public sealed class BookmarkEras
     /// <summary>The start date's year, which the eras sit either side of.</summary>
     public required int MainYear { get; init; }
 
+    /// <summary>The world's seed, which every per-person draw here is salted with. See <see cref="Rng.For(int, int, ulong, int)"/>.</summary>
+    public required int Seed { get; init; }
+
     /// <summary>The earliest date anything is seated on: the first bookmark before the start date's, else null.</summary>
     public string? FirstDate => Eras.FirstOrDefault(e => e.Year < MainYear)?.GrantDate;
 
@@ -94,7 +97,7 @@ public sealed class BookmarkEras
     {
         if (FirstLater is not { } later) return null;
 
-        var rng = new Rng(Rng.StableHash(id) ^ 0xDEADUL);
+        var rng = Rng.For(Seed, 0xDEAD, Rng.StableHash(id));
         int lo = MainYear + 1;
         int hi = Math.Max(lo, Math.Min(later.Year - 3, birthYear + 90));
         return $"{rng.Int(lo, hi)}.{rng.Int(1, 12)}.{rng.Int(1, 28)}";
@@ -107,7 +110,7 @@ public sealed class BookmarkEras
         if (!cfg.UsesAdditionalBookmarks) return null;
 
         var dates = cfg.AdditionalBookmarkDates;
-        var result = new BookmarkEras { Eras = [], MainYear = cfg.StartYear };
+        var result = new BookmarkEras { Eras = [], MainYear = cfg.StartYear, Seed = cfg.Seed };
 
         // Every bookmark year, the start's included, for "when is the next one".
         var allYears = dates.Select(d => d.Year).Append(cfg.StartYear).Order().ToList();
@@ -163,13 +166,13 @@ public sealed class BookmarkEras
 
             foreach (var seat in seats)
             {
-                var rng = new Rng(seat.Index ^ 0x3E2D ^ salt);
+                var rng = Rng.For(cfg.Seed, 0x3E2D, seat.Index, salt);
                 var culture = cultures.For(seat);
                 var faith = faiths.For(seat);
                 var primary = HistoryWriter.Primary(seat, map);
                 string government = eraGovernments.GetValueOrDefault(seat, GovernmentMap.Feudal);
 
-                bool female = HistoryWriter.RulerIsFemale(seat, faith, salt);
+                bool female = HistoryWriter.RulerIsFemale(seat, faith, cfg.Seed, salt);
                 var names = female ? culture.FemaleNames : culture.MaleNames;
                 string name = names.Count > 0 ? names[rng.Int(0, names.Count - 1)] : culture.Name;
 
@@ -206,7 +209,8 @@ public sealed class BookmarkEras
                     BirthYear = birthYear,
                     BirthMonth = birthMonth,
                     BirthDay = birthDay,
-                    Profile = RulerProfile.Build(seat, primary.Tier, government, culture.Ethos, age, hasVassals, salt),
+                    Profile = RulerProfile.Build(seat, primary.Tier, government, culture.Ethos, age, hasVassals,
+                        cfg.Seed, salt),
                     Gold = gold,
                     Prestige = prestige,
                     Renown = renown,
@@ -250,7 +254,7 @@ public sealed class BookmarkEras
                 // A county's lords are less sure to be the start date's family the further the date
                 // is from it, either way: most count houses last a century, few last three.
                 double endures = Math.Clamp(1.0 - yearsAway / 280.0, 0.1, 0.9);
-                if (new Rng(seat.Index ^ 0x51D1).NextDouble() < endures && Existing(seat) is { } local)
+                if (Rng.For(cfg.Seed, 0x51D1, seat.Index).NextDouble() < endures && Existing(seat) is { } local)
                     return (local.Dynasty, local.House, true);
                 key = $"c{seat.Index}";
             }
@@ -335,8 +339,8 @@ public sealed class BookmarkEras
                 var sample = counties.FirstOrDefault(c => !wilderness.Contains(c) && faiths.For(c) == faith)
                              ?? counties[0];
                 var culture = cultures.For(sample);
-                bool female = HistoryWriter.ClergyIsFemale(faith);
-                var rng = new Rng(Rng.StableHash(faith.Key) ^ 0x48A1UL ^ (ulong)salt);
+                bool female = HistoryWriter.ClergyIsFemale(faith, cfg.Seed);
+                var rng = Rng.For(cfg.Seed, 0x48A1, Rng.StableHash(faith.Key), salt);
                 var names = female ? culture.FemaleNames : culture.MaleNames;
                 string name = names.Count > 0 ? names[rng.Int(0, names.Count - 1)] : culture.Name;
                 int birth = era.Year - rng.Int(35, 60);

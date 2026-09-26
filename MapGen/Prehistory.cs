@@ -244,17 +244,19 @@ public sealed class PrehistoryMap
         WildernessMap wilderness,
         MapConfig cfg,
         Rng rng,
-        IReadOnlyDictionary<Title, AppliedHistory.Lineage>? lineage = null)
+        IReadOnlyDictionary<Title, AppliedHistory.Lineage>? lineage = null,
+        SimDiplomacy? diplomacy = null)
     {
         var map = new PrehistoryMap();
         if (counties.Count == 0) return map;
 
         var settledCounties = counties.Where(c => !wilderness.Contains(c)).ToList();
-        var countyNeighbors = BuildCountyAdjacency(settledCounties, provinces, order, landCount);
+        var countyNeighbors = CountyNetwork.ByTitle(settledCounties, landCount,
+            [Titles.LandAdjacency(provinces, landCount, order)]);
         var rulerCounties = realms.HolderCounty.Values.Distinct().Where(c => !wilderness.Contains(c)).ToList();
 
         // 1. Build Dynasties and Cadet Houses
-        BuildDynastiesAndHouses(map, rulerCounties, realms, cultures, rng, lineage, cfg.PeopleSalt);
+        BuildDynastiesAndHouses(map, rulerCounties, realms, cultures, cfg.Seed, lineage, cfg.PeopleSalt);
 
         // 1b. Noble Families — the landless title that makes a house a family to the engine.
         // Straight after the houses, because it is a fact about them and nothing later moves one.
@@ -293,7 +295,7 @@ public sealed class PrehistoryMap
 
                     if (topNeighbor != topCenter)
                     {
-                        var covetRng = new Rng(topNeighbor.Index ^ center.County.Index);
+                        var covetRng = Rng.For(cfg.Seed, topNeighbor.Index, center.County.Index);
                         if (covetRng.Chance(0.50))
                         {
                             AddClaim(map, topNeighbor, center.County, pressed: false);
@@ -303,8 +305,11 @@ public sealed class PrehistoryMap
             }
         }
 
-        // 8. Active Starting Wars
-        if (cfg.EnableStartingWars && topLiegeNeighbors.Count > 0)
+        // 8. Active Starting Wars — or, under an applied history, the wars, truces and claims it
+        // left, in place of the invented ones: the start date opens on the history's own quarrels.
+        if (diplomacy is not null)
+            AddSimulatedDiplomacy(map, diplomacy, rulerCounties, realms, cfg);
+        else if (cfg.EnableStartingWars && topLiegeNeighbors.Count > 0)
         {
             GenerateActiveWars(map, topLiegeNeighbors, realms, faiths, cultures, worldCenters, cfg, rng);
         }
@@ -339,7 +344,7 @@ public sealed class PrehistoryMap
         List<Title> rulerCounties,
         RealmMap realms,
         CultureMap cultures,
-        Rng rng,
+        int seed,
         IReadOnlyDictionary<Title, AppliedHistory.Lineage>? lineage = null,
         int salt = 0)
     {
@@ -373,7 +378,7 @@ public sealed class PrehistoryMap
             var primary = HistoryWriter.Primary(county, realms);
             var liegeCounty = TopLiegeCounty(county, realms);
 
-            var vRng = new Rng(county.Index ^ 0x48A1);
+            var vRng = Rng.For(seed, 0x48A1, county.Index);
             bool isHighVassal = primary.Tier is "d" or "k";
 
             // Cadet branches are rare on purpose. At two in five, most of the map's dukes turned out
@@ -523,7 +528,6 @@ public sealed class PrehistoryMap
         string suffix = "", HashSet<string>? taken = null)
     {
         var culture = cultures.For(county);
-        var cRng = new Rng(county.Index ^ 0x33A9);
 
         string dynName = culture.DynastyNames.Count > 0
             ? culture.DynastyNameFor(county)
@@ -633,7 +637,7 @@ public sealed class PrehistoryMap
             var faith = faiths.For(topLiege);
             var topTitle = HistoryWriter.Primary(topLiege, realms);
 
-            var topRng = new Rng(topLiege.Index ^ 0x7E1B);
+            var topRng = Rng.For(cfg.Seed, 0x7E1B, topLiege.Index);
             int topBirthYear = HistoryWriter.GetRulerBirthYear(topLiege, cfg);
 
             // The line runs through the parent of the ruler's own sex: a countess is her mother's
@@ -679,7 +683,7 @@ public sealed class PrehistoryMap
                 int kinBirthYear = HistoryWriter.GetRulerBirthYear(kinCounty, cfg);
                 int ageGap = Math.Abs(topBirthYear - kinBirthYear);
                 var kinTitle = HistoryWriter.Primary(kinCounty, realms);
-                var kinRng = new Rng(kinCounty.Index ^ 0x481A);
+                var kinRng = Rng.For(cfg.Seed, 0x481A, kinCounty.Index);
 
                 if (!brotherTaken && ageGap <= 10 && kinRng.Chance(0.4))
                 {
@@ -744,7 +748,7 @@ public sealed class PrehistoryMap
 
             var culture = cultures.For(county);
             var faith = faiths.For(county);
-            var fRng = new Rng(county.Index ^ 0x981C);
+            var fRng = Rng.For(cfg.Seed, 0x981C, county.Index);
 
             int birthYear = HistoryWriter.GetRulerBirthYear(county, cfg);
             int parentBirth = birthYear - fRng.Int(22, 35);
@@ -812,7 +816,7 @@ public sealed class PrehistoryMap
             var rulerFaith = faiths.For(ruler);
             var rulerCulture = cultures.For(ruler);
             bool rulerFemale = HistoryWriter.RulerIsFemale(ruler, rulerFaith, cfg);
-            var mRng = new Rng(ruler.Index ^ 0x6E19);
+            var mRng = Rng.For(cfg.Seed, 0x6E19, ruler.Index);
 
             if (!mRng.Chance(0.88)) continue;
 
@@ -920,6 +924,15 @@ public sealed class PrehistoryMap
                     spouseParentIsMother = df.Female;
                     int parentBirthYear = int.Parse(df.BirthDate.Split('.')[0]);
                     spouseBirthYear = Math.Max(spouseBirthYear, parentBirthYear + 17);
+
+                    // And no later than that parent could have had a child: a mother past 45 or a
+                    // father past 60, or either already dead (a father's child can come the year
+                    // after). Drawn from the start date alone, a consort could be born to a
+                    // 62-year-old mother, or years after the parent's grave.
+                    int latest = parentBirthYear + (df.Female ? 45 : 60);
+                    if (df.DeathDate is { } died)
+                        latest = Math.Min(latest, int.Parse(died.Split('.')[0]) - (df.Female ? 1 : 0));
+                    spouseBirthYear = Math.Max(parentBirthYear + 17, Math.Min(spouseBirthYear, latest));
                 }
             }
             else
@@ -1017,7 +1030,7 @@ public sealed class PrehistoryMap
             var culture = cultures.For(ruler);
             var faith = faiths.For(ruler);
             bool rulerFemale = HistoryWriter.RulerIsFemale(ruler, faith, cfg);
-            var cRng = new Rng(ruler.Index ^ 0x51E3);
+            var cRng = Rng.For(cfg.Seed, 0x51E3, ruler.Index);
 
             int childCount = cRng.Int(1, 3);
             var childrenList = new List<HistoricalCharacter>();
@@ -1120,7 +1133,7 @@ public sealed class PrehistoryMap
         {
             var primaryTitle = HistoryWriter.Primary(ruler, realms);
             var rulerFaith = faiths.For(ruler);
-            var rulerRng = new Rng(ruler.Index ^ 0x7B2F);
+            var rulerRng = Rng.For(cfg.Seed, 0x7B2F, ruler.Index);
 
             foreach (var otherRuler in neighbors)
             {
@@ -1242,7 +1255,7 @@ public sealed class PrehistoryMap
 
         foreach (var (khan, vassals) in vassalsByLiege.OrderBy(kv => kv.Key.Index))
         {
-            var draw = new Rng(khan.Index ^ 0x6D0A);
+            var draw = Rng.For(cfg.Seed, 0x6D0A, khan.Index);
 
             // Highest tier first: the vassals big enough to out-muster the khan are the ones whose
             // obedience actually decides whether the horde holds together.
@@ -1323,7 +1336,7 @@ public sealed class PrehistoryMap
 
         foreach (var (liegeCounty, vassals) in vassalsByLiege)
         {
-            var liegeRng = new Rng(liegeCounty.Index ^ 0x91F3);
+            var liegeRng = Rng.For(cfg.Seed, 0x91F3, liegeCounty.Index);
 
             var ambitiousVassals = vassals
                 .OrderByDescending(v => (map.Claims.TryGetValue(v, out var cl) && cl.Any(c => c.TargetTitle == HistoryWriter.Primary(liegeCounty, realms)) ? 3 : 0) +
@@ -1356,6 +1369,52 @@ public sealed class PrehistoryMap
                     }
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// An applied history's truces, claims and wars. Only between independent rulers the start date
+    /// has — titling can fold a realm into a lord or free a vassal — and each ruler in one war at
+    /// most, as <see cref="GenerateActiveWars"/> keeps them. Each war is a claim war: its attacker
+    /// is given a pressed claim on the county it went to war from, so the casus belli is valid for
+    /// any government. Draws nothing, so the stream the rest of the prehistory used is untouched.
+    /// </summary>
+    private static void AddSimulatedDiplomacy(PrehistoryMap map, SimDiplomacy diplomacy, List<Title> rulerCounties,
+        RealmMap realms, MapConfig cfg)
+    {
+        var rulers = rulerCounties.ToHashSet();
+        bool Sovereign(Title seat) => rulers.Contains(seat) && TopLiegeCounty(seat, realms) == seat;
+
+        // One truce a pair: the writer sets each entry, and a second would restart the first's clock.
+        foreach (var (a, b, days) in diplomacy.Truces)
+            if (days > 0 && rulers.Contains(a) && rulers.Contains(b) && a != b
+                && !(map.Truces.TryGetValue(a, out var had) && had.Any(t => t.TargetCounty == b)))
+                AddTruce(map, a, b, days);
+
+        foreach (var (claimant, target) in diplomacy.Claims)
+            if (rulers.Contains(claimant) && TopLiegeCounty(target, realms) != TopLiegeCounty(claimant, realms))
+                AddClaim(map, claimant, target, pressed: true);
+
+        if (!cfg.EnableStartingWars) return;
+
+        var busy = new HashSet<Title>();
+        foreach (var war in diplomacy.Wars.OrderBy(w => w.Started).ThenBy(w => w.Attacker.Index))
+        {
+            if (!Sovereign(war.Attacker) || !Sovereign(war.Defender) || war.Attacker == war.Defender) continue;
+            if (TopLiegeCounty(war.Target, realms) != war.Defender) continue;
+            if (!busy.Add(war.Attacker) || !busy.Add(war.Defender)) continue;
+
+            AddClaim(map, war.Attacker, war.Target, pressed: true);
+            map.ActiveWars.Add(new ActiveWar
+            {
+                StartDate = $"{war.Started}.1.1",
+                TargetTitle = war.Target,
+                CasusBelli = "claim_cb",
+                AttackerCounty = war.Attacker,
+                DefenderCounty = war.Defender,
+                ClaimantCounty = war.Attacker,
+                Description = $"{char.ToUpperInvariant(war.Name[0])}{war.Name[1..]}, begun {war.Started} (war score {war.Score:+0;-0;0} when history stopped)",
+            });
         }
     }
 
@@ -1529,31 +1588,6 @@ public sealed class PrehistoryMap
         return !alreadyAllied && countA < MaxAlliancesPerRuler && countB < MaxAlliancesPerRuler;
     }
 
-    private static Dictionary<Title, HashSet<Title>> BuildCountyAdjacency(
-        List<Title> counties, ProvinceMap provinces, int[] order, int landCount)
-    {
-        var countyOfProvince = new Dictionary<int, Title>();
-        foreach (var c in counties)
-            foreach (var b in c.Children)
-                if (b.ProvinceId > 0) countyOfProvince[b.ProvinceId] = c;
-
-        var adjacency = new Dictionary<Title, HashSet<Title>>();
-        foreach (var c in counties) adjacency[c] = [];
-
-        foreach (var (province, others) in Titles.LandAdjacency(provinces, landCount, order))
-        {
-            if (!countyOfProvince.TryGetValue(province, out var c1)) continue;
-            foreach (int other in others)
-            {
-                if (!countyOfProvince.TryGetValue(other, out var c2) || c1 == c2) continue;
-                adjacency[c1].Add(c2);
-                adjacency[c2].Add(c1);
-            }
-        }
-
-        return adjacency;
-    }
-
     private static Dictionary<Title, HashSet<Title>> BuildRulerNeighbors(
         List<Title> rulerCounties,
         Dictionary<Title, HashSet<Title>> countyNeighbors,
@@ -1608,11 +1642,5 @@ public sealed class PrehistoryMap
         }
 
         return topLiegeNeighbors;
-    }
-
-    public static int GetRulerBirthYear(int countyIndex, int startYear)
-    {
-        var rng = new Rng(countyIndex ^ 0x3E2D);
-        return startYear - rng.Int(24, 50);
     }
 }

@@ -53,6 +53,40 @@ public sealed class Rng
         return hash;
     }
 
+    /// <summary>
+    /// The stream for one thing in one world: <paramref name="seed"/> is the world's
+    /// (<c>MapConfig.Seed</c>), <paramref name="stream"/> names the purpose (the hex constant each
+    /// call site already had), <paramref name="key"/> is the thing — a county index — and
+    /// <paramref name="salt"/> tells apart draws of the same thing, such as a seat's ruler in an
+    /// earlier bookmark.
+    ///
+    /// Per-thing streams used to be <c>new Rng(county.Index ^ 0x6E19)</c>: independent of every
+    /// other draw, which is the point, but also of the world seed, so county 5 got the same family
+    /// on every seed — measured, every child count and every child's birthday matched between seeds
+    /// 4242 and 991. The parts are also mixed rather than XORed, so two purposes cannot collide on
+    /// the county pair whose indices differ by the XOR of their constants.
+    /// </summary>
+    public static Rng For(int seed, int stream, int key, int salt = 0)
+        => For(seed, stream, (ulong)(uint)key, salt);
+
+    /// <inheritdoc cref="For(int, int, int, int)"/>
+    /// <remarks>For a thing keyed by name: pass <see cref="StableHash"/> of its key.</remarks>
+    public static Rng For(int seed, int stream, ulong key, int salt = 0)
+    {
+        ulong h = Finalise((ulong)(uint)seed + 0x9E3779B97F4A7C15UL);
+        h = Finalise(h ^ (uint)stream);
+        h = Finalise(h ^ key);
+        h = Finalise(h ^ (uint)salt);
+        return new Rng(h);
+    }
+
+    private static ulong Finalise(ulong r)
+    {
+        r = (r ^ (r >> 30)) * 0xBF58476D1CE4E5B9UL;
+        r = (r ^ (r >> 27)) * 0x94D049BB133111EBUL;
+        return r ^ (r >> 31);
+    }
+
     private static ulong Rotl(ulong x, int k) => (x << k) | (x >> (64 - k));
 
     public ulong NextUInt64()

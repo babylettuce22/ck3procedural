@@ -278,7 +278,7 @@ public static class Faiths
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
         var counties = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
-        var graph = CountyGraph(counties, provinces, order, landCount, provinceTerrain,
+        var graph = CountyNetwork.Graph(counties, provinces, order, landCount, provinceTerrain, Resistance,
             cfg.FaithTerrainWeight);
 
         int faithTarget = Math.Max(1, (int)Math.Round(counties.Count / cfg.CountiesPerFaith));
@@ -828,40 +828,6 @@ public static class Faiths
             ]);
 
         return $"{prefix} {word}";
-    }
-
-    private static RegionGrowth.Graph CountyGraph(List<Title> counties, ProvinceMap provinces,
-        int[] order, int landCount, TerrainClass[] provinceTerrain, double terrainWeight)
-    {
-        var neighbours = CountyNetwork.Neighbours(counties, provinces, order, landCount);
-        var seedOfProvince = CountyNetwork.SeedOfProvince(order, landCount);
-
-        var cost = new double[counties.Count];
-        var position = new (double X, double Y)[counties.Count];
-
-        for (int i = 0; i < counties.Count; i++)
-        {
-            double total = 0, x = 0, y = 0;
-            int counted = 0;
-
-            foreach (var barony in counties[i].Children)
-            {
-                int id = barony.ProvinceId;
-                if (id <= 0 || id >= provinceTerrain.Length) continue;
-
-                total += Resistance(provinceTerrain[id]);
-                var seed = provinces.Seeds[seedOfProvince[id]];
-                x += seed.X;
-                y += seed.Y;
-                counted++;
-            }
-
-            double mean = counted == 0 ? 1.5 : total / counted;
-            cost[i] = Math.Max(0.1, 1.0 + (mean - 1.0) * terrainWeight);
-            position[i] = counted == 0 ? (0, 0) : (x / counted, y / counted);
-        }
-
-        return new RegionGrowth.Graph { Neighbours = neighbours, EnterCost = cost, Position = position };
     }
 
     private static double Resistance(TerrainClass t) => t switch

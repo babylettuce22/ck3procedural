@@ -222,12 +222,13 @@ public static class FaithIcons
 
     public static bool HasGeneratedIcon(Faith faith) => !faith.Inherited && faith.Icon == faith.Key;
 
-    public static List<FaithIconRecipe> Recipes(FaithMap faiths)
+    /// <param name="seed">The world's seed, which every draw here is salted with.</param>
+    public static List<FaithIconRecipe> Recipes(FaithMap faiths, int seed)
     {
         var religions = faiths.Religions
             .Where(r => !r.Inherited && r.Faiths.Any(f => !f.Inherited))
             .ToList();
-        var family = AssignFamilies(religions);
+        var family = AssignFamilies(religions, seed);
 
         var result = new List<FaithIconRecipe>();
         foreach (var religion in religions)
@@ -237,7 +238,7 @@ public static class FaithIcons
             var variants = Families[fam];
 
             var bag = FrameBag.SelectMany(f => Enumerable.Repeat(f.Frame, f.Weight)).ToList();
-            Seeded(religion.Key, "faiths").Shuffle(bag);
+            Seeded(seed, religion.Key, "faiths").Shuffle(bag);
 
             var used = new HashSet<(string, string, string)>();
             var groups = new HashSet<string>(StringComparer.Ordinal);
@@ -249,7 +250,7 @@ public static class FaithIcons
             for (int i = 0; i < members.Count; i++)
             {
                 var faith = members[i];
-                var rng = Seeded(faith.Key, "icon");
+                var rng = Seeded(seed, faith.Key, "icon");
                 string variant = variants[i % variants.Length];
                 string frame = faith == flagship ? "none" : bag[i % bag.Count];
                 var tier = TierOf(religion, faith);
@@ -269,7 +270,8 @@ public static class FaithIcons
 
     // -------------------------------------------------------------------------------------------
 
-    private static Rng Seeded(params string[] parts) => new(Rng.StableHash(string.Join("|", parts)));
+    /// <summary>A stream keyed by name and the world's seed: keys like <c>gen_religion_0</c> repeat on every seed.</summary>
+    private static Rng Seeded(int seed, params string[] parts) => Rng.For(seed, 0, Rng.StableHash(string.Join("|", parts)));
 
     private static bool HasHead(Faith f) => f.Head is not null && f.IsOrganized;
 
@@ -363,7 +365,7 @@ public static class FaithIcons
     /// the square an Azgaar god named "The Sad Antelope" drew a rosette about one time in four, and
     /// an early religion taking a family by chance left the one that clearly deserved it without.
     /// </summary>
-    private static Dictionary<Religion, string> AssignFamilies(List<Religion> religions)
+    private static Dictionary<Religion, string> AssignFamilies(List<Religion> religions, int seed)
     {
         var scores = religions.ToDictionary(r => r, Scores);
         var taken = new HashSet<string>(StringComparer.Ordinal);
@@ -382,7 +384,7 @@ public static class FaithIcons
             if (candidates.Count == 0)
                 candidates = scores[religion].OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal).Take(1).ToList();
 
-            var rng = Seeded(religion.Key, "family");
+            var rng = Seeded(seed, religion.Key, "family");
             static double Weight(double w) => w * w * w * w;
             double total = candidates.Sum(c => Weight(c.Value));
             double roll = rng.NextDouble() * total;

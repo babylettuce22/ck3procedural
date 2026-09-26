@@ -236,7 +236,7 @@ public sealed class RulerMap
             // The writer's own stream. Birth year is drawn from a fresh copy of it by
             // GetRulerBirthYear (prehistory needs the year before any ruler exists); month, day and
             // the purse continue from the one held here, in this order.
-            var rng = new Rng(county.Index ^ 0x3E2D ^ cfg.PeopleSalt);
+            var rng = Rng.For(cfg.Seed, 0x3E2D, county.Index, cfg.PeopleSalt);
             int birthYear = HistoryWriter.GetRulerBirthYear(county, cfg);
             int birthMonth = rng.Int(1, 12);
             int birthDay = rng.Int(1, 28);
@@ -245,7 +245,7 @@ public sealed class RulerMap
             // standing he starts with. See Emit/RulerProfile.cs for what each number is worth.
             var profile = RulerProfile.Build(
                 county, primaryTitle.Tier, government, culture.Ethos,
-                cfg.StartYear - birthYear, liegeCounties.Contains(county), cfg.PeopleSalt);
+                cfg.StartYear - birthYear, liegeCounties.Contains(county), cfg.Seed, cfg.PeopleSalt);
 
             string dynastyId = prehistory.CharacterDynastyMap.GetValueOrDefault(county, HistoryWriter.DynastyId(county));
             string houseKey = prehistory.CharacterHouseMap.GetValueOrDefault(county, $"house_gen_{county.Index}");

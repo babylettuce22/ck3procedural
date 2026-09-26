@@ -117,7 +117,7 @@ public sealed class BookmarkCast
     public static BookmarkCast? Build(
         List<Title> seats, RealmMap realms, GovernmentMap governments,
         Dictionary<Title, int> development, WildernessMap wilderness,
-        PrehistoryMap prehistory, RulerMap rulers, CultureMap cultures, int startYear,
+        PrehistoryMap prehistory, RulerMap rulers, CultureMap cultures, int startYear, int seed,
         Dictionary<Title, (int X, int Y)> positions, string tag = "")
     {
         var playable = realms.Greatest
@@ -181,7 +181,7 @@ public sealed class BookmarkCast
             ? f
             : facts[seat] = BookmarkFacts.For(rulers.For(seat), realms, governments, rulers, prehistory,
                                               realmSizes, frontier.Contains(seat), wealthy.Contains(seat),
-                                              seat == greatest);
+                                              seat == greatest, seed);
 
         var slots = chosen
             .Select(c => Compose(c.Key, FactsFor(c.County), c.X, c.Y, prehistory, cultures, startYear))
@@ -230,7 +230,8 @@ public sealed class BookmarkCast
         ActiveWar? War,
         Ruler? Rival,
         Ruler? Ally,
-        Title? PressedClaim)
+        Title? PressedClaim,
+        int Seed)
     {
         /// <summary>True when the man he has fallen out with is the man he answers to.</summary>
         public bool RivalIsLiege => Rival is not null && Liege is not null && Rival.Id == Liege.Id;
@@ -238,7 +239,7 @@ public sealed class BookmarkCast
         internal static BookmarkFacts For(
             Ruler ruler, RealmMap realms, GovernmentMap governments, RulerMap rulers,
             PrehistoryMap prehistory, Dictionary<Title, int> realmSizes, bool frontier, bool wealthy,
-            bool greatest)
+            bool greatest, int seed)
         {
             var seat = ruler.Seat;
 
@@ -287,7 +288,7 @@ public sealed class BookmarkCast
             string government = governments.For(seat);
 
             return new BookmarkFacts(ruler, liege, realmCounties, vassals, frontier, wealthy,
-                                     greatest, government, war, rival, ally, claim);
+                                     greatest, government, war, rival, ally, claim, seed);
         }
 
         /// <summary>
@@ -415,7 +416,7 @@ public sealed class BookmarkCast
         // A stream of its own, salted by the seat: phrasing varies between rulers, and asking twice
         // gives the same answer both times — which is what lets the description be a property
         // rather than a string frozen when the cast was chosen.
-        var rng = new Rng(f.Ruler.Seat.Index ^ 0x8B21);
+        var rng = Rng.For(f.Seed, 0x8B21, f.Ruler.Seat.Index);
 
         var p = Pronouns.For(f.Ruler.Female);
         var body = new List<string> { Standing(f, p) };

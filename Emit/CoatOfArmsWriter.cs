@@ -190,29 +190,35 @@ public static class CoatOfArmsWriter
     // Composing and writing
     // =========================================================================================
 
-    private static Rng SeedFor(string key) => new(Rng.StableHash(key) ^ 0x51A3UL);
+    /// <summary>
+    /// A family's heraldry stream: its key and the world's seed. Keyed on the id alone,
+    /// <c>gen_dynasty_5</c> rolled the same dice for its arms on every seed.
+    /// </summary>
+    private static Rng SeedFor(int seed, string key) => Rng.For(seed, 0x51A3, Rng.StableHash(key));
 
     /// <summary>
     /// Every dynasty's and house's arms as the write would roll them, without writing. What the
     /// ruler inspector shows before an edit, and the base an edit is compared against.
     /// </summary>
-    public static Dictionary<string, Coat> Compose(PrehistoryMap prehistory, CultureMap? cultures = null, FaithMap? faiths = null)
+    public static Dictionary<string, Coat> Compose(PrehistoryMap prehistory, int seed, CultureMap? cultures = null,
+        FaithMap? faiths = null)
     {
         var scopes = ScopesFor(prehistory, cultures, faiths);
         var coats = new Dictionary<string, Coat>(StringComparer.Ordinal);
         foreach (var dyn in prehistory.Dynasties.Values)
-            coats[dyn.Id] = Roll(SeedFor(dyn.Id), scopes(dyn.Id));
+            coats[dyn.Id] = Roll(SeedFor(seed, dyn.Id), scopes(dyn.Id));
 
         var cadetNumber = CadetNumbers(prehistory);
         foreach (var house in prehistory.Houses.Values)
-            coats[house.Key] = Roll(SeedFor(house.DynastyId), scopes(house.DynastyId),
+            coats[house.Key] = Roll(SeedFor(seed, house.DynastyId), scopes(house.DynastyId),
                 house.IsCadet ? cadetNumber[house.Key] : null);
         return coats;
     }
 
     /// <param name="overrides">Arms changed in the inspector after the write, by owner key; the rest are rolled as before.</param>
-    public static void WriteAll(string modDir, PrehistoryMap prehistory, IReadOnlyDictionary<string, Coat>? overrides = null,
-        CultureMap? cultures = null, FaithMap? faiths = null)
+    /// <param name="seed">The world's seed, which every family's arms are rolled with alongside its key.</param>
+    public static void WriteAll(string modDir, PrehistoryMap prehistory, int seed,
+        IReadOnlyDictionary<string, Coat>? overrides = null, CultureMap? cultures = null, FaithMap? faiths = null)
     {
         string dir = Path.Combine(modDir, "common", "coat_of_arms", "coat_of_arms");
         Directory.CreateDirectory(dir);
@@ -235,7 +241,7 @@ public static class CoatOfArmsWriter
         }
 
         foreach (var dyn in prehistory.Dynasties.Values)
-            Append(dyn.Id, Roll(SeedFor(dyn.Id), scopes(dyn.Id)));
+            Append(dyn.Id, Roll(SeedFor(seed, dyn.Id), scopes(dyn.Id)));
 
         // Every house is written arms, including a main house that would inherit its dynasty's
         // anyway. In game the inheritance is real — House Capet flies the Robertian arms in vanilla
@@ -256,7 +262,7 @@ public static class CoatOfArmsWriter
             // done: the head of a house bore the plain coat and bearing it was the claim to be head,
             // so everyone else bore the same arms with a difference.
             int? difference = house.IsCadet ? cadetNumber[house.Key] : null;
-            Append(house.Key, Roll(SeedFor(house.DynastyId), scopes(house.DynastyId), difference));
+            Append(house.Key, Roll(SeedFor(seed, house.DynastyId), scopes(house.DynastyId), difference));
         }
 
         // The noble family titles, each bearing the arms of the house it is the family of.
@@ -271,14 +277,14 @@ public static class CoatOfArmsWriter
         {
             if (!prehistory.Houses.TryGetValue(family.HouseKey, out var house)) continue;
             int? difference = house.IsCadet ? cadetNumber[house.Key] : null;
-            Append(family.TitleKey, Roll(SeedFor(house.DynastyId), scopes(house.DynastyId), difference), overrideKey: house.Key);
+            Append(family.TitleKey, Roll(SeedFor(seed, house.DynastyId), scopes(house.DynastyId), difference), overrideKey: house.Key);
         }
 
         // Vanilla houses and dynasties of historical rulers that vanilla leaves to be rolled at game
         // start: the bookmark screen draws a blank shield for a house with no defined arms, so these
         // get arms of their own. See VanillaCharacters.
         foreach (string key in prehistory.HistoricalCoaKeys)
-            Append(key, Roll(SeedFor(key), HeraldryScope.None));
+            Append(key, Roll(SeedFor(seed, key), HeraldryScope.None));
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_coas.txt"), b.ToString());
 
@@ -297,13 +303,6 @@ public static class CoatOfArmsWriter
         }
         return cadetNumber;
     }
-
-    /// <summary>
-    /// The arms a dynasty keyed <paramref name="dynastyKey"/> would be written with, for a family
-    /// of <paramref name="scope"/>; its <paramref name="cadet"/>th cadet branch's when given.
-    /// </summary>
-    public static Coat Roll(string dynastyKey, HeraldryScope scope, int? cadet = null)
-        => Roll(SeedFor(dynastyKey), scope, cadet);
 
     /// <summary>The coat for <paramref name="scope"/> off <paramref name="rng"/>, differenced for a cadet.</summary>
     private static Coat Roll(Rng rng, HeraldryScope scope, int? difference = null)

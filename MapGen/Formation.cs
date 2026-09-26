@@ -42,6 +42,18 @@ public enum FormationKind
 
     /// <summary>A duchy or kingdom became de jure part of another kingdom or empire.</summary>
     Drifted,
+
+    /// <summary>A realm settled a wilderness county on its border. The History workspace's only.</summary>
+    Colonised,
+
+    /// <summary>A county was abandoned and fell to ruin. The History workspace's only.</summary>
+    Ruined,
+
+    /// <summary>A realm declared war on another. The History workspace's only.</summary>
+    WarDeclared,
+
+    /// <summary>A war ended in a peace: won, lost, white, or overtaken by events. The History workspace's only.</summary>
+    WarEnded,
 }
 
 /// <summary>
@@ -86,7 +98,28 @@ public enum RealmRules
     /// </summary>
     DeJureDrift = 32,
 
-    All = Conquest | Homage | Secession | Collapse | Succession | DeJureDrift,
+    /// <summary>
+    /// A realm settles wilderness on its border. Never by war: the wild is outside the realm
+    /// simulation, and a county joins it only by this. Only the History workspace; see
+    /// <c>HistorySim.WildsYear</c>.
+    /// </summary>
+    Colonisation = 64,
+
+    /// <summary>
+    /// A neglected county of an unstable realm is abandoned and becomes a ruin. Only the
+    /// History workspace, and only on a world written with the ruins system.
+    /// </summary>
+    Ruination = 128,
+
+    /// <summary>
+    /// Conquest is fought as wars: a realm declares one over a de jure duchy or its claims, fights
+    /// it out over years, and a peace hands over the whole goal and starts a truce. Off, conquest
+    /// takes one county at a time on the spot, as generation does. Only the History workspace; see
+    /// <c>HistorySim.WarsYear</c>.
+    /// </summary>
+    Wars = 256,
+
+    All = Conquest | Homage | Secession | Collapse | Succession | DeJureDrift | Colonisation | Ruination | Wars,
 }
 
 /// <summary>One thing the simulation did, dated, with both parties named.</summary>
@@ -290,6 +323,14 @@ public static class Formation
         /// <summary>How readily realms attack and subordinate each other. Settable between ticks,
         /// for the History workspace's slider; generation sets it once.</summary>
         public required double Aggression { get; set; }
+
+        /// <summary>
+        /// Handed a conquest that the dice have granted — attacker, defender, county — and takes it
+        /// over, returning true, when a war should be fought for it instead. Only the History
+        /// workspace sets it (see <c>HistorySim.Declare</c>); unset, a won roll takes the county
+        /// on the spot, which is how generation has always run.
+        /// </summary>
+        public Func<Polity, Polity, Title, bool>? Wage { get; set; }
 
         /// <summary>How readily they fall apart. Settable as <see cref="Aggression"/> is.</summary>
         public required double Turbulence { get; set; }
@@ -567,8 +608,27 @@ public static class Formation
     /// </summary>
     internal static FormationHistory Freeze(Sim sim, int firstYear)
     {
+        var (polities, owner) = CopyLiving(sim.Polities);
+
+        return new FormationHistory
+        {
+            Polities = polities,
+            Owner = owner,
+            Events = [.. sim.Events.Where(e => e.Year <= sim.Year)],
+            FirstYear = firstYear,
+        };
+    }
+
+    /// <summary>
+    /// The living polities as new objects, in capital order, their suzerains pointing at each
+    /// other's copies (a suzerain that is not alive drops to none), and which copy holds each
+    /// county. Ids are kept. Shared by <see cref="Freeze"/> and <see cref="HistorySim.Resume"/>,
+    /// which each need realms they can change without touching the ones they came from.
+    /// </summary>
+    internal static (List<Polity> Polities, Dictionary<Title, Polity> Owner) CopyLiving(IEnumerable<Polity> polities)
+    {
         var copies = new Dictionary<Polity, Polity>();
-        foreach (var p in sim.Polities.Where(p => p.Alive).OrderBy(p => p.Capital.Index))
+        foreach (var p in polities.Where(p => p.Alive).OrderBy(p => p.Capital.Index))
         {
             var q = new Polity
             {
@@ -585,13 +645,7 @@ public static class Formation
             foreach (var c in q.Counties) owner[c] = q;
         }
 
-        return new FormationHistory
-        {
-            Polities = [.. copies.Values],
-            Owner = owner,
-            Events = [.. sim.Events.Where(e => e.Year <= sim.Year)],
-            FirstYear = firstYear,
-        };
+        return ([.. copies.Values], owner);
     }
 
     /// <summary>
@@ -610,7 +664,7 @@ public static class Formation
     /// A sprawling realm of mixed peoples fields less than its acreage suggests, which is what stops
     /// the biggest polity on the map simply going on being the biggest.
     /// </summary>
-    private static double Strength(Sim sim, Polity p)
+    internal static double Strength(Sim sim, Polity p)
     {
         double land = 0;
         foreach (var c in p.Counties) land += sim.Development.GetValueOrDefault(c) + 1;
@@ -723,11 +777,26 @@ public static class Formation
         if (!rng.Chance(sim.Aggression * atk / (atk + def))) return;
         if (!sim.Rules.HasFlag(RealmRules.Conquest)) return;
 
+        // The History workspace fights a war over it instead; generation never sets this.
+        if (sim.Wage?.Invoke(p, defender, target) == true) return;
+
+        Take(sim, target, defender, p, log: true);
+    }
+
+    /// <summary>
+    /// <paramref name="p"/> takes <paramref name="target"/> from <paramref name="defender"/>, and
+    /// if that was the defender's last county its vassals pass to the conqueror. The whole of a
+    /// conquest, shared by the formation's county-by-county fighting and the History workspace's
+    /// peace treaties, which log the war rather than each county.
+    /// </summary>
+    internal static void Take(Sim sim, Title target, Polity defender, Polity p, bool log)
+    {
         bool wasCapital = defender.Capital == target;
         Transfer(sim, target, defender, p);
 
-        sim.Log(FormationKind.Conquest, target, p, defender,
-                defender.Culture == p.Culture ? 1 : 3);
+        if (log)
+            sim.Log(FormationKind.Conquest, target, p, defender,
+                    defender.Culture == p.Culture ? 1 : 3);
 
         if (!defender.Alive)
         {

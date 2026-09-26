@@ -51,18 +51,21 @@ public static partial class ContentWriter
         var vocabulary = world.Vocabulary;
         var counties = world.Counties;
         var development = world.Development;
-        var wilderness = world.Wilderness;
         var titlePlan = world.TitlePlan;
-        var cultures = world.Cultures;
         var ethnicities = world.Ethnicities;
         var worldCenters = world.WorldCenters;
         var realms = world.Realms;
         var governments = world.Governments;
         var eraGovernments = world.EraGovernments;
         var hegemonShare = world.HegemonShare;
-        var faiths = world.Faiths;
         var steppe = world.Steppe;
-        var frontier = world.Frontier;
+
+        // Two views of the wild and its peoples. The realm layer — who holds what and everything
+        // written about them — stands on the frontier an applied history left; every layer the
+        // re-emit keeps (culture and religion files, holy sites, map objects) on the generated one.
+        // The same objects on a generated world. See ApplyHistory, which writes the same split.
+        var (wilderness, cultures, faiths, frontier, _) = world.RealmLayer;
+        var (generatedCultures, generatedFaiths, generatedWilderness) = (world.Cultures, world.Faiths, world.Wilderness);
         var crossings = world.Crossings;
         var routes = world.Routes;
         var silkRoad = world.SilkRoad;
@@ -129,13 +132,13 @@ public static partial class ContentWriter
         // The generated governments, not an applied history's: a culture's regiments are part of
         // the world that applying a history keeps as it was written. See WorldModel.GeneratedGovernments.
         var retinues = cfg.EnableGeneratedRetinues
-            ? Core.Stage.Time("retinues", () => MapGen.Retinues.Build(cultures.Declared(), world.GeneratedGovernments,
+            ? Core.Stage.Time("retinues", () => MapGen.Retinues.Build(generatedCultures.Declared(), world.GeneratedGovernments,
                 provinceTerrain, vocabulary, cfg, new Rng(cfg.Seed ^ 0x3AA7)))
             : null;
         if (retinues is not null) Core.Showcase.Publish(() => ShowcaseItems.Regiments(retinues, gameDir));
 
         Core.Stage.Time("culture files",
-            () => CultureWriter.WriteAll(modDir, cfg, cultures.Declared(), ethnicities, vocabulary,
+            () => CultureWriter.WriteAll(modDir, cfg, generatedCultures.Declared(), ethnicities, vocabulary,
                 new Rng(cfg.Seed ^ 0x0C1A), retinues?.Innovations));
 
         if (retinues is not null)
@@ -146,7 +149,7 @@ public static partial class ContentWriter
         }
 
         // After naming, so the calendar speaks the language the world's peoples ended up with.
-        var calendar = WorldCalendar.Build(cfg, azgaar, cultures);
+        var calendar = WorldCalendar.Build(cfg, azgaar, generatedCultures);
         Core.Showcase.Publish(() => ShowcaseItems.Calendar(calendar));
 
         Core.Stage.Time("compatibility", () =>
@@ -170,7 +173,7 @@ public static partial class ContentWriter
             CompatibilityWriter.WriteGeographicalRegions(modDir, gameDir, empires, cultures, regionMembers,
                 wilderness, everyCountyAdjacency, provinceTerrain,
                 Realms.HegemonRealmCounties(realms, empires, wilderness), riverside);
-            CompatibilityWriter.WriteHolySites(modDir, gameDir, empires, faiths);
+            CompatibilityWriter.WriteHolySites(modDir, gameDir, empires, generatedFaiths);
             CompatibilityWriter.WriteDecisionBlocks(modDir, gameDir);
         });
 
@@ -198,11 +201,11 @@ public static partial class ContentWriter
         Core.Stage.Time("route files", () => RouteWriter.WriteAll(modDir, routes, crossings, silkRoad,
             provinces, order, baronyCount, provinceTerrain));
 
-        Core.Stage.Time("religion files", () => ReligionWriter.WriteAll(modDir, faiths.Declared()));
+        Core.Stage.Time("religion files", () => ReligionWriter.WriteAll(modDir, generatedFaiths.Declared(), cfg.Seed));
 
         // After the religion files rather than with the faiths: a generated faith's icon is drawn
         // by the writer above, and this is the first moment it exists to be shown. See Showcase.
-        Core.Showcase.Publish(() => ShowcaseItems.Faiths(faiths, modDir, gameDir));
+        Core.Showcase.Publish(() => ShowcaseItems.Faiths(generatedFaiths, modDir, gameDir));
 
         // After the religions, whose crown-or-regalia answer it writes into CK3's triggers, and
         // after the titles it reads seats off. It writes nothing anything else reads.
@@ -285,11 +288,13 @@ public static partial class ContentWriter
 
         // The city models stand where the generated world's holdings are. An applied history moves
         // the holdings in the province history with its governments, but the map objects are part
-        // of the written world that applying keeps — so a full write and the re-emit agree.
+        // of the written world that applying keeps — so a full write and the re-emit agree. Rolled
+        // over the counties in the order the world was generated in: de jure drift has since moved
+        // the tree, and walking the moved tree would roll the same dice onto different baronies.
         var scatterHoldings = ReferenceEquals(world.GeneratedGovernments, governments)
             ? holdings
-            : BuildProvinceHistory(cfg, empires, provinceTerrain, development, cultures, faiths,
-                world.GeneratedGovernments, wilderness, worldCenters, silkRoad, cfg.Seed, azgaar).Holdings;
+            : BuildProvinceHistory(cfg, empires, provinceTerrain, development, generatedCultures, generatedFaiths,
+                world.GeneratedGovernments, generatedWilderness, worldCenters, silkRoad, cfg.Seed, azgaar, counties).Holdings;
 
         // Where an army can march across water: straits and major-river crossings, written into
         // map_data/adjacencies.csv over the stub the map writer left. See MapGen/Crossings.cs.
@@ -341,7 +346,7 @@ public static partial class ContentWriter
         // The counties as BuildWorld listed them, before an applied history's de jure drift moved
         // any: the same list, in the same order, as walking the tree gives a generated world.
         Core.Stage.Time("city scatter", () => CityScatterWriter.WriteAll(modDir, cfg, counties,
-            scatterHoldings, development, cultures, provinces, order, anchors, renderedElevation));
+            scatterHoldings, development, generatedCultures, provinces, order, anchors, renderedElevation));
         Core.Stage.Time("map table", () => MapTableWriter.WriteAll(modDir, cfg));
         Core.Stage.Time("holding models", () => HoldingModelWriter.WriteAll(modDir, gameDir, cfg));
         });
@@ -381,7 +386,7 @@ public static partial class ContentWriter
                 var layer = WriteHistoryLayer(modDir, gameDir, cfg, provinces, order, landCount, empires,
                     counties, realms, cultures, ethnicities, faiths, governments, worldCenters, wilderness,
                     development, titlePlan, eraGovernments, retinues, azgaar, calendar, flatmap, frontier,
-                    lineage: world.Lineage, pastRulers: world.PastRulers);
+                    lineage: world.Lineage, pastRulers: world.PastRulers, diplomacy: world.AppliedDiplomacy);
 
                 prehistory = layer.Prehistory;
                 rulers = layer.Rulers;
@@ -1419,12 +1424,16 @@ public static partial class ContentWriter
     /// province id — see <see cref="WrittenContent.Holdings"/> for why the second is kept rather
     /// than replayed.
     /// </returns>
+    /// <param name="counties">The counties to walk, in the order their holdings are rolled; the de
+    /// jure tree's order when null. The generated world's holdings are rolled in the order the
+    /// world was generated in, which drift moves the tree away from — see the city scatter.</param>
     private static (List<ProvinceRow> Rows, Dictionary<int, string> Holdings) BuildProvinceHistory(
         MapConfig cfg,
         List<Title> empires,
         TerrainClass[] provinceTerrain, Dictionary<Title, int> development, CultureMap cultures,
         FaithMap faiths, GovernmentMap governments, WildernessMap wilderness,
-        WorldCenterMap worldCenters, SilkRoadMap silkRoad, int cfgSeed, AzgaarImport? azgaar)
+        WorldCenterMap worldCenters, SilkRoadMap silkRoad, int cfgSeed, AzgaarImport? azgaar,
+        IReadOnlyList<Title>? counties = null)
     {
         var rng = new Rng(cfgSeed ^ 0x8A12);
         var counts = new Dictionary<string, int>();
@@ -1449,7 +1458,7 @@ public static partial class ContentWriter
         var wondersByBarony = worldCenters.Centers
             .ToDictionary(wc => wc.CapitalBarony, wc => wc.Wonder);
 
-        foreach (var county in Titles.Flatten(empires).Where(t => t.Tier == "c"))
+        foreach (var county in counties ?? [.. Titles.Flatten(empires).Where(t => t.Tier == "c")])
         {
             int level = development.GetValueOrDefault(county);
             string cultureKey = cultures.For(county).Key;
@@ -1514,7 +1523,7 @@ public static partial class ContentWriter
                     // How far up its own ladder this wonder already is on the start date.
                     int built = StartingWonderTier(
                         wonder, development, ordinaryTopDevelopment, governments, cfg,
-                        new Rng(barony.ProvinceId ^ 0x5C0E));
+                        Rng.For(cfgSeed, 0x5C0E, barony.ProvinceId));
 
                     // The slot is declared either way. Without it a world that rolled "not yet
                     // built" would have nowhere to build it, and the wonder would be a

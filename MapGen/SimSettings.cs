@@ -29,4 +29,10 @@ public sealed record SimSettings
 
     /// <summary>How fast de jure drift runs: the century a title must be held for, divided by this. 0 is never.</summary>
     public double DriftPace { get; init; } = 1.0;
+
+    /// <summary>How fast realms settle the wilderness on their borders, times the usual. 0 is never.</summary>
+    public double Colonisation { get; init; } = 1.0;
+
+    /// <summary>How often a neglected frontier county falls to ruin, times the usual. 0 is never.</summary>
+    public double Ruination { get; init; } = 1.0;
 }

@@ -9,7 +9,21 @@ public static partial class ContentWriter
     /// <summary>The realm map an applied history lays over the generated world, and what follows from it.</summary>
     internal sealed record AppliedRealms(RealmMap Realms, GovernmentMap Governments, double? HegemonShare,
         IReadOnlyDictionary<Title, AppliedHistory.Lineage> Lineage, List<PastRuler> PastRulers,
-        IReadOnlyDictionary<Title, (byte R, byte G, byte B)> Colours, int Drifted);
+        IReadOnlyDictionary<Title, (byte R, byte G, byte B)> Colours, int Drifted, WildsLayer Wilds, SimDiplomacy? Diplomacy);
+
+    /// <summary>
+    /// The wilderness at the applied date and what follows from it: the wilds cut from it, and the
+    /// county culture and faith maps with settled land given its settlers' people and fallen land
+    /// the unsettled ones. Read by the realm layer only — who holds what, and everything written
+    /// about them. Every layer decided before the realms keeps the generated wilderness, cultures
+    /// and faiths. The same objects as the generated ones when the history left the frontier alone.
+    /// </summary>
+    internal sealed record WildsLayer(WildernessMap Wilderness, CultureMap Cultures, FaithMap Faiths,
+        FrontierMap Wilds, bool Moved)
+    {
+        public static WildsLayer Unmoved(WildernessMap wilderness, CultureMap cultures, FaithMap faiths, FrontierMap wilds)
+            => new(wilderness, cultures, faiths, wilds, false);
+    }
 
     /// <summary>
     /// Titles an applied history and decides what follows from who rules what: the hegemony and the
@@ -20,13 +34,34 @@ public static partial class ContentWriter
     internal static AppliedRealms ApplyRealms(AppliedHistory applied, RealmMap generated, MapConfig cfg,
         List<Title> empires, List<Title> counties, ProvinceMap provinces, int[] order, int baronyCount,
         TerrainClass[] provinceTerrain, Dictionary<Title, int> development, CultureMap cultures,
-        WorldCenterMap worldCenters, WildernessMap wilderness, AzgaarImport? azgaar,
-        Dictionary<int, string>? stateGovernments, FaithMap faiths)
+        WorldCenterMap worldCenters, WildernessMap generatedWilderness, AzgaarImport? azgaar,
+        Dictionary<int, string>? stateGovernments, FaithMap generatedFaiths, int landCount, FrontierMap generatedWilds)
     {
-        var history = applied.Resolve(counties, cultures, generated.History, out string? problem)
+        // The frontier as the history left it. From here on the realms stand on this ground, not
+        // the generated one: settled land is somebody's, fallen land is the ruins dummy's.
+        var wilderness = applied.WildernessOver(generatedWilderness, counties);
+
+        // The realms' neighbours on that ground, when it is not the ground the realms being
+        // replaced stood on — which a re-emit over an earlier history can differ from even when
+        // this one ends where the generated world began.
+        var ground = counties.Where(c => !wilderness.Contains(c)).ToList();
+        bool groundMoved = generated.History?.Owner is { } before && !before.Keys.ToHashSet().SetEquals(ground);
+        Dictionary<Title, HashSet<Title>>? adjacency = applied.MovesWilds || groundMoved
+            ? Realms.BuildCountyAdjacency(ground, provinces, baronyCount, order,
+                (int)Math.Round(cfg.Scaled(cfg.SeaBridgePixelsAtVanilla)))
+            : null;
+
+        var history = applied.Resolve(counties, cultures, generated.History, out string? problem, wilderness, adjacency)
             ?? throw new InvalidOperationException(
                 $"The history applied from the History workspace does not fit this world: {problem}. "
                 + "Discard it in the History workspace, or go back to the settings it was run with.");
+
+        var wilds = applied.MovesWilds
+            ? SettleWilds(applied, history, counties, wilderness, cultures, generatedFaiths, generatedWilderness,
+                provinces, order, landCount, provinceTerrain)
+            : WildsLayer.Unmoved(generatedWilderness, cultures, generatedFaiths, generatedWilds);
+        var faiths = wilds.Faiths;
+        cultures = wilds.Cultures;
 
         // Before titling, which folds a realm with no tier left into its lord and drops it from the
         // list: its capital is still a lord's seat, and that lord is still the history's man.
@@ -40,7 +75,7 @@ public static partial class ContentWriter
             Console.WriteLine($"  applied history: {drifted} duchies and kingdoms drifted to a new de jure parent");
 
         var realms = Core.Stage.Time("applied history", () => Realms.FromHistory(history, empires, development,
-            wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17), generated.CountyAdjacency!));
+            wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17), adjacency ?? generated.CountyAdjacency!));
 
         if (cfg.StartingHegemony) Realms.CrownHegemon(realms, empires, wilderness);
 
@@ -51,7 +86,7 @@ public static partial class ContentWriter
         if (cfg.StartingHegemony) Realms.ExpandHegemonRealm(realms, empires, wilderness);
         double? hegemonShare = cfg.StartingHegemony ? Realms.HegemonDeJureShare(realms, empires, wilderness) : null;
 
-        var lineage = applied.LineageFor(realms, capitals, wilderness);
+        var lineage = applied.LineageFor(realms, capitals, wilderness, cfg.Seed);
 
         // The rulers the history had on the thrones, handed to every per-ruler draw from here on
         // — the character file, the families around them, the chronicle and the artifacts all read
@@ -71,13 +106,84 @@ public static partial class ContentWriter
             governments.Tally(counties, wilderness).Select(g => $"{g.Count} {g.Government[..^11]}")));
 
         // The predecessors, dated against the grant date HistoryWriter seats every holder on.
-        var pastRulers = applied.PastRulersFor(capitals, realms, faiths, Math.Max(1, cfg.StartYear - 5), cfg.StartYear);
+        var pastRulers = applied.PastRulersFor(capitals, realms, faiths, Math.Max(1, cfg.StartYear - 5), cfg.StartYear,
+            cfg.Seed);
         Console.WriteLine($"  applied history: {pastRulers.Count} past rulers written into {pastRulers.Select(r => r.TitleKey).Distinct().Count()} "
             + $"titles' histories (of {applied.Reigns.Count} reigns kept; backstop {AppliedHistory.MaxReignsPerRealm} a realm, "
             + $"{AppliedHistory.MaxReigns} in all)");
 
         return new AppliedRealms(realms, governments, hegemonShare, lineage, pastRulers, applied.ColoursFor(capitals),
-            drifted);
+            drifted, wilds, applied.DiplomacyFor(capitals, counties));
+    }
+
+    /// <summary>
+    /// The frontier a history moved: the settled counties given their settlers' culture and that
+    /// people's faith, the fallen ones the unsettled people, and the wilds cut
+    /// again from what is left wild. Copies — the generated maps are the cached layers' and stay
+    /// as they are.
+    /// </summary>
+    private static WildsLayer SettleWilds(AppliedHistory applied, FormationHistory history, List<Title> counties,
+        WildernessMap wilderness, CultureMap cultures, FaithMap faiths, WildernessMap generatedWilderness,
+        ProvinceMap provinces, int[] order, int landCount, TerrainClass[] provinceTerrain)
+    {
+        var unsettledCulture = cultures.Cultures.FirstOrDefault(c => c.Key == MapGen.Cultures.UnsettledKey);
+        var unsettledFaith = faiths.Faiths.FirstOrDefault(f => f.Key == MapGen.Faiths.UnsettledFaithKey);
+        if (unsettledCulture is null || unsettledFaith is null)
+            throw new InvalidOperationException("The history moved the edge of the wilderness on a world written "
+                + "without any. Discard it in the History workspace, or turn the wilderness back on.");
+
+        var cultureOf = new Dictionary<Title, Culture>(cultures.ByCounty);
+        var faithOf = new Dictionary<Title, Faith>(faiths.ByCounty);
+        var settlers = applied.SettlerCulturesOver(counties, cultures);
+
+        // The settlers' faith: the one most of their own people keep on the generated map, which is
+        // what they carried out into the wild. Then the faith of the settled ground of the realm
+        // holding the county, for settlers whose people hold no ground of their own. Never the
+        // unsettled faith — a realm made only of settled land has a capital still marked with it.
+        static Faith? Commonest(IEnumerable<Faith> seen)
+            => seen.GroupBy(f => f).OrderByDescending(g => g.Count()).ThenBy(g => g.Key.Key, StringComparer.Ordinal)
+                   .Select(g => g.Key).FirstOrDefault();
+        var faithOfPeople = cultures.ByCounty
+            .Where(kv => !generatedWilderness.Contains(kv.Key))
+            .GroupBy(kv => kv.Value)
+            .ToDictionary(g => g.Key, g => Commonest(g.Select(kv => faiths.For(kv.Key)))!);
+        Faith FaithOf(Culture people, Polity realm)
+            => faithOfPeople.GetValueOrDefault(people)
+               ?? Commonest(realm.Counties.Where(c => !generatedWilderness.Contains(c)).Select(faiths.For))
+               ?? Commonest(faithOfPeople.Values)
+               ?? faiths.For(realm.Capital);
+
+        int settled = 0, fallen = 0;
+        foreach (var county in counties)
+        {
+            bool wasWild = generatedWilderness.Contains(county), isWild = wilderness.Contains(county);
+            if (wasWild && !isWild && history.Owner.TryGetValue(county, out var realm))
+            {
+                var people = settlers.GetValueOrDefault(county) ?? realm.Culture;
+                cultureOf[county] = people;
+                faithOf[county] = FaithOf(people, realm);
+                settled++;
+            }
+            else if (!wasWild && isWild)
+            {
+                cultureOf[county] = unsettledCulture;
+                faithOf[county] = unsettledFaith;
+                fallen++;
+            }
+        }
+
+        var wilds = MapGen.Frontier.Build(counties, provinces, order, landCount, provinceTerrain, wilderness);
+        Console.WriteLine($"  applied history: {settled} wilderness counties settled, {fallen} fallen to ruin; "
+            + $"{wilderness.Count} wild at the start date ({wilderness.RuinCount} of them ruins)");
+
+        return new WildsLayer(wilderness,
+            new CultureMap { Heritages = cultures.Heritages, Cultures = cultures.Cultures, ByCounty = cultureOf },
+            new FaithMap
+            {
+                Religions = faiths.Religions, Faiths = faiths.Faiths, ByCounty = faithOf,
+                ImportedStructure = faiths.ImportedStructure, Whole = faiths.Whole,
+            },
+            wilds, true);
     }
 
     /// <summary>
@@ -127,9 +233,14 @@ public static partial class ContentWriter
         var worldCenters = world.WorldCenters;
         var retinues = written.Retinues;
 
-        var (realms, governments, hegemonShare, lineage, pastRulers, colours, drifted) = ApplyRealms(applied, current, cfg, empires,
-            counties, provinces, order, result.BaronyCount, world.ProvinceTerrain, development, cultures, worldCenters,
-            wilderness, result.Azgaar, world.StateGovernments, faiths);
+        var (realms, governments, hegemonShare, lineage, pastRulers, colours, drifted, wilds, diplomacy) = ApplyRealms(applied, current,
+            cfg, empires, counties, provinces, order, result.BaronyCount, world.ProvinceTerrain, development, cultures,
+            worldCenters, wilderness, result.Azgaar, world.StateGovernments, faiths, result.LandCount, world.Frontier);
+
+        // The culture file stays on the generated cultures — it is the calendar layer's, and holds
+        // no county. Everything written about who holds what stands on the frontier the history left.
+        var generatedCultures = cultures;
+        (wilderness, cultures, faiths) = (wilds.Wilderness, wilds.Cultures, wilds.Faiths);
 
         // --- Realms, in WriteAll's order ---
 
@@ -150,11 +261,13 @@ public static partial class ContentWriter
             return built;
         });
 
-        // --- De jure: only when drift moved a title ---
+        // --- De jure: only when drift moved a title, or the frontier moved ---
         //
         // Every writer here walks the de jure tree, so a drifted tree changes what they write or the
-        // order they write it in; with nothing drifted they would write what is already there.
-        if (drifted > 0)
+        // order they write it in; with nothing drifted they would write what is already there. The
+        // formation decisions also skip empires with no settled land, and the realm words follow
+        // the settlers' culture, so a moved frontier rewrites them too.
+        if (drifted > 0 || wilds.Moved)
         {
             Core.Stage.Time("de jure", () =>
             {
@@ -171,7 +284,7 @@ public static partial class ContentWriter
 
         // --- Calendar ---
 
-        Core.Stage.Time("culture files", () => CultureWriter.WriteAll(modDir, cfg, cultures.Declared(),
+        Core.Stage.Time("culture files", () => CultureWriter.WriteAll(modDir, cfg, generatedCultures.Declared(),
             world.Ethnicities, world.Vocabulary, new Rng(cfg.Seed ^ 0x0C1A), retinues?.Innovations));
 
         Core.Stage.Time("compatibility", () =>
@@ -195,6 +308,10 @@ public static partial class ContentWriter
                 Realms.HegemonRealmCounties(realms, empires, wilderness), riverside);
         });
 
+        // The Wilds situation, cut from the wilderness as the history left it. Deterministic from the
+        // map alone, so rewriting it for an unmoved frontier writes what is already there.
+        Core.Stage.Time("the wilds files", () => FrontierWriter.WriteAll(modDir, cfg, wilds.Wilds));
+
         Core.Stage.Time("dynastic cycle", () =>
         {
             if (cfg.DynasticCycle) DynasticCycleWriter.WriteAll(modDir, empires, hegemonShare);
@@ -207,8 +324,8 @@ public static partial class ContentWriter
         var layer = Core.Stage.Detail("history and bookmarks", () => WriteHistoryLayer(modDir, gameDir, cfg,
             provinces, order, result.LandCount, empires, counties, realms, cultures, world.Ethnicities, faiths,
             governments, worldCenters, wilderness, development, world.TitlePlan, eraGovernments: null,
-            retinues, result.Azgaar, written.Calendar, flatmap, world.Frontier, cultureAssets: false, lineage,
-            pastRulers));
+            retinues, result.Azgaar, written.Calendar, flatmap, wilds.Wilds, cultureAssets: false, lineage,
+            pastRulers, diplomacy));
 
         Core.Stage.Time("debug panel", () => DebugPanel.Write(modDir, DebugFacts(
             modDir, cfg, provinces, empires, counties, cultures, faiths, wilderness, worldCenters,
@@ -223,10 +340,16 @@ public static partial class ContentWriter
             Realms = realms, Governments = governments, HegemonShare = hegemonShare, Lineage = lineage,
             PastRulers = pastRulers,
             RealmColours = colours,
+            AppliedWilds = wilds,
+            AppliedDiplomacy = diplomacy,
         };
         var appliedContent = written with
         {
             World = appliedWorld,
+            Wilderness = wilderness,
+            Cultures = cultures,
+            Faiths = faiths,
+            Frontier = wilds.Wilds,
             Realms = realms,
             Governments = governments,
             Rulers = layer.Rulers,
@@ -308,7 +431,8 @@ public static partial class ContentWriter
         Dictionary<Title, int> development, VanillaTitles.Plan? titlePlan,
         Dictionary<int, GovernmentMap>? eraGovernments, RetinueMap? retinues, AzgaarImport? azgaar,
         WorldCalendar? calendar, Flatmap flatmap, FrontierMap frontier, bool cultureAssets = true,
-        IReadOnlyDictionary<Title, AppliedHistory.Lineage>? lineage = null, List<PastRuler>? pastRulers = null)
+        IReadOnlyDictionary<Title, AppliedHistory.Lineage>? lineage = null, List<PastRuler>? pastRulers = null,
+        SimDiplomacy? diplomacy = null)
     {
         PrehistoryMap? prehistory = null;
         RulerMap? rulers = null;
@@ -318,7 +442,8 @@ public static partial class ContentWriter
 
         prehistory = Core.Stage.Time("prehistory", () => PrehistoryMap.Build(
             counties, provinces, order, landCount, realms, cultures, faiths,
-            governments, worldCenters, wilderness, cfg, new Rng(cfg.Seed ^ 0x4821 ^ cfg.PeopleSalt), lineage));
+            governments, worldCenters, wilderness, cfg, new Rng(cfg.Seed ^ 0x4821 ^ cfg.PeopleSalt), lineage,
+            diplomacy));
 
         // An applied history's predecessors, beside the ancestors prehistory invents. Before the
         // rulers and everything that writes about them, so the character file and the title
@@ -450,7 +575,7 @@ public static partial class ContentWriter
 
         Core.Stage.Detail("  · character history", () => HistoryWriter.WriteAll(
             modDir, cfg, empires, realms, development,
-            cultures, ethnicities, faiths, governments, wilderness, prehistory, rulers));
+            cultures, ethnicities, faiths, governments, wilderness, prehistory, rulers, calendar));
 
         // Last of the history block, because it reads everything the rest of it decided.
         // Inside the block rather than beside it: with --no-history there are no houses, no

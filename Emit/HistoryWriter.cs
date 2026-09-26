@@ -13,7 +13,7 @@ public static class HistoryWriter
         string modDir, MapConfig cfg, List<Title> empires,
         RealmMap realms, Dictionary<Title, int> development,
         CultureMap cultures, EthnicityMap ethnicities, FaithMap faiths, GovernmentMap governments,
-        WildernessMap wilderness, PrehistoryMap prehistory, RulerMap rulers)
+        WildernessMap wilderness, PrehistoryMap prehistory, RulerMap rulers, WorldCalendar? calendar = null)
     {
         var all = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
         if (all.Count == 0) return;
@@ -50,7 +50,7 @@ public static class HistoryWriter
 
         WriteDynasties(modDir, prehistory);
         WriteDynastyHouses(modDir, prehistory);
-        CoatOfArmsWriter.WriteAll(modDir, prehistory, cultures: cultures, faiths: faiths);
+        CoatOfArmsWriter.WriteAll(modDir, prehistory, cfg.Seed, cultures: cultures, faiths: faiths);
         WriteCharacters(modDir, cfg, cultures, ethnicities, prehistory, rulers);
         WriteHeadOfFaithCharacters(modDir, cfg, faiths, cultures, ethnicities, counties, realms, wilderness,
             prehistory.Eras);
@@ -58,7 +58,7 @@ public static class HistoryWriter
         WriteHouseRelationsOnAction(modDir, cfg, prehistory);
         ContentWriter.WriteNobleFamilyTitles(modDir, prehistory);
         WriteTitleHistory(modDir, cfg, empires, development, realms, governments, faiths, wilderness, wild, prehistory);
-        WriteDynastyLocalisation(modDir, prehistory);
+        WriteDynastyLocalisation(modDir, prehistory, calendar);
         if (prehistory.Eras is { } eras) WriteEraStartEffects(modDir, cfg, eras);
     }
 
@@ -85,22 +85,24 @@ public static class HistoryWriter
     public static bool RulerIsFemale(Title county, Faith faith, MapConfig cfg)
         => cfg.SeatPeople?.TryGetValue(county.Index, out var person) == true
             ? person.Female
-            : RulerIsFemale(county, faith, cfg.PeopleSalt);
+            : RulerIsFemale(county, faith, cfg.Seed, cfg.PeopleSalt);
 
     /// <inheritdoc cref="RulerIsFemale(Title, Faith, MapConfig)"/>
     public static (string FirstName, string DynastyName) RulerNames(Title county, Culture culture, bool female,
         MapConfig cfg)
         => cfg.SeatPeople?.TryGetValue(county.Index, out var person) == true
             ? (person.Name, culture.DynastyNameFor(county))
-            : RulerNames(county, culture, female, cfg.PeopleSalt);
+            : RulerNames(county, culture, female, cfg.Seed, cfg.PeopleSalt);
 
     /// <inheritdoc cref="RulerIsFemale(Title, Faith, MapConfig)"/>
     public static int GetRulerBirthYear(Title county, MapConfig cfg)
         => cfg.SeatPeople?.TryGetValue(county.Index, out var person) == true
             ? person.Born
-            : GetRulerBirthYear(county.Index, cfg.StartYear, cfg.PeopleSalt);
+            : GetRulerBirthYear(county.Index, cfg.StartYear, cfg.Seed, cfg.PeopleSalt);
 
-    public static bool RulerIsFemale(Title county, Faith faith, int salt = 0)
+    /// <param name="seed">The world's seed. See <see cref="Rng.For(int, int, int, int)"/>.</param>
+    /// <param name="salt">Which ruler of the seat: 0 the start date's, an era or applied year otherwise.</param>
+    public static bool RulerIsFemale(Title county, Faith faith, int seed, int salt)
     {
         double share = MapGen.Faiths.GenderOf(faith) switch
         {
@@ -110,7 +112,7 @@ public static class HistoryWriter
         };
 
         // salt 0 is the start-date ruler; an additional bookmark's ruler of the same seat passes its own.
-        return new Rng(county.Index ^ 0x6ED5 ^ salt).Chance(share);
+        return Rng.For(seed, 0x6ED5, county.Index, salt).Chance(share);
     }
 
     /// <summary>
@@ -120,7 +122,7 @@ public static class HistoryWriter
     /// and every generated head of faith was a man regardless — so a third of the worlds this
     /// generator has ever made crowned a man over a priesthood he could not have joined.
     /// </summary>
-    public static bool ClergyIsFemale(Faith faith)
+    public static bool ClergyIsFemale(Faith faith, int seed)
     {
         string clerical = faith.DoctrineOf("doctrine_clerical_gender");
         if (clerical == "doctrine_clerical_gender_female_only") return true;
@@ -135,14 +137,14 @@ public static class HistoryWriter
             _ => 0.10,
         };
 
-        return new Rng(Rng.StableHash(faith.Key) ^ 0x48A2UL).Chance(share);
+        return Rng.For(seed, 0x48A2, Rng.StableHash(faith.Key)).Chance(share);
     }
 
     public static (string FirstName, string DynastyName) RulerNames(Title county, Culture culture,
-        bool female = false, int salt = 0)
+        bool female, int seed, int salt)
     {
         // salt 0 is the generated world; an applied history passes its year. See MapConfig.PeopleSalt.
-        var rng = new Rng(county.Index ^ 0x5A17 ^ salt);
+        var rng = Rng.For(seed, 0x5A17, county.Index, salt);
 
         var names = female ? culture.FemaleNames : culture.MaleNames;
 
@@ -212,9 +214,12 @@ public static class HistoryWriter
 
     public static string DynastyId(Title county) => $"gen_dynasty_{county.Index}";
 
-    public static int GetRulerBirthYear(int countyIndex, int startYear, int salt = 0)
+    /// <summary>The <see cref="RulerNames(Title, Culture, bool, int, int)"/> salt for a head of faith named from a seat.</summary>
+    internal const int HeadOfFaithSalt = 0x4F48;
+
+    public static int GetRulerBirthYear(int countyIndex, int startYear, int seed, int salt)
     {
-        var rng = new Rng(countyIndex ^ 0x3E2D ^ salt);
+        var rng = Rng.For(seed, 0x3E2D, countyIndex, salt);
         return startYear - rng.Int(24, 50);
     }
 
@@ -768,10 +773,13 @@ public static class HistoryWriter
 
             var sampleCounty = counties.FirstOrDefault(c => faiths.For(c) == faith) ?? counties[0];
             var culture = cultures.For(sampleCounty);
-            bool female = ClergyIsFemale(faith);
-            var (firstName, _) = RulerNames(sampleCounty, culture, female);
+            bool female = ClergyIsFemale(faith, cfg.Seed);
 
-            var rng = new Rng(Rng.StableHash(faith.Key) ^ 0x48A1UL);
+            // Salted apart from the start-date ruler (salt 0): the sample county is usually a seat,
+            // and the same draw gave its ruler and the faith's head one first name between them.
+            var (firstName, _) = RulerNames(sampleCounty, culture, female, cfg.Seed, HeadOfFaithSalt);
+
+            var rng = Rng.For(cfg.Seed, 0x48A1, Rng.StableHash(faith.Key));
             int birthYear = cfg.StartYear - rng.Int(35, 60);
 
             string id = $"gen_hof_{hofIndex++}";
@@ -1314,10 +1322,16 @@ public static class HistoryWriter
         };
     }
 
-    internal static void WriteDynastyLocalisation(string modDir, PrehistoryMap prehistory)
+    /// <param name="calendar">The world's calendar, whose era the relation dates are written in.
+    /// Null, or one that keeps vanilla's era, writes "AD" — the suffix the game's own dates show then.</param>
+    internal static void WriteDynastyLocalisation(string modDir, PrehistoryMap prehistory, WorldCalendar? calendar = null)
     {
         string dir = Path.Combine(modDir, "localization", "english");
         Directory.CreateDirectory(dir);
+
+        // The relation dates must read like every other date on screen, which the calendar renames
+        // (see CompatibilityWriter.WriteCalendarLocalisation): "since 812 AD" beside "1 Jimis, 900 KE".
+        string era = calendar?.EraShort.Trim() is { Length: > 0 } own ? ParadoxText.Loc(own) : "AD";
 
         var loc = new LocFile();
 
@@ -1334,8 +1348,8 @@ public static class HistoryWriter
             var rel = prehistory.HouseRelations[i];
             string key = rel.DescriptionKey ?? $"gen_house_relation_{i}_desc";
             string yearStr = !string.IsNullOrEmpty(rel.StartDate) && rel.StartDate.Contains('.')
-                ? rel.StartDate.Split('.')[0] + " AD"
-                : (!string.IsNullOrEmpty(rel.StartDate) ? rel.StartDate + " AD" : "ancient times");
+                ? rel.StartDate.Split('.')[0] + " " + era
+                : (!string.IsNullOrEmpty(rel.StartDate) ? rel.StartDate + " " + era : "ancient times");
 
             string desc = rel.Level switch
             {

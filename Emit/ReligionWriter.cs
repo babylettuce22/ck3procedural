@@ -6,15 +6,16 @@ namespace Ck3MapGen.Emit;
 
 public static class ReligionWriter
 {
-    public static void WriteAll(string modDir, FaithMap faiths)
+    /// <param name="seed">The world's seed, which the descriptions are drawn with. See <see cref="FaithDescriptions"/>.</param>
+    public static void WriteAll(string modDir, FaithMap faiths, int seed)
     {
         WriteHolySites(modDir, faiths);
         WriteReligions(modDir, faiths);
-        WriteLocalisation(modDir, faiths);
+        WriteLocalisation(modDir, faiths, seed);
 
         // Here rather than beside the call site, so an editor save that rewrites the faiths
         // redraws the icons from the same edited colours and tenets.
-        FaithIconWriter.WriteAll(modDir, faiths);
+        FaithIconWriter.WriteAll(modDir, faiths, seed);
 
         int sites = faiths.Faiths.Sum(f => f.HolySites.Count);
         Console.WriteLine($"  faiths written: {faiths.Faiths.Count} faiths in " +
@@ -198,7 +199,7 @@ public static class ReligionWriter
     /// Not private: holy site names read <c>county.Name</c> off the live title, so renaming a
     /// county after the write means re-running exactly this. See <see cref="WorldOverwrite"/>.
     /// </summary>
-    internal static void WriteLocalisation(string modDir, FaithMap faiths)
+    internal static void WriteLocalisation(string modDir, FaithMap faiths, int seed)
     {
         string dir = Path.Combine(modDir, "localization", "english");
         Directory.CreateDirectory(dir);
@@ -211,7 +212,7 @@ public static class ReligionWriter
             entries[$"{religion.Key}_adj"] = religion.Name;
             entries[$"{religion.Key}_adherent"] = religion.Name;
             entries[$"{religion.Key}_adherent_plural"] = religion.Name + "s";
-            entries[$"{religion.Key}_desc"] = FaithDescriptions.For(religion);
+            entries[$"{religion.Key}_desc"] = FaithDescriptions.For(religion, seed);
 
             foreach (var (key, value) in religion.LocalizationText) entries[key] = value;
         }
@@ -222,7 +223,7 @@ public static class ReligionWriter
             entries[$"{faith.Key}_adj"] = faith.Name;
             entries[$"{faith.Key}_adherent"] = faith.Name;
             entries[$"{faith.Key}_adherent_plural"] = faith.Name + "s";
-            entries[$"{faith.Key}_desc"] = FaithDescriptions.For(faith);
+            entries[$"{faith.Key}_desc"] = FaithDescriptions.For(faith, seed);
 
             // Localization required for unreformed faiths when reforming
             if (!faith.IsOrganized)

@@ -33,16 +33,11 @@ internal sealed class CountyCanvas
     /// <summary>The county across the boundary this pixel sits on, or the pixel's own when it is interior.</summary>
     private readonly int[] _across;
 
-    private readonly bool[] _wild;
-
     public CountyCanvas(PreviewRenderer.ProvinceRaster raster)
     {
         Counties = [.. Titles.Flatten(raster.Titles).Where(t => t.Tier == "c")];
         Index = [];
         for (int c = 0; c < Counties.Count; c++) Index[Counties[c]] = c;
-
-        _wild = new bool[Counties.Count];
-        for (int c = 0; c < Counties.Count; c++) _wild[c] = raster.IsWild?.Invoke(Counties[c]) == true;
 
         int width = raster.Width, height = raster.Height;
         int baronyCount = raster.BaronyCount, landCount = raster.LandCount;
@@ -126,13 +121,15 @@ internal sealed class CountyCanvas
 
     /// <summary>
     /// One frame. <paramref name="colours"/> is indexed like <see cref="Counties"/>; a null entry
-    /// paints as wilderness, the same as a county the raster marks wild.
+    /// paints as wilderness.
     /// </summary>
     public PreviewRenderer.Image Render((byte R, byte G, byte B)?[] colours)
     {
         var rgb = new byte[Width * Height * 3];
 
-        bool Wild(int c) => _wild[c] || colours[c] is null;
+        // Wild is whatever the frame leaves uncoloured, not what the raster was built with: history
+        // settles wilderness and lets land fall, and the frame is the one that knows which.
+        bool Wild(int c) => colours[c] is null;
         (byte R, byte G, byte B) Fill(int c) => Wild(c) ? WildTint : colours[c]!.Value;
 
         Parallel.For(0, Height, y =>

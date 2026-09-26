@@ -724,25 +724,10 @@ public static class AzgaarHierarchy
         var index = new Dictionary<Title, int>();
         for (int i = 0; i < counties.Count; i++) index[counties[i]] = i;
 
-        var owner = new Dictionary<int, int>();
-        for (int r = 0; r < roots.Count; r++)
-            foreach (var county in Titles.Flatten([roots[r]]).Where(t => t.Tier == "c"))
-                if (index.TryGetValue(county, out int c)) owner[c] = r;
-
-        var result = new Dictionary<int, HashSet<int>>(roots.Count);
-        for (int r = 0; r < roots.Count; r++) result[r] = [];
-
-        foreach (var (county, adjacent) in countyAdjacency)
-        {
-            if (!owner.TryGetValue(county, out int a)) continue;
-            foreach (int other in adjacent)
-            {
-                if (!owner.TryGetValue(other, out int b) || a == b) continue;
-                result[a].Add(b);
-                result[b].Add(a);
-            }
-        }
-
-        return result;
+        // Each root's counties by index: the clusters the county graph is lifted over.
+        var clusters = roots
+            .Select(root => Titles.Flatten([root]).Where(t => t.Tier == "c" && index.ContainsKey(t)).Select(t => index[t]).ToList())
+            .ToList();
+        return Titles.LiftAdjacency(clusters, countyAdjacency);
     }
 }

@@ -712,51 +712,12 @@ public static class Cultures
     }
 
     /// <summary>
-    /// Counties as nodes, linked where their provinces touch.
-    ///
-    /// Impassable provinces carry no barony and so belong to no county, which means they silently
-    /// drop out of the graph rather than bridging across it. That is the behaviour we want and it
-    /// is worth stating: a mountain wall the game routes armies around also stops a language, so
-    /// culture borders land on it without anything here having to look for ridgelines.
+    /// The county graph a culture grows over, entered at the cost of <see cref="Crossing"/> — see
+    /// <see cref="CountyNetwork.Graph"/>. Also what the Wilds and the steppe walk.
     /// </summary>
     internal static RegionGrowth.Graph BuildCountyGraph(List<Title> counties, ProvinceMap provinces,
         int[] order, int landCount, TerrainClass[] provinceTerrain, double terrainWeight)
-    {
-        var neighbours = CountyNetwork.Neighbours(counties, provinces, order, landCount);
-        var seedOfProvince = CountyNetwork.SeedOfProvince(order, landCount);
-
-        var cost = new double[counties.Count];
-        var position = new (double X, double Y)[counties.Count];
-
-        for (int i = 0; i < counties.Count; i++)
-        {
-            double total = 0, x = 0, y = 0;
-            int counted = 0;
-
-            foreach (var barony in counties[i].Children)
-            {
-                int id = barony.ProvinceId;
-                if (id <= 0 || id >= provinceTerrain.Length) continue;
-
-                total += Crossing(provinceTerrain[id]);
-                var seed = provinces.Seeds[seedOfProvince[id]];
-                x += seed.X;
-                y += seed.Y;
-                counted++;
-            }
-
-            double mean = counted == 0 ? 1.5 : total / counted;
-
-            // Terrain resistance is interpolated against flat ground rather than used raw, so one
-            // weight dials the whole map between "borders ignore terrain" and "borders are terrain".
-            cost[i] = 1.0 + (mean - 1.0) * terrainWeight;
-            if (cost[i] < 0.1) cost[i] = 0.1;
-
-            position[i] = counted == 0 ? (0, 0) : (x / counted, y / counted);
-        }
-
-        return new RegionGrowth.Graph { Neighbours = neighbours, EnterCost = cost, Position = position };
-    }
+        => CountyNetwork.Graph(counties, provinces, order, landCount, provinceTerrain, Crossing, terrainWeight);
 
     private static Culture Create(Heritage heritage, List<Title> counties,
         TerrainClass[] provinceTerrain, Dictionary<Title, int> development,

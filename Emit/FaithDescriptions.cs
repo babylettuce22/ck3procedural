@@ -15,13 +15,15 @@ namespace Ck3MapGen.Emit;
 /// </summary>
 public static class FaithDescriptions
 {
-    public static string For(Religion religion)
+    /// <param name="seed">The world's seed. A key is the same on every seed (<c>gen_religion_2</c>),
+    /// so keyed on it alone the second religion of every world read alike.</param>
+    public static string For(Religion religion, int seed)
     {
         if (religion.Key == Faiths.UnsettledReligionKey)
             return "Not a faith so much as the absence of one. The scattered peoples of the wild " +
                    "places keep their own small gods and answer to no temple, priest or scripture.";
 
-        var rng = new Rng(Rng.StableHash(religion.Key));
+        var rng = Rng.For(seed, 0, Rng.StableHash(religion.Key));
         var w = new Words(religion);
         string form = FormOf(religion);
 
@@ -36,12 +38,13 @@ public static class FaithDescriptions
         return string.Join(' ', parts.Where(p => p is not null));
     }
 
-    public static string For(Faith faith)
+    /// <inheritdoc cref="For(Religion, int)"/>
+    public static string For(Faith faith, int seed)
     {
         if (faith.Key == Faiths.UnsettledFaithKey)
             return "The loose customs of those who live beyond the reach of any settled faith.";
 
-        var rng = new Rng(Rng.StableHash(faith.Key));
+        var rng = Rng.For(seed, 0, Rng.StableHash(faith.Key));
         var parts = new List<string?> { Standing(faith, rng), Tenets(faith, rng), Sites(faith, rng) };
         return string.Join(' ', parts.Where(p => p is not null));
     }

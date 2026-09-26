@@ -92,44 +92,8 @@ public static class Realms
         int baronyCount,
         int[] order,
         int bridgeDistance)
-    {
-        var baronyToCounty = new Dictionary<int, Title>();
-        foreach (var c in counties)
-        {
-            foreach (var b in c.Children)
-            {
-                if (b.ProvinceId >= 1 && b.ProvinceId <= baronyCount)
-                    baronyToCounty[b.ProvinceId] = c;
-            }
-        }
-
-        var landAdj = Titles.LandAdjacency(map, baronyCount, order);
-        var seaAdj = Titles.BuildSeaAdjacency(map, baronyCount, order, bridgeDistance);
-
-        var countyAdj = new Dictionary<Title, HashSet<Title>>();
-        foreach (var c in counties) countyAdj[c] = [];
-
-        void AddLinks(IReadOnlyDictionary<int, HashSet<int>> adj)
-        {
-            foreach (var (bA, neighbors) in adj)
-            {
-                if (!baronyToCounty.TryGetValue(bA, out var cA)) continue;
-                foreach (var bB in neighbors)
-                {
-                    if (baronyToCounty.TryGetValue(bB, out var cB) && cA != cB)
-                    {
-                        countyAdj[cA].Add(cB);
-                        countyAdj[cB].Add(cA);
-                    }
-                }
-            }
-        }
-
-        AddLinks(landAdj);
-        AddLinks(seaAdj);
-
-        return countyAdj;
-    }
+        => CountyNetwork.ByTitle(counties, baronyCount,
+            [Titles.LandAdjacency(map, baronyCount, order), Titles.BuildSeaAdjacency(map, baronyCount, order, bridgeDistance)]);
 
     private static bool IsReachable(
         Title startCounty,
