@@ -135,6 +135,7 @@ public static partial class ContentWriter
             ? Core.Stage.Time("retinues", () => MapGen.Retinues.Build(cultures.Declared(), world.GeneratedGovernments,
                 provinceTerrain, vocabulary, cfg, new Rng(cfg.Seed ^ 0x3AA7)))
             : null;
+        if (retinues is not null) Core.Showcase.Publish(() => ShowcaseItems.Regiments(retinues, gameDir));
 
         Core.Stage.Time("culture files",
             () => CultureWriter.WriteAll(modDir, cfg, cultures.Declared(), ethnicities, vocabulary,
@@ -149,6 +150,7 @@ public static partial class ContentWriter
 
         // After naming, so the calendar speaks the language the world's peoples ended up with.
         var calendar = WorldCalendar.Build(cfg, azgaar, cultures);
+        Core.Showcase.Publish(() => ShowcaseItems.Calendar(calendar));
 
         Core.Stage.Time("compatibility", () =>
         {
@@ -200,6 +202,10 @@ public static partial class ContentWriter
             provinces, order, baronyCount, provinceTerrain));
 
         Core.Stage.Time("religion files", () => ReligionWriter.WriteAll(modDir, faiths.Declared()));
+
+        // After the religion files rather than with the faiths: a generated faith's icon is drawn
+        // by the writer above, and this is the first moment it exists to be shown. See Showcase.
+        Core.Showcase.Publish(() => ShowcaseItems.Faiths(faiths, modDir, gameDir));
 
         // After the religions, whose crown-or-regalia answer it writes into CK3's triggers, and
         // after the titles it reads seats off. It writes nothing anything else reads.

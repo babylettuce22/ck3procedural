@@ -32,6 +32,37 @@ public enum FormationKind
     Absorbed,
 }
 
+/// <summary>
+/// The rules of the realm simulation that can be switched off, for the History workspace. All on
+/// is the formation as it has always run, and what generation uses.
+///
+/// A rule that is off still rolls its dice and ignores the result, so switching one off never
+/// changes which way another's fall that year: turning off homage takes the homage out of a
+/// year's events and leaves its conquests where they were.
+///
+/// Not here, and not switchable: a realm cut in two by a conquest always splits along the cut
+/// (<c>ShedIslands</c>). Titling and CK3 both need every realm in one piece.
+/// </summary>
+[Flags]
+public enum RealmRules
+{
+    None = 0,
+
+    /// <summary>A realm takes a county from a neighbour by force.</summary>
+    Conquest = 1,
+
+    /// <summary>A realm several times a neighbour's size takes it as a vassal, whole.</summary>
+    Homage = 2,
+
+    /// <summary>An overstretched realm loses a block of its edge, which becomes a realm of its own.</summary>
+    Secession = 4,
+
+    /// <summary>An unstable realm's vassals all walk out at once.</summary>
+    Collapse = 8,
+
+    All = Conquest | Homage | Secession | Collapse,
+}
+
 /// <summary>One thing the simulation did, dated, with both parties named.</summary>
 public sealed class FormationEvent
 {
@@ -219,6 +250,9 @@ public static class Formation
         /// simulation, which scales each per-epoch rate down to its share of the epoch.
         /// </summary>
         public int TickYears { get; init; } = EpochYears;
+
+        /// <summary>Which rules are in force. Settable between ticks; see <see cref="RealmRules"/>.</summary>
+        public RealmRules Rules { get; set; } = RealmRules.All;
 
         /// <summary>How big a realm gets before it starts to strain.</summary>
         public required double Reach { get; init; }
@@ -636,12 +670,16 @@ public static class Formation
         // that already had clients of its own submit as a unit, which pushed every one of those
         // clients a rung past MaxDepth — and a chain that deep has no tier left to stand on when
         // titles are handed out, so the titling step simply cut it loose again.
+        // Rolled whether or not homage is in force, and acted on only when it is: see RealmRules.
+        // A roll that comes up with homage switched off falls through to the attack, as a roll
+        // that failed would.
         if (defender.Suzerain is null
             && defender != root
             && p.Depth + 1 + SubtreeDepth(sim, defender) <= Polity.MaxDepth
             && defender.Counties.Count >= 2
             && atk > def * 2.2
-            && rng.Chance(0.45 * sim.Aggression))
+            && rng.Chance(0.45 * sim.Aggression)
+            && sim.Rules.HasFlag(RealmRules.Homage))
         {
             defender.Suzerain = p;
             sim.Log(FormationKind.Vassalized, defender.Capital, defender, p,
@@ -650,6 +688,7 @@ public static class Formation
         }
 
         if (!rng.Chance(sim.Aggression * atk / (atk + def))) return;
+        if (!sim.Rules.HasFlag(RealmRules.Conquest)) return;
 
         bool wasCapital = defender.Capital == target;
         Transfer(sim, target, defender, p);
@@ -702,7 +741,8 @@ public static class Formation
         var vassals = sim.Polities.Where(v => v.Alive && v.Suzerain == p)
                                   .OrderBy(v => v.Capital.Index).ToList();
 
-        if (vassals.Count > 0 && rng.Chance(PerTick(sim, instability * sim.Turbulence * 0.9)))
+        if (vassals.Count > 0 && rng.Chance(PerTick(sim, instability * sim.Turbulence * 0.9))
+            && sim.Rules.HasFlag(RealmRules.Collapse))
         {
             foreach (var v in vassals)
             {
@@ -721,6 +761,7 @@ public static class Formation
         // shedding two is not a fragmenting empire, it is noise.
         if (p.Counties.Count < 6) return;
         if (!rng.Chance(PerTick(sim, instability * sim.Turbulence * 1.5))) return;
+        if (!sim.Rules.HasFlag(RealmRules.Secession)) return;
 
         var block = PeripheralBlock(sim, p, Math.Max(2, p.Counties.Count / 3));
         if (block.Count == 0 || block.Count >= p.Counties.Count) return;

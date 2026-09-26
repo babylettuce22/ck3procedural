@@ -122,6 +122,7 @@ public static class MapModes
             Legend =
             [
                 (PreviewRenderer.ImpassableFill, "Impassable"),
+                (PreviewRenderer.HeightFill, "Above height line"),
                 (PreviewRenderer.MaskFill, "Painted in mask"),
                 (PreviewRenderer.TrappedFill, "Trapped fill"),
                 (PreviewRenderer.QualifiesFill, "Over floor, cut by share"),

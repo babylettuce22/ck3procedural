@@ -50,6 +50,16 @@ public sealed class HistorySim
     /// <summary>Years per <see cref="Tick"/>: one, or an epoch's worth when comparing the two grains.</summary>
     public int TickYears => _sim.TickYears;
 
+    /// <summary>
+    /// Which of the realm rules are in force. Takes effect from the next <see cref="Tick"/>; the one
+    /// under way is never changed part-way. See <see cref="RealmRules"/>.
+    /// </summary>
+    public RealmRules Rules
+    {
+        get => _sim.Rules;
+        set => _sim.Rules = value;
+    }
+
     /// <summary>Everything that has happened since <see cref="StartYear"/>, oldest first.</summary>
     public IReadOnlyList<FormationEvent> Events => _sim.Events;
 

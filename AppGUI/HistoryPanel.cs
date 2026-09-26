@@ -77,6 +77,37 @@ internal sealed class HistoryPanel : Panel
         Visible = false,
     };
     private readonly Dictionary<int, Button> _speedButtons = [];
+
+    /// <summary>The switchable rules, in the order the bar shows them, with what each does.</summary>
+    private static readonly (RealmRules Rule, string Name, string Tip)[] RuleChoices =
+    [
+        (RealmRules.Conquest, "Conquest", "Realms take counties from their neighbours by force"),
+        (RealmRules.Homage, "Homage", "A realm several times a neighbour's size takes it as a vassal, whole"),
+        (RealmRules.Secession, "Secession", "An overstretched realm loses a block of its edge, which becomes a realm of its own"),
+        (RealmRules.Collapse, "Collapse", "An unstable realm's vassals all walk out at once"),
+    ];
+
+    private readonly Dictionary<RealmRules, CheckBox> _ruleBoxes = [];
+    private readonly FlowLayoutPanel _rulesBar = new()
+    {
+        Dock = DockStyle.Top,
+        Height = 30,
+        WrapContents = false,
+        Padding = new Padding(6, 2, 6, 0),
+        BackColor = Theme.Surface,
+    };
+
+    /// <summary>
+    /// Which rules are in force from which year, as the user switched them. Kept across a Reset, so
+    /// the same history plays out again switches and all; a switch made at some year drops whatever
+    /// was recorded after it, which belonged to a timeline that has just been left.
+    /// </summary>
+    private readonly SortedDictionary<int, RealmRules> _ruleSchedule = [];
+
+    /// <summary>The chronicle's own lines about the rules, by the year they took effect.</summary>
+    private readonly List<(int Year, string Text)> _notes = [];
+    private int _shownNotes;
+    private bool _settingBoxes;
     private readonly Label _year = new() { AutoSize = true, Font = new Font("Segoe UI", 12f, FontStyle.Bold), ForeColor = Theme.Text, Margin = new Padding(14, 6, 3, 3) };
     private readonly Label _stats = new() { AutoSize = true, Font = Theme.Ui, ForeColor = Theme.TextDim, Margin = new Padding(10, 10, 3, 3) };
     private readonly Label _readout = new() { Dock = DockStyle.Bottom, Height = 24, Font = Theme.Ui, ForeColor = Theme.TextDim, BackColor = Theme.Surface, Padding = new Padding(8, 4, 0, 0) };
@@ -160,6 +191,29 @@ internal sealed class HistoryPanel : Panel
         _appliedBar.Controls.Add(_appliedNote);
         _appliedBar.Controls.Add(_discard);
 
+        _rulesBar.Controls.Add(new Label { Text = "Rules", AutoSize = true, Font = Theme.UiBold, ForeColor = Theme.Text, Margin = new Padding(4, 6, 6, 3) });
+        foreach (var (rule, name, tip) in RuleChoices)
+        {
+            var box = new CheckBox
+            {
+                Text = name,
+                Checked = true,
+                AutoSize = true,
+                Font = Theme.Ui,
+                ForeColor = Theme.Text,
+                Margin = new Padding(6, 5, 3, 3),
+            };
+            box.CheckedChanged += (_, _) => { if (!_settingBoxes) OnRulesChanged(); };
+            tips.SetToolTip(box, tip);
+            _ruleBoxes[rule] = box;
+            _rulesBar.Controls.Add(box);
+        }
+        _rulesBar.Controls.Add(new Label
+        {
+            Text = "take effect from the next year · Reset replays them",
+            AutoSize = true, Font = Theme.Ui, ForeColor = Theme.TextDim, Margin = new Padding(12, 6, 3, 3),
+        });
+
         var chronicleHeader = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
@@ -182,6 +236,7 @@ internal sealed class HistoryPanel : Panel
         Controls.Add(map);
         Controls.Add(chronicle);
         Controls.Add(_appliedBar);
+        Controls.Add(_rulesBar);
         Controls.Add(toolbar);
         Controls.Add(new Panel { Dock = DockStyle.Top, Height = 1, BackColor = Theme.Border });
 
@@ -230,6 +285,11 @@ internal sealed class HistoryPanel : Panel
         _rulers = written?.Rulers;
         _prehistory = written?.Prehistory;
         _startYear = result?.Config.StartYear ?? 0;
+
+        // Switches belong to a timeline, and a new world is a new one.
+        _ruleSchedule.Clear();
+        _notes.Clear();
+        _shownNotes = 0;
 
         _view.SetImage(null);
         _frame?.Dispose();
@@ -331,6 +391,8 @@ internal sealed class HistoryPanel : Panel
         _colourOf.Clear();
         _nextColour = 0;
         _shownEvents = 0;
+        _notes.Clear();
+        _shownNotes = 0;
         _chronicle.Items.Clear();
 
         // Year zero wears the World workspace's own realm colours, asked of its palette rather than
@@ -403,7 +465,16 @@ internal sealed class HistoryPanel : Panel
     /// <summary>One year. False when a debug build caught the simulation breaking an invariant.</summary>
     private bool Advance()
     {
-        _sim!.Tick();
+        // The rules for the year about to be simulated, from the schedule — which is what makes a
+        // Reset replay the switches as well as the dice.
+        var rules = RulesFor(_sim!.Year + 1);
+        if (rules != _sim.Rules)
+        {
+            NoteRuleChange(_sim.Year + 1, _sim.Rules, rules);
+            _sim.Rules = rules;
+        }
+
+        _sim.Tick();
 
 #if DEBUG
         // Cheap next to the tick itself, and the one place a broken rule would otherwise go unseen
@@ -462,6 +533,17 @@ internal sealed class HistoryPanel : Panel
         _apply.Enabled = ready && _sim!.Year > _sim.StartYear;
         _play.Text = Playing ? "❚❚  Pause" : "▶  Play";
 
+        // The boxes show what the next year will be simulated under, so a replay after Reset
+        // visibly flips them where the switches were made.
+        _settingBoxes = true;
+        var next = _sim is null ? RealmRules.All : RulesFor(_sim.Year + 1);
+        foreach (var (rule, box) in _ruleBoxes)
+        {
+            box.Enabled = ready;
+            box.Checked = next.HasFlag(rule);
+        }
+        _settingBoxes = false;
+
         if (_sim is null)
         {
             _year.Text = "";
@@ -501,17 +583,71 @@ internal sealed class HistoryPanel : Panel
         _readout.Text = text;
     }
 
+    // --- Rules ----------------------------------------------------------------------------------
+
+    /// <summary>
+    /// The boxes were changed by hand: the rules they now show apply from the next year, and
+    /// whatever the schedule held from then on is dropped — it belonged to a timeline the user has
+    /// just stepped off.
+    /// </summary>
+    private void OnRulesChanged()
+    {
+        if (_sim is null) return;
+
+        var rules = RealmRules.None;
+        foreach (var (rule, box) in _ruleBoxes)
+            if (box.Checked) rules |= rule;
+
+        int from = _sim.Year + 1;
+        foreach (int year in _ruleSchedule.Keys.Where(y => y >= from).ToList()) _ruleSchedule.Remove(year);
+        if (rules != RulesFor(from)) _ruleSchedule[from] = rules;
+    }
+
+    /// <summary>The rules in force in <paramref name="year"/>: the last switch made at or before it, else all.</summary>
+    private RealmRules RulesFor(int year)
+    {
+        var rules = RealmRules.All;
+        foreach (var (from, set) in _ruleSchedule)
+        {
+            if (from > year) break;
+            rules = set;
+        }
+        return rules;
+    }
+
+    private void NoteRuleChange(int year, RealmRules before, RealmRules after)
+    {
+        foreach (var (rule, name, _) in RuleChoices)
+        {
+            bool was = before.HasFlag(rule), now = after.HasFlag(rule);
+            if (was != now) _notes.Add((year, now ? $"{name} resumes" : $"{name} halted"));
+        }
+    }
+
     // --- Chronicle -------------------------------------------------------------------------------
 
+    /// <summary>
+    /// Adds what has happened since the last call, the rule switches merged in by date — a
+    /// switch before the events of its own year, since it took effect as the year began.
+    /// </summary>
     private void AppendChronicle()
     {
         if (_sim is null) return;
         var events = _sim.Events;
-        if (_shownEvents >= events.Count) return;
+        if (_shownEvents >= events.Count && _shownNotes >= _notes.Count) return;
 
         _chronicle.BeginUpdate();
-        for (; _shownEvents < events.Count; _shownEvents++)
-            if (Describe(events[_shownEvents]) is { } line) _chronicle.Items.Insert(0, line);
+        while (_shownEvents < events.Count || _shownNotes < _notes.Count)
+        {
+            bool note = _shownNotes < _notes.Count
+                        && (_shownEvents >= events.Count || _notes[_shownNotes].Year <= events[_shownEvents].Year);
+
+            string? line = note
+                ? $"{_notes[_shownNotes].Year}   — {_notes[_shownNotes++].Text} —"
+                : Describe(events[_shownEvents++]);
+
+            if (line is not null) _chronicle.Items.Insert(0, line);
+        }
         while (_chronicle.Items.Count > ChronicleLimit) _chronicle.Items.RemoveAt(_chronicle.Items.Count - 1);
         _chronicle.EndUpdate();
     }
@@ -520,6 +656,7 @@ internal sealed class HistoryPanel : Panel
     {
         _chronicle.Items.Clear();
         _shownEvents = 0;
+        _shownNotes = 0;
         AppendChronicle();
     }
 

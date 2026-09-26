@@ -318,6 +318,9 @@ public static partial class ContentWriter
         ArtifactWriter.WriteTemplates(modDir);
         Core.Stage.Detail("  · artifact visuals", () => ArtifactWriter.WriteVisuals(modDir, forgedWeapons));
 
+        // The weapon icons exist from here. Read only; nothing when nobody watches. See Showcase.
+        Core.Showcase.Publish(() => ShowcaseItems.Treasures(artifacts, forgedWeapons, modDir, gameDir));
+
         // Dresses weapons the *game* creates - inspirations, tournament prizes, adventurer
         // finds - from the same pool. Without it every player-earned weapon would be vanilla
         // art standing next to forged art in the same inventory. Keyed on culture, so it

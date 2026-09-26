@@ -125,18 +125,23 @@ public sealed partial class MainForm
         foreach (string stage in switchedOff)
             Console.WriteLine($"  {stage} switched off: it needs a Direct3D 12 GPU, and none was found.");
 
+        // What the generator makes along the way goes to the page's discoveries column. Listened
+        // to only for this run: with nobody listening, the generator builds none of it.
+        Core.Showcase.Published += OnShowcase;
         try
         {
             await WriteModIntoAsync(modDir, carried: null);
         }
         finally
         {
+            Core.Showcase.Published -= OnShowcase;
             _quickRunning = false;
         }
 
         if (_lastRun == RunOutcome.Completed && _result is not null && _written is not null && Directory.Exists(modDir))
         {
             _quick.ShowDone(modDir, clock.Elapsed);
+            _quick.SetTallies(QuickTallies(_result, _written));
             RenderQuickResultAsync().Forget("quick result map");
         }
         else
@@ -145,6 +150,35 @@ public sealed partial class MainForm
                 _lastRun == RunOutcome.None ? "The run did not start." : _lastRunError);
         }
     }
+
+    /// <summary>
+    /// The finished world counted for the done screen: its title ladder, its peoples and faiths,
+    /// and its regiments. Only what this world has; a zero is left out rather than shown.
+    /// </summary>
+    private static IReadOnlyList<(string Label, int Count)> QuickTallies(GenerationResult result, Emit.WrittenContent written)
+    {
+        var titles = MapGen.Titles.Flatten(result.Titles).ToList();
+        int Tier(string tier) => titles.Count(t => t.Tier == tier);
+
+        var tallies = new List<(string Label, int Count)>
+        {
+            ("Counties", Tier("c")),
+            ("Duchies", Tier("d")),
+            ("Kingdoms", Tier("k")),
+            ("Cultures", written.Cultures.ByCounty.Values.Distinct().Count()),
+            ("Faiths", written.Faiths.Faiths.Count(f => f.Counties.Count > 0)),
+            ("Men-at-arms", written.Retinues?.Regiments.Count ?? 0),
+        };
+
+        // Rulers in place of an empty column, when the world has them and no regiments.
+        if (tallies[^1].Count == 0 && written.Rulers is { } rulers)
+            tallies[^1] = ("Rulers", rulers.All.Count);
+
+        return tallies.Where(t => t.Count > 0).ToList();
+    }
+
+    /// <summary>Called on the generator's thread; the item is plain values, so it crosses as it is.</summary>
+    private void OnShowcase(Core.ShowcaseItem item) => Post(() => { if (_quickRunning || _onQuick) _quick.OfferShowcase(item); });
 
     /// <summary>
     /// Anything changed in Complex this session is written to a preset before Quick replaces it,

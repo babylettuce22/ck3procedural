@@ -107,6 +107,16 @@ internal sealed class QuickPage : Panel
     private readonly TextLink _gameFix = new() { Name = "quickGameFolder", Text = "Set game folder…", LinkFont = Small };
     private readonly Label _complexNote = MakeLabel("", Small, Theme.TextDim, wrap: true);
 
+    // discoveries, shared by the run and done views
+    private readonly ShowcaseFeed _feed = new() { Name = "quickFeed" };
+    private readonly Label _feedTitle = MakeLabel("Discoveries", GroupTitle, Theme.Text);
+    private readonly Label _feedCount = MakeLabel("", Small, Theme.TextDim);
+
+    // what fills the space under the map: the run's milestones, then the finished world's tallies
+    private readonly MilestoneStrip _milestones = new() { Name = "quickMilestones" };
+    private readonly TallyRow _tallies = new() { Name = "quickTallies" };
+    private readonly Label _talliesTitle = MakeLabel("At a glance", GroupTitle, Theme.Text);
+
     // run view
     private readonly MapPreview _runMap = new();
     private readonly ProgressLine _bar = new();
@@ -268,6 +278,14 @@ internal sealed class QuickPage : Panel
         _phase.Text = "";
         _cancel.Enabled = true;
         _cancel.Text = "Cancel";
+        _milestones.Reset();
+        _tallies.Set([]);
+        _feed.Clear();
+        _feed.EmptyText = "Peoples, faiths, armies and treasures appear here as the world is made. "
+                        + "The land comes first.";
+        _feedTitle.Text = "Discoveries";
+        UpdateFeedCount();
+        MoveFeedTo(_runPanel);
         ShowPanel(_runPanel);
         UpdateChrome();
     }
@@ -329,6 +347,7 @@ internal sealed class QuickPage : Panel
         foreach (var b in (Control[])[_launch, _openFolder, _customize, _another]) b.Visible = true;
         foreach (var b in (Control[])[_retry, _details]) b.Visible = false;
         _launch.Enabled = _gameFound;
+        HandFeedToDone("Discovered in this world");
         ShowPanel(_donePanel);
         UpdateChrome();
     }
@@ -354,6 +373,7 @@ internal sealed class QuickPage : Panel
         _doneMap.Chip = cancelled ? "Cancelled" : "Stopped here";
         foreach (var b in (Control[])[_launch, _openFolder, _customize, _another]) b.Visible = false;
         foreach (var b in (Control[])[_retry, _details]) b.Visible = true;
+        HandFeedToDone("Made before it stopped");
         ShowPanel(_donePanel);
         UpdateChrome();
     }
@@ -924,7 +944,7 @@ internal sealed class QuickPage : Panel
 
     private void BuildRunView()
     {
-        _runPanel.Controls.AddRange([_runTitle, _runSubtitle, _runMap, _bar, _percent, _eta, _phase, _cancel]);
+        _runPanel.Controls.AddRange([_runTitle, _runSubtitle, _runMap, _bar, _percent, _eta, _phase, _cancel, _milestones]);
         _cancel.Click += (_, _) => CancelRequested?.Invoke();
 
         _runPanel.Arrange = panel =>
@@ -936,9 +956,14 @@ internal sealed class QuickPage : Panel
             _runSubtitle.Location = new Point(x, y);
             y += _runSubtitle.PreferredHeight + S(18);
 
-            int mapH = Math.Min(w / 2, panel.ClientSize.Height - y - S(100));
+            // The map on the left, the discoveries in a column on the right.
+            int feedW = S(310), gap = S(24);
+            int left = w - feedW - gap;
+            PlaceFeed(panel, x + left + gap, y, feedW);
+
+            int mapH = Math.Min(left / 2, panel.ClientSize.Height - y - S(100));
             int mapW = mapH * 2;
-            int mx = x + (w - mapW) / 2;
+            int mx = x;
             _runMap.Bounds = new Rectangle(mx, y, mapW, mapH);
             y += mapH + S(20);
             _bar.Bounds = new Rectangle(mx, y, mapW, S(8));
@@ -948,12 +973,15 @@ internal sealed class QuickPage : Panel
             _cancel.Location = new Point(mx + mapW - _cancel.Width, y - S(2));
             y += _percent.PreferredHeight + S(2);
             _phase.Location = new Point(mx, y);
+            y += _phase.PreferredHeight + S(16);
+            _milestones.Bounds = new Rectangle(mx, y, mapW, _milestones.PreferredGridHeight);
         };
     }
 
     private void BuildDoneView()
     {
-        _donePanel.Controls.AddRange([_doneTitle, _doneSubtitle, _donePath, _doneMap, _launch, _openFolder, _customize, _another, _retry, _details]);
+        _donePanel.Controls.AddRange([_doneTitle, _doneSubtitle, _donePath, _doneMap, _launch, _openFolder, _customize, _another, _retry, _details,
+            _talliesTitle, _tallies]);
         _launch.Click += (_, _) => LaunchRequested?.Invoke();
         _openFolder.Click += (_, _) => OpenFolderRequested?.Invoke();
         _customize.Click += (_, _) => CustomizeRequested?.Invoke();
@@ -981,23 +1009,113 @@ internal sealed class QuickPage : Panel
             _donePath.Bounds = new Rectangle(x, y, w, pathH);
             y += pathH + S(14);
 
-            var buttons = (_failed ? (Control[])[_retry, _details] : [_launch, _openFolder, _customize, _another]).ToList();
-            int buttonsH = S(36);
-            int mapH = Math.Min(w / 2, panel.ClientSize.Height - y - buttonsH - S(40));
-            int mapW = mapH * 2;
-            int mx = x + (w - mapW) / 2;
-            _doneMap.Bounds = new Rectangle(mx, y, mapW, mapH);
-            y += mapH + S(22);
+            // The world on the left with what to do next under it; everything discovered on the right.
+            int feedW = S(310), gap = S(24);
+            int left = w - feedW - gap;
+            PlaceFeed(panel, x + left + gap, y, feedW);
 
+            var buttons = (_failed ? (Control[])[_retry, _details] : [_launch, _openFolder, _customize, _another]).ToList();
             foreach (var b in buttons) if (b is PillButton p) p.FitWidth();
-            int total = buttons.Sum(b => b.Width) + S(10) * (buttons.Count - 1);
-            int bx = x + (w - total) / 2;
+
+            // Buttons flow into as many rows as the map's width needs.
+            var rows = new List<List<Control>> { new() };
+            int rowW = 0;
             foreach (var b in buttons)
             {
-                b.Location = new Point(bx, y);
-                bx += b.Width + S(10);
+                int need = b.Width + (rows[^1].Count > 0 ? S(10) : 0);
+                if (rows[^1].Count > 0 && rowW + need > left) { rows.Add([]); rowW = 0; need = b.Width; }
+                rows[^1].Add(b);
+                rowW += need;
+            }
+
+            int buttonsH = rows.Count * S(36) + (rows.Count - 1) * S(10);
+            bool tallies = _tallies.PreferredGridHeight > 0;
+            int talliesH = tallies ? _talliesTitle.PreferredHeight + S(8) + _tallies.PreferredGridHeight + S(18) : 0;
+            int mapH = Math.Min(left / 2, panel.ClientSize.Height - y - buttonsH - talliesH - S(34));
+            int mapW = mapH * 2;
+            _doneMap.Bounds = new Rectangle(x, y, mapW, mapH);
+            y += mapH + S(18);
+
+            foreach (var row in rows)
+            {
+                int bx = x;
+                foreach (var b in row)
+                {
+                    b.Location = new Point(bx, y);
+                    bx += b.Width + S(10);
+                }
+                y += S(36) + S(10);
+            }
+
+            _talliesTitle.Visible = _tallies.Visible = tallies;
+            if (tallies)
+            {
+                y += S(8);
+                _talliesTitle.Location = new Point(x, y);
+                y += _talliesTitle.PreferredHeight + S(8);
+                _tallies.Bounds = new Rectangle(x, y, mapW, _tallies.PreferredGridHeight);
             }
         };
+    }
+
+    /// <summary>
+    /// Puts the discoveries column in whichever of the run and done views is laying out. One feed
+    /// serves both, moved across when the run ends, so everything found during it is still there.
+    /// </summary>
+    private void PlaceFeed(StepPanel panel, int x, int y, int width)
+    {
+        if (!ReferenceEquals(_feed.Parent, panel)) return;
+        _feedTitle.Location = new Point(x, y);
+        _feedCount.Location = new Point(x + width - _feedCount.PreferredWidth, y + (_feedTitle.PreferredHeight - _feedCount.PreferredHeight) / 2);
+        int top = y + _feedTitle.PreferredHeight + S(8);
+        _feed.Bounds = new Rectangle(x, top, width, Math.Max(S(60), panel.ClientSize.Height - top - S(10)));
+    }
+
+    /// <summary>The run is over: everything still queued is shown at once, and the column moves across.</summary>
+    private void HandFeedToDone(string title)
+    {
+        _milestones.Finish(completed: !_failed);
+        _feed.Flush();
+        _feed.EmptyText = "Nothing was shown for this run.";
+        _feedTitle.Text = title;
+        MoveFeedTo(_donePanel);
+        UpdateFeedCount();
+    }
+
+    private void MoveFeedTo(StepPanel panel)
+    {
+        panel.Controls.Add(_feedTitle);
+        panel.Controls.Add(_feedCount);
+        panel.Controls.Add(_feed);
+        panel.PerformLayout();
+    }
+
+    /// <summary>A stage the generator entered, for the milestones under the map.</summary>
+    public void EnterStage(string stage)
+    {
+        if (_mode == Mode.Running) _milestones.Enter(stage);
+    }
+
+    /// <summary>The finished world counted, for the "At a glance" row. Empty hides the row.</summary>
+    public void SetTallies(IReadOnlyList<(string Label, int Count)> tallies)
+    {
+        _tallies.Set(tallies);
+        _donePanel.PerformLayout();
+    }
+
+    /// <summary>Something the generator just made; see <see cref="ShowcaseFeed"/>.</summary>
+    public void OfferShowcase(Core.ShowcaseItem item)
+    {
+        _feed.Offer(item);
+        UpdateFeedCount();
+    }
+
+    private void UpdateFeedCount()
+    {
+        int n = _feed.Count;
+        _feedCount.Text = n == 0 ? "" : n == 1 ? "1 so far" : $"{n} so far";
+        if (_mode == Mode.Done) _feedCount.Text = n == 0 ? "" : $"{n} in all";
+        if (_feed.Parent is StepPanel panel) panel.PerformLayout();
     }
 
     // ================================================================ layout plumbing

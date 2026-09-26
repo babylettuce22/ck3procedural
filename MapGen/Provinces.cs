@@ -16,7 +16,9 @@ public sealed class ProvinceSeed
 
     /// <summary>
     /// Why this province is impassable, for the preview and hover readout. <c>Score</c> means it
-    /// ranked in on relief; <c>Mask</c> means the user painted it in
+    /// ranked in on relief; <c>Height</c> means most of it stands above
+    /// <see cref="MapConfig.ImpassableHeightFraction"/>'s line though its score did not rank it in;
+    /// <c>Mask</c> means the user painted it in
     /// <see cref="MapConfig.ImpassableMaskPath"/>; <c>Trapped</c> means the connectivity pass
     /// filled it because it was landlocked behind other impassables; <c>None</c> for every
     /// passable province.
@@ -40,15 +42,18 @@ public sealed class ProvinceSeed
     public int Domain;
 }
 
-public enum ImpassableCause : byte { None, Score, Trapped, Mask }
+public enum ImpassableCause : byte { None, Score, Trapped, Mask, Height }
 
 /// <summary>
 /// What the impassable pass measured on this map, kept so the preview can show the same lines
 /// and the same floor the selection used instead of re-deriving them and drifting.
+/// <c>HeightLine</c> is <see cref="MapConfig.ImpassableHeightFraction"/>'s elevation on this map
+/// (<see cref="float.MaxValue"/> when the rule is off) and <c>HeightMarked</c> the provinces it
+/// took that the score had not already.
 /// </summary>
 public sealed record ImpassableDiagnostics(
     float MountainLine, float SteepLine, double Median, double Mad, double Floor, double Cut,
-    int Target, int Marked, string LimitedBy)
+    int Target, int Marked, string LimitedBy, float HeightLine = float.MaxValue, int HeightMarked = 0)
 {
     public bool Qualifies(float score) => !float.IsNaN(score) && score >= Floor;
 }
@@ -1005,10 +1010,12 @@ public static class Provinces
         float steepLine = MathF.Max(minSlope,
             LandLine(slope, mask, 1.0 - Math.Clamp(cfg.SteepLineShare, 0, 1)));
 
+        float heightLine = HeightLine(elevation, mask, cfg);
 
         var total = new int[map.Count];
         var high = new int[map.Count];
         var steep = new int[map.Count];
+        var top = new int[map.Count];
         for (int i = 0; i < map.Label.Length; i++)
         {
             int label = map.Label[i];
@@ -1016,6 +1023,7 @@ public static class Provinces
             total[label]++;
             if (elevation[i] >= mountainLine) high[label]++;
             if (slope[i] >= steepLine) steep[label]++;
+            if (elevation[i] >= heightLine) top[label]++;
         }
 
         double slopeWeight = Math.Clamp(cfg.ImpassableSlopeWeight, 0, 1);
@@ -1063,6 +1071,17 @@ public static class Provinces
             marked++;
         }
 
+        // The plateau rule runs after the ranking and outside its quota, so the slope score keeps
+        // every slot it would have had; this only adds the roof of the map that the score let through.
+        int heightMarked = 0;
+        foreach (var (label, _, _, _) in ranked)
+        {
+            if (map.Seeds[label].IsImpassable || top[label] * 2 <= total[label]) continue;
+            map.Seeds[label].IsImpassable = true;
+            map.Seeds[label].ImpassableCause = ImpassableCause.Height;
+            heightMarked++;
+        }
+
         string mix = marked == 0
             ? ""
             : $", mean {highSum / marked:P0} above the line and {steepSum / marked:P0} steep";
@@ -1077,9 +1096,32 @@ public static class Provinces
                           $"floor {floor:F3} (adaptive {adaptive:F3} vs backstop " +
                           $"{cfg.ImpassableMinMountainShare:F2}), cut at {cut:F3} — " +
                           $"limited by {bound}");
+        if (heightLine != float.MaxValue)
+            Console.WriteLine($"    height: line {heightLine:F0} ({cfg.ImpassableHeightFraction:P0} of the way " +
+                              $"to the peak), {heightMarked} more province(s) taken above it");
 
         map.Impassability = new ImpassableDiagnostics(
-            mountainLine, steepLine, median, mad, floor, cut, want, marked, bound);
+            mountainLine, steepLine, median, mad, floor, cut, want, marked, bound,
+            heightLine, heightMarked);
+    }
+
+    /// <summary>
+    /// <see cref="MapConfig.ImpassableHeightFraction"/> as an elevation on this map: that fraction
+    /// of the way from sea level to the highest land pixel. <see cref="float.MaxValue"/> when the
+    /// rule is off, so a comparison against it never passes.
+    /// </summary>
+    private static float HeightLine(float[] elevation, byte[] mask, MapConfig cfg)
+    {
+        double fraction = cfg.ImpassableHeightFraction;
+        if (!(fraction > 0)) return float.MaxValue;
+
+        float sea = cfg.Limits.SeaLevelUpper;
+        float peak = float.MinValue;
+        for (int i = 0; i < elevation.Length; i++)
+            if (mask[i] != 0 && elevation[i] > peak) peak = elevation[i];
+        if (peak <= sea) return float.MaxValue;
+
+        return (float)(sea + (peak - sea) * Math.Min(fraction, 1));
     }
 
     private static void MergeImpassableRanges(ProvinceMap map, MapConfig cfg)

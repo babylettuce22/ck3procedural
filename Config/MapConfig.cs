@@ -1153,6 +1153,18 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Description("How much of the impassability score comes from steepness rather than height. 0 is height-only, 1 is slope-only.")]
     public double ImpassableSlopeWeight { get; set; } = 0.65;
 
+    /// <summary>
+    /// A land province with most of its ground at or above this fraction of the way from sea level
+    /// to the map's highest point is impassable outright, whatever its slope score and whatever the
+    /// target share. It exists for high plateaus: flat on top, so the slope-weighted score passes
+    /// over them, yet so high no road should cross. Kept near 1 so it only takes the true roof of
+    /// the map and the slope ranking still decides nearly everything. 0 turns it off.
+    /// Recommended: 0.98.
+    /// </summary>
+    [Category("03 Provinces")]
+    [Description("A land province with most of its ground at or above this fraction of the way from sea level to the map's highest point is impassable regardless of slope or the target share — catches high, flat plateaus the slope score misses. Near 1 it only takes the roof of the map. 0 turns it off.")]
+    public double ImpassableHeightFraction { get; set; } = 0.98;
+
     [AdvancedSetting]
     [Category("03 Provinces")]
     [Description("Minimum gradient per pixel for ground to count as steep, so a flat map does not get its gentlest slopes declared cliffs just because they are its steepest. Authored against vanilla-scale terrain and scaled by the same factor as land relief, so it means the same thing at any map size. It is a floor on the steep line only — it never removes pixels from the percentile that sets that line.")]

@@ -231,6 +231,12 @@ public static partial class ContentWriter
         var worldCenters = Core.Stage.Time("world centers", () => WorldCenterMap.Build(
             counties, provinces, order, landCount, provinceTerrain, cultures, wilderness, cfg, new Rng(cfg.Seed ^ 0x93FA)));
 
+        // A culture's name, heritage, tongue, name lists and traditions are all settled by here, so
+        // the peoples are shown now, with the wonders. Read only; nothing when nobody watches.
+        // See Showcase.
+        Core.Showcase.Publish(() => ShowcaseItems.Cultures(cultures));
+        Core.Showcase.Publish(() => ShowcaseItems.Wonders(worldCenters, gameDir));
+
         development = Core.Stage.Time("development", () =>
         {
             var levels = MapGen.Development.ForCounties(counties, provinceTerrain, cfg,
@@ -271,6 +277,9 @@ public static partial class ContentWriter
         // After the realm pass, never during it — see Realms.CrownHegemon for why granting it any
         // earlier would have made one ruler the liege of the whole map.
         if (cfg.StartingHegemony) Realms.CrownHegemon(realms, empires, wilderness);
+
+        // For anyone watching the run; reads only, and does nothing when nobody is. See Showcase.
+        Core.Showcase.Publish(() => ShowcaseItems.Realms(realms));
 
         if (titlePlan is not null)
             Console.WriteLine($"  vanilla titles: {VanillaTitles.Fragmentation(empires, realms)}");
@@ -424,6 +433,7 @@ public static partial class ContentWriter
         var waterNames = Core.Stage.Time("water naming", () => WaterNaming.Generate(
             provinces, order, landCount, riverCount, cultures, empires, cfg,
             new Rng(cfg.Seed ^ 0x5EAE), terra.MajorRiversList, azgaar));
+        Core.Showcase.Publish(() => ShowcaseItems.Waters(waterNames));
 
         // History run on in the History workspace replaces the realms the formation grew — last,
         // after everything above has been decided from the generated ones. Faiths.Build reads the

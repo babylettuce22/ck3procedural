@@ -1512,6 +1512,7 @@ public static class PreviewRenderer
     // Impassable diagnostics palette. Shared with the legend in MapModes so the key matches the paint.
     public static readonly (byte R, byte G, byte B)
         ImpassableFill = (204, 44, 44),      // ranked in on relief
+        HeightFill = (120, 60, 40),          // above the height line, missed by the score
         MaskFill = (44, 120, 220),           // painted in the user's impassable mask
         TrappedFill = (196, 64, 200),        // filled by the connectivity pass
         QualifiesFill = (232, 200, 64),      // over the floor, cut by the target share
@@ -1576,6 +1577,7 @@ public static class PreviewRenderer
                 var colour = seed.ImpassableCause switch
                 {
                     ImpassableCause.Score => Mix(ground, ImpassableFill, 0.6),
+                    ImpassableCause.Height => Mix(ground, HeightFill, 0.6),
                     ImpassableCause.Mask => Mix(ground, MaskFill, 0.6),
                     ImpassableCause.Trapped => Mix(ground, TrappedFill, 0.6),
                     _ when seed.IsImpassable => Mix(ground, ImpassableFill, 0.6),
@@ -1626,6 +1628,7 @@ public static class PreviewRenderer
         string verdict = seed.ImpassableCause switch
         {
             ImpassableCause.Score => "impassable",
+            ImpassableCause.Height => $"impassable — mostly above the height line ({diag.HeightLine:F0} m)",
             ImpassableCause.Mask => "impassable — painted in the mask",
             ImpassableCause.Trapped => "impassable — trapped (landlocked behind impassables)",
             _ when seed.IsImpassable => "impassable",

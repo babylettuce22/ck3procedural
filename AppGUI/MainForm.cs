@@ -3512,12 +3512,14 @@ public sealed partial class MainForm : ChromeForm
         _progressModel?.Enter(name);
         _phase = Sentence(name);
         _status.Text = $"{_phase}…";
+        if (_quickRunning) _quick.EnterStage(name);
         ShowProgress();
     });
 
     private void OnStageDetail(string name) => Post(() =>
     {
         if (_busy && _phase is not null) _status.Text = $"{_phase} · {name.Trim(' ', '·')}…";
+        if (_quickRunning) _quick.EnterStage(name);
     });
 
     private string? _phase;
