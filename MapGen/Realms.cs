@@ -60,6 +60,13 @@ public sealed class RealmMap
     /// </summary>
     public Dictionary<Title, HashSet<Title>>? CountyAdjacency { get; set; }
 
+    /// <summary>
+    /// The realms at each additional bookmark, keyed by its year: the formation simulation's map on
+    /// that date, titled the same way this one was. Null when there are no additional bookmarks or
+    /// realms were not grown — see <see cref="BookmarkEras"/> for the fallback.
+    /// </summary>
+    public Dictionary<int, RealmMap>? EraMaps { get; set; }
+
     /// <summary>Records that <paramref name="vassal"/> answers to <paramref name="lord"/>.</summary>
     public void SetLiege(Title vassal, Title lord, LiegeOrigin origin)
     {
@@ -241,6 +248,21 @@ public static class Realms
 
             var formed = FromFormation(history, all, development, weight, holderCounty, countyAdj, cfg, rng);
             formed.CountyAdjacency = countyAdj;
+
+            // The additional bookmarks' maps, titled from their own snapshots on their own streams,
+            // after the start-date map so nothing above draws a different number.
+            if (history.Snapshots.Count > 0)
+            {
+                formed.EraMaps = [];
+                foreach (var (year, snapshot) in history.Snapshots.OrderBy(kv => kv.Key))
+                {
+                    var eraHolders = nonWildCounties.ToDictionary(c => c, c => c);
+                    formed.EraMaps[year] = FromFormation(snapshot, all, development, weight, eraHolders,
+                        countyAdj, cfg, new Rng(cfg.Seed ^ 0x2E18 ^ year), quiet: true);
+                    formed.EraMaps[year].CountyAdjacency = countyAdj;
+                }
+            }
+
             return formed;
         }
 
@@ -589,7 +611,8 @@ public static class Realms
         Dictionary<Title, Title> holderCounty,
         Dictionary<Title, HashSet<Title>> countyAdj,
         MapConfig cfg,
-        Rng rng)
+        Rng rng,
+        bool quiet = false)
     {
         var map = new RealmMap { HolderCounty = holderCounty, Liege = [], History = history };
 
@@ -735,6 +758,10 @@ public static class Realms
             .ThenBy(kv => kv.Key.Index)
             .Select(kv => kv.Key)
             .ToList();
+
+        // An additional bookmark's map is reported once, by BookmarkEras, rather than as a second
+        // copy of this block.
+        if (quiet) return map;
 
         if (unreachable > 0 || folded > 0)
             Console.WriteLine($"  realms: {unreachable} vassals could not reach their lord (set free), " +

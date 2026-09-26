@@ -12,6 +12,10 @@ public static class ReligionWriter
         WriteReligions(modDir, faiths);
         WriteLocalisation(modDir, faiths);
 
+        // Here rather than beside the call site, so an editor save that rewrites the faiths
+        // redraws the icons from the same edited colours and tenets.
+        FaithIconWriter.WriteAll(modDir, faiths);
+
         int sites = faiths.Faiths.Sum(f => f.HolySites.Count);
         Console.WriteLine($"  faiths written: {faiths.Faiths.Count} faiths in " +
                           $"{faiths.Religions.Count} religions, {sites} holy sites");
@@ -113,7 +117,9 @@ public static class ReligionWriter
                             if (!faith.IsOrganized)
                             {
                                 b.Field("doctrine", "unreformed_faith_doctrine");
-                                b.Field("reformed_icon", faith.Icon);
+                                b.Field("reformed_icon", FaithIcons.HasGeneratedIcon(faith) && faith.ReformedIcon is { } reformed
+                                    ? reformed
+                                    : faith.Icon);
                             }
 
                             b.Blank();

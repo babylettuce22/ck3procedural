@@ -392,30 +392,87 @@ public sealed class MapConfig : CustomTypeDescriptor
     public int EraYear => EraAnchorYear > 0 ? EraAnchorYear : Math.Max(1, StartYear);
 
     /// <summary>
-    /// Two more bookmarks before <see cref="StartYear"/>, held by the current rulers' parents and
-    /// grandparents on the same political map. See <see cref="MapGen.BookmarkEras"/>. Off writes
-    /// exactly what a run without it did.
+    /// How advanced the world is in <paramref name="worldYear"/>: the start's own advancement,
+    /// moved by the same number of years. An additional bookmark 199 years on is 199 years more
+    /// advanced than the start, whatever the start is.
     /// </summary>
-    [Category("02 World State")]
-    [DisplayName("Earlier Bookmarks")]
-    [Description("Adds two earlier start dates (World Year − 45 and World Year − 20), each held by the previous generation of the same houses on the same political map. Off keeps the single start date. Not used with Content Source VanillaWorld or a World Year below 130.")]
-    public bool EarlierBookmarks { get; set; }
-
-    /// <summary>Whether this run actually writes the earlier bookmarks: the setting, where the world can carry it.</summary>
-    [Browsable(false)]
-    public bool UsesEarlierBookmarks =>
-        EarlierBookmarks && ContentSource == ContentSourceMode.Procedural && StartYear >= 130;
-
-    /// <summary>Years of the earlier bookmarks, oldest first. Only meaningful with <see cref="UsesEarlierBookmarks"/>.</summary>
-    [Browsable(false)]
-    public int[] EarlierBookmarkYears => [StartYear - 45, StartYear - 20];
+    public int EraYearAt(int worldYear) => Math.Max(1, EraYear + (worldYear - StartYear));
 
     /// <summary>
-    /// The date a game-start effect naming the start-date rulers must be gated to, or null when
-    /// there is only one start date and no gate is needed.
+    /// This configuration as it would be for a world as advanced as <paramref name="eraYear"/>, for
+    /// the passes an additional bookmark re-runs. A shallow copy: nothing it shares is written to.
+    /// </summary>
+    internal MapConfig AtAdvancement(int eraYear)
+    {
+        var copy = (MapConfig)MemberwiseClone();
+        copy.EraAnchorYear = Math.Max(1, eraYear);
+        return copy;
+    }
+
+    /// <summary>
+    /// Two more bookmarks around <see cref="StartYear"/>, filling out vanilla's 867 / 1066 / 1178.
+    /// The start takes whichever of the three its advancement is nearest, and the other two are
+    /// placed by vanilla's gaps from it — before it, after it, or one of each. See
+    /// <see cref="MapGen.BookmarkEras"/>. The start date's world is the same either way: this only
+    /// adds history dated before and after it.
+    /// </summary>
+    [Category("02 World State")]
+    [DisplayName("Additional Bookmarks")]
+    [Description("Adds two more start dates around the World Year, so the three fill out vanilla's 867 / 1066 / 1178. The World Year takes whichever its Advancement Year is nearest — a world at 900 gets bookmarks 199 and 311 years later; one at 1178 or later gets them 311 and 112 years earlier. Each shows the realms, governments, holdings, development and innovations of its own date, ruled by the houses of the time. The World Year's own map is unchanged. Not used with Content Source VanillaWorld.")]
+    public bool AdditionalBookmarks { get; set; }
+
+    /// <summary>Whether this run writes the additional bookmarks: the setting, where the world can carry it.</summary>
+    [Browsable(false)]
+    public bool UsesAdditionalBookmarks =>
+        AdditionalBookmarks && ContentSource == ContentSourceMode.Procedural && AdditionalBookmarkDates.Length > 0;
+
+    /// <summary>Vanilla's three bookmark years, whose gaps the additional bookmarks keep.</summary>
+    public static readonly int[] VanillaBookmarkYears = [867, 1066, 1178];
+
+    /// <summary>The earliest year a bookmark can sit on: its rulers are born up to 65 years before it.</summary>
+    public const int MinBookmarkYear = 70;
+
+    /// <summary>
+    /// The additional bookmarks, oldest first, each with the tag of the vanilla bookmark it stands in
+    /// for — "early", "middle" or "late" — which every key it writes carries. A date that would fall
+    /// before <see cref="MinBookmarkYear"/> is dropped.
     /// </summary>
     [Browsable(false)]
-    public string? LatestBookmarkGate => UsesEarlierBookmarks ? StartDate : null;
+    public (int Year, string Tag)[] AdditionalBookmarkDates
+    {
+        get
+        {
+            string[] tags = ["early", "middle", "late"];
+            int era = EraYear;
+            int main = VanillaBookmarkYears.OrderBy(v => Math.Abs(v - era)).ThenBy(v => v).First();
+
+            return [.. VanillaBookmarkYears
+                .Select((v, i) => (Year: StartYear + v - main, Tag: tags[i], Main: v == main))
+                .Where(d => !d.Main && d.Year >= MinBookmarkYear)
+                .Select(d => (d.Year, d.Tag))];
+        }
+    }
+
+    /// <summary>The years of <see cref="AdditionalBookmarkDates"/>, oldest first.</summary>
+    [Browsable(false)]
+    public int[] AdditionalBookmarkYears => [.. AdditionalBookmarkDates.Select(d => d.Year)];
+
+    /// <summary>
+    /// The window a game-start effect naming the start date's people must be gated to: from the
+    /// start date when an additional bookmark comes before it, until the next one after it when one
+    /// does. Both null with a single start date, which needs no gate.
+    /// </summary>
+    [Browsable(false)]
+    public (string? From, string? Until) MainBookmarkWindow
+    {
+        get
+        {
+            if (!UsesAdditionalBookmarks) return (null, null);
+            var years = AdditionalBookmarkYears;
+            return (years.Any(y => y < StartYear) ? StartDate : null,
+                    years.Where(y => y > StartYear).Select(y => $"{y}.1.1").FirstOrDefault());
+        }
+    }
 
     public enum ContentSourceMode
     {
@@ -2179,6 +2236,15 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Category("10 Cultures and faiths")]
     [Description("How strongly culture borders follow terrain. 0 ignores the ground and cuts straight over mountains; 1 makes ranges and deserts into language barriers.")]
     public double CultureTerrainWeight { get; set; } = 1.0;
+
+    /// <summary>
+    /// Whether every generated faith gets its own rendered icon. Off, each draws one of vanilla's
+    /// faith icons at random, as it always did. See <see cref="MapGen.FaithIcons"/>.
+    /// </summary>
+    [Category("10 Cultures and faiths")]
+    [DisplayName("Generated Faith Icons")]
+    [Description("Draw each generated faith its own relief icon. Faiths of one religion share a symbol (suns, crescents, a tree) chosen from their tenets; material follows standing, from carved wood for unreformed faiths to gold and enamel for organised ones, and the inlay takes the faith's map colour. Unreformed faiths also get the icon they will wear once reformed. Off picks vanilla icons at random.")]
+    public bool GenerateFaithIcons { get; set; } = true;
 
     // Can be way too many nude characters lol
     // Need to extend this to cover "Nudism" cultural pillar

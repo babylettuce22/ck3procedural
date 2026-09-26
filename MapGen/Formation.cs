@@ -131,6 +131,14 @@ public sealed class FormationHistory
 
     /// <summary>The year the simulation began. Every event is dated between here and the start date.</summary>
     public required int FirstYear { get; init; }
+
+    /// <summary>
+    /// The map at each additional bookmark (<see cref="MapConfig.AdditionalBookmarkYears"/>), keyed
+    /// by that year: a copy of the last epoch at or before it, with its own polity objects. One
+    /// after the start date comes from the simulation run on past it on a copy. Empty unless
+    /// additional bookmarks are on.
+    /// </summary>
+    public Dictionary<int, FormationHistory> Snapshots { get; init; } = [];
 }
 
 /// <summary>
@@ -265,46 +273,24 @@ public static class Formation
             sim.Owner[county] = p;
         }
 
+        // The additional bookmarks read the map as it stood on their date. Copied as the loop passes
+        // each one, and never fed back, so the dice below are the same with or without them.
+        int[] snapshotYears = cfg.UsesAdditionalBookmarks ? cfg.AdditionalBookmarkYears : [];
+        var snapshots = new Dictionary<int, FormationHistory>();
+
+        void Capture(Sim at, int from)
+        {
+            foreach (int year in snapshotYears)
+                if (!snapshots.ContainsKey(year) && year < from + EpochYears)
+                    snapshots[year] = Freeze(at, firstYear);
+        }
+
+        Capture(sim, firstYear);
+
         for (int epoch = 0; epoch < epochs; epoch++)
         {
-            sim.Year = firstYear + (epoch + 1) * EpochYears;
-            // Each epoch draws from its own stream, so a change to one tick's rules cannot shift
-            // every later tick's dice. The golden-ratio constant is there to keep consecutive
-            // epochs far apart in the seed space rather than one bit apart.
-            var rng = new Rng(cfg.Seed ^ 0x5A17 ^ unchecked((int)(epoch * 0x9E3779B1u)));
-
-            // Strongest first, so a great power picks its target before its neighbours pick theirs.
-            // Tie-broken on the capital index, which never moves, so equal strength always resolves
-            // the same way twice.
-            var actors = sim.Polities
-                .Where(p => p.Alive)
-                .OrderByDescending(p => Strength(sim, p))
-                .ThenBy(p => p.Capital.Index)
-                .ToList();
-
-            foreach (var p in actors)
-            {
-                if (!p.Alive) continue;
-
-                // Big realms act more often, and this is the single number that decides whether the
-                // world consolidates at all. One action per epoch caps a realm's lifetime growth at
-                // the epoch count however strong it gets, which on a six-century run is about
-                // twenty counties — so every world came out a scatter of duchies with no great
-                // power in it, whatever the odds per fight said. Scaled against a quarter of a
-                // kingdom so the snowball engages on a small map as well as a large one.
-                int actions = Math.Clamp(
-                    1 + (int)(p.Counties.Count / Math.Max(2.0, avgKingdom * 0.25)), 1, 5);
-                for (int a = 0; a < actions && p.Alive; a++) Act(sim, p, rng);
-            }
-
-            foreach (var p in Snapshot(sim)) if (p.Alive) Strain(sim, p, rng);
-
-            // Anything that came apart on the map rather than in the rules. A realm that loses a
-            // county in its middle is two realms whatever the ownership table says, and leaving it
-            // whole is what produces a ruler seated in an exclave with vassals he cannot reach.
-            foreach (var p in Snapshot(sim)) if (p.Alive) ShedIslands(sim, p);
-
-            foreach (var p in sim.Polities) if (p.Alive) p.Peak = Math.Max(p.Peak, p.Counties.Count);
+            Epoch(sim, epoch);
+            Capture(sim, sim.Year);
         }
 
         var survivors = sim.Polities.Where(p => p.Alive).OrderBy(p => p.Capital.Index).ToList();
@@ -322,11 +308,128 @@ public static class Formation
                           $"({independent} independent, largest {biggest} counties), " +
                           $"{sim.Events.Count} events");
 
+        // Bookmarks after the start date need a future. It is run on a copy, from where the start
+        // date left off and on the epoch streams that come next, so the start date's realms —
+        // the objects returned below — are never touched by it.
+        if (snapshotYears.Any(y => !snapshots.ContainsKey(y)))
+        {
+            var future = Continue(sim);
+            for (int epoch = epochs; snapshotYears.Any(y => !snapshots.ContainsKey(y)); epoch++)
+            {
+                Epoch(future, epoch);
+                Capture(future, future.Year);
+            }
+
+            Console.WriteLine($"  formation: run on to {future.Year} for the additional bookmarks — "
+                              + $"{future.Polities.Count(p => p.Alive)} realms by then");
+        }
+
         return new FormationHistory
         {
             Polities = survivors,
             Owner = sim.Owner,
             Events = sim.Events,
+            FirstYear = firstYear,
+            Snapshots = snapshots,
+        };
+
+        // One tick of the simulation.
+        void Epoch(Sim s, int epoch)
+        {
+            s.Year = firstYear + (epoch + 1) * EpochYears;
+            // Each epoch draws from its own stream, so a change to one tick's rules cannot shift
+            // every later tick's dice. The golden-ratio constant is there to keep consecutive
+            // epochs far apart in the seed space rather than one bit apart.
+            var rng = new Rng(cfg.Seed ^ 0x5A17 ^ unchecked((int)(epoch * 0x9E3779B1u)));
+
+            // Strongest first, so a great power picks its target before its neighbours pick theirs.
+            // Tie-broken on the capital index, which never moves, so equal strength always resolves
+            // the same way twice.
+            var actors = s.Polities
+                .Where(p => p.Alive)
+                .OrderByDescending(p => Strength(s, p))
+                .ThenBy(p => p.Capital.Index)
+                .ToList();
+
+            foreach (var p in actors)
+            {
+                if (!p.Alive) continue;
+
+                // Big realms act more often, and this is the single number that decides whether the
+                // world consolidates at all. One action per epoch caps a realm's lifetime growth at
+                // the epoch count however strong it gets, which on a six-century run is about
+                // twenty counties — so every world came out a scatter of duchies with no great
+                // power in it, whatever the odds per fight said. Scaled against a quarter of a
+                // kingdom so the snowball engages on a small map as well as a large one.
+                int actions = Math.Clamp(
+                    1 + (int)(p.Counties.Count / Math.Max(2.0, avgKingdom * 0.25)), 1, 5);
+                for (int a = 0; a < actions && p.Alive; a++) Act(s, p, rng);
+            }
+
+            foreach (var p in Snapshot(s)) if (p.Alive) Strain(s, p, rng);
+
+            // Anything that came apart on the map rather than in the rules. A realm that loses a
+            // county in its middle is two realms whatever the ownership table says, and leaving it
+            // whole is what produces a ruler seated in an exclave with vassals he cannot reach.
+            foreach (var p in Snapshot(s)) if (p.Alive) ShedIslands(s, p);
+
+            foreach (var p in s.Polities) if (p.Alive) p.Peak = Math.Max(p.Peak, p.Counties.Count);
+        }
+    }
+
+    /// <summary>
+    /// The simulation as it stands, on polity objects of its own, to be run on past the start date
+    /// without moving the start date's realms. Ids carry over, as in <see cref="Freeze"/>.
+    /// </summary>
+    private static Sim Continue(Sim sim)
+    {
+        var now = Freeze(sim, 0);
+        return new Sim
+        {
+            Polities = now.Polities,
+            Owner = now.Owner,
+            Adjacent = sim.Adjacent,
+            Development = sim.Development,
+            CountyCulture = sim.CountyCulture,
+            Events = [],
+            Reach = sim.Reach,
+            Aggression = sim.Aggression,
+            Turbulence = sim.Turbulence,
+            NextId = sim.NextId,
+            Year = sim.Year,
+        };
+    }
+
+    /// <summary>
+    /// The living realms as they stand now, as new objects: titling a snapshot folds and frees
+    /// polities in place, and must not touch the simulation's own. Ids are kept, which is how a
+    /// realm is recognised from one bookmark to the next.
+    /// </summary>
+    private static FormationHistory Freeze(Sim sim, int firstYear)
+    {
+        var copies = new Dictionary<Polity, Polity>();
+        foreach (var p in sim.Polities.Where(p => p.Alive).OrderBy(p => p.Capital.Index))
+        {
+            var q = new Polity
+            {
+                Id = p.Id, Capital = p.Capital, Culture = p.Culture, Founded = p.Founded, Peak = p.Peak,
+            };
+            q.Counties.UnionWith(p.Counties);
+            copies[p] = q;
+        }
+
+        var owner = new Dictionary<Title, Polity>();
+        foreach (var (p, q) in copies)
+        {
+            q.Suzerain = p.Suzerain is { } s && copies.TryGetValue(s, out var sq) ? sq : null;
+            foreach (var c in q.Counties) owner[c] = q;
+        }
+
+        return new FormationHistory
+        {
+            Polities = [.. copies.Values],
+            Owner = owner,
+            Events = [.. sim.Events.Where(e => e.Year <= sim.Year)],
             FirstYear = firstYear,
         };
     }

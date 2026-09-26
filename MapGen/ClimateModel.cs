@@ -133,7 +133,8 @@ public static class ClimateModel
             var flattened = new float[provinceElevation.Length];
             for (int i = 0; i < flattened.Length; i++)
                 flattened[i] = Math.Max(provinceElevation[i], sea);
-            relief = Field.Blur(flattened, pw, ph, blur, 2);
+            // Running sum: at this radius the exact-order Blur was 80% of the whole climate stage.
+            relief = Field.BlurRunning(flattened, pw, ph, blur, 2);
         }
 
         var pixelKm = new float[relief.Length];
@@ -403,8 +404,8 @@ public static class ClimateModel
         /// province sizes and every border downstream of them.
         ///
         /// Sequential rows fix it for a few milliseconds — the grid is capped at
-        /// <see cref="GridWidth"/> across, so this is a small part of a stage dominated by the
-        /// relief blur at full province resolution.
+        /// <see cref="GridWidth"/> across, so this is a small part of a stage whose cost is in the
+        /// full-resolution passes.
         /// </summary>
         void Advect(int direction)
         {

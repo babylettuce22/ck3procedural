@@ -301,8 +301,10 @@ public static class Program
                         System.Globalization.CultureInfo.InvariantCulture);
                     break;
 
+                // --earlier-bookmarks is the setting's first name, kept so old command lines still work.
+                case "--additional-bookmarks":
                 case "--earlier-bookmarks":
-                    cfg.EarlierBookmarks = true;
+                    cfg.AdditionalBookmarks = true;
                     break;
 
                 // Which way the world's faiths, cultures and rulers lean on inheritance and

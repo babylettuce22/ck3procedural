@@ -60,7 +60,10 @@ public static class BookmarkWriter
             return new BookmarkResult([], new Dictionary<Title, string>(), null);
         }
 
-        var countyPositions = CalculateCountyScreenPositions(seatCounties, provinces, order, cfg);
+        // Every settled county, not just today's seats: an additional bookmark seats rulers elsewhere.
+        // Each position is the county's own, so the start date's come out the same either way.
+        var countyPositions = CalculateCountyScreenPositions(
+            allCounties.Where(c => !wilderness.Contains(c)).ToList(), provinces, order, cfg);
         var cast = BookmarkCast.Build(seatCounties, realms, governments, development, wilderness,
                                       prehistory, rulers, cultures, cfg.StartYear, countyPositions);
 
@@ -80,16 +83,16 @@ public static class BookmarkWriter
         foreach (var (county, dnaKey) in bookmarkDnaMap)
             rulers.For(county).DnaKey = dnaKey;
 
-        // The earlier bookmarks, latest first so a ruler already on a later screen keeps that face.
-        // Relations between rulers are the start-date generation's, so none are passed down.
+        // The additional bookmarks, each cast from its own map and its own people. Relations between
+        // rulers are the start date's, so none are passed down.
         var eras = prehistory.Eras;
         if (eras is not null)
         {
-            foreach (var era in Enumerable.Reverse(eras.Eras))
+            foreach (var era in eras.Eras)
             {
-                era.Cast = BookmarkCast.Build(seatCounties.Where(era.Rulers.Contains).ToList(), realms,
-                    governments, development, wilderness, new PrehistoryMap(), era.Rulers, cultures,
-                    era.Year, countyPositions, era.Tag, r => era.Heirs.GetValueOrDefault(r.Id));
+                var eraSeats = allCounties.Where(c => !wilderness.Contains(c) && era.Rulers.Contains(c)).ToList();
+                era.Cast = BookmarkCast.Build(eraSeats, era.Realms, era.Governments, development, wilderness,
+                    new PrehistoryMap(), era.Rulers, cultures, era.Year, countyPositions, era.Tag);
 
                 if (era.Cast is null) continue;
                 foreach (var slot in era.Cast.All) slot.Ruler.DnaKey = $"dna_{slot.Key}";
@@ -105,7 +108,7 @@ public static class BookmarkWriter
         WriteRealmHighlights(modDir, cfg, provinces, order, cast.Slots, realms, empires);
         foreach (var era in eras?.Eras ?? [])
             if (era.Cast is not null)
-                WriteRealmHighlights(modDir, cfg, provinces, order, era.Cast.Slots, realms, empires,
+                WriteRealmHighlights(modDir, cfg, provinces, order, era.Cast.Slots, era.Realms, empires,
                     $"bm_generated_{era.Tag}");
 
         Report(cast);
@@ -145,16 +148,15 @@ public static class BookmarkWriter
             }
         }
 
-        // Each earlier cast after the start-date one, so a face borrowed across screens is drawn first.
-        foreach (var era in Enumerable.Reverse(eras?.Eras ?? []))
+        foreach (var era in eras?.Eras ?? [])
             if (era.Cast is not null) requests.AddRange(EraPortraits(era.Cast, cultures));
 
         return new BookmarkResult(requests, bookmarkDnaMap, cast);
     }
 
     /// <summary>
-    /// The portraits an earlier cast needs. A companion who already wears a face from another
-    /// screen — the start-date ruler shown as a boy beside his father — borrows it.
+    /// The portraits an earlier cast needs. A companion who is also one of that screen's own
+    /// rulers — a liege standing beside his vassal — borrows the face drawn for his slot.
     /// </summary>
     private static IEnumerable<PortraitWriter.CharacterPortraitRequest> EraPortraits(
         BookmarkCast cast, CultureMap cultures)
@@ -302,17 +304,18 @@ public static class BookmarkWriter
         string dir = Path.Combine(modDir, "common", "bookmarks", "groups");
         Directory.CreateDirectory(dir);
 
-        // One tab per date, as vanilla's 867 / 1066 / 1178.
-        string earlier = string.Concat((eras?.Eras ?? []).Select(era =>
-            $"{GroupKey}_{era.Tag} = {{\n\tdefault_start_date = {era.Date}\n}}\n\n"));
+        // One tab per date, as vanilla's 867 / 1066 / 1178 — and in date order, which is the order
+        // the frontend draws them in: it lays the tabs out as the file declares the groups.
+        string Group(BookmarkEra era) => $"{GroupKey}_{era.Tag} = {{\n\tdefault_start_date = {era.Date}\n}}\n\n";
+        var others = eras?.Eras ?? [];
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_bookmark_groups.txt"),
-            $$"""
+            string.Concat(others.Where(e => e.Year < cfg.StartYear).Select(Group)) + $$"""
               {{GroupKey}} = {
               	default_start_date = {{cfg.StartDate}}
               }
 
-              """ + earlier);
+              """ + string.Concat(others.Where(e => e.Year > cfg.StartYear).Select(e => "\n" + Group(e).TrimEnd('\n') + "\n")));
     }
 
     private static void WriteBookmarks(string modDir, MapConfig cfg, BookmarkCast cast,
@@ -323,18 +326,30 @@ public static class BookmarkWriter
         Directory.CreateDirectory(dir);
 
         var b = new JominiBuilder();
-        Bookmark("bm_generated", GroupKey, cfg.StartDate, cast);
 
-        foreach (var era in eras?.Eras ?? [])
+        // Oldest first, as the tabs are. The weight is what picks the bookmark the screen opens on,
+        // and that stays the start date.
+        var others = (eras?.Eras ?? []).Where(e => e.Cast is not null).ToList();
+        foreach (var era in others.Where(e => e.Year < cfg.StartYear))
         {
-            if (era.Cast is null) continue;
+            Bookmark($"bm_generated_{era.Tag}", $"{GroupKey}_{era.Tag}", era.Date, era.Cast!, 50,
+                era.Realms, era.Governments);
             b.Blank();
-            Bookmark($"bm_generated_{era.Tag}", $"{GroupKey}_{era.Tag}", era.Date, era.Cast);
+        }
+
+        Bookmark("bm_generated", GroupKey, cfg.StartDate, cast, 100, realms, governments);
+
+        foreach (var era in others.Where(e => e.Year > cfg.StartYear))
+        {
+            b.Blank();
+            Bookmark($"bm_generated_{era.Tag}", $"{GroupKey}_{era.Tag}", era.Date, era.Cast!, 50,
+                era.Realms, era.Governments);
         }
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_bookmarks.txt"), b.ToString());
 
-        void Bookmark(string key, string group, string date, BookmarkCast shown)
+        void Bookmark(string key, string group, string date, BookmarkCast shown, int weight,
+            RealmMap shownRealms, GovernmentMap shownGovernments)
         {
             using (b.Block(key))
             {
@@ -343,11 +358,11 @@ public static class BookmarkWriter
                 b.Field("group", group);
                 b.Blank();
 
-                using (b.Block("weight")) b.Field("value", 100);
+                using (b.Block("weight")) b.Field("value", weight);
                 b.Blank();
 
                 foreach (var slot in shown.Slots)
-                    AppendCharacter(b, slot, realms, cultures, faiths, governments, withPosition: true,
+                    AppendCharacter(b, slot, shownRealms, cultures, faiths, shownGovernments, withPosition: true,
                         trailingBlank: slot != shown.Slots[^1]);
             }
         }
@@ -536,6 +551,15 @@ public static class BookmarkWriter
         Console.WriteLine($"  bookmark tab: {title} — {dated}, {age}"
                           + (named.Length > 0 ? " (era named by the export)" : ""));
 
+        // The tab subtitle asks for the earlier tabs' names to tell them apart (GuiWriter), so a
+        // world without them still answers — with nothing, which no real tab is called.
+        foreach (string tag in (string[])["early", "middle", "late"])
+            if (eras?.Eras.Any(e => e.Tag == tag && e.Cast is not null) != true)
+            {
+                loc.AddBuilt($"{GroupKey}_{tag}", "");
+                loc.AddBuilt($"{GroupKey}_{tag}_sub", "");
+            }
+
         loc.AddBuilt("bm_generated", title);
         loc.AddBuilt("bm_generated_desc", "Explore a newly forged world with unique cultures, faiths, and empires.");
         loc.Blank();
@@ -554,14 +578,17 @@ public static class BookmarkWriter
             string pastDated = era.Length > 0 ? $"{past.Year} {era}" : past.Year.ToString();
             loc.AddBuilt($"{GroupKey}_{past.Tag}", pastDated);
 
-            string pastTitle = EraTitle(past, azgaar, realms, pastDated);
+            // The age the government mix of that date speaks for, as the start date's tab does.
+            var pastSeats = past.Rulers.All.Select(r => r.Seat).ToList();
+            string pastAge = TabSubtitle(cfg.AtAdvancement(cfg.EraYearAt(past.Year)), pastSeats, past.Governments);
+            loc.AddBuilt($"{GroupKey}_{past.Tag}_sub", pastAge);
+
+            string pastTitle = EraTitle(past, azgaar, pastDated);
             loc.AddBuilt($"bm_generated_{past.Tag}", pastTitle);
-            loc.AddBuilt($"bm_generated_{past.Tag}_desc", past.Tag == "early"
-                ? "Two generations before the present, when the grandparents of today's rulers held the land."
-                : "A generation before the present, when the parents of today's rulers held the land.");
+            loc.AddBuilt($"bm_generated_{past.Tag}_desc", EraDescription(past, cfg.StartYear));
             loc.Blank();
 
-            Console.WriteLine($"  bookmark tab: {pastTitle} — {pastDated}");
+            Console.WriteLine($"  bookmark tab: {pastTitle} — {pastDated}, {pastAge}");
             Cast(past.Cast);
         }
 
@@ -584,17 +611,43 @@ public static class BookmarkWriter
         }
     }
 
-    /// <summary>An earlier bookmark's name: the export's world with its year, else the leading realm's dawn.</summary>
-    private static string EraTitle(BookmarkEra era, AzgaarImport? azgaar, RealmMap realms, string dated)
+    /// <summary>An additional bookmark's name: the export's world with its year, else its leading realm's age.</summary>
+    private static string EraTitle(BookmarkEra era, AzgaarImport? azgaar, string dated)
     {
         string world = azgaar?.MapName.Trim() ?? "";
         if (world.Length > 0) return $"{world}, {dated}";
 
         var first = era.Cast?.Slots.FirstOrDefault();
-        string realm = first is null ? "" : HistoryWriter.Primary(first.County, realms).Name.Trim();
+        string realm = first is null ? "" : HistoryWriter.Primary(first.County, era.Realms).Name.Trim();
         if (realm.Length == 0) return $"Procedural Realm, {dated}";
 
-        return era.Tag == "early" ? $"The Dawn of {realm}" : $"The Old Guard of {realm}";
+        return era.Tag switch
+        {
+            "early" => $"The Dawn of {realm}",
+            "late" => $"The Height of {realm}",
+            _ => $"The Age of {realm}",
+        };
+    }
+
+    /// <summary>
+    /// What an additional bookmark is, in the counts that make it one: how far it is from the start
+    /// date and which way, how many realms stand on it, and how many of their houses also rule on
+    /// the start date.
+    /// </summary>
+    private static string EraDescription(BookmarkEra era, int startYear)
+    {
+        int years = Math.Abs(startYear - era.Year);
+        string span = years >= 250 ? "Three centuries" : years >= 150 ? "Two centuries" : "A century";
+        bool before = era.Year < startYear;
+        string houses = era.Enduring switch
+        {
+            0 => before ? "none of their houses still rules" : "none of their houses ruled",
+            1 => before ? "one of their houses still rules" : "one of their houses already ruled",
+            _ => before ? $"{era.Enduring} of their houses still rule" : $"{era.Enduring} of their houses already ruled",
+        };
+
+        return $"{span} {(before ? "before" : "after")} {startYear}. {era.Independent} realms answer to no one, "
+               + $"and {houses} in {startYear}.";
     }
 
     private static void WriteBookmarkGraphics(string modDir, string gameDir, BookmarkEras? eras)
@@ -650,7 +703,7 @@ public static class BookmarkWriter
             File.Copy(vanillaIcon, targetIcon, overwrite: true);
         }
 
-        // The earlier bookmarks wear the same art under their own names.
+        // The additional bookmarks wear the same art under their own names.
         foreach (var era in eras?.Eras ?? [])
         {
             string key = $"bm_generated_{era.Tag}";
@@ -674,25 +727,32 @@ public static class BookmarkWriter
         Directory.CreateDirectory(dir);
 
         var b = new JominiBuilder();
-        Challenge(challenge, cfg.StartDate);
+        var others = (eras?.Eras ?? []).Where(e => e.Cast is not null).ToList();
 
-        foreach (var era in eras?.Eras ?? [])
+        foreach (var era in others.Where(e => e.Year < cfg.StartYear))
         {
-            if (era.Cast is null) continue;
+            Challenge(era.Cast!.Challenge, era.Date, era.Realms, era.Governments);
             b.Blank();
-            Challenge(era.Cast.Challenge, era.Date);
+        }
+
+        Challenge(challenge, cfg.StartDate, realms, governments);
+
+        foreach (var era in others.Where(e => e.Year > cfg.StartYear))
+        {
+            b.Blank();
+            Challenge(era.Cast!.Challenge, era.Date, era.Realms, era.Governments);
         }
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_challenge.txt"), b.ToString());
 
         // Keyed by the slot, which carries the era's suffix on an earlier date.
-        void Challenge(BookmarkSlot slot, string date)
+        void Challenge(BookmarkSlot slot, string date, RealmMap shownRealms, GovernmentMap shownGovernments)
         {
             using (b.Block(slot.Key))
             {
                 b.Field("start_date", date);
                 b.Blank();
-                AppendCharacter(b, slot, realms, cultures, faiths, governments,
+                AppendCharacter(b, slot, shownRealms, cultures, faiths, shownGovernments,
                     withPosition: false, trailingBlank: false);
             }
         }

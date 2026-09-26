@@ -221,13 +221,39 @@ public static class ContentWriter
         if (titlePlan is not null)
             Console.WriteLine($"  vanilla titles: {VanillaTitles.Fragmentation(empires, realms)}");
 
+        var coastal = MapGen.ProvinceSurvey.Take(provinces, order, baronyCount, null).Coastal;
         var governments = Core.Stage.Time("governments", () => MapGen.Governments.Build(
-            empires, counties, realms, provinceTerrain,
-            MapGen.ProvinceSurvey.Take(provinces, order, baronyCount, null).Coastal, development, cultures,
+            empires, counties, realms, provinceTerrain, coastal, development, cultures,
             worldCenters, cfg, new Rng(cfg.Seed ^ 0x6017), azgaar, stateGovernments));
 
         Console.WriteLine("  governments: " + string.Join(", ",
             governments.Tally(counties, wilderness).Select(g => $"{g.Count} {g.Government[..^11]}")));
+
+        // The same cascade for each additional bookmark: its own map, at its own advancement and
+        // with the development it had then, on its own stream. Nothing above reads these. A world
+        // that starts with a hegemon has one on a later date too, crowned and sworn to the same way.
+        Dictionary<int, GovernmentMap>? eraGovernments = null;
+        if (cfg.UsesAdditionalBookmarks)
+        {
+            eraGovernments = [];
+            foreach (int year in cfg.AdditionalBookmarkYears)
+            {
+                var eraRealms = realms.EraMaps?.GetValueOrDefault(year) ?? realms;
+                bool crown = cfg.StartingHegemony && year > cfg.StartYear && !ReferenceEquals(eraRealms, realms);
+                if (crown) Realms.CrownHegemon(eraRealms, empires, wilderness);
+
+                var eraDevelopment = development.ToDictionary(kv => kv.Key,
+                    kv => BookmarkEras.EraDevelopment(kv.Value, cfg, year));
+                eraGovernments[year] = MapGen.Governments.Build(empires, counties, eraRealms, provinceTerrain,
+                    coastal, eraDevelopment, cultures, worldCenters, cfg.AtAdvancement(cfg.EraYearAt(year)),
+                    new Rng(cfg.Seed ^ 0x6017 ^ year), azgaar, stateGovernments);
+
+                if (crown) Realms.ExpandHegemonRealm(eraRealms, empires, wilderness);
+
+                Console.WriteLine($"  governments in {year} (as advanced as {cfg.EraYearAt(year)}): " + string.Join(", ",
+                    eraGovernments[year].Tally(counties, wilderness).Select(g => $"{g.Count} {g.Government[..^11]}")));
+            }
+        }
 
         // After the governments, never before: this brings whole kingdoms under the hegemon, and
         // governments are decided one per realm grouped by top liege — done first, every absorbed
@@ -279,6 +305,11 @@ public static class ContentWriter
             faiths.Faiths.Add(unsettledFaith);
             foreach (var county in wilderness.Counties) faiths.ByCounty[county] = unsettledFaith;
         }
+
+        // Every faith now exists. Each generated one is pointed at its own rendered icon; the
+        // vanilla icon Faiths.Build drew stays in place when this is off, so the seed stream and
+        // the rest of the world are the same either way. Rendered with the religion files.
+        if (cfg.GenerateFaithIcons) MapGen.FaithIcons.Claim(faiths);
 
         // Who fights and who inherits, settled here because it is the first point at which both
         // halves of the question exist: the culture was drawn before any faith did, and the answer
@@ -345,13 +376,15 @@ public static class ContentWriter
         // Rng walked across the whole world, so this is the only chance to see them.
         Dictionary<int, string> holdings = [];
         List<ProvinceRow> provinceRows = [];
+        EraHoldings? eraHoldings = null;
 
         Core.Stage.Time("titles, history and localisation", () =>
         {
             WriteLandedTitles(modDir, empires, faiths, wilderness, HegemonSeat(empires, realms));
             WriteProvinceTerrain(modDir, provinceTerrain, landCount);
             (provinceRows, holdings) = BuildProvinceHistory(cfg, empires, provinceTerrain, development, cultures, faiths, governments, wilderness, worldCenters, silkRoad, cfg.Seed, azgaar);
-            EmitProvinceHistory(modDir, provinceRows, holdings);
+            eraHoldings = BuildEraHoldings(cfg, empires, wilderness, eraGovernments, holdings);
+            EmitProvinceHistory(modDir, provinceRows, holdings, eraHoldings);
             WriteLocalisation(modDir, empires, waterNames, provinces, order, baronyCount,
                 landCount, riverCount);
         });
@@ -619,11 +652,13 @@ public static class ContentWriter
                         VanillaCatalog.Read(gameDir), realms, rulers!, prehistory!, cultures, faiths, empires,
                         cfg.EraOffset, new Rng(cfg.Seed ^ 0x7A15)));
 
-                // The generations before the start date, for the earlier bookmarks. Null unless
-                // asked for, and it redraws nothing above, so the start-date world is unchanged.
-                if (cfg.UsesEarlierBookmarks)
-                    prehistory!.Eras = Core.Stage.Time("earlier bookmarks",
-                        () => BookmarkEras.Build(cfg, rulers!, prehistory!));
+                // The people of the additional bookmarks, on the maps the formation simulation drew
+                // for their dates. Null unless asked for; it redraws nothing above, so the
+                // start-date world is unchanged, and it only adds dynasties to prehistory.
+                if (cfg.UsesAdditionalBookmarks)
+                    prehistory!.Eras = Core.Stage.Time("additional bookmarks", () => BookmarkEras.Build(
+                        cfg, counties, realms, rulers!, prehistory!, cultures, faiths, governments, wilderness,
+                        eraGovernments));
 
                 // Beside the artifacts rather than beside the roster: both are things the rulers
                 // already own on the start date, and both need the rulers to exist first.
@@ -832,6 +867,7 @@ public static class ContentWriter
             Wilderness = wilderness,
             Development = development,
             Holdings = holdings,
+            EraHoldings = eraHoldings,
             ProvinceHistory = provinceRows,
             WorldCenters = worldCenters,
             Realms = realms,
@@ -1672,6 +1708,50 @@ public static class ContentWriter
         int ProvinceId, string Culture, string Faith, string? SpecialSlot, string? SpecialBuilding);
 
     /// <summary>
+    /// The seat holdings the additional bookmarks' governments need, oldest date first, by province
+    /// id and only where they differ from the start date's; and the date the start date's holding is
+    /// restored on after an earlier one, which is the day its holders take their titles.
+    /// </summary>
+    public sealed record EraHoldings(List<(int Year, string Date, Dictionary<int, string> Capitals)> Dates,
+        int MainYear, string RevertDate);
+
+    /// <summary>
+    /// Which seats an additional bookmark sits in under a different kind of holding than today: a
+    /// county its ruler governs as a tribe needs a tribal hall, one he governs as a lord a castle.
+    /// The seat only — a county's other holdings are ones any government may keep — and never a
+    /// holding no government seats in, such as a wonder's or the wilderness's.
+    /// </summary>
+    private static EraHoldings? BuildEraHoldings(MapConfig cfg, List<Title> empires, WildernessMap wilderness,
+        Dictionary<int, GovernmentMap>? eraGovernments, IReadOnlyDictionary<int, string> holdings)
+    {
+        if (eraGovernments is null) return null;
+
+        string[] seatHoldings = ["castle_holding", "tribal_holding", "city_holding", "church_holding",
+            "nomad_holding", "temple_citadel_holding"];
+
+        var dates = new List<(int, string, Dictionary<int, string>)>();
+        foreach (var (year, governments) in eraGovernments.OrderBy(kv => kv.Key))
+        {
+            var capitals = new Dictionary<int, string>();
+            foreach (var county in Titles.Flatten(empires).Where(t => t.Tier == "c" && !wilderness.Contains(t)))
+            {
+                if (county.Capital is not { ProvinceId: > 0 } seat) continue;
+                if (!holdings.TryGetValue(seat.ProvinceId, out var today) || !seatHoldings.Contains(today)) continue;
+
+                string then = GovernmentMap.CapitalHolding(BookmarkEras.EraGovernment(governments.For(county)));
+                if (then != today) capitals[seat.ProvinceId] = then;
+            }
+
+            dates.Add((year, $"{year - 1}.1.1", capitals));
+            Console.WriteLine($"  additional bookmark {year}: {capitals.Count} seats held as "
+                + string.Join(", ", capitals.Values.GroupBy(h => h).OrderByDescending(g => g.Count())
+                    .Select(g => $"{g.Count()} {g.Key.Replace("_holding", "")}")));
+        }
+
+        return new EraHoldings(dates, cfg.StartYear, $"{Math.Max(1, cfg.StartYear - 5)}.1.1");
+    }
+
+    /// <summary>
     /// Writes the province history from rows already decided.
     ///
     /// Split from <see cref="BuildProvinceHistory"/> so that changing a realm's government after
@@ -1681,7 +1761,7 @@ public static class ContentWriter
     /// way — the generator calls Build then this, an overwrite calls this alone.
     /// </summary>
     internal static void EmitProvinceHistory(string modDir, IReadOnlyList<ProvinceRow> rows,
-        IReadOnlyDictionary<int, string> holdings)
+        IReadOnlyDictionary<int, string> holdings, EraHoldings? eras = null)
     {
         string dir = Path.Combine(modDir, "history", "provinces");
         Directory.CreateDirectory(dir);
@@ -1693,12 +1773,40 @@ public static class ContentWriter
         {
             using (b.Block(row.ProvinceId))
             {
+                string holding = holdings.GetValueOrDefault(row.ProvinceId, "none");
                 b.Field("culture", row.Culture);
                 b.Field("religion", row.Faith);
-                b.Field("holding", holdings.GetValueOrDefault(row.ProvinceId, "none"));
+                b.Field("holding", holding);
 
                 if (row.SpecialSlot is { } slot) b.Field("special_building_slot", slot);
                 if (row.SpecialBuilding is { } building) b.Field("special_building", building);
+
+                // A seat an additional bookmark's ruler sits in under another government: that
+                // government's holding from its date, and the start date's back when its holder
+                // takes it — the way vanilla's tribal halls become castles between its bookmarks.
+                if (eras is null) continue;
+
+                string state = holding;
+                void Apply(IEnumerable<(int Year, string Date, Dictionary<int, string> Capitals)> which)
+                {
+                    foreach (var (_, date, capitals) in which)
+                    {
+                        string then = capitals.GetValueOrDefault(row.ProvinceId, holding);
+                        if (then == state) continue;
+                        using (b.Block(date)) b.Field("holding", then);
+                        state = then;
+                    }
+                }
+
+                Apply(eras.Dates.Where(d => d.Year < eras.MainYear));
+
+                if (state != holding)
+                {
+                    using (b.Block(eras.RevertDate)) b.Field("holding", holding);
+                    state = holding;
+                }
+
+                Apply(eras.Dates.Where(d => d.Year > eras.MainYear));
             }
         }
 

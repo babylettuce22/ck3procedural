@@ -117,7 +117,7 @@ Frequently used options:
 | `--county-scale <number>` | Scale barony size relative to vanilla; larger values produce fewer provinces. |
 | `--province-downscale <integer>` | Set the province-grid downscale factor. |
 | `--start-year <year>` / `--era-anchor <year>` | Set the start year and era calibration. |
-| `--earlier-bookmarks` | Add two earlier start dates (start year − 45 and − 20), held by the previous two generations of the same houses on the same political map. Procedural content only. |
+| `--additional-bookmarks` | Add two more start dates so the three fill out vanilla's 867 / 1066 / 1178: the start year takes whichever its advancement is nearest, and the others sit at vanilla's gaps from it, before or after. Each has its own realms (from realm formation, run on past the start for later dates), governments, holdings, development and innovations; realms that last keep their ruling house. The start year's own map is unchanged. Procedural content only. (`--earlier-bookmarks` still works.) |
 | `--no-calendar` | Keep CK3's month names and AD instead of generating the world's own calendar. |
 | `--gender historical\|mixed\|femaledominated` | Choose the world's gender-law profile. |
 | `--races off\|low\|high\|exotic` | Choose a fantasy-race preset. |
@@ -164,7 +164,7 @@ Output depends on the settings, available game data, and generated world. The ma
 | Map data | Heightmap, packed/indirection atlases, province and river rasters, province definitions, adjacencies, terrain, and seasons. |
 | Map graphics | Terrain textures and masks, water and snow textures, flatmap, holding locators, trees, animals, bridges, and map objects. |
 | Titles and settlements | De jure hierarchy, realm borders, capitals, holdings, development, and title names and colours. |
-| Peoples and religions | Cultures, heritages, languages, name lists, faiths, doctrines, holy sites, and ethnicities. |
+| Peoples and religions | Cultures, heritages, languages, name lists, faiths, faith icons, doctrines, holy sites, and ethnicities. |
 | Characters and history | Rulers, houses, dynasties, ancestors, formation history, starting wars, bookmarks, portraits, and chronicles. |
 | Military and artifacts | Generated men-at-arms and associated innovations, regalia, and composed weapon and armour assets. |
 | Regional content | Centers of the World and wonders, regional struggles, routes, Silk Road and steppe content, and formation decisions. |
@@ -246,6 +246,26 @@ dotnet run -- --languages Norse 4242 family
 
 Omit the flavour name to sample all flavours. The implementation lives in
 `MapGen/Language.cs`, `Phonology.cs`, `Lexicon.cs`, and `LanguageFlavour.cs`.
+
+### Faith icons
+
+Every generated faith gets its own icon, rendered as a relief: a symbol raised from metal,
+stone or wood, lit from the upper left, in vanilla's 100×100 format.
+
+- **Religions share a symbol.** Each religion takes one motif family (suns, crescents, crosses,
+  a world tree, knots, wheels, antlers and so on, 23 in all), chosen from its faiths' tenets and
+  whether it is Abrahamic-shaped. No two religions share a family. Faiths within it vary the
+  motif, frame and material, as vanilla's Christian faiths are all crosses.
+- **Material follows standing.** Unreformed faiths are carved in wood, stone, bone or iron;
+  reformed ones are cast in bronze, verdigris, silver or jade; Abrahamic-shaped faiths and faiths
+  with a head are gold, silver, electrum, obsidian or enamel. Unreformed faiths also get the icon
+  they will show once reformed.
+- **The inlay is the faith's colour.** Gems, bosses and medallion fields are enamelled in the
+  faith's map colour, and redrawn when the colour is edited.
+
+Choosing a vanilla icon in the Faith inspector replaces the generated one. Turn the feature off
+with Generated Faith Icons in Cultures and faiths. The designs live in `MapGen/FaithIcons.cs`
+and the renderer in `Emit/Relief/`.
 
 ## Building from source
 

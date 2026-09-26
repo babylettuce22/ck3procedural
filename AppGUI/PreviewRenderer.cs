@@ -441,7 +441,174 @@ public static class PreviewRenderer
         => cultures is null ? RenderTitles(result, "c") : RenderByCounty(result, wilderness, county => cultures.ByCounty.TryGetValue(county, out var c) ? c.Color : null);
 
     public static Image RenderFaiths(GenerationResult result, MapGen.FaithMap? faiths, MapGen.WildernessMap? wilderness)
-        => faiths is null ? RenderTitles(result, "c") : RenderByCounty(result, wilderness, county => faiths.ByCounty.TryGetValue(county, out var f) ? ((byte)Math.Clamp(f.Color.R * 255, 0, 255), (byte)Math.Clamp(f.Color.G * 255, 0, 255), (byte)Math.Clamp(f.Color.B * 255, 0, 255)) : null);
+    {
+        if (faiths is null) return RenderTitles(result, "c");
+
+        var image = RenderByCounty(result, wilderness, county => faiths.ByCounty.TryGetValue(county, out var f) ? ((byte)Math.Clamp(f.Color.R * 255, 0, 255), (byte)Math.Clamp(f.Color.G * 255, 0, 255), (byte)Math.Clamp(f.Color.B * 255, 0, 255)) : null);
+        DrawFaithIcons(image, result, faiths, wilderness);
+        return image;
+    }
+
+    /// <summary>Faith icon size on the preview, in preview pixels.</summary>
+    private const int FaithIconSize = 48;
+
+    /// <summary>
+    /// Each faith's icon at the heart of its land: the generated relief icon, rendered in memory
+    /// from the faith as it stands (so an unsaved colour edit already shows), or the vanilla icon
+    /// it points at.
+    ///
+    /// On the same dark disc as every other badge. The icons carry their own rim and shadow, but
+    /// their inlay is enamel in the faith's colour — the very colour of the land under them — and
+    /// without the disc a medallion field simply vanished into its own faith.
+    /// </summary>
+    private static void DrawFaithIcons(Image image, GenerationResult result, MapGen.FaithMap faiths, MapGen.WildernessMap? wilderness)
+    {
+        Dictionary<MapGen.Faith, byte[]> generated;
+        try
+        {
+            generated = Emit.FaithIconWriter.RenderPreview(faiths, FaithIconSize);
+        }
+        catch (Exception ex)
+        {
+            // A preview nicety must never take the map mode down with it.
+            Console.WriteLine($"  faith icon preview failed: {ex.Message}");
+            generated = [];
+        }
+
+        var seatOf = BaronySeatLocator(result);
+        int step = StepFor(result.Provinces.Width);
+
+        // Largest faiths first, so where two badges would collide the smaller one is the one that
+        // moves off its seat.
+        var placed = new List<(int X, int Y)>();
+        int minGap = FaithIconSize + 8;
+        foreach (var group in faiths.ByCounty.GroupBy(kv => kv.Value, kv => kv.Key)
+                                   .OrderByDescending(g => g.Count())
+                                   .ThenBy(g => g.Key.Key, StringComparer.Ordinal))
+        {
+            var faith = group.Key;
+            byte[]? bgra = generated.GetValueOrDefault(faith) ?? VanillaFaithIcon(faith.Icon, FaithIconSize);
+            if (bgra is null || seatOf(group, wilderness) is not { } seat) continue;
+
+            var at = Nudge((seat.X / step, seat.Y / step), placed, minGap);
+            placed.Add(at);
+
+            // Obsidian, iron and dark enamels vanish on the usual dark disc; they get parchment.
+            var fill = Luminance(bgra) < 85 ? (188, 180, 160) : (20, 22, 26);
+            DrawBadgeCircle(image, at.X, at.Y, FaithIconSize - 8, fill);
+            BlendIcon(image, at.X, at.Y, bgra, FaithIconSize);
+        }
+    }
+
+    /// <summary>Mean luminance of an icon's solid pixels, 0-255, ignoring its shadow and edges.</summary>
+    private static double Luminance(byte[] bgra)
+    {
+        double sum = 0;
+        int n = 0;
+        for (int i = 0; i < bgra.Length; i += 4)
+        {
+            if (bgra[i + 3] < 250) continue;
+            sum += 0.0722 * bgra[i] + 0.7152 * bgra[i + 1] + 0.2126 * bgra[i + 2];
+            n++;
+        }
+        return n == 0 ? 255 : sum / n;
+    }
+
+    /// <summary>
+    /// The nearest point to <paramref name="want"/>, on a widening ring of candidates, that keeps
+    /// <paramref name="gap"/> pixels from every badge already placed. Gives up after a few rings
+    /// and overlaps rather than wander far from the faith's land.
+    /// </summary>
+    private static (int X, int Y) Nudge((int X, int Y) want, List<(int X, int Y)> placed, int gap)
+    {
+        bool Clear((int X, int Y) p) => placed.All(q => (p.X - q.X) * (p.X - q.X) + (p.Y - q.Y) * (p.Y - q.Y) >= gap * gap);
+        if (Clear(want)) return want;
+
+        for (int ring = 1; ring <= 4; ring++)
+        {
+            double r = ring * gap * 0.5;
+            for (int k = 0; k < 12; k++)
+            {
+                double a = k * Math.PI / 6;
+                var p = (want.X + (int)Math.Round(r * Math.Cos(a)), want.Y + (int)Math.Round(r * Math.Sin(a)));
+                if (Clear(p)) return p;
+            }
+        }
+        return want;
+    }
+
+    private static readonly Dictionary<string, byte[]?> VanillaFaithIcons = new(StringComparer.Ordinal);
+
+    /// <summary>A vanilla faith icon from the game folder, resampled to <paramref name="size"/>.</summary>
+    private static byte[]? VanillaFaithIcon(string icon, int size)
+    {
+        lock (VanillaFaithIcons)
+        {
+            if (VanillaFaithIcons.TryGetValue(icon, out var cached)) return cached;
+
+            byte[]? result = null;
+            if (GameLocator.FindGameDir() is { } gameDir
+                && DdsReader.Load(Path.Combine(gameDir, "gfx", "interface", "icons", "faith", icon + ".dds")) is { } img)
+                result = ResampleBgra(img.Bgra, img.Width, img.Height, size);
+            return VanillaFaithIcons[icon] = result;
+        }
+    }
+
+    /// <summary>Box-filtered resample of a BGRA image to a square, premultiplying so edges stay clean.</summary>
+    private static byte[] ResampleBgra(byte[] src, int w, int h, int size)
+    {
+        var dst = new byte[size * size * 4];
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                int x0 = x * w / size, x1 = Math.Max(x0 + 1, (x + 1) * w / size);
+                int y0 = y * h / size, y1 = Math.Max(y0 + 1, (y + 1) * h / size);
+                double r = 0, g = 0, b = 0, a = 0;
+                int n = 0;
+                for (int sy = y0; sy < y1; sy++)
+                    for (int sx = x0; sx < x1; sx++)
+                    {
+                        int o = (sy * w + sx) * 4;
+                        double al = src[o + 3] / 255.0;
+                        b += src[o] * al; g += src[o + 1] * al; r += src[o + 2] * al; a += al;
+                        n++;
+                    }
+                int d = (y * size + x) * 4;
+                if (a > 0)
+                {
+                    dst[d] = (byte)Math.Round(b / a);
+                    dst[d + 1] = (byte)Math.Round(g / a);
+                    dst[d + 2] = (byte)Math.Round(r / a);
+                }
+                dst[d + 3] = (byte)Math.Round(255 * a / n);
+            }
+        return dst;
+    }
+
+    /// <summary>Alpha-blends a square BGRA icon onto the preview, centred on (cx, cy).</summary>
+    private static void BlendIcon(Image dest, int cx, int cy, byte[] bgra, int size)
+    {
+        int half = size / 2;
+        for (int y = 0; y < size; y++)
+        {
+            int py = cy - half + y;
+            if (py < 0 || py >= dest.Height) continue;
+            for (int x = 0; x < size; x++)
+            {
+                int px = cx - half + x;
+                if (px < 0 || px >= dest.Width) continue;
+
+                int s = (y * size + x) * 4;
+                float a = bgra[s + 3] / 255f;
+                if (a <= 0) continue;
+
+                int o = (py * dest.Width + px) * 3;
+                dest.Rgb[o + 0] = (byte)(dest.Rgb[o + 0] * (1 - a) + bgra[s + 2] * a);
+                dest.Rgb[o + 1] = (byte)(dest.Rgb[o + 1] * (1 - a) + bgra[s + 1] * a);
+                dest.Rgb[o + 2] = (byte)(dest.Rgb[o + 2] * (1 - a) + bgra[s + 0] * a);
+            }
+        }
+    }
 
     /// <summary>
     /// The wilderness and the governments a write would produce, worked out for a world that has
@@ -1014,8 +1181,11 @@ public static class PreviewRenderer
         return image;
     }
 
-    private static List<(RaceArchetype Archetype, (int X, int Y) Position, bool Minority)> CalculateEthnicityCentroids(
-        GenerationResult result, Emit.WrittenContent written)
+    /// <summary>
+    /// For each barony province id, the seed it grew from, so a badge can sit on a real barony
+    /// rather than on a geometric mean that may fall in the sea or in a neighbour's land.
+    /// </summary>
+    private static Func<IEnumerable<Title>, MapGen.WildernessMap?, (int X, int Y)?> BaronySeatLocator(GenerationResult result)
     {
         var map = result.Provinces;
         var order = result.ProvinceOrder;
@@ -1030,17 +1200,15 @@ public static class PreviewRenderer
                 seedOfProvince[id] = label;
         }
 
-        var centroids = new List<(RaceArchetype Archetype, (int X, int Y) Position, bool Minority)>();
-
-        // The barony seed closest to a culture's geometric centre, or null for a culture with no
-        // drawable ground. Shared by the majority badges and the minority ones below.
-        (int X, int Y)? CentroidOf(MapGen.Culture culture)
+        // The barony seed closest to the counties' geometric centre, or null for ground with
+        // nothing drawable on it (all wilderness, or no baronies).
+        return (counties, wilderness) =>
         {
             var points = new List<(int X, int Y)>();
 
-            foreach (var county in culture.Counties)
+            foreach (var county in counties)
             {
-                if (written.Wilderness?.Contains(county) == true) continue;
+                if (wilderness?.Contains(county) == true) continue;
 
                 foreach (var barony in county.Children)
                 {
@@ -1067,7 +1235,17 @@ public static class PreviewRenderer
                 long dx = p.X - avgX, dy = p.Y - avgY;
                 return dx * dx + dy * dy;
             });
-        }
+        };
+    }
+
+    private static List<(RaceArchetype Archetype, (int X, int Y) Position, bool Minority)> CalculateEthnicityCentroids(
+        GenerationResult result, Emit.WrittenContent written)
+    {
+        var centroids = new List<(RaceArchetype Archetype, (int X, int Y) Position, bool Minority)>();
+
+        // Shared by the majority badges and the minority ones below.
+        var seatOf = BaronySeatLocator(result);
+        (int X, int Y)? CentroidOf(MapGen.Culture culture) => seatOf(culture.Counties, written.Wilderness);
 
         // Calculate centroid per culture so separate enclaves/cultures of a race get their own badge
         foreach (var culture in written.Cultures.Cultures)
@@ -1104,6 +1282,10 @@ public static class PreviewRenderer
     /// between two map modes would look like it meant something different.
     /// </summary>
     private static void DrawBadgeCircle(Image dest, int cx, int cy, int targetSize)
+        => DrawBadgeCircle(dest, cx, cy, targetSize, (20, 22, 26));
+
+    /// <summary>The badge disc with a chosen fill; the rim stays the same so it still reads as a badge.</summary>
+    private static void DrawBadgeCircle(Image dest, int cx, int cy, int targetSize, (int R, int G, int B) fill)
     {
         int radius = targetSize / 2 + 3;
         int rSq = radius * radius;
@@ -1129,7 +1311,7 @@ public static class PreviewRenderer
                 int o = (py * dest.Width + px) * 3;
                 bool rim = distSq > rimSq;
                 float alpha = rim ? 0.85f : 0.78f;
-                var (r, g, b) = rim ? (206, 200, 186) : (20, 22, 26);
+                var (r, g, b) = rim ? (206, 200, 186) : fill;
 
                 dest.Rgb[o + 0] = (byte)(dest.Rgb[o + 0] * (1 - alpha) + r * alpha);
                 dest.Rgb[o + 1] = (byte)(dest.Rgb[o + 1] * (1 - alpha) + g * alpha);

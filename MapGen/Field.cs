@@ -113,6 +113,10 @@ internal static class Field
     /// stride `width` floats per sample and miss cache on nearly every one, where this accumulates
     /// whole rows into a scratch buffer, adding them in the same -radius..+radius order each
     /// output pixel saw before.
+    ///
+    /// The climate relief blur no longer comes through here — see <see cref="BlurRunning"/>. At
+    /// radius 140 on a 9216-wide map it was 8 of climate's 10 seconds, and taking the one-time
+    /// output shift was judged worth it for that call alone.
     /// </summary>
     public static float[] Blur(float[] src, int width, int height, int radius, int passes)
     {
@@ -184,6 +188,90 @@ internal static class Field
             }
             return sum / n;
         }
+    }
+
+    /// <summary>
+    /// The same box blur as <see cref="Blur"/> — same window, same edge rule (the window is cut at
+    /// the map edge and the sum divided by what is left) — carried as a running sum, so the cost
+    /// per pixel no longer grows with the radius.
+    ///
+    /// It is not bit-for-bit <see cref="Blur"/>: the sum is a double updated by one add and one
+    /// subtract per step rather than a float re-summed from scratch, so the last bits differ
+    /// (measured: 0.0002 at most on a relief range of ~456). It is still deterministic. Every row
+    /// in the horizontal pass and every column in the vertical one is walked in a fixed order by
+    /// one thread, and the parallelism only splits which rows or column blocks run where, so the
+    /// thread count cannot reach the result.
+    ///
+    /// Use it for large radii, where the O(radius) cost is the problem; at radius 3 on the coarse
+    /// climate grid there is nothing to win and <see cref="Blur"/> keeps those outputs where they
+    /// were.
+    /// </summary>
+    public static float[] BlurRunning(float[] src, int width, int height, int radius, int passes)
+    {
+        var a = (float[])src.Clone();
+        var b = new float[src.Length];
+
+        // Columns are walked in blocks so each step down the map reads and writes a short
+        // contiguous run of a row rather than striding a whole row per sample.
+        const int ColumnBlock = 64;
+
+        for (int p = 0; p < passes; p++)
+        {
+            Parallel.For(0, height, y =>
+            {
+                int row = y * width;
+                double sum = 0;
+                int n = 0;
+
+                for (int x = 0; x <= Math.Min(radius, width - 1); x++) { sum += a[row + x]; n++; }
+
+                for (int x = 0; x < width; x++)
+                {
+                    b[row + x] = (float)(sum / n);
+
+                    int enter = x + radius + 1, leave = x - radius;
+                    if (enter < width) { sum += a[row + enter]; n++; }
+                    if (leave >= 0) { sum -= a[row + leave]; n--; }
+                }
+            });
+
+            Parallel.For(0, (width + ColumnBlock - 1) / ColumnBlock, block =>
+            {
+                int x0 = block * ColumnBlock;
+                int span = Math.Min(width, x0 + ColumnBlock) - x0;
+                var sum = new double[span];
+                int n = 0;
+
+                for (int y = 0; y <= Math.Min(radius, height - 1); y++)
+                {
+                    int source = y * width + x0;
+                    for (int x = 0; x < span; x++) sum[x] += b[source + x];
+                    n++;
+                }
+
+                for (int y = 0; y < height; y++)
+                {
+                    int target = y * width + x0;
+                    for (int x = 0; x < span; x++) a[target + x] = (float)(sum[x] / n);
+
+                    int enter = y + radius + 1, leave = y - radius;
+                    if (enter < height)
+                    {
+                        int source = enter * width + x0;
+                        for (int x = 0; x < span; x++) sum[x] += b[source + x];
+                        n++;
+                    }
+                    if (leave >= 0)
+                    {
+                        int source = leave * width + x0;
+                        for (int x = 0; x < span; x++) sum[x] -= b[source + x];
+                        n--;
+                    }
+                }
+            });
+        }
+
+        return a;
     }
 
     /// <summary>

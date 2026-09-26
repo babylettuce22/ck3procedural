@@ -62,6 +62,12 @@ public sealed record WrittenContent
     public required Dictionary<int, string> Holdings { get; init; }
 
     /// <summary>
+    /// The seat holdings the additional bookmarks write around today's, or null without them. Kept so
+    /// a province-history re-emit writes them again rather than dropping them.
+    /// </summary>
+    public ContentWriter.EraHoldings? EraHoldings { get; init; }
+
+    /// <summary>
     /// The rest of every barony's province-history line, in the order it was written — culture,
     /// faith, and the special building slot a wonder or a bazaar claimed.
     ///

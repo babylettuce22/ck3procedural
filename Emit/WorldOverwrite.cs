@@ -249,7 +249,8 @@ public static class WorldOverwrite
                 written.Development, governed, edited, written.Faiths, written.Wilderness,
                 written.Prehistory);
 
-            ContentWriter.EmitProvinceHistory(modDir, written.ProvinceHistory, written.Holdings);
+            ContentWriter.EmitProvinceHistory(modDir, written.ProvinceHistory, written.Holdings,
+                written.EraHoldings);
 
             // Only ever adds: the writer is a no-op when the map has no hordes, so a world that has
             // stopped having one keeps a harmless override rather than losing the file mid-edit.

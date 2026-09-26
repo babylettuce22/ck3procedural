@@ -43,6 +43,13 @@ public sealed class Faith
     public required (double R, double G, double B) Color { get; set; }
     public required string Icon { get; set; }
 
+    /// <summary>
+    /// The icon an unreformed faith shows once reformed, or null to reuse <see cref="Icon"/>.
+    /// Set with a generated icon (see <see cref="FaithIcons.Claim"/>) and only honoured while
+    /// <see cref="Icon"/> is still the generated one.
+    /// </summary>
+    public string? ReformedIcon { get; set; }
+
     public required List<string> Tenets { get; set; }
 
     public List<Title> Counties { get; } = [];
@@ -135,6 +142,18 @@ public sealed class Religion
 
     /// <summary>Declared by the base game rather than by this mod; see <see cref="Faith.Inherited"/>.</summary>
     public bool Inherited { get; init; }
+
+    /// <summary>
+    /// The Azgaar tradition this religion was built from — "Nature Worship", "Monotheism" — or
+    /// null for a generated religion. Read by <see cref="FaithIcons"/> for the motif.
+    /// </summary>
+    public string? SourceForm { get; set; }
+
+    /// <summary>
+    /// The export's deity whole, epithet included ("Varrus, The Sad Antelope"), or null. The
+    /// localisation keeps only the name; the epithet is what names the god's symbol.
+    /// </summary>
+    public string? SourceDeity { get; set; }
 }
 
 public sealed class FaithMap
@@ -335,6 +354,13 @@ public static class Faiths
 
                 // The one prose fact the export has that we otherwise invent: the god's name.
                 ApplyDeity(religion, planned);
+
+                // Kept for the icon: the tradition and the god's epithet say what the religion's
+                // symbol should be better than rolled tenets can.
+                religion.SourceForm = planned.Root.Form is { Length: > 0 } rootForm ? rootForm : null;
+                religion.SourceDeity = planned.Faiths.Select(f => f.Source.Deity)
+                                           .FirstOrDefault(d => !string.IsNullOrWhiteSpace(d))
+                                       ?? planned.Root.Deity;
 
                 OrganizeAndMintHeads(religion, religionFaiths, hasDominant);
             }

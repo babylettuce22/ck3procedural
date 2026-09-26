@@ -1,4 +1,4 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 using Ck3MapGen.Emit;
 
@@ -173,8 +173,8 @@ public sealed class RulerMap
     public bool Contains(Title seat) => _bySeat.ContainsKey(seat);
 
     /// <summary>
-    /// Seats a ruler for an earlier bookmark (<see cref="BookmarkEras"/>). One man can hold
-    /// several seats there — brothers' father held both their lands — so he is listed once.
+    /// Seats a ruler for an additional bookmark (<see cref="BookmarkEras"/>), listed once however
+    /// many seats he is given.
     /// </summary>
     internal void Seat(Title seat, Ruler ruler)
     {
@@ -251,54 +251,7 @@ public sealed class RulerMap
             string houseKey = prehistory.CharacterHouseMap.GetValueOrDefault(county, $"house_gen_{county.Index}");
             var parent = prehistory.DeceasedParents.GetValueOrDefault(county);
 
-            int gold = primaryTitle.Tier switch
-            {
-                "h" => rng.Int(1200, 1600),
-                "e" => rng.Int(850, 1200),
-                "k" => rng.Int(480, 700),
-                "d" => rng.Int(150, 210),
-                _ => rng.Int(60, 90)
-            };
-
-            // Prestige is graded against the thresholds, not to taste. Vanilla's defines put
-            // LEVELS_PRESTIGE at { 1000 2000 5000 10000 25000 }, and prestige LEVEL is an opinion
-            // modifier on everyone — PRESTIGIOUS = { -10 0 5 10 20 30 } — so a starting emperor on
-            // 500 prestige was not merely poor, he was standing at the level that pays nothing while
-            // his vassals judged him. Kings and emperors are now written above the second threshold
-            // under either reading of it, which is worth +5 opinion realm-wide and reads on the
-            // character sheet as a crowned ruler rather than a jumped-up count.
-            //
-            // Counts are left where they were on purpose: the ladder only means something if the
-            // bottom of it stays modest.
-            int prestige = primaryTitle.Tier switch
-            {
-                // Above the third threshold (5000): the one ruler the whole map defers to.
-                "h" => rng.Int(5200, 6500),
-                "e" => rng.Int(3400, 4600),
-                "k" => rng.Int(2000, 2700),
-                "d" => rng.Int(350, 600),
-                _ => rng.Int(35, 65)
-            };
-            int renown = primaryTitle.Tier switch
-            {
-                "h" => rng.Int(7000, 10000),
-                "e" => rng.Int(4000, 7000),
-                "k" => rng.Int(2000, 4000),
-                "d" => rng.Int(900, 1600),
-                _ => rng.Int(150, 450)
-            };
-
-            switch (GovernmentMap.Family(government))
-            {
-                case GovernmentMap.Tribal:
-                    gold = (int)(gold * 0.45);
-                    prestige = (int)(prestige * 1.6);
-                    break;
-                case GovernmentMap.Republic:
-                    gold = (int)(gold * 1.8);
-                    prestige = (int)(prestige * 0.7);
-                    break;
-            }
+            var (gold, prestige, renown) = Purse(primaryTitle.Tier, government, rng);
 
             var ruler = new Ruler
             {
@@ -330,5 +283,64 @@ public sealed class RulerMap
         }
 
         return map;
+    }
+
+    /// <summary>
+    /// Starting gold, prestige and dynasty prestige for a ruler of this tier and government, drawn
+    /// from <paramref name="rng"/> in that order. Shared with the additional bookmarks' rulers, who are
+    /// graded on the same ladder.
+    /// </summary>
+    internal static (int Gold, int Prestige, int Renown) Purse(string tier, string government, Rng rng)
+    {
+        int gold = tier switch
+        {
+            "h" => rng.Int(1200, 1600),
+            "e" => rng.Int(850, 1200),
+            "k" => rng.Int(480, 700),
+            "d" => rng.Int(150, 210),
+            _ => rng.Int(60, 90)
+        };
+
+        // Prestige is graded against the thresholds, not to taste. Vanilla's defines put
+        // LEVELS_PRESTIGE at { 1000 2000 5000 10000 25000 }, and prestige LEVEL is an opinion
+        // modifier on everyone — PRESTIGIOUS = { -10 0 5 10 20 30 } — so a starting emperor on
+        // 500 prestige was not merely poor, he was standing at the level that pays nothing while
+        // his vassals judged him. Kings and emperors are now written above the second threshold
+        // under either reading of it, which is worth +5 opinion realm-wide and reads on the
+        // character sheet as a crowned ruler rather than a jumped-up count.
+        //
+        // Counts are left where they were on purpose: the ladder only means something if the
+        // bottom of it stays modest.
+        int prestige = tier switch
+        {
+            // Above the third threshold (5000): the one ruler the whole map defers to.
+            "h" => rng.Int(5200, 6500),
+            "e" => rng.Int(3400, 4600),
+            "k" => rng.Int(2000, 2700),
+            "d" => rng.Int(350, 600),
+            _ => rng.Int(35, 65)
+        };
+        int renown = tier switch
+        {
+            "h" => rng.Int(7000, 10000),
+            "e" => rng.Int(4000, 7000),
+            "k" => rng.Int(2000, 4000),
+            "d" => rng.Int(900, 1600),
+            _ => rng.Int(150, 450)
+        };
+
+        switch (GovernmentMap.Family(government))
+        {
+            case GovernmentMap.Tribal:
+                gold = (int)(gold * 0.45);
+                prestige = (int)(prestige * 1.6);
+                break;
+            case GovernmentMap.Republic:
+                gold = (int)(gold * 1.8);
+                prestige = (int)(prestige * 0.7);
+                break;
+        }
+
+        return (gold, prestige, renown);
     }
 }

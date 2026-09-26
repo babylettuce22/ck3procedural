@@ -1653,15 +1653,31 @@ public static class GuiWriter
     /// The <c>visible</c> is what makes the splice safe to ship unconditionally. A run that wrote no
     /// bookmark wrote no subtitle key either, and a <c>text</c> pointing at a key with nothing
     /// behind it renders the key — so the widget asks first, exactly as the title-lore button does.
+    ///
+    /// With additional bookmarks there are three tabs sharing this one widget, and
+    /// <c>BookmarkGroup</c> offers its localised name and nothing else to tell them apart — so each
+    /// additional tab is recognised by that name and reads its own <c>_sub</c> key, and anything
+    /// else falls through to the start date's. A tag a run does not use has an empty name, which no
+    /// tab is called.
     /// </summary>
     private static GuiNode BookmarkTabSubtitle()
-        => GuiBuilder.TextSingle("gen_bookmark_group_subtitle")
-            .Text(BookmarkWriter.GroupSubtitleKey)
+    {
+        var subtitle = GuiExpr.Localize(GuiExpr.Literal(BookmarkWriter.GroupSubtitleKey));
+        foreach (string tag in (string[])["late", "middle", "early"])
+        {
+            string group = $"{BookmarkWriter.GroupKey}_{tag}";
+            subtitle = GuiExpr.Raw(
+                $"Select_CString( EqualTo_string( BookmarkGroup.GetName, Localize( '{group}' ) ), "
+                + $"Localize( '{group}_sub' ), {subtitle.Inner} )");
+        }
+
+        return GuiBuilder.TextSingle("gen_bookmark_group_subtitle")
+            .Text(subtitle)
             .Format("#weak;glow_color:{0,0,0,1}")
             .Using("Font_Size_Small", "Font_Type_Flavor")
             .MaxWidth(190)
-            .Visible(GuiExpr.Not(GuiExpr.StringIsEmpty(
-                GuiExpr.Localize(GuiExpr.Literal(BookmarkWriter.GroupSubtitleKey)))));
+            .Visible(GuiExpr.Not(GuiExpr.StringIsEmpty(subtitle)));
+    }
 
     /// <summary>
     /// Stops the bookmark's own tab going blank the moment it is selected.

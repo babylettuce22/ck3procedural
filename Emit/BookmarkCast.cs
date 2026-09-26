@@ -118,7 +118,7 @@ public sealed class BookmarkCast
         List<Title> seats, RealmMap realms, GovernmentMap governments,
         Dictionary<Title, int> development, WildernessMap wilderness,
         PrehistoryMap prehistory, RulerMap rulers, CultureMap cultures, int startYear,
-        Dictionary<Title, (int X, int Y)> positions, string tag = "", Func<Ruler, Ruler?>? heirOf = null)
+        Dictionary<Title, (int X, int Y)> positions, string tag = "")
     {
         var playable = realms.Greatest
             .Where(c => rulers.Contains(c) && IsPlayable(governments.For(c)))
@@ -130,7 +130,7 @@ public sealed class BookmarkCast
         if (playable.Count == 0) playable = seats.Where(rulers.Contains).ToList();
         if (playable.Count == 0) return null;
 
-        // One slot per man: on an earlier bookmark a father can hold several seats.
+        // One slot per man, whatever the map: a seat is a county, and a ruler is listed once.
         var seenRulers = new HashSet<string>();
         playable = playable.Where(c => seenRulers.Add(rulers.For(c).Id)).ToList();
 
@@ -184,7 +184,7 @@ public sealed class BookmarkCast
                                               seat == greatest);
 
         var slots = chosen
-            .Select(c => Compose(c.Key, FactsFor(c.County), c.X, c.Y, prehistory, cultures, startYear, heirOf))
+            .Select(c => Compose(c.Key, FactsFor(c.County), c.X, c.Y, prehistory, cultures, startYear))
             .ToList();
 
         // The challenge character: the hardest honest start left on the map. Graded over every
@@ -202,7 +202,7 @@ public sealed class BookmarkCast
         var challenge = Compose(
             tag.Length == 0 ? BookmarkWriter.ChallengeCharacter : $"{BookmarkWriter.ChallengeCharacter}_{tag}",
             FactsFor(challengeSeat ?? slots[^1].County),
-            0, 0, prehistory, cultures, startYear, heirOf);
+            0, 0, prehistory, cultures, startYear);
 
         return new BookmarkCast { Slots = slots, Challenge = challenge };
     }
@@ -335,10 +335,10 @@ public sealed class BookmarkCast
 
     private static BookmarkSlot Compose(
         string key, BookmarkFacts f, int x, int y, PrehistoryMap prehistory, CultureMap cultures,
-        int startYear, Func<Ruler, Ruler?>? heirOf) =>
+        int startYear) =>
         new(Key: key,
             Facts: f,
-            Companions: Companions(key, f, prehistory, cultures, startYear, heirOf),
+            Companions: Companions(key, f, prehistory, cultures, startYear),
             ScreenX: x,
             ScreenY: y);
 
@@ -571,8 +571,7 @@ public sealed class BookmarkCast
     /// one error this file is capable of causing.
     /// </summary>
     private static List<BookmarkCompanion> Companions(
-        string key, BookmarkFacts f, PrehistoryMap prehistory, CultureMap cultures, int startYear,
-        Func<Ruler, Ruler?>? heirOf)
+        string key, BookmarkFacts f, PrehistoryMap prehistory, CultureMap cultures, int startYear)
     {
         var found = new List<(BookmarkCompanion Companion, Action Stamp)>();
 
@@ -581,14 +580,6 @@ public sealed class BookmarkCast
 
         if (f.Rival is { } rival)
             found.Add(FromRuler(rival, $"{key}_rival", "BOOKMARK_RELATION_RIVAL"));
-
-        // On an earlier bookmark the heir is the next generation's ruler, who may still be a child.
-        if (heirOf?.Invoke(f.Ruler) is { } successor)
-        {
-            var (companion, stamp) = FromRuler(successor, $"{key}_heir",
-                successor.Female ? "BOOKMARK_RELATION_DAUGHTER" : "BOOKMARK_RELATION_SON");
-            found.Add((companion with { Child = startYear - successor.BirthYear < 16 }, stamp));
-        }
 
         if (prehistory.Children.TryGetValue(f.Ruler.Seat, out var children))
         {

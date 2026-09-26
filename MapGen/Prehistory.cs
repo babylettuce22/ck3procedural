@@ -185,7 +185,7 @@ public sealed class PrehistoryMap
 
     public List<ActiveWar> ActiveWars { get; } = [];
 
-    /// <summary>The generations before the start date, when earlier bookmarks are on; else null.</summary>
+    /// <summary>The additional bookmarks' eras, when they are on; else null.</summary>
     public BookmarkEras? Eras { get; set; }
 
     private const int MaxRivalsPerRuler = 2;
@@ -496,7 +496,7 @@ public sealed class PrehistoryMap
             : map.CharacterHouseMap[county];
     }
 
-    private static string? CulturePrefix(string cultureKey)
+    internal static string? CulturePrefix(string cultureKey)
     {
         if (cultureKey.Contains("french") || cultureKey.Contains("norman") || cultureKey.Contains("breton") || cultureKey.Contains("occitan"))
             return "dynnp_de";

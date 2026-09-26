@@ -456,9 +456,30 @@ public static class CultureWriter
                                    .Where(inv => Innovations.IndexOf(inv.Era) == i)
                                    .Select(inv => inv.Key)];
 
+                var held = eraInns.Concat(invented).OrderBy(k => k, StringComparer.Ordinal).ToList();
+
+                // With a bookmark before the start date each era's innovations arrive over its span
+                // rather than all at once, and a finished era is joined when it ends rather than
+                // when it begins — otherwise every bookmark opens as advanced as the last one. By
+                // the start date the culture holds exactly what it would have without them.
+                if (cfg.UsesAdditionalBookmarks && cfg.AdditionalBookmarkYears.Any(y => y < cfg.StartYear))
+                {
+                    int began = EraDate(eraStart, cfg);
+                    if (i < currentEraIndex)
+                    {
+                        int ended = EraDate(eraMilestones[i].EndYear, cfg);
+                        held = WriteEarlierDiscoveries(b, cfg, held, began, ended, frequencies);
+                        blockDate = $"{ended}.1.1";
+                    }
+                    else if (blockDate == cfg.StartDate)
+                    {
+                        held = WriteEarlierDiscoveries(b, cfg, held, began, cfg.StartYear, frequencies);
+                    }
+                }
+
                 using (b.Block(blockDate))
                 {
-                    foreach (string inn in eraInns.Concat(invented).OrderBy(k => k, StringComparer.Ordinal))
+                    foreach (string inn in held)
                         b.Field("discover_innovation", inn);
 
                     // Promote to next era at the end of the completed era block
@@ -469,11 +490,119 @@ public static class CultureWriter
                 totalAssigned += eraInns.Count;
             }
 
+            // 4. Bookmarks after the start date: the culture keeps learning. Dated after the start,
+            // on a stream of the culture's own, so the start date's culture is untouched.
+            var laterYears = cfg.UsesAdditionalBookmarks
+                ? cfg.AdditionalBookmarkYears.Where(y => y > cfg.StartYear).ToList()
+                : [];
+            if (laterYears.Count > 0)
+            {
+                var later = new Rng(Rng.StableHash(culture.Key) ^ 0x1A7EUL);
+                int eraIndex = currentEraIndex;
+
+                foreach (int year in laterYears)
+                {
+                    int advanced = cfg.EraYearAt(year);
+                    var (laterFrequencies, _) = vocab.GetFrequenciesAtYear(advanced);
+
+                    // Every era this date has passed the end of: completed as a past era is, and
+                    // joined on its own end date.
+                    while (eraIndex < eraMilestones.Length - 1 && advanced >= eraMilestones[eraIndex].EndYear)
+                    {
+                        var (key, _, end) = eraMilestones[eraIndex];
+                        var whole = EraPool(key);
+                        var pool = Sampleable(whole);
+                        var have = Holding(key);
+                        int before = have.Count;
+
+                        int minRequired = Math.Min(pool.Count, Math.Max(8, (int)Math.Ceiling(whole.Count * 0.5)));
+                        double rate = 0.55 + 0.35 * devNormalized + (later.NextDouble() * 0.1 - 0.05);
+                        int target = Math.Clamp((int)Math.Round(pool.Count * Math.Clamp(rate, 0.50, 0.95)),
+                            minRequired, pool.Count);
+                        SampleWeightedInnovations(have, pool, Math.Max(target, before), culture, vocab,
+                            laterFrequencies, later);
+
+                        int joined = Math.Clamp(end + cfg.EraOffset, cfg.StartYear + 1, year);
+                        using (b.Block($"{joined}.1.1"))
+                        {
+                            foreach (string inn in have.Skip(before).Order(StringComparer.Ordinal))
+                                b.Field("discover_innovation", inn);
+                            b.Field("join_era", eraMilestones[eraIndex + 1].EraKey);
+                        }
+
+                        b.Blank();
+                        eraIndex++;
+                    }
+
+                    // Then as far into its current era as this date reaches, on the same scale the
+                    // start date's current era is graded on.
+                    var (curKey, curStart, curEnd) = eraMilestones[eraIndex];
+                    var curPool = Sampleable(EraPool(curKey));
+                    var curHave = Holding(curKey);
+                    int had = curHave.Count;
+                    if (curPool.Count == 0) continue;
+
+                    double progress = Math.Clamp((advanced - curStart) / (double)Math.Max(1, curEnd - curStart), 0.0, 1.0);
+                    double baseCount = eraIndex == 0
+                        ? 1.0 + Math.Clamp(advanced / 900.0, 0.0, 1.0) * 7.0 + (culture.MeanDevelopment - 8.0) * 0.2
+                        : 2.0 + progress * 6.0 + (culture.MeanDevelopment - 10.0) * 0.25;
+                    int curTarget = Math.Clamp((int)Math.Round(baseCount), 1, curPool.Count);
+                    SampleWeightedInnovations(curHave, curPool, Math.Max(curTarget, had), culture, vocab,
+                        laterFrequencies, later);
+
+                    if (curHave.Count == had) continue;
+                    using (b.Block($"{year}.1.1"))
+                        foreach (string inn in curHave.Skip(had).Order(StringComparer.Ordinal))
+                            b.Field("discover_innovation", inn);
+                    b.Blank();
+                }
+
+                List<string> Holding(string era)
+                {
+                    if (!chosenByEra.TryGetValue(era, out var list)) chosenByEra[era] = list = [];
+                    return list;
+                }
+            }
+
             ParadoxText.WriteBom(Path.Combine(dir, $"{culture.Key}.txt"), b.ToString());
         }
 
         Console.WriteLine($"  culture history: {(double)totalAssigned / cultures.Cultures.Count:F1} " +
                           $"starting innovations per culture across {currentEraIndex + 1} eras");
+    }
+
+    /// <summary>
+    /// Writes the share of an era's innovations each bookmark before the start date already has, in
+    /// proportion to how far through the era it falls, and returns what is left for the era's last
+    /// block. The commonest go first — what most of vanilla's cultures hold is what a culture learned
+    /// early. At least one arrives by the first bookmark inside the era, so no culture there opens
+    /// with nothing it can build on.
+    /// </summary>
+    private static List<string> WriteEarlierDiscoveries(JominiBuilder b, MapConfig cfg, List<string> held,
+        int eraBegan, int eraEnds, Dictionary<string, double> frequencies)
+    {
+        var ordered = held
+            .OrderByDescending(k => frequencies.GetValueOrDefault(k))
+            .ThenBy(k => k, StringComparer.Ordinal)
+            .ToList();
+
+        int done = 0;
+        foreach (int year in cfg.AdditionalBookmarkYears.Where(y => y > eraBegan && y < eraEnds))
+        {
+            double share = (double)(year - eraBegan) / Math.Max(1, eraEnds - eraBegan);
+            int upTo = Math.Max(Math.Min(1, ordered.Count), (int)Math.Round(ordered.Count * share));
+            if (upTo <= done) continue;
+
+            using (b.Block($"{year}.1.1"))
+                foreach (string inn in ordered.Skip(done).Take(upTo - done).OrderBy(k => k, StringComparer.Ordinal))
+                    b.Field("discover_innovation", inn);
+
+            b.Blank();
+            done = upTo;
+        }
+
+        var rest = ordered.Skip(done).ToHashSet(StringComparer.Ordinal);
+        return [.. held.Where(rest.Contains)];
     }
 
     private static void SampleWeightedInnovations(

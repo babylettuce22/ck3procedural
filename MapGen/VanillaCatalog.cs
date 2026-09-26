@@ -176,6 +176,55 @@ public sealed class VanillaCatalog
     /// <summary>Religions vanilla's coronation triggers crown rather than invest with regalia.</summary>
     public HashSet<string> CrownReligions { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Vanilla's geographical regions (<c>map_data/geographical_regions</c>) as declared: each
+    /// field (<c>duchies</c>, <c>regions</c>, <c>provinces</c>…) to its keys. Resolved to counties
+    /// on demand by <see cref="RegionCounties"/>.
+    /// </summary>
+    public Dictionary<string, List<(string Field, string Key)>> Regions { get; } = new(StringComparer.Ordinal);
+
+    private readonly Dictionary<string, HashSet<string>> _regionCounties = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The county keys inside a geographical region, its sub-regions and titles expanded down the
+    /// de jure tree and its provinces taken to the county their barony belongs to. Null when
+    /// vanilla declares no such region.
+    /// </summary>
+    public IReadOnlySet<string>? RegionCounties(string region)
+    {
+        if (!Regions.ContainsKey(region)) return null;
+        var byProvince = Titles.Values.Where(t => t.Tier == 'b' && t.Province > 0 && t.Parent is not null)
+                               .GroupBy(t => t.Province).ToDictionary(g => g.Key, g => g.First().Parent!);
+        lock (_regionCounties) return Resolve(region, new HashSet<string>(StringComparer.Ordinal));
+
+        HashSet<string> Resolve(string key, HashSet<string> visiting)
+        {
+            if (_regionCounties.TryGetValue(key, out var known)) return known;
+            var counties = new HashSet<string>(StringComparer.Ordinal);
+            if (!visiting.Add(key) || !Regions.TryGetValue(key, out var fields)) return counties;
+
+            foreach (var (field, member) in fields)
+            {
+                if (field == "regions") counties.UnionWith(Resolve(member, visiting));
+                else if (field == "provinces")
+                {
+                    if (int.TryParse(member, out int id) && byProvince.TryGetValue(id, out string? county)) counties.Add(county);
+                }
+                else if (Titles.TryGetValue(member, out var title)) Collect(title);
+            }
+
+            _regionCounties[key] = counties;
+            return counties;
+
+            void Collect(TitleDef def)
+            {
+                if (def.Tier == 'c') { counties.Add(def.Key); return; }
+                foreach (string child in def.Children)
+                    if (Titles.TryGetValue(child, out var c) && c.Tier != 'b') Collect(c);
+            }
+        }
+    }
+
     /// <summary>Files the parser could not read. Reported, never fatal: a mod-patched or future
     /// file shape costs the entries in it and nothing else.</summary>
     public List<string> Unreadable { get; } = [];
@@ -230,6 +279,8 @@ public sealed class VanillaCatalog
 
         foreach (string pillar in Cultures.Values.SelectMany(c => new[] { c.Heritage, c.Language }).Distinct())
             PillarNames[pillar] = Clean(loc.Text($"{pillar}_name")) ?? Humanise(pillar);
+
+        ReadRegions(Path.Combine(gameDir, "map_data", "geographical_regions"));
 
         var centroids = ReadProvinceCentroids(Path.Combine(gameDir, "map_data"));
         ReadTitleHistory(Path.Combine(gameDir, "history", "titles"));
@@ -529,6 +580,22 @@ public sealed class VanillaCatalog
                 else if (child.Value is null) names.AddRange(child.Head.Where(h => h != "="));
             }
         return names;
+    }
+
+    private static readonly HashSet<string> RegionFields =
+        new(["hegemonies", "empires", "kingdoms", "duchies", "counties", "provinces", "regions"], StringComparer.Ordinal);
+
+    /// <summary>Every geographical region's members, field by field; see <see cref="Regions"/>.</summary>
+    private void ReadRegions(string dir)
+    {
+        foreach (var (key, node) in TopLevelBlocks(dir))
+        {
+            var members = new List<(string Field, string Key)>();
+            foreach (var field in node.Children.Where(c => c.IsBlock && RegionFields.Contains(c.Key)))
+                foreach (string member in Tokens(field))
+                    members.Add((field.Key, member));
+            Regions[key] = members;
+        }
     }
 
     private void ReadHolySites(string dir)
