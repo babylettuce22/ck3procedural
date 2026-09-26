@@ -5,8 +5,10 @@ namespace Ck3MapGen.AppGUI;
 /// and notes, with an action bar underneath. The walkthroughs differ only in their words and
 /// their buttons, and the layout fiddliness — wrapping labels, indent, spacing — is exactly the
 /// part worth writing once.
+///
+/// Wears the app's drawn caption (<see cref="ChromeForm"/>), like every other window of the tool.
 /// </summary>
-public abstract class GuideForm : Form
+public abstract class GuideForm : ChromeForm
 {
     protected const int Body = 520;
 
@@ -41,8 +43,16 @@ public abstract class GuideForm : Form
         MinimizeBox = false;
         MaximizeBox = false;
 
+        // A guide belongs to the main window, which already shows the application's icon; the
+        // caption row carries the guide's title alone, as an inspector's does.
+        ShowIcon = false;
+
         Controls.Add(_steps);
         Controls.Add(_bar);
+
+        // Added last so they dock first: the caption row on top, a hairline under it.
+        Controls.Add(new Panel { Dock = DockStyle.Top, Height = 1, BackColor = Theme.Border });
+        Controls.Add(CaptionBar = new TitleBar(this));
     }
 
     protected override void OnLoad(EventArgs e)

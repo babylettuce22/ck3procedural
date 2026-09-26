@@ -128,8 +128,11 @@ public static partial class ContentWriter
         // government most of them live under, the temperament their ethos gave them — and because
         // the culture files below have to carry the innovations it invents. Nothing downstream of
         // it changes a culture, so this is the earliest point at which its inputs are all final.
+        //
+        // The generated governments, not an applied history's: a culture's regiments are part of
+        // the world that applying a history keeps as it was written. See WorldModel.GeneratedGovernments.
         var retinues = cfg.EnableGeneratedRetinues
-            ? Core.Stage.Time("retinues", () => MapGen.Retinues.Build(cultures.Declared(), governments,
+            ? Core.Stage.Time("retinues", () => MapGen.Retinues.Build(cultures.Declared(), world.GeneratedGovernments,
                 provinceTerrain, vocabulary, cfg, new Rng(cfg.Seed ^ 0x3AA7)))
             : null;
 
@@ -269,6 +272,14 @@ public static partial class ContentWriter
         // of each other in length, so by the time this runs the branch has essentially finished.
         var shipped = shippedHeightmap();
 
+        // The city models stand where the generated world's holdings are. An applied history moves
+        // the holdings in the province history with its governments, but the map objects are part
+        // of the written world that applying keeps — so a full write and the re-emit agree.
+        var scatterHoldings = ReferenceEquals(world.GeneratedGovernments, governments)
+            ? holdings
+            : BuildProvinceHistory(cfg, empires, provinceTerrain, development, cultures, faiths,
+                world.GeneratedGovernments, wilderness, worldCenters, silkRoad, cfg.Seed, azgaar).Holdings;
+
         // Where an army can march across water: straits and major-river crossings, written into
         // map_data/adjacencies.csv over the stub the map writer left. See MapGen/Crossings.cs.
         //
@@ -317,7 +328,7 @@ public static partial class ContentWriter
         // Prototype, deliberately severable: its own Rng stream and its own output file, so
         // MapConfig.EnableCityScatter (--no-city-scatter) removes it without moving anything else.
         Core.Stage.Time("city scatter", () => CityScatterWriter.WriteAll(modDir, cfg, empires,
-            holdings, development, cultures, provinces, order, anchors, renderedElevation));
+            scatterHoldings, development, cultures, provinces, order, anchors, renderedElevation));
         Core.Stage.Time("map table", () => MapTableWriter.WriteAll(modDir, cfg));
         Core.Stage.Time("holding models", () => HoldingModelWriter.WriteAll(modDir, gameDir, cfg));
         });
@@ -354,162 +365,15 @@ public static partial class ContentWriter
         {
             Core.Stage.Detail("history and bookmarks", () =>
             {
-                prehistory = Core.Stage.Time("prehistory", () => PrehistoryMap.Build(
-                    counties, provinces, order, landCount, realms, cultures, faiths,
-                    governments, worldCenters, wilderness, cfg, new Rng(cfg.Seed ^ 0x4821)));
+                var layer = WriteHistoryLayer(modDir, gameDir, cfg, provinces, order, landCount, empires,
+                    counties, realms, cultures, ethnicities, faiths, governments, worldCenters, wilderness,
+                    development, titlePlan, eraGovernments, retinues, azgaar, calendar, flatmap, frontier);
 
-                // After prehistory, which it reads the houses and fathers from, and before
-                // anything that names a ruler: the bookmarks and the character file both read
-                // from this rather than each drawing the man again.
-                rulers = Core.Stage.Time("rulers", () => RulerMap.Build(
-                    counties, cfg, realms, cultures, faiths, governments, wilderness, prehistory));
-
-                // On a world of vanilla titles, the holders are vanilla's own people: whoever held
-                // each title in vanilla's history on the start date, with their house and family.
-                // Right after the roster and before anything names a ruler. See VanillaCharacters.
-                if (titlePlan is not null)
-                    Core.Stage.Time("vanilla characters", () => VanillaCharacters.Import(titlePlan,
-                        VanillaCatalog.Read(gameDir), realms, rulers!, prehistory!, cultures, faiths, empires,
-                        cfg.EraOffset, new Rng(cfg.Seed ^ 0x7A15)));
-
-                // The people of the additional bookmarks, on the maps the formation simulation drew
-                // for their dates. Null unless asked for; it redraws nothing above, so the
-                // start-date world is unchanged, and it only adds dynasties to prehistory.
-                if (cfg.UsesAdditionalBookmarks)
-                    prehistory!.Eras = Core.Stage.Time("additional bookmarks", () => BookmarkEras.Build(
-                        cfg, counties, realms, rulers!, prehistory!, cultures, faiths, governments, wilderness,
-                        eraGovernments));
-
-                // Beside the artifacts rather than beside the roster: both are things the rulers
-                // already own on the start date, and both need the rulers to exist first.
-                if (retinues is not null)
-                    Core.Stage.Time("starting retinues",
-                        () => RetinueWriter.WriteStartingRegiments(modDir, cfg, retinues, rulers));
-
-                // Reads prehistory for the same reason the bookmarks do: an heirloom needs the
-                // dead man it was made for and the house it was taken from, and both were decided
-                // a few lines up. Without them every artifact ships with an empty history panel.
-                // World centres and development are read for placement weighting only, and both are
-                // optional there: a map with no wonders scatters its treasure exactly as this did
-                // before, rather than needing a branch of its own.
-                // Forged before the artifacts that wear them: a generated weapon picks its look
-                // from this pool, so the pool has to exist first. One pool per weapon kind that has
-                // a parts library; kinds without one fall back to the stock catalogue, which is a
-                // supported answer rather than a failure.
-                var composed = Core.Stage.Detail("  · weapon forge",
-                    () => WeaponForgeStep.ComposeWeaponCatalogue(modDir, gameDir, new Rng(cfg.Seed ^ 0x5A0D)));
-
-                var artifacts = Core.Stage.Detail("  · artifacts", () => MapGen.ArtifactMap.Build(
-                    counties, cultures, faiths, realms, wilderness, prehistory,
-                    worldCenters, development, cfg, new Rng(cfg.Seed ^ 0x4A1F), composed.Looks));
-
-                // Icons come after the artifacts and not with the catalogue, because which pairings
-                // deserve one depends on which the world actually handed out. A thumbnail is the one
-                // thing composition does not make cheap — geometry and masks are shared between
-                // pairings, a thumbnail belongs to exactly one — so only the upper bands get drawn
-                // and everything else keeps its kind's stock art.
-                var forgedWeapons = Core.Stage.Detail("  · weapon icons",
-                    () => WeaponForgeStep.FinishTopArtifacts(modDir, gameDir, composed,
-                        artifacts.AllArtifacts.Select(a => (a.Visuals, a.Rarity)),
-                        ArtifactRarity.Famed, ArtifactRarity.Masterwork, new Rng(cfg.Seed ^ 0x4E17)));
-
-                ArtifactWriter.WriteTemplates(modDir);
-                Core.Stage.Detail("  · artifact visuals", () => ArtifactWriter.WriteVisuals(modDir, forgedWeapons));
-
-                // Dresses weapons the *game* creates - inspirations, tournament prizes, adventurer
-                // finds - from the same pool. Without it every player-earned weapon would be vanilla
-                // art standing next to forged art in the same inventory. Keyed on culture, so it
-                // needs this world's culture list rather than just the weapons.
-                ForgedVisualOverrides.Write(modDir, forgedWeapons,
-                    [.. cultures.Cultures.Select(c => c.Key)]);
-
-                // Armour, which needs no geometry at all: a vanilla war garment already carries the
-                // mask and variation hooks a forged weapon does, so a look is a palette and some
-                // text. Culture picks the garment, the artifact's type picks the material.
-                Core.Stage.Detail("  · armour forge", () => ArmorForgeStep.WriteAll(modDir, gameDir,
-                    [.. cultures.Cultures.Select(c => c.Key)],
-                    cultures.Cultures.ToDictionary(c => c.Key, c => c.ClothingGfx, StringComparer.Ordinal)));
-
-                // Hand-modelled pieces from assets/armors, worn from a debug flag. After the forge
-                // above, because that is what splices the gene template both of them rely on.
-                CustomArmorStep.WriteAll(modDir, gameDir);
-
-                // Rigid pieces hung off portrait bones - pauldrons today, any slot later. After the
-                // armour forge because it garnishes what that emits, though it depends on none of it.
-                BonePieceStep.WriteAll(modDir, gameDir, [.. cultures.Cultures.Select(c => c.Key)]);
-                ArtifactWriter.WriteModifiers(modDir, artifacts);
-                ArtifactWriter.WriteLocalisation(modDir, artifacts);
-                ArtifactWriter.WriteOnGameStart(modDir, artifacts, cfg);
-                artifactCount = artifacts.AllArtifacts.Count;
-
-                if (forgedWeapons.Count > 0)
-                {
-                    Console.WriteLine("  forged weapons: " + string.Join(", ",
-                        forgedWeapons.GroupBy(a => a.Kind)
-                            .Select(g => $"{g.Count()} {g.Key}(s)"))
-                        + " in the artifact pool");
-
-                    // The band split is printed because it is the one part of the forge a config
-                    // change can quietly move: raise WeaponPoolSizePerKind and it widens, drop it
-                    // below four and bands start sharing looks. Neither shows in the emitted files
-                    // without opening them. Counted across every kind rather than per kind, since a
-                    // library that under-fills its pool gets a shorter ladder than its neighbours.
-                    Console.WriteLine("    bands: " + string.Join(", ",
-                        forgedWeapons.Where(a => a.Tier is not null)
-                            .GroupBy(a => a.Tier!.Value)
-                            .OrderBy(g => g.Key)
-                            .Select(g => $"{g.Count()} {g.Key.ToString().ToLowerInvariant()}")));
-                }
-
-                var bookmarkResult = Core.Stage.Detail("  · bookmarks", () => BookmarkWriter.WriteAll(
-                    modDir, gameDir, cfg, provinces, order, empires,
-                    realms, development, cultures, faiths, governments, wilderness, prehistory,
-                    rulers, azgaar, calendar));
-
-                // Kept for the editor: re-emitting a ruler means re-emitting the bookmark that
-                // describes him, and the cast is the record of who that is.
-                bookmarks = bookmarkResult.Cast;
-
-                Core.Stage.Detail("  · character history", () => HistoryWriter.WriteAll(
-                    modDir, cfg, empires, realms, development,
-                    cultures, ethnicities, faiths, governments, wilderness, prehistory, rulers));
-
-                // Last of the history block, because it reads everything the rest of it decided.
-                // Inside the block rather than beside it: with --no-history there are no houses, no
-                // wars and no artifacts, so a chronicle written there could only repeat the map back
-                // at the player, and the GUI already treats a missing key as "no button".
-                var chronicle = Core.Stage.Time("chronicle", () => ChronicleMap.Build(
-                    empires, realms, development, cultures, faiths, wilderness, prehistory,
-                    artifacts, worldCenters, cfg, new Rng(cfg.Seed ^ 0x104E)));
-
-                // After the chronicle, which is the thing that decides where a struggle is. Reads
-                // the counties for its membership and the chronicle only for its tension, so it
-                // cannot invent a quarrel the lore panel does not also report.
-                var struggles = Core.Stage.Time("struggles", () => StruggleMap.Build(
-                    empires, chronicle, cultures, faiths, wilderness, cfg,
-                    new Rng(cfg.Seed ^ 0x57A6)));
-
-                // Written after the struggles it reads, not after the chronicle it is made of: the
-                // lore panel closes with the name of the struggle a title is caught up in, and that
-                // name does not exist until the line above has run.
-                //
-                // Only this is gated, not the build above: the chronicle is also where struggles
-                // come from. The lore it writes is read by the Realm Lore panel and nothing else.
-                if (cfg.EnableChronicle)
-                    ChronicleWriter.WriteAll(modDir, chronicle, struggles, empires);
-
-                Core.Stage.Detail("  · struggle art",
-                    () => StruggleWriter.WriteAll(modDir, gameDir, cfg, struggles, flatmap, provinces, order));
-                struggleCount = struggles.Struggles.Count;
-
-                // The half of the chronicle the game writes. After the struggles because it
-                // narrates their phase changes by name, and after the frontier for the same reason.
-                Core.Stage.Detail("  · chronicle (runtime)",
-                    () => ChronicleRuntimeWriter.WriteAll(modDir, cfg, struggles, frontier));
-
-                WarWriter.WriteAll(modDir, prehistory, cfg);
-                Core.Stage.Detail("  · portraits", () => PortraitWriter.WriteAll(
-                    modDir, gameDir, bookmarkResult.PortraitRequests, ethnicities, cfg.Seed));
+                prehistory = layer.Prehistory;
+                rulers = layer.Rulers;
+                bookmarks = layer.Bookmarks;
+                artifactCount = layer.ArtifactCount;
+                struggleCount = layer.StruggleCount;
             });
         }
         else
@@ -598,6 +462,9 @@ public static partial class ContentWriter
             Frontier = frontier,
             Bookmarks = bookmarks,
             Calendar = calendar,
+            World = world,
+            Retinues = retinues,
+            Flatmap = flatmap,
             BaronyCount = baronyCount,
             LandCount = landCount,
             RiverCount = riverCount,

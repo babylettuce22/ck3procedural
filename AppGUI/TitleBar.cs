@@ -55,6 +55,12 @@ internal sealed class TitleBar : Control
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer
                  | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
 
+        // Never a tab stop. The row is driven by the mouse through the form's hit testing, and in
+        // a dialog an unfocusable-looking stop after the last field would swallow a Tab press.
+        // A menu inside it keeps its own keyboard access (Alt, F10).
+        SetStyle(ControlStyles.Selectable, false);
+        TabStop = false;
+
         if (menu is not null)
         {
             menu.Dock = DockStyle.None;
@@ -108,6 +114,23 @@ internal sealed class TitleBar : Control
     }
 
     public static bool IsButton(int hit) => hit is HtMinButton or HtMaxButton or HtClose;
+
+    /// <summary>
+    /// Puts the menu bar away and shows the window's title in its place, for a page with nothing to
+    /// command yet: the start page. Everything else about the row — the icon, dragging, the
+    /// caption buttons — stays as it is, so the window keeps one top whichever page is showing.
+    /// </summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public bool MenuHidden
+    {
+        get => _menu is not null && !_menu.Visible;
+        set
+        {
+            if (_menu is null || _menu.Visible == !value) return;
+            _menu.Visible = !value;
+            Invalidate();
+        }
+    }
 
     /// <summary>The button under the mouse, or 0. Fed from the form's non-client mouse messages.</summary>
     public void SetHover(int hit)
@@ -174,8 +197,9 @@ internal sealed class TitleBar : Control
 
         // The main window's row carries no title: the icon and the menus say what the application
         // is, and the name still shows in the taskbar and Alt+Tab. A palette's title is the name of
-        // what is being inspected, which is worth the room.
-        if (_menu is null)
+        // what is being inspected, which is worth the room. A main window with its menus put away
+        // (the start page) shows its title too, rather than an empty row.
+        if (_menu is null || !_menu.Visible)
         {
             var area = Rectangle.FromLTRB(IconBounds.Right + Scale(6), 0, ButtonsLeft - Scale(8), Height);
             if (area.Width > 0)

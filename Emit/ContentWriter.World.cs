@@ -18,7 +18,7 @@ namespace Ck3MapGen.Emit;
 /// Only the decisions a later stage cannot re-derive are here. Holdings, retinues, the calendar,
 /// prehistory and the rulers are still decided inside the write, where they always were.
 /// </summary>
-public sealed class WorldModel
+public sealed record WorldModel
 {
     public required TerrainClass[] ProvinceTerrain { get; init; }
     public required VanillaVocabulary Vocabulary { get; init; }
@@ -43,6 +43,14 @@ public sealed class WorldModel
     public required WorldCenterMap WorldCenters { get; init; }
     public required RealmMap Realms { get; init; }
     public required GovernmentMap Governments { get; init; }
+
+    /// <summary>
+    /// The governments the generated realms have. The same object as <see cref="Governments"/>
+    /// unless a history was applied, when those follow the applied realms and this stays what every
+    /// cached layer was decided from — cultivation, the steppe, the silk road, faiths, regiments and
+    /// the city models. See <see cref="ContentWriter.ApplyRealms"/>.
+    /// </summary>
+    public required GovernmentMap GeneratedGovernments { get; init; }
 
     /// <summary>One government map per additional bookmark, or null without them.</summary>
     public Dictionary<int, GovernmentMap>? EraGovernments { get; init; }
@@ -246,8 +254,12 @@ public static partial class ContentWriter
             ? VanillaTitles.Countries(titlePlan, VanillaCatalog.Read(gameDir), wilderness, empires, development)
             : null;
 
+        // With a history applied the world is written in a later year, but the realms it replaces
+        // are the ones the formation grew for the year the history was run on from — the formation
+        // counts its epochs back from the start date, and a moved start would grow a different map.
+        var formationCfg = applied is null ? cfg : cfg.AtStartYear(applied.FromYear);
         var realms = Core.Stage.Time("realms", () => Realms.Build(
-                    empires, development, wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17), provinces, order,
+                    empires, development, wilderness, formationCfg, new Rng(cfg.Seed ^ 0x2E17), provinces, order,
                     baronyCount, azgaar, cultures, vanillaRealms));
 
         // After the realm pass, never during it — see Realms.CrownHegemon for why granting it any
@@ -350,39 +362,6 @@ public static partial class ContentWriter
         Core.Stage.Time("gender", () => MapGen.Cultures.AlignGender(cultures.Declared(), faiths, vocabulary,
             new Rng(cfg.Seed ^ 0x6E1D)));
 
-        // History run on in the History workspace replaces the realms the formation grew — here,
-        // after the faiths and not where the realms were built. Faiths.Build reads the governments,
-        // and a religion's tribal share decides its shape and gates draws that every later faith's
-        // names and tenets come off; built from the applied realms, the same world would come back
-        // with its religions renamed. So everything above is the generated world's own, and only
-        // what follows from who rules what is decided again: governments, the hegemony, and every
-        // stage below that reads them. The start date itself is moved by the caller — see
-        // MapConfig.AtStartYear.
-        if (applied is not null)
-        {
-            var history = applied.Resolve(counties, cultures, realms.History!, out string? problem)
-                ?? throw new InvalidOperationException(
-                    $"The history applied from the History workspace does not fit this world: {problem}. "
-                    + "Discard it in the History workspace, or go back to the settings it was run with.");
-
-            realms = Core.Stage.Time("applied history", () => Realms.FromHistory(history, empires, development,
-                wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17), realms.CountyAdjacency!));
-
-            if (cfg.StartingHegemony) Realms.CrownHegemon(realms, empires, wilderness);
-
-            governments = MapGen.Governments.Build(empires, counties, realms, provinceTerrain, coastal,
-                development, cultures, worldCenters, cfg, new Rng(cfg.Seed ^ 0x6017), azgaar, stateGovernments);
-
-            if (cfg.StartingHegemony) Realms.ExpandHegemonRealm(realms, empires, wilderness);
-            hegemonShare = cfg.StartingHegemony ? Realms.HegemonDeJureShare(realms, empires, wilderness) : null;
-
-            int independent = history.Polities.Count(p => p.Suzerain is null);
-            Console.WriteLine($"  applied history: the realms of {applied.Year} (run on from {applied.FromYear}) "
-                + $"replace the generated start — {history.Polities.Count} realms, {independent} independent");
-            Console.WriteLine("  governments: " + string.Join(", ",
-                governments.Tally(counties, wilderness).Select(g => $"{g.Count} {g.Government[..^11]}")));
-        }
-
         // Farmland and oases, placed from settlement and drainage rather than from climate. Runs
         // here, after every social layer has been decided, so nothing reads a terrain that only
         // exists *because* of the settlement: development, government, culture and faith all see
@@ -440,8 +419,23 @@ public static partial class ContentWriter
             provinces, order, landCount, riverCount, cultures, empires, cfg,
             new Rng(cfg.Seed ^ 0x5EAE), terra.MajorRiversList, azgaar));
 
+        // History run on in the History workspace replaces the realms the formation grew — last,
+        // after everything above has been decided from the generated ones. Faiths.Build reads the
+        // governments, and a religion's tribal share gates draws that every later faith's names and
+        // tenets come off, so faiths built from applied realms would come back renamed; cultivation,
+        // the steppe, the silk road and the regiments read them too. All of those are the generated
+        // world's, kept as they were written, so that applying a history can re-emit the few files
+        // that follow who rules what instead of rewriting the mod — see ApplyHistory, which calls
+        // the same ApplyRealms. The start date is moved by the caller: see MapConfig.AtStartYear.
+        var generatedGovernments = governments;
+        if (applied is not null)
+            (realms, governments, hegemonShare) = ApplyRealms(applied, realms, cfg, empires, counties,
+                provinces, order, baronyCount, provinceTerrain, development, cultures, worldCenters,
+                wilderness, azgaar, stateGovernments);
+
         return new WorldModel
         {
+            GeneratedGovernments = generatedGovernments,
             ProvinceTerrain = provinceTerrain,
             Vocabulary = vocabulary,
             Counties = counties,

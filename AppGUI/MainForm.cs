@@ -514,13 +514,16 @@ public sealed partial class MainForm : ChromeForm
             _category = rememberedMode.Category;
         }
 
-        Controls.Add(BuildWorkspaces());
+        // The start page goes in first so it docks last: it fills whatever the caption row leaves.
+        // It starts hidden, so the first layout sizes the workspaces; OnLoad shows it afterwards.
+        Controls.Add(BuildStartPage());
+        Controls.Add(_workspaceHost = BuildWorkspaces());
         Controls.Add(BuildWorkspaceBar());
 
         // Docking lays out from the last control back, so the title row has to be added after the
         // workspace bar to end up above it. The menu bar lives inside it; see ChromeForm.
         Controls.Add(CaptionBar = new TitleBar(this, BuildMenuBar()));
-        Controls.Add(BuildStatusBar());
+        Controls.Add(_statusBar = BuildStatusBar());
 
         _lastModDir = _state.LastModDir;
 
@@ -560,8 +563,10 @@ public sealed partial class MainForm : ChromeForm
         var savePreset = MenuItem("Save preset…", SavePreset);
         var loadPreset = MenuItem("Load preset…", LoadPreset);
         var exit = MenuItem("Exit", Close);
+        var startPage = MenuItem("Start page", ShowStartPage);
 
         var file = TopMenu(menu, "&File",
+            startPage, new ToolStripSeparator(),
             editWorld, closeWorld, new ToolStripSeparator(), chooseHeightmap, recent, azgaar, new ToolStripSeparator(),
             exportView, new ToolStripSeparator(),
             savePreset, loadPreset, new ToolStripSeparator(),
@@ -569,6 +574,7 @@ public sealed partial class MainForm : ChromeForm
 
         file.DropDownOpening += (_, _) =>
         {
+            startPage.Enabled = !_busy;
             chooseHeightmap.Enabled = _browse.Enabled;
             editWorld.Enabled = !_busy;
             closeWorld.Enabled = !_busy && _loadedWorld is not null;
@@ -1016,6 +1022,10 @@ public sealed partial class MainForm : ChromeForm
     /// </summary>
     private void SelectWorkspace(Workspace workspace)
     {
+        // Every route to a workspace — the Complex card, Ctrl+1..4, the View menu, opening a
+        // world — is also a way off the start page.
+        LeaveStartPage();
+
         if (!_workspaceBar.IsAvailable(workspace))
         {
             _status.Text = "An opened mod is edited in the World workspace; terrain and climate tools are for generating.";
@@ -1534,6 +1544,9 @@ public sealed partial class MainForm : ChromeForm
 
         ReportFolders();
         RestoreClimatePaint();
+
+        // Last, once every splitter above has been placed against a visible page.
+        if (OpensToStartPage) ShowStartPage();
     }
 
     private void ReportFolders()
@@ -1566,6 +1579,8 @@ public sealed partial class MainForm : ChromeForm
         _gameFolder.Visible = !found;
         _gameFolder.Text = found ? "Game folder…" : "Game folder ⚠";
         _gameFolder.ForeColor = found ? Theme.Text : Theme.Danger;
+
+        UpdateStartPageFolders();
     }
 
     private void PickGameFolder()
@@ -1650,12 +1665,14 @@ public sealed partial class MainForm : ChromeForm
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         if (_loadedWorld is not null && !ConfirmLoadedEdits()) { e.Cancel = true; return; }
-        var bounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+        // On the start page the window is a compact launcher; what is saved is the generator's
+        // own placement, held aside when the page shrank the window (see PlacementToSave).
+        var (bounds, maximized) = PlacementToSave();
         _state.Left = bounds.X;
         _state.Top = bounds.Y;
         _state.Width = bounds.Width;
         _state.Height = bounds.Height;
-        _state.Maximized = WindowState == FormWindowState.Maximized;
+        _state.Maximized = maximized;
         _state.SettingsWidth = _body.SplitterDistance;
         _state.LogHeight = _logHeight;
         _state.Workspace = _workspace.ToString();
@@ -1695,6 +1712,12 @@ public sealed partial class MainForm : ChromeForm
 
     protected override bool ProcessCmdKey(ref Message message, Keys key)
     {
+        // The start page hides the generator, so its shortcuts would act on something off screen.
+        // Only the workspace keys get through, and they leave the page.
+        if (_onStart && key is not ((Keys.Control | Keys.D1) or (Keys.Control | Keys.D2)
+                                    or (Keys.Control | Keys.D3) or (Keys.Control | Keys.D4)))
+            return base.ProcessCmdKey(ref message, key);
+
         // Terrain and Climate own the brush keys while they are on screen, and say so by handling
         // them; anything they pass on falls through to the window's own shortcuts.
         if (_workspace == Workspace.Terrain && !TypingInText() && _forge.HandleKey(key)) return true;
@@ -2254,7 +2277,8 @@ public sealed partial class MainForm : ChromeForm
     {
         base.OnShown(e);
 
-        if (_state.WelcomeShown) return;
+        // On the start page the walkthrough waits for the Complex card; see EnterComplex.
+        if (_state.WelcomeShown || _onStart) return;
         _state.WelcomeShown = true;
         ShowWelcomeGuide();
     }
@@ -2851,21 +2875,39 @@ public sealed partial class MainForm : ChromeForm
     }
 
     /// <summary>
-    /// Makes the realms the History workspace has run on to the world's start, and writes the mod
-    /// with them through the ordinary write — the same carrying-over of edits, the same folder
-    /// guards — so the World workspace and everything edited there is built from the applied
-    /// realms. See <see cref="Core.GenerationOptions.AppliedHistory"/> for what is replaced.
+    /// Makes the realms the History workspace has run on to the world's start. With a written mod in
+    /// hand that is a re-emit — <see cref="Emit.ContentWriter.ApplyHistory"/> rewrites only the files
+    /// that follow who rules what, in seconds, and the World workspace and its editor move onto the
+    /// result. Without one it is the ordinary write, with the history on
+    /// <see cref="Core.GenerationOptions.AppliedHistory"/>; the two produce the same files.
     /// </summary>
     private async Task ApplyHistoryAsync(MapGen.AppliedHistory applied)
     {
         if (_busy) return;
 
+        // Re-emitted into the written mod when there is one to hand; a full write only when there is
+        // not. The re-emit rewrites the files a pending edit would also be rewriting, so those go
+        // first — or the edits would be half on disk and half not.
+        var target = _edits.Target is { Written.World: not null } t && Directory.Exists(t.ModDir) ? t : ((GenerationResult Result, Emit.WrittenContent Written, string ModDir)?)null;
+        if (target is not null && _edits.HasPending)
+        {
+            MessageBox.Show(this,
+                $"{Count(_edits.EditedCount, "edit")} to this world {(_edits.EditedCount == 1 ? "is" : "are")} not "
+                + "written yet. Press Overwrite to write them, or revert them, then apply the history.",
+                "Unsaved edits", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
         var cfg = _options.Config;
         var answer = MessageBox.Show(this,
             $"Make the realms of {applied.Year} this world's start?\n\n"
-            + $"The mod is written again starting in {applied.Year}. Titles, cultures, faiths, development and "
-            + "wilderness stay as generated; rulers, families, governments and title history are drawn "
-            + "fresh for the new realms.\n\n"
+            + (target is not null
+                ? $"Only what follows from who rules what is rewritten in {target.Value.ModDir}, dated "
+                  + $"{applied.Year}: title and province history, rulers and families, artifacts, bookmarks "
+                  + "and the chronicle. Terrain, titles, cultures, faiths and everything else stay as written.\n\n"
+                : $"The mod is written starting in {applied.Year}. Titles, cultures, faiths, development and "
+                  + "wilderness stay as generated; rulers, families, governments and title history are drawn "
+                  + "fresh for the new realms.\n\n")
             + $"Advancement stays at {cfg.EraYear}"
             + (cfg.EraAnchorYear <= 0 ? " — for this world it no longer follows the World Year" : "")
             + ". Change Advancement Year in the settings to move it.\n\n"
@@ -2879,7 +2921,47 @@ public sealed partial class MainForm : ChromeForm
         _options.AppliedHistory = applied;
         _history.ShowApplied(applied);
         SelectWorkspace(Workspace.World);
-        await WriteModAsync();
+
+        if (target is not { } written)
+        {
+            await WriteModAsync();
+            return;
+        }
+
+        _busy = true;
+        SetEnabled(false);
+        _status.Text = $"Applying the history of {applied.Year}…";
+        var clock = Stopwatch.StartNew();
+        try
+        {
+            Stage.Begin();
+            string gameDir = _options.GameDir;
+            var (result, content) = await Task.Run(() => Emit.ContentWriter.ApplyHistory(
+                written.ModDir, gameDir, written.Result, written.Written, applied));
+            Stage.Report();
+
+            // ShowResult reads _written for the History workspace, so it goes first; the editor is
+            // attached again after, to the world as now written.
+            _written = content;
+            ShowResult(result);
+            _edits.Attach(result, content, written.ModDir);
+            _status.Text = $"History of {applied.Year} applied to {written.ModDir} in {clock.ElapsedMilliseconds / 1000.0:F1} s";
+            Console.WriteLine($"History of {applied.Year} applied in {clock.ElapsedMilliseconds / 1000.0:F1} s — "
+                              + "restart the game, not just the mod, to see it");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine();
+            Console.WriteLine(ex);
+            _status.Text = "Applying the history failed — see log";
+            MessageBox.Show(this, $"The history could not be applied:\n\n{ex.Message}",
+                "Apply history", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            _busy = false;
+            SetEnabled(true);
+        }
     }
 
     /// <summary>Back to the generated realms. Nothing on disk changes until the next write.</summary>
@@ -3414,6 +3496,7 @@ public sealed partial class MainForm : ChromeForm
         // After BuildAsync has set _written, so a write hands History its world and a preview
         // takes the previous one away.
         _history.Attach(result, _written);
+        _calendar.ShowGenerated(_written?.Calendar);
 
         _viewer.SetImage(null);
         foreach (var bitmap in _rendered.Values) bitmap.Dispose();

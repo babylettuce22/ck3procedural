@@ -19,8 +19,10 @@ namespace Ck3MapGen.AppGUI;
 /// landed_titles and history are the ones that survive. There is no reordering beyond that yet, and
 /// no conflict analysis — the warning under the list is the honest summary of what stacking a total
 /// conversion costs, and a real per-mod verdict wants the file scan that is not written yet.
+///
+/// Wears the app's drawn caption (<see cref="ChromeForm"/>), like every other window of the tool.
 /// </summary>
-internal sealed class ModListDialog : Form
+internal sealed class ModListDialog : ChromeForm
 {
     private readonly CheckedListBox _list = new()
     {
@@ -123,6 +125,12 @@ internal sealed class ModListDialog : Form
         layout.Controls.Add(_warning, 0, 3);
         layout.Controls.Add(buttons, 0, 4);
         Controls.Add(layout);
+
+        // Added last so they dock first: the caption row on top, a hairline under it. No icon —
+        // a dialog of the main window, which already shows it.
+        ShowIcon = false;
+        Controls.Add(new Panel { Dock = DockStyle.Top, Height = 1, BackColor = Theme.Border });
+        Controls.Add(CaptionBar = new TitleBar(this));
 
         _list.ItemCheck += OnItemCheck;
         _ok.Click += (_, _) => { DialogResult = DialogResult.OK; Close(); };

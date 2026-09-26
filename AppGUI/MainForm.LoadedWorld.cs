@@ -17,6 +17,7 @@ public sealed partial class MainForm
         _result = null;
         _written = null;
         _history.Attach(null, null);
+        _calendar.ShowGenerated(null);
         _realmGraph = null;
         _realmGraphBuilt = false;
         _realmFocus.Clear();

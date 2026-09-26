@@ -73,12 +73,12 @@ public sealed class AppliedHistory
     /// <param name="generated">The formation this world grew on its own. Its rules are kept, so
     /// the History workspace can run on again from the applied date; its realms are what this
     /// replaces, and the ground they cover is the ground the applied realms must cover too.</param>
-    public FormationHistory? Resolve(List<Title> counties, CultureMap cultures, FormationHistory generated,
+    public FormationHistory? Resolve(List<Title> counties, CultureMap cultures, FormationHistory? generated,
         out string? problem)
     {
         problem = null;
 
-        if (generated.Rules is not { } rules)
+        if (generated?.Rules is not { } rules)
         {
             problem = "this world's realms were not grown by the formation, so there is nothing to lay a history over";
             return null;

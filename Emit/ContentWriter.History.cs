@@ -1,0 +1,416 @@
+﻿using Ck3MapGen.Config;
+using Ck3MapGen.Core;
+using Ck3MapGen.MapGen;
+
+namespace Ck3MapGen.Emit;
+
+public static partial class ContentWriter
+{
+    /// <summary>The realm map an applied history lays over the generated world, and what follows from it.</summary>
+    internal sealed record AppliedRealms(RealmMap Realms, GovernmentMap Governments, double? HegemonShare);
+
+    /// <summary>
+    /// Titles an applied history and decides what follows from who rules what: the hegemony and the
+    /// governments. Shared by <see cref="BuildWorld"/>, for a full write, and <see cref="ApplyHistory"/>,
+    /// for the re-emit, so the two cannot come to different answers. Throws when the history does
+    /// not fit the world; see <see cref="AppliedHistory.Resolve"/>.
+    /// </summary>
+    internal static AppliedRealms ApplyRealms(AppliedHistory applied, RealmMap generated, MapConfig cfg,
+        List<Title> empires, List<Title> counties, ProvinceMap provinces, int[] order, int baronyCount,
+        TerrainClass[] provinceTerrain, Dictionary<Title, int> development, CultureMap cultures,
+        WorldCenterMap worldCenters, WildernessMap wilderness, AzgaarImport? azgaar,
+        Dictionary<int, string>? stateGovernments)
+    {
+        var history = applied.Resolve(counties, cultures, generated.History, out string? problem)
+            ?? throw new InvalidOperationException(
+                $"The history applied from the History workspace does not fit this world: {problem}. "
+                + "Discard it in the History workspace, or go back to the settings it was run with.");
+
+        var realms = Core.Stage.Time("applied history", () => Realms.FromHistory(history, empires, development,
+            wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17), generated.CountyAdjacency!));
+
+        if (cfg.StartingHegemony) Realms.CrownHegemon(realms, empires, wilderness);
+
+        var coastal = MapGen.ProvinceSurvey.Take(provinces, order, baronyCount, null).Coastal;
+        var governments = MapGen.Governments.Build(empires, counties, realms, provinceTerrain, coastal,
+            development, cultures, worldCenters, cfg, new Rng(cfg.Seed ^ 0x6017), azgaar, stateGovernments);
+
+        if (cfg.StartingHegemony) Realms.ExpandHegemonRealm(realms, empires, wilderness);
+        double? hegemonShare = cfg.StartingHegemony ? Realms.HegemonDeJureShare(realms, empires, wilderness) : null;
+
+        int independent = history.Polities.Count(p => p.Suzerain is null);
+        Console.WriteLine($"  applied history: the realms of {applied.Year} (run on from {applied.FromYear}) "
+            + $"replace the generated start — {history.Polities.Count} realms, {independent} independent");
+        Console.WriteLine("  governments: " + string.Join(", ",
+            governments.Tally(counties, wilderness).Select(g => $"{g.Count} {g.Government[..^11]}")));
+
+        return new AppliedRealms(realms, governments, hegemonShare);
+    }
+
+    /// <summary>
+    /// Lays a history run on in the History workspace over a mod already written, without
+    /// generating the world again: the realms and what follows from them are decided afresh and
+    /// only the files that carry them are rewritten. Everything else on disk — map data, terrain,
+    /// map objects, titles, cultures, faiths, regiments — is the written world's and stays as it is.
+    ///
+    /// Two layers are rewritten:
+    /// <list type="bullet">
+    /// <item><b>Realms</b> — who rules what: title and province history, the characters and their
+    /// families, noble families, regiments handed to rulers, artifacts, bookmarks, the chronicle and
+    /// its struggles, wars, portraits, the hegemony's disaster regions and Dynastic Cycle entry, and
+    /// the nomad naming rule.</item>
+    /// <item><b>Calendar</b> — every file carrying a date, since the start date moves: culture
+    /// history, the culture era thresholds and the defines.</item>
+    /// </list>
+    /// A simulation that one day changes cultures or faiths makes those layers too; their writers
+    /// are already re-emittable (see <see cref="WorldOverwrite"/>).
+    ///
+    /// Written by the same code a full write runs — <see cref="ApplyRealms"/> and
+    /// <see cref="WriteHistoryLayer"/> — and in the same order, so the files come out as a full
+    /// write with the same <see cref="AppliedHistory"/> would make them.
+    /// </summary>
+    /// <returns>The world as now written: the result under the applied configuration, and the
+    /// content with the new realms, governments, people and holdings in it.</returns>
+    public static (GenerationResult Result, WrittenContent Written) ApplyHistory(string modDir, string gameDir,
+        GenerationResult result, WrittenContent written, AppliedHistory applied)
+    {
+        if (!Directory.Exists(modDir))
+            throw new DirectoryNotFoundException($"The mod folder '{modDir}' is no longer there. Write the mod again.");
+
+        if (written.World is not { } world || written.Realms is not { } current || written.Flatmap is not { } flatmap)
+            throw new InvalidOperationException(
+                "This world was written without the history it would need to be re-emitted. Write the mod again.");
+
+        var cfg = result.Config.AtStartYear(applied.Year);
+        var runStarted = DateTime.UtcNow;
+        var provinces = result.Provinces;
+        var order = result.ProvinceOrder;
+        var empires = result.Titles;
+        var counties = world.Counties;
+        var cultures = world.Cultures;
+        var faiths = world.Faiths;
+        var wilderness = world.Wilderness;
+        var development = world.Development;
+        var worldCenters = world.WorldCenters;
+        var retinues = written.Retinues;
+
+        var (realms, governments, hegemonShare) = ApplyRealms(applied, current, cfg, empires, counties,
+            provinces, order, result.BaronyCount, world.ProvinceTerrain, development, cultures, worldCenters,
+            wilderness, result.Azgaar, world.StateGovernments);
+
+        // --- Realms, in WriteAll's order ---
+
+        // Only ever written, never removed, by the writer itself; a world that no longer has a horde
+        // has to lose the rule it wrote when it did, or the re-emit would differ from a full write.
+        Core.Stage.Time("government overrides", () =>
+        {
+            if (!GovernmentWriter.WriteNomadNaming(modDir, gameDir, counties.Any(governments.IsNomad)))
+                DeleteIfPresent(modDir, "common", "governments", "zz_generated_nomad_government.txt");
+        });
+
+        var (provinceRows, holdings) = Core.Stage.Time("title and province history", () =>
+        {
+            WriteLandedTitles(modDir, empires, faiths, wilderness, HegemonSeat(empires, realms));
+            var built = BuildProvinceHistory(cfg, empires, world.ProvinceTerrain, development, cultures, faiths,
+                governments, wilderness, worldCenters, world.SilkRoad, cfg.Seed, result.Azgaar);
+            EmitProvinceHistory(modDir, built.Rows, built.Holdings, null);
+            return built;
+        });
+
+        // --- Calendar ---
+
+        Core.Stage.Time("culture files", () => CultureWriter.WriteAll(modDir, cfg, cultures.Declared(),
+            world.Ethnicities, world.Vocabulary, new Rng(cfg.Seed ^ 0x0C1A), retinues?.Innovations));
+
+        Core.Stage.Time("compatibility", () =>
+        {
+            CompatibilityWriter.WriteDefines(modDir, gameDir, cfg);
+
+            // Written only when the calendar and advancement differ, so a history applied at an
+            // offset of zero has to take away the thresholds an earlier one shifted.
+            if (cfg.EraOffset == 0) DeleteDirectoryIfPresent(modDir, "common", "culture", "eras");
+            CompatibilityWriter.WriteCultureEras(modDir, gameDir, cfg);
+
+            // The disaster regions keep clear of the hegemon's realm, which has just changed.
+            var regionMembers = world.Steppe.RegionMembers();
+            foreach (var (key, members) in world.SilkRoad.RegionMembers()) regionMembers[key] = members;
+            var everyCountyAdjacency = Realms.BuildCountyAdjacency(counties, provinces, result.BaronyCount, order,
+                (int)Math.Round(cfg.Scaled(cfg.SeaBridgePixelsAtVanilla)));
+            var riverside = MapGen.MajorRivers.RiversideCounties(result.Terra.MajorRiversList, provinces,
+                order, result.BaronyCount, counties, Math.Max(2, (int)Math.Round(cfg.Scaled(4))));
+            CompatibilityWriter.WriteGeographicalRegions(modDir, gameDir, empires, cultures, regionMembers,
+                wilderness, everyCountyAdjacency, world.ProvinceTerrain,
+                Realms.HegemonRealmCounties(realms, empires, wilderness), riverside);
+        });
+
+        Core.Stage.Time("dynastic cycle", () =>
+        {
+            if (cfg.DynasticCycle) DynasticCycleWriter.WriteAll(modDir, empires, hegemonShare);
+        });
+
+        // --- The people, and everything written about them ---
+
+        ClearHistoryLayerFiles(modDir);
+
+        var layer = Core.Stage.Detail("history and bookmarks", () => WriteHistoryLayer(modDir, gameDir, cfg,
+            provinces, order, result.LandCount, empires, counties, realms, cultures, world.Ethnicities, faiths,
+            governments, worldCenters, wilderness, development, world.TitlePlan, eraGovernments: null,
+            retinues, result.Azgaar, written.Calendar, flatmap, world.Frontier, cultureAssets: false));
+
+        Core.Stage.Time("debug panel", () => DebugPanel.Write(modDir, DebugFacts(
+            modDir, cfg, provinces, empires, counties, cultures, faiths, wilderness, worldCenters,
+            retinues, result.LandCount, result.RiverCount, result.BaronyCount, layer.ArtifactCount,
+            layer.StruggleCount, writeHistory: true, result.Azgaar, runStarted)));
+
+        // Stamps exactly the files rewritten above: everything else still carries its stamp.
+        Core.Stage.Time("watermark", () => Generator.ApplyWatermark(modDir, cfg));
+
+        var appliedWorld = world with { Realms = realms, Governments = governments, HegemonShare = hegemonShare };
+        var appliedContent = written with
+        {
+            World = appliedWorld,
+            Realms = realms,
+            Governments = governments,
+            Rulers = layer.Rulers,
+            Prehistory = layer.Prehistory,
+            Bookmarks = layer.Bookmarks,
+            Holdings = holdings,
+            ProvinceHistory = provinceRows,
+            EraHoldings = null,
+        };
+
+        return (result.WithConfig(cfg), appliedContent);
+    }
+
+    /// <summary>
+    /// The files the history layer writes one per person, treasure or struggle, from the last time
+    /// it ran. Every other file it writes is rewritten whole and needs no clearing; these are named
+    /// after who or what they are for, so a bookmark character, a forged top-band weapon or a
+    /// struggle that the new history does not have would otherwise outlive it. Matched by the
+    /// prefixes only the history layer uses — nothing static or cultural shares them.
+    /// </summary>
+    private static void ClearHistoryLayerFiles(string modDir)
+    {
+        (string[] Dir, string Pattern)[] owned =
+        [
+            (["common", "bookmark_portraits"], "bm_char_*.txt"),                          // PortraitWriter
+            (["gfx", "models", "artifacts", "gen_weapons"], "gen_hero_*"),                // WeaponForgeStep.FinishTopArtifacts
+            (["gfx", "interface", "icons", "artifact"], "gen_hero_*"),                    // the same, icons
+            (["gfx", "interface", "illustrations", "struggle_backgrounds"], "gen_struggle_*"), // StruggleArt
+        ];
+
+        foreach (var (parts, pattern) in owned)
+        {
+            string dir = Path.Combine([modDir, .. parts]);
+            if (!Directory.Exists(dir)) continue;
+            foreach (string file in Directory.EnumerateFiles(dir, pattern)) File.Delete(file);
+        }
+    }
+
+    private static void DeleteIfPresent(string modDir, params string[] parts)
+    {
+        string path = Path.Combine([modDir, .. parts]);
+        if (File.Exists(path)) File.Delete(path);
+    }
+
+    private static void DeleteDirectoryIfPresent(string modDir, params string[] parts)
+    {
+        string path = Path.Combine([modDir, .. parts]);
+        if (Directory.Exists(path)) Directory.Delete(path, recursive: true);
+    }
+
+    /// <summary>What the history layer decided, for WrittenContent and the debug panel.</summary>
+    internal sealed record HistoryLayer(PrehistoryMap? Prehistory, RulerMap? Rulers, BookmarkCast? Bookmarks,
+        int ArtifactCount, int StruggleCount);
+
+    /// <summary>
+    /// The people of the start date and everything written about them: families and ancestors,
+    /// the rulers, their regiments and treasures, the bookmarks, the character and title history,
+    /// the chronicle and its struggles, wars and portraits.
+    ///
+    /// One method, called by both <see cref="WriteAll"/> and <see cref="ApplyHistory"/>, so that
+    /// history applied from the History workspace is written by exactly the code a full write uses
+    /// — the two cannot drift apart. Moved here verbatim from WriteAll's history block.
+    /// </summary>
+    internal static HistoryLayer WriteHistoryLayer(string modDir, string gameDir, MapConfig cfg,
+        ProvinceMap provinces, int[] order, int landCount, List<Title> empires, List<Title> counties,
+        RealmMap realms, CultureMap cultures, EthnicityMap ethnicities, FaithMap faiths,
+        GovernmentMap governments, WorldCenterMap worldCenters, WildernessMap wilderness,
+        Dictionary<Title, int> development, VanillaTitles.Plan? titlePlan,
+        Dictionary<int, GovernmentMap>? eraGovernments, RetinueMap? retinues, AzgaarImport? azgaar,
+        WorldCalendar? calendar, Flatmap flatmap, FrontierMap frontier, bool cultureAssets = true)
+    {
+        PrehistoryMap? prehistory = null;
+        RulerMap? rulers = null;
+        BookmarkCast? bookmarks = null;
+        int artifactCount = 0;
+        int struggleCount = 0;
+
+        prehistory = Core.Stage.Time("prehistory", () => PrehistoryMap.Build(
+            counties, provinces, order, landCount, realms, cultures, faiths,
+            governments, worldCenters, wilderness, cfg, new Rng(cfg.Seed ^ 0x4821)));
+
+        // After prehistory, which it reads the houses and fathers from, and before
+        // anything that names a ruler: the bookmarks and the character file both read
+        // from this rather than each drawing the man again.
+        rulers = Core.Stage.Time("rulers", () => RulerMap.Build(
+            counties, cfg, realms, cultures, faiths, governments, wilderness, prehistory));
+
+        // On a world of vanilla titles, the holders are vanilla's own people: whoever held
+        // each title in vanilla's history on the start date, with their house and family.
+        // Right after the roster and before anything names a ruler. See VanillaCharacters.
+        if (titlePlan is not null)
+            Core.Stage.Time("vanilla characters", () => VanillaCharacters.Import(titlePlan,
+                VanillaCatalog.Read(gameDir), realms, rulers!, prehistory!, cultures, faiths, empires,
+                cfg.EraOffset, new Rng(cfg.Seed ^ 0x7A15)));
+
+        // The people of the additional bookmarks, on the maps the formation simulation drew
+        // for their dates. Null unless asked for; it redraws nothing above, so the
+        // start-date world is unchanged, and it only adds dynasties to prehistory.
+        if (cfg.UsesAdditionalBookmarks)
+            prehistory!.Eras = Core.Stage.Time("additional bookmarks", () => BookmarkEras.Build(
+                cfg, counties, realms, rulers!, prehistory!, cultures, faiths, governments, wilderness,
+                eraGovernments));
+
+        // Beside the artifacts rather than beside the roster: both are things the rulers
+        // already own on the start date, and both need the rulers to exist first.
+        if (retinues is not null)
+            Core.Stage.Time("starting retinues",
+                () => RetinueWriter.WriteStartingRegiments(modDir, cfg, retinues, rulers));
+
+        // Reads prehistory for the same reason the bookmarks do: an heirloom needs the
+        // dead man it was made for and the house it was taken from, and both were decided
+        // a few lines up. Without them every artifact ships with an empty history panel.
+        // World centres and development are read for placement weighting only, and both are
+        // optional there: a map with no wonders scatters its treasure exactly as this did
+        // before, rather than needing a branch of its own.
+        // Forged before the artifacts that wear them: a generated weapon picks its look
+        // from this pool, so the pool has to exist first. One pool per weapon kind that has
+        // a parts library; kinds without one fall back to the stock catalogue, which is a
+        // supported answer rather than a failure.
+        var composed = Core.Stage.Detail("  · weapon forge",
+            () => WeaponForgeStep.ComposeWeaponCatalogue(modDir, gameDir, new Rng(cfg.Seed ^ 0x5A0D)));
+
+        var artifacts = Core.Stage.Detail("  · artifacts", () => MapGen.ArtifactMap.Build(
+            counties, cultures, faiths, realms, wilderness, prehistory,
+            worldCenters, development, cfg, new Rng(cfg.Seed ^ 0x4A1F), composed.Looks));
+
+        // Icons come after the artifacts and not with the catalogue, because which pairings
+        // deserve one depends on which the world actually handed out. A thumbnail is the one
+        // thing composition does not make cheap — geometry and masks are shared between
+        // pairings, a thumbnail belongs to exactly one — so only the upper bands get drawn
+        // and everything else keeps its kind's stock art.
+        var forgedWeapons = Core.Stage.Detail("  · weapon icons",
+            () => WeaponForgeStep.FinishTopArtifacts(modDir, gameDir, composed,
+                artifacts.AllArtifacts.Select(a => (a.Visuals, a.Rarity)),
+                ArtifactRarity.Famed, ArtifactRarity.Masterwork, new Rng(cfg.Seed ^ 0x4E17)));
+
+        ArtifactWriter.WriteTemplates(modDir);
+        Core.Stage.Detail("  · artifact visuals", () => ArtifactWriter.WriteVisuals(modDir, forgedWeapons));
+
+        // Dresses weapons the *game* creates - inspirations, tournament prizes, adventurer
+        // finds - from the same pool. Without it every player-earned weapon would be vanilla
+        // art standing next to forged art in the same inventory. Keyed on culture, so it
+        // needs this world's culture list rather than just the weapons.
+        ForgedVisualOverrides.Write(modDir, forgedWeapons,
+            [.. cultures.Cultures.Select(c => c.Key)]);
+
+        // Armour, which needs no geometry at all: a vanilla war garment already carries the
+        // mask and variation hooks a forged weapon does, so a look is a palette and some
+        // text. Culture picks the garment, the artifact's type picks the material.
+        //
+        // These three read nothing about who rules what — only the cultures and the asset
+        // libraries — and they patch the mod's own copies of vanilla files, so running them over a
+        // mod that already has their patches applies them twice. A re-emit (cultureAssets false)
+        // leaves what the write put there, which is exactly what they would produce again.
+        if (cultureAssets)
+        {
+            Core.Stage.Detail("  · armour forge", () => ArmorForgeStep.WriteAll(modDir, gameDir,
+                [.. cultures.Cultures.Select(c => c.Key)],
+                cultures.Cultures.ToDictionary(c => c.Key, c => c.ClothingGfx, StringComparer.Ordinal)));
+
+            // Hand-modelled pieces from assets/armors, worn from a debug flag. After the forge
+            // above, because that is what splices the gene template both of them rely on.
+            CustomArmorStep.WriteAll(modDir, gameDir);
+
+            // Rigid pieces hung off portrait bones - pauldrons today, any slot later. After the
+            // armour forge because it garnishes what that emits, though it depends on none of it.
+            BonePieceStep.WriteAll(modDir, gameDir, [.. cultures.Cultures.Select(c => c.Key)]);
+        }
+        ArtifactWriter.WriteModifiers(modDir, artifacts);
+        ArtifactWriter.WriteLocalisation(modDir, artifacts);
+        ArtifactWriter.WriteOnGameStart(modDir, artifacts, cfg);
+        artifactCount = artifacts.AllArtifacts.Count;
+
+        if (forgedWeapons.Count > 0)
+        {
+            Console.WriteLine("  forged weapons: " + string.Join(", ",
+                forgedWeapons.GroupBy(a => a.Kind)
+                    .Select(g => $"{g.Count()} {g.Key}(s)"))
+                + " in the artifact pool");
+
+            // The band split is printed because it is the one part of the forge a config
+            // change can quietly move: raise WeaponPoolSizePerKind and it widens, drop it
+            // below four and bands start sharing looks. Neither shows in the emitted files
+            // without opening them. Counted across every kind rather than per kind, since a
+            // library that under-fills its pool gets a shorter ladder than its neighbours.
+            Console.WriteLine("    bands: " + string.Join(", ",
+                forgedWeapons.Where(a => a.Tier is not null)
+                    .GroupBy(a => a.Tier!.Value)
+                    .OrderBy(g => g.Key)
+                    .Select(g => $"{g.Count()} {g.Key.ToString().ToLowerInvariant()}")));
+        }
+
+        var bookmarkResult = Core.Stage.Detail("  · bookmarks", () => BookmarkWriter.WriteAll(
+            modDir, gameDir, cfg, provinces, order, empires,
+            realms, development, cultures, faiths, governments, wilderness, prehistory,
+            rulers, azgaar, calendar));
+
+        // Kept for the editor: re-emitting a ruler means re-emitting the bookmark that
+        // describes him, and the cast is the record of who that is.
+        bookmarks = bookmarkResult.Cast;
+
+        Core.Stage.Detail("  · character history", () => HistoryWriter.WriteAll(
+            modDir, cfg, empires, realms, development,
+            cultures, ethnicities, faiths, governments, wilderness, prehistory, rulers));
+
+        // Last of the history block, because it reads everything the rest of it decided.
+        // Inside the block rather than beside it: with --no-history there are no houses, no
+        // wars and no artifacts, so a chronicle written there could only repeat the map back
+        // at the player, and the GUI already treats a missing key as "no button".
+        var chronicle = Core.Stage.Time("chronicle", () => ChronicleMap.Build(
+            empires, realms, development, cultures, faiths, wilderness, prehistory,
+            artifacts, worldCenters, cfg, new Rng(cfg.Seed ^ 0x104E)));
+
+        // After the chronicle, which is the thing that decides where a struggle is. Reads
+        // the counties for its membership and the chronicle only for its tension, so it
+        // cannot invent a quarrel the lore panel does not also report.
+        var struggles = Core.Stage.Time("struggles", () => StruggleMap.Build(
+            empires, chronicle, cultures, faiths, wilderness, cfg,
+            new Rng(cfg.Seed ^ 0x57A6)));
+
+        // Written after the struggles it reads, not after the chronicle it is made of: the
+        // lore panel closes with the name of the struggle a title is caught up in, and that
+        // name does not exist until the line above has run.
+        //
+        // Only this is gated, not the build above: the chronicle is also where struggles
+        // come from. The lore it writes is read by the Realm Lore panel and nothing else.
+        if (cfg.EnableChronicle)
+            ChronicleWriter.WriteAll(modDir, chronicle, struggles, empires);
+
+        Core.Stage.Detail("  · struggle art",
+            () => StruggleWriter.WriteAll(modDir, gameDir, cfg, struggles, flatmap, provinces, order));
+        struggleCount = struggles.Struggles.Count;
+
+        // The half of the chronicle the game writes. After the struggles because it
+        // narrates their phase changes by name, and after the frontier for the same reason.
+        Core.Stage.Detail("  · chronicle (runtime)",
+            () => ChronicleRuntimeWriter.WriteAll(modDir, cfg, struggles, frontier));
+
+        WarWriter.WriteAll(modDir, prehistory, cfg);
+        Core.Stage.Detail("  · portraits", () => PortraitWriter.WriteAll(
+            modDir, gameDir, bookmarkResult.PortraitRequests, ethnicities, cfg.Seed));
+
+        return new HistoryLayer(prehistory, rulers, bookmarks, artifactCount, struggleCount);
+    }
+}

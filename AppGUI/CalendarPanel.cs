@@ -8,9 +8,10 @@ namespace Ck3MapGen.AppGUI;
 /// the settings column in place of the grid, so it lays out to whatever width that column is.
 ///
 /// Every box may be left blank, and a blank one is generated at build time in the language of the
-/// world's most widespread people (<see cref="WorldCalendar.Build"/>). So the tab cannot show the
-/// generated names — that language does not exist until the cultures do — and says "generated"
-/// instead. What it can show is the typed half, as a date the game would render.
+/// world's most widespread people (<see cref="WorldCalendar.Build"/>). That language does not exist
+/// until the cultures do, so before a world is written a blank box says "generated"; after one,
+/// its greyed placeholder is the name that world gave it (<see cref="ShowGenerated"/>), still
+/// overridden by anything typed over it.
 ///
 /// Writes straight into the live <see cref="MapConfig"/>, the same object the settings grid edits,
 /// so presets carry the names with everything else. Shown only while
@@ -18,12 +19,15 @@ namespace Ck3MapGen.AppGUI;
 /// </summary>
 public sealed class CalendarPanel : UserControl
 {
+    private const string Placeholder = "generated";
+
     private MapConfig? _config;
+    private WorldCalendar? _generated;
     private bool _loading;
 
-    private readonly TextBox _eraName = Box("generated");
-    private readonly TextBox _eraShort = Box("generated");
-    private readonly TextBox[] _months = [.. WorldCalendar.EnglishMonths.Select(_ => Box("generated"))];
+    private readonly TextBox _eraName = Box(Placeholder);
+    private readonly TextBox _eraShort = Box(Placeholder);
+    private readonly TextBox[] _months = [.. WorldCalendar.EnglishMonths.Select(_ => Box(Placeholder))];
     private readonly Label _preview = new()
     {
         AutoSize = true, Font = Theme.UiBold, ForeColor = Theme.Text, Margin = new Padding(3, 10, 3, 3),
@@ -89,7 +93,34 @@ public sealed class CalendarPanel : UserControl
 
         foreach (var box in _months.Append(_eraName).Append(_eraShort))
             box.TextChanged += (_, _) => Store();
+        _eraName.TextChanged += (_, _) => ShowEraShortPlaceholder();
     }
+
+    /// <summary>
+    /// Greys the names the last written world generated into the blank boxes, so leaving a box
+    /// blank shows what it becomes. Null — a preview, or a mod opened from disk — puts
+    /// "generated" back, since a new world may draw different names.
+    /// </summary>
+    public void ShowGenerated(WorldCalendar? calendar)
+    {
+        _generated = calendar;
+        for (int m = 0; m < _months.Length; m++)
+            _months[m].PlaceholderText = UntypedMonth(m) ?? Placeholder;
+        _eraName.PlaceholderText = UntypedEra?.Name is { Length: > 0 } name ? name : Placeholder;
+        ShowEraShortPlaceholder();
+        RefreshPreview();
+    }
+
+    private string? UntypedMonth(int m)
+        => _generated?.UntypedMonths is { } names && m < names.Count ? names[m] : null;
+
+    private (string Name, string Short)? UntypedEra
+        => _generated?.UntypedEra is { Short.Length: > 0 } era ? era : null;
+
+    /// <summary>A typed era name abbreviates itself; only a blank one falls back to the world's.</summary>
+    private void ShowEraShortPlaceholder()
+        => _eraShort.PlaceholderText = _eraName.Text.Trim() is { Length: > 0 } typed ? WorldCalendar.Initials(typed)
+            : UntypedEra?.Short ?? Placeholder;
 
     /// <summary>Points the tab at a config and shows what it holds; again after a preset loads.</summary>
     public void Bind(MapConfig config)
@@ -112,10 +143,11 @@ public sealed class CalendarPanel : UserControl
     {
         if (_config is null) return;
 
-        string month = _months[0].Text.Trim() is { Length: > 0 } typed ? typed : "(generated month)";
+        string month = _months[0].Text.Trim() is { Length: > 0 } typed ? typed
+            : UntypedMonth(0) ?? "(generated month)";
         string era = _eraShort.Text.Trim() is { Length: > 0 } s ? s
             : _eraName.Text.Trim() is { Length: > 0 } n ? WorldCalendar.Initials(n)
-            : "(generated era)";
+            : UntypedEra?.Short ?? "(generated era)";
         _preview.Text = $"The game's first day:  1 {month}, {Math.Max(1, _config.StartYear)} {era}";
     }
 

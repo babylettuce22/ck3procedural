@@ -150,6 +150,27 @@ public sealed record WrittenContent
     /// </summary>
     public MapGen.WorldCalendar? Calendar { get; init; }
 
+    /// <summary>
+    /// Every decision the write was built from — see <see cref="WorldModel"/>. Kept whole so an
+    /// applied history can re-emit the files that follow who rules what without generating again;
+    /// see <see cref="ContentWriter.ApplyHistory"/>. Null only on a content object built by hand.
+    /// </summary>
+    public WorldModel? World { get; init; }
+
+    /// <summary>
+    /// The generated regiments, which the rulers' starting retinues are drawn from. Null when
+    /// generated retinues are off. Kept for the same re-emit: the roster is part of the written
+    /// world, and the retinues handed to rulers are not.
+    /// </summary>
+    public RetinueMap? Retinues { get; init; }
+
+    /// <summary>
+    /// The flat map as FlatmapWriter painted it, which the struggle windows cut their backgrounds
+    /// from. Kept for the re-emit, which writes struggles again and would otherwise have to paint
+    /// the parchment a second time.
+    /// </summary>
+    public Flatmap? Flatmap { get; init; }
+
     /// <summary>The province id boundaries the title localisation file is written against.</summary>
     public required int BaronyCount { get; init; }
 

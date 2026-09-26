@@ -55,7 +55,7 @@ public static class Program
                         var world = LoadedWorld.Open(args[++i]);
                         if (GameLocator.IsGameDir(options.GameDir)) MapGen.VanillaVocabulary.Read(options.GameDir);
                         ApplicationConfiguration.Initialize();
-                        var form = new AppGUI.MainForm(options);
+                        var form = new AppGUI.MainForm(options) { OpensToStartPage = false };
                         var view = new AppGUI.LoadedWorldView(world);
                         form.Shown += (_, _) => form.AdoptLoadedWorld(view);
                         System.Windows.Forms.Application.Run(form);

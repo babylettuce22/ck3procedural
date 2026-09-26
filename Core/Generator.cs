@@ -77,11 +77,41 @@ public sealed class GenerationResult
     /// <summary>The imported Azgaar world, or null when none was given.</summary>
     public MapGen.AzgaarImport? Azgaar { get; init; }
     public long ElapsedMs { get; init; }
+
+    /// <summary>
+    /// The same world under another configuration — the one a history applied without generating
+    /// again was written with, so that later re-emits from the editor date what they write the
+    /// same way. Everything else is shared, not copied.
+    /// </summary>
+    internal GenerationResult WithConfig(MapConfig config) => new()
+    {
+        Config = config,
+        World = World,
+        ProvinceElevation = ProvinceElevation,
+        LandMask = LandMask,
+        Provinces = Provinces,
+        ProvinceOrder = ProvinceOrder,
+        BaronyCount = BaronyCount,
+        LandCount = LandCount,
+        RiverCount = RiverCount,
+        Titles = Titles,
+        ProvinceLandMask = ProvinceLandMask,
+        Drainage = Drainage,
+        Terrain = Terrain,
+        Terra = Terra,
+        Azgaar = Azgaar,
+        ElapsedMs = ElapsedMs,
+    };
 }
 
 public static class Generator
 {
-    private static void ApplyWatermark(string modDir, MapConfig cfg)
+    /// <summary>
+    /// Stamps and BOMs every script file in the mod that does not carry the stamp yet — after a full
+    /// write, all of them; after a re-emit (see <see cref="Emit.ContentWriter.ApplyHistory"/>), only
+    /// the files it rewrote, which is what makes a re-emitted file match the one a full write makes.
+    /// </summary>
+    internal static void ApplyWatermark(string modDir, MapConfig cfg)
     {
         // The build's own version: the release workflow stamps it from the git tag, so the header
         // names the release that wrote the file. The "+commit" suffix the SDK appends is dropped.

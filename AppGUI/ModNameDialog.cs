@@ -15,8 +15,10 @@ namespace Ck3MapGen.AppGUI;
 /// box and updates as it is typed, so the answer to "where did it go" is on screen before the write
 /// rather than in the log after it — which matters more now that the mod folder is searched for
 /// rather than assumed and is therefore not necessarily on C:.
+///
+/// Wears the app's drawn caption (<see cref="ChromeForm"/>), like every other window of the tool.
 /// </summary>
-internal sealed class ModNameDialog : Form
+internal sealed class ModNameDialog : ChromeForm
 {
     private readonly TextBox _name = new()
     {
@@ -128,6 +130,12 @@ internal sealed class ModNameDialog : Form
         layout.SetColumnSpan(buttons, 2);
 
         Controls.Add(layout);
+
+        // Added last so they dock first: the caption row on top, a hairline under it. No icon —
+        // a dialog of the main window, which already shows it.
+        ShowIcon = false;
+        Controls.Add(new Panel { Dock = DockStyle.Top, Height = 1, BackColor = Theme.Border });
+        Controls.Add(CaptionBar = new TitleBar(this));
 
         _name.TextChanged += (_, _) => Describe();
         _browse.Click += (_, _) => PickRoot();
