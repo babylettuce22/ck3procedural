@@ -405,10 +405,16 @@ public static class Retinues
     private static bool IsCold(TerrainClass terrain)
         => terrain is TerrainClass.Taiga or TerrainClass.Arctic;
 
+    /// <param name="raceOf">Each culture's fantasy race from the ethnicity pass, or null on a map
+    /// without races. Falls back to the export's tag (<see cref="Culture.ImportedArchetype"/>),
+    /// which is all this ever read before — so on a generated map race used to decide nothing.</param>
     public static RetinueMap Build(CultureMap cultures, GovernmentMap governments,
-        TerrainClass[] provinceTerrain, VanillaVocabulary vocab, MapConfig cfg, Rng rng)
+        TerrainClass[] provinceTerrain, VanillaVocabulary vocab, MapConfig cfg, Rng rng,
+        Func<Culture, RaceArchetype>? raceOf = null)
     {
         var map = new RetinueMap { Innovations = new InnovationMap() };
+
+        RaceArchetype? RaceOf(Culture c) => raceOf is not null ? raceOf(c) : c.ImportedArchetype;
 
         // One roster, one name each: seventy regiments drawn from thirty tongues will collide eventually.
         var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -504,7 +510,7 @@ public static class Retinues
             int held = Math.Max(1, members.Sum(c => c.Counties.Count));
             double wealth = members.Sum(c => c.MeanDevelopment * c.Counties.Count) / held;
 
-            var profile = Best(usable, terrain, lead, wealth, governmentByCulture[lead],
+            var profile = Best(usable, terrain, lead, RaceOf(lead), wealth, governmentByCulture[lead],
                                [], incumbent: null, floor: 0, elite: false, worldwide, vocab, rng);
 
             var regiment = Compose($"gen_maa_h{h}", profile, lead, heritage, terrain,
@@ -541,7 +547,7 @@ public static class Retinues
                 ? 0
                 : Power(levy.Damage, levy.Toughness, levy.Pursuit, levy.Screen);
 
-            var profile = Best(usable, terrain, culture, culture.MeanDevelopment,
+            var profile = Best(usable, terrain, culture, RaceOf(culture), culture.MeanDevelopment,
                                governmentByCulture[culture], taken, levy?.Doctrine, floor,
                                elite: true, worldwide, vocab, rng);
 
@@ -642,7 +648,7 @@ public static class Retinues
     /// raise, not against its own archetype's mean, and those two are not the same question when
     /// archetype means run from 42 to 299 on the same scale.</param>
     private static Profile Best(List<Profile> profiles, Dictionary<TerrainClass, int> terrain,
-        Culture culture, double development, string government, HashSet<Doctrine> taken,
+        Culture culture, RaceArchetype? race, double development, string government, HashSet<Doctrine> taken,
         Doctrine? incumbent, double floor, bool elite,
         (Dictionary<Doctrine, int> Doctrines, Dictionary<string, int> Archetypes) worldwide,
         VanillaVocabulary vocab, Rng rng)
@@ -705,7 +711,7 @@ public static class Retinues
             // A fantasy race the export or the ethnicity pass tagged this people with. Worth as
             // much as the ethos: it is a statement about their bodies, and a race that cannot
             // ride is not going to have arrived at heavy cavalry whatever its grassland says.
-            if (culture.ImportedArchetype is { } race && profile.Races.Contains(race)) score += 1.1;
+            if (race is { } r && profile.Races.Contains(r)) score += 1.1;
 
             if (score <= bestScore) continue;
 

@@ -35,7 +35,7 @@ public static class RaceMorphWriter
     /// <c>phenotype_gracile</c>, which left this file able to force only the genes both elf tables
     /// agreed on — averaged, so high elves lost their height — and able to tell the two skins apart
     /// only by a list of generation-time culture keys, so every wood elf outside one (minorities,
-    /// diverged and hybrid cultures, converts) rendered high-elf lavender.
+    /// diverged and hybrid cultures, converts) rendered with high-elf skin.
     /// </summary>
     private static readonly (RaceArchetype Archetype, string Trait)[] Races =
     [

@@ -117,7 +117,14 @@ public static class ProvinceDomain
         // slivers to absorb; every pass over it would be a no-op and a second or two.
         if (azgaar is null && painted is null) return domain;
 
-        AbsorbSlivers(domain, width, height, cfg);
+        // Seeded a barony per town, a province places only as many seeds as it has towns, so every
+        // stray piece of it the coastline cut off would become a sliver barony of its own (691 on
+        // Ondrerol, most a few dozen pixels). Detached pieces are therefore held to half a vanilla
+        // barony there; a province's main body keeps the ordinary floor. See AzgaarSeeding.
+        int fragmentFloor = azgaar is not null && cfg.AzgaarBaroniesFromTowns
+            ? (int)Math.Max(cfg.MinProvincePixels, cfg.BaronyPixelsAtVanilla / 2)
+            : cfg.MinProvincePixels;
+        AbsorbSlivers(domain, width, height, cfg, fragmentFloor);
         if (azgaar is not null) Report(domain, cfg);
         if (painted is not null) ReportPainted(domain, width, height, cfg);
         return domain;
@@ -204,10 +211,16 @@ public static class ProvinceDomain
     /// from it. Erasing whole small provinces would be throwing away the very data the import
     /// exists to read, so the floor is <see cref="MapConfig.MinProvincePixels"/> — the point below
     /// which a province cannot exist at all — and not a fraction of a barony.
+    ///
+    /// <paramref name="fragmentFloor"/> is the one exception, and it keeps that safety: it applies
+    /// only to a component that is not its domain's largest, so it can fold away a piece of a
+    /// province stranded across an inlet but never the province itself. A piece with no land
+    /// neighbour — an island — has nothing to join and stays either way.
     /// </summary>
-    private static void AbsorbSlivers(int[] domain, int width, int height, MapConfig cfg)
+    private static void AbsorbSlivers(int[] domain, int width, int height, MapConfig cfg, int fragmentFloor)
     {
         int floor = Math.Max(1, cfg.MinProvincePixels);
+        fragmentFloor = Math.Max(floor, fragmentFloor);
         int absorbed = 0;
         long absorbedPixels = 0;
 
@@ -261,10 +274,20 @@ public static class ProvinceDomain
             // the border its neighbour is being measured against half way through the pass.
             var reassign = new Dictionary<int, int>();
 
+            // Each domain's main body: its largest component. Only the rest are fragments.
+            var largest = new Dictionary<int, int>();
+            if (fragmentFloor > floor)
+                foreach (var cells in members)
+                {
+                    int d = domain[cells[0]];
+                    if (cells.Count > largest.GetValueOrDefault(d)) largest[d] = cells.Count;
+                }
+
             for (int id = 0; id < members.Count; id++)
             {
                 var cells = members[id];
-                if (cells.Count >= floor) continue;
+                bool fragment = fragmentFloor > floor && cells.Count < largest.GetValueOrDefault(domain[cells[0]]);
+                if (cells.Count >= (fragment ? fragmentFloor : floor)) continue;
 
                 var votes = new Dictionary<int, int>();
                 foreach (int cell in cells)
@@ -299,7 +322,8 @@ public static class ProvinceDomain
         }
 
         if (absorbed > 0)
-            Console.WriteLine($"  domain: absorbed {absorbed} land fragments under {floor} px " +
+            Console.WriteLine($"  domain: absorbed {absorbed} land fragments under {floor} px" +
+                              (fragmentFloor > floor ? $" (detached pieces under {fragmentFloor} px) " : " ") +
                               $"({absorbedPixels} px) into their surrounding province");
     }
 

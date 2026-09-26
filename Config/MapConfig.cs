@@ -333,6 +333,29 @@ public sealed class MapConfig : CustomTypeDescriptor
     public string AzgaarJsonPath { get; set; } = "";
 
     /// <summary>
+    /// Whether an import's provinces are cut into one barony per town the export draws in them,
+    /// rather than at <see cref="CountyScale"/>'s uniform size. See <see cref="MapGen.AzgaarSeeding"/>
+    /// for why no uniform size can be faithful: Azgaar province areas vary far more than their
+    /// town counts, so a single size splits the big provinces into several counties and starves the
+    /// small ones. Only read when an export is loaded; land outside the export's provinces keeps the
+    /// uniform size either way.
+    /// </summary>
+    [Category("03 Provinces")]
+    [DisplayName("Azgaar: Barony Per Town")]
+    [Description("With an Azgaar export: cut each of its provinces into one barony per town it holds (at least one), so every province becomes one county holding its own settlements, dense where the export is populous and sparse where it is not. Off cuts them at County Scale's uniform size instead. Only used with an export.")]
+    public bool AzgaarBaroniesFromTowns { get; set; } = true;
+
+    /// <summary>
+    /// The largest a barony may grow under <see cref="AzgaarBaroniesFromTowns"/>, in vanilla
+    /// barony areas. A thinly-settled Azgaar province can be vast; past this it gets more baronies
+    /// than towns, so no single barony is a whole region's one siege, terrain and holding.
+    /// </summary>
+    [Category("03 Provinces")]
+    [DisplayName("Azgaar: Largest Barony")]
+    [Description("With Azgaar: Barony Per Town, the largest a barony may be, in vanilla barony areas. A thinly-settled province bigger than this gets extra baronies beyond its towns. 8 by default; lower keeps empty land finer-grained, higher follows the export's towns more strictly.")]
+    public double AzgaarMaxBaronyArea { get; set; } = 8.0;
+
+    /// <summary>
     /// Ships the chronicle the player can see: the HUD's Chronicle tab and its world feed, the
     /// Realm Lore button in the title window, and the narrators that write entries during play.
     ///
@@ -1208,6 +1231,24 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Category("03 Provinces")]
     [Description("The highest the mountain-ground gate's line may sit, in elevation units (sea 36, max 520). 238 is where vanilla's top 3.5% of land begins. Stops high, saturated maps reading real ranges as foothills. 0 removes the cap.")]
     public double ImpassableGateHeight { get; set; } = 238;
+
+    /// <summary>
+    /// Makes a land province with more than half its ground above the mountain line impassable
+    /// outright, outside the target share, as <see cref="ImpassableHeightFraction"/> already does
+    /// for the roof of the map.
+    ///
+    /// The score is mostly steepness, and a plateau top is flat, so the quota fills with the steep
+    /// flanks around a massif before it reaches the top. The massif then comes out walled around its
+    /// edge with a passable plateau in the middle. On a small Lowlands pangaea this took 6 such
+    /// provinces (52 → 58 walls, mountain ground walled 58.5% → 92.6%); on the Highlands pangaea it
+    /// took 11, and on a large Lowlands pangaea it took none, because the score had already taken
+    /// every one.
+    /// Recommended: on.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("03 Provinces")]
+    [Description("A province more than half above the mountain line is impassable regardless of the target share. Stops a massif being walled around its edge with a passable plateau on top.")]
+    public bool ImpassableMountainPlateaus { get; set; } = true;
 
     /// <summary>
     /// A land province with most of its ground at or above this fraction of the way from sea level

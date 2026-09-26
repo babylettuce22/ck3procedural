@@ -423,8 +423,10 @@ internal sealed class AzgaarPage : Panel
             _choices.AzgaarCountyScale = fit.Scale;
             _densityAzgaar.Subtitle = $"A barony per town · ~{fit.Baronies:N0} baronies";
             _tips.SetToolTip(_densityAzgaar,
-                $"As many baronies as the export has towns ({_export!.Burgs:N0}), at {fit.Scale:0.##}× vanilla's barony size. "
-                + $"Each province becomes a county; {fit.Split} of the largest hold more than a county can and are split.");
+                $"Each of the export's {_export!.Provinces} provinces becomes one county, with a barony for each of its towns "
+                + $"({_export.Burgs:N0} in all). Thinly-settled provinces get {fit.FromCap:N0} more so no barony passes "
+                + $"{new MapConfig().AzgaarMaxBaronyArea:0.#}× vanilla's size"
+                + (fit.Split > 0 ? $"; the {fit.Split} largest then hold more than a county can and are split." : "."));
         }
         else
         {
@@ -444,7 +446,7 @@ internal sealed class AzgaarPage : Panel
     {
         if (_image is not { } image || _export is not { } export || _picture is not { } picture) return null;
         var built = image.Fit ?? (image.Width, image.Height);
-        return AzgaarFiles.ProvinceScale(picture, built, export.Burgs);
+        return AzgaarFiles.ProvinceScale(picture, built, export.World, new MapConfig().AzgaarMaxBaronyArea);
     }
 
     /// <summary>The advancement as the summary says it.</summary>

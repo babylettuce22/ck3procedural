@@ -32,13 +32,16 @@ public sealed class AzgaarChoices
     /// </summary>
     public int Advancement { get; set; }
 
-    /// <summary>Barony size, or null for Azgaar: <see cref="AzgaarCountyScale"/>.</summary>
+    /// <summary>
+    /// Barony size, or null for Azgaar: each province cut into a barony per town
+    /// (<see cref="MapConfig.AzgaarBaroniesFromTowns"/>).
+    /// </summary>
     public QuickDensity? Density { get; set; }
 
     /// <summary>
-    /// What "Azgaar" comes to for <see cref="Density"/> on this pair of files: the county scale at
-    /// which there is a barony per town the export draws and its provinces stay whole, one county
-    /// each. Worked out by the page from the files (<see cref="AzgaarFiles.ProvinceScale"/>).
+    /// Under Azgaar density, the uniform barony size for land outside the export's provinces: the
+    /// one at which the whole map would hold a barony per town. Worked out by the page from the
+    /// files (<see cref="AzgaarFiles.ProvinceScale"/>).
     /// </summary>
     public double AzgaarCountyScale { get; set; } = 1.25;
 
@@ -81,6 +84,10 @@ public sealed class AzgaarChoices
         if (Advancement > 0) cfg.StartYear = Advancement;
         cfg.EraAnchorYear = Math.Max(0, Advancement);
 
+        // Azgaar: each province cut into a barony per town (MapGen.AzgaarSeeding), with the land
+        // outside any province at the uniform size that matches the export's towns overall. An
+        // override cuts everything at one size instead.
+        cfg.AzgaarBaroniesFromTowns = Density is null;
         cfg.CountyScale = CountyScale;
 
         cfg.EnableMagic = false;   // not a finished feature; see QuickChoices.ApplyTo

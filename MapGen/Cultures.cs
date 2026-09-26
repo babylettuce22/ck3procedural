@@ -9,8 +9,10 @@ namespace Ck3MapGen.MapGen;
 public sealed class Heritage
 {
     public required string Key { get; init; }
-    public required string Name { get; init; }
-    public required Language Language { get; init; }
+    // Settable for one reason: Cultures.SpeakAsRace re-voices a fantasy people once its race is
+    // known, which is after the heritage was born. Nothing else writes these after creation.
+    public required string Name { get; set; }
+    public required Language Language { get; set; }
     public required VanillaVocabulary.Look Look { get; init; }
 
     /// <summary>
@@ -64,7 +66,7 @@ public sealed class Culture
     /// spelling shifted — so sister cultures read as kin without being copies. The pillar CK3
     /// sees is still the heritage's.
     /// </summary>
-    public required Language Tongue { get; init; }
+    public required Language Tongue { get; set; } // settable for SpeakAsRace, as Heritage.Language
 
     public required (byte R, byte G, byte B) Color { get; set; }
     public required string Ethos { get; set; }
@@ -102,9 +104,10 @@ public sealed class Culture
             ? Name[..^1] + "o"
             : Name + "o";
 
-    public required List<string> MaleNames { get; init; }
-    public required List<string> FemaleNames { get; init; }
-    public required List<string> DynastyNames { get; init; }
+    // The name lists and the grammar below are the Tongue's output, so they are settable with it.
+    public required List<string> MaleNames { get; set; }
+    public required List<string> FemaleNames { get; set; }
+    public required List<string> DynastyNames { get; set; }
 
     /// <summary>
     /// The house name for the dynasty founded at <paramref name="county"/>, by allocation rather
@@ -127,14 +130,14 @@ public sealed class Culture
     }
 
     /// <summary>Localisation keys, with the words they stand for, for this culture's name grammar.</summary>
-    public required string PatronymSuffixMale { get; init; }
+    public required string PatronymSuffixMale { get; set; }
 
-    public required string PatronymSuffixFemale { get; init; }
-    public required string LocationPrefix { get; init; }
-    public required bool AlwaysUsePatronym { get; init; }
+    public required string PatronymSuffixFemale { get; set; }
+    public required string LocationPrefix { get; set; }
+    public required bool AlwaysUsePatronym { get; set; }
 
     /// <summary>True where the patronymic goes before the father's name (ibn, mac, ap) rather than after.</summary>
-    public bool PatronymIsPrefix { get; init; }
+    public bool PatronymIsPrefix { get; set; }
 
     /// <summary>Counties speaking this culture at the start date.</summary>
     public List<Title> Counties { get; } = [];
@@ -488,6 +491,223 @@ public static class Cultures
         Report(heritages, cultures, counties.Count, sw.ElapsedMilliseconds);
         ReportDress(cultures, provinceClimate);
         return new CultureMap { Heritages = heritages, Cultures = cultures, ByCounty = byCounty };
+    }
+
+    /// <summary>
+    /// Gives each fantasy people its race's tongue — dwarves speak Dwarven, orcs Harsh, elves
+    /// Sylvan (see <see cref="Ethnicities.TongueOf"/>) — once the ethnicity pass has said who is who.
+    ///
+    /// **Why a pass afterwards rather than a choice at birth.** A heritage's language is drawn the
+    /// moment the heritage is, from the same stream that then partitions it into cultures, and races
+    /// are decided from that partition. Deciding the tongue first would need the race first, which
+    /// needs the cultures first; and reordering the draws to break the loop would reshape every
+    /// world, human ones included. So the build stays exactly as it was, and this re-voices only
+    /// the peoples whose race calls for it, from a stream of its own — a world without races is
+    /// byte-identical, and a fantasy world keeps its geography.
+    ///
+    /// A heritage takes the tongue of the race holding most of its land. Under TieRaceToHeritage
+    /// that is every culture in it; otherwise a culture whose race wants a different tongue (a
+    /// human people inside a dwarven heritage, or the reverse) gets a fresh language of its own
+    /// rather than a dialect, since a dialect of the wrong tongue is exactly what this is removing.
+    /// Humans never speak a fantasy flavour.
+    ///
+    /// Everything spoken is redrawn together — the heritage's and cultures' names, the language's
+    /// name, the given-name and house lists, and the name grammar — so nothing keeps a word from
+    /// the old tongue. Must run before anything names titles, which happens in these languages.
+    ///
+    /// Skips a heritage whose language was built from an export's name corpus (no phonology): an
+    /// Azgaar map's peoples already speak as the export drew them.
+    /// </summary>
+    /// <returns>How many heritages took a new tongue, and how many cultures were re-voiced.</returns>
+    public static (int Heritages, int Cultures) SpeakAsRace(CultureMap map,
+        Func<Culture, RaceArchetype> raceOf, Rng rng)
+    {
+        var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var h in map.Heritages) { usedNames.Add(h.Name); usedNames.Add(h.Language.Name); }
+        foreach (var c in map.Cultures) usedNames.Add(c.Name);
+        var usedDynasties = new HashSet<string>(map.Cultures.SelectMany(c => c.DynastyNames),
+            StringComparer.OrdinalIgnoreCase);
+
+        // "Speaks right" for a race: its own fantasy flavour, or for a human any flavour that is
+        // not a fantasy one.
+        static bool Fits(LanguageFlavour? want, LanguageFlavour? spoken)
+            => want is null ? spoken?.Fantasy != true : spoken == want;
+
+        int heritagesDone = 0, culturesDone = 0;
+
+        foreach (var heritage in map.Heritages)
+        {
+            if (heritage.Inherited || heritage.Language.Phonology is null) continue;
+
+            var members = heritage.Cultures.Where(c => !c.Inherited && c.Key != UnsettledKey).ToList();
+            if (members.Count == 0) continue;
+
+            var dominant = members
+                .GroupBy(raceOf)
+                .OrderByDescending(g => g.Sum(c => c.Counties.Count))
+                .ThenBy(g => (int)g.Key)
+                .First().Key;
+            var heritageTongue = Ethnicities.TongueOf(dominant);
+
+            bool revoiced = false;
+            if (!Fits(heritageTongue, heritage.Language.Flavour))
+            {
+                usedNames.Remove(heritage.Name);
+                usedNames.Remove(heritage.Language.Name);
+
+                // Same key: the language pillar CK3 sees keeps its identity, only its sound changes.
+                var language = Language.Create(heritage.Language.Key, rng, heritageTongue);
+                string baseName = UniqueFrom(() => language.FolkName(rng), usedNames);
+                language.Name = language.LanguageNameFor(baseName, rng);
+                usedNames.Add(language.Name);
+
+                heritage.Language = language;
+                heritage.Name = baseName;
+                revoiced = true;
+                heritagesDone++;
+            }
+
+            foreach (var culture in members)
+            {
+                var want = Ethnicities.TongueOf(raceOf(culture));
+                if (!revoiced && Fits(want, culture.Tongue.Flavour)) continue;
+
+                var tongue = Fits(want, heritage.Language.Flavour)
+                    ? heritage.Language.Dialect($"{heritage.Language.Key}_d_{culture.Key}", rng)
+                    : Language.Create($"{heritage.Language.Key}_own_{culture.Key}", rng, want);
+
+                Revoice(culture, tongue, usedNames, usedDynasties, rng);
+                culturesDone++;
+            }
+        }
+
+        return (heritagesDone, culturesDone);
+    }
+
+    /// <summary>
+    /// Redraws everything a culture says in its tongue, exactly as <see cref="Create"/> first drew
+    /// it: its name, its given names, its houses and its name grammar.
+    /// </summary>
+    private static void Revoice(Culture culture, Language tongue, HashSet<string> usedNames,
+        HashSet<string> usedDynasties, Rng rng)
+    {
+        usedNames.Remove(culture.Name);
+        foreach (var house in culture.DynastyNames) usedDynasties.Remove(house);
+
+        culture.Tongue = tongue;
+        culture.Name = UniqueFrom(() => tongue.FolkName(rng), usedNames);
+        culture.MaleNames = Names(tongue, rng, 60, male: true, usedNames: null);
+        culture.FemaleNames = Names(tongue, rng, 45, male: false, usedNames: null);
+        culture.DynastyNames = Dynasties(tongue, rng, Math.Max(40, culture.Counties.Count * 3 + 12), usedDynasties);
+        culture.PatronymSuffixMale = tongue.PatronymMale;
+        culture.PatronymSuffixFemale = tongue.PatronymFemale;
+        culture.PatronymIsPrefix = tongue.PatronymIsPrefix;
+        culture.LocationPrefix = tongue.Particle;
+        culture.AlwaysUsePatronym = tongue.PatronymMale.Length > 0 && rng.Chance(0.35);
+    }
+
+    /// <summary>
+    /// Traditions a race brings with it, whatever its ground. Each entry is a promise: a culture of
+    /// the race holds at least one tradition from <c>AnyOf</c>, and if it holds none, one from
+    /// <c>Add</c> is given to it.
+    ///
+    /// Two jobs. The first is mechanical: the phenotype traits carry <c>culture_modifier</c> blocks
+    /// gated on a culture PARAMETER — stocky's mountain attrition on <c>mountain_trait_bonuses</c>,
+    /// sylvan's forest attrition on <c>forest_trait_bonuses</c> — and a parameter exists only on a
+    /// culture holding a tradition that grants it. Terrain-picked traditions gave dwarves one only
+    /// when their ground happened to say so, so the trait's bonus was usually dead. The dwarf's
+    /// <c>AnyOf</c> is every vanilla tradition granting the parameter, while <c>Add</c> is only
+    /// Mountaineers: a regional one like Caucasian Wolves satisfies the promise if the ground
+    /// already gave it, but is never handed out.
+    ///
+    /// The second is character: an orcish people should have a warrior tradition and a gnomish one
+    /// a craft, which terrain alone will not say.
+    /// </summary>
+    private static readonly Dictionary<RaceArchetype, (string[] AnyOf, string[] Add)[]> RaceTraditions = new()
+    {
+        [RaceArchetype.Dwarf] =
+        [
+            (["tradition_mountaineers", "tradition_horn_mountain_skirmishing", "tradition_mountain_herding",
+              "tradition_caucasian_wolves", "tradition_himalayan_settlers", "tradition_mountaineer_ruralism"],
+             ["tradition_mountaineers"]),
+            (["tradition_ancient_miners", "tradition_metal_craftsmanship", "tradition_fortress_mastery"],
+             ["tradition_ancient_miners", "tradition_metal_craftsmanship", "tradition_fortress_mastery"]),
+        ],
+        [RaceArchetype.WoodElf] =
+        [
+            (["tradition_forest_fighters"], ["tradition_forest_fighters"]),
+        ],
+        [RaceArchetype.HighElf] =
+        [
+            (["tradition_philosopher_culture", "tradition_poetry", "tradition_music_theory", "tradition_language_scholars"],
+             ["tradition_philosopher_culture", "tradition_poetry", "tradition_music_theory", "tradition_language_scholars"]),
+        ],
+        [RaceArchetype.Orc] =
+        [
+            (["tradition_warrior_culture", "tradition_only_the_strong", "tradition_by_the_sword", "tradition_battlefield_looters"],
+             ["tradition_warrior_culture", "tradition_only_the_strong", "tradition_by_the_sword", "tradition_battlefield_looters"]),
+        ],
+        [RaceArchetype.Gnome] =
+        [
+            (["tradition_artisans", "tradition_metal_craftsmanship", "tradition_philosopher_culture", "tradition_family_entrepreneurship"],
+             ["tradition_artisans", "tradition_metal_craftsmanship", "tradition_philosopher_culture", "tradition_family_entrepreneurship"]),
+        ],
+        [RaceArchetype.Giantkin] =
+        [
+            (["tradition_stalwart_defenders", "tradition_winter_warriors", "tradition_only_the_strong"],
+             ["tradition_stalwart_defenders", "tradition_winter_warriors", "tradition_only_the_strong"]),
+        ],
+        [RaceArchetype.Deepkin] =
+        [
+            (["tradition_hidden_cities", "tradition_mystical_ancestors"],
+             ["tradition_hidden_cities", "tradition_mystical_ancestors"]),
+        ],
+    };
+
+    /// <summary>Most traditions <see cref="PickTraditions"/> ever gives; a race's promise swaps
+    /// rather than adds once a culture is at it.</summary>
+    private const int MaxTraditions = 5;
+
+    /// <summary>
+    /// Keeps each race's promises in <see cref="RaceTraditions"/>. A culture already holding a
+    /// qualifying tradition is untouched. Otherwise one of the race's candidates the install allows
+    /// is added; at the five-tradition ceiling, the last tradition that is not itself one of the
+    /// race's promises makes room.
+    /// </summary>
+    /// <returns>How many traditions were granted.</returns>
+    public static int GiveRaceTraditions(IEnumerable<Culture> cultures, Func<Culture, RaceArchetype> raceOf,
+        VanillaVocabulary vocab, MapConfig cfg, Rng rng)
+    {
+        var allowed = AllowedTraditions(vocab, cfg).ToHashSet(StringComparer.Ordinal);
+        int granted = 0;
+
+        foreach (var culture in cultures)
+        {
+            if (culture.Inherited || culture.Key == UnsettledKey) continue;
+            if (!RaceTraditions.TryGetValue(raceOf(culture), out var promises)) continue;
+
+            var protectedKeys = promises.SelectMany(p => p.AnyOf).ToHashSet(StringComparer.Ordinal);
+
+            foreach (var (anyOf, add) in promises)
+            {
+                if (anyOf.Any(culture.Traditions.Contains)) continue;
+
+                var candidates = add.Where(allowed.Contains).ToList();
+                if (candidates.Count == 0) continue;
+
+                if (culture.Traditions.Count >= MaxTraditions)
+                {
+                    int drop = culture.Traditions.FindLastIndex(t => !protectedKeys.Contains(t));
+                    if (drop < 0) continue;
+                    culture.Traditions.RemoveAt(drop);
+                }
+
+                culture.Traditions.Add(rng.Pick(candidates));
+                granted++;
+            }
+        }
+
+        return granted;
     }
 
     /// <summary>

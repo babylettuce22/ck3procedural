@@ -146,51 +146,61 @@ internal static class AzgaarFiles
     /// pixels: the groups the hierarchy turns into counties. Either half may be missing.
     /// </summary>
     public sealed record Picture(Bitmap Image, AzgaarRaster.Alignment? Alignment, double LandShare, int PreviewPixels,
-        IReadOnlyList<int> ProvinceAreas);
+        IReadOnlyDictionary<int, int> ProvinceAreas);
 
     /// <summary>The most baronies one county holds; a province bigger than this is split. See <see cref="Titles.MaxBaroniesPerCounty"/>.</summary>
     public static int MaxBaroniesPerProvince => Titles.MaxBaroniesPerCounty;
 
-    /// <summary>What "Azgaar" comes to for provinces: a barony size, and what it makes of the export.</summary>
-    public sealed record ProvinceFit(double Scale, double MedianPerProvince, int Baronies, int Split);
+    /// <summary>
+    /// What "Azgaar" comes to for provinces on this pair: the baronies the run will cut, how many of
+    /// them the cap added beyond the towns, how many provinces will hold more than a county can and
+    /// be split, and the uniform barony size for land outside any province.
+    /// </summary>
+    public sealed record ProvinceFit(double Scale, int Baronies, int FromCap, int Split);
 
     /// <summary>
-    /// The county scale that is faithful to the export's settlements: as many baronies as it draws
-    /// towns, since towns are what our burg import makes holdings of.
+    /// The run's own rule (<see cref="AzgaarSeeding"/>), worked out at preview size: every province
+    /// gets one barony per town, at least one, and more where a barony would pass
+    /// <paramref name="maxBaronyArea"/> vanilla baronies. Areas are measured at preview size and
+    /// scaled up to the province raster, so the counts are estimates within a few per cent.
     ///
-    /// Only the total can be faithful with one barony size for the whole map. Measured on Ondrerol,
-    /// province areas span 3.6 to 62 vanilla baronies (p10 to p90) while their towns span 1 to 8, so
-    /// any single size either splits the large provinces into several counties (Azgaar provinces
-    /// become counties, and one over <see cref="MaxBaroniesPerProvince"/> baronies is split — see
-    /// <see cref="AzgaarHierarchy"/>) or leaves the small ones a single barony. Sizing for "keep 95%
-    /// of provinces whole" instead came out at 3.48 there: 887 baronies for 1,643 towns, most
-    /// provinces one barony. Per-province barony counts would need the partition to seed each
-    /// province by its own towns, which is a generator change, not a page setting.
-    ///
-    /// Never below vanilla's own barony size (1.0), and capped at 4 so a pathological export cannot
-    /// make a map of a handful of baronies.
-    ///
-    /// Barony count falls out of land area (<see cref="MapConfig.BaronyPixels"/>): province-raster
-    /// pixels over the pixels a barony takes. The areas are measured at preview size and scaled up.
+    /// <see cref="ProvinceFit.Scale"/> is for the land no province covers, which keeps the ordinary
+    /// uniform size: the one at which the whole map would hold a barony per town, between vanilla's
+    /// own size and four times it.
     /// </summary>
-    public static ProvinceFit? ProvinceScale(Picture picture, (int Width, int Height) built, int towns)
+    public static ProvinceFit? ProvinceScale(Picture picture, (int Width, int Height) built, AzgaarWorld world, double maxBaronyArea)
     {
         if (picture.ProvinceAreas.Count == 0 || picture.PreviewPixels <= 0) return null;
 
         var cfg = new MapConfig { Width = built.Width, Height = built.Height };
         double up = (double)cfg.ProvinceWidth * cfg.ProvinceHeight / picture.PreviewPixels;
-        var areas = picture.ProvinceAreas.Select(a => a * up).OrderBy(a => a).ToArray();
-        double land = areas.Sum();
         double barony = cfg.BaronyPixelsAtVanilla;
+        double cap = Math.Max(1.0, maxBaronyArea) * barony;
 
-        double byTowns = towns > 0 ? Math.Sqrt(land / (barony * towns)) : 1.0;
-        double scale = Math.Round(Math.Clamp(byTowns, 1.0, 4.0), 2);
-        double size = barony * scale * scale;
-        return new ProvinceFit(
-            scale,
-            areas[areas.Length / 2] / size,
-            (int)Math.Round(land / size),
-            areas.Count(a => a / size > MaxBaroniesPerProvince + 0.5));
+        var towns = new Dictionary<int, int>();
+        foreach (var burg in world.RealBurgs)
+        {
+            if (burg.Cell < 0 || burg.Cell >= world.Pack.Cells.Count) continue;
+            int province = world.Pack.Cells[burg.Cell].Province;
+            if (province > 0) towns[province] = towns.GetValueOrDefault(province) + 1;
+        }
+
+        int baronies = 0, fromCap = 0, split = 0;
+        double land = 0;
+        foreach (var (province, pixels) in picture.ProvinceAreas)
+        {
+            double area = pixels * up;
+            land += area;
+            int byTowns = Math.Max(1, towns.GetValueOrDefault(province));
+            int count = Math.Max(byTowns, (int)Math.Ceiling(area / cap));
+            baronies += count;
+            fromCap += count - byTowns;
+            if (count > MaxBaroniesPerProvince) split++;
+        }
+
+        int townCount = towns.Values.Sum();
+        double scale = townCount > 0 ? Math.Sqrt(land / (barony * townCount)) : 1.0;
+        return new ProvinceFit(Math.Round(Math.Clamp(scale, 1.0, 4.0), 2), baronies, fromCap, split);
     }
 
     /// <summary>
@@ -328,21 +338,18 @@ internal static class AzgaarFiles
             }
         }
 
-        // Land area per (country, province), keyed the way AzgaarHierarchy groups baronies into
-        // counties. Only where both halves are in: the land is the image's, the provinces the export's.
-        var areas = new List<int>();
+        // Land area per Azgaar province, the regions the partition seeds one by one
+        // (MapGen.AzgaarSeeding). Only where both halves are in: the land is the image's, the
+        // provinces the export's.
+        var areas = new Dictionary<int, int>();
         if (gray is not null && raster is not null)
         {
-            var byGroup = new Dictionary<long, int>();
             for (int i = 0; i < n; i++)
             {
                 if (!land[i]) continue;
                 int province = raster.ProvinceAt(i);
-                if (province <= 0) continue;
-                long key = ((long)raster.StateAt(i) << 32) | (uint)province;
-                byGroup[key] = byGroup.GetValueOrDefault(key) + 1;
+                if (province > 0) areas[province] = areas.GetValueOrDefault(province) + 1;
             }
-            areas.AddRange(byGroup.Values);
         }
 
         return new Picture(bitmap, alignment, land.Count(l => l) / (double)Math.Max(1, n), n, areas);

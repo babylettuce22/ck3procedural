@@ -277,8 +277,9 @@ public sealed class EthnicityMap
 
     /// <summary>
     /// Races the mode's land ratio could not give a realm, seated instead as ~13% minorities in
-    /// the listed human host culture. They count as delivered for GuaranteedRaceCount; their
-    /// members look the race but carry no phenotype trait, since traits are stamped per culture.
+    /// the listed human host culture. They count as delivered for GuaranteedRaceCount. History
+    /// writes them phenotype_human (traits are stamped per culture); the Fantasy script set swaps
+    /// in their own race's trait at game start by reading their gen_race_skin gene.
     /// </summary>
     public required List<(RaceArchetype Race, Culture Host)> MinorityPlacements { get; init; }
 
@@ -318,8 +319,14 @@ public static class Ethnicities
         TerrainClass[] provinceTerrain,
         MapConfig cfg,
         Rng rng,
-        WildernessMap? wilderness = null)
+        WildernessMap? wilderness = null,
+        bool quiet = false)
     {
+        // quiet: the preliminary pass the culture stage runs to learn each people's race before
+        // naming (see Cultures.SpeakAsRace). The real pass follows with the same seed and inputs and
+        // arrives at the same races, so its report is the one worth printing.
+        void Say(string line) { if (!quiet) Console.WriteLine(line); }
+
         // A culture whose every county fell to wilderness writes no province history: it exists as
         // a definition and holds nothing a player will ever see. Before this set existed such
         // ghosts were not only eligible for races, they were MAGNETS for them — GetTerrainShares
@@ -330,7 +337,7 @@ public static class Ethnicities
         int LandCount(Culture c) => c.Counties.Count(k => wilderness?.Contains(k) != true);
         var ghosts = cultures.Where(c => LandCount(c) == 0).ToHashSet();
         if (ghosts.Count > 0)
-            Console.WriteLine($"  ethnicities: {ghosts.Count} culture(s) hold only wilderness — kept human and out of every race roll");
+            Say($"  ethnicities: {ghosts.Count} culture(s) hold only wilderness — kept human and out of every race roll");
 
         var ethnicities = new Dictionary<string, EthnicityDef>(StringComparer.OrdinalIgnoreCase);
         var byCulture = new Dictionary<Culture, EthnicityDef>();
@@ -592,7 +599,7 @@ public static class Ethnicities
             .Distinct().Count();
 
         if (minorityPlaced.Count > 0)
-            Console.WriteLine("  ethnicities: minorities — " + string.Join(", ",
+            Say("  ethnicities: minorities — " + string.Join(", ",
                 minorityPlaced.Select(m => $"{m.Race} among the {m.Host.Name}")));
 
         if (cfg.EnableFantasyEthnicities && cfg.RaceMode != FantasyRaceMode.HumanOnly)
@@ -600,11 +607,11 @@ public static class Ethnicities
             int humanCounties = byCulture
                 .Where(kv => kv.Value.Archetype == RaceArchetype.Human)
                 .Sum(kv => kv.Key.Counties.Count);
-            Console.WriteLine($"  ethnicities: humans hold {(double)humanCounties / totalCounties:P0} " +
+            Say($"  ethnicities: humans hold {(double)humanCounties / totalCounties:P0} " +
                               $"of counties (mode target ~{HumanShareFor(cfg.RaceMode):P0})");
         }
 
-        Console.WriteLine($"  ethnicities: {byCulture.Count} cultures across {deliveredRaces} distinct races -> {string.Join(", ", tallies)}");
+        Say($"  ethnicities: {byCulture.Count} cultures across {deliveredRaces} distinct races -> {string.Join(", ", tallies)}");
 
         // Delivering fewer races than asked for used to be silent, which made a clipped quota
         // look like bad luck in the seed. Say which constraint actually bound.
@@ -617,10 +624,7 @@ public static class Ethnicities
             // asked for ten races to make more heritages sends them after a limit that was never
             // the problem.
             string reason = wanted > quotaPool.Count
-                ? $"only {quotaPool.Count} races exist in this mode"
-                  + (cfg.RaceMode == FantasyRaceMode.ExoticSurreal
-                        ? " — that is the ceiling"
-                        : " — ExoticSurreal adds a ninth")
+                ? $"only {quotaPool.Count} races exist — that is the ceiling in every mode"
                 : !cfg.AllowMinorityRaces
                 ? "the mode's human:fantasy ratio left no land for them and AllowMinorityRaces is off — turn it on to seat them as minorities, or accept fewer races"
                 : cfg.RaceTerrain == RaceTerrainRule.Require
@@ -630,7 +634,7 @@ public static class Ethnicities
                 : cfg.TieRaceToHeritage && heritages.Count < wanted
                     ? $"only {heritages.Count} heritage(s) exist — lower CulturesPerHeritage or CountiesPerCulture to make more, or untick TieRaceToHeritage to place races per culture instead"
                     : "the terrain roll did not spread them this seed — try another";
-            Console.WriteLine($"  WARNING: asked for {wanted} distinct races but delivered {deliveredRaces}: {reason}");
+            Say($"  WARNING: asked for {wanted} distinct races but delivered {deliveredRaces}: {reason}");
         }
 
         return new EthnicityMap
@@ -1116,7 +1120,9 @@ public static class Ethnicities
             (RaceArchetype.Orc, TerrainClass.Mountains or TerrainClass.Desert or TerrainClass.Hills or TerrainClass.Steppe) => 10,
             (RaceArchetype.Gnome, TerrainClass.Wetlands or TerrainClass.Desert or TerrainClass.Hills) => 11,
             (RaceArchetype.Giantkin, TerrainClass.Arctic or TerrainClass.Mountains) => 12,
-            (RaceArchetype.Deepkin, TerrainClass.Wetlands or TerrainClass.Arctic or TerrainClass.Desert) => 10,
+            // Caves under broken country and the dark of the fens — the "subterranean depths" of
+            // their trait, kept off the high mountains dwarves, orcs and giants already contest.
+            (RaceArchetype.Deepkin, TerrainClass.Hills or TerrainClass.Wetlands) => 10,
             (RaceArchetype.Human, TerrainClass.Plains or TerrainClass.Farmlands or TerrainClass.Hills) => 8,
             _ => 1
         };
@@ -1167,16 +1173,16 @@ public static class Ethnicities
                     => [RaceArchetype.Dwarf, RaceArchetype.Orc, RaceArchetype.Giantkin],
 
                 TerrainClass.Hills
-                    => [RaceArchetype.Dwarf, RaceArchetype.Orc, RaceArchetype.Gnome, RaceArchetype.Human],
+                    => [RaceArchetype.Dwarf, RaceArchetype.Orc, RaceArchetype.Gnome, RaceArchetype.Deepkin, RaceArchetype.Human],
 
                 TerrainClass.Forest or TerrainClass.Taiga or TerrainClass.Jungle
                     => [RaceArchetype.WoodElf, RaceArchetype.Gnome, RaceArchetype.Orc],
 
                 TerrainClass.Arctic
-                    => [RaceArchetype.Giantkin, RaceArchetype.Deepkin, RaceArchetype.Dwarf],
+                    => [RaceArchetype.Giantkin, RaceArchetype.Dwarf],
 
                 TerrainClass.Desert
-                    => [RaceArchetype.Orc, RaceArchetype.Gnome, RaceArchetype.Deepkin, RaceArchetype.HighElf],
+                    => [RaceArchetype.Orc, RaceArchetype.Gnome, RaceArchetype.HighElf],
 
                 TerrainClass.Wetlands
                     => [RaceArchetype.Gnome, RaceArchetype.Deepkin, RaceArchetype.WoodElf],
@@ -1230,32 +1236,27 @@ public static class Ethnicities
         Rng rng,
         string? forcedTemplate = null)
     {
-        // Null for humans, and that is the whole of the fantasy-race guarantee: a race's family is
-        // fixed here by the race and never consults `look`, so no setting over human appearance can
-        // reach one. Its colouring comes from its own gen_race_skin shift regardless.
-        string? raceFamily = archetype switch
-        {
-            RaceArchetype.Orc or RaceArchetype.Gnome => "asian",
-            RaceArchetype.Deepkin => "african",
-            RaceArchetype.WoodElf or RaceArchetype.HighElf => "caucasian",
-            RaceArchetype.Dwarf or RaceArchetype.Giantkin => "caucasian",
-            _ => null
-        };
-
-        // A race picks its family and then a template inside it, exactly as this always did. A
-        // human goes the other way -- template first, family derived -- which is the only way a
-        // preset can span two families (a Mediterranean world wants byzantine and arab both) or
-        // move a template between them (papuan belongs beside its South East Asian neighbours, not
-        // beside east_african). See PickHumanLook.
+        // Every people, fantasy or human, draws its base template the same way: from the world's
+        // human-look setting. The template supplies every face feature a race does not author
+        // (nose detail, lips, lids), so it is a people's "local" face under the race's own genes —
+        // a dwarf in a Mediterranean world is a Mediterranean-looking dwarf.
+        //
+        // Races used to be pinned to a family instead — orcs and gnomes on the Asian templates,
+        // deepkin on the African ones, the rest European — which tied fantasy races to real-world
+        // ethnicities for no reason the race itself gave. Nothing a race IS depends on the family:
+        // its skin is its own skin_color band plus the gen_race_skin shift, its hair and eyes are
+        // its own palettes (see ApplyColorGenes), and its shape is RaceMorphs forced at render.
+        //
+        // A human goes template first, family derived, which is the only way a preset can span two
+        // families (a Mediterranean world wants byzantine and arab both) or move a template between
+        // them (papuan belongs beside its South East Asian neighbours). See PickHumanLook.
         //
         // `forcedTemplate` is the editor's way in -- see Retemplate, the only caller that passes
         // one, which refuses anything but a human first. It skips a draw the generation path makes,
         // which is why nothing on the generation path may ever pass it.
         var (family, template) = forcedTemplate is { } forced
             ? (FamilyOf(forced), forced)
-            : raceFamily is { } fixedFamily
-                ? (fixedFamily, PickVanillaTemplate(fixedFamily, rng))
-                : PickHumanLook(look, rng);
+            : PickHumanLook(look, rng);
 
         var def = new EthnicityDef
         {
@@ -1341,10 +1342,9 @@ public static class Ethnicities
     /// to be right about colouring, not about geography.
     ///
     /// <c>papuan</c> sits with the Asian templates here while <see cref="PickVanillaTemplate"/>
-    /// still lists it under african, and both are correct for what they do: the fantasy path uses
-    /// that function to pick a Deepkin's base tone, where the drow's own shift overwrites the
-    /// result anyway, whereas the South East Asian preset needs papuan to colour like its
-    /// neighbours. The two blocks differ by five percentage points on one hair band regardless.
+    /// still lists it under african: that function serves only the Varied draw, family first, and
+    /// the South East Asian preset needs papuan to colour like its neighbours. The two blocks
+    /// differ by five percentage points on one hair band regardless.
     /// </summary>
     private static string FamilyOf(string template) => template switch
     {
@@ -1501,6 +1501,20 @@ public static class Ethnicities
         RaceArchetype.HighElf => "High Elf",
         RaceArchetype.WoodElf => "Wood Elf",
         _ => archetype.ToString()
+    };
+
+    /// <summary>
+    /// The phonology a race speaks, or null for humans, who draw from the world's real-world
+    /// flavours like any people. Three fantasy tongues for seven races, grouped by kinship: the
+    /// deepkin are estranged elves, gnomes are dwarf-kin, and giants are as rough-tongued as orcs.
+    /// Applied by <see cref="Cultures.SpeakAsRace"/>.
+    /// </summary>
+    public static LanguageFlavour? TongueOf(RaceArchetype archetype) => archetype switch
+    {
+        RaceArchetype.HighElf or RaceArchetype.WoodElf or RaceArchetype.Deepkin => LanguageFlavour.Sylvan,
+        RaceArchetype.Dwarf or RaceArchetype.Gnome => LanguageFlavour.Dwarven,
+        RaceArchetype.Orc or RaceArchetype.Giantkin => LanguageFlavour.Harsh,
+        _ => null
     };
 
     private static void ApplyMorphGenes(EthnicityDef def, RaceArchetype archetype, FantasyRaceMode mode, Rng rng)

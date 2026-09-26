@@ -185,6 +185,12 @@ public static partial class ContentWriter
 
         Dictionary<(string Culture, string Government), string>? tierForms = null;
 
+        bool racesOn = cfg.EnableFantasyEthnicities && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly;
+
+        // Each culture's race as the culture stage's preliminary ethnicity pass saw it, kept to prove
+        // the real pass agrees. Null when that pass did not run.
+        Dictionary<MapGen.Culture, MapGen.RaceArchetype>? preliminaryRaces = null;
+
         // Set by the culture stage on a world of vanilla titles; read by the realm and faith stages.
         VanillaTitles.Plan? titlePlan = null;
 
@@ -198,6 +204,23 @@ public static partial class ContentWriter
             {
                 int renamed = MapGen.AzgaarNaming.RenameCultures(azgaar, map);
                 Console.WriteLine($"  azgaar: {renamed} of {map.Cultures.Count} cultures named from the export");
+            }
+
+            // Fantasy peoples speak their race's tongue. The race has to be known before anything is
+            // named in these languages, so the ethnicity pass runs once here, quietly, to say who is
+            // who; the real pass below repeats it with the same seed and inputs and reaches the same
+            // races (nothing it decides reads a name), this time with the new names in hand. Not on
+            // an Azgaar map, whose peoples already speak as the export drew them. See
+            // Cultures.SpeakAsRace.
+            if (azgaar is null && racesOn)
+            {
+                var races = MapGen.Ethnicities.Build(map.Heritages, map.Cultures, provinceTerrain, cfg,
+                    new Rng(cfg.Seed ^ 0x38F1), wilderness, quiet: true);
+                preliminaryRaces = map.Cultures.ToDictionary(c => c, c => races.For(c).Archetype);
+
+                var (h, c) = MapGen.Cultures.SpeakAsRace(map, culture => races.For(culture).Archetype,
+                    new Rng(cfg.Seed ^ 0x70A6));
+                Console.WriteLine($"  cultures: {h} heritage(s) and {c} culture(s) now speak their race's tongue");
             }
 
             // A world of vanilla peoples keeps the cultural geography just grown and swaps who lives
@@ -262,6 +285,26 @@ public static partial class ContentWriter
         var ethnicities = Core.Stage.Time("ethnicities", () => MapGen.Ethnicities.Build(
             cultures.Heritages, cultures.Cultures, provinceTerrain, cfg, new Rng(cfg.Seed ^ 0x38F1),
             wilderness));
+
+        // The re-voicing above is only right if this pass agrees with the one it was based on. It
+        // should by construction; a future change that let a name steer the race roll would break
+        // that silently, leaving dwarves speaking Sylvan, so it is checked rather than assumed.
+        if (preliminaryRaces is not null)
+        {
+            int drifted = preliminaryRaces.Count(kv => ethnicities.For(kv.Key).Archetype != kv.Value);
+            if (drifted > 0)
+                Console.WriteLine($"  WARNING: {drifted} culture(s) changed race between the naming pass and " +
+                                  "the ethnicity pass — their tongue no longer matches their race");
+        }
+
+        // What each race brings to its culture regardless of ground — see Cultures.RaceTraditions.
+        // Before the showcase, which shows traditions.
+        if (racesOn)
+        {
+            int granted = MapGen.Cultures.GiveRaceTraditions(cultures.Declared().Cultures,
+                c => ethnicities.For(c).Archetype, vocabulary, cfg, new Rng(cfg.Seed ^ 0x7AD1));
+            Console.WriteLine($"  cultures: {granted} race tradition(s) granted");
+        }
 
         var worldCenters = Core.Stage.Time("world centers", () => WorldCenterMap.Build(
             counties, provinces, order, landCount, provinceTerrain, cultures, wilderness, cfg, new Rng(cfg.Seed ^ 0x93FA)));

@@ -3332,8 +3332,8 @@ wilderness_colonization.0073 = {
 # =====================================================================================
 wilderness_colonization.9999 = {
 	type = character_event
-	title = "DEBUG: Upgrade Realm Colonies"
-	desc = "Choose how to advance all colony holdings currently situated within your sub-realm."
+	title = wilderness_colonization.9999.t
+	desc = wilderness_colonization.9999.desc
 	theme = realm
 	override_background = { reference = study }
 
@@ -3344,7 +3344,7 @@ wilderness_colonization.9999 = {
 
 	# --- Option A: Repair Broken Holdings & Advance to Tier 2 ---
 	option = {
-		name = "Advance / Upgrade Colonies to Tier 2"
+		name = wilderness_colonization.9999.a
 
 		every_sub_realm_county = {
 			limit = {
@@ -3381,7 +3381,7 @@ wilderness_colonization.9999 = {
 
 	# --- Option B: Max Out All Colonies (Tier 3, Dev 5, Ready for Promotion) ---
 	option = {
-		name = "Max out all colonies (Tier 3, Dev 5, Obstacles Cleared)"
+		name = wilderness_colonization.9999.b
 
 		every_sub_realm_county = {
 			limit = {
@@ -3421,7 +3421,7 @@ wilderness_colonization.9999 = {
 
 	# --- Option C: Reset / Repair Holding Type ---
 	option = {
-		name = "Repair Corrupted Holding Slots"
+		name = wilderness_colonization.9999.c
 
 		every_sub_realm_county = {
 			limit = {
@@ -3436,7 +3436,7 @@ wilderness_colonization.9999 = {
 
 	# --- Option D: Instantly Promote to Castle/Tribal ---
 	option = {
-		name = "Instantly promote all colonies to full holdings"
+		name = wilderness_colonization.9999.d
 
 		every_sub_realm_county = {
 			limit = {
@@ -3457,7 +3457,7 @@ wilderness_colonization.9999 = {
 	# Adding another tool means adding it to 9998, and when THAT page fills, spending its last button
 	# the same way on a 9997. Do not add a fifth tool here.
 	option = {
-		name = "Next page..."
+		name = wilderness_colonization.9999.e
 
 		trigger_event = wilderness_colonization.9998
 	}
@@ -3470,8 +3470,8 @@ wilderness_colonization.9999 = {
 # =====================================================================================
 wilderness_colonization.9998 = {
 	type = character_event
-	title = "DEBUG: Colony Tools (page 2)"
-	desc = "Colony tools that would not fit on the first page."
+	title = wilderness_colonization.9998.t
+	desc = wilderness_colonization.9998.desc
 	theme = realm
 	override_background = { reference = study }
 
@@ -3482,7 +3482,7 @@ wilderness_colonization.9998 = {
 
 	# --- Option: Test Vassal Colony Secession (100% Guaranteed) ---
 	option = {
-		name = "TEST: Force a Vassal Colony to Max & Secede (Event 0021)"
+		name = wilderness_colonization.9998.a
 
 		# 1. Find a colonist vassal in realm (or pick any colony county holder)
 		random_vassal = {
@@ -3551,7 +3551,7 @@ wilderness_colonization.9998 = {
 	#                        the fix is a button of our own, since `ToggleGameViewData( 'domicile',
 	#                        ... )` is all vanilla's own camp button does.
 	option = {
-		name = "DEBUG: Report my domicile state"
+		name = wilderness_colonization.9998.b
 
 		if = {
 			limit = { has_domicile = no }
@@ -3591,7 +3591,7 @@ wilderness_colonization.9998 = {
 	# problem is WHEN that effect runs rather than what it does — which would point at the domicile
 	# not existing yet at the moment the government changes, and the fix being a delayed pass.
 	option = {
-		name = "DEBUG: Re-run colony camp setup"
+		name = wilderness_colonization.9998.c
 
 		save_scope_as = new_colonist
 
@@ -3687,7 +3687,7 @@ wilderness_colonization.9998 = {
 	# answer is a domain-limit bonus per colony, moving the maluses onto script-applied county
 	# modifiers, or both — and guessing between them is how this system got its last three bugs.
 	option = {
-		name = "DEBUG: Probe a disabled colony holding"
+		name = wilderness_colonization.9998.d
 
 		# Prefer a colony that is actually in the disabled state, because it is the only one that
 		# can answer anything. `has_disabled_building` is a barony trigger, not a county one — see
@@ -3761,7 +3761,7 @@ wilderness_colonization.9998 = {
 	# needs a 9997 of its own, reached by spending THIS button on the page break and moving "Back"
 	# there. See the note on the page break in 9999.
 	option = {
-		name = "Back"
+		name = wilderness_colonization.9998.e
 
 		trigger_event = wilderness_colonization.9999
 	}

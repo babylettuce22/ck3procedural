@@ -724,8 +724,8 @@ public sealed class LanguageFlavour
 
     /// <summary>
     /// The flavours a world's theme calls for, with weights. A themed world draws only from its own
-    /// region; the unthemed default draws from every real-world flavour and, on a fantasy world,
-    /// from the invented ones as well — rarely on low fantasy, freely on high.
+    /// region; the unthemed default draws from every real-world flavour. The invented fantasy
+    /// flavours are never in it — they belong to races, not to the draw.
     /// </summary>
     public static List<(LanguageFlavour Flavour, double Weight)> Pool(MapConfig cfg)
     {
@@ -761,12 +761,10 @@ public sealed class LanguageFlavour
                 break;
         }
 
-        if (cfg.EnableFantasyEthnicities)
-        {
-            double w = cfg.RaceMode == MapConfig.FantasyRaceMode.HighFantasy ? 1.2 : 0.4;
-            Add(Sylvan, w); Add(Dwarven, w); Add(Harsh, w);
-        }
-
+        // No fantasy flavours, on any world. They used to join this pool whenever fantasy races were
+        // switched on — before any race was decided — so a dwarven people could speak Sylvan and a
+        // human one Harsh. They are the RACES' tongues now, handed out by Cultures.SpeakAsRace once
+        // the ethnicity pass has said who is who (see Ethnicities.TongueOf).
         return pool;
     }
 

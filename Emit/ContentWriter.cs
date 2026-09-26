@@ -132,7 +132,12 @@ public static partial class ContentWriter
         // the world that applying a history keeps as it was written. See WorldModel.GeneratedGovernments.
         var retinues = cfg.EnableGeneratedRetinues
             ? Core.Stage.Time("retinues", () => MapGen.Retinues.Build(generatedCultures.Declared(), world.GeneratedGovernments,
-                provinceTerrain, vocabulary, cfg, new Rng(cfg.Seed ^ 0x3AA7)))
+                provinceTerrain, vocabulary, cfg, new Rng(cfg.Seed ^ 0x3AA7),
+                // Only when races are on: every culture is Human otherwise, and passing that would
+                // tilt every human world's regiments toward the Human-tagged profiles.
+                cfg.EnableFantasyEthnicities && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly
+                    ? c => ethnicities.For(c).Archetype
+                    : null))
             : null;
         if (retinues is not null) Core.Showcase.Publish(() => ShowcaseItems.Regiments(retinues, gameDir));
 

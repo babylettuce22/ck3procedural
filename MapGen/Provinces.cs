@@ -17,7 +17,8 @@ public sealed class ProvinceSeed
     /// <summary>
     /// Why this province is impassable, for the preview and hover readout. <c>Score</c> means it
     /// ranked in on relief; <c>Height</c> means most of it stands above
-    /// <see cref="MapConfig.ImpassableHeightFraction"/>'s line though its score did not rank it in;
+    /// <see cref="MapConfig.ImpassableHeightFraction"/>'s line, or above the mountain line when
+    /// <see cref="MapConfig.ImpassableMountainPlateaus"/> is on, though its score did not rank it in;
     /// <c>Mask</c> means the user painted it in
     /// <see cref="MapConfig.ImpassableMaskPath"/>; <c>Trapped</c> means the connectivity pass
     /// filled it because it was landlocked behind other impassables; <c>None</c> for every
@@ -178,6 +179,12 @@ public static class Provinces
             () => ProvinceDomain.Build(mask, azgaar, width, height, cfg, snap ? painted : null));
 
         foreach (var seed in seeds) seed.Domain = domain[seed.Y * width + seed.X];
+
+        // An import's provinces are seeded on their own town counts rather than the scatter's
+        // uniform size, so each comes out as one county holding its own settlements.
+        if (azgaar is not null && cfg.AzgaarBaroniesFromTowns)
+            Core.Stage.Detail("  · azgaar town seeding",
+                () => AzgaarSeeding.Reseed(seeds, domain, width, height, azgaar, cfg));
 
         Core.Stage.Detail("  · seed coverage", () => EnsureSeedsCoverComponents(domain, width, height, seeds));
 
@@ -843,8 +850,15 @@ public static class Provinces
                     continue;
                 }
 
+                // Drowning a land crumb means giving it to the sea. Among its other neighbours only
+                // water keeps every province inside one domain: a land province next door is a
+                // different region by construction (a same-domain one would have taken it above),
+                // and handing the crumb to it straddled an Azgaar border. On a map without regions
+                // a tiny land province's only other neighbours are water, so this changes nothing.
+                bool preferWater = map.Seeds[t].IsLand && counts.Keys.Any(o => !map.Seeds[o].IsLand);
                 foreach (var (other, border) in counts)
                 {
+                    if (preferWater && map.Seeds[other].IsLand) continue;
                     if (border <= bestBorder) continue;
                     best = other;
                     bestBorder = border;
@@ -1099,14 +1113,24 @@ public static class Provinces
         }
 
         // The plateau rule runs after the ranking and outside its quota, so the slope score keeps
-        // every slot it would have had; this only adds the roof of the map that the score let through.
-        int heightMarked = 0;
+        // every slot it would have had; this only adds high ground the score let through. That is
+        // the roof of the map (most of the province above the height line) and, unless turned off,
+        // any province mostly above the mountain line. A plateau top is flat, so the score ranks
+        // the steep flanks around it first and the quota runs out before reaching it: on a small
+        // Lowlands pangaea a province 93% above the mountain line ranked 117th for 52 slots, and
+        // the massif came out walled around its edge with a passable top.
+        bool mountainPlateaus = cfg.ImpassableMountainPlateaus;
+        int heightMarked = 0, plateauMarked = 0;
         foreach (var (label, _, _, _, _) in ranked)
         {
-            if (map.Seeds[label].IsImpassable || top[label] * 2 <= total[label]) continue;
+            if (map.Seeds[label].IsImpassable) continue;
+            bool roof = top[label] * 2 > total[label];
+            bool plateau = mountainPlateaus && high[label] * 2 > total[label];
+            if (!roof && !plateau) continue;
             map.Seeds[label].IsImpassable = true;
             map.Seeds[label].ImpassableCause = ImpassableCause.Height;
-            heightMarked++;
+            if (roof) heightMarked++;
+            else plateauMarked++;
         }
 
         string mix = marked == 0
@@ -1134,10 +1158,12 @@ public static class Provinces
         if (heightLine != float.MaxValue)
             Console.WriteLine($"    height: line {heightLine:F0} ({cfg.ImpassableHeightFraction:P0} of the way " +
                               $"to the peak), {heightMarked} more province(s) taken above it");
+        if (mountainPlateaus)
+            Console.WriteLine($"    plateaus: {plateauMarked} more province(s) taken mostly above the mountain line");
 
         map.Impassability = new ImpassableDiagnostics(
             mountainLine, steepLine, median, mad, floor, cut, want, marked, bound,
-            heightLine, heightMarked, gateLine, gateMin, gated);
+            heightLine, heightMarked + plateauMarked, gateLine, gateMin, gated);
     }
 
     /// <summary>
