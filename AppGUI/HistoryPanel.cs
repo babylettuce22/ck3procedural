@@ -87,33 +87,53 @@ internal sealed class HistoryPanel : Panel
     };
     private readonly Dictionary<int, Button> _speedButtons = [];
 
-    /// <summary>The switchable rules, in the order the bar shows them, with what each does.</summary>
-    private static readonly (RealmRules Rule, string Name, string Tip)[] RuleChoices =
+    /// <summary>The switchable rules, by the settings section they sit in, with what each does.</summary>
+    private static readonly (string Section, RealmRules Rule, string Name, string Tip)[] RuleChoices =
     [
-        (RealmRules.Conquest, "Conquest", "Realms take counties from their neighbours by force"),
-        (RealmRules.Homage, "Homage", "A realm several times a neighbour's size takes it as a vassal, whole"),
-        (RealmRules.Secession, "Secession", "An overstretched realm loses a block of its edge, which becomes a realm of its own"),
-        (RealmRules.Collapse, "Collapse", "An unstable realm's vassals all walk out at once"),
-        (RealmRules.Succession, "Succession", "A ruler's death can divide the realm among heirs or put another house on the throne. "
+        ("Realms", RealmRules.Conquest, "Conquest", "Realms take counties from their neighbours by force"),
+        ("Realms", RealmRules.Homage, "Homage", "A realm several times a neighbour's size takes it as a vassal, whole"),
+        ("Realms", RealmRules.Secession, "Secession", "An overstretched realm loses a block of its edge, which becomes a realm of its own"),
+        ("Realms", RealmRules.Collapse, "Collapse", "An unstable realm's vassals all walk out at once"),
+        ("People", RealmRules.Succession, "Succession", "A ruler's death can divide the realm among heirs or put another house on the throne. "
             + "Off, rulers still die, and one heir of the same house takes everything"),
     ];
 
+    /// <summary>
+    /// The dials, by section: each a multiplier from 0 to <c>Max</c> in tenths, 1 being the world as
+    /// generated. <c>Get</c> and <c>Set</c> read and write it on a <see cref="SimSettings"/>.
+    /// </summary>
+    private static readonly (string Section, string Name, string Tip, double Max,
+        Func<SimSettings, double> Get, Func<SimSettings, double, SimSettings> Set)[] Dials =
+    [
+        ("Realms", "Aggression", "How readily realms attack their neighbours and take homage — 0 is peace",
+            3.0, s => s.Aggression, (s, v) => s with { Aggression = v }),
+        ("Realms", "Turbulence", "How readily overstretched and unstable realms fall apart — 0 holds every realm together",
+            3.0, s => s.Turbulence, (s, v) => s with { Turbulence = v }),
+        ("People", "Heirs", "How often a partition finds a second and a third heir — 0 means one heir takes all",
+            2.0, s => s.Heirs, (s, v) => s with { Heirs = v }),
+        ("People", "Crises", "How likely a succession in an unstable realm goes to a new house",
+            4.0, s => s.Crises, (s, v) => s with { Crises = v }),
+    ];
+
     private readonly Dictionary<RealmRules, CheckBox> _ruleBoxes = [];
-    private readonly FlowLayoutPanel _rulesBar = new()
+    private readonly Dictionary<string, (TrackBar Bar, Label Value)> _dials = [];
+    private readonly Button _settingsToggle = Theme.MakeButton("Settings ◂", 90);
+
+    /// <summary>The simulation's settings, down the left of the map: collapsible, one section per system.</summary>
+    private readonly Panel _settingsPanel = new()
     {
-        Dock = DockStyle.Top,
-        Height = 30,
-        WrapContents = false,
-        Padding = new Padding(6, 2, 6, 0),
+        Dock = DockStyle.Left,
+        Width = 250,
         BackColor = Theme.Surface,
+        Padding = new Padding(0, 0, 1, 0),
     };
 
     /// <summary>
-    /// Which rules are in force from which year, as the user switched them. Kept across a Reset, so
-    /// the same history plays out again switches and all; a switch made at some year drops whatever
-    /// was recorded after it, which belonged to a timeline that has just been left.
+    /// Which settings are in force from which year, as the user changed them. Kept across a Reset, so
+    /// the same history plays out again switches, dials and all; a change made at some year drops
+    /// whatever was recorded after it, which belonged to a timeline that has just been left.
     /// </summary>
-    private readonly SortedDictionary<int, RealmRules> _ruleSchedule = [];
+    private readonly SortedDictionary<int, SimSettings> _schedule = [];
 
     /// <summary>The chronicle's own lines about the rules, by the year they took effect.</summary>
     private readonly List<(int Year, string Text)> _notes = [];
@@ -195,6 +215,7 @@ internal sealed class HistoryPanel : Panel
             Padding = new Padding(6, 4, 6, 0),
             BackColor = Theme.Surface,
         };
+        toolbar.Controls.Add(_settingsToggle);
         toolbar.Controls.Add(_play);
         toolbar.Controls.Add(_step);
         toolbar.Controls.Add(_reset);
@@ -207,28 +228,9 @@ internal sealed class HistoryPanel : Panel
         _appliedBar.Controls.Add(_appliedNote);
         _appliedBar.Controls.Add(_discard);
 
-        _rulesBar.Controls.Add(new Label { Text = "Rules", AutoSize = true, Font = Theme.UiBold, ForeColor = Theme.Text, Margin = new Padding(4, 6, 6, 3) });
-        foreach (var (rule, name, tip) in RuleChoices)
-        {
-            var box = new CheckBox
-            {
-                Text = name,
-                Checked = true,
-                AutoSize = true,
-                Font = Theme.Ui,
-                ForeColor = Theme.Text,
-                Margin = new Padding(6, 5, 3, 3),
-            };
-            box.CheckedChanged += (_, _) => { if (!_settingBoxes) OnRulesChanged(); };
-            tips.SetToolTip(box, tip);
-            _ruleBoxes[rule] = box;
-            _rulesBar.Controls.Add(box);
-        }
-        _rulesBar.Controls.Add(new Label
-        {
-            Text = "take effect from the next year · Reset replays them",
-            AutoSize = true, Font = Theme.Ui, ForeColor = Theme.TextDim, Margin = new Padding(12, 6, 3, 3),
-        });
+        BuildSettingsPanel(tips);
+        _settingsToggle.Click += (_, _) => SetSettingsOpen(!_settingsPanel.Visible);
+        tips.SetToolTip(_settingsToggle, "Show or hide the simulation's settings");
 
         var chronicleHeader = new FlowLayoutPanel
         {
@@ -252,8 +254,8 @@ internal sealed class HistoryPanel : Panel
 
         Controls.Add(map);
         Controls.Add(chronicle);
+        Controls.Add(_settingsPanel);
         Controls.Add(_appliedBar);
-        Controls.Add(_rulesBar);
         Controls.Add(toolbar);
         Controls.Add(new Panel { Dock = DockStyle.Top, Height = 1, BackColor = Theme.Border });
 
@@ -305,7 +307,7 @@ internal sealed class HistoryPanel : Panel
         _startYear = result?.Config.StartYear ?? 0;
 
         // Switches belong to a timeline, and a new world is a new one.
-        _ruleSchedule.Clear();
+        _schedule.Clear();
         _notes.Clear();
         _shownNotes = 0;
 
@@ -485,11 +487,11 @@ internal sealed class HistoryPanel : Panel
     {
         // The rules for the year about to be simulated, from the schedule — which is what makes a
         // Reset replay the switches as well as the dice.
-        var rules = RulesFor(_sim!.Year + 1);
-        if (rules != _sim.Rules)
+        var settings = SettingsFor(_sim!.Year + 1);
+        if (settings != _sim.Settings)
         {
-            NoteRuleChange(_sim.Year + 1, _sim.Rules, rules);
-            _sim.Rules = rules;
+            NoteSettingsChange(_sim.Year + 1, _sim.Settings, settings);
+            _sim.Settings = settings;
         }
 
         _sim.Tick();
@@ -554,11 +556,18 @@ internal sealed class HistoryPanel : Panel
         // The boxes show what the next year will be simulated under, so a replay after Reset
         // visibly flips them where the switches were made.
         _settingBoxes = true;
-        var next = _sim is null ? RealmRules.All : RulesFor(_sim.Year + 1);
+        var next = _sim is null ? SimSettings.Default : SettingsFor(_sim.Year + 1);
         foreach (var (rule, box) in _ruleBoxes)
         {
             box.Enabled = ready;
-            box.Checked = next.HasFlag(rule);
+            box.Checked = next.Rules.HasFlag(rule);
+        }
+        foreach (var (_, name, _, _, get, _) in Dials)
+        {
+            var (bar, value) = _dials[name];
+            bar.Enabled = ready;
+            bar.Value = Math.Clamp((int)Math.Round(get(next) * 10), bar.Minimum, bar.Maximum);
+            value.Text = $"{get(next):0.0}×";
         }
         _settingBoxes = false;
 
@@ -609,14 +618,105 @@ internal sealed class HistoryPanel : Panel
         _readout.Text = text;
     }
 
-    // --- Rules ----------------------------------------------------------------------------------
+    // --- Settings -------------------------------------------------------------------------------
 
     /// <summary>
-    /// The boxes were changed by hand: the rules they now show apply from the next year, and
-    /// whatever the schedule held from then on is dropped — it belonged to a timeline the user has
-    /// just stepped off.
+    /// The settings sidebar: a section per system — Realms, People — each with its rules as
+    /// switches and its dials as sliders. New systems add a section by adding rows to
+    /// <see cref="RuleChoices"/> and <see cref="Dials"/>.
     /// </summary>
-    private void OnRulesChanged()
+    private void BuildSettingsPanel(ToolTip tips)
+    {
+        var list = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            AutoScroll = true,
+            Padding = new Padding(10, 8, 8, 8),
+            BackColor = Theme.Surface,
+        };
+
+        const int Inner = 222;
+        list.Controls.Add(new Label { Text = "Simulation", AutoSize = true, Font = Theme.UiBold, ForeColor = Theme.Text, Margin = new Padding(0, 0, 0, 2) });
+        list.Controls.Add(new Label
+        {
+            Text = "Changes take effect from the next year. Reset replays them.",
+            AutoSize = true, MaximumSize = new Size(Inner, 0), Font = Theme.Ui, ForeColor = Theme.TextDim,
+            Margin = new Padding(0, 0, 0, 6),
+        });
+
+        foreach (string section in RuleChoices.Select(r => r.Section).Concat(Dials.Select(d => d.Section)).Distinct())
+        {
+            list.Controls.Add(new Label
+            {
+                Text = section, AutoSize = true, Font = Theme.UiBold, ForeColor = Theme.Accent,
+                Margin = new Padding(0, 10, 0, 2),
+            });
+
+            foreach (var (_, rule, name, tip) in RuleChoices.Where(r => r.Section == section))
+            {
+                var box = new CheckBox
+                {
+                    Text = name, Checked = true, AutoSize = true, Font = Theme.Ui, ForeColor = Theme.Text,
+                    Margin = new Padding(2, 2, 0, 0),
+                };
+                box.CheckedChanged += (_, _) => { if (!_settingBoxes) OnSettingsChanged(); };
+                tips.SetToolTip(box, tip);
+                _ruleBoxes[rule] = box;
+                list.Controls.Add(box);
+            }
+
+            foreach (var (_, name, tip, max, _, _) in Dials.Where(d => d.Section == section))
+            {
+                var row = new Panel { Width = Inner, Height = 50, Margin = new Padding(0, 6, 0, 0), BackColor = Theme.Surface };
+                var label = new Label { Text = name, AutoSize = true, Font = Theme.Ui, ForeColor = Theme.Text, Location = new Point(2, 2) };
+                var value = new Label
+                {
+                    Text = "1.0×", AutoSize = false, Width = 60, TextAlign = ContentAlignment.TopRight,
+                    Font = Theme.Ui, ForeColor = Theme.TextDim, Location = new Point(Inner - 62, 2),
+                };
+                var bar = new TrackBar
+                {
+                    Minimum = 0, Maximum = (int)Math.Round(max * 10), Value = 10, TickFrequency = 5,
+                    SmallChange = 1, LargeChange = 5, AutoSize = false, Height = 28, Width = Inner,
+                    Location = new Point(0, 20), BackColor = Theme.Surface,
+                };
+                bar.ValueChanged += (_, _) =>
+                {
+                    value.Text = $"{bar.Value / 10.0:0.0}×";
+                    if (!_settingBoxes) OnSettingsChanged();
+                };
+                tips.SetToolTip(bar, tip);
+                tips.SetToolTip(label, tip);
+                row.Controls.Add(label);
+                row.Controls.Add(value);
+                row.Controls.Add(bar);
+                _dials[name] = (bar, value);
+                list.Controls.Add(row);
+            }
+        }
+
+        _settingsPanel.Controls.Add(list);
+        _settingsPanel.Paint += (_, e) =>
+        {
+            using var pen = new Pen(Theme.Border);
+            e.Graphics.DrawLine(pen, _settingsPanel.Width - 1, 0, _settingsPanel.Width - 1, _settingsPanel.Height);
+        };
+    }
+
+    private void SetSettingsOpen(bool open)
+    {
+        _settingsPanel.Visible = open;
+        _settingsToggle.Text = open ? "Settings ◂" : "Settings ▸";
+    }
+
+    /// <summary>
+    /// A switch or a slider was moved by hand: what the panel now shows applies from the next year,
+    /// and whatever the schedule held from then on is dropped — it belonged to a timeline the user
+    /// has just stepped off.
+    /// </summary>
+    private void OnSettingsChanged()
     {
         if (_sim is null) return;
 
@@ -624,30 +724,37 @@ internal sealed class HistoryPanel : Panel
         foreach (var (rule, box) in _ruleBoxes)
             if (box.Checked) rules |= rule;
 
+        var settings = SimSettings.Default with { Rules = rules };
+        foreach (var (_, name, _, _, _, set) in Dials)
+            settings = set(settings, _dials[name].Bar.Value / 10.0);
+
         int from = _sim.Year + 1;
-        foreach (int year in _ruleSchedule.Keys.Where(y => y >= from).ToList()) _ruleSchedule.Remove(year);
-        if (rules != RulesFor(from)) _ruleSchedule[from] = rules;
+        foreach (int year in _schedule.Keys.Where(y => y >= from).ToList()) _schedule.Remove(year);
+        if (settings != SettingsFor(from)) _schedule[from] = settings;
     }
 
-    /// <summary>The rules in force in <paramref name="year"/>: the last switch made at or before it, else all.</summary>
-    private RealmRules RulesFor(int year)
+    /// <summary>The settings in force in <paramref name="year"/>: the last change made at or before it, else the defaults.</summary>
+    private SimSettings SettingsFor(int year)
     {
-        var rules = RealmRules.All;
-        foreach (var (from, set) in _ruleSchedule)
+        var settings = SimSettings.Default;
+        foreach (var (from, set) in _schedule)
         {
             if (from > year) break;
-            rules = set;
+            settings = set;
         }
-        return rules;
+        return settings;
     }
 
-    private void NoteRuleChange(int year, RealmRules before, RealmRules after)
+    private void NoteSettingsChange(int year, SimSettings before, SimSettings after)
     {
-        foreach (var (rule, name, _) in RuleChoices)
+        foreach (var (_, rule, name, _) in RuleChoices)
         {
-            bool was = before.HasFlag(rule), now = after.HasFlag(rule);
+            bool was = before.Rules.HasFlag(rule), now = after.Rules.HasFlag(rule);
             if (was != now) _notes.Add((year, now ? $"{name} resumes" : $"{name} halted"));
         }
+
+        foreach (var (_, name, _, _, get, _) in Dials)
+            if (get(before) != get(after)) _notes.Add((year, $"{name} set to {get(after):0.0}×"));
     }
 
     // --- Chronicle -------------------------------------------------------------------------------

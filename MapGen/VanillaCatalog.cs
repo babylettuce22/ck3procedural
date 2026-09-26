@@ -988,7 +988,7 @@ public sealed class VanillaCatalog
 
     private static string? Unquote(string? value) => value is null ? null : GuiNode.Unquote(value);
 
-    /// <summary>Display text fit to stand alone as a name, or null for anything carrying markup.</summary>
+    /// <summary>Display text fit to stand alone as a name, or null for anything carrying markup.</summary>CoA
     private static string? Clean(string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return null;
