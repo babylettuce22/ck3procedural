@@ -78,11 +78,11 @@ internal sealed class StartPage : Panel
             Name = "startQuick",
             Glyph = "",
             Title = "Quick",
-            Badge = "Coming soon",
+            Badge = "Recommended",
             Tagline = "Pick a map type and a few basics — size, era, climate — and let good defaults do the rest.",
             Features = ["Map types", "Size", "Era", "Climate"],
-            Action = "Not available yet",
-            Available = false,
+            Action = "Make a world in four steps",
+            Available = true,
         };
 
         _complex = new ModeCard
@@ -112,7 +112,7 @@ internal sealed class StartPage : Panel
 
         _gameChange = new LinkButton { Name = "startGameFolder", Text = "Change…" };
 
-        _quick.Click += (_, _) => { ShowNote(); QuickPicked?.Invoke(); };
+        _quick.Click += (_, _) => QuickPicked?.Invoke();
         _complex.Click += (_, _) => ComplexPicked?.Invoke();
         _openWorld.Click += (_, _) => OpenWorldPicked?.Invoke();
         _guide.Click += (_, _) => GuidePicked?.Invoke();

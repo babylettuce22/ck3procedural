@@ -325,6 +325,12 @@ public static class Generator
 
         Emit.ModWriter.RefuseGameFolder(modDir, options.GameDir);
 
+        // Before the folder is cleared, not where the history is laid down: a history that does
+        // not fit this map would otherwise fail the write halfway, with the old mod already gone.
+        // The ground is the part that can be checked this early; see AppliedHistory.Resolve.
+        if (options.AppliedHistory?.Mismatch(result.Titles) is { } mismatch)
+            throw new InvalidOperationException($"Nothing was written: {mismatch}.");
+
         // Before anything is written, not after: a run that fails halfway should leave a folder
         // holding only this run's output, never this run's mixed with the last one's.
         Emit.ModWriter.ClearModDir(modDir);

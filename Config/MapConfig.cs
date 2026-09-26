@@ -463,8 +463,19 @@ public sealed class MapConfig : CustomTypeDescriptor
         if (copy.EraAnchorYear <= 0) copy.EraAnchorYear = Math.Max(1, EraYear);
         copy.StartYear = year;
         copy.AdditionalBookmarks = false;
+        copy.PeopleSalt = year;
         return copy;
     }
+
+    /// <summary>
+    /// Mixed into every per-person draw — a ruler's name, sex, birth and upbringing, and the family
+    /// stream prehistory walks. Zero for a generated world, which is what keeps it byte for byte the
+    /// world it always was. A history applied from the History workspace sets it to the year it
+    /// stands at (see <see cref="AtStartYear"/>): those draws are keyed on the seat county alone, so
+    /// without it a realm that kept its capital for three centuries would still be ruled by the
+    /// same man, with the same dead father.
+    /// </summary>
+    internal int PeopleSalt { get; set; }
 
     /// <summary>
     /// Two more bookmarks around <see cref="StartYear"/>, filling out vanilla's 867 / 1066 / 1178.

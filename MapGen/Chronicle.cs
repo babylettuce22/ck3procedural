@@ -384,7 +384,7 @@ public sealed class ChronicleMap
 
         // Anchored on the ruler's own birth year so the house cannot be said to have taken the seat
         // after the man holding it was born into it.
-        int born = HistoryWriter.GetRulerBirthYear(county.Index, cfg.StartYear);
+        int born = HistoryWriter.GetRulerBirthYear(county.Index, cfg.StartYear, cfg.PeopleSalt);
         int offset = rng.Int(10, 90);
 
         // A main house is older than the man holding it and the seat came down to him. A cadet is

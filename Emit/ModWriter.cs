@@ -73,7 +73,7 @@ public static class ModWriter
     /// user's, not ours — see <see cref="AppGUI.EditOverlay"/>, which exists precisely so a mod
     /// written again under the same name keeps its hand edits.
     /// </summary>
-    private static readonly string[] Keep = [AppGUI.EditOverlay.FileName];
+    private static readonly string[] Keep = [AppGUI.EditOverlay.FileName, MapGen.AppliedHistory.FileName];
 
     /// <summary>
     /// Empties the mod folder before a write, so what ships is exactly what this run emitted.

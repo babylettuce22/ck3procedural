@@ -517,6 +517,7 @@ public sealed partial class MainForm : ChromeForm
         // The start page goes in first so it docks last: it fills whatever the caption row leaves.
         // It starts hidden, so the first layout sizes the workspaces; OnLoad shows it afterwards.
         Controls.Add(BuildStartPage());
+        Controls.Add(BuildQuickPage());
         Controls.Add(_workspaceHost = BuildWorkspaces());
         Controls.Add(BuildWorkspaceBar());
 
@@ -1023,8 +1024,8 @@ public sealed partial class MainForm : ChromeForm
     private void SelectWorkspace(Workspace workspace)
     {
         // Every route to a workspace — the Complex card, Ctrl+1..4, the View menu, opening a
-        // world — is also a way off the start page.
-        LeaveStartPage();
+        // world — is also a way off the start page, and off the Quick page.
+        LeaveLauncher();
 
         if (!_workspaceBar.IsAvailable(workspace))
         {
@@ -1712,11 +1713,21 @@ public sealed partial class MainForm : ChromeForm
 
     protected override bool ProcessCmdKey(ref Message message, Keys key)
     {
-        // The start page hides the generator, so its shortcuts would act on something off screen.
-        // Only the workspace keys get through, and they leave the page.
-        if (_onStart && key is not ((Keys.Control | Keys.D1) or (Keys.Control | Keys.D2)
-                                    or (Keys.Control | Keys.D3) or (Keys.Control | Keys.D4)))
-            return base.ProcessCmdKey(ref message, key);
+        // The launcher pages hide the generator, so its shortcuts would act on something off
+        // screen. Only the workspace keys get through, and they leave the page — except during a
+        // Quick run, which is watched on its page; there Escape cancels, as it does anywhere else.
+        if (_inLauncher)
+        {
+            if (_quickRunning)
+            {
+                if (key == Keys.Escape) { RequestCancel(); _quick.CancelPending(); return true; }
+                return base.ProcessCmdKey(ref message, key);
+            }
+
+            if (key is not ((Keys.Control | Keys.D1) or (Keys.Control | Keys.D2)
+                            or (Keys.Control | Keys.D3) or (Keys.Control | Keys.D4)))
+                return base.ProcessCmdKey(ref message, key);
+        }
 
         // Terrain and Climate own the brush keys while they are on screen, and say so by handling
         // them; anything they pass on falls through to the window's own shortcuts.
@@ -2856,13 +2867,35 @@ public sealed partial class MainForm : ChromeForm
         _modName = dialog.ModDisplayName;
         _options.ModName = dialog.ModDisplayName;
 
-        string modDir = dialog.ModDir;
+        await WriteModIntoAsync(dialog.ModDir, carried);
+    }
+
+    /// <summary>
+    /// Everything Write mod does once it knows where the mod goes: build and write, then hand the
+    /// world to the editor and offer to enable the mod. Split out of <see cref="WriteModAsync"/> so
+    /// the Quick page, which asks for the name itself, writes through exactly the same path.
+    /// </summary>
+    private async Task WriteModIntoAsync(string modDir, EditOverlay? carried)
+    {
+        // A history this mod was last written with is written again, unless one is already in
+        // hand. Discarding it removes the file, so this never brings back what the user let go of.
+        if (_options.AppliedHistory is null && MapGen.AppliedHistory.Load(modDir) is { } saved)
+        {
+            _options.AppliedHistory = saved;
+            _history.ShowApplied(saved);
+            Console.WriteLine($"Applied history of {saved.Year} restored from {MapGen.AppliedHistory.FileName} beside the mod");
+        }
+
         await BuildAsync(modDir);
 
         if (Directory.Exists(modDir)) _lastModDir = modDir;
 
         if (_result is not null && _written is not null && Directory.Exists(modDir))
         {
+            // The file says what the mod on disk was written with, so it follows every write.
+            if (_options.AppliedHistory is { } applied) applied.Save(modDir);
+            else MapGen.AppliedHistory.Forget(modDir);
+
             _edits.Attach(_result, _written, modDir);
             Console.WriteLine();
             Console.WriteLine("The world can now be edited — click any title, culture or faith map.");
@@ -2945,6 +2978,7 @@ public sealed partial class MainForm : ChromeForm
             _written = content;
             ShowResult(result);
             _edits.Attach(result, content, written.ModDir);
+            applied.Save(written.ModDir);
             _status.Text = $"History of {applied.Year} applied to {written.ModDir} in {clock.ElapsedMilliseconds / 1000.0:F1} s";
             Console.WriteLine($"History of {applied.Year} applied in {clock.ElapsedMilliseconds / 1000.0:F1} s — "
                               + "restart the game, not just the mod, to see it");
@@ -2964,11 +2998,16 @@ public sealed partial class MainForm : ChromeForm
         }
     }
 
-    /// <summary>Back to the generated realms. Nothing on disk changes until the next write.</summary>
+    /// <summary>
+    /// Back to the generated realms. The mod's files change at the next write; the record beside it
+    /// goes now, so that write — in this session or after a restart — does not restore it.
+    /// </summary>
     private void DiscardHistory()
     {
         _options.AppliedHistory = null;
         _history.ShowApplied(null);
+        if ((_edits.Target?.ModDir ?? _lastModDir) is { } modDir && Directory.Exists(modDir))
+            MapGen.AppliedHistory.Forget(modDir);
         _status.Text = "Applied history discarded — the next write uses the realms the generator grows";
     }
 
@@ -3169,6 +3208,9 @@ public sealed partial class MainForm : ChromeForm
         {
             var bitmap = ToBitmap(image);
 
+            // The Quick page shows the world filling in; it gets a copy of its own to keep.
+            if (_quickRunning) _quick.OfferLiveImage(viewName, new Bitmap(bitmap));
+
             _rendered.TryGetValue(viewName, out var old);
             _rendered[viewName] = bitmap;
 
@@ -3191,11 +3233,13 @@ public sealed partial class MainForm : ChromeForm
     {
         // A Forge source with an unbaked erosion stage will bake it inside the run, which can be
         // the longest phase of the lot. Say so first, as the tab's own export does.
-        if (_source is MapGen.ForgeHeightmapProvider && !_forge.ConfirmStaleBakes(this)) return;
+        // A Quick world skips the question: its page already says the run takes a few minutes.
+        if (_source is MapGen.ForgeHeightmapProvider && !_onQuick && !_forge.ConfirmStaleBakes(this)) return;
 
         // Read on the UI thread before the run, and cloned: the tab stays enabled for panning but
-        // the paint must not change under the model mid-run.
-        var climatePaint = _climate.EffectivePaint?.Clone();
+        // the paint must not change under the model mid-run. A Quick world's climate is the one its
+        // page chose, so paint left on the Climate workspace does not reach it.
+        var climatePaint = _onQuick ? null : _climate.EffectivePaint?.Clone();
 
         var (result, cancelled) = await RunAsync(
             modDir is null ? "Building preview…" : "Writing mod…",
@@ -3304,8 +3348,9 @@ public sealed partial class MainForm : ChromeForm
 
         // A run is watched from World, whichever workspace it was started from (F5 works in all
         // three), and its log opens for the duration. It folds again afterwards unless the run
-        // failed — then the log is the thing worth reading.
-        SelectWorkspace(Workspace.World);
+        // failed — then the log is the thing worth reading. A run started from the Quick page is
+        // watched there instead, so it stays put.
+        if (!_onQuick) SelectWorkspace(Workspace.World);
         bool logWasOpen = _logOpen;
         bool failed = false;
         SetLogOpen(true);
@@ -3340,10 +3385,12 @@ public sealed partial class MainForm : ChromeForm
             Console.WriteLine();
             Console.WriteLine($"Finished in {clock.ElapsedMilliseconds / 1000.0:F1} s");
             if (modDir is not null) RunLog.Write(modDir, _options, "completed");
+            _lastRun = RunOutcome.Completed;
             return (result, false);
         }
         catch (OperationCanceledException)
         {
+            _lastRun = RunOutcome.Cancelled;
             Console.WriteLine();
             Console.WriteLine($"Cancelled after {clock.ElapsedMilliseconds / 1000.0:F1} s");
             if (modDir is not null) RunLog.Write(modDir, _options, "cancelled — the mod folder may be half written");
@@ -3351,6 +3398,8 @@ public sealed partial class MainForm : ChromeForm
         }
         catch (Exception ex)
         {
+            _lastRun = RunOutcome.Failed;
+            _lastRunError = ex.Message;
             Console.WriteLine();
             Console.WriteLine(ex);
             _status.Text = "Failed — see log";
@@ -3399,6 +3448,15 @@ public sealed partial class MainForm : ChromeForm
         else
         {
             _eta.Text = $"{_progressModel.Elapsed.TotalSeconds:F0}s elapsed";
+        }
+
+        // The Quick page watches the same estimate. An uncalibrated one has no fraction to give.
+        if (_quickRunning)
+        {
+            bool calibrated = remaining is not null && _progress.Style == ProgressBarStyle.Blocks;
+            _quick.SetProgress(calibrated ? fraction : null,
+                calibrated ? RunProgress.Describe(remaining!.Value) : null,
+                _progressModel.Elapsed, _phase);
         }
     }
 

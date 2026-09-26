@@ -210,7 +210,7 @@ public sealed class ArtifactMap
             // matter how wide the name banks got. Wider banks cannot help a generator that is
             // asking them the same question every time.
             var countyRng = new Rng(cfg.Seed ^ county.Index ^ 0x7E1A);
-            var (firstName, _) = HistoryWriter.RulerNames(county, culture);
+            var (firstName, _) = HistoryWriter.RulerNames(county, culture, salt: cfg.PeopleSalt);
 
             var list = new List<GeneratedArtifact>();
 

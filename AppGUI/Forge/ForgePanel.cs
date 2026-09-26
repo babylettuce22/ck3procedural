@@ -691,6 +691,39 @@ public sealed class ForgePanel : UserControl
 
     // ---------------------------------------------------------- presets / export
 
+    /// <summary>
+    /// Makes a preset the Forge's project, as Load preset does but without asking for a file, and
+    /// sets its seed and base size. Used by the Quick generator, so the Terrain workspace shows
+    /// exactly the terrain the Quick world was built from and "Customize in Complex" can pick it up.
+    ///
+    /// Erosion needs a Direct3D 12 GPU and throws without one, so on such a machine its stages are
+    /// switched off rather than left to fail the run halfway through. Returns what was switched
+    /// off, for the caller to say so.
+    /// </summary>
+    public IReadOnlyList<string> AdoptPreset(string path, int seed, int width, int height)
+    {
+        EnsureStarted();
+        Session.LoadPreset(path);
+        Session.History.Clear();
+        Session.SetSeed(seed);
+        Session.SetBaseSize(width, height);
+
+        var disabled = new List<string>();
+        if (!HydraulicErosionStage.GpuAvailable)
+        {
+            foreach (var stage in Session.Pipeline.Stages.Where(s => s is HydraulicErosionStage && s.Enabled).ToList())
+            {
+                Session.SetStageEnabled(stage, false);
+                disabled.Add(stage.DisplayName);
+            }
+        }
+
+        RefreshStageList();
+        if (_stages.Items.Count > 0) _stages.SelectedIndex = 0;
+        BindPainting();
+        return disabled;
+    }
+
     private void LoadPreset()
     {
         using var dialog = new OpenFileDialog

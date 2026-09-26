@@ -32,7 +32,14 @@ public sealed class HistorySim
         _sim = sim;
         _seed = seed;
         StartYear = startYear;
+        StartCapitals = sim.Polities.ToDictionary(p => p.Id, p => p.Capital);
     }
+
+    /// <summary>
+    /// Where each realm standing at the start date was seated then, by id — the seat whose ruler's
+    /// house a surviving realm still belongs to. See <see cref="AppliedHistory.Capture"/>.
+    /// </summary>
+    public IReadOnlyDictionary<int, Title> StartCapitals { get; }
 
     /// <summary>The year the history began: the world's start date.</summary>
     public int StartYear { get; }

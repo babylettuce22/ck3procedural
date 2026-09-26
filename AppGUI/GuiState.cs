@@ -113,6 +113,12 @@ public sealed class GuiState
     public string? LastModDir { get; set; }
 
     /// <summary>
+    /// What the last Quick world was made with, so the Quick page opens on it. A convenience, like
+    /// the window's position: the seed in it is ignored and a fresh one drawn each visit.
+    /// </summary>
+    public QuickChoices? Quick { get; set; }
+
+    /// <summary>
     /// What the last run of each kind cost, phase by phase — the whole basis of the progress
     /// estimate. Two of them because writing the mod runs a dozen phases a preview never does, so
     /// one shared profile would over-predict every preview and under-predict every write.
@@ -244,6 +250,38 @@ internal static class Preset
         }
 
         return applied;
+    }
+
+    /// <summary>
+    /// Puts every setting a preset carries back to its default, in place, so the PropertyGrid keeps
+    /// pointing at the same object. What a preset leaves alone — the map size, the grid's view
+    /// switch — is left alone here too.
+    /// </summary>
+    public static void Reset(MapConfig config)
+    {
+        var fresh = new MapConfig();
+        foreach (var property in Settable(config))
+            if (Saved(property)) property.SetValue(config, property.GetValue(fresh));
+    }
+
+    /// <summary>
+    /// Whether every setting a preset carries is at its default: compared as a preset would write
+    /// them, so a list or object setting compares by content rather than by reference.
+    ///
+    /// The seed is not compared. The window rolls a fresh one at every launch, so it differs from
+    /// the default without anyone having chosen anything.
+    /// </summary>
+    public static bool IsDefault(MapConfig config)
+    {
+        var fresh = new MapConfig();
+        foreach (var property in Settable(config))
+        {
+            if (!Saved(property) || property.Name == nameof(MapConfig.Seed)) continue;
+            string mine = JsonSerializer.Serialize(property.GetValue(config));
+            string theirs = JsonSerializer.Serialize(property.GetValue(fresh));
+            if (mine != theirs) return false;
+        }
+        return true;
     }
 
     private static IEnumerable<System.Reflection.PropertyInfo> Settable(MapConfig config)

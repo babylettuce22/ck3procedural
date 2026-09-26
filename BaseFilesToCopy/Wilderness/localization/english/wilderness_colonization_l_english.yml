@@ -452,6 +452,12 @@ wilderness_colonization.0029.t:0 "The Starving Winter"
  wilderness_leak_toast:0 "Wilderness in a Realm: [leak_county.GetName] was held by [leak_county.GetHolder.GetName] while still unsettled. It has been returned to the wild."
  wilderness_leak_debug_log:0 "WILDERNESS LEAK: county [leak_county.GetName] entered the realm of [leak_county.GetHolder.GetName] with wilderness_holding intact; reverted."
 
+ # The same, for a county whose holding is settled but whose people are still Unsettled. Remove
+ # with wilderness_colonization.0098.
+ wilderness_identity_leak_toast:0 "Unsettled People in a Realm: [identity_county.GetName] came to [identity_county.GetHolder.GetName] still keeping the Unsettled culture or faith. It now follows its holder's."
+ wilderness_identity_leak_debug_log:0 "WILDERNESS IDENTITY LEAK: county [identity_county.GetName] came to [identity_county.GetHolder.GetName] with the unsettled culture or faith; set to the holder's. Transfer type in the scope dump below."
+ wilderness_identity_sweep_debug_log:0 "WILDERNESS IDENTITY SWEEP: county [identity_county.GetName] held by [identity_county.GetHolder.GetName] still had the unsettled culture or faith; set to the holder's."
+
  colonize_already_present_tt:0 "We are already there"
  colonize_already_travelling_tt:0 "We are already on the road"
 

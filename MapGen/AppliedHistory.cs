@@ -20,6 +20,53 @@ namespace Ck3MapGen.MapGen;
 /// </summary>
 public sealed class AppliedHistory
 {
+    /// <summary>
+    /// Kept beside the mod whenever the mod was written with a history, and only then, so that
+    /// writing the same mod again — after a restart, say — writes the same history rather than
+    /// quietly going back to the generated realms. Spared by <see cref="Emit.ModWriter.ClearModDir"/>.
+    /// </summary>
+    public const string FileName = "proctool_history.json";
+
+    private static readonly System.Text.Json.JsonSerializerOptions Json = new() { WriteIndented = false };
+
+    /// <summary>Records this history beside the mod in <paramref name="modDir"/>.</summary>
+    public void Save(string modDir)
+        => File.WriteAllText(Path.Combine(modDir, FileName), System.Text.Json.JsonSerializer.Serialize(this, Json));
+
+    /// <summary>Forgets any history recorded beside the mod: the mod was written without one.</summary>
+    public static void Forget(string modDir)
+    {
+        string path = Path.Combine(modDir, FileName);
+        if (File.Exists(path)) File.Delete(path);
+    }
+
+    /// <summary>The history recorded beside the mod, or null when there is none or it cannot be read.</summary>
+    public static AppliedHistory? Load(string modDir)
+    {
+        string path = Path.Combine(modDir, FileName);
+        if (!File.Exists(path)) return null;
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<AppliedHistory>(File.ReadAllText(path), Json);
+        }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or IOException or NotSupportedException)
+        {
+            Console.WriteLine($"  {FileName}: could not be read ({ex.Message}); the generated realms are used");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Why this history cannot be laid over a world with these titles, or null when the ground
+    /// matches. The check that can be made before anything is written — see
+    /// <see cref="Core.Generator.WriteMod"/>; <see cref="Resolve"/> makes the rest.
+    /// </summary>
+    public string? Mismatch(IEnumerable<Title> titles)
+        => GroundOf(Titles.Flatten(titles.ToList())) == Ground
+            ? null
+            : $"the history of {Year} was run on a different county map — a different heightmap, seed or "
+              + "county setting. Discard it in the History workspace, or go back to the settings it was run with";
+
     /// <summary>The year the realms stand at: the start date the world is written with.</summary>
     public required int Year { get; init; }
 
@@ -37,9 +84,44 @@ public sealed class AppliedHistory
     /// <summary>One realm, by county index. <see cref="Suzerain"/> is another realm's <see cref="Id"/>.</summary>
     public sealed record Realm(int Id, int Capital, int? Suzerain, string Culture, int Founded, int Peak, int[] Counties);
 
-    /// <summary>The history as it stands, lifted off the objects it runs on.</summary>
-    public static AppliedHistory Capture(HistorySim sim, IEnumerable<Title> counties)
-        => new()
+    /// <summary>
+    /// A dynasty and the house of it that rules, carried by value: the history is laid over a world
+    /// generated again, whose prehistory knows nothing of the one the history started from.
+    /// </summary>
+    public sealed record Lineage(string DynastyId, string DynastyNameKey, string DynastyName, string CultureKey,
+        string HouseKey, string HouseNameKey, string HouseName, string? Prefix);
+
+    /// <summary>
+    /// The house that ruled each realm when the history began, by realm id — only for realms that
+    /// were already standing then. A realm that endures keeps it; one born since founds its own.
+    /// </summary>
+    public Dictionary<int, Lineage> RealmLineage { get; init; } = [];
+
+    /// <summary>
+    /// The house of every ruler seated when the history began, by seat county index — for the lords
+    /// inside realms, who keep the local family with a chance that falls with the years passed.
+    /// </summary>
+    public Dictionary<int, Lineage> SeatLineage { get; init; } = [];
+
+    /// <summary>
+    /// The history as it stands, lifted off the objects it runs on. <paramref name="rulers"/> and
+    /// <paramref name="prehistory"/> are the people of the world the history started from; without
+    /// them every realm founds a new house.
+    /// </summary>
+    public static AppliedHistory Capture(HistorySim sim, IEnumerable<Title> counties,
+        RulerMap? rulers = null, PrehistoryMap? prehistory = null)
+    {
+        var seatLineage = new Dictionary<int, Lineage>();
+        if (rulers is not null && prehistory is not null)
+            foreach (var ruler in rulers.All)
+                if (LineageOf(ruler, prehistory) is { } line) seatLineage[ruler.Seat.Index] = line;
+
+        var realmLineage = new Dictionary<int, Lineage>();
+        foreach (var p in sim.Realms)
+            if (sim.StartCapitals.TryGetValue(p.Id, out var seat) && seatLineage.TryGetValue(seat.Index, out var line))
+                realmLineage[p.Id] = line;
+
+        return new()
         {
             Year = sim.Year,
             FromYear = sim.StartYear,
@@ -48,7 +130,46 @@ public sealed class AppliedHistory
             Realms = [.. sim.Realms.OrderBy(p => p.Id).Select(p => new Realm(
                 p.Id, p.Capital.Index, p.Suzerain?.Id, p.Culture.Key, p.Founded, p.Peak,
                 [.. p.Counties.Select(c => c.Index).Order()]))],
+            RealmLineage = realmLineage,
+            SeatLineage = seatLineage,
         };
+    }
+
+    /// <summary>
+    /// A ruler's dynasty, by its senior house — the line a cadet branch came off, as the additional
+    /// bookmarks carry it: a branch is one ruler's, the dynasty is what outlasts him.
+    /// </summary>
+    private static Lineage? LineageOf(Ruler ruler, PrehistoryMap prehistory)
+    {
+        if (!prehistory.Dynasties.TryGetValue(ruler.DynastyId, out var dynasty)) return null;
+        if (!prehistory.Houses.TryGetValue(dynasty.MainHouseKey, out var house)) return null;
+        return new Lineage(dynasty.Id, dynasty.NameKey, dynasty.LocalizedName, dynasty.CultureKey,
+            house.Key, house.NameKey, house.LocalizedName, house.Prefix);
+    }
+
+    /// <summary>
+    /// Which ruling seats of the titled applied world carry a house from the start, and which. A
+    /// realm's own seat carries its realm's; any other seat — a lord inside a realm — keeps the house
+    /// that held it then with a chance of 1 - years/280 (0.1 to 0.9), the additional bookmarks' rule:
+    /// most count houses last a century, few last three.
+    /// </summary>
+    public Dictionary<Title, Lineage> LineageFor(RealmMap realms, FormationHistory history, WildernessMap wilderness)
+    {
+        var polityAt = history.Polities.ToDictionary(p => p.Capital, p => p.Id);
+        double endures = Math.Clamp(1.0 - (Year - FromYear) / 280.0, 0.1, 0.9);
+        var result = new Dictionary<Title, Lineage>();
+
+        foreach (var seat in realms.HolderCounty.Values.Distinct().Where(c => !wilderness.Contains(c)))
+        {
+            if (polityAt.TryGetValue(seat, out int id) && RealmLineage.TryGetValue(id, out var realm))
+                result[seat] = realm;
+            else if (SeatLineage.TryGetValue(seat.Index, out var local)
+                     && new Core.Rng(seat.Index ^ 0x51D1 ^ Year).NextDouble() < endures)
+                result[seat] = local;
+        }
+
+        return result;
+    }
 
     /// <summary>
     /// A fingerprint of the county map: every county's index and the provinces of its baronies. Two

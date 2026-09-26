@@ -204,7 +204,8 @@ internal sealed class ModNameDialog : ChromeForm
         {
             _note.ForeColor = Theme.Danger;
             _note.Text = "This folder already holds a mod written by this tool. Writing replaces "
-                         + $"everything in it except your hand edits ({EditOverlay.FileName}).";
+                         + $"everything in it except your hand edits ({EditOverlay.FileName}) and an "
+                         + $"applied history ({MapGen.AppliedHistory.FileName}).";
         }
         else if (!folder.Equals(_name.Text.Trim(), StringComparison.Ordinal))
         {

@@ -32,6 +32,23 @@ is_settled_county_trigger = {
 	}
 }
 
+# Title scope. Do this county's people still carry the Unsettled culture or faith?
+#
+# They should only while the dummy holds it: colonize_county_effect swaps both for the colonist's in
+# the same effect that moves the title. A real ruler holding a county that still answers yes came by
+# it some other way — see wilderness_colonization.0098.
+#
+# Compared against the dummy rather than naming culture:gen_culture_unsettled, so the key lives in
+# one place (MapGen/Cultures.cs, MapGen/Faiths.cs) and history is what decides it. k_gen_wilderness
+# exists on every map that ships this set; see the note in abandon_county_effect.
+county_has_unsettled_identity_trigger = {
+	exists = title:k_gen_wilderness.holder
+	OR = {
+		culture = title:k_gen_wilderness.holder.culture
+		faith = title:k_gen_wilderness.holder.faith
+	}
+}
+
 # Title scope. Has every obstacle in this county's capital been cleared?
 #
 # The `obstacle` flag is the entire interface between this trigger and the six blocker pairs in

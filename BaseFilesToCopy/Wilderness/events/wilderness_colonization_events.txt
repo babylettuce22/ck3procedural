@@ -1879,6 +1879,56 @@ wilderness_colonization.0099 = {
 	}
 }
 
+# ---- The identity leak ----
+#
+# Reported 2026-09-25 on a fresh world: a tribal realm holding a stretch of land whose county culture
+# and faith were still Unsettled — control 100, development 21, -10 popular opinion. The generator
+# cannot write that (a check of the shipped history found every Unsettled-culture province on a
+# dummy-held county), and colonize_county_effect sets culture and faith in the same effect that moves
+# the title. So the county reached a real ruler by a route that skips colonisation, the same
+# unidentified route 0099 hunts for — but by the time anyone looked its capital was no longer
+# wilderness_holding, so 0099 never tripped.
+#
+# Repairs rather than reverts. Unlike 0099's case this county has a real holding and a functioning
+# holder; the only thing wrong is the people on it, and giving them the holder's culture and faith is
+# exactly what colonisation would have done. Reports as loudly as 0099, and `debug_log_scopes` puts
+# scope:identity_transfer — the on_title_gain transfer type — into game.log, which is the one fact
+# that names the route.
+#
+# Leaves a county that is still wilderness_holding to 0099, which will hand it back to the wild.
+wilderness_colonization.0098 = {
+	hidden = yes
+	scope = character
+
+	trigger = {
+		exists = scope:identity_county
+		scope:identity_county = {
+			tier = tier_county
+			holder ?= { NOT = { has_trait = wilderness } }
+			NOT = { title_province ?= { has_holding_type = wilderness_holding } }
+			county_has_unsettled_identity_trigger = yes
+		}
+	}
+
+	immediate = {
+		debug_log = wilderness_identity_leak_debug_log
+		debug_log_scopes = yes
+
+		every_player = {
+			send_interface_toast = {
+				type = event_toast_effect_bad
+				title = wilderness_identity_leak_toast
+				left_icon = scope:identity_county.holder
+				right_icon = scope:identity_county
+			}
+		}
+
+		scope:identity_county = {
+			county_settle_identity_effect = { HOLDER = scope:identity_county.holder }
+		}
+	}
+}
+
 
 # The AI's decision to claim a county.
 #

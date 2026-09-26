@@ -7,7 +7,8 @@ namespace Ck3MapGen.Emit;
 public static partial class ContentWriter
 {
     /// <summary>The realm map an applied history lays over the generated world, and what follows from it.</summary>
-    internal sealed record AppliedRealms(RealmMap Realms, GovernmentMap Governments, double? HegemonShare);
+    internal sealed record AppliedRealms(RealmMap Realms, GovernmentMap Governments, double? HegemonShare,
+        IReadOnlyDictionary<Title, AppliedHistory.Lineage> Lineage);
 
     /// <summary>
     /// Titles an applied history and decides what follows from who rules what: the hegemony and the
@@ -38,13 +39,18 @@ public static partial class ContentWriter
         if (cfg.StartingHegemony) Realms.ExpandHegemonRealm(realms, empires, wilderness);
         double? hegemonShare = cfg.StartingHegemony ? Realms.HegemonDeJureShare(realms, empires, wilderness) : null;
 
+        var lineage = applied.LineageFor(realms, history, wilderness);
+
         int independent = history.Polities.Count(p => p.Suzerain is null);
+        int enduring = history.Polities.Count(p => p.Suzerain is null && lineage.ContainsKey(p.Capital));
         Console.WriteLine($"  applied history: the realms of {applied.Year} (run on from {applied.FromYear}) "
-            + $"replace the generated start — {history.Polities.Count} realms, {independent} independent");
+            + $"replace the generated start — {history.Polities.Count} realms, {independent} independent, "
+            + $"{enduring} of them under the house that ruled them in {applied.FromYear}; "
+            + $"{lineage.Count} of {realms.HolderCounty.Values.Distinct().Count()} seats keep a house");
         Console.WriteLine("  governments: " + string.Join(", ",
             governments.Tally(counties, wilderness).Select(g => $"{g.Count} {g.Government[..^11]}")));
 
-        return new AppliedRealms(realms, governments, hegemonShare);
+        return new AppliedRealms(realms, governments, hegemonShare, lineage);
     }
 
     /// <summary>
@@ -94,7 +100,7 @@ public static partial class ContentWriter
         var worldCenters = world.WorldCenters;
         var retinues = written.Retinues;
 
-        var (realms, governments, hegemonShare) = ApplyRealms(applied, current, cfg, empires, counties,
+        var (realms, governments, hegemonShare, lineage) = ApplyRealms(applied, current, cfg, empires, counties,
             provinces, order, result.BaronyCount, world.ProvinceTerrain, development, cultures, worldCenters,
             wilderness, result.Azgaar, world.StateGovernments);
 
@@ -155,7 +161,7 @@ public static partial class ContentWriter
         var layer = Core.Stage.Detail("history and bookmarks", () => WriteHistoryLayer(modDir, gameDir, cfg,
             provinces, order, result.LandCount, empires, counties, realms, cultures, world.Ethnicities, faiths,
             governments, worldCenters, wilderness, development, world.TitlePlan, eraGovernments: null,
-            retinues, result.Azgaar, written.Calendar, flatmap, world.Frontier, cultureAssets: false));
+            retinues, result.Azgaar, written.Calendar, flatmap, world.Frontier, cultureAssets: false, lineage));
 
         Core.Stage.Time("debug panel", () => DebugPanel.Write(modDir, DebugFacts(
             modDir, cfg, provinces, empires, counties, cultures, faiths, wilderness, worldCenters,
@@ -165,7 +171,10 @@ public static partial class ContentWriter
         // Stamps exactly the files rewritten above: everything else still carries its stamp.
         Core.Stage.Time("watermark", () => Generator.ApplyWatermark(modDir, cfg));
 
-        var appliedWorld = world with { Realms = realms, Governments = governments, HegemonShare = hegemonShare };
+        var appliedWorld = world with
+        {
+            Realms = realms, Governments = governments, HegemonShare = hegemonShare, Lineage = lineage,
+        };
         var appliedContent = written with
         {
             World = appliedWorld,
@@ -238,7 +247,8 @@ public static partial class ContentWriter
         GovernmentMap governments, WorldCenterMap worldCenters, WildernessMap wilderness,
         Dictionary<Title, int> development, VanillaTitles.Plan? titlePlan,
         Dictionary<int, GovernmentMap>? eraGovernments, RetinueMap? retinues, AzgaarImport? azgaar,
-        WorldCalendar? calendar, Flatmap flatmap, FrontierMap frontier, bool cultureAssets = true)
+        WorldCalendar? calendar, Flatmap flatmap, FrontierMap frontier, bool cultureAssets = true,
+        IReadOnlyDictionary<Title, AppliedHistory.Lineage>? lineage = null)
     {
         PrehistoryMap? prehistory = null;
         RulerMap? rulers = null;
@@ -248,7 +258,7 @@ public static partial class ContentWriter
 
         prehistory = Core.Stage.Time("prehistory", () => PrehistoryMap.Build(
             counties, provinces, order, landCount, realms, cultures, faiths,
-            governments, worldCenters, wilderness, cfg, new Rng(cfg.Seed ^ 0x4821)));
+            governments, worldCenters, wilderness, cfg, new Rng(cfg.Seed ^ 0x4821 ^ cfg.PeopleSalt), lineage));
 
         // After prehistory, which it reads the houses and fathers from, and before
         // anything that names a ruler: the bookmarks and the character file both read

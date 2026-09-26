@@ -205,7 +205,8 @@ public sealed class PrehistoryMap
         WorldCenterMap? worldCenters,
         WildernessMap wilderness,
         MapConfig cfg,
-        Rng rng)
+        Rng rng,
+        IReadOnlyDictionary<Title, AppliedHistory.Lineage>? lineage = null)
     {
         var map = new PrehistoryMap();
         if (counties.Count == 0) return map;
@@ -215,7 +216,7 @@ public sealed class PrehistoryMap
         var rulerCounties = realms.HolderCounty.Values.Distinct().Where(c => !wilderness.Contains(c)).ToList();
 
         // 1. Build Dynasties and Cadet Houses
-        BuildDynastiesAndHouses(map, rulerCounties, realms, cultures, rng);
+        BuildDynastiesAndHouses(map, rulerCounties, realms, cultures, rng, lineage, cfg.PeopleSalt);
 
         // 1b. Noble Families — the landless title that makes a house a family to the engine.
         // Straight after the houses, because it is a fact about them and nothing later moves one.
@@ -288,21 +289,42 @@ public sealed class PrehistoryMap
         return map;
     }
 
+    /// <param name="lineage">
+    /// Under a history applied from the History workspace, the seats that carry a house from the
+    /// world it started from — see <see cref="AppliedHistory.LineageFor"/>. Those take it as it was;
+    /// every other house is founded with <paramref name="salt"/>, the applied year, in its keys, so
+    /// that a new house seated where a carried one used to sit can never be declared under the same
+    /// id. Both are null and zero for a generated world, which is left exactly as it was.
+    /// </param>
     private static void BuildDynastiesAndHouses(
         PrehistoryMap map,
         List<Title> rulerCounties,
         RealmMap realms,
         CultureMap cultures,
-        Rng rng)
+        Rng rng,
+        IReadOnlyDictionary<Title, AppliedHistory.Lineage>? lineage = null,
+        int salt = 0)
     {
+        string suffix = lineage is null ? "" : $"_y{salt}";
+
+        // Names already taken by the houses carried across, so a house founded beside them does not
+        // come out with the same name as a dynasty that is not its own.
+        var carriedNames = lineage?.Values.Select(l => l.DynastyName).ToHashSet(StringComparer.Ordinal) ?? [];
+
+        if (lineage is not null)
+            foreach (var county in rulerCounties)
+                if (lineage.TryGetValue(county, out var line)) Carry(map, county, line);
+
         foreach (var county in rulerCounties)
         {
+            if (map.CharacterDynastyMap.ContainsKey(county)) continue;
+
             var primary = HistoryWriter.Primary(county, realms);
             bool isTopLiege = !realms.Liege.ContainsKey(primary);
 
             if (isTopLiege)
             {
-                CreateDynastyAndMainHouse(map, county, cultures);
+                CreateDynastyAndMainHouse(map, county, cultures, suffix, carriedNames);
             }
         }
 
@@ -333,8 +355,8 @@ public sealed class PrehistoryMap
                     ? culture.DynastyNameFor(county, 2)
                     : $"{culture.Name}_{county.Index}";
 
-                string houseKey = $"house_gen_{county.Index}";
-                string houseNameKey = $"dynn_gen_house_{county.Index}";
+                string houseKey = $"house_gen_{county.Index}{suffix}";
+                string houseNameKey = $"dynn_gen_house_{county.Index}{suffix}";
                 string? prefix = CulturePrefix(culture.Key);
 
                 map.Houses[houseKey] = new DynastyHouseDef
@@ -350,10 +372,39 @@ public sealed class PrehistoryMap
             }
             else
             {
-                CreateDynastyAndMainHouse(map, county, cultures);
+                CreateDynastyAndMainHouse(map, county, cultures, suffix, carriedNames);
             }
             }
         }
+    }
+
+    /// <summary>
+    /// Seats a ruler in a house carried across an applied history: the dynasty and its senior house
+    /// declared as they were — same keys, same names, same arms, which are rolled from the key — the
+    /// first time any seat carries them, and shared by every seat after.
+    /// </summary>
+    private static void Carry(PrehistoryMap map, Title county, AppliedHistory.Lineage line)
+    {
+        map.Dynasties.TryAdd(line.DynastyId, new DynastyDef
+        {
+            Id = line.DynastyId,
+            NameKey = line.DynastyNameKey,
+            LocalizedName = line.DynastyName,
+            CultureKey = line.CultureKey,
+            MainHouseKey = line.HouseKey,
+        });
+
+        map.Houses.TryAdd(line.HouseKey, new DynastyHouseDef
+        {
+            Key = line.HouseKey,
+            NameKey = line.HouseNameKey,
+            LocalizedName = line.HouseName,
+            DynastyId = line.DynastyId,
+            Prefix = line.Prefix,
+        });
+
+        map.CharacterDynastyMap[county] = line.DynastyId;
+        map.CharacterHouseMap[county] = line.HouseKey;
     }
 
     /// <summary>
@@ -430,7 +481,8 @@ public sealed class PrehistoryMap
         return changed;
     }
 
-    private static void CreateDynastyAndMainHouse(PrehistoryMap map, Title county, CultureMap cultures)
+    private static void CreateDynastyAndMainHouse(PrehistoryMap map, Title county, CultureMap cultures,
+        string suffix = "", HashSet<string>? taken = null)
     {
         var culture = cultures.For(county);
         var cRng = new Rng(county.Index ^ 0x33A9);
@@ -439,9 +491,15 @@ public sealed class PrehistoryMap
             ? culture.DynastyNameFor(county)
             : $"{culture.Name}_{county.Index}";
 
-        string dynId = $"gen_dynasty_{county.Index}";
-        string dynNameKey = $"dynn_gen_{county.Index}";
-        string houseKey = $"house_gen_{county.Index}";
+        // A house founded beside carried ones steps off any name one of them already has: the
+        // county's own slot is the name its old house bore, if that house endured somewhere else.
+        // Slots from 3 up are the ones nothing else in this generator draws.
+        for (int slot = 3; taken is not null && taken.Contains(dynName) && slot < 10; slot++)
+            dynName = culture.DynastyNameFor(county, slot);
+
+        string dynId = $"gen_dynasty_{county.Index}{suffix}";
+        string dynNameKey = $"dynn_gen_{county.Index}{suffix}";
+        string houseKey = $"house_gen_{county.Index}{suffix}";
 
         map.Dynasties[dynId] = new DynastyDef
         {
@@ -538,11 +596,11 @@ public sealed class PrehistoryMap
             var topTitle = HistoryWriter.Primary(topLiege, realms);
 
             var topRng = new Rng(topLiege.Index ^ 0x7E1B);
-            int topBirthYear = HistoryWriter.GetRulerBirthYear(topLiege.Index, cfg.StartYear);
+            int topBirthYear = HistoryWriter.GetRulerBirthYear(topLiege.Index, cfg.StartYear, cfg.PeopleSalt);
 
             // The line runs through the parent of the ruler's own sex: a countess is her mother's
             // daughter, and the house descends the way the world's laws say land does.
-            bool topFemale = HistoryWriter.RulerIsFemale(topLiege, faith);
+            bool topFemale = HistoryWriter.RulerIsFemale(topLiege, faith, cfg.PeopleSalt);
             string topParentName = GivenName(culture, topFemale, topRng);
 
             int topParentBirth = topBirthYear - topRng.Int(22, 35);
@@ -580,7 +638,7 @@ public sealed class PrehistoryMap
 
             foreach (var kinCounty in kin)
             {
-                int kinBirthYear = HistoryWriter.GetRulerBirthYear(kinCounty.Index, cfg.StartYear);
+                int kinBirthYear = HistoryWriter.GetRulerBirthYear(kinCounty.Index, cfg.StartYear, cfg.PeopleSalt);
                 int ageGap = Math.Abs(topBirthYear - kinBirthYear);
                 var kinTitle = HistoryWriter.Primary(kinCounty, realms);
                 var kinRng = new Rng(kinCounty.Index ^ 0x481A);
@@ -614,7 +672,7 @@ public sealed class PrehistoryMap
                 var kinCulture = cultures.For(kinCounty);
                 var kinFaith = faiths.For(kinCounty);
 
-                bool kinFemale = HistoryWriter.RulerIsFemale(kinCounty, kinFaith);
+                bool kinFemale = HistoryWriter.RulerIsFemale(kinCounty, kinFaith, cfg.PeopleSalt);
                 string kinParentName = GivenName(kinCulture, kinFemale, kinRng);
 
                 int kinParentBirth = kinBirthYear - kinRng.Int(22, 35);
@@ -650,11 +708,11 @@ public sealed class PrehistoryMap
             var faith = faiths.For(county);
             var fRng = new Rng(county.Index ^ 0x981C);
 
-            int birthYear = HistoryWriter.GetRulerBirthYear(county.Index, cfg.StartYear);
+            int birthYear = HistoryWriter.GetRulerBirthYear(county.Index, cfg.StartYear, cfg.PeopleSalt);
             int parentBirth = birthYear - fRng.Int(22, 35);
             int parentDeath = cfg.StartYear - fRng.Int(2, 15);
 
-            bool female = HistoryWriter.RulerIsFemale(county, faith);
+            bool female = HistoryWriter.RulerIsFemale(county, faith, cfg.PeopleSalt);
             string parentName = GivenName(culture, female, fRng);
 
             var parent = new HistoricalCharacter
@@ -715,12 +773,12 @@ public sealed class PrehistoryMap
 
             var rulerFaith = faiths.For(ruler);
             var rulerCulture = cultures.For(ruler);
-            bool rulerFemale = HistoryWriter.RulerIsFemale(ruler, rulerFaith);
+            bool rulerFemale = HistoryWriter.RulerIsFemale(ruler, rulerFaith, cfg.PeopleSalt);
             var mRng = new Rng(ruler.Index ^ 0x6E19);
 
             if (!mRng.Chance(0.88)) continue;
 
-            int rulerBirthYear = HistoryWriter.GetRulerBirthYear(ruler.Index, cfg.StartYear);
+            int rulerBirthYear = HistoryWriter.GetRulerBirthYear(ruler.Index, cfg.StartYear, cfg.PeopleSalt);
             var topLiege = TopLiegeCounty(ruler, realms);
             bool isTopLiege = (ruler == topLiege);
 
@@ -920,7 +978,7 @@ public sealed class PrehistoryMap
         {
             var culture = cultures.For(ruler);
             var faith = faiths.For(ruler);
-            bool rulerFemale = HistoryWriter.RulerIsFemale(ruler, faith);
+            bool rulerFemale = HistoryWriter.RulerIsFemale(ruler, faith, cfg.PeopleSalt);
             var cRng = new Rng(ruler.Index ^ 0x51E3);
 
             int childCount = cRng.Int(1, 3);

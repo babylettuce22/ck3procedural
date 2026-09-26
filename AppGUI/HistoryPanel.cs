@@ -85,6 +85,10 @@ internal sealed class HistoryPanel : Panel
     private GenerationResult? _result;
     private RealmMap? _realms;
     private MapGen.WildernessMap? _wilderness;
+
+    /// <summary>The start date's people, whose houses realms that endure are still ruled by. See <see cref="AppliedHistory.Capture"/>.</summary>
+    private RulerMap? _rulers;
+    private PrehistoryMap? _prehistory;
     private int _startYear;
 
     private CountyCanvas? _canvas;
@@ -119,7 +123,7 @@ internal sealed class HistoryPanel : Panel
         {
             if (_sim is null || _canvas is null) return;
             Pause();
-            ApplyRequested?.Invoke(AppliedHistory.Capture(_sim, _canvas.Counties));
+            ApplyRequested?.Invoke(AppliedHistory.Capture(_sim, _canvas.Counties, _rulers, _prehistory));
         };
         _discard.Click += (_, _) => DiscardRequested?.Invoke();
         _showConquests.CheckedChanged += (_, _) => RebuildChronicle();
@@ -223,6 +227,8 @@ internal sealed class HistoryPanel : Panel
         _result = result;
         _realms = written?.Realms;
         _wilderness = written?.Wilderness;
+        _rulers = written?.Rulers;
+        _prehistory = written?.Prehistory;
         _startYear = result?.Config.StartYear ?? 0;
 
         _view.SetImage(null);

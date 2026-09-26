@@ -515,6 +515,25 @@ colonize_county_effect = {
 	colony_clear_expedition_effect = { COUNTY = $COUNTY$ }
 }
 
+# COUNTY scope. Gives a county that still carries the Unsettled culture or faith its holder's
+# instead — the half of colonize_county_effect that a county reaching a real ruler by any other route
+# never ran.
+#
+#   $HOLDER$  the character whose culture and faith the county takes
+#
+# Each is replaced only if it is still the unsettled one, so a county whose faith was converted by
+# ordinary means keeps it. Called by wilderness_colonization.0098 and the yearly sweep.
+county_settle_identity_effect = {
+	if = {
+		limit = { culture = title:k_gen_wilderness.holder.culture }
+		set_county_culture = $HOLDER$.culture
+	}
+	if = {
+		limit = { faith = title:k_gen_wilderness.holder.faith }
+		set_county_faith = $HOLDER$.faith
+	}
+}
+
 
 # =====================================================================================
 #  Who goes out with them

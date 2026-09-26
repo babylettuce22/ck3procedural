@@ -115,9 +115,10 @@ public static class HistoryWriter
     }
 
     public static (string FirstName, string DynastyName) RulerNames(Title county, Culture culture,
-        bool female = false)
+        bool female = false, int salt = 0)
     {
-        var rng = new Rng(county.Index ^ 0x5A17);
+        // salt 0 is the generated world; an applied history passes its year. See MapConfig.PeopleSalt.
+        var rng = new Rng(county.Index ^ 0x5A17 ^ salt);
 
         var names = female ? culture.FemaleNames : culture.MaleNames;
 
@@ -187,9 +188,9 @@ public static class HistoryWriter
 
     public static string DynastyId(Title county) => $"gen_dynasty_{county.Index}";
 
-    public static int GetRulerBirthYear(int countyIndex, int startYear)
+    public static int GetRulerBirthYear(int countyIndex, int startYear, int salt = 0)
     {
-        var rng = new Rng(countyIndex ^ 0x3E2D);
+        var rng = new Rng(countyIndex ^ 0x3E2D ^ salt);
         return startYear - rng.Int(24, 50);
     }
 
@@ -938,6 +939,16 @@ public static class HistoryWriter
         // skips it exactly as it skips an unformed empire.
         var all = Titles.Flatten(empires).ToList();
         if (Titles.HegemonyOf(empires) is { } crown) all.Insert(0, crown);
+
+        // Greatest tier first, the tree's own order within a tier. CK3 applies the entries of one
+        // date in the order the file gives them, so a `liege =` read before the liege title's own
+        // block has been has no holder to swear to, and the vassal starts the game independent —
+        // silently: nothing reaches error.log. Written in tree order, that was every vassal whose
+        // liege sits in a different de jure branch further down: 27 of 173 on a generated world,
+        // 207 of 896 after an applied history, whose realms cut across de jure lines far more.
+        // A liege always outranks the vassal title that names it, so this order puts it first on
+        // every date at once — the additional bookmarks' included. LINQ's OrderBy is stable.
+        all = [.. all.OrderByDescending(t => Title.TierRank(t.Tier))];
 
         if (eras is not null)
             WriteEraTitleHistory(b, cfg, all, development, realms, governments, wilderness, eras, titleGrantDate);

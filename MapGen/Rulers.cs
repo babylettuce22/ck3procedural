@@ -228,16 +228,16 @@ public sealed class RulerMap
 
             var culture = cultures.For(county);
             var faith = faiths.For(county);
-            bool female = HistoryWriter.RulerIsFemale(county, faith);
-            var (firstName, _) = HistoryWriter.RulerNames(county, culture, female);
+            bool female = HistoryWriter.RulerIsFemale(county, faith, cfg.PeopleSalt);
+            var (firstName, _) = HistoryWriter.RulerNames(county, culture, female, cfg.PeopleSalt);
             var primaryTitle = HistoryWriter.Primary(county, realms);
             string government = governments.For(county);
 
             // The writer's own stream. Birth year is drawn from a fresh copy of it by
             // GetRulerBirthYear (prehistory needs the year before any ruler exists); month, day and
             // the purse continue from the one held here, in this order.
-            var rng = new Rng(county.Index ^ 0x3E2D);
-            int birthYear = HistoryWriter.GetRulerBirthYear(county.Index, cfg.StartYear);
+            var rng = new Rng(county.Index ^ 0x3E2D ^ cfg.PeopleSalt);
+            int birthYear = HistoryWriter.GetRulerBirthYear(county.Index, cfg.StartYear, cfg.PeopleSalt);
             int birthMonth = rng.Int(1, 12);
             int birthDay = rng.Int(1, 28);
 
@@ -245,7 +245,7 @@ public sealed class RulerMap
             // standing he starts with. See Emit/RulerProfile.cs for what each number is worth.
             var profile = RulerProfile.Build(
                 county, primaryTitle.Tier, government, culture.Ethos,
-                cfg.StartYear - birthYear, liegeCounties.Contains(county));
+                cfg.StartYear - birthYear, liegeCounties.Contains(county), cfg.PeopleSalt);
 
             string dynastyId = prehistory.CharacterDynastyMap.GetValueOrDefault(county, HistoryWriter.DynastyId(county));
             string houseKey = prehistory.CharacterHouseMap.GetValueOrDefault(county, $"house_gen_{county.Index}");

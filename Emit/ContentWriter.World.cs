@@ -52,6 +52,12 @@ public sealed record WorldModel
     /// </summary>
     public required GovernmentMap GeneratedGovernments { get; init; }
 
+    /// <summary>
+    /// Under an applied history, the ruling seats that carry a house from the world the history
+    /// started from — see <see cref="AppliedHistory.LineageFor"/>. Null for a generated world.
+    /// </summary>
+    public IReadOnlyDictionary<Title, AppliedHistory.Lineage>? Lineage { get; init; }
+
     /// <summary>One government map per additional bookmark, or null without them.</summary>
     public Dictionary<int, GovernmentMap>? EraGovernments { get; init; }
     public double? HegemonShare { get; init; }
@@ -428,14 +434,16 @@ public static partial class ContentWriter
         // that follow who rules what instead of rewriting the mod — see ApplyHistory, which calls
         // the same ApplyRealms. The start date is moved by the caller: see MapConfig.AtStartYear.
         var generatedGovernments = governments;
+        IReadOnlyDictionary<Title, AppliedHistory.Lineage>? lineage = null;
         if (applied is not null)
-            (realms, governments, hegemonShare) = ApplyRealms(applied, realms, cfg, empires, counties,
+            (realms, governments, hegemonShare, lineage) = ApplyRealms(applied, realms, cfg, empires, counties,
                 provinces, order, baronyCount, provinceTerrain, development, cultures, worldCenters,
                 wilderness, azgaar, stateGovernments);
 
         return new WorldModel
         {
             GeneratedGovernments = generatedGovernments,
+            Lineage = lineage,
             ProvinceTerrain = provinceTerrain,
             Vocabulary = vocabulary,
             Counties = counties,

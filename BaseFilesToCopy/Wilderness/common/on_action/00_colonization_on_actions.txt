@@ -217,6 +217,37 @@ yearly_playable_pulse = {
 		wilderness_yearly_colonist_validity
 		wilderness_yearly_stranded_colony_check
 		wilderness_yearly_tribal_labour_sweep
+		wilderness_yearly_unsettled_identity_sweep
+	}
+}
+
+# The backstop for wilderness_colonization.0098.
+#
+# That event only sees a county at the moment it changes hands. A save already carrying one — a
+# realm holding a stretch of Unsettled-culture land it came by before the detector existed — never
+# fires it again, so this finds them once a year and gives them their holder's culture and faith.
+#
+# Cheap: the first test is a tier check on titles already held, and county_has_unsettled_identity_
+# trigger is two comparisons.
+wilderness_yearly_unsettled_identity_sweep = {
+	trigger = {
+		NOT = { has_trait = wilderness }
+		any_held_title = {
+			tier = tier_county
+			county_has_unsettled_identity_trigger = yes
+		}
+	}
+
+	effect = {
+		every_held_title = {
+			limit = {
+				tier = tier_county
+				county_has_unsettled_identity_trigger = yes
+			}
+			save_scope_as = identity_county
+			debug_log = wilderness_identity_sweep_debug_log
+			county_settle_identity_effect = { HOLDER = root }
+		}
 	}
 }
 
@@ -550,6 +581,30 @@ wilderness_on_title_gain = {
 			scope:title = { save_scope_as = leak_county }
 			trigger_event = {
 				id = wilderness_colonization.0099
+				days = 7
+			}
+		}
+
+		# --- The identity leak detector ----------------------------------------------------------
+		#
+		# The same kind of leak, one step further on: the county's holding is no longer wild, but
+		# its culture and faith are still the Unsettled ones, so a real ruler owns a county of
+		# nobody's people (reported on a fresh world, 2026-09-25). Deferred for the same reason as
+		# above — colonize_county_effect moves the title before it sets culture and faith.
+		if = {
+			limit = {
+				NOT = { has_trait = wilderness }
+				scope:title ?= { tier = tier_county }
+				scope:title ?= { county_has_unsettled_identity_trigger = yes }
+			}
+
+			scope:title = { save_scope_as = identity_county }
+			save_scope_value_as = {
+				name = identity_transfer
+				value = scope:transfer_type
+			}
+			trigger_event = {
+				id = wilderness_colonization.0098
 				days = 7
 			}
 		}
