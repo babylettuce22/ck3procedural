@@ -9,7 +9,7 @@ public static partial class ContentWriter
     /// <summary>The realm map an applied history lays over the generated world, and what follows from it.</summary>
     internal sealed record AppliedRealms(RealmMap Realms, GovernmentMap Governments, double? HegemonShare,
         IReadOnlyDictionary<Title, AppliedHistory.Lineage> Lineage, List<PastRuler> PastRulers,
-        IReadOnlyDictionary<Title, (byte R, byte G, byte B)> Colours);
+        IReadOnlyDictionary<Title, (byte R, byte G, byte B)> Colours, int Drifted);
 
     /// <summary>
     /// Titles an applied history and decides what follows from who rules what: the hegemony and the
@@ -31,6 +31,13 @@ public static partial class ContentWriter
         // Before titling, which folds a realm with no tier left into its lord and drops it from the
         // list: its capital is still a lord's seat, and that lord is still the history's man.
         var capitals = history.Polities.ToDictionary(p => p.Id, p => p.Capital);
+
+        // The de jure tree as drift left it, laid down before titling, which names each realm for
+        // the de jure title it covers most of. Here, at the swap and not earlier, so every cached
+        // layer above was decided on the tree the world was generated with.
+        int drifted = applied.ApplyDeJure(empires, development);
+        if (drifted > 0)
+            Console.WriteLine($"  applied history: {drifted} duchies and kingdoms drifted to a new de jure parent");
 
         var realms = Core.Stage.Time("applied history", () => Realms.FromHistory(history, empires, development,
             wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17), generated.CountyAdjacency!));
@@ -69,7 +76,8 @@ public static partial class ContentWriter
             + $"titles' histories (of {applied.Reigns.Count} reigns kept; backstop {AppliedHistory.MaxReignsPerRealm} a realm, "
             + $"{AppliedHistory.MaxReigns} in all)");
 
-        return new AppliedRealms(realms, governments, hegemonShare, lineage, pastRulers, applied.ColoursFor(capitals));
+        return new AppliedRealms(realms, governments, hegemonShare, lineage, pastRulers, applied.ColoursFor(capitals),
+            drifted);
     }
 
     /// <summary>
@@ -119,7 +127,7 @@ public static partial class ContentWriter
         var worldCenters = world.WorldCenters;
         var retinues = written.Retinues;
 
-        var (realms, governments, hegemonShare, lineage, pastRulers, colours) = ApplyRealms(applied, current, cfg, empires,
+        var (realms, governments, hegemonShare, lineage, pastRulers, colours, drifted) = ApplyRealms(applied, current, cfg, empires,
             counties, provinces, order, result.BaronyCount, world.ProvinceTerrain, development, cultures, worldCenters,
             wilderness, result.Azgaar, world.StateGovernments, faiths);
 
@@ -141,6 +149,25 @@ public static partial class ContentWriter
             EmitProvinceHistory(modDir, built.Rows, built.Holdings, null);
             return built;
         });
+
+        // --- De jure: only when drift moved a title ---
+        //
+        // Every writer here walks the de jure tree, so a drifted tree changes what they write or the
+        // order they write it in; with nothing drifted they would write what is already there.
+        if (drifted > 0)
+        {
+            Core.Stage.Time("de jure", () =>
+            {
+                WriteLocalisation(modDir, empires, world.WaterNames, provinces, order, result.BaronyCount,
+                    result.LandCount, result.RiverCount);
+                WriteFormationDecisions(modDir, empires, wilderness);
+                TitleTierWriter.WriteAll(modDir, cultures, empires);
+                HegemonyFlavourWriter.WriteAll(modDir, gameDir, empires);
+                CoronationWriter.WriteAll(modDir, gameDir, empires, faiths.Declared());
+                CompatibilityWriter.WriteVanillaTitulars(modDir, gameDir, empires,
+                    faiths.Faiths.Where(f => f.Head is { Inherited: true }).Select(f => f.Head!.TitleKey));
+            });
+        }
 
         // --- Calendar ---
 
@@ -236,6 +263,17 @@ public static partial class ContentWriter
             if (!Directory.Exists(dir)) continue;
             foreach (string file in Directory.EnumerateFiles(dir, pattern)) File.Delete(file);
         }
+    }
+
+    /// <summary>The empire-formation decisions, from the de jure tree as it stands. Shared by the full write and the re-emit.</summary>
+    internal static (List<DecisionSpec> Decisions, int Written) WriteFormationDecisions(string modDir,
+        List<Title> empires, WildernessMap wilderness)
+    {
+        var decisions = FormationDecisions.Build(empires, wilderness);
+        int written = DecisionsWriter.WriteAll(modDir, decisions,
+            comment: "Generated decisions. One per de jure empire, plus the hegemony above "
+                   + "them, each shown while it has no holder.");
+        return (decisions, written);
     }
 
     private static void DeleteIfPresent(string modDir, params string[] parts)

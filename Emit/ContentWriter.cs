@@ -102,10 +102,7 @@ public static partial class ContentWriter
         // both, and before nothing in particular: no other writer reads what this one produces.
         Core.Stage.Time("decisions", () =>
         {
-            var decisions = FormationDecisions.Build(empires, wilderness);
-            int written = DecisionsWriter.WriteAll(modDir, decisions,
-                comment: "Generated decisions. One per de jure empire, plus the hegemony above "
-                       + "them, each shown while it has no holder.");
+            var (decisions, written) = WriteFormationDecisions(modDir, empires, wilderness);
 
             // Whether an empire is held is a runtime question and the decision asks it at runtime,
             // so every empire gets one. The start-date count is reported anyway because it is the
@@ -341,7 +338,9 @@ public static partial class ContentWriter
         Core.Stage.Time("bridges", () => BridgeWriter.WriteAll(modDir, cfg, terra.MajorRiversList, classified.Climate, renderedElevation, rng));
         // Prototype, deliberately severable: its own Rng stream and its own output file, so
         // MapConfig.EnableCityScatter (--no-city-scatter) removes it without moving anything else.
-        Core.Stage.Time("city scatter", () => CityScatterWriter.WriteAll(modDir, cfg, empires,
+        // The counties as BuildWorld listed them, before an applied history's de jure drift moved
+        // any: the same list, in the same order, as walking the tree gives a generated world.
+        Core.Stage.Time("city scatter", () => CityScatterWriter.WriteAll(modDir, cfg, counties,
             scatterHoldings, development, cultures, provinces, order, anchors, renderedElevation));
         Core.Stage.Time("map table", () => MapTableWriter.WriteAll(modDir, cfg));
         Core.Stage.Time("holding models", () => HoldingModelWriter.WriteAll(modDir, gameDir, cfg));

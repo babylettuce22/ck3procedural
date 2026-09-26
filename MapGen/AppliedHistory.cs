@@ -98,6 +98,50 @@ public sealed class AppliedHistory
         string HouseKey, string HouseNameKey, string HouseName, string? Prefix);
 
     /// <summary>
+    /// The de jure tree as drift left it: every duchy's kingdom and every kingdom's empire the
+    /// simulation tracked, by title key — all of them, not just the ones that moved, so laying it
+    /// over the generated tree and over an already-drifted one come out the same. Empty in a file
+    /// saved before drift was simulated.
+    /// </summary>
+    public Dictionary<string, string> DeJure { get; init; } = [];
+
+    /// <summary>
+    /// Moves the titles <see cref="DeJure"/> says have drifted to their new parents, in the tree
+    /// the world is about to be written from. A moved title goes in among its new siblings in index
+    /// order — the order the generator made them in — so the tree comes out the same whatever order
+    /// the moves happen in. A title that lost the child its capital sat in is re-seated on its most
+    /// developed remaining one.
+    /// </summary>
+    /// <returns>How many titles moved.</returns>
+    public int ApplyDeJure(List<Title> empires, Dictionary<Title, int> development)
+    {
+        if (DeJure.Count == 0) return 0;
+
+        var byKey = Titles.Flatten(empires).GroupBy(t => t.Key).ToDictionary(g => g.Key, g => g.First());
+        int moved = 0;
+
+        foreach (var (key, parentKey) in DeJure.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+        {
+            if (!byKey.TryGetValue(key, out var title) || !byKey.TryGetValue(parentKey, out var parent)) continue;
+            if (title.Parent == parent || title.Parent is not { } old) continue;
+
+            old.Children.Remove(title);
+            int at = parent.Children.FindIndex(c => c.Index > title.Index);
+            parent.Children.Insert(at < 0 ? parent.Children.Count : at, title);
+            title.Parent = parent;
+            moved++;
+
+            if (old.Seat == title)
+                old.Seat = old.Children
+                    .OrderByDescending(c => Capitals.CapitalCounty(c) is { } seat ? development.GetValueOrDefault(seat) : -1)
+                    .ThenBy(c => c.Index)
+                    .FirstOrDefault();
+        }
+
+        return moved;
+    }
+
+    /// <summary>
     /// The colour the History workspace had each realm in when the history was captured, by realm id,
     /// packed 0xRRGGBB. Kept so the World workspace, and the History workspace after it, show the
     /// applied world in the colours the user was watching it in. Presentation only.
@@ -187,6 +231,7 @@ public sealed class AppliedHistory
             RealmLineage = realmLineage,
             SeatLineage = seatLineage,
             Reigns = PastReigns(sim),
+            DeJure = sim.DeJureMap().ToDictionary(kv => kv.Key.Key, kv => kv.Value.Key),
             Colours = colours?.ToDictionary(kv => kv.Key, kv => kv.Value.R << 16 | kv.Value.G << 8 | kv.Value.B) ?? [],
         };
     }

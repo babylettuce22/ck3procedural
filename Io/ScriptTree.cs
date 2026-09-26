@@ -172,6 +172,16 @@ public static class ScriptTree
                 i++;
                 continue;
             }
+
+            // An inline expression, `@[0.5 - cross_from_center_x ]`, is one token however it is spaced.
+            if (c == '@' && i + 1 < n && text[i + 1] == '[')
+            {
+                int close = text.IndexOf(']', i);
+                if (close < 0) close = n - 1;
+                tokens.Add(new Token(text[i..(close + 1)], false));
+                i = close + 1;
+                continue;
+            }
             if (c is '=' or '<' or '>' or '!' or '?')
             {
                 // Two-character operators first.

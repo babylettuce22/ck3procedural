@@ -39,6 +39,9 @@ public enum FormationKind
 
     /// <summary>A ruler died and another house took the throne.</summary>
     Usurped,
+
+    /// <summary>A duchy or kingdom became de jure part of another kingdom or empire.</summary>
+    Drifted,
 }
 
 /// <summary>
@@ -76,7 +79,14 @@ public enum RealmRules
     /// </summary>
     Succession = 16,
 
-    All = Conquest | Homage | Secession | Collapse | Succession,
+    /// <summary>
+    /// A duchy held for a century by a realm based in another de jure kingdom becomes part of that
+    /// kingdom, and a kingdom of another empire likewise. Only the History workspace; see
+    /// <c>HistorySim.DriftYear</c>.
+    /// </summary>
+    DeJureDrift = 32,
+
+    All = Conquest | Homage | Secession | Collapse | Succession | DeJureDrift,
 }
 
 /// <summary>One thing the simulation did, dated, with both parties named.</summary>

@@ -762,6 +762,7 @@ public static class VanillaIdentities
             GraphicalFaith = v.GraphicalFaith ?? fallbackGfx,
             Monotheist = doctrines.Contains("doctrine_monotheist"),
             Abrahamic = v.Family == Faiths.AbrahamicFamily,
+            VanillaFamily = v.Family,
             LayClergy = doctrines.Contains("doctrine_theocracy_lay_clergy"),
             Doctrines = Grouped(doctrines, vocab),
             Virtues = [.. v.Virtues],

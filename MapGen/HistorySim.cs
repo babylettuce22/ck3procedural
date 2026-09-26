@@ -144,6 +144,7 @@ public sealed partial class HistorySim
 
         var history = new HistorySim(sim, rules.Seed, startYear);
         history.SeatStartRulers(rulers, prehistory);
+        history.SeatDeJure();
         return history;
     }
 
@@ -171,6 +172,10 @@ public sealed partial class HistorySim
         // The people's year, after the realms': rulers for realms born this year, then deaths and
         // successions. On its own stream, so switching Succession changes no realm's dice.
         RulersYear();
+
+        // Last: drift reads who holds what once the year's conquests and partitions are done, and
+        // changes no realm, so nothing after it could depend on it.
+        DriftYear();
     }
 
     /// <summary>
@@ -216,6 +221,7 @@ public sealed partial class HistorySim
             if (!p.Alive) problems.Add($"{c.Name} is owned by the dead realm {p}");
 
         CheckRulers(alive, problems);
+        CheckDeJure(problems);
         return problems;
     }
 

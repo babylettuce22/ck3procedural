@@ -175,7 +175,11 @@ public static class CityScatterWriter
         ["amuric_building_gfx"] = Chinese,
     };
 
-    public static void WriteAll(string modDir, MapConfig cfg, List<Title> empires,
+    /// <param name="counties">Every county, in the order the de jure tree lists them when the world
+    /// is generated. A list rather than the tree, because the scatter draws from one stream county
+    /// by county: a history applied with de jure drift reorders the tree, and walking it here would
+    /// move every city model on the map that the applied history otherwise leaves as written.</param>
+    public static void WriteAll(string modDir, MapConfig cfg, IReadOnlyList<Title> counties,
         Dictionary<int, string> holdings, Dictionary<Title, int> development, CultureMap cultures,
         ProvinceMap provinces, int[] order, ProvinceAnchor.Anchors anchors, float[] renderedElevation)
     {
@@ -209,7 +213,7 @@ public static class CityScatterWriter
         int clusters = 0, pieces = 0, starved = 0;
         var familyCount = new Dictionary<string, int>();
 
-        foreach (var county in Titles.Flatten(empires).Where(t => t.Tier == "c"))
+        foreach (var county in counties)
         {
             int dev = development.GetValueOrDefault(county);
             Family? family = null;

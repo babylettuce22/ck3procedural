@@ -459,7 +459,7 @@ public static partial class ContentWriter
         List<PastRuler>? pastRulers = null;
         IReadOnlyDictionary<Title, (byte R, byte G, byte B)>? realmColours = null;
         if (applied is not null)
-            (realms, governments, hegemonShare, lineage, pastRulers, realmColours) = ApplyRealms(applied, realms, cfg, empires,
+            (realms, governments, hegemonShare, lineage, pastRulers, realmColours, _) = ApplyRealms(applied, realms, cfg, empires,
                 counties, provinces, order, baronyCount, provinceTerrain, development, cultures, worldCenters,
                 wilderness, azgaar, stateGovernments, faiths);
 

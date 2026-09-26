@@ -50,7 +50,7 @@ public static class HistoryWriter
 
         WriteDynasties(modDir, prehistory);
         WriteDynastyHouses(modDir, prehistory);
-        CoatOfArmsWriter.WriteAll(modDir, prehistory);
+        CoatOfArmsWriter.WriteAll(modDir, prehistory, cultures: cultures, faiths: faiths);
         WriteCharacters(modDir, cfg, cultures, ethnicities, prehistory, rulers);
         WriteHeadOfFaithCharacters(modDir, cfg, faiths, cultures, ethnicities, counties, realms, wilderness,
             prehistory.Eras);

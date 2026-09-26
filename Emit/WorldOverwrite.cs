@@ -242,7 +242,7 @@ public static class WorldOverwrite
             {
                 ContentWriter.WriteNobleFamilyTitles(modDir, seated);
                 HistoryWriter.WriteDynastyLocalisation(modDir, seated);
-                CoatOfArmsWriter.WriteAll(modDir, seated, written.Coats);
+                CoatOfArmsWriter.WriteAll(modDir, seated, written.Coats, written.Cultures, written.Faiths);
             }
 
             HistoryWriter.ReWriteTitleHistory(modDir, result.Config, result.Titles,
@@ -283,7 +283,7 @@ public static class WorldOverwrite
         if (written.Prehistory is { } families)
         {
             if (aspects.HasFlag(WorldAspect.Dynasties)) HistoryWriter.WriteDynastyLocalisation(modDir, families);
-            if (aspects.HasFlag(WorldAspect.Coats)) CoatOfArmsWriter.WriteAll(modDir, families, written.Coats);
+            if (aspects.HasFlag(WorldAspect.Coats)) CoatOfArmsWriter.WriteAll(modDir, families, written.Coats, written.Cultures, written.Faiths);
         }
     }
 

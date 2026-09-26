@@ -166,7 +166,7 @@ Output depends on the settings, available game data, and generated world. The ma
 | Map graphics | Terrain textures and masks, water and snow textures, flatmap, holding locators, trees, animals, bridges, and map objects. |
 | Titles and settlements | De jure hierarchy, realm borders, capitals, holdings, development, and title names and colours. |
 | Peoples and religions | Cultures, heritages, languages, name lists, faiths, faith icons, doctrines, holy sites, and ethnicities. |
-| Characters and history | Rulers, houses, dynasties, ancestors, formation history, starting wars, bookmarks, portraits, and chronicles. |
+| Characters and history | Rulers, houses, dynasties and their coats of arms, ancestors, formation history, starting wars, bookmarks, portraits, and chronicles. |
 | Military and artifacts | Generated men-at-arms and associated innovations, regalia, and composed weapon and armour assets. |
 | Regional content | Centers of the World and wonders, regional struggles, routes, Silk Road and steppe content, and formation decisions. |
 | Governments | Government assignment, administrative and nomadic content, hegemony support, and dynastic-cycle integration. |
@@ -269,6 +269,16 @@ stone or wood, lit from the upper left, in vanilla's 100×100 format.
 Choosing a vanilla icon in the Faith inspector replaces the generated one. Turn the feature off
 with Generated Faith Icons in Cultures and faiths. The designs live in `MapGen/FaithIcons.cs`
 and the renderer in `Emit/Relief/`.
+
+### Coats of arms
+
+Dynasty and house arms are rolled with vanilla's own heraldry rules, read from the installed
+game: its weighted templates, tincture lists and emblem lists, with the regional sets (kamon,
+Byzantine rondels, steppe tamgas, Iberian bordures and so on) chosen by the same culture and
+faith triggers the game uses. A main house bears its dynasty's arms; a cadet bears them in
+another livery with a cadency mark. Everything is written out, so the bookmark screen and the
+Ruler inspector show real shields. Without a game install, a small fixed set is used instead.
+The rules are run in `Emit/VanillaHeraldry.cs`.
 
 ## Building from source
 

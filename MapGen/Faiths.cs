@@ -144,6 +144,16 @@ public sealed class Religion
     public bool Inherited { get; init; }
 
     /// <summary>
+    /// The religion family vanilla declares (<c>rf_eastern</c>, <c>rf_pagan</c>…) for an
+    /// <see cref="Inherited"/> religion; null for a generated one, whose family follows
+    /// <see cref="Abrahamic"/>. Read through <see cref="FamilyKey"/>.
+    /// </summary>
+    public string? VanillaFamily { get; init; }
+
+    /// <summary>The family this religion is written with, or vanilla gave it.</summary>
+    public string FamilyKey => VanillaFamily ?? (Abrahamic ? MapGen.Faiths.AbrahamicFamily : MapGen.Faiths.Family);
+
+    /// <summary>
     /// The Azgaar tradition this religion was built from — "Nature Worship", "Monotheism" — or
     /// null for a generated religion. Read by <see cref="FaithIcons"/> for the motif.
     /// </summary>

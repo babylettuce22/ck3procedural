@@ -26,4 +26,7 @@ public sealed record SimSettings
 
     /// <summary>How likely a succession in an unstable realm goes to a new house, times the usual.</summary>
     public double Crises { get; init; } = 1.0;
+
+    /// <summary>How fast de jure drift runs: the century a title must be held for, divided by this. 0 is never.</summary>
+    public double DriftPace { get; init; } = 1.0;
 }

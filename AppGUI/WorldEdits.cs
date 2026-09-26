@@ -789,14 +789,14 @@ public sealed class WorldEdits
     {
         if (_written?.Prehistory is not { } prehistory) return null;
         if (_written.Coats.TryGetValue(key, out var edited)) return edited;
-        _rolledCoats ??= CoatOfArmsWriter.Compose(prehistory);
+        _rolledCoats ??= CoatOfArmsWriter.Compose(prehistory, _written.Cultures, _written.Faiths);
         return _rolledCoats.GetValueOrDefault(key);
     }
 
     public void EditCoat(string key, Func<CoatOfArmsWriter.Coat, CoatOfArmsWriter.Coat> change)
     {
         if (_written?.Prehistory is not { } prehistory) return;
-        _rolledCoats ??= CoatOfArmsWriter.Compose(prehistory);
+        _rolledCoats ??= CoatOfArmsWriter.Compose(prehistory, _written.Cultures, _written.Faiths);
         if (!_rolledCoats.TryGetValue(key, out var rolled)) return;
         var overrides = _written.Coats;
         Apply(new CoatKey(key), () => new CoatSnapshot(overrides, key, rolled),

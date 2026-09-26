@@ -96,6 +96,8 @@ internal sealed class HistoryPanel : Panel
         ("Realms", RealmRules.Collapse, "Collapse", "An unstable realm's vassals all walk out at once"),
         ("People", RealmRules.Succession, "Succession", "A ruler's death can divide the realm among heirs or put another house on the throne. "
             + "Off, rulers still die, and one heir of the same house takes everything"),
+        ("Titles", RealmRules.DeJureDrift, "De jure drift", "A duchy held for a century by a realm based in another de jure kingdom "
+            + "becomes part of that kingdom, as in CK3; kingdoms drift into empires the same way"),
     ];
 
     /// <summary>
@@ -113,7 +115,15 @@ internal sealed class HistoryPanel : Panel
             2.0, s => s.Heirs, (s, v) => s with { Heirs = v }),
         ("People", "Crises", "How likely a succession in an unstable realm goes to a new house",
             4.0, s => s.Crises, (s, v) => s with { Crises = v }),
+        ("Titles", "Drift pace", "How fast titles drift: CK3's century divided by this — 2× drifts in fifty years",
+            3.0, s => s.DriftPace, (s, v) => s with { DriftPace = v }),
     ];
+
+    /// <summary>What the map is coloured by: realms as they stand, or the de jure tree as drift has left it.</summary>
+    private enum MapView { Realms, Kingdoms, Empires }
+
+    private MapView _mapView = MapView.Realms;
+    private readonly Dictionary<MapView, Button> _viewButtons = [];
 
     private readonly Dictionary<RealmRules, CheckBox> _ruleBoxes = [];
     private readonly Dictionary<string, (TrackBar Bar, Label Value)> _dials = [];
@@ -180,6 +190,13 @@ internal sealed class HistoryPanel : Panel
             button.Click += (_, _) => SetSpeed(speed);
             _speedButtons[speed] = button;
         }
+        foreach (var view in Enum.GetValues<MapView>())
+        {
+            var button = new Theme.SegmentButton { Text = $"{view}", Width = 72 };
+            button.Click += (_, _) => SetMapView(view);
+            _viewButtons[view] = button;
+            Theme.StyleSegment(button, view == _mapView);
+        }
 
         _play.Click += (_, _) => TogglePlay();
         _step.Click += (_, _) => StepOnce();
@@ -204,6 +221,9 @@ internal sealed class HistoryPanel : Panel
         tips.SetToolTip(_showSuccessions, "List every ruler's death and heir, not only the partitions and usurpations");
         tips.SetToolTip(_apply, "Make the realms as they stand now the world's start, and write the mod with them");
         tips.SetToolTip(_discard, "Go back to the realms the generator grows; takes effect when the mod is next written");
+        tips.SetToolTip(_viewButtons[MapView.Realms], "Colour the map by independent realm");
+        tips.SetToolTip(_viewButtons[MapView.Kingdoms], "Colour the map by de jure kingdom, as drift has left them");
+        tips.SetToolTip(_viewButtons[MapView.Empires], "Colour the map by de jure empire, as drift has left them");
 
         var speedLabel = new Label { Text = "years / second", AutoSize = true, Font = Theme.Ui, ForeColor = Theme.TextDim, Margin = new Padding(2, 10, 3, 3) };
 
@@ -222,6 +242,7 @@ internal sealed class HistoryPanel : Panel
         toolbar.Controls.Add(Theme.MakeSegmented(_speedButtons.Values));
         toolbar.Controls.Add(speedLabel);
         toolbar.Controls.Add(_apply);
+        toolbar.Controls.Add(Theme.MakeSegmented(_viewButtons.Values));
         toolbar.Controls.Add(_year);
         toolbar.Controls.Add(_stats);
 
@@ -452,6 +473,13 @@ internal sealed class HistoryPanel : Panel
         Redraw();
     }
 
+    private void SetMapView(MapView view)
+    {
+        _mapView = view;
+        foreach (var (v, button) in _viewButtons) Theme.StyleSegment(button, v == view);
+        if (!Playing) Redraw();
+    }
+
     private void SetSpeed(int speed)
     {
         _speed = speed;
@@ -518,8 +546,17 @@ internal sealed class HistoryPanel : Panel
         if (_sim is null || _canvas is null) return;
 
         var colours = new (byte R, byte G, byte B)?[_canvas.Counties.Count];
+        string? tier = _mapView switch { MapView.Kingdoms => "k", MapView.Empires => "e", _ => null };
         for (int c = 0; c < colours.Length; c++)
-            if (_sim.OwnerOf(_canvas.Counties[c]) is { } owner) colours[c] = ColourOf(owner.Root);
+        {
+            var county = _canvas.Counties[c];
+            if (tier is not null)
+            {
+                // Wilderness keeps its blank so the de jure view still shows where the realms end.
+                if (_sim.OwnerOf(county) is not null && _sim.DeJureOf(county, tier) is { } title) colours[c] = title.Color;
+            }
+            else if (_sim.OwnerOf(county) is { } owner) colours[c] = ColourOf(owner.Root);
+        }
 
         var old = _frame;
         _frame = PreviewRenderer.ToBitmap(_canvas.Render(colours));
@@ -615,6 +652,8 @@ internal sealed class HistoryPanel : Panel
                         SuccessionLaw.Elective => " · elective",
                         _ => " · single heir",
                     });
+        if (_sim.DeJureOf(county, "k") is { } kingdom)
+            text += $" · de jure {kingdom.Name}" + (_sim.DeJureOf(county, "e") is { } empire ? $", {empire.Name}" : "");
         _readout.Text = text;
     }
 
@@ -813,7 +852,7 @@ internal sealed class HistoryPanel : Panel
             FormationKind.Collapsed => $"The realm of {subject} came apart; its vassals went their own ways",
             FormationKind.Absorbed => $"The realm of {actor} fell to {other}",
             FormationKind.Succeeded => _showSuccessions.Checked ? e.Note : null,
-            FormationKind.Partitioned or FormationKind.Usurped => e.Note,
+            FormationKind.Partitioned or FormationKind.Usurped or FormationKind.Drifted => e.Note,
             _ => null,
         };
 

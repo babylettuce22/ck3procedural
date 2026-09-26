@@ -324,6 +324,10 @@ public sealed class VanillaVocabulary
         Console.WriteLine($"  men-at-arms harvested: {v.MaaArchetypes.Values.Sum(a => a.Count)} regiments across " +
                           $"{v.MaaArchetypes.Count} archetypes, {v.MaaIcons.Count} icons");
 
+        // Vanilla's random-heraldry rules, read at the same moment so every writer that rolls arms —
+        // the editor's re-emit included — rolls against the same install. See Emit/VanillaHeraldry.
+        Emit.VanillaHeraldry.LoadCurrent(gameDir);
+
         Current = v;
         return v;
     }
