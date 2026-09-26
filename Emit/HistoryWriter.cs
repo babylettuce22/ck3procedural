@@ -309,7 +309,8 @@ public static class HistoryWriter
         // =========================================================================
         // 2. Deceased Ancestors (Fathers) — Stamped with historical birth and death
         // =========================================================================
-        foreach (var ancestor in prehistory.AllExtraCharacters.Where(c => c.IsDeadAncestor))
+        // Kin are written after the past rulers, below: a past ruler can be their parent.
+        void WriteDeadAncestor(HistoricalCharacter ancestor)
         {
             using (b.Block(ancestor.Id))
             {
@@ -331,6 +332,10 @@ public static class HistoryWriter
                 if (ancestorCulture is not null)
                     b.Field("trait", GetPhenotypeTrait(ancestorCulture, ethnicities, cfg));
 
+                // Only kin have parents among the ancestors; Field skips a null.
+                b.Field("father", ancestor.FatherId);
+                b.Field("mother", ancestor.MotherId);
+
                 b.Inline(ancestor.BirthDate, "birth = yes");
 
                 // Every ancestor generated here is given a death date, but the field is optional on
@@ -342,6 +347,9 @@ public static class HistoryWriter
 
             b.Blank();
         }
+
+        foreach (var ancestor in prehistory.AllExtraCharacters.Where(c => c.IsDeadAncestor && !c.IsKin))
+            WriteDeadAncestor(ancestor);
 
         // =========================================================================
         // 2b. An applied history's past rulers — the realms' real predecessors
@@ -366,6 +374,14 @@ public static class HistoryWriter
 
             b.Blank();
         }
+
+        // =========================================================================
+        // 2c. Kin who died before the start — the children who never ruled
+        // =========================================================================
+        // After both kinds of parent they can have. The living ones are written with the other
+        // living characters in section 4. See PrehistoryMap.AddKin.
+        foreach (var kin in prehistory.AllExtraCharacters.Where(c => c.IsDeadAncestor && c.IsKin))
+            WriteDeadAncestor(kin);
 
         // =========================================================================
         // 3. Living Rulers — Chronological timeline of wedding, alliances, and rivals
@@ -1321,7 +1337,8 @@ public static class HistoryWriter
 
         return ethnicity.Archetype switch
         {
-            RaceArchetype.HighElf or RaceArchetype.WoodElf => "phenotype_gracile",
+            RaceArchetype.HighElf => "phenotype_gracile",
+            RaceArchetype.WoodElf => "phenotype_sylvan",
             RaceArchetype.Dwarf => "phenotype_stocky",
             RaceArchetype.Orc => "phenotype_rough_hewn",
             RaceArchetype.Giantkin => "phenotype_towering",

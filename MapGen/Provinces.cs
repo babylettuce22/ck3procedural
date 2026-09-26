@@ -33,6 +33,13 @@ public sealed class ProvinceSeed
     public float ImpassableScore = float.NaN, HighShare = float.NaN, SteepShare = float.NaN;
 
     /// <summary>
+    /// The share of this province's pixels at or above the gate line — see
+    /// <see cref="MapConfig.ImpassableMinMountainGround"/>. Diagnostics only; NaN where
+    /// <see cref="ImpassableScore"/> is.
+    /// </summary>
+    public float GateShare = float.NaN;
+
+    /// <summary>
     /// The region this province grows inside and may never leave. See <see cref="ProvinceDomain"/>.
     ///
     /// Strictly finer than <see cref="IsLand"/> — water is always domain 0 — so every test that used
@@ -49,13 +56,20 @@ public enum ImpassableCause : byte { None, Score, Trapped, Mask, Height }
 /// and the same floor the selection used instead of re-deriving them and drifting.
 /// <c>HeightLine</c> is <see cref="MapConfig.ImpassableHeightFraction"/>'s elevation on this map
 /// (<see cref="float.MaxValue"/> when the rule is off) and <c>HeightMarked</c> the provinces it
-/// took that the score had not already.
+/// took that the score had not already. <c>GateLine</c> is the elevation
+/// <see cref="MapConfig.ImpassableMinMountainGround"/> is measured above, <c>GateMinShare</c> that
+/// setting (0 when the gate is off) and <c>GatedCount</c> the provinces that cleared the floor
+/// inside the quota but were passed over for too little ground above the line.
 /// </summary>
 public sealed record ImpassableDiagnostics(
     float MountainLine, float SteepLine, double Median, double Mad, double Floor, double Cut,
-    int Target, int Marked, string LimitedBy, float HeightLine = float.MaxValue, int HeightMarked = 0)
+    int Target, int Marked, string LimitedBy, float HeightLine = float.MaxValue, int HeightMarked = 0,
+    float GateLine = float.MaxValue, double GateMinShare = 0, int GatedCount = 0)
 {
     public bool Qualifies(float score) => !float.IsNaN(score) && score >= Floor;
+
+    /// <summary>True when the gate would pass this province over, whatever its score.</summary>
+    public bool FailsGate(float gateShare) => GateMinShare > 0 && !(gateShare >= GateMinShare);
 }
 
 /// <summary>Pixel-level province assignment at provinces-map resolution.</summary>
@@ -1011,11 +1025,14 @@ public static class Provinces
             LandLine(slope, mask, 1.0 - Math.Clamp(cfg.SteepLineShare, 0, 1)));
 
         float heightLine = HeightLine(elevation, mask, cfg);
+        float gateLine = GateLine(mountainLine, cfg);
+        double gateMin = Math.Clamp(cfg.ImpassableMinMountainGround, 0, 1);
 
         var total = new int[map.Count];
         var high = new int[map.Count];
         var steep = new int[map.Count];
         var top = new int[map.Count];
+        var gate = new int[map.Count];
         for (int i = 0; i < map.Label.Length; i++)
         {
             int label = map.Label[i];
@@ -1024,22 +1041,25 @@ public static class Provinces
             if (elevation[i] >= mountainLine) high[label]++;
             if (slope[i] >= steepLine) steep[label]++;
             if (elevation[i] >= heightLine) top[label]++;
+            if (elevation[i] >= gateLine) gate[label]++;
         }
 
         double slopeWeight = Math.Clamp(cfg.ImpassableSlopeWeight, 0, 1);
-        var ranked = new List<(int Label, double Score, double High, double Steep)>();
+        var ranked = new List<(int Label, double Score, double High, double Steep, double Gate)>();
         for (int i = 0; i < map.Count; i++)
         {
             if (!map.Seeds[i].IsLand || total[i] == 0) continue;
 
             double highShare = (double)high[i] / total[i];
             double steepShare = (double)steep[i] / total[i];
+            double gateShare = (double)gate[i] / total[i];
             double score = highShare * (1 - slopeWeight) + steepShare * slopeWeight;
-            ranked.Add((i, score, highShare, steepShare));
+            ranked.Add((i, score, highShare, steepShare, gateShare));
 
             map.Seeds[i].ImpassableScore = (float)score;
             map.Seeds[i].HighShare = (float)highShare;
             map.Seeds[i].SteepShare = (float)steepShare;
+            map.Seeds[i].GateShare = (float)gateShare;
         }
 
         if (ranked.Count == 0) return;
@@ -1057,12 +1077,19 @@ public static class Provinces
         double floor = Math.Max(cfg.ImpassableMinMountainShare, adaptive);
 
         int want = (int)Math.Round(ranked.Count * share);
-        int marked = 0;
+        int marked = 0, gated = 0;
         double highSum = 0, steepSum = 0;
         double cut = 0;
-        foreach (var (label, score, highShare, steepShare) in ranked)
+        foreach (var (label, score, highShare, steepShare, gateShare) in ranked)
         {
             if (marked >= want || score < floor) break;
+
+            // Steepness ranks, height qualifies. Without this a flat world's quota runs past its
+            // mountains and fills with the eroded sides of low hills, which score as steep as any
+            // range; and because a summit is gentler than its flanks, it walls the flanks and
+            // leaves the top passable. A passed-over province does not use up a slot.
+            if (gateMin > 0 && gateShare < gateMin) { gated++; continue; }
+
             map.Seeds[label].IsImpassable = true;
             map.Seeds[label].ImpassableCause = ImpassableCause.Score;
             highSum += highShare;
@@ -1074,7 +1101,7 @@ public static class Provinces
         // The plateau rule runs after the ranking and outside its quota, so the slope score keeps
         // every slot it would have had; this only adds the roof of the map that the score let through.
         int heightMarked = 0;
-        foreach (var (label, _, _, _) in ranked)
+        foreach (var (label, _, _, _, _) in ranked)
         {
             if (map.Seeds[label].IsImpassable || top[label] * 2 <= total[label]) continue;
             map.Seeds[label].IsImpassable = true;
@@ -1090,19 +1117,56 @@ public static class Provinces
                           $"steep line {steepLine:F2}/px{mix})");
 
         string bound = marked >= want ? "target share"
+            : gated > 0 ? "mountain-ground gate"
             : adaptive > cfg.ImpassableMinMountainShare ? "floor, adaptive"
             : "floor, absolute backstop";
         Console.WriteLine($"    score: median {median:F3}, deviation {mad:F3}, " +
                           $"floor {floor:F3} (adaptive {adaptive:F3} vs backstop " +
                           $"{cfg.ImpassableMinMountainShare:F2}), cut at {cut:F3} — " +
                           $"limited by {bound}");
+        if (gateMin > 0)
+        {
+            double capLine = CappedGateHeight(cfg);
+            Console.WriteLine($"    gate: {gated} province(s) passed over with under {gateMin:P0} of their ground " +
+                              $"above {gateLine:F0} (mountain line {mountainLine:F0}, " +
+                              $"cap {(capLine > 0 ? capLine.ToString("F0") : "off")})");
+        }
         if (heightLine != float.MaxValue)
             Console.WriteLine($"    height: line {heightLine:F0} ({cfg.ImpassableHeightFraction:P0} of the way " +
                               $"to the peak), {heightMarked} more province(s) taken above it");
 
         map.Impassability = new ImpassableDiagnostics(
             mountainLine, steepLine, median, mad, floor, cut, want, marked, bound,
-            heightLine, heightMarked);
+            heightLine, heightMarked, gateLine, gateMin, gated);
+    }
+
+    /// <summary>
+    /// The elevation <see cref="MapConfig.ImpassableMinMountainGround"/> is measured above: this
+    /// map's own mountain line, but never higher than <see cref="MapConfig.ImpassableGateHeight"/>.
+    ///
+    /// The cap is what makes the gate work on high relief. A heightmap that saturates at its
+    /// ceiling puts its top few percent of land on the flat clipped roof, so a gate on the map's
+    /// own line would read every real range below the roof as foothills and release it. Measured
+    /// on a Highlands pangaea, the uncapped gate released 181 provinces with a median height of
+    /// 313; capped, it released 42 with a median of 112, the same kind of ground it releases on
+    /// Lowlands.
+    /// </summary>
+    private static float GateLine(float mountainLine, MapConfig cfg)
+    {
+        double cap = CappedGateHeight(cfg);
+        return cap > 0 ? MathF.Min(mountainLine, (float)cap) : mountainLine;
+    }
+
+    /// <summary>
+    /// <see cref="MapConfig.ImpassableGateHeight"/> on this map. Its height above sea travels with
+    /// <see cref="MapConfig.ReliefScale"/>, as every relief threshold authored at vanilla scale
+    /// must; 0 or less when the cap is off.
+    /// </summary>
+    private static double CappedGateHeight(MapConfig cfg)
+    {
+        if (!(cfg.ImpassableGateHeight > 0)) return 0;
+        double sea = cfg.Limits.SeaLevelUpper;
+        return sea + Math.Max(0, cfg.ImpassableGateHeight - sea) * cfg.ReliefScale;
     }
 
     /// <summary>

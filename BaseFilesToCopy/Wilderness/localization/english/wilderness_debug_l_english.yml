@@ -22,3 +22,21 @@
  colony_debug_disable_gate_holds:0 "DEBUG — Holding disabled, and BOTH obstacle tests still see the blockers. The promotion gate holds; what is lost is the maluses, and only until the holding re-enables."
  colony_debug_disable_gate_leaks:0 "DEBUG — Holding disabled. #V has_building#! sees the blockers but the obstacle #V flag#! count reads zero. The promotion gate LEAKS — this colony can be promoted with its obstacles still standing."
  colony_debug_disable_all_blind:0 "DEBUG — Holding disabled, and NEITHER obstacle test sees a blocker. Open the holding view before believing it: greyed-out blockers there mean both tests are blind; an empty holding means this colony had nothing to say."
+
+ # The two pages' own title, description and buttons. These were once written straight into the
+ # event as quoted text, which the game treats as a loc key it cannot find: it still shows the words,
+ # but logs "Unrecognized loc key" for every one of them, every time the page opens.
+ wilderness_colonization.9999.t:0 "DEBUG: Upgrade Realm Colonies"
+ wilderness_colonization.9999.desc:0 "Choose how to advance all colony holdings currently situated within your sub-realm."
+ wilderness_colonization.9999.a:0 "Advance / Upgrade Colonies to Tier 2"
+ wilderness_colonization.9999.b:0 "Max out all colonies (Tier 3, Dev 5, Obstacles Cleared)"
+ wilderness_colonization.9999.c:0 "Repair Corrupted Holding Slots"
+ wilderness_colonization.9999.d:0 "Instantly promote all colonies to full holdings"
+ wilderness_colonization.9999.e:0 "Next page..."
+ wilderness_colonization.9998.t:0 "DEBUG: Colony Tools (page 2)"
+ wilderness_colonization.9998.desc:0 "Colony tools that would not fit on the first page."
+ wilderness_colonization.9998.a:0 "TEST: Force a Vassal Colony to Max & Secede (Event 0021)"
+ wilderness_colonization.9998.b:0 "DEBUG: Report my domicile state"
+ wilderness_colonization.9998.c:0 "DEBUG: Re-run colony camp setup"
+ wilderness_colonization.9998.d:0 "DEBUG: Probe a disabled colony holding"
+ wilderness_colonization.9998.e:0 "Back"

@@ -18,10 +18,10 @@ namespace Ck3MapGen.Emit;
 /// birth-time genome surgery, and it equally fixes the courtier the engine invented with a human
 /// face who was handed <c>phenotype_stocky</c> by the culture pulse: the trait now IS the look.
 ///
-/// It has to be a generated file rather than a BaseFilesToCopy static for two reasons. The ranges
-/// are fantasy-tier-scaled, and a static file cannot know whether this map is LowFantasy or
-/// ExoticSurreal; and the elf skin split below needs to name generated culture keys, which a
-/// static file may not do.
+/// It has to be a generated file rather than a BaseFilesToCopy static because the ranges are
+/// fantasy-tier-scaled, and a static file cannot know whether this map is LowFantasy or
+/// ExoticSurreal. (It used to need generated culture keys too, for the elf skin split; one trait
+/// per elf retired that.)
 ///
 /// **Two groups, because a portrait modifier group applies exactly one of its entries.** Shape and
 /// skin are separate axes that must both land, so they are separate groups. Priorities 90 and 91
@@ -30,8 +30,17 @@ namespace Ck3MapGen.Emit;
 /// </summary>
 public static class RaceMorphWriter
 {
+    /// <summary>
+    /// One trait per race, and that one-to-one is load-bearing. The two elves used to share
+    /// <c>phenotype_gracile</c>, which left this file able to force only the genes both elf tables
+    /// agreed on — averaged, so high elves lost their height — and able to tell the two skins apart
+    /// only by a list of generation-time culture keys, so every wood elf outside one (minorities,
+    /// diverged and hybrid cultures, converts) rendered high-elf lavender.
+    /// </summary>
     private static readonly (RaceArchetype Archetype, string Trait)[] Races =
     [
+        (RaceArchetype.HighElf, "phenotype_gracile"),
+        (RaceArchetype.WoodElf, "phenotype_sylvan"),
         (RaceArchetype.Dwarf, "phenotype_stocky"),
         (RaceArchetype.Orc, "phenotype_rough_hewn"),
         (RaceArchetype.Gnome, "phenotype_diminutive"),
@@ -75,12 +84,6 @@ public static class RaceMorphWriter
             foreach (var (archetype, trait) in Races)
                 ShapeEntry(b, $"gen_race_morph_{archetype.ToString().ToLowerInvariant()}",
                     $"has_trait = {trait}", RaceMorphs.Of(archetype), f);
-
-            // Both elf archetypes share phenotype_gracile, so their entry is the merge of the two
-            // tables: genes where both agree on the template, ranges averaged. Genes where the
-            // templates differ (body_shape: rectangle vs triangle) are left to inherit — musculature
-            // blends harmlessly, and forcing either template onto the other elf would be wrong.
-            ShapeEntry(b, "gen_race_morph_gracile", "has_trait = phenotype_gracile", MergeGracile(), f);
         }
 
         b.Blank();
@@ -98,26 +101,7 @@ public static class RaceMorphWriter
             foreach (var (archetype, trait) in Races)
                 SkinEntry(b, $"gen_race_skin_{archetype.ToString().ToLowerInvariant()}",
                     $"has_trait = {trait}", RaceSkin.TemplateOf(archetype)!, skinLo, skinHi,
-                    weight: 100, cultureKeys: null);
-
-            // phenotype_gracile covers two skins. The culture decides which: wood-elf cultures get the
-            // olive shift at weight 100, everyone else carrying the trait falls to the high-elf entry
-            // at 90. `selection_behavior = max` picks the highest applicable. The culture keys are the
-            // generated ones — the second reason this file cannot be static.
-            var woodElfCultures = ethnicities.ByCulture
-                .Where(kv => kv.Value.Archetype == RaceArchetype.WoodElf)
-                .Select(kv => kv.Key.Key)
-                .Distinct()
-                .ToList();
-
-            if (woodElfCultures.Count > 0)
-                SkinEntry(b, "gen_race_skin_wood_elf", "has_trait = phenotype_gracile",
-                    RaceSkin.TemplateOf(RaceArchetype.WoodElf)!, skinLo, skinHi,
-                    weight: 100, cultureKeys: woodElfCultures);
-
-            SkinEntry(b, "gen_race_skin_high_elf", "has_trait = phenotype_gracile",
-                RaceSkin.TemplateOf(RaceArchetype.HighElf)!, skinLo, skinHi,
-                weight: 90, cultureKeys: null);
+                    weight: 100);
 
             // The human reset. gen_race_skin is INHERITABLE — that is what makes half-breeds work —
             // so the human child of an elf carries the elven shift in its DNA, and without this entry
@@ -136,17 +120,16 @@ public static class RaceMorphWriter
             // still is the right one: a mixed-line human is precisely "human whose inherited shift must
             // go", and no trait describes that.
             SkinEntry(b, "gen_race_skin_human", "has_character_flag = gen_phenotype_human",
-                "gen_skin_human", 0f, 0f, weight: 100, cultureKeys: null);
+                "gen_skin_human", 0f, 0f, weight: 100);
 
-            // The six fantasy traits and the mixed-line flag are the whole roster; a character with
+            // The seven fantasy traits and the mixed-line flag are the whole roster; a character with
             // none of them (a traited-but-unmixed human, or a pre-pulse engine character) has no entry
-            // fire and keeps its inherited appearance — phenotype_human
-            // deliberately forces nothing, human looks belong to the ethnicity. Exotic maps to no
-            // trait — its shape is rolled per people rather than authored — so it has no entry either.
+            // fire and keeps its inherited appearance — phenotype_human deliberately forces nothing,
+            // human looks belong to the ethnicity.
         }
 
         ParadoxText.WriteBom(path, b.ToString());
-        Console.WriteLine($"  race morphs written: {Races.Length + 1} shape and {Races.Length + 2} skin enforcement entries to 99_gen_race_morphs.txt");
+        Console.WriteLine($"  race morphs written: {Races.Length} shape and {Races.Length + 1} skin enforcement entries to 99_gen_race_morphs.txt");
     }
 
     /// <summary>
@@ -167,7 +150,7 @@ public static class RaceMorphWriter
                     Morph(b, m.Gene, m.Template, lo, hi);
                 }
 
-            Weight(b, condition, weight: 100, cultureKeys: null);
+            Weight(b, condition, weight: 100);
         }
 
         b.Blank();
@@ -176,12 +159,12 @@ public static class RaceMorphWriter
     /// <summary>One skin entry: a single forced <c>gen_race_skin</c> shift.</summary>
     private static void SkinEntry(
         JominiBuilder b, string name, string condition, string template,
-        float lo, float hi, int weight, List<string>? cultureKeys)
+        float lo, float hi, int weight)
     {
         using (b.Block(name))
         {
             using (b.Block("dna_modifiers")) Morph(b, "gen_race_skin", template, lo, hi);
-            Weight(b, condition, weight, cultureKeys);
+            Weight(b, condition, weight);
         }
 
         b.Blank();
@@ -195,7 +178,7 @@ public static class RaceMorphWriter
         => b.Inline("morph",
             $"mode = replace  gene = {gene}  template = {template}  range = {{ {F(lo)} {F(hi)} }}");
 
-    private static void Weight(JominiBuilder b, string condition, int weight, List<string>? cultureKeys)
+    private static void Weight(JominiBuilder b, string condition, int weight)
     {
         using (b.Block("weight"))
         {
@@ -210,30 +193,8 @@ public static class RaceMorphWriter
                 b.Field("exists", "this");
                 b.Token(condition);
 
-                if (cultureKeys is { Count: > 0 })
-                    using (b.Block("OR"))
-                        foreach (var key in cultureKeys) b.Field("culture", $"culture:{key}");
             }
         }
-    }
-
-    /// <summary>
-    /// The gracile entry: the intersection of the two elf tables. Same gene and same template on
-    /// both sides merges with averaged ranges; a template disagreement drops the gene, leaving it
-    /// to ordinary inheritance.
-    /// </summary>
-    private static List<RaceMorph> MergeGracile()
-    {
-        var high = RaceMorphs.Of(RaceArchetype.HighElf);
-        var wood = RaceMorphs.Of(RaceArchetype.WoodElf).ToDictionary(m => m.Gene);
-
-        var merged = new List<RaceMorph>();
-        foreach (var h in high)
-        {
-            if (!wood.TryGetValue(h.Gene, out var w) || w.Template != h.Template) continue;
-            merged.Add(h with { Min = (h.Min + w.Min) / 2f, Max = (h.Max + w.Max) / 2f });
-        }
-        return merged;
     }
 
     private static string F(float v) => v.ToString("0.###", CultureInfo.InvariantCulture);

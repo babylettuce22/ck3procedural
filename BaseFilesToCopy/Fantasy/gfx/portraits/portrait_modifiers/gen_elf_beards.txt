@@ -8,13 +8,13 @@
 #
 # **A separate group from gen_dwarf_beard, not extra entries inside it.** Portrait modifier groups
 # apply exactly one entry each, and two groups apply independently -- so dwarves and elves cannot
-# collide no matter what, because no character holds phenotype_stocky and phenotype_gracile at once
-# (the seven phenotype traits list each other as `opposites`). Keeping them apart also means the
+# collide no matter what, because no character holds phenotype_stocky and an elf trait at once
+# (the eight phenotype traits list each other as `opposites`). Keeping them apart also means the
 # dwarf file keeps its name honest, and neither has to be touched to change the other.
 #
-# **Both elf archetypes are covered by one trait.** phenotype_gracile is high elf and wood elf
-# together -- Emit/RaceMorphWriter.cs makes the same merge for shape, and splits only the skin -- so
-# there is nothing to branch on here.
+# **Both elves, one rule.** phenotype_gracile (high elf) and phenotype_sylvan (wood elf) are separate
+# traits so each can be drawn with its own body, but they share the clean-shaven look, so every
+# entry here takes either.
 #
 # THE 3%
 # ------
@@ -61,7 +61,10 @@ gen_elf_beard = {
 			modifier = {
 				add = 97
 				exists = this
-				has_trait = phenotype_gracile
+				OR = {
+					has_trait = phenotype_gracile
+					has_trait = phenotype_sylvan
+				}
 			}
 
 			# Women take the exception's 3 as well, so they sit at a flat 100 here. The rare beard
@@ -71,7 +74,10 @@ gen_elf_beard = {
 			modifier = {
 				add = 3
 				exists = this
-				has_trait = phenotype_gracile
+				OR = {
+					has_trait = phenotype_gracile
+					has_trait = phenotype_sylvan
+				}
 				is_female = yes
 			}
 		}
@@ -92,7 +98,10 @@ gen_elf_beard = {
 				add = 3
 				exists = this
 				is_female = no
-				has_trait = phenotype_gracile
+				OR = {
+					has_trait = phenotype_gracile
+					has_trait = phenotype_sylvan
+				}
 			}
 		}
 	}

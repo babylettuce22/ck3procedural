@@ -125,9 +125,9 @@ gen_assign_phenotype_effect = {
 # makes it the right answer for a minority: a gnome seated among the Rohand rolls the gnome
 # ethnicity, so the gene says gnome no matter what the culture says.
 #
-# Both elf archetypes map to phenotype_gracile — one trait, two skins — matching the split
-# Emit/RaceMorphWriter.cs makes at render time, where the culture decides which of the two skin
-# entries applies.
+# The two elves are two traits — phenotype_gracile for the high elf, phenotype_sylvan for the wood
+# elf — so the genome answers which elf this is directly, and Emit/RaceMorphWriter.cs forces each
+# one's own shape and skin with no culture test.
 #
 # There is deliberately NO gen_skin_human branch. Index 0 is the empty template every character
 # falls back to when their DNA does not mention the gene at all, so a human branch here would match
@@ -140,13 +140,13 @@ gen_assign_phenotype_effect = {
 # see the comment there for why that matters.
 gen_assign_phenotype_from_genes_effect = {
 	if = {
-		limit = {
-			OR = {
-				has_gene = { category = gen_race_skin template = gen_skin_high_elf }
-				has_gene = { category = gen_race_skin template = gen_skin_wood_elf }
-			}
-		}
+		limit = { has_gene = { category = gen_race_skin template = gen_skin_high_elf } }
 		add_trait = phenotype_gracile
+		add_character_flag = gen_phenotype_from_gene
+	}
+	else_if = {
+		limit = { has_gene = { category = gen_race_skin template = gen_skin_wood_elf } }
+		add_trait = phenotype_sylvan
 		add_character_flag = gen_phenotype_from_gene
 	}
 	else_if = {
@@ -218,6 +218,10 @@ gen_copy_phenotype_effect = {
 		add_trait = phenotype_gracile
 	}
 	else_if = {
+		limit = { scope:gen_phenotype_source = { has_trait = phenotype_sylvan } }
+		add_trait = phenotype_sylvan
+	}
+	else_if = {
 		limit = { scope:gen_phenotype_source = { has_trait = phenotype_stocky } }
 		add_trait = phenotype_stocky
 	}
@@ -251,7 +255,7 @@ gen_copy_phenotype_effect = {
 
 # Strips a character back to one race.
 #
-# Should never fire: all seven traits list each other as `opposites`, and the mixed-line flag is
+# Should never fire: all eight traits list each other as `opposites`, and the mixed-line flag is
 # only set by script. The ruler designer and the console can still produce a doubled character, and
 # two races means two sets of forced genes fighting over one portrait, so the yearly pulse checks.
 #
@@ -268,6 +272,17 @@ gen_sanitize_phenotype_effect = {
 
 		if = {
 			limit = { has_trait = phenotype_gracile }
+			remove_trait = phenotype_sylvan
+			remove_trait = phenotype_stocky
+			remove_trait = phenotype_rough_hewn
+			remove_trait = phenotype_towering
+			remove_trait = phenotype_diminutive
+			remove_trait = phenotype_dusk_adapted
+			remove_trait = phenotype_human
+			remove_character_flag = gen_phenotype_human
+		}
+		else_if = {
+			limit = { has_trait = phenotype_sylvan }
 			remove_trait = phenotype_stocky
 			remove_trait = phenotype_rough_hewn
 			remove_trait = phenotype_towering

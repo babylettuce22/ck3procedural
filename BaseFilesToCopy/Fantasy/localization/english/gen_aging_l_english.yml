@@ -12,6 +12,7 @@
 
  # ============ Feed message ============
  gen_world_weary_deepens_message_title: "The World Grows Distant"
+ gen_dwarf_age_catches_up_message_title: "Age Catches Up"
 
  # ============ Onset: The Weight of Centuries ============
  gen_aging.0001.t: "The Weight of Centuries"
@@ -26,9 +27,9 @@
 
  # ============ Core debug inspector (console: event gen_aging.0090) ============
  gen_aging.0090.t: "Core Debug: Phenotype & Aging"
- gen_aging.0090.race_elf: "#weak Race:#! Elf (phenotype_gracile) — long-lived, fades.\n"
+ gen_aging.0090.race_elf: "#weak Race:#! Elf (phenotype_gracile / phenotype_sylvan) — long-lived, fades.\n"
  gen_aging.0090.race_deepkin: "#weak Race:#! Deepkin (phenotype_dusk_adapted) — long-lived, fades.\n"
- gen_aging.0090.race_dwarf: "#weak Race:#! Dwarf (phenotype_stocky) — mortal aging.\n"
+ gen_aging.0090.race_dwarf: "#weak Race:#! Dwarf (phenotype_stocky) — mortal aging, ailments from 65.\n"
  gen_aging.0090.race_orc: "#weak Race:#! Orc (phenotype_rough_hewn) — mortal aging.\n"
  gen_aging.0090.race_giant: "#weak Race:#! Giant (phenotype_towering) — mortal aging.\n"
  gen_aging.0090.race_gnome: "#weak Race:#! Gnome (phenotype_diminutive) — mortal aging.\n"

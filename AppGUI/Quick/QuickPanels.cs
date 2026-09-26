@@ -179,8 +179,12 @@ internal sealed class TallyRow : Control
 
     public const int Columns = 6;
 
+    /// <summary>Tiles per row. Six under a finished world; the Azgaar page counts five things.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public int ColumnCount { get; set; } = Columns;
+
     public int PreferredGridHeight
-        => _tallies.Count == 0 ? 0 : ((_tallies.Count + Columns - 1) / Columns) * (S(58) + S(8)) - S(8);
+        => _tallies.Count == 0 ? 0 : ((_tallies.Count + ColumnCount - 1) / ColumnCount) * (S(58) + S(8)) - S(8);
 
     public void Set(IReadOnlyList<(string Label, int Count)> tallies)
     {
@@ -195,12 +199,13 @@ internal sealed class TallyRow : Control
         g.SmoothingMode = SmoothingMode.AntiAlias;
 
         int gap = S(8);
-        int cellW = (Width - gap * (Columns - 1)) / Columns;
+        int columns = Math.Max(1, ColumnCount);
+        int cellW = (Width - gap * (columns - 1)) / columns;
         int cellH = S(58);
 
         for (int i = 0; i < _tallies.Count; i++)
         {
-            int col = i % Columns, row = i / Columns;
+            int col = i % columns, row = i / columns;
             var cell = new Rectangle(col * (cellW + gap), row * (cellH + gap), cellW, cellH);
             using (var path = Rounded(new RectangleF(cell.X + 0.5f, cell.Y + 0.5f, cell.Width - 1, cell.Height - 1), S(8)))
             {

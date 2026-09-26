@@ -215,6 +215,15 @@ public sealed class AzgaarImport
     /// </summary>
     private static void AdoptCalendar(AzgaarWorld world, MapConfig cfg)
     {
+        // Advancement left to follow the world year is read from the export instead: once the year
+        // is the export's calendar it says nothing about how advanced the world is, and the export's
+        // peoples do. See AzgaarAdvancement. An advancement the user set is theirs and stays.
+        if (cfg.EraAnchorYear <= 0 && AzgaarAdvancement.Read(world) is { } reading)
+        {
+            cfg.EraAnchorYear = reading.Year;
+            Console.WriteLine($"  azgaar advancement: {reading.Describe()}");
+        }
+
         int year = world.Settings.Options.Year;
         if (year <= 0) return;
 

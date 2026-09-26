@@ -8,6 +8,10 @@
  trait_phenotype_gracile_desc:0 "Possessing an elongated, lithesome build and sharp bone structure, individuals with this trait move with natural poise and effortless grace."
  trait_phenotype_gracile_character_desc:0 "Possessing an elongated, lithesome build and sharp bone structure, [ROOT.GetCharacter.GetFirstNameNoTooltip] moves with natural poise and effortless grace."
 
+ trait_phenotype_sylvan:0 "Sylvan"
+ trait_phenotype_sylvan_desc:0 "Lean, sharp-featured and at home beneath the canopy, individuals with this trait carry a hunter's wiry strength and move through wild country without a sound."
+ trait_phenotype_sylvan_character_desc:0 "Lean, sharp-featured and at home beneath the canopy, [ROOT.GetCharacter.GetFirstNameNoTooltip] carries a hunter's wiry strength and moves through wild country without a sound."
+
  trait_phenotype_stocky:0 "Stocky"
  trait_phenotype_stocky_desc:0 "Built low to the ground with broad shoulders and dense bone structure, individuals with this trait possess immense physical stamina and stability."
  trait_phenotype_stocky_character_desc:0 "Built low to the ground with broad shoulders and dense bone structure, [ROOT.GetCharacter.GetFirstNameNoTooltip] possesses immense physical stamina and stability."

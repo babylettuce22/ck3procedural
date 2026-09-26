@@ -456,6 +456,11 @@ public static partial class ContentWriter
         // history are written from the same list. Nothing for a generated world.
         if (pastRulers is { Count: > 0 }) prehistory!.AddPastRulers(pastRulers);
 
+        // The children who never ruled, for every dead parent either list holds, so the dynasty
+        // trees fan out. Last of the people, on a stream of its own: nothing above moves.
+        var (kin, livingKin) = prehistory!.AddKin(cultures, cfg);
+        Console.WriteLine($"  pre-history: {kin} kin who never ruled ({livingKin} alive at the start)");
+
         // After prehistory, which it reads the houses and fathers from, and before
         // anything that names a ruler: the bookmarks and the character file both read
         // from this rather than each drawing the man again.

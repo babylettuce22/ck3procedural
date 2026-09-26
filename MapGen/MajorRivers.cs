@@ -484,7 +484,14 @@ public static class MajorRivers
         return outlets;
     }
 
-    private const double NavigableRadius = 7.0;
+    /// <summary>
+    /// The narrowest a navigable channel is carved, bank to bank, in world units. Province growth
+    /// will not cut a corner unless both orthogonal neighbours are water, so a channel has to stay
+    /// 4-connected across its diagonal reaches or the river province chain splits; five units does
+    /// that with room left for the width variation. It replaced a radius floor of 7 heightmap pixels
+    /// that dated from the 2:1 province downsample and, at 1:1, made every river at least 14 wide.
+    /// </summary>
+    private const double NavigableWidth = 5.0;
 
     private static void CarveHeightmapChannels(
             float[] fullElev,
@@ -500,8 +507,12 @@ public static class MajorRivers
         float scaleX = (float)fullWidth / cfg.ProvinceWidth;
         float scaleY = (float)fullHeight / cfg.ProvinceHeight;
 
-        double minWidthFull = Math.Max(NavigableRadius, cfg.Scaled(cfg.RiverChannelRadiusMin));
-        double maxWidthFull = Math.Max(16.0, cfg.Scaled(cfg.RiverChannelRadiusMax));
+        // The widths are bank-to-bank in world units; the carve works in heightmap pixels from the
+        // centreline, so halve and multiply by the heightmap pixels behind each world unit. Not
+        // MapScale — see RiverChannelWidthMin.
+        double floorRadius = NavigableWidth * 0.5 * scaleX;
+        double minWidthFull = Math.Max(NavigableWidth, cfg.RiverChannelWidthMin) * 0.5 * scaleX;
+        double maxWidthFull = cfg.RiverChannelWidthMax * 0.5 * scaleX;
 
         if (maxWidthFull < minWidthFull) maxWidthFull = minWidthFull;
 
@@ -553,7 +564,7 @@ public static class MajorRivers
                 if (variation > 0)
                 {
                     double wobble = 1.0 + variation * wobbleField.Noise2D(arc / variationScale, lane);
-                    radius = Math.Max(NavigableRadius,
+                    radius = Math.Max(floorRadius,
                         radius * Math.Clamp(wobble, 1.0 - variation, 1.0 + variation));
                 }
 

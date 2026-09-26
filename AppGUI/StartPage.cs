@@ -6,8 +6,8 @@ using NoiseTool.Pipeline;
 namespace Ck3MapGen.AppGUI;
 
 /// <summary>
-/// What the window shows when it opens: a choice between the Quick generator and the Complex one,
-/// with the few things worth doing before either (opening a world already written, the guide, and
+/// What the window shows when it opens: a choice between importing an Azgaar map, the Quick
+/// generator and the Complex one, with the few things worth doing before any of them (opening a world already written, the guide, and
 /// telling the tool where the game is).
 ///
 /// It is a page of the main window rather than a window of its own. A launcher shown ahead of the
@@ -22,7 +22,9 @@ namespace Ck3MapGen.AppGUI;
 /// </summary>
 internal sealed class StartPage : Panel
 {
-    /// <summary>The Quick card. It has nowhere to go yet; the host decides what a click means.</summary>
+    /// <summary>The Azgaar card: import a map made in Azgaar's Fantasy Map Generator.</summary>
+    public event Action? AzgaarPicked;
+    /// <summary>The Quick card. The host decides what a click means.</summary>
     public event Action? QuickPicked;
     public event Action? ComplexPicked;
     public event Action? OpenWorldPicked;
@@ -39,6 +41,7 @@ internal sealed class StartPage : Panel
     private readonly MapBanner _banner = new();
     private readonly Label _title;
     private readonly Label _subtitle;
+    private readonly ModeCard _azgaar;
     private readonly ModeCard _quick;
     private readonly ModeCard _complex;
     private readonly LinkButton _openWorld;
@@ -76,13 +79,24 @@ internal sealed class StartPage : Panel
             BackColor = Color.Transparent,
         };
 
+        _azgaar = new ModeCard
+        {
+            Name = "startAzgaar",
+            Glyph = "",
+            Title = "Azgaar",
+            Tagline = "Bring a map drawn in Azgaar. Its countries, peoples and faiths come too.",
+            Features = ["Your map", "Countries", "Cultures"],
+            Action = "Import in three steps",
+            Available = true,
+        };
+
         _quick = new ModeCard
         {
             Name = "startQuick",
             Glyph = "",
             Title = "Quick",
             Badge = "Recommended",
-            Tagline = "Pick a map type and a few basics — size, era, climate — and let good defaults do the rest.",
+            Tagline = "Pick a map type and a few basics, and let good defaults do the rest.",
             Features = ["Map types", "Size", "Era", "Climate"],
             Action = "Make a world in four steps",
             Available = true,
@@ -93,8 +107,8 @@ internal sealed class StartPage : Panel
             Name = "startComplex",
             Glyph = "",
             Title = "Complex",
-            Tagline = "The full generator: shape terrain in the Forge, paint the climate, tune every setting and run history.",
-            Features = ["Terrain forge", "Climate paint", "Every setting", "History"],
+            Tagline = "The full generator: shape terrain, paint the climate, tune every setting.",
+            Features = ["Terrain forge", "Climate paint", "History"],
             Action = "Open the generator",
             Available = true,
         };
@@ -104,6 +118,7 @@ internal sealed class StartPage : Panel
 
         _gameChange = new LinkButton { Name = "startGameFolder", Text = "Change…" };
 
+        _azgaar.Click += (_, _) => AzgaarPicked?.Invoke();
         _quick.Click += (_, _) => QuickPicked?.Invoke();
         _complex.Click += (_, _) => ComplexPicked?.Invoke();
         _openWorld.Click += (_, _) => OpenWorldPicked?.Invoke();
@@ -117,10 +132,10 @@ internal sealed class StartPage : Panel
             PerformLayout();
         };
         _tips.SetToolTip(_remember,
-            "Open straight into whichever you pick next — Quick or Complex — from now on.\n"
+            "Open straight into whichever you pick next — Azgaar, Quick or Complex — from now on.\n"
             + "The Start link on the Quick page, or File ▸ Start page, brings this page back.");
 
-        Controls.AddRange([_banner, _title, _subtitle, _quick, _complex, _openWorld, _guide, _remember,
+        Controls.AddRange([_banner, _title, _subtitle, _azgaar, _quick, _complex, _openWorld, _guide, _remember,
                            _rule, _gameGlyph, _gameText, _gameChange]);
     }
 
@@ -227,10 +242,13 @@ internal sealed class StartPage : Panel
         _subtitle.Bounds = new Rectangle(x, y, width, subtitleH);
         y += subtitleH + S(24);
 
-        int gap = S(20);
-        int cardW = (width - gap) / 2;
-        _quick.Bounds = new Rectangle(x, y, cardW, cardH);
-        _complex.Bounds = new Rectangle(x + cardW + gap, y, width - cardW - gap, cardH);
+        // Three ways in, left to right from the most given to the most made: a map brought from
+        // Azgaar, a Quick world, the full generator.
+        int gap = S(16);
+        int cardW = (width - 2 * gap) / 3;
+        _azgaar.Bounds = new Rectangle(x, y, cardW, cardH);
+        _quick.Bounds = new Rectangle(x + cardW + gap, y, cardW, cardH);
+        _complex.Bounds = new Rectangle(x + 2 * (cardW + gap), y, width - 2 * (cardW + gap), cardH);
         y += cardH + S(16);
 
         _openWorld.Location = new Point(x, y + (linkH - _openWorld.Height) / 2);

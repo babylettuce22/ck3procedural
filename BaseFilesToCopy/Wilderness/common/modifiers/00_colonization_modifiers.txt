@@ -64,14 +64,6 @@ colony_tribal_labour = {
 }
 
 
-settlers_promised_land = {
-	icon = county_modifier_control_negative
-
-	monthly_county_control_growth_add = -0.3
-	county_opinion_add = -15
-}
-
-
 # =====================================================================================
 #  Presence: what changes when the lord is actually there
 # =====================================================================================

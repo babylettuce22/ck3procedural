@@ -367,7 +367,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     [DisplayName("World Year")]
     [AzgaarIncompat("The export's own present year becomes the world year, so the game clock and the " +
                     "world's history agree. Advancement does not follow it — that stays on Advancement " +
-                    "Year, which is pinned to this value when an export is loaded. Still read as set " +
+                    "Year, which, left to follow, is read from the export's peoples instead. Still read as set " +
                     "if the export carries no year, which a 'Minimal' export may not.")]
     [Description("What the world calls the year: the bookmark date, and the calendar every date the game renders is on — births, deaths, wars, chronicle entries. How advanced the world is, is a separate question: see Advancement Year.")]
     public int StartYear { get; set; } = 900;
@@ -387,6 +387,10 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Category("02 World State")]
     [DisplayName("Advancement Year")]
     [TypeConverter(typeof(FollowWorldYearConverter))]
+    [AzgaarIncompat("Left to follow the world year, an import reads it from the export instead — how many of its " +
+                    "people are settled rather than tribal, follow organised faiths, and live behind walls — since " +
+                    "the world year becomes the export's calendar. A year typed here is used as it stands.",
+                    overridden: false)]
     [Description("Which year on CK3's own timeline this world is as advanced as: innovations cultures already hold, the development baseline, and the feudal/tribal/nomad mix. Set it to follow the world year to keep the two together, which is how every map worked before this setting existed.")]
     public int EraAnchorYear { get; set; }
 
@@ -1169,6 +1173,43 @@ public sealed class MapConfig : CustomTypeDescriptor
     public double ImpassableSlopeWeight { get; set; } = 0.65;
 
     /// <summary>
+    /// The share of a province's ground that must stand above the gate line before the score may
+    /// make it impassable. The gate line is this map's mountain line, capped at
+    /// <see cref="ImpassableGateHeight"/>. Steepness still ranks the candidates; this only decides
+    /// who may take a slot, and a province passed over does not use one up.
+    ///
+    /// Without it, steepness alone qualifies. On a flat world the quota then runs past the real
+    /// mountains and fills with the eroded sides of low hills. Measured on a Lowlands pangaea, 96
+    /// of 218 impassables had no ground above the mountain line, and walls ringed a summit the
+    /// score left passable. With the default cap, 0.1 and 0.25 gave 130 and 113 impassables there
+    /// and 295 and 281 on the Highlands version of the same map, so the exact value matters
+    /// little. 0 turns the gate off.
+    /// Recommended: 0.1.
+    /// </summary>
+    [Category("03 Provinces")]
+    [Description("Share of a province's ground that must be above the mountain line (capped at ImpassableGateHeight) before it may be impassable. Stops the steep sides of low hills being walled on flat maps. 0 turns it off.")]
+    public double ImpassableMinMountainGround { get; set; } = 0.1;
+
+    /// <summary>
+    /// The highest the gate line for <see cref="ImpassableMinMountainGround"/> may sit, in the
+    /// generator's elevation units (sea level 36, heightmap maximum 520). The default, 238, is
+    /// where vanilla's own top 3.5% of land begins on this scale, which is the same share the
+    /// mountain line takes.
+    ///
+    /// The cap exists for high relief. A heightmap that saturates at its ceiling puts its top 3.5%
+    /// of land on the flat roof, so a gate on the map's own line would release every real range
+    /// below it. On a Highlands pangaea the line was 506 and the uncapped gate released 181
+    /// mountain provinces; capped at 238 it released 42 low ones. On a Lowlands map the map's own
+    /// line (260 there) is close to the cap anyway. The height above sea scales with
+    /// <see cref="ReliefScale"/>. 0 removes the cap.
+    /// Recommended: 238.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("03 Provinces")]
+    [Description("The highest the mountain-ground gate's line may sit, in elevation units (sea 36, max 520). 238 is where vanilla's top 3.5% of land begins. Stops high, saturated maps reading real ranges as foothills. 0 removes the cap.")]
+    public double ImpassableGateHeight { get; set; } = 238;
+
+    /// <summary>
     /// A land province with most of its ground at or above this fraction of the way from sea level
     /// to the map's highest point is impassable outright, whatever its slope score and whatever the
     /// target share. It exists for high plateaus: flat on top, so the slope-weighted score passes
@@ -1429,29 +1470,40 @@ public sealed class MapConfig : CustomTypeDescriptor
     public double LakeOutletMinSeaZones { get; set; } = 0.1;
 
     /// <summary>
-    /// Half-width of a major river's carved channel at its source, in vanilla *heightmap* pixels.
+    /// Width of a major river's carved channel at its source, bank to bank, in world units — which
+    /// are province pixels on every map, whatever <see cref="ProvinceDownscale"/> is.
     ///
-    /// A radius, measured perpendicular from the centreline — the carve tests
-    /// <c>dist &lt;= curChanR</c> — so the channel is twice this across.
+    /// <b>Not scaled by <see cref="MapScale"/>, deliberately.</b> A river is sized against the
+    /// counties it runs between, and barony size does not shrink with the map: a 4096-wide world
+    /// has baronies larger in pixels than vanilla's (median 2255 px against 1005, measured
+    /// 2026-09-26). Scaling the channel down with the map would thin it against the land it cuts.
     ///
-    /// Floored at 7 in the carve regardless of scale. Navigability depends on the channel surviving
-    /// the 2:1 downsample into the province raster, which calls a cell water only when three of its
-    /// four pixels are under sea level, so a thinner channel stops reading as water at province
-    /// resolution and the navigable province chain breaks.
+    /// Calibrated on vanilla 1.19. The water CK3 draws over vanilla's river provinces — the
+    /// heightmap under the plane at 3932 — is 7 world units across at the median, 6–9 from p10 to
+    /// p90; the river provinces themselves are 3–5. The defaults here and in
+    /// <see cref="RiverChannelWidthMax"/> open from 7 to 13 on the carve's source-to-mouth curve,
+    /// which puts the median reach at about 10.5: one and a half times vanilla.
+    ///
+    /// These replace RiverChannelRadiusMin/Max (9 and 14), which were radii in *vanilla heightmap*
+    /// pixels — two per world unit — and were never converted when ProvinceDownscale went to 1, then
+    /// floored at 7 and 16 regardless of setting. Together that carved rivers about three times
+    /// vanilla's width and put 8.6% of the land into river provinces against vanilla's 0.45%. The
+    /// rename is so a preset holding the old numbers drops them rather than reading them in these
+    /// units.
     /// </summary>
     [AdvancedSetting]
     [Category("05 Rivers")]
-    [Description("Half-width of a major river's carved channel at its source, in heightmap pixels measured from the centreline — the channel is twice this across. Below about 7 it stops surviving the downsample into the province map and the river ceases to be navigable.")]
-    public double RiverChannelRadiusMin { get; set; } = 9.0;
+    [Description("Width of a major river's channel at its source, bank to bank, in world units (province pixels). Not scaled with map size, because counties are not. Vanilla's rivers draw about 7 across; the default runs from 7 at the source to 13 at the mouth. The carve will not go below 5, which keeps the river province chain unbroken.")]
+    public double RiverChannelWidthMin { get; set; } = 7.0;
 
     /// <summary>
-    /// Half-width of a major river's carved channel at its mouth, in vanilla heightmap pixels.
-    /// Same radius convention as <see cref="RiverChannelRadiusMin"/>.
+    /// Width of a major river's carved channel at its mouth, bank to bank, in world units. Same
+    /// convention and calibration as <see cref="RiverChannelWidthMin"/>.
     /// </summary>
     [AdvancedSetting]
     [Category("05 Rivers")]
-    [Description("Half-width of a major river's carved channel at its mouth, in heightmap pixels from the centreline. The channel opens from the source radius to this along its length.")]
-    public double RiverChannelRadiusMax { get; set; } = 14.0;
+    [Description("Width of a major river's channel at its mouth, bank to bank, in world units (province pixels). The channel opens from the source width to this along its length.")]
+    public double RiverChannelWidthMax { get; set; } = 13.0;
 
     /// <summary>
     /// How much a major river's channel breathes in and out along its length, as a fraction of the

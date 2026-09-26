@@ -699,6 +699,9 @@ public static class CultureWriter
             entries[$"{culture.Key}_name"] = culture.Name;
             entries[$"{culture.Key}_collective_noun"] = Plural(culture.Name);
             entries[$"{culture.Key}_prefix"] = culture.Prefix;
+            // The name list's own title, which the culture UI shows beside the list (vanilla:
+            // name_list_english "English"). Without it the list reads as its raw key.
+            entries[culture.NameListKey] = culture.Name;
             entries[$"mercenary_company_{culture.Key}"] = $"{culture.Name} Company";
 
             entries[$"dynnp_{culture.Key}"] = culture.LocationPrefix + " ";

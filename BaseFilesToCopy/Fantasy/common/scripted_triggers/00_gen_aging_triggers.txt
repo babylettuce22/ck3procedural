@@ -4,6 +4,7 @@
 gen_long_lived_race_trigger = {
 	OR = {
 		has_trait = phenotype_gracile
+		has_trait = phenotype_sylvan
 		has_trait = phenotype_dusk_adapted
 	}
 }
@@ -26,4 +27,34 @@ gen_world_weary_eligible_trigger = {
 	# the is_immortal flag — the flag is deliberately on every elf and deepkin now, the engine
 	# `immortal = yes` property lives only on this trait.
 	NOT = { has_trait = immortal }
+}
+
+# May age catch up with this dwarf this year?
+#
+# Vanilla's onset is 45 for infirm and 50 for the other four ailments; phenotype_stocky's
+# life_expectancy = 20 moves the whole curve twenty years, so onset here is 65. The race trait
+# carries is_immortal purely to switch vanilla's own onset off (see 00_phenotype_traits.txt).
+#
+# One ailment at a time is not the rule — vanilla lets them stack, and so does this — but a
+# character must lack at least one of the five, or there is nothing left to add.
+gen_dwarf_ailment_eligible_trigger = {
+	has_trait = phenotype_stocky
+	age >= 65
+	is_incapable = no
+	NOT = { has_game_rule = off_elderly_health }
+	NOT = { has_trait = immortal }
+	# Mirrors the per-option triggers of the random_list in gen_dwarf_ailment_pulse_effect, so the
+	# list can never be reached with every option ruled out.
+	OR = {
+		NOT = { has_trait = infirm }
+		AND = {
+			NOT = { has_game_rule = infirm_only_elderly_health }
+			OR = {
+				NOT = { has_trait = withering_mind }
+				NOT = { has_trait = clouded_eyes }
+				NOT = { has_trait = faltering_heart }
+				NOT = { has_trait = fragile_bones }
+			}
+		}
+	}
 }

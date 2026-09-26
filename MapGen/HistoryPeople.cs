@@ -130,6 +130,13 @@ public sealed partial class HistorySim
                 _femaleShare[p.Id] = 0.05;
                 Seat(p, NewRuler(p, FoundHouse(p.Culture, rng), rng, age: rng.Int(20, 55)));
             }
+
+            // The laws of the land, for whatever breaks away from here later (SeatNewRealms).
+            foreach (var county in p.Counties)
+            {
+                _landLaw[county] = _law[p.Id];
+                _landFemaleShare[county] = _femaleShare[p.Id];
+            }
         }
     }
 
@@ -248,29 +255,32 @@ public sealed partial class HistorySim
     }
 
     /// <summary>
-    /// Divides a realm between the eldest heir and his younger siblings. Each younger heir takes a
-    /// connected block off the edge, grown the way a secession's is, and either swears to the
-    /// eldest — when the chain of homage has room — or stands alone, as CK3's partition leaves a
-    /// younger son who inherited a title of his own.
+    /// Divides a realm between the eldest heir and his younger siblings, the way CK3 divides one: by
+    /// title. The eldest keeps the capital and the de jure title it lies in; each younger heir takes
+    /// the realm's holdings in another whole duchy — or another whole kingdom, when the realm spans
+    /// more than one — and holds a duchy under the eldest, a kingdom as a crown of his own unless the
+    /// eldest's realm is an empire around it. See <see cref="TitleShare"/>.
+    ///
+    /// It used to cut a block off the edge, grown the way a secession's is, sworn on a coin flip:
+    /// the pieces followed no line anyone could name, and a realm divided every generation.
     /// </summary>
     private void Partition(Polity p, SimRuler dead, SimRuler eldest, int younger, Rng rng)
     {
-        int share = Math.Max(2, p.Counties.Count / (younger + 2));
-
         for (int i = 0; i < younger; i++)
         {
-            var block = Formation.PeripheralBlock(_sim, p, share);
-            if (block.Count == 0 || block.Count >= p.Counties.Count) break;
+            // A whole title's worth of the realm, as CK3 divides one: see TitleShare. None left to
+            // give that keeps the eldest's realm whole, and the rest go without.
+            if (TitleShare(p) is not { } share) break;
 
             var sibling = Heir(p, dead, rng);
-            bool sworn = rng.Chance(0.5);
-            string place = block.OrderByDescending(c => _sim.Development.GetValueOrDefault(c)).ThenBy(c => c.Index).First().Name;
-
-            var part = Formation.Secede(_sim, p, block, FormationKind.Partitioned, 1,
-                $"{dead} died and the realm was divided: {sibling.Name} took {place}, {eldest.Name} kept {p.Capital.Name}");
+            var part = Formation.Secede(_sim, p, [.. share.Counties.OrderBy(c => c.Index)], FormationKind.Partitioned, 1,
+                $"{dead} died and the realm was divided: {sibling.Name} took the "
+                + $"{(share.Title.Tier == "k" ? "kingdom" : "duchy")} of {share.Title.Name}, {eldest.Name} kept {p.Capital.Name}");
             if (part is null) break;
 
-            if (sworn && p.Depth + 1 + Formation.SubtreeDepth(_sim, part) <= Polity.MaxDepth)
+            // A duchy is held under the eldest, who kept the crown above it; a second crown goes
+            // its own way, unless the eldest's own realm is an empire it lies inside.
+            if (share.Sworn && p.Depth + 1 + Formation.SubtreeDepth(_sim, part) <= Polity.MaxDepth)
                 part.Suzerain = p;
 
             _law[part.Id] = _law[p.Id];
@@ -279,6 +289,82 @@ public sealed partial class HistorySim
         }
 
         Formation.ShedIslands(_sim, p);
+    }
+
+    /// <summary>
+    /// What a younger heir inherits: the realm's holdings in one de jure title the eldest does not
+    /// keep — a whole kingdom when the realm spans more than one, else a duchy — as CK3's partition
+    /// hands out titles rather than slices of border.
+    ///
+    /// The largest such holding that keeps the eldest's realm in one piece, is two counties or
+    /// more, and leaves the eldest at least as much as he gives away. Only the connected part of a
+    /// holding goes, so the heir's realm is in one piece too. Null when there is none: the rest of
+    /// the heirs go without, as a realm too small to share does now.
+    /// </summary>
+    private (Title Title, HashSet<Title> Counties, bool Sworn)? TitleShare(Polity p)
+    {
+        // The tier the realm spans more than one of decides what is shared out.
+        string tier = p.Counties.Select(c => DeJureOf(c, "k")).Distinct().Count() > 1 ? "k" : "d";
+        var kept = DeJureOf(p.Capital, tier);
+
+        // A kingdom share stays under the eldest when his realm holds most of the de jure empire
+        // it sits in: he is an emperor, and a kingdom is his to grant. Otherwise it is a crown of
+        // its own. A duchy share is always sworn.
+        bool imperial = tier == "k" && DeJureOf(p.Capital, "e") is { } empire
+                        && 2 * p.Counties.Count(c => DeJureOf(c, "e") == empire)
+                           >= _sim.Owner.Keys.Count(c => DeJureOf(c, "e") == empire);
+
+        (Title Title, HashSet<Title> Counties, bool Sworn)? best = null;
+        foreach (var group in p.Counties.Where(c => c != p.Capital && DeJureOf(c, tier) is { } t && t != kept)
+                                       .GroupBy(c => DeJureOf(c, tier)!)
+                                       .OrderBy(g => g.Key.Index))
+        {
+            foreach (var part in Components(group.ToHashSet()))
+            {
+                if (part.Count < 2 || part.Count > p.Counties.Count - part.Count) continue;
+                if (best is { } b && (part.Count < b.Counties.Count
+                                      || (part.Count == b.Counties.Count && part.Min(c => c.Index) >= b.Counties.Min(c => c.Index))))
+                    continue;
+                if (!WholeWithout(p, part)) continue;
+                best = (group.Key, part, tier == "d" || imperial);
+            }
+        }
+        return best;
+    }
+
+    /// <summary>The connected pieces of a set of counties on the realm simulation's ground.</summary>
+    private List<HashSet<Title>> Components(HashSet<Title> counties)
+    {
+        var pieces = new List<HashSet<Title>>();
+        var left = new HashSet<Title>(counties);
+        foreach (var start in counties.OrderBy(c => c.Index))
+        {
+            if (!left.Remove(start)) continue;
+            var piece = new HashSet<Title> { start };
+            var queue = new Queue<Title>([start]);
+            while (queue.Count > 0)
+            {
+                if (!_sim.Adjacent.TryGetValue(queue.Dequeue(), out var near)) continue;
+                foreach (var n in near)
+                    if (left.Remove(n)) { piece.Add(n); queue.Enqueue(n); }
+            }
+            pieces.Add(piece);
+        }
+        return pieces;
+    }
+
+    /// <summary>Whether a realm stays in one piece around its capital without <paramref name="given"/>.</summary>
+    private bool WholeWithout(Polity p, HashSet<Title> given)
+    {
+        var seen = new HashSet<Title> { p.Capital };
+        var queue = new Queue<Title>([p.Capital]);
+        while (queue.Count > 0)
+        {
+            if (!_sim.Adjacent.TryGetValue(queue.Dequeue(), out var near)) continue;
+            foreach (var n in near)
+                if (p.Counties.Contains(n) && !given.Contains(n) && seen.Add(n)) queue.Enqueue(n);
+        }
+        return seen.Count == p.Counties.Count - given.Count;
     }
 
     /// <summary>The dead ruler's child: of his house and culture, born a generation after him.</summary>
@@ -331,40 +417,32 @@ public sealed partial class HistorySim
 
     /// <summary>
     /// Gives a ruler to every realm without one — a secession, a split-off island — as a house of
-    /// its own, under the laws of the realm it came out of.
+    /// its own, under the laws of the land it is seated on: the law its capital's realm had at the
+    /// start date, or partition for land nobody held then.
+    ///
+    /// Not the laws of the realm it came out of. That was the ratchet: a single-heir realm never
+    /// divides, so it outlasts its neighbours, and every splinter it shed carried its law away with
+    /// it, until the one realm on the map that kept its lands whole had set the law for everyone.
+    /// Only a partition's heirs inherit the law, and Partition sets it for them before this runs.
     /// </summary>
     private void SeatNewRealms(Rng rng)
     {
         foreach (var p in _sim.Polities.Where(p => p.Alive && !_rulerOf.ContainsKey(p.Id))
                                        .OrderBy(p => p.Capital.Index).ToList())
         {
-            if (ParentOf(p) is { } parent)
-            {
-                _law[p.Id] = LawOf(parent);
-                _femaleShare[p.Id] = _femaleShare.GetValueOrDefault(parent.Id, 0.05);
-            }
-            else
-            {
-                _law.TryAdd(p.Id, SuccessionLaw.Partition);
-                _femaleShare.TryAdd(p.Id, 0.05);
-            }
+            _law.TryAdd(p.Id, _landLaw.GetValueOrDefault(p.Capital, SuccessionLaw.Partition));
+            _femaleShare.TryAdd(p.Id, _landFemaleShare.GetValueOrDefault(p.Capital, 0.05));
 
             Seat(p, NewRuler(p, FoundHouse(p.Culture, rng), rng, age: rng.Int(20, 50)));
         }
     }
 
-    /// <summary>The realm a new one broke away from this year, from the event that says so.</summary>
-    private Polity? ParentOf(Polity p)
-    {
-        for (int i = _sim.Events.Count - 1; i >= 0 && _sim.Events[i].Year == _sim.Year; i--)
-        {
-            var e = _sim.Events[i];
-            if (e.Actor == p.Capital && e.Counterpart is { } from && _sim.Owner.TryGetValue(from, out var parent)
-                && parent != p)
-                return parent;
-        }
-        return null;
-    }
+    /// <summary>
+    /// The succession law and female share each county's realm had at the start date — what a
+    /// realm that breaks away later is seated under. The laws of the land, not of whoever last held it.
+    /// </summary>
+    private readonly Dictionary<Title, SuccessionLaw> _landLaw = [];
+    private readonly Dictionary<Title, double> _landFemaleShare = [];
 
     /// <summary>A new house with a name from its culture's list that no house in the history has used.</summary>
     private SimHouse FoundHouse(Culture culture, Rng rng)

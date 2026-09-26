@@ -3,8 +3,8 @@ using Ck3MapGen.Core;
 namespace Ck3MapGen.AppGUI;
 
 /// <summary>
-/// The launcher pages — the start page, and the Quick generator it leads to — and how they hand
-/// over to the Complex generator.
+/// The launcher pages — the start page, and the Azgaar and Quick pages it leads to — and how they
+/// hand over to the Complex generator.
 ///
 /// While one is up, the rest of the window is hidden rather than covered — the workspace bar, the
 /// workspaces and the status bar — so nothing behind it can be tabbed into or take a shortcut,
@@ -12,7 +12,7 @@ namespace Ck3MapGen.AppGUI;
 /// back exactly as it was; the workspaces are laid out once, in OnLoad, before a launcher page is
 /// shown, so their splitters are already where they belong (see <see cref="OnLoad"/>).
 ///
-/// The two launcher pages share one compact window. Moving between them swaps the page in place;
+/// The launcher pages share one compact window. Moving between them swaps the page in place;
 /// only arriving from, or leaving for, the generator changes the window's size.
 /// </summary>
 public sealed partial class MainForm
@@ -49,6 +49,7 @@ public sealed partial class MainForm
 
     private StartPage BuildStartPage()
     {
+        _start.AzgaarPicked += () => { RememberStart("Azgaar"); ShowAzgaarPage(); };
         _start.QuickPicked += () => { RememberStart("Quick"); ShowQuickPage(); };
         _start.ComplexPicked += () => { RememberStart("Complex"); EnterComplex(); };
         _start.RememberChanged += on =>
@@ -85,6 +86,11 @@ public sealed partial class MainForm
         if (_state.RememberStartChoice && _state.StartWith == "Quick")
         {
             ShowQuickPage();
+            return;
+        }
+        if (_state.RememberStartChoice && _state.StartWith == "Azgaar")
+        {
+            ShowAzgaarPage();
             return;
         }
         ShowStartPage();
@@ -134,7 +140,9 @@ public sealed partial class MainForm
     {
         var start = _start.PreferredPageSize;
         var quick = _quick.PreferredPageSize;
-        return new Size(Math.Max(start.Width, quick.Width), Math.Max(start.Height, quick.Height));
+        var azgaar = _azgaarPage.PreferredPageSize;
+        return new Size(Math.Max(Math.Max(start.Width, quick.Width), azgaar.Width),
+                        Math.Max(Math.Max(start.Height, quick.Height), azgaar.Height));
     }
 
     /// <summary>
@@ -224,5 +232,6 @@ public sealed partial class MainForm
         bool found = Core.GameLocator.IsGameDir(_options.GameDir);
         _start.SetGameFolder(found, _options.GameDir, _modRoot);
         _quick.SetGameFolder(found, _options.GameDir);
+        _azgaarPage.SetGameFolder(found, _options.GameDir);
     }
 }

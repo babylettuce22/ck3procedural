@@ -99,7 +99,12 @@ gen_aging.0090 = {
 		# Line 1: which race the character reads as.
 		first_valid = {
 			triggered_desc = {
-				trigger = { has_trait = phenotype_gracile }
+				trigger = {
+					OR = {
+						has_trait = phenotype_gracile
+						has_trait = phenotype_sylvan
+					}
+				}
 				desc = gen_aging.0090.race_elf
 			}
 			triggered_desc = {

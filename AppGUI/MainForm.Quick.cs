@@ -22,8 +22,11 @@ public sealed partial class MainForm
 {
     private readonly QuickPage _quick = new() { Visible = false };
 
-    /// <summary>True while a run started from the Quick page is going.</summary>
-    private bool _quickRunning;
+    /// <summary>
+    /// The run screen of the launcher page whose run is going — Quick's or Azgaar's — or null when
+    /// no run was started from a launcher page. Progress, pictures and discoveries go to it.
+    /// </summary>
+    private RunScreen? _launcherRun;
 
     /// <summary>How the last run ended, which the Quick page turns into its closing screen.</summary>
     private enum RunOutcome { None, Completed, Cancelled, Failed }
@@ -35,7 +38,7 @@ public sealed partial class MainForm
     {
         _quick.BackToStart += ShowStartPage;
         _quick.CreateRequested += () => QuickCreateAsync().Forget("quick world");
-        _quick.CancelRequested += () => { RequestCancel(); _quick.CancelPending(); };
+        _quick.CancelRequested += () => { RequestCancel(); _quick.Run.CancelPending(); };
         _quick.LaunchRequested += LaunchGame;
         _quick.OpenFolderRequested += OpenModFolder;
         _quick.CustomizeRequested += CustomizeQuickWorld;
@@ -114,19 +117,41 @@ public sealed partial class MainForm
         _modName = modName;
         _options.ModName = modName;
 
-        _quickRunning = true;
         _quick.ShowRunning();
-        _written = null;
-        _lastRun = RunOutcome.None;
-        _lastRunError = null;
-        var clock = Stopwatch.StartNew();
 
         Console.WriteLine($"Quick world: {choices.MapType}, seed {choices.Seed}, {choices.Pixels.Width}x{choices.Pixels.Height}");
         foreach (string stage in switchedOff)
             Console.WriteLine($"  {stage} switched off: it needs a Direct3D 12 GPU, and none was found.");
 
+        var (completed, took) = await RunFromLauncherAsync(_quick.Run, modDir);
+
+        if (completed)
+        {
+            _quick.ShowDone(modDir, took);
+            FinishLauncherRun(_quick.Run);
+        }
+        else
+        {
+            _quick.ShowFailed(_lastRun == RunOutcome.Cancelled,
+                _lastRun == RunOutcome.None ? "The run did not start." : _lastRunError);
+        }
+    }
+
+    /// <summary>
+    /// The ordinary write, watched from a launcher page: its progress, pictures and discoveries go
+    /// to <paramref name="run"/> for as long as it lasts. Returns whether the mod was written, and
+    /// how long it took.
+    /// </summary>
+    private async Task<(bool Completed, TimeSpan Took)> RunFromLauncherAsync(RunScreen run, string modDir)
+    {
+        _written = null;
+        _lastRun = RunOutcome.None;
+        _lastRunError = null;
+        var clock = Stopwatch.StartNew();
+
         // What the generator makes along the way goes to the page's discoveries column. Listened
         // to only for this run: with nobody listening, the generator builds none of it.
+        _launcherRun = run;
         Core.Showcase.Published += OnShowcase;
         try
         {
@@ -135,20 +160,19 @@ public sealed partial class MainForm
         finally
         {
             Core.Showcase.Published -= OnShowcase;
-            _quickRunning = false;
+            _launcherRun = null;
         }
 
-        if (_lastRun == RunOutcome.Completed && _result is not null && _written is not null && Directory.Exists(modDir))
-        {
-            _quick.ShowDone(modDir, clock.Elapsed);
-            _quick.SetTallies(QuickTallies(_result, _written));
-            RenderQuickResultAsync().Forget("quick result map");
-        }
-        else
-        {
-            _quick.ShowFailed(_lastRun == RunOutcome.Cancelled,
-                _lastRun == RunOutcome.None ? "The run did not start." : _lastRunError);
-        }
+        bool completed = _lastRun == RunOutcome.Completed && _result is not null && _written is not null && Directory.Exists(modDir);
+        return (completed, clock.Elapsed);
+    }
+
+    /// <summary>The finished world counted and drawn on a run screen already showing its done view.</summary>
+    private void FinishLauncherRun(RunScreen run)
+    {
+        if (_result is null || _written is null) return;
+        run.SetTallies(QuickTallies(_result, _written));
+        RenderLauncherResultAsync(run).Forget("launcher result map");
     }
 
     /// <summary>
@@ -178,7 +202,7 @@ public sealed partial class MainForm
     }
 
     /// <summary>Called on the generator's thread; the item is plain values, so it crosses as it is.</summary>
-    private void OnShowcase(Core.ShowcaseItem item) => Post(() => { if (_quickRunning || _onQuick) _quick.OfferShowcase(item); });
+    private void OnShowcase(Core.ShowcaseItem item) => Post(() => _launcherRun?.OfferShowcase(item));
 
     /// <summary>
     /// Anything changed in Complex this session is written to a preset before Quick replaces it,
@@ -240,7 +264,7 @@ public sealed partial class MainForm
     /// The finished world's picture: its realms as they stand at the start. Drawn off the UI thread,
     /// since it walks the whole realm tree; until it lands the page shows the last live picture.
     /// </summary>
-    private async Task RenderQuickResultAsync()
+    private async Task RenderLauncherResultAsync(RunScreen run)
     {
         if (_result is not { } result || _written is not { } written) return;
         var mode = MapModes.Find("Realms") ?? MapModes.Find("Kingdoms");
@@ -249,7 +273,7 @@ public sealed partial class MainForm
         try
         {
             var image = await Task.Run(() => mode.Render(result, written));
-            _quick.SetDoneImage(ToBitmap(image), mode.Name == "Realms" ? "Realms at the start" : mode.Name);
+            run.SetDoneImage(ToBitmap(image), mode.Name == "Realms" ? "Realms at the start" : mode.Name);
         }
         catch (Exception ex)
         {

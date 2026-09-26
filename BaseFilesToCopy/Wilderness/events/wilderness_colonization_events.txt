@@ -1090,7 +1090,8 @@ wilderness_colonization.0017 = {
 
 
 # They want to turn back. The currency is a promise, and it is the only one of the three whose cost
-# lands after the fact — see settlers_promised_land for why that is the point.
+# lands after the fact — nothing is owed until the colony stands, and then wilderness_colonization.0025
+# collects it. That is the point: it buys success with something you only pay if you succeed.
 #
 # ---- Why the debt is not part of the gamble ----
 #

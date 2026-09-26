@@ -163,7 +163,9 @@ public static class CoatOfArmsWriter
         foreach (var f in faiths?.Faiths ?? []) faithByKey.TryAdd(f.Key, f);
 
         var faithOfDynasty = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var ch in prehistory.AllExtraCharacters) faithOfDynasty.TryAdd(ch.DynastyId, ch.FaithKey);
+        // Not kin: they are drawn last and at random, and a house whose only other members are past
+        // rulers would otherwise have its arms re-rolled by whether it happened to get any.
+        foreach (var ch in prehistory.AllExtraCharacters.Where(c => !c.IsKin)) faithOfDynasty.TryAdd(ch.DynastyId, ch.FaithKey);
 
         var cache = new Dictionary<string, HeraldryScope>(StringComparer.Ordinal);
         return dynastyId =>

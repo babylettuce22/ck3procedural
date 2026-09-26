@@ -119,13 +119,19 @@ public sealed class GuiState
     public QuickChoices? Quick { get; set; }
 
     /// <summary>
+    /// The Azgaar page's last files and answers, so coming back after reworking the map in Azgaar
+    /// is one click. Files that have since moved are dropped when the page opens.
+    /// </summary>
+    public AzgaarChoices? Azgaar { get; set; }
+
+    /// <summary>
     /// The start page's "Remember my choice": when on, the next launch skips the start page and
     /// opens straight into <see cref="StartWith"/>, the card picked while it was on. Turning it off
     /// forgets the choice as well, so turning it back on never revives an old one silently.
     /// </summary>
     public bool RememberStartChoice { get; set; }
 
-    /// <summary>"Quick" or "Complex": where a remembered launch opens. Null until a card is picked.</summary>
+    /// <summary>"Azgaar", "Quick" or "Complex": where a remembered launch opens. Null until a card is picked.</summary>
     public string? StartWith { get; set; }
 
     /// <summary>

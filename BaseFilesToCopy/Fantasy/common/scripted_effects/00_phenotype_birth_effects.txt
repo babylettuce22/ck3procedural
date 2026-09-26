@@ -52,7 +52,7 @@ gen_resolve_child_phenotype_effect = {
 
 # Copies one parent's race onto the newborn.
 #
-# Written as an else_if chain rather than six independent ifs so a parent who somehow carries two
+# Written as an else_if chain rather than seven independent ifs so a parent who somehow carries two
 # phenotypes — the `opposites` lists are meant to prevent it, but the ruler designer and the console
 # can still produce one — hands over exactly one instead of stacking them onto the child.
 gen_take_parent_race_effect = {
@@ -61,6 +61,10 @@ gen_take_parent_race_effect = {
 	if = {
 		limit = { scope:gen_race_donor = { has_trait = phenotype_gracile } }
 		add_trait = phenotype_gracile
+	}
+	else_if = {
+		limit = { scope:gen_race_donor = { has_trait = phenotype_sylvan } }
+		add_trait = phenotype_sylvan
 	}
 	else_if = {
 		limit = { scope:gen_race_donor = { has_trait = phenotype_stocky } }
@@ -116,5 +120,21 @@ gen_take_parent_race_effect = {
 			}
 			add_character_flag = gen_phenotype_human
 		}
+	}
+
+	# A minority's child is a minority too. gen_phenotype_from_gene marks a character whose race is
+	# NOT their culture's, and gen_assign_phenotype_effect refuses such a culture head as the template
+	# for the culture's engine-generated courtiers. The flag used to stop at the first generation:
+	# a gnome born to the gnomes seated among a human people took the trait here but not the flag, so
+	# if that child later became the culture's head, every courtier the engine invented for the
+	# culture copied phenotype_diminutive — and the portrait modifier then forced gnome bodies onto
+	# them. Riding along with the race closes it. Only when the child actually took the donor's
+	# fantasy race: a human child of a minority parent is its culture's race and must stay eligible.
+	if = {
+		limit = {
+			gen_has_fantasy_phenotype_trigger = yes
+			scope:gen_race_donor = { has_character_flag = gen_phenotype_from_gene }
+		}
+		add_character_flag = gen_phenotype_from_gene
 	}
 }

@@ -518,6 +518,7 @@ public sealed partial class MainForm : ChromeForm
         // It starts hidden, so the first layout sizes the workspaces; OnLoad shows it afterwards.
         Controls.Add(BuildStartPage());
         Controls.Add(BuildQuickPage());
+        Controls.Add(BuildAzgaarPage());
         Controls.Add(_workspaceHost = BuildWorkspaces());
         Controls.Add(BuildWorkspaceBar());
 
@@ -1718,12 +1719,12 @@ public sealed partial class MainForm : ChromeForm
     {
         // The launcher pages hide the generator, so its shortcuts would act on something off
         // screen. Only the workspace keys get through, and they leave the page — except during a
-        // Quick run, which is watched on its page; there Escape cancels, as it does anywhere else.
+        // launcher run, which is watched on its page; there Escape cancels, as it does anywhere else.
         if (_inLauncher)
         {
-            if (_quickRunning)
+            if (_launcherRun is { } run)
             {
-                if (key == Keys.Escape) { RequestCancel(); _quick.CancelPending(); return true; }
+                if (key == Keys.Escape) { RequestCancel(); run.CancelPending(); return true; }
                 return base.ProcessCmdKey(ref message, key);
             }
 
@@ -1921,6 +1922,15 @@ public sealed partial class MainForm : ChromeForm
         var (load, fit, unverified) = OfferTileFit(path);
         if (!load) return;
 
+        AdoptHeightmapFile(path, fit, unverified);
+    }
+
+    /// <summary>
+    /// Makes a heightmap file the source, with the size question already answered. The second half
+    /// of <see cref="SetHeightmap"/>, and all of it for the Azgaar page, which fits the size itself.
+    /// </summary>
+    private void AdoptHeightmapFile(string path, (int Width, int Height)? fit, bool unverified)
+    {
         _lastHeightmapFile = path;
 
         var recent = _state.RecentHeightmaps ?? [];
@@ -2181,6 +2191,13 @@ public sealed partial class MainForm : ChromeForm
 
     private void PickAzgaar()
     {
+        // The guide's "Choose export…" while the Azgaar page is up fills the page, not Complex.
+        if (_onAzgaar)
+        {
+            _azgaarPage.ChooseExport();
+            return;
+        }
+
         string current = _options.Config.AzgaarJsonPath;
 
         using var dialog = new OpenFileDialog
@@ -3213,8 +3230,8 @@ public sealed partial class MainForm : ChromeForm
         {
             var bitmap = ToBitmap(image);
 
-            // The Quick page shows the world filling in; it gets a copy of its own to keep.
-            if (_quickRunning) _quick.OfferLiveImage(viewName, new Bitmap(bitmap));
+            // A launcher page shows the world filling in; it gets a copy of its own to keep.
+            _launcherRun?.OfferLiveImage(viewName, new Bitmap(bitmap));
 
             _rendered.TryGetValue(viewName, out var old);
             _rendered[viewName] = bitmap;
@@ -3239,12 +3256,13 @@ public sealed partial class MainForm : ChromeForm
         // A Forge source with an unbaked erosion stage will bake it inside the run, which can be
         // the longest phase of the lot. Say so first, as the tab's own export does.
         // A Quick world skips the question: its page already says the run takes a few minutes.
-        if (_source is MapGen.ForgeHeightmapProvider && !_onQuick && !_forge.ConfirmStaleBakes(this)) return;
+        if (_source is MapGen.ForgeHeightmapProvider && !_inLauncher && !_forge.ConfirmStaleBakes(this)) return;
 
         // Read on the UI thread before the run, and cloned: the tab stays enabled for panning but
         // the paint must not change under the model mid-run. A Quick world's climate is the one its
-        // page chose, so paint left on the Climate workspace does not reach it.
-        var climatePaint = _onQuick ? null : _climate.EffectivePaint?.Clone();
+        // page chose, so paint left on the Climate workspace does not reach it; an Azgaar world's
+        // climate is the export's, for the same reason.
+        var climatePaint = _inLauncher ? null : _climate.EffectivePaint?.Clone();
 
         // Set inside the run when the applied history turns out not to fit the world just built.
         MapGen.AppliedHistory? dropped = null;
@@ -3384,9 +3402,9 @@ public sealed partial class MainForm : ChromeForm
 
         // A run is watched from World, whichever workspace it was started from (F5 works in all
         // three), and its log opens for the duration. It folds again afterwards unless the run
-        // failed — then the log is the thing worth reading. A run started from the Quick page is
+        // failed — then the log is the thing worth reading. A run started from a launcher page is
         // watched there instead, so it stays put.
-        if (!_onQuick) SelectWorkspace(Workspace.World);
+        if (!_inLauncher) SelectWorkspace(Workspace.World);
         bool logWasOpen = _logOpen;
         bool failed = false;
         SetLogOpen(true);
@@ -3486,11 +3504,11 @@ public sealed partial class MainForm : ChromeForm
             _eta.Text = $"{_progressModel.Elapsed.TotalSeconds:F0}s elapsed";
         }
 
-        // The Quick page watches the same estimate. An uncalibrated one has no fraction to give.
-        if (_quickRunning)
+        // A launcher page watches the same estimate. An uncalibrated one has no fraction to give.
+        if (_launcherRun is { } run)
         {
             bool calibrated = remaining is not null && _progress.Style == ProgressBarStyle.Blocks;
-            _quick.SetProgress(calibrated ? fraction : null,
+            run.SetProgress(calibrated ? fraction : null,
                 calibrated ? RunProgress.Describe(remaining!.Value) : null,
                 _progressModel.Elapsed, _phase);
         }
@@ -3548,14 +3566,14 @@ public sealed partial class MainForm : ChromeForm
         _progressModel?.Enter(name);
         _phase = Sentence(name);
         _status.Text = $"{_phase}…";
-        if (_quickRunning) _quick.EnterStage(name);
+        _launcherRun?.EnterStage(name);
         ShowProgress();
     });
 
     private void OnStageDetail(string name) => Post(() =>
     {
         if (_busy && _phase is not null) _status.Text = $"{_phase} · {name.Trim(' ', '·')}…";
-        if (_quickRunning) _quick.EnterStage(name);
+        _launcherRun?.EnterStage(name);
     });
 
     private string? _phase;

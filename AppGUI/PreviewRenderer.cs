@@ -1581,6 +1581,7 @@ public static class PreviewRenderer
                     ImpassableCause.Trapped => Mix(ground, TrappedFill, 0.6),
                     _ when seed.IsImpassable => Mix(ground, ImpassableFill, 0.6),
                     _ when diag is not null && diag.Qualifies(seed.ImpassableScore)
+                                            && !diag.FailsGate(seed.GateShare)
                         => Mix(ground, QualifiesFill, 0.45),
                     _ => ground,
                 };
@@ -1631,6 +1632,9 @@ public static class PreviewRenderer
             ImpassableCause.Mask => "impassable — painted in the mask",
             ImpassableCause.Trapped => "impassable — trapped (landlocked behind impassables)",
             _ when seed.IsImpassable => "impassable",
+            _ when diag.Qualifies(seed.ImpassableScore) && diag.FailsGate(seed.GateShare)
+                => $"clears the floor, but only {seed.GateShare:P0} of it is above {diag.GateLine:F0} m " +
+                   $"(needs {diag.GateMinShare:P0})",
             _ when diag.Qualifies(seed.ImpassableScore) => "clears the floor, cut by target share",
             _ => $"below floor by {diag.Floor - seed.ImpassableScore:F2}",
         };

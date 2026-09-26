@@ -6,7 +6,7 @@
  # chains are read by different people in different situations, and a translator working on one has
  # no business scrolling through the other. Nothing here is referenced by the colonisation files and
  # nothing there is referenced by these; the only shared keys are the ones both paths genuinely
- # share -- settlers_promised_land and the settlement holding names -- and those stay over there,
+ # share -- the settlement holding names -- and those stay over there,
  # where they were first written.
  #
  # Voice: the same as the other file. Nobody out here is having an adventure. Things are counted,
@@ -20,6 +20,8 @@
  # eleventh, ck3-tiger will say so.
  activity_stake_wilderness:0 "Break Ground"
  activity_stake_wilderness_name:0 "Break Ground"
+ # The article in the activity list's "Host [a] [name]" heading; none, as the name is a verb phrase.
+ activity_stake_wilderness_host_an_a:0 ""
  activity_stake_wilderness_owner:0 "Broken by [ROOT.Char.GetTitledFirstName]"
  activity_stake_wilderness_selection_tooltip:0 "Stop moving. Put the company on unclaimed ground and hold it through four winters."
  activity_stake_wilderness_host_desc:0 "We will be living in it, not passing through it."

@@ -106,6 +106,83 @@ gen_world_weary_pulse_effect = {
 	}
 }
 
+# Vanilla's age ailments for dwarves, twenty years late. phenotype_stocky carries is_immortal to
+# switch vanilla's own onset events off (they hard-code 45/50 and cannot be retimed from outside);
+# this puts the same five traits back from 65. Only ONSET lives here: once a dwarf holds one,
+# vanilla's yearly_health_pulse progresses it exactly as it would a human's, because that effect
+# keys on the age_related_ailment trait flag, not on is_immortal.
+#
+# The yearly chance and the per-ailment weights follow vanilla's own pulse (about one onset
+# roll in ten a year once past the threshold; 30/30/30/20/20 between the five), and the
+# infirm_only_elderly_health game rule is honoured the way vanilla honours it.
+#
+# What is NOT restored: vanilla's harm.0001-0003 "incapable with age" culmination and the random
+# harm events, which exclude is_immortal characters inside vanilla's own triggers. Dwarves share
+# that with elves; the ailments' own health penalties still carry them to death.
+gen_dwarf_ailment_pulse_effect = {
+	if = {
+		limit = { gen_dwarf_ailment_eligible_trigger = yes }
+		random = {
+			chance = 10
+			modifier = {
+				add = 5
+				age >= 75
+			}
+			modifier = {
+				add = 10
+				age >= 85
+			}
+			# The message sits inside each option rather than around the list: a random_list run
+			# inside send_interface_message does not roll properly (ck3-tiger flags it).
+			random_list = {
+				20 = {
+					trigger = { NOT = { has_trait = infirm } }
+					gen_dwarf_ailment_onset_effect = { AILMENT = infirm }
+				}
+				30 = {
+					trigger = {
+						NOT = { has_trait = withering_mind }
+						NOT = { has_game_rule = infirm_only_elderly_health }
+					}
+					gen_dwarf_ailment_onset_effect = { AILMENT = withering_mind }
+				}
+				20 = {
+					trigger = {
+						NOT = { has_trait = clouded_eyes }
+						NOT = { has_game_rule = infirm_only_elderly_health }
+					}
+					gen_dwarf_ailment_onset_effect = { AILMENT = clouded_eyes }
+				}
+				30 = {
+					trigger = {
+						NOT = { has_trait = faltering_heart }
+						NOT = { has_game_rule = infirm_only_elderly_health }
+					}
+					gen_dwarf_ailment_onset_effect = { AILMENT = faltering_heart }
+				}
+				30 = {
+					trigger = {
+						NOT = { has_trait = fragile_bones }
+						NOT = { has_game_rule = infirm_only_elderly_health }
+					}
+					gen_dwarf_ailment_onset_effect = { AILMENT = fragile_bones }
+				}
+			}
+		}
+	}
+}
+
+# One ailment arriving, announced. The trait is added inside the message so the feed entry shows
+# which one it was.
+gen_dwarf_ailment_onset_effect = {
+	send_interface_message = {
+		type = msg_health_change
+		title = gen_dwarf_age_catches_up_message_title
+		left_icon = root
+		add_trait = $AILMENT$
+	}
+}
+
 # Day-one seeding, called from the game-start sweep in 00_gen_aging_on_actions.txt for every
 # living long-lived character. Elders already past onset start mid-fade instead of fresh —
 # gen_world_weary_seed_value gives 3 XP per year past 80, capped short of the killing threshold.

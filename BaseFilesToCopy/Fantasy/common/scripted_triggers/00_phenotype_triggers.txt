@@ -1,8 +1,9 @@
-﻿# The six fantasy races, as one question. Not the same as gen_has_phenotype_trigger below —
+﻿# The seven fantasy races, as one question. Not the same as gen_has_phenotype_trigger below —
 # phenotype_human is a race too, just not a fantastical one.
 gen_has_fantasy_phenotype_trigger = {
 	OR = {
 		has_trait = phenotype_gracile
+		has_trait = phenotype_sylvan
 		has_trait = phenotype_stocky
 		has_trait = phenotype_rough_hewn
 		has_trait = phenotype_towering
@@ -51,11 +52,12 @@ gen_has_phenotype_trigger = {
 # state of a mixed-line human.
 gen_has_conflicting_phenotype_trigger = {
 	OR = {
-		# Two or more of the seven race traits at once.
+		# Two or more of the eight race traits at once.
 		calc_true_if = {
 			amount = 2
 			has_trait = phenotype_human
 			has_trait = phenotype_gracile
+			has_trait = phenotype_sylvan
 			has_trait = phenotype_stocky
 			has_trait = phenotype_rough_hewn
 			has_trait = phenotype_towering
@@ -126,9 +128,19 @@ gen_is_different_race_than = {
 			scope:gen_target_char = { NOT = { gen_has_fantasy_phenotype_trigger = yes } }
 		}
 		# Both are fantasy races, but different traits
+		# The two elves are kin for this question: high and wood elves are separate races (each is
+		# drawn with its own body) but they married freely while they shared one trait, and the only
+		# consumer of this trigger is the AI's marriage reluctance. Their opinion of each other still
+		# follows the opposites web.
 		AND = {
-			has_trait = phenotype_gracile
-			scope:gen_target_char = { NOT = { has_trait = phenotype_gracile } }
+			OR = {
+				has_trait = phenotype_gracile
+				has_trait = phenotype_sylvan
+			}
+			scope:gen_target_char = {
+				NOT = { has_trait = phenotype_gracile }
+				NOT = { has_trait = phenotype_sylvan }
+			}
 		}
 		AND = {
 			has_trait = phenotype_stocky

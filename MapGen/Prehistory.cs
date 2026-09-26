@@ -72,6 +72,14 @@ public sealed class HistoricalCharacter
     public bool IsHeir { get; set; }
 
     public bool IsDeadAncestor { get; init; }
+
+    /// <summary>
+    /// A child who never ruled, drawn only to fill out a dynasty tree — see
+    /// <see cref="PrehistoryMap.AddKin"/>. Its parent may be a past ruler, which the character file
+    /// writes after the invented ancestors, so a dead one is written after those too.
+    /// </summary>
+    public bool IsKin { get; init; }
+
     public string? MarriageDate { get; set; }
 
     /// <summary>
@@ -152,7 +160,7 @@ public sealed record PastRuler(string Id, string Name, bool Female, AppliedHisto
     string FaithKey, string BirthDate, string DeathDate, string? TitleKey, string? ReignDate,
     string? ParentId = null, bool ParentIsMother = false);
 
-public sealed class PrehistoryMap
+public sealed partial class PrehistoryMap
 {
     /// <summary>
     /// The realms' past rulers under an applied history, oldest reign first within a title; empty

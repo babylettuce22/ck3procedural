@@ -291,8 +291,6 @@
  colonize_riding_after_desc:0 "Three months of road to make up"
  colony_tribal_labour:0 "Kin Labour"
  colony_tribal_labour_desc:0 "The work here is done by the chief's own people, paid in feasts, gifts and standing rather than in silver. Building costs less gold and more prestige."
- settlers_promised_land:0 "Promised Their Own Land"
- settlers_promised_land_desc:0 "They were told, on a bad road a long way from here, that this country would be theirs. Some of it will have to be."
 
  wilderness_colonization.0012.t:0 "Word from the Colony"
  wilderness_colonization.0012.desc:0 "A rider from [colony.GetName], 7 months on.\n\nThey lost people — the rider is matter-of-fact about it, and does not give a number unless asked. But there are roofs, there is a palisade, and there was enough put by to get through the second winter without sending to us for it.\n\nIt is a place now. A poor one, but a place."
@@ -430,6 +428,7 @@ wilderness_colonization.0029.t:0 "The Starving Winter"
  trait_colony_founder:0 "Founder"
  trait_colony_founder_desc:0 "This character raised a settled county out of wild ground — claimed it, cleared it, and held it until the day the charter was read."
  nick_gen_founder:0 "the Founder"
+ nick_gen_founder_desc:0 "Took settlers into country no one held and stayed until it was a county. The people there still say whose charter it was."
 
  wilderness_colonization.0022.t:0 "The Charter Read Aloud"
  wilderness_colonization.0022.desc.founder:0 "The whole of [finished_colony.GetName] has turned out, because the whole of [finished_colony.GetName] fits in the square it built. The charter is read from the granary steps — the bounds, the rights, the county's name entered in the rolls like any other — and the words are ordinary, which is precisely the wonder of it. Ordinary words, for a place that was howling treeline when the first stake went in.\n\nThe old hands stand at the front. They were there for the first winter, and they are looking at [ROOT.Char.GetFirstName], because so were we."
@@ -518,6 +517,9 @@ wilderness_colonization.0051.t:0 "A Plea from the Palisade"
  # what ck3-tiger asked for; if a future patch adds an eleventh, tiger will say so.
  activity_oversee_colony:0 "Oversee a Colony"
  activity_oversee_colony_name:0 "Oversee a Colony"
+ # The article in the activity list's "Host [a] [name]" heading. The name is already a verb phrase,
+ # so no article: vanilla's "a" would read "Host a Oversee a Colony", and a missing key shows raw.
+ activity_oversee_colony_host_an_a:0 ""
  activity_oversee_colony_owner:0 "Overseen by [ROOT.Char.GetTitledFirstName]"
  activity_oversee_colony_selection_tooltip:0 "Ride out to one of our colonies and live there until the work is done."
  activity_oversee_colony_host_desc:0 "We will be living behind its palisade, not reading reports about it."

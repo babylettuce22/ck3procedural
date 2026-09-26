@@ -519,6 +519,44 @@ public static class Titles
         return [.. clusters.Where(c => c.Count > 0)];
     }
 
+    /// <summary>
+    /// A small world runs out of children before a tier reaches a world's worth of titles: eight
+    /// kingdoms under a floor of four per empire can only ever make two empires, and two empires
+    /// cannot carry a hegemony that is not the whole map. When <paramref name="current"/> has fewer
+    /// than <paramref name="want"/> groups, this re-groups the same members at smaller sizes — the
+    /// largest size first, down to pairs — and keeps the first grouping that reaches the count, or
+    /// else whichever grouping came closest. Maps that already reach it never get here, so their
+    /// titles are unchanged.
+    ///
+    /// Several tries per size, because the greedy clusterer strands single members that the absorb
+    /// pass then folds back into a neighbour, and whether it does so depends on the seed order.
+    /// </summary>
+    private static List<List<int>> Regroup(string tier, List<List<int>> current, int members,
+        IReadOnlyDictionary<int, HashSet<int>> adjacency, (double X, double Y)[] positions,
+        int want, int ordinaryFloor, Rng rng)
+    {
+        if (current.Count >= want || members < 4) return current;
+
+        var best = current;
+        int top = Math.Clamp(members / want, 2, Math.Max(2, ordinaryFloor - 1));
+        var range = Enumerable.Range(0, members).ToList();
+
+        for (int size = top; size >= 2 && best.Count < want; size--)
+            foreach (int hi in (int[])[size + 1, size])
+                for (int attempt = 0; attempt < RegroupAttempts && best.Count < want; attempt++)
+                {
+                    var tried = AbsorbUndersized(Cluster(range, adjacency, size, hi, rng, positions),
+                                                 adjacency, size, hi, positions);
+                    if (tried.Count > best.Count) best = tried;
+                }
+
+        Console.WriteLine($"  small world: {members} children made {current.Count} {tier}; " +
+                          $"re-grouped smaller into {best.Count} (wanted {want})");
+        return best;
+    }
+
+    private const int RegroupAttempts = 4;
+
     private static int Nearest(List<List<int>> clusters, (double X, double Y)[] positions, int source)
     {
         var (x, y) = Centre(clusters[source], positions);
@@ -652,6 +690,9 @@ public static class Titles
                 MinDuchiesPerKingdom, MaxDuchiesPerKingdom, rng, duchyPosition),
             Union(kingdomAdjacency, kingdomSea), cfg.MinChildrenPerTitle, MaxDuchiesPerKingdom,
             duchyPosition);
+        kingdomClusters = Regroup("kingdoms", kingdomClusters, duchies.Count,
+            Union(kingdomAdjacency, kingdomSea), duchyPosition, 2 * MinEmpiresPerWorld,
+            Math.Max(MinDuchiesPerKingdom, cfg.MinChildrenPerTitle), rng);
         var kingdoms = Wrap("k", kingdomClusters, c => c.Select(i => duchies[i]));
         var kingdomPosition = Roll(kingdomClusters, duchyPosition);
 
@@ -663,6 +704,10 @@ public static class Titles
                 MinKingdomsPerEmpire, MaxKingdomsPerEmpire, rng, kingdomPosition),
             Union(empireAdjacency, empireSea), cfg.MinChildrenPerTitle, MaxKingdomsPerEmpire,
             kingdomPosition);
+        empireClusters = Regroup("empires", empireClusters, kingdoms.Count,
+            Union(empireAdjacency, empireSea), kingdomPosition, MinEmpiresPerWorld,
+            Math.Max(MinKingdomsPerEmpire, cfg.MinChildrenPerTitle), rng);
+
         var empires = Wrap("e", empireClusters, c => c.Select(i => kingdoms[i]));
 
         AssignColors(empires, rng, cfg.DeJureColorCoding);
@@ -730,6 +775,13 @@ public static class Titles
     private const int MinEmpiresPerHegemony = 2;
 
     /// <summary>
+    /// Fewest empires a world should have. Four is the smallest count where two neighbouring
+    /// empires can outweigh the largest one and still leave half the map outside the crown; below
+    /// it, <see cref="Build"/> re-groups the kingdoms into smaller empires.
+    /// </summary>
+    private const int MinEmpiresPerWorld = 4;
+
+    /// <summary>
     /// The key the generated hegemony is written under: vanilla's, on purpose.
     ///
     /// All Under Heaven hardcodes <c>title:h_china</c> some 220 times across the Dynastic Cycle
@@ -771,6 +823,23 @@ public static class Titles
     /// path for that case already exists because maps under two empires have always taken it.
     /// </summary>
     private const double HegemonyHardMaxShare = 0.55;
+
+    /// <summary>
+    /// The hard cap a small world gets instead, and the county counts it scales between. A small
+    /// map has few empires, so the lightest pair that outweighs the largest is a bigger slice of it;
+    /// and a hegemony on a small map should be a bigger slice, because the map is the region. At
+    /// <see cref="SmallWorldCounties"/> or fewer the cap is this; at <see cref="LargeWorldCounties"/>
+    /// or more it is <see cref="HegemonyHardMaxShare"/>; linear between.
+    /// </summary>
+    private const double SmallWorldHardMaxShare = 0.72;
+    private const int SmallWorldCounties = 250;
+    private const int LargeWorldCounties = 700;
+
+    private static double HardMaxShare(int counties)
+    {
+        double t = Math.Clamp((double)(counties - SmallWorldCounties) / (LargeWorldCounties - SmallWorldCounties), 0, 1);
+        return SmallWorldHardMaxShare + (HegemonyHardMaxShare - SmallWorldHardMaxShare) * t;
+    }
 
     /// <summary>
     /// Puts one title above a contiguous group of empires — the world's hegemony — and returns it,
@@ -873,7 +942,7 @@ public static class Titles
 
         int total = weight.Values.Sum();
         int floor = weight.Values.Max();
-        int ceiling = (int)(HegemonyHardMaxShare * total);
+        int ceiling = (int)(HardMaxShare(total) * total);
 
         // A map with no adjacency at hand — no provinces, so no notion of what touches what. The
         // two largest empires are the only defensible guess: contiguity cannot be checked, so the
