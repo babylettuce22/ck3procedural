@@ -39,6 +39,7 @@ public sealed class QuickChoices
 {
     public string MapType { get; set; } = "continents";
     public int Seed { get; set; } = 1;
+    public QuickRelief Relief { get; set; } = QuickRelief.Standard;
     public QuickSize Size { get; set; } = QuickSize.Standard;
     public QuickEra Era { get; set; } = QuickEra.High;
     public QuickClimate Climate { get; set; } = QuickClimate.Temperate;
@@ -84,6 +85,14 @@ public sealed class QuickChoices
         _ => (0.9, 80),
     };
 
+    /// <summary>Shares of baronies that become mountains and hills, and of land left impassable.</summary>
+    public (double Mountains, double Hills, double Impassable) TerrainShares => Relief switch
+    {
+        QuickRelief.Lowlands => (0.07, 0.12, 0.05),
+        QuickRelief.Highlands => (0.21, 0.25, 0.11),
+        _ => (0.14, 0.19, 0.08),
+    };
+
     /// <summary>Barony size relative to vanilla's. 1.25 is the generator's default.</summary>
     public double CountyScale => Density switch
     {
@@ -108,6 +117,15 @@ public sealed class QuickChoices
         cfg.MapLatitudeSpan = span;
 
         cfg.CountyScale = CountyScale;
+
+        // The game half of the relief choice (the terrain half is QuickTerrain). CK3's hills and
+        // mountains are handed out by rank at these shares, so without them a Highlands map would
+        // look rugged and play like any other. Standard keeps the generator's own, which sit near
+        // vanilla's 12% mountains and 19% hills.
+        var (mountains, hills, impassable) = TerrainShares;
+        cfg.MountainProvinceShare = mountains;
+        cfg.HillProvinceShare = hills;
+        cfg.ImpassableShareOfLand = impassable;
 
         cfg.ContentSource = People == QuickPeople.RealCk3
             ? MapConfig.ContentSourceMode.VanillaWorld
@@ -137,6 +155,7 @@ public sealed class QuickChoices
         {
             MapType = types.Count > 0 ? types[random.Next(types.Count)].Key : "continents",
             Seed = random.Next(1, 1_000_000),
+            Relief = Pick<QuickRelief>(),
             // Size stays Standard in a surprise: it changes how long the run takes, not the world.
             Size = QuickSize.Standard,
             Era = Pick<QuickEra>(),

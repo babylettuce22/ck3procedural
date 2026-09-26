@@ -799,7 +799,8 @@ internal static class LaunchUi
 /// </summary>
 internal static class ForgePreview
 {
-    public static Bitmap? Render(string presetPath, int seed, int width, int height, CancellationToken token)
+    public static Bitmap? Render(string presetPath, int seed, int width, int height, CancellationToken token,
+        QuickRelief relief = QuickRelief.Standard)
     {
         try
         {
@@ -807,6 +808,7 @@ internal static class ForgePreview
             PresetIO.Load(pipeline, presetPath);
             pipeline.SeaLevel = Ck3.SeaLevelNormalised;
             pipeline.MasterSeed = seed;
+            QuickTerrain.Apply(pipeline, relief);
             var result = pipeline.Run(width, height, isPreview: true, token);
             return HeightRenderer.Render(result.Field, pipeline.SeaLevel, RenderMode.Hypsometric);
         }

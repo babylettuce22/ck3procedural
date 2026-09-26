@@ -71,7 +71,7 @@
     },
     {
       "type": "RidgeStage",
-      "name": "Ridges \u0026 Mountains",
+      "name": "Ridges & Mountains",
       "enabled": true,
       "params": {
         "seed": -89098401,
@@ -112,7 +112,8 @@
         "talus": 0.35,
         "thermalRate": 0.2,
         "thermalEvery": 4,
-        "protectCoast": true
+        "protectCoast": true,
+        "referenceHeight": 4096
       }
     }
   ]

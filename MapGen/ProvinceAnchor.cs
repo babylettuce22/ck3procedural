@@ -32,9 +32,16 @@ public static class ProvinceAnchor
     /// drawn on top of or inside the castle, and constrained to stay on land inside the same
     /// province.
     /// </param>
+    /// <param name="Enclosure">
+    /// Per label, the outer radius in world units of a special building that stands AROUND the
+    /// holding rather than beside it, or zero. Where it is non-zero <paramref name="Special"/> is the
+    /// holding point itself. Set by <see cref="EncloseHoldings"/>, read by the city scatter so its
+    /// outskirts start outside the ring instead of on top of it.
+    /// </param>
     public readonly record struct Anchors(
         (double X, double Y)[] Holding,
-        (double X, double Y)[] Special);
+        (double X, double Y)[] Special,
+        double[] Enclosure);
 
     /// <summary>4-neighbour offsets: a pixel is on the edge if it orthogonally touches another
     /// province, since diagonal-only contact is a corner rather than a border.</summary>
@@ -122,7 +129,59 @@ public static class ProvinceAnchor
         Report(map, depth, slope, anchor);
 
         var special = SpecialAnchors(map, depth, slope, elevation, anchor, reference, cfg);
-        return new Anchors(anchor, special);
+        return new Anchors(anchor, special, new double[map.Count]);
+    }
+
+    /// <summary>
+    /// Puts every wonder whose mesh is a ring — a wall circuit, a walled mound — back on its
+    /// holding, so the holding stands inside it.
+    ///
+    /// The offset <see cref="SpecialAnchors"/> gives every province is right for a cathedral and
+    /// wrong for a city wall: nine units out, the Walls of Lugo enclose an empty field and cut
+    /// through the castle's flank. Vanilla draws its own two wall circuits within half a unit of the
+    /// holding's locator. The rings' hollow middles (3.8-5.3 units) clear a holding at scale 1,
+    /// whose own wall ring runs 3.2-4.1.
+    ///
+    /// The holding point is not moved to suit the ring. It was chosen for flat ground deep in the
+    /// province, which is what the ring wants too, and moving it would move the armies and sieges
+    /// with it. What is reported instead is how much of the ring's circumference lands on dry
+    /// land, so a wall hanging into the sea shows up in the log.
+    /// </summary>
+    public static void EncloseHoldings(Anchors anchors, WorldCenterMap centers, ProvinceMap map,
+        int[] order, float[] elevation, MapConfig cfg)
+    {
+        float sea = cfg.Limits.SeaLevelUpper;
+
+        foreach (var center in centers.Centers)
+        {
+            var wonder = center.Wonder;
+            if (wonder.Encloses <= 0) continue;
+
+            int label = Array.IndexOf(order, wonder.Barony.ProvinceId);
+            if (label < 0) continue;
+
+            var (ax, ay) = anchors.Holding[label];
+            anchors.Special[label] = (ax, ay);
+            anchors.Enclosure[label] = wonder.Encloses;
+
+            const int samples = 32;
+            int onLand = 0;
+            for (int i = 0; i < samples; i++)
+            {
+                double theta = i * Math.PI * 2 / samples;
+                int cx = (int)Math.Round(ax + wonder.Encloses * Math.Cos(theta));
+                int cy = (int)Math.Round(ay + wonder.Encloses * Math.Sin(theta));
+                if (cx < 0 || cy < 0 || cx >= map.Width || cy >= map.Height) continue;
+
+                // Any province's land will do: a wall crossing into the neighbour's fields is still
+                // standing on something. Only water is wrong.
+                if (elevation[cy * map.Width + cx] > sea) onLand++;
+            }
+
+            Console.WriteLine($"  special building anchors: {wonder.Name} encloses its holding " +
+                              $"(radius {wonder.Encloses:F1}, {onLand * 100 / samples}% of the ring " +
+                              "on dry land)");
+        }
     }
 
     /// <summary>Directions tried around the holding. Sixteen is fine enough that the ring is not

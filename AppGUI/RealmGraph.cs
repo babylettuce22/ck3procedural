@@ -27,10 +27,23 @@ public sealed class RealmGraph
     public static RealmGraph? Build(Emit.WrittenContent? written, GenerationResult result)
         => written?.Realms is { } realms
             ? new RealmGraph(realms, Titles.Flatten(result.Titles).Where(t => t.Tier == "c"))
+            {
+                Colours = written.World?.RealmColours,
+            }
             : null;
 
     /// <summary>The same graph over a realm map read back from an existing mod's title history.</summary>
-    public static RealmGraph From(RealmMap realms, IEnumerable<Title> counties) => new(realms, counties);
+    public static RealmGraph From(RealmMap realms, IEnumerable<Title> counties,
+        IReadOnlyDictionary<Title, (byte R, byte G, byte B)>? colours = null)
+        => new(realms, counties) { Colours = colours };
+
+    /// <summary>
+    /// Colours some realms already wear, by the independent ruler's seat — under an applied history,
+    /// the ones the History workspace gave them while the history ran, so applying it does not
+    /// repaint the map the user was watching. <see cref="RealmPalette"/> uses these first. Null for a
+    /// generated world, which is coloured by the palette's own sequence as it always was.
+    /// </summary>
+    public IReadOnlyDictionary<Title, (byte R, byte G, byte B)>? Colours { get; private init; }
 
     private RealmGraph(RealmMap realms, IEnumerable<Title> counties)
     {

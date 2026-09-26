@@ -8,7 +8,8 @@ public static partial class ContentWriter
 {
     /// <summary>The realm map an applied history lays over the generated world, and what follows from it.</summary>
     internal sealed record AppliedRealms(RealmMap Realms, GovernmentMap Governments, double? HegemonShare,
-        IReadOnlyDictionary<Title, AppliedHistory.Lineage> Lineage);
+        IReadOnlyDictionary<Title, AppliedHistory.Lineage> Lineage, List<PastRuler> PastRulers,
+        IReadOnlyDictionary<Title, (byte R, byte G, byte B)> Colours);
 
     /// <summary>
     /// Titles an applied history and decides what follows from who rules what: the hegemony and the
@@ -20,12 +21,16 @@ public static partial class ContentWriter
         List<Title> empires, List<Title> counties, ProvinceMap provinces, int[] order, int baronyCount,
         TerrainClass[] provinceTerrain, Dictionary<Title, int> development, CultureMap cultures,
         WorldCenterMap worldCenters, WildernessMap wilderness, AzgaarImport? azgaar,
-        Dictionary<int, string>? stateGovernments)
+        Dictionary<int, string>? stateGovernments, FaithMap faiths)
     {
         var history = applied.Resolve(counties, cultures, generated.History, out string? problem)
             ?? throw new InvalidOperationException(
                 $"The history applied from the History workspace does not fit this world: {problem}. "
                 + "Discard it in the History workspace, or go back to the settings it was run with.");
+
+        // Before titling, which folds a realm with no tier left into its lord and drops it from the
+        // list: its capital is still a lord's seat, and that lord is still the history's man.
+        var capitals = history.Polities.ToDictionary(p => p.Id, p => p.Capital);
 
         var realms = Core.Stage.Time("applied history", () => Realms.FromHistory(history, empires, development,
             wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17), generated.CountyAdjacency!));
@@ -39,10 +44,18 @@ public static partial class ContentWriter
         if (cfg.StartingHegemony) Realms.ExpandHegemonRealm(realms, empires, wilderness);
         double? hegemonShare = cfg.StartingHegemony ? Realms.HegemonDeJureShare(realms, empires, wilderness) : null;
 
-        var lineage = applied.LineageFor(realms, history, wilderness);
+        var lineage = applied.LineageFor(realms, capitals, wilderness);
+
+        // The rulers the history had on the thrones, handed to every per-ruler draw from here on
+        // — the character file, the families around them, the chronicle and the artifacts all read
+        // the same three draws, so the man on the throne is the one the History workspace showed.
+        // On the configuration the world is written with, which is this run's own copy.
+        cfg.SeatPeople = applied.PeopleFor(capitals, realms);
 
         int independent = history.Polities.Count(p => p.Suzerain is null);
-        int enduring = history.Polities.Count(p => p.Suzerain is null && lineage.ContainsKey(p.Capital));
+        var startDynasties = applied.StartDynasties();
+        int enduring = history.Polities.Count(p => p.Suzerain is null
+            && lineage.TryGetValue(p.Capital, out var line) && startDynasties.Contains(line.DynastyId));
         Console.WriteLine($"  applied history: the realms of {applied.Year} (run on from {applied.FromYear}) "
             + $"replace the generated start — {history.Polities.Count} realms, {independent} independent, "
             + $"{enduring} of them under the house that ruled them in {applied.FromYear}; "
@@ -50,7 +63,13 @@ public static partial class ContentWriter
         Console.WriteLine("  governments: " + string.Join(", ",
             governments.Tally(counties, wilderness).Select(g => $"{g.Count} {g.Government[..^11]}")));
 
-        return new AppliedRealms(realms, governments, hegemonShare, lineage);
+        // The predecessors, dated against the grant date HistoryWriter seats every holder on.
+        var pastRulers = applied.PastRulersFor(capitals, realms, faiths, Math.Max(1, cfg.StartYear - 5), cfg.StartYear);
+        Console.WriteLine($"  applied history: {pastRulers.Count} past rulers written into {pastRulers.Select(r => r.TitleKey).Distinct().Count()} "
+            + $"titles' histories (of {applied.Reigns.Count} reigns kept; backstop {AppliedHistory.MaxReignsPerRealm} a realm, "
+            + $"{AppliedHistory.MaxReigns} in all)");
+
+        return new AppliedRealms(realms, governments, hegemonShare, lineage, pastRulers, applied.ColoursFor(capitals));
     }
 
     /// <summary>
@@ -100,9 +119,9 @@ public static partial class ContentWriter
         var worldCenters = world.WorldCenters;
         var retinues = written.Retinues;
 
-        var (realms, governments, hegemonShare, lineage) = ApplyRealms(applied, current, cfg, empires, counties,
-            provinces, order, result.BaronyCount, world.ProvinceTerrain, development, cultures, worldCenters,
-            wilderness, result.Azgaar, world.StateGovernments);
+        var (realms, governments, hegemonShare, lineage, pastRulers, colours) = ApplyRealms(applied, current, cfg, empires,
+            counties, provinces, order, result.BaronyCount, world.ProvinceTerrain, development, cultures, worldCenters,
+            wilderness, result.Azgaar, world.StateGovernments, faiths);
 
         // --- Realms, in WriteAll's order ---
 
@@ -161,7 +180,8 @@ public static partial class ContentWriter
         var layer = Core.Stage.Detail("history and bookmarks", () => WriteHistoryLayer(modDir, gameDir, cfg,
             provinces, order, result.LandCount, empires, counties, realms, cultures, world.Ethnicities, faiths,
             governments, worldCenters, wilderness, development, world.TitlePlan, eraGovernments: null,
-            retinues, result.Azgaar, written.Calendar, flatmap, world.Frontier, cultureAssets: false, lineage));
+            retinues, result.Azgaar, written.Calendar, flatmap, world.Frontier, cultureAssets: false, lineage,
+            pastRulers));
 
         Core.Stage.Time("debug panel", () => DebugPanel.Write(modDir, DebugFacts(
             modDir, cfg, provinces, empires, counties, cultures, faiths, wilderness, worldCenters,
@@ -174,6 +194,8 @@ public static partial class ContentWriter
         var appliedWorld = world with
         {
             Realms = realms, Governments = governments, HegemonShare = hegemonShare, Lineage = lineage,
+            PastRulers = pastRulers,
+            RealmColours = colours,
         };
         var appliedContent = written with
         {
@@ -248,7 +270,7 @@ public static partial class ContentWriter
         Dictionary<Title, int> development, VanillaTitles.Plan? titlePlan,
         Dictionary<int, GovernmentMap>? eraGovernments, RetinueMap? retinues, AzgaarImport? azgaar,
         WorldCalendar? calendar, Flatmap flatmap, FrontierMap frontier, bool cultureAssets = true,
-        IReadOnlyDictionary<Title, AppliedHistory.Lineage>? lineage = null)
+        IReadOnlyDictionary<Title, AppliedHistory.Lineage>? lineage = null, List<PastRuler>? pastRulers = null)
     {
         PrehistoryMap? prehistory = null;
         RulerMap? rulers = null;
@@ -259,6 +281,11 @@ public static partial class ContentWriter
         prehistory = Core.Stage.Time("prehistory", () => PrehistoryMap.Build(
             counties, provinces, order, landCount, realms, cultures, faiths,
             governments, worldCenters, wilderness, cfg, new Rng(cfg.Seed ^ 0x4821 ^ cfg.PeopleSalt), lineage));
+
+        // An applied history's predecessors, beside the ancestors prehistory invents. Before the
+        // rulers and everything that writes about them, so the character file and the title
+        // history are written from the same list. Nothing for a generated world.
+        if (pastRulers is { Count: > 0 }) prehistory!.AddPastRulers(pastRulers);
 
         // After prehistory, which it reads the houses and fathers from, and before
         // anything that names a ruler: the bookmarks and the character file both read

@@ -246,6 +246,17 @@ public static class CityScatterWriter
                 double inner = (walled ? RingInnerWalled : RingInnerOpen) * ringScale;
                 double outer = RingOuter * ringScale;
 
+                // A wonder that rings the holding — a city wall circuit — runs right through the
+                // band above. The suburbs go outside it, in a band as deep as the usual one; the
+                // ring is a special-building mesh and HoldingScale does not resize it, so its
+                // radius is taken as it stands.
+                if (anchors.Enclosure[label] > 0)
+                {
+                    double band = outer - inner;
+                    inner = Math.Max(inner, anchors.Enclosure[label] + Separation * ringScale * 0.5);
+                    outer = Math.Max(outer, inner + band);
+                }
+
                 // Settlements grow to one side — downhill, along the road, toward the water — not
                 // evenly around the keep. One preferred bearing per cluster, with the spread wide
                 // enough that it still reads as a town rather than a line.

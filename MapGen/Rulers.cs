@@ -228,8 +228,8 @@ public sealed class RulerMap
 
             var culture = cultures.For(county);
             var faith = faiths.For(county);
-            bool female = HistoryWriter.RulerIsFemale(county, faith, cfg.PeopleSalt);
-            var (firstName, _) = HistoryWriter.RulerNames(county, culture, female, cfg.PeopleSalt);
+            bool female = HistoryWriter.RulerIsFemale(county, faith, cfg);
+            var (firstName, _) = HistoryWriter.RulerNames(county, culture, female, cfg);
             var primaryTitle = HistoryWriter.Primary(county, realms);
             string government = governments.For(county);
 
@@ -237,7 +237,7 @@ public sealed class RulerMap
             // GetRulerBirthYear (prehistory needs the year before any ruler exists); month, day and
             // the purse continue from the one held here, in this order.
             var rng = new Rng(county.Index ^ 0x3E2D ^ cfg.PeopleSalt);
-            int birthYear = HistoryWriter.GetRulerBirthYear(county.Index, cfg.StartYear, cfg.PeopleSalt);
+            int birthYear = HistoryWriter.GetRulerBirthYear(county, cfg);
             int birthMonth = rng.Int(1, 12);
             int birthDay = rng.Int(1, 28);
 

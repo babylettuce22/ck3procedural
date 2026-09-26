@@ -211,6 +211,11 @@ public sealed partial class MainForm
         var (width, height) = choices.Pixels;
         var switchedOff = _forge.AdoptPreset(type.PresetPath, choices.Seed, width, height);
 
+        // The relief choice bends the preset's own relief stages; the Terrain workspace shows the
+        // result as ordinary parameter values, so it can be tuned further from there.
+        QuickTerrain.Apply(_forge.Session.Pipeline, choices.Relief);
+        _forge.Session.Pipeline.NotifyChanged();
+
         Preset.Reset(_options.Config);
         choices.ApplyTo(_options.Config);
 

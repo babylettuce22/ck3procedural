@@ -78,6 +78,15 @@ internal sealed class QuickPage : Panel
     private readonly TextBox _seedBox = new() { BorderStyle = BorderStyle.FixedSingle, Font = Body, Name = "quickSeed" };
     private readonly PillButton _reroll = new() { Name = "quickReroll", Text = "Roll again", Kind = PillKind.Primary, Glyph = "" };
     private readonly PillButton _previous = new() { Name = "quickPrevious", Text = "Previous", Kind = PillKind.Quiet, Glyph = "" };
+    private readonly Label _reliefCaption = MakeLabel("Relief", Small, Theme.TextDim);
+    private readonly Dictionary<QuickRelief, Theme.SegmentButton> _reliefButtons = new()
+    {
+        [QuickRelief.Lowlands] = new() { Text = "Lowlands", Name = "quickReliefLowlands" },
+        [QuickRelief.Standard] = new() { Text = "Standard", Name = "quickReliefStandard" },
+        [QuickRelief.Highlands] = new() { Text = "Highlands", Name = "quickReliefHighlands" },
+    };
+    private FlowLayoutPanel? _reliefTrack;
+    private readonly ToolTip _reliefTips = new() { InitialDelay = 400 };
     private readonly Label _mapHint = MakeLabel(
         "Every seed is a different world. This is the bare terrain: rivers, climate and erosion are added when the world is made.",
         Small, Theme.TextDim, wrap: true);
@@ -510,6 +519,7 @@ internal sealed class QuickPage : Panel
         _wilderness.On = _choices.Wilderness;
         _wars.On = _choices.Wars;
         _seedBox.Text = _choices.Seed.ToString();
+        foreach (var (relief, button) in _reliefButtons) Theme.StyleSegment(button, relief == _choices.Relief);
         var type2 = CurrentType;
         _typeName.Text = type2?.Title ?? "";
         _typeBlurb.Text = type2?.Blurb ?? "";
@@ -527,6 +537,18 @@ internal sealed class QuickPage : Panel
         var title = MakeLabel("Choose a map", Title, Theme.Text);
         var subtitle = MakeLabel("Pick the shape of the land, then roll until the coastline feels right.", Subtitle, Theme.TextDim);
         _mapPanel.Controls.AddRange([title, subtitle, _preview, _typeName, _typeBlurb, _seedCaption, _seedBox, _reroll, _previous, _mapHint]);
+
+        // Relief: how rugged the land is, whatever its shape. Changes the preview and, through the
+        // game's hill and mountain shares, how the world plays. See QuickTerrain.
+        _reliefTrack = Theme.MakeSegmented(_reliefButtons.Values);
+        _reliefTrack.Margin = new Padding(0);
+        _mapPanel.Controls.Add(_reliefCaption);
+        _mapPanel.Controls.Add(_reliefTrack);
+        _reliefTips.SetToolTip(_reliefButtons[QuickRelief.Lowlands], "Broad plains and low hills; few mountains. More farmland, easier marching.");
+        _reliefTips.SetToolTip(_reliefButtons[QuickRelief.Standard], "The map type as it was designed.");
+        _reliefTips.SetToolTip(_reliefButtons[QuickRelief.Highlands], "Rugged country: more ranges, more hills, more impassable peaks.");
+        foreach (var (relief, button) in _reliefButtons)
+            button.Click += (_, _) => PickRelief(relief);
 
         foreach (var type in _types)
         {
@@ -582,7 +604,22 @@ internal sealed class QuickPage : Panel
             _previous.MinWidth = sw * 96 / DeviceDpi;
             _previous.FitWidth();
             _previous.Location = new Point(sx, sy);
-            sy += _previous.Height + S(16);
+            sy += _previous.Height + S(12);
+
+            if (_reliefTrack is { } track)
+            {
+                _reliefCaption.Location = new Point(sx, sy);
+                sy += _reliefCaption.PreferredHeight + S(3);
+                // Sized exactly: the track is an auto-sizing panel, and left to itself it grows to
+                // whatever it once measured and never shrinks back.
+                int each = (sw - S(4)) / _reliefButtons.Count;
+                int buttonH = S(26);
+                foreach (var button in _reliefButtons.Values) button.Size = new Size(each, buttonH);
+                track.AutoSize = false;
+                track.Bounds = new Rectangle(sx, sy, each * _reliefButtons.Count + S(4), buttonH + S(4));
+                sy += track.Height + S(14);
+            }
+
             _mapHint.Bounds = new Rectangle(sx, sy, sw, Math.Min(Wrapped(_mapHint, sw), y + previewH - sy));
         };
     }
@@ -590,6 +627,14 @@ internal sealed class QuickPage : Panel
     private static int Wrapped(Label label, int width)
         => TextRenderer.MeasureText(label.Text ?? "", label.Font, new Size(Math.Max(1, width), 0),
                TextFormatFlags.WordBreak | TextFormatFlags.NoPadding).Height + 2;
+
+    private void PickRelief(QuickRelief relief)
+    {
+        if (_choices.Relief == relief) return;
+        _choices.Relief = relief;
+        SyncControls();
+        RenderPreview();
+    }
 
     private void PickType(QuickMapType type)
     {
@@ -641,9 +686,12 @@ internal sealed class QuickPage : Panel
         var cts = _previewCts = new CancellationTokenSource();
         int seed = _choices.Seed;
         _preview.Busy = "Drawing…";
-        _preview.Chip = $"{type.Title}  ·  seed {seed}";
+        var relief = _choices.Relief;
+        _preview.Chip = relief == QuickRelief.Standard
+            ? $"{type.Title}  ·  seed {seed}"
+            : $"{type.Title}  ·  {relief}  ·  seed {seed}";
 
-        Task.Run(() => ForgePreview.Render(type.PresetPath, seed, 1024, 512, cts.Token)).ContinueWith(task =>
+        Task.Run(() => ForgePreview.Render(type.PresetPath, seed, 1024, 512, cts.Token, relief)).ContinueWith(task =>
         {
             var bitmap = task.Result;
             if (IsDisposed || !IsHandleCreated) { bitmap?.Dispose(); return; }
@@ -753,7 +801,7 @@ internal sealed class QuickPage : Panel
 
     private (string Key, int Step)[] SummaryRows =>
     [
-        ("Map", MapStep), ("Size", WorldStep), ("Era", WorldStep), ("Climate", WorldStep), ("Provinces", WorldStep),
+        ("Map", MapStep), ("Relief", MapStep), ("Size", WorldStep), ("Era", WorldStep), ("Climate", WorldStep), ("Provinces", WorldStep),
         ("Cultures & faiths", PeopleStep), ("Politics", PeopleStep), ("Rulers", PeopleStep), ("Extras", PeopleStep),
     ];
 
@@ -766,6 +814,12 @@ internal sealed class QuickPage : Panel
         return
         [
             $"{CurrentType?.Title ?? _choices.MapType}  ·  seed {_choices.Seed}",
+            _choices.Relief switch
+            {
+                QuickRelief.Lowlands => "Lowlands  ·  fewer hills and mountains",
+                QuickRelief.Highlands => "Highlands  ·  more hills and mountains",
+                _ => "Standard",
+            },
             $"{SizeNames[_choices.Size]}  ·  {w} × {h}",
             $"{EraNames[_choices.Era]}  ·  {_choices.StartYear}",
             ClimateNames[_choices.Climate],
@@ -843,7 +897,9 @@ internal sealed class QuickPage : Panel
             int ty = y;
             int mapH = rightW / 2;
             _reviewMap.Bounds = new Rectangle(rightX, ty, rightW, mapH);
-            _reviewMap.Chip = $"{CurrentType?.Title}  ·  seed {_choices.Seed}";
+            _reviewMap.Chip = _choices.Relief == QuickRelief.Standard
+                ? $"{CurrentType?.Title}  ·  seed {_choices.Seed}"
+                : $"{CurrentType?.Title}  ·  {_choices.Relief}  ·  seed {_choices.Seed}";
             ty += mapH + S(18);
             _nameCaption.Location = new Point(rightX, ty);
             ty += _nameCaption.PreferredHeight + S(4);

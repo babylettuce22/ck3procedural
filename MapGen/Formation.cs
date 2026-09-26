@@ -30,6 +30,15 @@ public enum FormationKind
 
     /// <summary>A realm lost its last county and stopped existing.</summary>
     Absorbed,
+
+    /// <summary>A ruler died and an heir took the realm whole. The History workspace's only; generation never logs it.</summary>
+    Succeeded,
+
+    /// <summary>A ruler died and the realm was divided among heirs.</summary>
+    Partitioned,
+
+    /// <summary>A ruler died and another house took the throne.</summary>
+    Usurped,
 }
 
 /// <summary>
@@ -60,7 +69,14 @@ public enum RealmRules
     /// <summary>An unstable realm's vassals all walk out at once.</summary>
     Collapse = 8,
 
-    All = Conquest | Homage | Secession | Collapse,
+    /// <summary>
+    /// A ruler's death can divide the realm among heirs or put another house on the throne. Off,
+    /// rulers still die and are still succeeded — ages have to stay human — but always by one heir
+    /// of the same house. Only the History workspace simulates rulers; generation ignores this.
+    /// </summary>
+    Succession = 16,
+
+    All = Conquest | Homage | Secession | Collapse | Succession,
 }
 
 /// <summary>One thing the simulation did, dated, with both parties named.</summary>
@@ -84,6 +100,10 @@ public sealed class FormationEvent
 
     /// <summary>How much bad blood this left, 0 to 3. Graded the way <see cref="ChronicleEvent.Tension"/> is.</summary>
     public int Tension { get; init; }
+
+    /// <summary>The people in it, for the events that are about people — who died, who succeeded.
+    /// Null for everything the realm simulation logs.</summary>
+    public string? Note { get; init; }
 }
 
 /// <summary>
@@ -257,16 +277,18 @@ public static class Formation
         /// <summary>How big a realm gets before it starts to strain.</summary>
         public required double Reach { get; init; }
 
-        /// <summary>How readily realms attack and subordinate each other.</summary>
-        public required double Aggression { get; init; }
+        /// <summary>How readily realms attack and subordinate each other. Settable between ticks,
+        /// for the History workspace's slider; generation sets it once.</summary>
+        public required double Aggression { get; set; }
 
-        /// <summary>How readily they fall apart.</summary>
-        public required double Turbulence { get; init; }
+        /// <summary>How readily they fall apart. Settable as <see cref="Aggression"/> is.</summary>
+        public required double Turbulence { get; set; }
 
         public int NextId;
         public int Year;
 
-        public void Log(FormationKind kind, Title subject, Polity? actor, Polity? other, int tension)
+        public void Log(FormationKind kind, Title subject, Polity? actor, Polity? other, int tension,
+            string? note = null)
             => Events.Add(new FormationEvent
             {
                 Kind = kind,
@@ -274,6 +296,7 @@ public static class Formation
                 Subject = subject,
                 Counterpart = other?.Capital,
                 Actor = actor?.Capital,
+                Note = note,
                 Culture = actor?.Culture,
                 CounterpartCulture = other?.Culture,
                 Tension = tension,
@@ -604,7 +627,7 @@ public static class Formation
     /// came within reach of the thresholds that fragmentation and collapse were gated on, so both
     /// rules were dead and every world came out the same.
     /// </summary>
-    private static double Cohesion(Sim sim, Polity p)
+    internal static double Cohesion(Sim sim, Polity p)
     {
         if (p.Counties.Count == 0) return 0;
 
@@ -773,7 +796,7 @@ public static class Formation
     /// A connected block of about <paramref name="want"/> counties grown from the realm's weakest
     /// attachment, never including the capital.
     /// </summary>
-    private static List<Title> PeripheralBlock(Sim sim, Polity p, int want)
+    internal static List<Title> PeripheralBlock(Sim sim, Polity p, int want)
     {
         int Inward(Title c) => sim.Adjacent.TryGetValue(c, out var near)
             ? near.Count(p.Counties.Contains)
@@ -828,7 +851,7 @@ public static class Formation
     /// earlier version of this generator turned twelve countries into a hundred and thirty-six
     /// realms. Cheaper to hold the invariant here than to find it in the emitted map.
     /// </summary>
-    private static void ShedIslands(Sim sim, Polity p)
+    internal static void ShedIslands(Sim sim, Polity p)
     {
         if (p.Counties.Count < 2) return;
 
@@ -869,11 +892,14 @@ public static class Formation
 
     // --- Bookkeeping ----------------------------------------------------------------------------
 
-    /// <summary>Breaks <paramref name="block"/> off <paramref name="from"/> as a realm of its own.</summary>
-    private static void Secede(
-        Sim sim, Polity from, List<Title> block, FormationKind kind, int tension)
+    /// <summary>
+    /// Breaks <paramref name="block"/> off <paramref name="from"/> as a realm of its own, and returns
+    /// it — null for an empty block. <paramref name="note"/> rides on the event it logs.
+    /// </summary>
+    internal static Polity? Secede(
+        Sim sim, Polity from, List<Title> block, FormationKind kind, int tension, string? note = null)
     {
-        if (block.Count == 0) return;
+        if (block.Count == 0) return null;
 
         var seat = block
             .OrderByDescending(c => sim.Development.GetValueOrDefault(c))
@@ -895,7 +921,8 @@ public static class Formation
 
         foreach (var c in block) Transfer(sim, c, from, broken);
         sim.Polities.Add(broken);
-        sim.Log(kind, seat, broken, from, tension);
+        sim.Log(kind, seat, broken, from, tension, note);
+        return broken;
     }
 
     /// <summary>
@@ -928,7 +955,7 @@ public static class Formation
     /// <summary>
     /// How many rungs of homage hang below <paramref name="p"/>. 0 when nobody answers to it.
     /// </summary>
-    private static int SubtreeDepth(Sim sim, Polity p)
+    internal static int SubtreeDepth(Sim sim, Polity p)
     {
         int deepest = 0;
         foreach (var v in sim.Polities)

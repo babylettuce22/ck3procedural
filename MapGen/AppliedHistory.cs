@@ -81,8 +81,14 @@ public sealed class AppliedHistory
     /// <summary>The id the next realm born takes, so a history resumed from this one never reuses one.</summary>
     public required int NextId { get; init; }
 
-    /// <summary>One realm, by county index. <see cref="Suzerain"/> is another realm's <see cref="Id"/>.</summary>
-    public sealed record Realm(int Id, int Capital, int? Suzerain, string Culture, int Founded, int Peak, int[] Counties);
+    /// <summary>
+    /// One realm, by county index. <see cref="Suzerain"/> is another realm's <see cref="Id"/>.
+    /// <see cref="Ruler"/>, <see cref="RulerFemale"/> and <see cref="RulerBorn"/> are the person the
+    /// History workspace had on its throne, written as the realm's ruler; absent in a file saved
+    /// before rulers were simulated, when the seat's ruler is drawn as any other.
+    /// </summary>
+    public sealed record Realm(int Id, int Capital, int? Suzerain, string Culture, int Founded, int Peak, int[] Counties,
+        string? Ruler = null, bool RulerFemale = false, int RulerBorn = 0);
 
     /// <summary>
     /// A dynasty and the house of it that rules, carried by value: the history is laid over a world
@@ -90,6 +96,44 @@ public sealed class AppliedHistory
     /// </summary>
     public sealed record Lineage(string DynastyId, string DynastyNameKey, string DynastyName, string CultureKey,
         string HouseKey, string HouseNameKey, string HouseName, string? Prefix);
+
+    /// <summary>
+    /// The colour the History workspace had each realm in when the history was captured, by realm id,
+    /// packed 0xRRGGBB. Kept so the World workspace, and the History workspace after it, show the
+    /// applied world in the colours the user was watching it in. Presentation only.
+    /// </summary>
+    public Dictionary<int, int> Colours { get; init; } = [];
+
+    /// <summary><see cref="Colours"/> on the titled world, by the seat each realm is ruled from.</summary>
+    public Dictionary<Title, (byte R, byte G, byte B)> ColoursFor(IReadOnlyDictionary<int, Title> capitals)
+    {
+        var result = new Dictionary<Title, (byte R, byte G, byte B)>();
+        foreach (var (id, rgb) in Colours)
+            if (capitals.TryGetValue(id, out var seat))
+                result[seat] = ((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb);
+        return result;
+    }
+
+    /// <summary>
+    /// A reign that ended in death before the applied date, in a realm still standing then — the
+    /// predecessors a title's history in game lists. See <see cref="PastRulersFor"/>.
+    /// </summary>
+    public sealed record Reign(int RealmId, string Name, bool Female, int Born, int Crowned, int Died, Lineage House);
+
+    /// <summary>
+    /// Past reigns, most recent first within a realm, cut by the backstop in <see cref="Capture"/>.
+    /// Empty in a file saved before rulers were simulated.
+    /// </summary>
+    public List<Reign> Reigns { get; init; } = [];
+
+    /// <summary>
+    /// The backstop on how many dead rulers an applied history writes. A long history of partitions
+    /// runs through thousands of reigns, and every one would be a character in the file and an
+    /// entry in a title's history. Twelve is more predecessors than a title's history window shows
+    /// comfortably; the total keeps a millennium-long run of a thousand-county map within the size of
+    /// the rest of the character file. Larger realms are served first.
+    /// </summary>
+    public const int MaxReignsPerRealm = 12, MaxReigns = 1500;
 
     /// <summary>
     /// The house that ruled each realm when the history began, by realm id — only for realms that
@@ -109,17 +153,25 @@ public sealed class AppliedHistory
     /// them every realm founds a new house.
     /// </summary>
     public static AppliedHistory Capture(HistorySim sim, IEnumerable<Title> counties,
-        RulerMap? rulers = null, PrehistoryMap? prehistory = null)
+        RulerMap? rulers = null, PrehistoryMap? prehistory = null,
+        IReadOnlyDictionary<int, (byte R, byte G, byte B)>? colours = null)
     {
         var seatLineage = new Dictionary<int, Lineage>();
         if (rulers is not null && prehistory is not null)
             foreach (var ruler in rulers.All)
                 if (LineageOf(ruler, prehistory) is { } line) seatLineage[ruler.Seat.Index] = line;
 
+        // Each realm's house is its ruler's: carried from the start date when it ruled then, minted
+        // when the history founded it. A realm with no ruler — none, once the simulation has run a
+        // year — falls back to the house its start-date seat had.
         var realmLineage = new Dictionary<int, Lineage>();
         foreach (var p in sim.Realms)
-            if (sim.StartCapitals.TryGetValue(p.Id, out var seat) && seatLineage.TryGetValue(seat.Index, out var line))
+        {
+            if (sim.RulerOf(p) is { } ruler)
+                realmLineage[p.Id] = ruler.House.Carried ?? Minted(ruler.House, sim.StartYear);
+            else if (sim.StartCapitals.TryGetValue(p.Id, out var seat) && seatLineage.TryGetValue(seat.Index, out var line))
                 realmLineage[p.Id] = line;
+        }
 
         return new()
         {
@@ -127,19 +179,135 @@ public sealed class AppliedHistory
             FromYear = sim.StartYear,
             Ground = GroundOf(counties),
             NextId = sim.NextId,
-            Realms = [.. sim.Realms.OrderBy(p => p.Id).Select(p => new Realm(
-                p.Id, p.Capital.Index, p.Suzerain?.Id, p.Culture.Key, p.Founded, p.Peak,
-                [.. p.Counties.Select(c => c.Index).Order()]))],
+            Realms = [.. sim.Realms.OrderBy(p => p.Id).Select(p => sim.RulerOf(p) is { } r
+                ? new Realm(p.Id, p.Capital.Index, p.Suzerain?.Id, p.Culture.Key, p.Founded, p.Peak,
+                    [.. p.Counties.Select(c => c.Index).Order()], r.Name, r.Female, r.Born)
+                : new Realm(p.Id, p.Capital.Index, p.Suzerain?.Id, p.Culture.Key, p.Founded, p.Peak,
+                    [.. p.Counties.Select(c => c.Index).Order()]))],
             RealmLineage = realmLineage,
             SeatLineage = seatLineage,
+            Reigns = PastReigns(sim),
+            Colours = colours?.ToDictionary(kv => kv.Key, kv => kv.Value.R << 16 | kv.Value.G << 8 | kv.Value.B) ?? [],
         };
     }
+
+    /// <summary>
+    /// The reigns that ended in death, in realms still standing, under the backstop: larger realms
+    /// first, each keeping its <see cref="MaxReignsPerRealm"/> most recent, until
+    /// <see cref="MaxReigns"/> are taken. A realm swallowed before the applied date writes no
+    /// predecessors — it has no title to have held.
+    /// </summary>
+    private static List<Reign> PastReigns(HistorySim sim)
+    {
+        var dead = sim.Reigns
+            .Where(r => r.Ruler.Died is not null)
+            .GroupBy(r => r.PolityId)
+            .ToDictionary(g => g.Key, g => g.Select(r => r.Ruler).OrderByDescending(r => r.Died).ThenByDescending(r => r.Id).ToList());
+
+        var reigns = new List<Reign>();
+        foreach (var p in sim.Realms.OrderByDescending(p => p.Counties.Count).ThenBy(p => p.Capital.Index))
+        {
+            if (!dead.TryGetValue(p.Id, out var rulers)) continue;
+            foreach (var ruler in rulers.Take(MaxReignsPerRealm))
+            {
+                if (reigns.Count >= MaxReigns) return reigns;
+                reigns.Add(new Reign(p.Id, ruler.Name, ruler.Female, ruler.Born, ruler.Crowned, ruler.Died!.Value,
+                    ruler.House.Carried ?? Minted(ruler.House, sim.StartYear)));
+            }
+        }
+        return reigns;
+    }
+
+    /// <summary>
+    /// The past rulers of the titled applied world, dated for its title history: each realm's
+    /// predecessors on the primary title its capital's holder has now, the first from the year he
+    /// was crowned and each after from the day after the one before him died. Only reigns that began
+    /// before <paramref name="grantYear"/> — the date every current holder is granted his titles
+    /// on — are written: a later one would sit between the grant and the start and contradict it.
+    /// </summary>
+    public List<PastRuler> PastRulersFor(IReadOnlyDictionary<int, Title> capitals, RealmMap realms,
+        FaithMap faiths, int grantYear, int startYear)
+    {
+        var seats = realms.HolderCounty.Values.ToHashSet();
+        var result = new List<PastRuler>();
+
+        foreach (var group in Reigns.GroupBy(r => r.RealmId))
+        {
+            if (!capitals.TryGetValue(group.Key, out var seat) || !seats.Contains(seat)) continue;
+            var title = Emit.HistoryWriter.Primary(seat, realms);
+            string faith = faiths.For(seat).Key;
+
+            (int Y, int M, int D)? previousDeath = null;
+            int n = 0;
+            foreach (var reign in group.OrderBy(r => r.Crowned).ThenBy(r => r.Died))
+            {
+                var start = previousDeath is { } before ? NextDay(before) : (reign.Crowned, 1, 1);
+                if (start.Item1 >= grantYear) break;
+
+                string id = $"gen_char_hist_{reign.RealmId}_{n++}_{FromYear}";
+                var rng = new Core.Rng(unchecked((int)Core.Rng.StableHash(id)));
+                (int Y, int M, int D) death = (Math.Min(reign.Died, startYear - 1), rng.Int(1, 12), rng.Int(1, 28));
+                if (Before(death, NextDay(start))) death = NextDay(start);
+                var birth = (Math.Min(reign.Born, start.Item1 - 1), rng.Int(1, 12), rng.Int(1, 28));
+
+                result.Add(new PastRuler(id, reign.Name, reign.Female, reign.House, faith,
+                    Date(birth), Date(death), title.Key, Date(start)));
+                previousDeath = death;
+            }
+        }
+
+        return result;
+
+        static (int, int, int) NextDay((int Y, int M, int D) d)
+            => d.D < 28 ? (d.Y, d.M, d.D + 1) : d.M < 12 ? (d.Y, d.M + 1, 1) : (d.Y + 1, 1, 1);
+        static bool Before((int Y, int M, int D) a, (int Y, int M, int D) b)
+            => a.Y != b.Y ? a.Y < b.Y : a.M != b.M ? a.M < b.M : a.D < b.D;
+        static string Date((int Y, int M, int D) d) => $"{d.Y}.{d.M}.{d.D}";
+    }
+
+    /// <summary>
+    /// Keys for a house the history founded. The history's own start year is in them, so a second
+    /// history run on from an applied one mints keys the first cannot have used, and none of them
+    /// can meet a key the generator writes (<c>gen_dynasty_12</c>, <c>gen_dynasty_12_y1150</c>).
+    /// </summary>
+    private static Lineage Minted(SimHouse house, int fromYear)
+    {
+        string tag = $"h{house.Id}_{fromYear}";
+        return new Lineage($"gen_dynasty_{tag}", $"dynn_gen_{tag}", house.Name, house.Culture.Key,
+            $"house_gen_{tag}", $"dynn_gen_{tag}", house.Name, PrehistoryMap.CulturePrefix(house.Culture.Key));
+    }
+
+    /// <summary>
+    /// The people the History workspace had on the thrones, by the seat county index they rule from
+    /// in the titled world — what <see cref="Config.MapConfig.SeatPeople"/> hands the character draws.
+    /// </summary>
+    /// <param name="capitals">As for <see cref="LineageFor"/>: before titling, so a folded realm's
+    /// ruler is still the lord of his capital.</param>
+    public Dictionary<int, (string Name, bool Female, int Born)> PeopleFor(IReadOnlyDictionary<int, Title> capitals,
+        RealmMap realms)
+    {
+        var seats = realms.HolderCounty.Values.ToHashSet();
+        var people = new Dictionary<int, (string Name, bool Female, int Born)>();
+        // Every current holder is granted his titles five years before the start (HistoryWriter's
+        // grant date), so a ruler has to be born by then or CK3 hands a title to nobody. The
+        // simulation crowns children, and a child crowned in the last few years is written a
+        // little older than he is.
+        int bornBy = Year - 6;
+        foreach (var realm in Realms)
+            if (realm.Ruler is { } name && realm.RulerBorn > 0
+                && capitals.TryGetValue(realm.Id, out var capital) && seats.Contains(capital))
+                people[capital.Index] = (name, realm.RulerFemale, Math.Min(realm.RulerBorn, bornBy));
+        return people;
+    }
+
+    /// <summary>The dynasties that ruled somewhere when the history began, for telling an enduring house from a new one.</summary>
+    public HashSet<string> StartDynasties() => SeatLineage.Values.Select(l => l.DynastyId).ToHashSet(StringComparer.Ordinal);
 
     /// <summary>
     /// A ruler's dynasty, by its senior house — the line a cadet branch came off, as the additional
     /// bookmarks carry it: a branch is one ruler's, the dynasty is what outlasts him.
     /// </summary>
-    private static Lineage? LineageOf(Ruler ruler, PrehistoryMap prehistory)
+    internal static Lineage? LineageOf(Ruler ruler, PrehistoryMap prehistory)
     {
         if (!prehistory.Dynasties.TryGetValue(ruler.DynastyId, out var dynasty)) return null;
         if (!prehistory.Houses.TryGetValue(dynasty.MainHouseKey, out var house)) return null;
@@ -153,9 +321,13 @@ public sealed class AppliedHistory
     /// that held it then with a chance of 1 - years/280 (0.1 to 0.9), the additional bookmarks' rule:
     /// most count houses last a century, few last three.
     /// </summary>
-    public Dictionary<Title, Lineage> LineageFor(RealmMap realms, FormationHistory history, WildernessMap wilderness)
+    /// <param name="capitals">Every realm's capital by id, taken before titling folds any: a realm
+    /// folded into its lord — a younger brother with no tier left to stand on — still sits in its
+    /// capital as a lord inside the realm, and is still of its house.</param>
+    public Dictionary<Title, Lineage> LineageFor(RealmMap realms, IReadOnlyDictionary<int, Title> capitals,
+        WildernessMap wilderness)
     {
-        var polityAt = history.Polities.ToDictionary(p => p.Capital, p => p.Id);
+        var polityAt = capitals.ToDictionary(kv => kv.Value, kv => kv.Key);
         double endures = Math.Clamp(1.0 - (Year - FromYear) / 280.0, 0.1, 0.9);
         var result = new Dictionary<Title, Lineage>();
 

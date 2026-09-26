@@ -30,6 +30,14 @@ public sealed class GeneratedWonder
     /// </summary>
     public required string Mesh { get; init; }
 
+    /// <summary>Outer radius of a mesh that rings the holding rather than standing beside it, or
+    /// zero. Copied from <see cref="WonderAsset.Encloses"/>.</summary>
+    public double Encloses { get; init; }
+
+    /// <summary>The ring is the town's walls; the holding's own wall ring is switched off under
+    /// it. Copied from <see cref="WonderAsset.ReplacesWalls"/>.</summary>
+    public bool ReplacesWalls { get; init; }
+
     /// <summary>
     /// The building key for one rung of the wonder's ladder, numbered as vanilla numbers its own —
     /// <c>hagia_sophia_01</c>, <c>_02</c>, <c>_03</c>.
@@ -408,6 +416,8 @@ public sealed class WorldCenterMap
             Barony = barony,
             Icon = icon,
             Mesh = asset.Mesh,
+            Encloses = asset.Encloses,
+            ReplacesWalls = asset.ReplacesWalls,
             CharacterModifiers = charMod,
             CountyModifiers = countyMod,
             ProvinceModifiers = provMod

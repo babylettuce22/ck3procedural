@@ -478,6 +478,15 @@ public sealed class MapConfig : CustomTypeDescriptor
     internal int PeopleSalt { get; set; }
 
     /// <summary>
+    /// Under an applied history, the rulers the History workspace had on the realms' thrones, by the
+    /// seat county index they rule from: name, sex and birth year, which the per-ruler draws hand
+    /// back in place of drawing (see <c>HistoryWriter.RulerNames</c> and its two siblings). Set by
+    /// <c>ContentWriter.ApplyRealms</c>; null for a generated world. Every seat not in it — a lord
+    /// inside a realm — is drawn as before.
+    /// </summary>
+    internal IReadOnlyDictionary<int, (string Name, bool Female, int Born)>? SeatPeople { get; set; }
+
+    /// <summary>
     /// Two more bookmarks around <see cref="StartYear"/>, filling out vanilla's 867 / 1066 / 1178.
     /// The start takes whichever of the three its advancement is nearest, and the other two are
     /// placed by vanilla's gaps from it — before it, after it, or one of each. See

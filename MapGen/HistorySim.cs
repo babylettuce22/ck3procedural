@@ -22,15 +22,20 @@ namespace Ck3MapGen.MapGen;
 /// Deterministic: year Y draws from its own stream, so a history played straight through and one
 /// paused, stepped and resumed arrive at the same map. Not thread-safe; the owner serialises.
 /// </summary>
-public sealed class HistorySim
+public sealed partial class HistorySim
 {
     private readonly Formation.Sim _sim;
     private readonly int _seed;
+
+    private readonly double _baseAggression, _baseTurbulence;
+    private SimSettings _settings = SimSettings.Default;
 
     private HistorySim(Formation.Sim sim, int seed, int startYear)
     {
         _sim = sim;
         _seed = seed;
+        _baseAggression = sim.Aggression;
+        _baseTurbulence = sim.Turbulence;
         StartYear = startYear;
         StartCapitals = sim.Polities.ToDictionary(p => p.Id, p => p.Capital);
     }
@@ -56,8 +61,25 @@ public sealed class HistorySim
     /// </summary>
     public RealmRules Rules
     {
-        get => _sim.Rules;
-        set => _sim.Rules = value;
+        get => _settings.Rules;
+        set => Settings = _settings with { Rules = value };
+    }
+
+    /// <summary>
+    /// The rules and dials in force. Takes effect from the next <see cref="Tick"/>. The dials scale
+    /// what the world was generated with — see <see cref="SimSettings"/> — so the defaults leave the
+    /// history exactly as it runs without them.
+    /// </summary>
+    public SimSettings Settings
+    {
+        get => _settings;
+        set
+        {
+            _settings = value;
+            _sim.Rules = value.Rules;
+            _sim.Aggression = _baseAggression * value.Aggression;
+            _sim.Turbulence = _baseTurbulence * value.Turbulence;
+        }
     }
 
     /// <summary>Everything that has happened since <see cref="StartYear"/>, oldest first.</summary>
@@ -77,7 +99,11 @@ public sealed class HistorySim
     /// whose realms were handed out down the de jure tree, or read from an Azgaar export or a
     /// written mod, never ran the formation and has no rules to go on with.
     /// </summary>
-    public static HistorySim? Resume(RealmMap realms, int startYear, int tickYears = 1)
+    /// <param name="rulers">The start date's rulers and <paramref name="prehistory"/> their families,
+    /// which the realms begin under — see <see cref="SeatStartRulers"/>. Without them every realm
+    /// starts under a ruler and house drawn here.</param>
+    public static HistorySim? Resume(RealmMap realms, int startYear, int tickYears = 1,
+        RulerMap? rulers = null, PrehistoryMap? prehistory = null)
     {
         if (realms.History is not { Rules: { } rules } start) return null;
 
@@ -116,7 +142,9 @@ public sealed class HistorySim
             Year = startYear,
         };
 
-        return new HistorySim(sim, rules.Seed, startYear);
+        var history = new HistorySim(sim, rules.Seed, startYear);
+        history.SeatStartRulers(rulers, prehistory);
+        return history;
     }
 
     /// <summary>Advances the world by <see cref="TickYears"/>.</summary>
@@ -139,6 +167,10 @@ public sealed class HistorySim
         // out differently; what changes is that a history centuries long does not scan every
         // realm that ever lived on every tick.
         _sim.Polities.RemoveAll(p => !p.Alive);
+
+        // The people's year, after the realms': rulers for realms born this year, then deaths and
+        // successions. On its own stream, so switching Succession changes no realm's dice.
+        RulersYear();
     }
 
     /// <summary>
@@ -183,6 +215,7 @@ public sealed class HistorySim
         foreach (var (c, p) in _sim.Owner)
             if (!p.Alive) problems.Add($"{c.Name} is owned by the dead realm {p}");
 
+        CheckRulers(alive, problems);
         return problems;
     }
 

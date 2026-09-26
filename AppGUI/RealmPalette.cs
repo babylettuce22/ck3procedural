@@ -93,6 +93,8 @@ public sealed class RealmPalette
     /// </summary>
     public (byte R, byte G, byte B) Colour(Title seat)
     {
+        if (_graph.Colours?.TryGetValue(seat, out var kept) == true) return kept;
+
         var (hue, step) = Tone(seat);
         return Titles.FromHsl(hue, 0.60f + step % 3 * 0.09f, 0.44f + step % 2 * 0.13f);
     }

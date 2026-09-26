@@ -61,6 +61,15 @@ internal sealed class HistoryPanel : Panel
         Margin = new Padding(12, 7, 3, 3),
     };
 
+    private readonly CheckBox _showSuccessions = new()
+    {
+        Text = "Successions",
+        AutoSize = true,
+        Font = Theme.Ui,
+        ForeColor = Theme.TextDim,
+        Margin = new Padding(6, 7, 3, 3),
+    };
+
     private readonly Button _play = Theme.MakeButton("▶  Play", 84, primary: true);
     private readonly Button _step = Theme.MakeButton("+1 year", 70);
     private readonly Button _reset = Theme.MakeButton("Reset", 64);
@@ -85,6 +94,8 @@ internal sealed class HistoryPanel : Panel
         (RealmRules.Homage, "Homage", "A realm several times a neighbour's size takes it as a vassal, whole"),
         (RealmRules.Secession, "Secession", "An overstretched realm loses a block of its edge, which becomes a realm of its own"),
         (RealmRules.Collapse, "Collapse", "An unstable realm's vassals all walk out at once"),
+        (RealmRules.Succession, "Succession", "A ruler's death can divide the realm among heirs or put another house on the throne. "
+            + "Off, rulers still die, and one heir of the same house takes everything"),
     ];
 
     private readonly Dictionary<RealmRules, CheckBox> _ruleBoxes = [];
@@ -120,6 +131,9 @@ internal sealed class HistoryPanel : Panel
     /// <summary>The start date's people, whose houses realms that endure are still ruled by. See <see cref="AppliedHistory.Capture"/>.</summary>
     private RulerMap? _rulers;
     private PrehistoryMap? _prehistory;
+
+    /// <summary>Colours an applied history carried over, by seat; the palette wears them first.</summary>
+    private IReadOnlyDictionary<Title, (byte R, byte G, byte B)>? _keptColours;
     private int _startYear;
 
     private CountyCanvas? _canvas;
@@ -154,10 +168,11 @@ internal sealed class HistoryPanel : Panel
         {
             if (_sim is null || _canvas is null) return;
             Pause();
-            ApplyRequested?.Invoke(AppliedHistory.Capture(_sim, _canvas.Counties, _rulers, _prehistory));
+            ApplyRequested?.Invoke(AppliedHistory.Capture(_sim, _canvas.Counties, _rulers, _prehistory, _colourOf));
         };
         _discard.Click += (_, _) => DiscardRequested?.Invoke();
         _showConquests.CheckedChanged += (_, _) => RebuildChronicle();
+        _showSuccessions.CheckedChanged += (_, _) => RebuildChronicle();
         _timer.Tick += (_, _) => OnFrame();
         _view.ViewChanged += (_, pixel) => ShowReadout(pixel);
 
@@ -166,6 +181,7 @@ internal sealed class HistoryPanel : Panel
         tips.SetToolTip(_step, "Advance one year (→)");
         tips.SetToolTip(_reset, "Go back to the start date. The same history plays out again unless something is changed.");
         tips.SetToolTip(_showConquests, "List every county that changes hands, not only the realm-level events");
+        tips.SetToolTip(_showSuccessions, "List every ruler's death and heir, not only the partitions and usurpations");
         tips.SetToolTip(_apply, "Make the realms as they stand now the world's start, and write the mod with them");
         tips.SetToolTip(_discard, "Go back to the realms the generator grows; takes effect when the mod is next written");
 
@@ -223,6 +239,7 @@ internal sealed class HistoryPanel : Panel
         };
         chronicleHeader.Controls.Add(new Label { Text = "Chronicle", AutoSize = true, Font = Theme.UiBold, ForeColor = Theme.Text, Margin = new Padding(8, 7, 3, 3) });
         chronicleHeader.Controls.Add(_showConquests);
+        chronicleHeader.Controls.Add(_showSuccessions);
 
         var chronicle = new Panel { Dock = DockStyle.Right, Width = 380, BackColor = Theme.Surface, Padding = new Padding(1, 0, 0, 0) };
         chronicle.Controls.Add(_chronicle);
@@ -284,6 +301,7 @@ internal sealed class HistoryPanel : Panel
         _wilderness = written?.Wilderness;
         _rulers = written?.Rulers;
         _prehistory = written?.Prehistory;
+        _keptColours = written?.World?.RealmColours;
         _startYear = result?.Config.StartYear ?? 0;
 
         // Switches belong to a timeline, and a new world is a new one.
@@ -387,7 +405,7 @@ internal sealed class HistoryPanel : Panel
         if (_realms is null || _canvas is null) return;
 
         Pause();
-        _sim = HistorySim.Resume(_realms, _startYear);
+        _sim = HistorySim.Resume(_realms, _startYear, rulers: _rulers, prehistory: _prehistory);
         _colourOf.Clear();
         _nextColour = 0;
         _shownEvents = 0;
@@ -402,7 +420,7 @@ internal sealed class HistoryPanel : Panel
         if (_sim is not null)
         {
             var counties = _canvas.Counties;
-            var graph = RealmGraph.From(_realms, counties);
+            var graph = RealmGraph.From(_realms, counties, _keptColours);
             var palette = new RealmPalette(graph, counties);
 
             foreach (var root in _sim.Realms.Where(p => p.Suzerain is null))
@@ -580,6 +598,14 @@ internal sealed class HistoryPanel : Panel
         string text = $"{county.Name} — held by the realm of {owner.Capital.Name} ({owner.Counties.Count} counties, founded {owner.Founded})";
         if (owner.Suzerain is { } lord) text += $", sworn to {lord.Capital.Name}";
         if (owner.Root != owner && owner.Root != owner.Suzerain) text += $" under {owner.Root.Capital.Name}";
+        if (_sim.RulerOf(owner) is { } ruler)
+            text += $" · ruled by {ruler.Name} of {ruler.House.Name}, {_sim.Year - ruler.Born}, since {ruler.Crowned}"
+                    + (_sim.LawOf(owner) switch
+                    {
+                        SuccessionLaw.Partition => " · partition",
+                        SuccessionLaw.Elective => " · elective",
+                        _ => " · single heir",
+                    });
         _readout.Text = text;
     }
 
@@ -679,6 +705,8 @@ internal sealed class HistoryPanel : Panel
             FormationKind.Fragmented => $"{subject} broke away from {other}",
             FormationKind.Collapsed => $"The realm of {subject} came apart; its vassals went their own ways",
             FormationKind.Absorbed => $"The realm of {actor} fell to {other}",
+            FormationKind.Succeeded => _showSuccessions.Checked ? e.Note : null,
+            FormationKind.Partitioned or FormationKind.Usurped => e.Note,
             _ => null,
         };
 

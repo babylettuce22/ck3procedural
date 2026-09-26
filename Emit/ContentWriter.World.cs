@@ -58,6 +58,17 @@ public sealed record WorldModel
     /// </summary>
     public IReadOnlyDictionary<Title, AppliedHistory.Lineage>? Lineage { get; init; }
 
+    /// <summary>Under an applied history, the realms' dated predecessors; null for a generated world.
+    /// See <see cref="AppliedHistory.PastRulersFor"/>.</summary>
+    public List<PastRuler>? PastRulers { get; init; }
+
+    /// <summary>
+    /// Under an applied history, the colour the History workspace gave each realm, by the seat it is
+    /// ruled from — see <see cref="AppliedHistory.Colours"/>. Presentation only: nothing written
+    /// reads it. Null for a generated world.
+    /// </summary>
+    public IReadOnlyDictionary<Title, (byte R, byte G, byte B)>? RealmColours { get; init; }
+
     /// <summary>One government map per additional bookmark, or null without them.</summary>
     public Dictionary<int, GovernmentMap>? EraGovernments { get; init; }
     public double? HegemonShare { get; init; }
@@ -445,15 +456,19 @@ public static partial class ContentWriter
         // the same ApplyRealms. The start date is moved by the caller: see MapConfig.AtStartYear.
         var generatedGovernments = governments;
         IReadOnlyDictionary<Title, AppliedHistory.Lineage>? lineage = null;
+        List<PastRuler>? pastRulers = null;
+        IReadOnlyDictionary<Title, (byte R, byte G, byte B)>? realmColours = null;
         if (applied is not null)
-            (realms, governments, hegemonShare, lineage) = ApplyRealms(applied, realms, cfg, empires, counties,
-                provinces, order, baronyCount, provinceTerrain, development, cultures, worldCenters,
-                wilderness, azgaar, stateGovernments);
+            (realms, governments, hegemonShare, lineage, pastRulers, realmColours) = ApplyRealms(applied, realms, cfg, empires,
+                counties, provinces, order, baronyCount, provinceTerrain, development, cultures, worldCenters,
+                wilderness, azgaar, stateGovernments, faiths);
 
         return new WorldModel
         {
             GeneratedGovernments = generatedGovernments,
             Lineage = lineage,
+            PastRulers = pastRulers,
+            RealmColours = realmColours,
             ProvinceTerrain = provinceTerrain,
             Vocabulary = vocabulary,
             Counties = counties,

@@ -135,7 +135,8 @@
         "talus": 0.35,
         "thermalRate": 0.2,
         "thermalEvery": 4,
-        "protectCoast": true
+        "protectCoast": true,
+        "referenceHeight": 4096
       }
     }
   ]

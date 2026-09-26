@@ -22,7 +22,19 @@ namespace Ck3MapGen.MapGen;
 /// <param name="Icon">A file in gfx/interface/icons/building_types, verified to exist.</param>
 /// <param name="Blurb">Description, formatted with the county name.</param>
 /// <param name="Names">Name candidates, formatted with the county name and a culture word.</param>
-public sealed record WonderAsset(string Mesh, string Icon, string Blurb, string[] Names);
+/// <param name="Encloses">
+/// Zero for a wonder that stands beside the holding, which is nearly all of them. Otherwise the
+/// mesh is a hollow ring built to go AROUND the holding — a wall circuit, a walled mound — and this
+/// is the outer radius of its standing geometry in world units, so whatever else crowds the holding
+/// knows to stay outside it. See <see cref="ProvinceAnchor.EncloseHoldings"/>.
+/// </param>
+/// <param name="ReplacesWalls">
+/// The ring is the town's walls, so the holding's own wall ring must not be drawn inside it as well.
+/// Vanilla switches the ring off for exactly these (Lugo, Toledo) in <c>walls_00</c>; see
+/// <see cref="Emit.WonderWriter"/>.
+/// </param>
+public sealed record WonderAsset(string Mesh, string Icon, string Blurb, string[] Names,
+    double Encloses = 0, bool ReplacesWalls = false);
 
 /// <summary>
 /// Per-archetype pools of <see cref="WonderAsset"/>.
@@ -196,18 +208,27 @@ public static class WonderAssets
         new("fp3_building_special_alamut_castle_01_a_mesh", "icon_structure_alamut_castle.dds",
             "An eyrie on a knife-edge ridge, reached by one path wide enough for a single man out of {0}.",
             ["The Eagle's Nest of {0}", "The Mountain Hold of {1}", "The Eyrie of {0}"]),
+        // The three rings below are the only meshes in the catalogue with an empty middle: no
+        // standing geometry inside radius 3.8-5.3, walls out to 8.4-10.2, measured off the .mesh
+        // files. Vanilla stands each of them within 0.7 units of its holding's locator where every
+        // other special building sits 5-25 away. Heian-kyo and Angkor are co-located in vanilla too,
+        // but their middles are solid — a holding there would stand inside the temple — so they
+        // keep the ordinary offset.
         new("fp3_building_special_ark_of_bukhara_mesh", "icon_structure_ark_of_bukhara.dds",
             "A whole quarter raised on an artificial mound behind sloping walls — court, treasury and garrison of {0} together.",
-            ["The Great Ark of {0}", "The Citadel of {1}", "The Walled Mount of {0}"]),
+            ["The Great Ark of {0}", "The Citadel of {1}", "The Walled Mount of {0}"],
+            Encloses: 9.4),
         new("fp3_building_special_falak_ol_aflak_citadel_01_a_mesh", "icon_structure_falak_ol_aflak_citadel.dds",
             "A brick citadel of many towers on the rock above {0}, never yet carried by storm.",
             ["The Twelve Towers of {0}", "The Sky Citadel of {1}", "The High Citadel of {0}"]),
         new("fp2_building_special_toledo_city_walls_01_a_mesh", "toledo.dds",
             "A full circuit of curtain wall and barbican gates enclosing every roof in {0}.",
-            ["The Great Walls of {0}", "The Ringwall of {1}", "The Gated Walls of {0}"]),
+            ["The Great Walls of {0}", "The Ringwall of {1}", "The Gated Walls of {0}"],
+            Encloses: 10.2, ReplacesWalls: true),
         new("fp2_building_special_roman_wall_of_lugo_01_a_mesh", "lugo_walls.dds",
             "An unbroken ancient circuit of bastioned wall, older than the walk along its top in {0}.",
-            ["The Old Walls of {0}", "The Ancient Circuit of {1}", "The Bastioned Walls of {0}"]),
+            ["The Old Walls of {0}", "The Ancient Circuit of {1}", "The Bastioned Walls of {0}"],
+            Encloses: 8.4, ReplacesWalls: true),
         new("fp2_building_special_alcazar_de_segovia_01_a_mesh", "alcazar_segovia.dds",
             "A castle on a spur of rock, its prow-shaped keep splitting the two rivers below {0}.",
             ["The Prow Fortress of {0}", "The Cliffside Castle of {1}", "The Stone Prow of {0}"]),

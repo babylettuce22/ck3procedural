@@ -138,8 +138,46 @@ public sealed class NobleFamilyDef
     public Title? Liege { get; init; }
 }
 
+/// <summary>
+/// A ruler the History workspace's simulation saw reign and die before the date a history was
+/// applied at: written as a dead character, and as a dated holder of <see cref="TitleKey"/>, so the
+/// title's history in game names who actually held it. Dates are CK3 date strings.
+/// </summary>
+public sealed record PastRuler(string Id, string Name, bool Female, AppliedHistory.Lineage House,
+    string FaithKey, string BirthDate, string DeathDate, string TitleKey, string ReignDate);
+
 public sealed class PrehistoryMap
 {
+    /// <summary>
+    /// The realms' past rulers under an applied history, oldest reign first within a title; empty
+    /// for a generated world. See <see cref="AddPastRulers"/>.
+    /// </summary>
+    public List<PastRuler> PastRulers { get; } = [];
+
+    /// <summary>
+    /// Takes the past rulers an applied history carries, declaring every house they were of —
+    /// a predecessor may be of a house that no longer rules anywhere, overthrown before the
+    /// applied date, and his dynasty_house has to name something that exists.
+    /// </summary>
+    public void AddPastRulers(IEnumerable<PastRuler> rulers)
+    {
+        foreach (var ruler in rulers)
+        {
+            var line = ruler.House;
+            Dynasties.TryAdd(line.DynastyId, new DynastyDef
+            {
+                Id = line.DynastyId, NameKey = line.DynastyNameKey, LocalizedName = line.DynastyName,
+                CultureKey = line.CultureKey, MainHouseKey = line.HouseKey,
+            });
+            Houses.TryAdd(line.HouseKey, new DynastyHouseDef
+            {
+                Key = line.HouseKey, NameKey = line.HouseNameKey, LocalizedName = line.HouseName,
+                DynastyId = line.DynastyId, Prefix = line.Prefix,
+            });
+            PastRulers.Add(ruler);
+        }
+    }
+
     public Dictionary<Title, HistoricalCharacter> Spouses { get; } = [];
     public Dictionary<Title, List<HistoricalCharacter>> Children { get; } = [];
     public Dictionary<Title, HistoricalCharacter> DeceasedParents { get; } = [];
@@ -596,11 +634,11 @@ public sealed class PrehistoryMap
             var topTitle = HistoryWriter.Primary(topLiege, realms);
 
             var topRng = new Rng(topLiege.Index ^ 0x7E1B);
-            int topBirthYear = HistoryWriter.GetRulerBirthYear(topLiege.Index, cfg.StartYear, cfg.PeopleSalt);
+            int topBirthYear = HistoryWriter.GetRulerBirthYear(topLiege, cfg);
 
             // The line runs through the parent of the ruler's own sex: a countess is her mother's
             // daughter, and the house descends the way the world's laws say land does.
-            bool topFemale = HistoryWriter.RulerIsFemale(topLiege, faith, cfg.PeopleSalt);
+            bool topFemale = HistoryWriter.RulerIsFemale(topLiege, faith, cfg);
             string topParentName = GivenName(culture, topFemale, topRng);
 
             int topParentBirth = topBirthYear - topRng.Int(22, 35);
@@ -638,7 +676,7 @@ public sealed class PrehistoryMap
 
             foreach (var kinCounty in kin)
             {
-                int kinBirthYear = HistoryWriter.GetRulerBirthYear(kinCounty.Index, cfg.StartYear, cfg.PeopleSalt);
+                int kinBirthYear = HistoryWriter.GetRulerBirthYear(kinCounty, cfg);
                 int ageGap = Math.Abs(topBirthYear - kinBirthYear);
                 var kinTitle = HistoryWriter.Primary(kinCounty, realms);
                 var kinRng = new Rng(kinCounty.Index ^ 0x481A);
@@ -672,7 +710,7 @@ public sealed class PrehistoryMap
                 var kinCulture = cultures.For(kinCounty);
                 var kinFaith = faiths.For(kinCounty);
 
-                bool kinFemale = HistoryWriter.RulerIsFemale(kinCounty, kinFaith, cfg.PeopleSalt);
+                bool kinFemale = HistoryWriter.RulerIsFemale(kinCounty, kinFaith, cfg);
                 string kinParentName = GivenName(kinCulture, kinFemale, kinRng);
 
                 int kinParentBirth = kinBirthYear - kinRng.Int(22, 35);
@@ -708,11 +746,11 @@ public sealed class PrehistoryMap
             var faith = faiths.For(county);
             var fRng = new Rng(county.Index ^ 0x981C);
 
-            int birthYear = HistoryWriter.GetRulerBirthYear(county.Index, cfg.StartYear, cfg.PeopleSalt);
+            int birthYear = HistoryWriter.GetRulerBirthYear(county, cfg);
             int parentBirth = birthYear - fRng.Int(22, 35);
             int parentDeath = cfg.StartYear - fRng.Int(2, 15);
 
-            bool female = HistoryWriter.RulerIsFemale(county, faith, cfg.PeopleSalt);
+            bool female = HistoryWriter.RulerIsFemale(county, faith, cfg);
             string parentName = GivenName(culture, female, fRng);
 
             var parent = new HistoricalCharacter
@@ -773,12 +811,12 @@ public sealed class PrehistoryMap
 
             var rulerFaith = faiths.For(ruler);
             var rulerCulture = cultures.For(ruler);
-            bool rulerFemale = HistoryWriter.RulerIsFemale(ruler, rulerFaith, cfg.PeopleSalt);
+            bool rulerFemale = HistoryWriter.RulerIsFemale(ruler, rulerFaith, cfg);
             var mRng = new Rng(ruler.Index ^ 0x6E19);
 
             if (!mRng.Chance(0.88)) continue;
 
-            int rulerBirthYear = HistoryWriter.GetRulerBirthYear(ruler.Index, cfg.StartYear, cfg.PeopleSalt);
+            int rulerBirthYear = HistoryWriter.GetRulerBirthYear(ruler, cfg);
             var topLiege = TopLiegeCounty(ruler, realms);
             bool isTopLiege = (ruler == topLiege);
 
@@ -978,7 +1016,7 @@ public sealed class PrehistoryMap
         {
             var culture = cultures.For(ruler);
             var faith = faiths.For(ruler);
-            bool rulerFemale = HistoryWriter.RulerIsFemale(ruler, faith, cfg.PeopleSalt);
+            bool rulerFemale = HistoryWriter.RulerIsFemale(ruler, faith, cfg);
             var cRng = new Rng(ruler.Index ^ 0x51E3);
 
             int childCount = cRng.Int(1, 3);

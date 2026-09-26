@@ -93,7 +93,7 @@ public static partial class ContentWriter
                 landCount, riverCount);
         });
 
-        Core.Stage.Time("wonders", () => WonderWriter.WriteAll(modDir, worldCenters));
+        Core.Stage.Time("wonders", () => WonderWriter.WriteAll(modDir, gameDir, worldCenters));
         Core.Stage.Time("wonder index", () => WonderIndex.Write(modDir, worldCenters));
 
         Core.Stage.Time("title tiers", () => TitleTierWriter.WriteAll(modDir, cultures, empires));
@@ -222,8 +222,16 @@ public static partial class ContentWriter
         // over the whole province raster, which each of them used to run for itself off the same
         // two inputs. Hoisted here rather than memoised inside ProvinceAnchor so the sharing is
         // visible at the call site and the two writers cannot drift apart.
-        var anchors = Core.Stage.Time("province anchors",
-            () => MapGen.ProvinceAnchor.Compute(provinces, provinceElevation, cfg));
+        var anchors = Core.Stage.Time("province anchors", () =>
+        {
+            var computed = MapGen.ProvinceAnchor.Compute(provinces, provinceElevation, cfg);
+
+            // Before either writer reads them: a wall-circuit wonder stands on its holding, not
+            // beside it, and the city scatter has to know the ring is there.
+            MapGen.ProvinceAnchor.EncloseHoldings(computed, worldCenters, provinces, order,
+                provinceElevation, cfg);
+            return computed;
+        });
 
         Core.Stage.Time("locators", () => LocatorWriter.WriteAll(modDir, gameDir, provinces, order, landCount, anchors, cfg));
         Core.Stage.Time("casus belli", () => CasusBelliWriter.WriteAll(modDir, gameDir, cfg));
@@ -374,7 +382,7 @@ public static partial class ContentWriter
                 var layer = WriteHistoryLayer(modDir, gameDir, cfg, provinces, order, landCount, empires,
                     counties, realms, cultures, ethnicities, faiths, governments, worldCenters, wilderness,
                     development, titlePlan, eraGovernments, retinues, azgaar, calendar, flatmap, frontier,
-                    lineage: world.Lineage);
+                    lineage: world.Lineage, pastRulers: world.PastRulers);
 
                 prehistory = layer.Prehistory;
                 rulers = layer.Rulers;

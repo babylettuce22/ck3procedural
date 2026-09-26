@@ -76,6 +76,30 @@ public static class HistoryWriter
     /// <see cref="MapGen.RulerMap.Build"/> afterwards. Both must get the same answer, and neither
     /// may disturb the draw the other is walking.
     /// </summary>
+    /// <summary>
+    /// The ruler draws as a configuration asks for them: the person an applied history put on this
+    /// seat when it did (<see cref="MapConfig.SeatPeople"/>), else the draw salted for its year.
+    /// Every caller that writes the start date's people goes through these three, so a ruler, his
+    /// family and everything written about him agree on who he is.
+    /// </summary>
+    public static bool RulerIsFemale(Title county, Faith faith, MapConfig cfg)
+        => cfg.SeatPeople?.TryGetValue(county.Index, out var person) == true
+            ? person.Female
+            : RulerIsFemale(county, faith, cfg.PeopleSalt);
+
+    /// <inheritdoc cref="RulerIsFemale(Title, Faith, MapConfig)"/>
+    public static (string FirstName, string DynastyName) RulerNames(Title county, Culture culture, bool female,
+        MapConfig cfg)
+        => cfg.SeatPeople?.TryGetValue(county.Index, out var person) == true
+            ? (person.Name, culture.DynastyNameFor(county))
+            : RulerNames(county, culture, female, cfg.PeopleSalt);
+
+    /// <inheritdoc cref="RulerIsFemale(Title, Faith, MapConfig)"/>
+    public static int GetRulerBirthYear(Title county, MapConfig cfg)
+        => cfg.SeatPeople?.TryGetValue(county.Index, out var person) == true
+            ? person.Born
+            : GetRulerBirthYear(county.Index, cfg.StartYear, cfg.PeopleSalt);
+
     public static bool RulerIsFemale(Title county, Faith faith, int salt = 0)
     {
         double share = MapGen.Faiths.GenderOf(faith) switch
@@ -309,6 +333,27 @@ public static class HistoryWriter
                 // CK3 abandons the whole file at that point, taking every later character with it.
                 if (ancestor.DeathDate is not null)
                     b.Inline(ancestor.DeathDate, "death = yes");
+            }
+
+            b.Blank();
+        }
+
+        // =========================================================================
+        // 2b. An applied history's past rulers — the realms' real predecessors
+        // =========================================================================
+        foreach (var past in prehistory.PastRulers)
+        {
+            using (b.Block(past.Id))
+            {
+                b.Quoted("name", nameToken(past.Name));
+                if (past.Female) b.Field("female", "yes");
+                b.Field("dynasty_house", past.House.HouseKey);
+                b.Field("religion", past.FaithKey);
+                b.Field("culture", past.House.CultureKey);
+                if (cultures.Cultures.FirstOrDefault(c => c.Key == past.House.CultureKey) is { } pastCulture)
+                    b.Field("trait", GetPhenotypeTrait(pastCulture, ethnicities, cfg));
+                b.Inline(past.BirthDate, "birth = yes");
+                b.Inline(past.DeathDate, "death = yes");
             }
 
             b.Blank();
@@ -950,6 +995,13 @@ public static class HistoryWriter
         // every date at once — the additional bookmarks' included. LINQ's OrderBy is stable.
         all = [.. all.OrderByDescending(t => Title.TierRank(t.Tier))];
 
+        // An applied history's predecessors, by the title they held: dated holder entries ahead of
+        // the grant, oldest first. Only a holder line — the liege and government lines stay on the
+        // grant, so the file-order rule above is untouched. Empty for a generated world.
+        var pastByTitle = (prehistory?.PastRulers ?? [])
+            .GroupBy(p => p.TitleKey)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
         if (eras is not null)
             WriteEraTitleHistory(b, cfg, all, development, realms, governments, wilderness, eras, titleGrantDate);
         else
@@ -964,21 +1016,26 @@ public static class HistoryWriter
             string government = governments.For(holder);
 
             using (b.Block(title.Key))
-            using (b.Block(titleGrantDate))
             {
-                b.Field("holder", CharacterId(holder));
+                foreach (var past in pastByTitle.GetValueOrDefault(title.Key) ?? [])
+                    using (b.Block(past.ReignDate)) b.Field("holder", past.Id);
 
-                // Feudal is the engine's default, so saying so would be noise on most of the map.
-                if (government != GovernmentMap.Feudal) b.Field("government", government);
+                using (b.Block(titleGrantDate))
+                {
+                    b.Field("holder", CharacterId(holder));
 
-                b.Field("liege", liege?.Key);
-                if (level > 0) b.Field("change_development_level", level);
+                    // Feudal is the engine's default, so saying so would be noise on most of the map.
+                    if (government != GovernmentMap.Feudal) b.Field("government", government);
 
-                // Once per ruler, on the one title that is theirs: the effect acts on the holder,
-                // and a man holding a kingdom and six counties would otherwise run it seven times.
-                if (government == GovernmentMap.Administrative
-                    && ReferenceEquals(title, Primary(holder, realms)))
-                    WriteAdministrativeFallback(b);
+                    b.Field("liege", liege?.Key);
+                    if (level > 0) b.Field("change_development_level", level);
+
+                    // Once per ruler, on the one title that is theirs: the effect acts on the holder,
+                    // and a man holding a kingdom and six counties would otherwise run it seven times.
+                    if (government == GovernmentMap.Administrative
+                        && ReferenceEquals(title, Primary(holder, realms)))
+                        WriteAdministrativeFallback(b);
+                }
             }
         }
 
