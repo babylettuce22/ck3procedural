@@ -194,6 +194,41 @@ public sealed class GenderPreferenceConverter() : EnumConverter(typeof(GenderPre
 /// Not exclusive, so the row stays a normal editable number: the dropdown offers the sentinel and
 /// typing a year still works. Every other value renders as itself.
 /// </summary>
+public sealed class VanillaRegionConverter : StringConverter
+{
+    public const string Anywhere = "Anywhere";
+
+    /// <summary>Vanilla's top-level world regions and a few popular sub-regions. Not exclusive:
+    /// any geographical region key can be typed.</summary>
+    private static readonly string[] Common =
+    [
+        Anywhere,
+        "world_europe", "world_europe_west", "world_europe_north", "world_europe_south", "world_europe_east",
+        "world_europe_west_britannia", "world_europe_west_francia", "world_europe_west_germania", "world_europe_west_iberia",
+        "world_middle_east", "world_asia_minor", "world_middle_east_persia", "world_middle_east_arabia",
+        "world_africa", "world_africa_north", "world_africa_west", "world_africa_east",
+        "world_india", "world_steppe", "world_tibet", "world_burma",
+        "world_asia", "world_asia_china", "world_asia_japan", "world_asia_korea", "world_asia_southeast",
+        "world_europe, world_middle_east",
+        "world_europe, world_middle_east, world_india, world_steppe, world_asia",
+    ];
+
+    public override bool GetStandardValuesSupported(ITypeDescriptorContext? context) => true;
+    public override bool GetStandardValuesExclusive(ITypeDescriptorContext? context) => false;
+    public override StandardValuesCollection GetStandardValues(ITypeDescriptorContext? context) => new(Common);
+
+    public override object? ConvertTo(ITypeDescriptorContext? context, CultureInfo? culture,
+        object? value, Type destinationType)
+        => destinationType == typeof(string) && value is string s && string.IsNullOrWhiteSpace(s)
+            ? Anywhere
+            : base.ConvertTo(context, culture, value, destinationType);
+
+    public override object? ConvertFrom(ITypeDescriptorContext? context, CultureInfo? culture, object value)
+        => value is string text && (string.IsNullOrWhiteSpace(text) || text.Trim().Equals(Anywhere, StringComparison.OrdinalIgnoreCase))
+            ? ""
+            : base.ConvertFrom(context, culture, value);
+}
+
 public sealed class FollowWorldYearConverter : Int32Converter
 {
     public const string Follow = "0 (Follow World Year)";
@@ -505,8 +540,29 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// </summary>
     [Category("02 World State")]
     [DisplayName("Content Source")]
+    [RefreshProperties(RefreshProperties.All)]
     [Description("Procedural generates every culture, faith, title and character. VanillaWorld lays a region of CK3's real world onto the generated map, sized to fit it: every title is a vanilla title (the Kingdom of France, the Duchy of Normandy, down to the baronies) inside vanilla's own de jure tree, every county has the culture and faith its vanilla county had at the Advancement Year, the independent realms and the rulers who hold them are vanilla's own historical characters at that date, with their families and dynasties, and holy sites and heads of faith are vanilla's. Needs the installed game; not compatible with fantasy ethnicities.")]
     public ContentSourceMode ContentSource { get; set; } = ContentSourceMode.Procedural;
+
+    /// <summary>
+    /// Where on vanilla's map a <see cref="ContentSourceMode.VanillaWorld"/> window may fall: one or
+    /// more of vanilla's geographical region keys, comma separated (<c>world_europe</c>,
+    /// <c>world_africa, world_middle_east</c>). Empty is anywhere, the original behaviour. A region
+    /// larger than the map is sampled from inside; one smaller is taken whole and topped up with
+    /// its nearest neighbours. See <see cref="MapGen.VanillaTitles"/>.
+    /// </summary>
+    [Category("02 World State")]
+    [DisplayName("Vanilla Region")]
+    [TypeConverter(typeof(VanillaRegionConverter))]
+    [Description("With Content Source VanillaWorld: which part of CK3's world the map is laid onto. Pick a region or type any of vanilla's geographical region keys (map_data/geographical_regions), several separated by commas, e.g. \"world_europe, world_middle_east\". A region bigger than the map yields a piece of it; a smaller one is taken whole plus its nearest neighbours. Anywhere lets the seed choose.")]
+    public string VanillaRegion { get; set; } = "";
+
+    /// <summary>The region keys of <see cref="VanillaRegion"/>, empty for anywhere.</summary>
+    [Browsable(false)]
+    public IReadOnlyList<string> VanillaRegionKeys
+        => VanillaRegion.Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Where(k => !k.Equals(VanillaRegionConverter.Anywhere, StringComparison.OrdinalIgnoreCase))
+                        .Distinct(StringComparer.Ordinal).ToList();
 
     /// <summary>
     /// How far the world's calendar has been slid off vanilla's, and therefore how far every
@@ -2918,6 +2974,9 @@ public sealed class MapConfig : CustomTypeDescriptor
         {
             if (property.Attributes[typeof(HideInGeneratorAttribute)] is not null) continue;
             if (hideAdvanced && property.Attributes[typeof(AdvancedSettingAttribute)] is not null) continue;
+
+            // Only a vanilla world has a region of vanilla's map to choose.
+            if (property.Name == nameof(VanillaRegion) && ContentSource != ContentSourceMode.VanillaWorld) continue;
 
             shown.Add(imported && property.Attributes[typeof(AzgaarIncompatAttribute)]
                           is AzgaarIncompatAttribute incompat

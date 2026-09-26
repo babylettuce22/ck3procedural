@@ -122,6 +122,7 @@ Frequently used options:
 | `--gender historical\|mixed\|femaledominated` | Choose the world's gender-law profile. |
 | `--races off\|low\|high\|exotic` | Choose a fantasy-race preset. |
 | `--content procedural\|vanilla` | Generate the world's cultures and faiths, or settle the generated map with CK3's own. |
+| `--vanilla-region <keys>` | With `--content vanilla`, confine the real-world window to vanilla geographical regions (`world_europe`, `"world_africa, world_middle_east"`). |
 | `--impassable-mask <png>` | Supply a painted impassable mask; `--impassable-mask-mode snap\|touch` controls how it applies. |
 | `--starting-hegemony` | Enable a starting hegemony. |
 | `--no-dynastic-cycle` / `--no-formation` | Disable the dynastic cycle or pre-start formation simulation. |
@@ -195,7 +196,9 @@ settings that conflict with imported data are identified in the GUI.
 `ContentSource` (`--content vanilla`) lays a region of CK3's real world onto the generated
 map. The generator picks a window of vanilla's map holding about as many counties as the
 generated map has, shaped like its land, and projects the map onto it. Several seeded windows
-are tried, and the one whose peoples best suit the generated land wins.
+are tried, and the one whose peoples best suit the generated land wins. `VanillaRegion`
+(`--vanilla-region world_europe`) confines the window to one or more of vanilla's geographical
+regions; a region smaller than the map is taken whole with its nearest neighbours.
 
 - **Titles.** Every empire, kingdom, duchy, county and barony is a vanilla title with its
   vanilla name, arms and culture-specific names. They are laid on top down: the map's empires

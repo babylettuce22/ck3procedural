@@ -60,7 +60,7 @@ public static class VanillaTitles
 
     public static Plan? Match(List<Title> empires, CultureMap grown, Dictionary<Title, int> development,
         VanillaCatalog catalog, Func<Title, (double X, double Y)?> position, int year,
-        IReadOnlySet<string> reserved, Rng rng)
+        IReadOnlySet<string> reserved, Rng rng, IReadOnlyList<string>? regions = null)
     {
         string date = $"{Math.Max(1, year)}.1.1";
         var counties = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
@@ -86,6 +86,43 @@ public static class VanillaTitles
             return mine.Count == 0 ? middle : (mine.Average(p => p.X), mine.Average(p => p.Y));
         }
 
+        // The counties a window may hold. Anywhere, unless regions were asked for: then the region's
+        // own counties, or — when the region is smaller than the map — all of them plus the nearest
+        // others, as a single window.
+        var pool = eligible.Counties;
+        Window? fixedWindow = null;
+        string? regionLabel = null;
+        if (regions is { Count: > 0 })
+        {
+            var keys = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string region in regions)
+            {
+                if (catalog.RegionCounties(region) is { } members) keys.UnionWith(members);
+                else Console.WriteLine($"  vanilla titles: no geographical region '{region}' in the game files; ignored");
+            }
+
+            var inRegion = eligible.Counties.Where(c => keys.Contains(c.Key)).ToList();
+            if (inRegion.Count == 0)
+                Console.WriteLine($"  vanilla titles: region {string.Join(", ", regions)} holds no usable counties; choosing anywhere");
+            else
+            {
+                regionLabel = string.Join(", ", regions.Where(r => catalog.Regions.ContainsKey(r)));
+                if (inRegion.Count >= wanted) pool = inRegion;
+                else
+                {
+                    (double X, double Y) centroid = (inRegion.Average(c => c.Home!.Value.X), inRegion.Average(c => c.Home!.Value.Y));
+                    var inside = inRegion.ToHashSet();
+                    var held = inRegion.Concat(eligible.Counties.Where(c => !inside.Contains(c))
+                                                       .OrderBy(c => Distance2(c.Home!.Value, centroid)).ThenBy(c => c.Key, StringComparer.Ordinal)
+                                                       .Take(wanted - inRegion.Count)).ToList();
+                    var nearest = inRegion.OrderBy(c => Distance2(c.Home!.Value, centroid)).ThenBy(c => c.Key, StringComparer.Ordinal).First();
+                    fixedWindow = new Window(held, centroid, nearest);
+                    Console.WriteLine($"  vanilla titles: region {regionLabel} has {inRegion.Count} counties for a map of {held.Count}; " +
+                                      "taking all of it and its nearest neighbours");
+                }
+            }
+        }
+
         Window MakeWindow(VanillaCatalog.TitleDef centre)
         {
             var (cx, cy) = centre.Home!.Value;
@@ -95,12 +132,12 @@ public static class VanillaTitles
             for (int i = 0; i < 40; i++)
             {
                 double mid = (lo + hi) / 2;
-                int inside = eligible.Counties.Count(t => Math.Abs(t.Home!.Value.X - cx) <= mid && Math.Abs(t.Home!.Value.Y - cy) <= mid / aspect);
+                int inside = pool.Count(t => Math.Abs(t.Home!.Value.X - cx) <= mid && Math.Abs(t.Home!.Value.Y - cy) <= mid / aspect);
                 if (inside >= wanted) hi = mid; else lo = mid;
             }
 
-            var inWindow = eligible.Counties.Where(t => Math.Abs(t.Home!.Value.X - cx) <= hi
-                                                        && Math.Abs(t.Home!.Value.Y - cy) <= hi / aspect).ToList();
+            var inWindow = pool.Where(t => Math.Abs(t.Home!.Value.X - cx) <= hi
+                                           && Math.Abs(t.Home!.Value.Y - cy) <= hi / aspect).ToList();
             return new Window(inWindow, (cx, cy), centre);
         }
 
@@ -119,25 +156,30 @@ public static class VanillaTitles
         }
 
         var centres = new List<VanillaCatalog.TitleDef>();
-        var remaining = eligible.Counties.ToList();
-        for (int i = 0; i < Windows && remaining.Count > 0; i++)
+        var remaining = pool.ToList();
+        for (int i = 0; i < Windows && remaining.Count > 0 && fixedWindow is null; i++)
         {
             int k = rng.Int(0, remaining.Count - 1);
             centres.Add(remaining[k]);
             remaining.RemoveAt(k);
         }
 
+        IEnumerable<Window> windows = fixedWindow is not null ? [fixedWindow] : centres.Select(MakeWindow);
+
         (Window Window, Dictionary<Title, VanillaCatalog.TitleDef> Titles, double Fit)? best = null;
-        foreach (var centre in centres)
+        foreach (var window in windows)
         {
-            var window = MakeWindow(centre);
-            var assignment = TopDown(empires, window, eligible, catalog, Local);
+            var assignment = TopDown(empires, window, eligible, catalog, Local, confine: regionLabel is not null);
             double fit = FitOf(assignment);
             if (best is null || fit > best.Value.Fit) best = (window, assignment, fit);
         }
 
         var chosen = best!.Value;
-        var plan = new Plan { Date = date, Region = RegionName(catalog, chosen.Window.CentreCounty) };
+        var plan = new Plan
+        {
+            Date = date,
+            Region = RegionName(catalog, chosen.Window.CentreCounty) + (regionLabel is null ? "" : $" in {regionLabel}"),
+        };
         foreach (var (title, v) in chosen.Titles)
         {
             plan.Borrowed[title] = v;
@@ -193,7 +235,7 @@ public static class VanillaTitles
     /// window, then within each, its children to the matched title's children. See the class remarks.
     /// </summary>
     private static Dictionary<Title, VanillaCatalog.TitleDef> TopDown(List<Title> empires, Window window,
-        Eligible eligible, VanillaCatalog catalog, Func<Title, (double X, double Y)> local)
+        Eligible eligible, VanillaCatalog catalog, Func<Title, (double X, double Y)> local, bool confine = false)
     {
         var result = new Dictionary<Title, VanillaCatalog.TitleDef>();
         var used = new HashSet<string>(StringComparer.Ordinal);
@@ -222,7 +264,9 @@ public static class VanillaTitles
         {
             if (mine.Count == 0) return;
 
-            var candidates = offered.Where(d => !used.Contains(d.Key) && eligible.Is(d)).ToList();
+            // Confined to a region, a title's children outside the window are not offered: Egypt's
+            // empire is Arabia's, and without this an African map would take Yemen and Syria.
+            var candidates = offered.Where(d => !used.Contains(d.Key) && eligible.Is(d) && (!confine || Touches(d))).ToList();
 
             // Too few: the nearest unused titles of the tier — inside the window first, so a kingdom
             // short of duchies borrows its neighbour's rather than one from across the world.

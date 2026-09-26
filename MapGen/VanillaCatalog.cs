@@ -402,6 +402,16 @@ public sealed class VanillaCatalog
             return true;
         }
 
+        // A geographical region: how many counties a VanillaRegion of it offers, and its kingdoms.
+        if (key is not null && catalog.RegionCounties(key) is { } region)
+        {
+            var kingdoms = region.Select(k => catalog.Titles[k]).Select(c => c.Parent is { } d ? catalog.Titles.GetValueOrDefault(d)?.Parent : null)
+                                 .OfType<string>().Distinct().Select(k => catalog.Titles[k].Name).Order().ToList();
+            Console.WriteLine($"{key}: {region.Count} counties in {kingdoms.Count} kingdoms");
+            Console.WriteLine($"  {string.Join(", ", kingdoms)}");
+            return true;
+        }
+
         if (key is not null && catalog.Faiths.TryGetValue(key, out var f))
         {
             Console.WriteLine($"{f.Key} \"{f.Name}\" of {f.Religion.Key} ({f.Religion.Family}), {f.Counties} counties");

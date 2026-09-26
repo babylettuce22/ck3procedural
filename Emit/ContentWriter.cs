@@ -155,7 +155,7 @@ public static class ContentWriter
                 var catalog = VanillaCatalog.Read(gameDir);
                 titlePlan = VanillaTitles.Match(empires, grown, development, catalog,
                     CountyPosition(provinces, order, landCount), cfg.EraYear, MapGen.SilkRoad.ReservedCountyKeys,
-                    new Rng(cfg.Seed ^ 0x7A13));
+                    new Rng(cfg.Seed ^ 0x7A13), cfg.VanillaRegionKeys);
 
                 if (titlePlan is not null)
                 {

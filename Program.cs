@@ -354,6 +354,12 @@ public static class Program
                     break;
                 }
 
+                // Which of vanilla's geographical regions a vanilla world is laid onto, comma
+                // separated; see MapConfig.VanillaRegion.
+                case "--vanilla-region" when i + 1 < args.Length:
+                    cfg.VanillaRegion = args[++i];
+                    break;
+
                 // Which real-world looks the world's humans are drawn from; see HumanLook.
                 // Fantasy races are unaffected either way. Varied is the default.
                 case "--dominant-look" when i + 1 < args.Length:
