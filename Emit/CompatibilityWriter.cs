@@ -1760,6 +1760,72 @@ public static partial class CompatibilityWriter
     private static partial System.Text.RegularExpressions.Regex YearField();
 
     /// <summary>
+    /// Moves the Black Death's date gate onto the world's own calendar, by the same offset as the
+    /// culture eras (<see cref="WriteCultureEras"/>), so it arrives when the world is as advanced as
+    /// vanilla's 1346 rather than whenever the calendar happens to read 1346.
+    ///
+    /// Under the default <c>bd_occurrence_historical</c> rule, <c>bubonic_plague</c>'s apocalyptic
+    /// tier may break out only once <c>current_date &gt;= 1346.1.1</c>, in <c>world_central_asia</c>,
+    /// which <see cref="WriteGeographicalRegions"/> re-declares against one generated county. So a
+    /// world whose History was applied to 2245 is past the gate on day one: measured on one such
+    /// run, it broke out 22 years in, covered the whole map for 45 years (its
+    /// <c>max_provinces</c> is 12000+), floored every county's development with
+    /// <c>apply_infection_development_loss</c>, and caused every one of the 55 ruined counties.
+    ///
+    /// Every <c>current_date</c> comparison in <c>common/epidemics</c> is shifted, not just the
+    /// 1346 pair, because each one is a date on vanilla's calendar. Writes nothing when the offset
+    /// is zero, for the same reason the eras don't.
+    /// </summary>
+    public static void WriteEpidemicDates(string modDir, string gameDir, Config.MapConfig cfg)
+    {
+        if (cfg.EraOffset == 0) return;
+
+        string source = Path.Combine(gameDir, "common", "epidemics");
+        if (!Directory.Exists(source)) return;
+
+        string destination = Path.Combine(modDir, "common", "epidemics");
+
+        int moved = 0;
+        var shiftedTo = new SortedSet<int>();
+
+        foreach (string path in Directory.GetFiles(source, "*.txt"))
+        {
+            string text = File.ReadAllText(path);
+            int before = moved;
+
+            text = DateGate().Replace(text, match =>
+            {
+                int vanilla = int.Parse(match.Groups[3].Value);
+                int shifted = Math.Max(1, vanilla + cfg.EraOffset);
+                shiftedTo.Add(shifted);
+                moved++;
+                return $"{match.Groups[1].Value}{match.Groups[2].Value}{shifted}{match.Groups[4].Value}";
+            });
+
+            // Only files that carried a gate are shadowed; the rest stay vanilla's own.
+            if (moved == before) continue;
+
+            Directory.CreateDirectory(destination);
+            ParadoxText.WriteBom(Path.Combine(destination, Path.GetFileName(path)), text);
+        }
+
+        if (moved == 0)
+        {
+            Console.WriteLine("  epidemic dates: WARNING no `current_date` gate matched in common/epidemics — "
+                + "the Black Death stays on vanilla's calendar");
+            return;
+        }
+
+        Console.WriteLine($"  epidemic dates: {moved} gate(s) moved by {cfg.EraOffset:+#;-#;0} years; "
+                          + $"the Black Death may break out from {string.Join(", ", shiftedTo)} "
+                          + $"(world starts {cfg.StartYear})");
+    }
+
+    // `current_date >= 1346.1.1` → groups: prefix, operator + spacing, year, rest of the date.
+    [System.Text.RegularExpressions.GeneratedRegex(@"(current_date\s*)([<>]=?\s*)(\d+)(\.\d+\.\d+)")]
+    private static partial System.Text.RegularExpressions.Regex DateGate();
+
+    /// <summary>
     /// Re-declares every vanilla geographical region against generated titles.
     ///
     /// Blanking these files does not work: CK3 then reports "no visual geographical region" once

@@ -75,6 +75,7 @@ internal sealed class HistoryPanel : Panel
     private readonly Button _reset = Theme.MakeButton("Reset", 64);
     private readonly Button _apply = Theme.MakeButton("Apply to World…", 120);
     private readonly Button _discard = Theme.MakeButton("Discard", 70);
+    private readonly Button _changeYear = Theme.MakeButton("Change year…", 104);
     private readonly Label _appliedNote = new() { AutoSize = true, Font = Theme.Ui, ForeColor = Theme.NoticeText, Margin = new Padding(8, 5, 3, 3) };
     private readonly FlowLayoutPanel _appliedBar = new()
     {
@@ -96,6 +97,9 @@ internal sealed class HistoryPanel : Panel
         ("Realms", RealmRules.Homage, "Homage", "A realm several times a neighbour's size takes it as a vassal, whole"),
         ("Realms", RealmRules.Secession, "Secession", "An overstretched realm loses a block of its edge, which becomes a realm of its own"),
         ("Realms", RealmRules.Collapse, "Collapse", "An unstable realm's vassals all walk out at once"),
+        ("Realms", RealmRules.Independence, "Independence", "A vassal throws off its liege — most readily when the whole realm "
+            + "overreaches, the vassal rivals its liege's own land, its people are foreign, or a new or child ruler "
+            + "has just taken the throne. A freed realm will not swear to that realm again for a generation"),
         ("People", RealmRules.Succession, "Succession", "A ruler's death can divide the realm among heirs or put another house on the throne. "
             + "Off, rulers still die, and one heir of the same house takes everything"),
         ("Titles", RealmRules.DeJureDrift, "De jure drift", "A duchy held for a century by a realm based in another de jure kingdom "
@@ -117,6 +121,8 @@ internal sealed class HistoryPanel : Panel
             3.0, s => s.Aggression, (s, v) => s with { Aggression = v }),
         ("Realms", "Turbulence", "How readily overstretched and unstable realms fall apart — 0 holds every realm together",
             3.0, s => s.Turbulence, (s, v) => s with { Turbulence = v }),
+        ("Realms", "Independence", "How readily vassals throw off their lieges — 0 keeps every vassal loyal",
+            3.0, s => s.Independence, (s, v) => s with { Independence = v }),
         ("People", "Heirs", "How often a partition finds a second and a third heir — 0 means one heir takes all",
             2.0, s => s.Heirs, (s, v) => s with { Heirs = v }),
         ("People", "Crises", "How likely a succession in an unstable realm goes to a new house",
@@ -224,6 +230,7 @@ internal sealed class HistoryPanel : Panel
             ApplyRequested?.Invoke(AppliedHistory.Capture(_sim, _canvas.Counties, _rulers, _prehistory, _colourOf));
         };
         _discard.Click += (_, _) => DiscardRequested?.Invoke();
+        _changeYear.Click += (_, _) => ChangeYearRequested?.Invoke();
         _showConquests.CheckedChanged += (_, _) => RebuildChronicle();
         _showSuccessions.CheckedChanged += (_, _) => RebuildChronicle();
         _timer.Tick += (_, _) => OnFrame();
@@ -238,6 +245,7 @@ internal sealed class HistoryPanel : Panel
         tips.SetToolTip(_showSuccessions, "List every ruler's death and heir, not only the partitions and usurpations");
         tips.SetToolTip(_apply, "Make the realms as they stand now the world's start, and write the mod with them");
         tips.SetToolTip(_discard, "Go back to the realms the generator grows; takes effect when the mod is next written");
+        tips.SetToolTip(_changeYear, "Write the applied history as another year. Every date moves with it; nothing is simulated again");
         tips.SetToolTip(_viewButtons[MapView.Realms], "Colour the map by independent realm");
         tips.SetToolTip(_viewButtons[MapView.Kingdoms], "Colour the map by de jure kingdom, as drift has left them");
         tips.SetToolTip(_viewButtons[MapView.Empires], "Colour the map by de jure empire, as drift has left them");
@@ -264,6 +272,7 @@ internal sealed class HistoryPanel : Panel
         toolbar.Controls.Add(_stats);
 
         _appliedBar.Controls.Add(_appliedNote);
+        _appliedBar.Controls.Add(_changeYear);
         _appliedBar.Controls.Add(_discard);
 
         BuildSettingsPanel(tips);
@@ -308,6 +317,9 @@ internal sealed class HistoryPanel : Panel
 
     /// <summary>The applied history is to be dropped.</summary>
     public event Action? DiscardRequested;
+
+    /// <summary>The applied history is to be written as another year: the same history, every date moved.</summary>
+    public event Action? ChangeYearRequested;
 
     /// <summary>
     /// Says, above the map, which history the next write will use. Shown whenever one is pending
@@ -690,6 +702,8 @@ internal sealed class HistoryPanel : Panel
         if (_sim.SettledIn(county) is { } settled) text += $", settled {settled}";
         if (owner.Suzerain is { } lord) text += $", sworn to {lord.Capital.Name}";
         if (owner.Root != owner && owner.Root != owner.Suzerain) text += $" under {owner.Root.Capital.Name}";
+        if (owner.Suzerain is not null && _sim.Rules.HasFlag(RealmRules.Independence))
+            text += $" (breaks away {_sim.IndependenceChance(owner):0.0%} a year)";
         if (_sim.RulerOf(owner) is { } ruler)
             text += $" · ruled by {ruler.Name} of {ruler.House.Name}, {_sim.Year - ruler.Born}, since {ruler.Crowned}"
                     + (ruler.Parent is { } parent ? $", {(ruler.Female ? "daughter" : "son")} of {parent.Name}" : "")

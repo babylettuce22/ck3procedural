@@ -162,10 +162,26 @@ gen_ruin_is_suffering_trigger = {
 	OR = {
 		gen_ruin_suffer_control_trigger = yes
 		gen_ruin_suffer_opinion_trigger = yes
-		gen_ruin_suffer_plague_trigger = yes
 		gen_ruin_suffer_devdrop_trigger = yes
 	}
 }
+
+# ---- `gen_ruin_suffer_plague_trigger` left this list on 2026-09-26, for the contested arm's reason ----
+#
+# An epidemic works on a county by holding its control down (vanilla's infection modifiers use
+# `monthly_county_control_decline_add`), and gen_ruin_suffer_control_trigger already scores exactly
+# that. So the plague arm was the epidemic counted a second time, the same double charge the
+# contested arm was removed for.
+#
+# Measured on one 245-county world that the Black Death covered for 45 years (2267-2312): of 5,009
+# bad years, plague was true in 4,145 and control in 4,765, and plague was the ONLY arm true in 69
+# (1%). The report credited plague as "dominant" in 32 of 55 falls, but only because the two arms
+# tied year for year. Replaying that log without the arm moved predicted falls by 7%. What it removes
+# is the false attribution, not the rate. The rate belongs to how an epidemic's years are forgiven,
+# which is a separate decision.
+#
+# It stays DEFINED and the tally still counts it, like the contested arm. The `c_plague` column keeps
+# reporting how much of a streak happened under an epidemic, which is the number that decision needs.
 
 # ---- `gen_ruin_suffer_contested_trigger` is NOT in that list, as of the 122-year measurement ----
 #
@@ -306,6 +322,9 @@ gen_ruin_suffer_opinion_trigger = {
 
 # Plague. Reachable only with the relevant content installed; on a base-game install the list is
 # simply empty and this arm contributes nothing rather than erroring.
+#
+# An OBSERVATION since 2026-09-26, not a charge: gen_ruin_is_suffering_trigger no longer reads it,
+# and the only caller is the telemetry tally. See the note under that trigger.
 gen_ruin_suffer_plague_trigger = {
 	any_county_province_epidemic = { count >= 1 }
 }

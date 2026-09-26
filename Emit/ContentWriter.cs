@@ -155,6 +155,7 @@ public static partial class ContentWriter
         {
             CompatibilityWriter.WriteDefines(modDir, gameDir, cfg);
             CompatibilityWriter.WriteCultureEras(modDir, gameDir, cfg);
+            CompatibilityWriter.WriteEpidemicDates(modDir, gameDir, cfg);
             CompatibilityWriter.WriteCalendarLocalisation(modDir, calendar);
             var regionMembers = steppe.RegionMembers();
             foreach (var (key, members) in silkRoad.RegionMembers()) regionMembers[key] = members;

@@ -11,8 +11,10 @@
 # not, and no threshold can tell them apart.
 #
 # So nothing here is a level. Every point is scored against a county's own recent past or against
-# conditions that mean the same thing at any development: control lost, ground occupied, plague in
-# the province, a population that hates whoever claims to hold it. A county has to hold one of those
+# conditions that mean the same thing at any development: control lost and not coming back, a
+# population that hates whoever claims to hold it, development falling. (A year spent occupied, or under an
+# epidemic, is observed but not scored as a bad year, because each already shows up as lost control.
+# The occupation itself still costs its shock points. See 00_ruins_triggers.txt.) A county has to hold one of those
 # every year without a break before anything happens, and a single good year wipes the count.
 
 # ---- The ladder ------------------------------------------------------------------------------

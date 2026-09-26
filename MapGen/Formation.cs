@@ -119,7 +119,15 @@ public enum RealmRules
     /// </summary>
     Wars = 256,
 
-    All = Conquest | Homage | Secession | Collapse | Succession | DeJureDrift | Colonisation | Ruination | Wars,
+    /// <summary>
+    /// A vassal throws off its liege: most often when the liege's whole bloc is overstretched, the
+    /// vassal rivals the liege's own land, its people are not the overlord's, or a new or child
+    /// ruler has just taken the liege's throne. A realm that broke free will not swear to that
+    /// bloc again for a generation. Only the History workspace; see <c>HistorySim.IndependenceYear</c>.
+    /// </summary>
+    Independence = 512,
+
+    All = Conquest | Homage | Secession | Collapse | Succession | DeJureDrift | Colonisation | Ruination | Wars | Independence,
 }
 
 /// <summary>One thing the simulation did, dated, with both parties named.</summary>
@@ -332,6 +340,15 @@ public static class Formation
         /// </summary>
         public Func<Polity, Polity, Title, bool>? Wage { get; set; }
 
+        /// <summary>
+        /// Asked, once homage's own dice have come up, whether the would-be vassal (first) will
+        /// swear to the would-be suzerain (second); false turns the homage into the attack a failed
+        /// roll falls through to. Only the History workspace sets it (see
+        /// <c>HistorySim.Submits</c>); unset, every homage the dice grant is taken, as generation
+        /// has always run. Asked after the roll, so it never changes which dice are drawn.
+        /// </summary>
+        public Func<Polity, Polity, bool>? Submits { get; set; }
+
         /// <summary>How readily they fall apart. Settable as <see cref="Aggression"/> is.</summary>
         public required double Turbulence { get; set; }
 
@@ -366,7 +383,7 @@ public static class Formation
         // negative date, and the event log is dated from here — nothing emits it yet, but a run
         // configured with more centuries than the calendar has would otherwise hand the first
         // consumer of it a pile of unwritable dates.
-        int epochs = Math.Max(1, Math.Min(cfg.FormationYears, cfg.StartYear - 1) / EpochYears);
+        int epochs = cfg.FormationEpochs(cfg.StartYear);
         int firstYear = cfg.StartYear - epochs * EpochYears;
 
         // Index order, not tree order, for the reason the chronicle gives: the tree is rebuilt every
@@ -766,7 +783,8 @@ public static class Formation
             && defender.Counties.Count >= 2
             && atk > def * 2.2
             && rng.Chance(0.45 * sim.Aggression)
-            && sim.Rules.HasFlag(RealmRules.Homage))
+            && sim.Rules.HasFlag(RealmRules.Homage)
+            && sim.Submits?.Invoke(defender, p) != false)
         {
             defender.Suzerain = p;
             sim.Log(FormationKind.Vassalized, defender.Capital, defender, p,

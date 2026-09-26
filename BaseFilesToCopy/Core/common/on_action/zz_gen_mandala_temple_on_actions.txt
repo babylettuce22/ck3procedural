@@ -1,5 +1,5 @@
-﻿# The starting Mandala Temple Complex, given to generated mandala kings the way vanilla gives it to
-# its own.
+﻿# The starting Mandala Temple Complex, given to generated mandala kings and independent mandala
+# dukes the way vanilla gives it to its own.
 #
 # ---- What this is ----
 #
@@ -9,13 +9,20 @@
 # them, so no generated mandala realm starts with one. The government still works without it:
 # vanilla's generic mandala setup (legitimacy, the starter decree, succession) keys on the
 # government flag and runs for ours. What is missing is the building's own modifiers (+1 domain
-# limit, +1 vassal cap, levies and garrison) and the AI God-king story, which vanilla only creates
-# for a ruler who already has a temple (has_mandala_capital_trigger).
+# limit, +1 vassal cap, levies and garrison), Mandala Radiance itself (the character window greys
+# it out with "must have the Ornate Temple" until the capital has one), and the AI God-king story,
+# which vanilla only creates for a ruler who already has a temple (has_mandala_capital_trigger).
 #
 # ---- The design ----
 #
-# * Kingdom tier and above, the same line vanilla's God-king story draws. A mandala duke builds his
-#   own as a great project, as he would in vanilla.
+# * Kingdom tier and above, the same line vanilla's God-king story draws, and independent dukes
+#   too. Vanilla's mandalas are all kingdoms, but the generator makes a jungle realm mandala at
+#   whatever size it grew to, and an independent duke with no temple has no Radiance at all from
+#   the first day. Mandala vassals below a king get none, as in vanilla: they build their own as a
+#   great project.
+#
+# * Kings first, dukes second, so a duke never takes the last slot in a de jure kingdom that a
+#   king in it would otherwise have had.
 #
 # * on_game_start, not _after_lobby, so the temple exists before vanilla's after-lobby pass looks
 #   for it. That pass then gives the AI kings their God-king story itself, and nothing here has to
@@ -26,8 +33,10 @@
 #   one is not something to rely on.
 #
 # * less_than_max_amount_of_mandala_capitals_trigger is vanilla's per-de-jure-kingdom cap, the same
-#   one that governs rebuilding. Honoured so two mandala kings in one de jure kingdom do not both
-#   start with a complex that vanilla would never let the second one build.
+#   one that governs rebuilding. Honoured so two mandala rulers in one de jure kingdom do not both
+#   start with a complex that vanilla would never let the second one build. It is checked again
+#   inside the effect, not only in the list's limit: the list is gathered before any temple is
+#   placed, so the limit alone cannot see the ones this same pass has just added.
 #
 # * Added to mandala_poi_list the way vanilla adds each of its own, so the travel point of
 #   interest can find it.
@@ -50,13 +59,33 @@ gen_mandala_starting_temples = {
 					highest_held_title_tier >= tier_kingdom
 					exists = capital_province
 					has_mandala_capital_trigger = no
-					less_than_max_amount_of_mandala_capitals_trigger = yes
 				}
-				capital_province = {
-					add_great_building = mandala_capital_01
-					add_to_global_variable_list = {
-						name = mandala_poi_list
-						target = this
+				if = {
+					limit = { less_than_max_amount_of_mandala_capitals_trigger = yes }
+					capital_province = {
+						add_great_building = mandala_capital_01
+						add_to_global_variable_list = {
+							name = mandala_poi_list
+							target = this
+						}
+					}
+				}
+			}
+			every_independent_ruler = {
+				limit = {
+					government_has_flag = government_is_mandala
+					highest_held_title_tier = tier_duchy
+					exists = capital_province
+					has_mandala_capital_trigger = no
+				}
+				if = {
+					limit = { less_than_max_amount_of_mandala_capitals_trigger = yes }
+					capital_province = {
+						add_great_building = mandala_capital_01
+						add_to_global_variable_list = {
+							name = mandala_poi_list
+							target = this
+						}
 					}
 				}
 			}

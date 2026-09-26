@@ -877,6 +877,10 @@ public sealed partial class MainForm : ChromeForm
         _workspacePages[Workspace.History] = Page(_history);
         _history.ApplyRequested += applied => ApplyHistoryAsync(applied).Forget("apply history");
         _history.DiscardRequested += DiscardHistory;
+        _history.ChangeYearRequested += () =>
+        {
+            if (_options.AppliedHistory is { } applied) ApplyHistoryAsync(applied, changing: true).Forget("change history year");
+        };
 
         // All of them start visible, so the first layout sizes every one of them — the splitters
         // placed in OnLoad clamp to the size they are given, and a page that has never been laid
@@ -2913,7 +2917,9 @@ public sealed partial class MainForm : ChromeForm
     /// result. Without one it is the ordinary write, with the history on
     /// <see cref="Core.GenerationOptions.AppliedHistory"/>; the two produce the same files.
     /// </summary>
-    private async Task ApplyHistoryAsync(MapGen.AppliedHistory applied)
+    /// <param name="changing">True to write the history already applied as another year — the
+    /// applied bar's Change year. The same dialog and the same write; only its wording differs.</param>
+    private async Task ApplyHistoryAsync(MapGen.AppliedHistory applied, bool changing = false)
     {
         if (_busy) return;
 
@@ -2931,24 +2937,24 @@ public sealed partial class MainForm : ChromeForm
         }
 
         var cfg = _options.Config;
-        var answer = MessageBox.Show(this,
-            $"Make the realms of {applied.Year} this world's start?\n\n"
-            + (target is not null
-                ? $"Only what follows from who rules what is rewritten in {target.Value.ModDir}, dated "
-                  + $"{applied.Year}: title and province history, rulers and families, artifacts, bookmarks "
-                  + "and the chronicle. Terrain, titles, cultures, faiths and everything else stay as written.\n\n"
-                : $"The mod is written starting in {applied.Year}. Titles, cultures, faiths, development and "
-                  + "wilderness stay as generated; rulers, families, governments and title history are drawn "
-                  + "fresh for the new realms.\n\n")
-            + $"Advancement stays at {cfg.EraYear}"
-            + (cfg.EraAnchorYear <= 0 ? " — for this world it no longer follows the World Year" : "")
-            + ". Change Advancement Year in the settings to move it.\n\n"
-            + (cfg.UsesAdditionalBookmarks ? "Additional bookmarks are not written for an applied history yet.\n\n" : "")
-            + "The settings keep their own World Year. The History workspace says which history is in use "
-            + "until it is discarded there.",
-            "Apply history", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
+        string what = (target is not null
+                ? $"Only what follows from who rules what is rewritten in {target.Value.ModDir}: title and "
+                  + "province history, rulers and families, artifacts, bookmarks and the chronicle. Terrain, "
+                  + "titles, cultures, faiths and everything else stay as written."
+                : "The mod is written in full. Titles, cultures, faiths, development and wilderness stay as "
+                  + "generated; rulers, families, governments and title history follow the history's realms.")
+            + (cfg.UsesAdditionalBookmarks ? " Additional bookmarks are not written for an applied history yet." : "")
+            + " The settings keep their own World Year.";
 
-        if (answer != DialogResult.OK) return;
+        using (var dialog = new ApplyHistoryDialog(applied.Year, applied.YearRange(cfg), _written?.Calendar, what,
+                   cfg.EraYear, changing))
+        {
+            if (dialog.ShowDialog(this) != DialogResult.OK) return;
+            if (changing && dialog.Year == applied.Year) return;
+
+            // Written as another year: the same history, every date moved. See AppliedHistory.ShiftedBy.
+            applied = applied.ShiftedBy(dialog.Year - applied.Year);
+        }
 
         _options.AppliedHistory = applied;
         _history.ShowApplied(applied);
@@ -3284,7 +3290,7 @@ public sealed partial class MainForm : ChromeForm
                 {
                     if (applied.Mismatch(r.Titles) is null)
                     {
-                        r = r.WithConfig(r.Config.AtStartYear(applied.Year));
+                        r = r.WithConfig(r.Config.AtStartYear(applied.Year, applied.PeopleSalt));
                         Console.WriteLine($"Applied history: written as {r.Config.StartYear}, as advanced as {r.Config.EraYear}"
                             + (cfg.UsesAdditionalBookmarks ? "; additional bookmarks are not written for it" : ""));
                     }

@@ -137,6 +137,7 @@ public sealed partial class HistorySim
         history.SeatDeJure();
         history.SeatWilds(wilds);
         history.SeatWars();
+        history.SeatIndependence();
         return history;
     }
 
@@ -168,6 +169,10 @@ public sealed partial class HistorySim
         // The people's year, after the realms': rulers for realms born this year, then deaths and
         // successions. On its own stream, so switching Succession changes no realm's dice.
         RulersYear();
+
+        // Vassals breaking away, after the successions whose new and child rulers they press on,
+        // and on a stream of their own. See HistoryIndependence.
+        IndependenceYear();
 
         // The frontier's year: land settled and land abandoned, after the wars and successions and
         // on its own stream, so switching either changes nothing else's dice this year.

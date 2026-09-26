@@ -42,8 +42,9 @@ namespace Ck3MapGen.MapGen;
 /// decay count whenever causes overlap. The useful reading is per-fall dominance: which single arm
 /// was true for the most years of the run that killed this county. A world where <c>control</c>
 /// dominates every fall is a world where ruination is measuring administration; one where
-/// <c>devdrop</c> dominates is measuring economics; one where <c>contested</c> dominates is measuring
-/// war, which is the failure mode this mechanic was rewritten to stop having.
+/// <c>devdrop</c> dominates is measuring economics. <c>contested</c> and <c>plague</c> are still
+/// tallied but no longer score, so they are listed apart as "observed, not scored" and never
+/// dominate: each double-counted the lost control the control arm already scores.
 /// </para>
 /// <para>
 /// ---- Robustness ----
@@ -73,18 +74,23 @@ public static class RuinLogReport
         public int Length => Since > 0 && Year >= Since ? Year - Since : 0;
 
         /// <summary>
-        /// The arm that was true for the most years of this streak, or "none" when nothing was
-        /// counted. Ties go to the earlier name in the list, which is stable rather than meaningful —
-        /// a genuinely tied fall is a compound cause and the per-arm totals are where to read it.
+        /// The SCORING arm that was true for the most years of this streak, or "none" when nothing
+        /// was counted. Ties go to the earlier name in the list, which is stable rather than
+        /// meaningful — a genuinely tied fall is a compound cause and the per-arm totals are where
+        /// to read it.
         /// </summary>
+        /// <remarks>
+        /// Contested and plague are tallied but no longer score (the report lists them as "observed,
+        /// not scored"), so they cannot be dominant. Plague, when it could, tied control year for year under an epidemic
+        /// and was credited with falls control explained just as well.
+        /// </remarks>
         public string Dominant
         {
             get
             {
                 (string Name, int N)[] arms =
                 [
-                    ("contested", Contested), ("no-control", NoControl), ("hated", Hated),
-                    ("plague", Plague), ("emptying", Emptying),
+                    ("no-control", NoControl), ("hated", Hated), ("emptying", Emptying),
                 ];
                 var best = arms.OrderByDescending(a => a.N).First();
                 return best.N == 0 ? "none" : best.Name;
@@ -300,33 +306,29 @@ public static class RuinLogReport
             return;
         }
 
-        (string Name, Func<Entry, int> Get)[] arms =
+        (string Name, string Key, Func<Entry, int> Get)[] arms =
         [
-            ("contested (somebody else holds it)", e => e.Contested),
-            ("no control", e => e.NoControl),
-            ("hated", e => e.Hated),
-            ("plague", e => e.Plague),
-            ("emptying (development falling)", e => e.Emptying),
+            ("no control", "no-control", e => e.NoControl),
+            ("hated", "hated", e => e.Hated),
+            ("emptying (development falling)", "emptying", e => e.Emptying),
         ];
 
         var dominant = set.GroupBy(e => e.Dominant).ToDictionary(g => g.Key, g => g.Count());
 
         Console.WriteLine("  cause                                 dominated     total years");
-        foreach (var (name, get) in arms)
+        foreach (var (name, key, get) in arms)
         {
-            string key = name.Split(' ')[0] switch
-            {
-                "contested" => "contested",
-                "no" => "no-control",
-                "hated" => "hated",
-                "plague" => "plague",
-                _ => "emptying",
-            };
             dominant.TryGetValue(key, out int dom);
             Console.WriteLine($"  {name,-36}  {dom,5} ({dom * 100.0 / set.Count,3:0}%)  {set.Sum(get),11}");
         }
         if (dominant.TryGetValue("none", out int none) && none > 0)
             Console.WriteLine($"  {"(no cause recorded)",-36}  {none,5} ({none * 100.0 / set.Count,3:0}%)");
+
+        // Observed, not scored: how many of those years were also spent occupied or under an
+        // epidemic. No dominance column, because neither can make a year bad any more.
+        Console.WriteLine("  observed, not scored:");
+        Console.WriteLine($"  {"contested (somebody else holds it)",-36}  {"",12}  {set.Sum(e => e.Contested),11}");
+        Console.WriteLine($"  {"plague (an epidemic in the county)",-36}  {"",12}  {set.Sum(e => e.Plague),11}");
         Console.WriteLine();
     }
 

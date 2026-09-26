@@ -222,7 +222,7 @@ public static partial class ContentWriter
             throw new InvalidOperationException(
                 "This world was written without the history it would need to be re-emitted. Write the mod again.");
 
-        var cfg = result.Config.AtStartYear(applied.Year);
+        var cfg = result.Config.AtStartYear(applied.Year, applied.PeopleSalt);
         var runStarted = DateTime.UtcNow;
         var provinces = result.Provinces;
         var order = result.ProvinceOrder;
@@ -297,6 +297,9 @@ public static partial class ContentWriter
             // offset of zero has to take away the thresholds an earlier one shifted.
             if (cfg.EraOffset == 0) DeleteDirectoryIfPresent(modDir, "common", "culture", "eras");
             CompatibilityWriter.WriteCultureEras(modDir, gameDir, cfg);
+            // Same rule for the Black Death's date gate, which moves by the same offset.
+            if (cfg.EraOffset == 0) DeleteDirectoryIfPresent(modDir, "common", "epidemics");
+            CompatibilityWriter.WriteEpidemicDates(modDir, gameDir, cfg);
 
             // The disaster regions keep clear of the hegemon's realm, which has just changed.
             var regionMembers = world.Steppe.RegionMembers();

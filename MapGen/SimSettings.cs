@@ -21,6 +21,9 @@ public sealed record SimSettings
     /// <summary>How readily overstretched and unstable realms come apart, times the world's own.</summary>
     public double Turbulence { get; init; } = 1.0;
 
+    /// <summary>How readily vassals throw off their lieges, times the usual. 0 is never.</summary>
+    public double Independence { get; init; } = 1.0;
+
     /// <summary>How often a partition finds a second and a third heir, times the usual 50% and 25%.</summary>
     public double Heirs { get; init; } = 1.0;
 

@@ -87,6 +87,70 @@ public sealed class AppliedHistory
     /// <summary>The start date the history was run on from.</summary>
     public required int FromYear { get; init; }
 
+    /// <summary>
+    /// The year the history was captured at, kept when its dates are moved: every draw of a person
+    /// the history did not simulate is salted with it (see <see cref="Config.MapConfig.PeopleSalt"/>), so
+    /// a history written as another year keeps its people. Zero in a file saved before it existed,
+    /// which means <see cref="Year"/>.
+    /// </summary>
+    public int Salt { get; init; }
+
+    /// <summary>What the people are drawn with: <see cref="Salt"/>, or the year for an older file.</summary>
+    public int PeopleSalt => Salt != 0 ? Salt : Year;
+
+    /// <summary>
+    /// The same history written as a different year: every date in it moved by
+    /// <paramref name="delta"/> — the start it ran from, the realms' foundings, every ruler's birth,
+    /// reign and death, the wars, truces and claims — and nothing else. The people keep their
+    /// <see cref="PeopleSalt"/> and the ids they were written under, so the world is the one it was,
+    /// relabelled: a world grows the same realms from any start year with the same formation epochs
+    /// (see <see cref="YearRange"/>).
+    /// </summary>
+    public AppliedHistory ShiftedBy(int delta)
+    {
+        if (delta == 0) return this;
+        return new AppliedHistory
+        {
+            Year = Year + delta,
+            FromYear = FromYear + delta,
+            Salt = PeopleSalt,
+            Ground = Ground,
+            NextId = NextId,
+            Realms = [.. Realms.Select(r => r with
+            {
+                Founded = r.Founded + delta,
+                RulerBorn = r.RulerBorn > 0 ? r.RulerBorn + delta : 0,
+            })],
+            RealmLineage = RealmLineage,
+            SeatLineage = SeatLineage,
+            Reigns = [.. Reigns.Select(r => r with { Born = r.Born + delta, Crowned = r.Crowned + delta, Died = r.Died + delta })],
+            Colours = Colours,
+            DeJure = DeJure,
+            Settled = Settled,
+            SettlerCultures = SettlerCultures,
+            Fallen = Fallen,
+            Wars = [.. Wars.Select(w => w with { Started = w.Started + delta })],
+            Truces = [.. Truces.Select(t => t with { Until = t.Until + delta })],
+            Claims = [.. Claims.Select(c => c with { Until = c.Until + delta })],
+        };
+    }
+
+    /// <summary>
+    /// The years this history can be written as: any that keeps the world it started from growing
+    /// the same realms — the same number of formation epochs before <see cref="FromYear"/>, moved —
+    /// and no later than CK3's calendar goes. With the default six centuries of formation, anything
+    /// from the formation years plus the span of the history onwards.
+    /// </summary>
+    public (int Min, int Max) YearRange(Config.MapConfig cfg)
+    {
+        int span = Year - FromYear;
+        int epochs = cfg.FormationEpochs(FromYear);
+        int min = FromYear, max = FromYear;
+        while (min > 2 && cfg.FormationEpochs(min - 1) == epochs) min--;
+        while (max + span < 9999 && cfg.FormationEpochs(max + 1) == epochs) max++;
+        return (min + span, max + span);
+    }
+
     /// <summary>Which counties, on which baronies, the history was simulated over.</summary>
     public required string Ground { get; init; }
 
@@ -331,6 +395,7 @@ public sealed class AppliedHistory
         return new()
         {
             Year = sim.Year,
+            Salt = sim.Year,
             FromYear = sim.StartYear,
             Ground = GroundOf(counties),
             NextId = sim.NextId,
@@ -632,7 +697,7 @@ public sealed class AppliedHistory
             if (polityAt.TryGetValue(seat, out int id) && RealmLineage.TryGetValue(id, out var realm))
                 result[seat] = realm;
             else if (SeatLineage.TryGetValue(seat.Index, out var local)
-                     && Core.Rng.For(seed, 0x51D1, seat.Index, Year).NextDouble() < endures)
+                     && Core.Rng.For(seed, 0x51D1, seat.Index, PeopleSalt).NextDouble() < endures)
                 result[seat] = local;
         }
 

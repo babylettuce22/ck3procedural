@@ -457,15 +457,26 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// and nothing yet places them on the simulated timeline. A shallow copy, as
     /// <see cref="AtAdvancement"/> is; the settings grid keeps showing the user's own values.
     /// </summary>
-    internal MapConfig AtStartYear(int year)
+    /// <param name="salt">The <see cref="PeopleSalt"/> to draw people with: the year by default, or
+    /// the one an applied history was first captured at, which stays with it when its dates are
+    /// moved (see <c>AppliedHistory.ShiftedBy</c>) so a relabelled year keeps the same people.</param>
+    internal MapConfig AtStartYear(int year, int? salt = null)
     {
         var copy = (MapConfig)MemberwiseClone();
         if (copy.EraAnchorYear <= 0) copy.EraAnchorYear = Math.Max(1, EraYear);
         copy.StartYear = year;
         copy.AdditionalBookmarks = false;
-        copy.PeopleSalt = year;
+        copy.PeopleSalt = salt ?? year;
         return copy;
     }
+
+    /// <summary>
+    /// How many epochs the formation runs for a world starting in <paramref name="startYear"/>: the
+    /// formation years, or as many as fit after year one. Two start years with the same count grow
+    /// the same realms — the formation counts back from the start, never from a fixed date.
+    /// </summary>
+    internal int FormationEpochs(int startYear)
+        => Math.Max(1, Math.Min(FormationYears, startYear - 1) / MapGen.Formation.EpochYears);
 
     /// <summary>
     /// Mixed into every per-person draw — a ruler's name, sex, birth and upbringing, and the family
