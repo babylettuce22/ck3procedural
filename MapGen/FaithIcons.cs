@@ -10,7 +10,8 @@ public sealed record FaithIconRecipe(
     string Frame,
     FaithIcons.Tier Tier,
     string Material,
-    string? ReformedMaterial);
+    string? ReformedMaterial,
+    string? Engraving = null);
 
 /// <summary>
 /// Designs an icon for every generated faith, in the relief style rendered by
@@ -199,6 +200,27 @@ public static class FaithIcons
         ["electrum"] = "pale", ["obsidian"] = "black",
     };
 
+    /// <summary>
+    /// The engravings cut into an enamelled frame field (see <see cref="Emit.Relief.ReliefMotifs.Engraving"/>),
+    /// and the frames that have such a field.
+    /// </summary>
+    public static readonly string[] Engravings = ["Sunburst", "Diaper", "Spirograph"];
+    private static readonly HashSet<string> FramesWithField = new(StringComparer.Ordinal) { "medallion", "lobed" };
+
+    /// <summary>
+    /// A framed faith's engraving: one its religion has not used yet where one is left, so sibling
+    /// faiths in the same frame still tell apart. From a stream of its own, so adding it moved none
+    /// of the material draws that come off the faith's icon stream.
+    /// </summary>
+    private static string PickEngraving(int seed, Faith faith, List<string> usedInReligion)
+    {
+        var order = Engravings.ToList();
+        Seeded(seed, faith.Key, "engraving").Shuffle(order);
+        string pick = order.FirstOrDefault(e => !usedInReligion.Contains(e)) ?? order[0];
+        usedInReligion.Add(pick);
+        return pick;
+    }
+
     /// <summary>Half of all flagships go unframed; the rest of the faiths draw frames from this bag.</summary>
     private static readonly (string Frame, int Weight)[] FrameBag =
         [("none", 5), ("ring", 2), ("medallion", 2), ("lobed", 1), ("rayed", 1)];
@@ -243,6 +265,7 @@ public static class FaithIcons
             var used = new HashSet<(string, string, string)>();
             var groups = new HashSet<string>(StringComparer.Ordinal);
             var reformedGroups = new HashSet<string>(StringComparer.Ordinal);
+            var engravingsUsed = new List<string>();
 
             // The faith with a head (else the first) carries the plain, unframed flagship design.
             var flagship = members.FirstOrDefault(HasHead) ?? members[0];
@@ -262,7 +285,9 @@ public static class FaithIcons
                         variant, frame, used, reformedGroups)
                     : null;
 
-                result.Add(new FaithIconRecipe(faith, fam, variant, frame, tier, material, reformed));
+                string? engraving = FramesWithField.Contains(frame) ? PickEngraving(seed, faith, engravingsUsed) : null;
+
+                result.Add(new FaithIconRecipe(faith, fam, variant, frame, tier, material, reformed, engraving));
             }
         }
         return result;

@@ -38,7 +38,7 @@ public static class FaithIconWriter
         string dir = Path.Combine(modDir, IconDir.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(dir);
 
-        var designs = recipes.GroupBy(r => (r.Motif, r.Frame)).ToList();
+        var designs = recipes.GroupBy(r => (r.Motif, r.Frame, r.Engraving)).ToList();
         int written = 0;
 
         // One design per thread; the raster operations underneath are sequential on purpose. A
@@ -48,7 +48,8 @@ public static class FaithIconWriter
         {
             Parallel.ForEach(designs, options, design =>
             {
-                var (canvas, fieldInlay) = ReliefMotifs.Build(design.Key.Motif, design.Key.Frame, CanvasSize);
+                var (canvas, fieldInlay) = ReliefMotifs.Build(design.Key.Motif, design.Key.Frame, CanvasSize,
+                    engraving: design.Key.Engraving);
                 var surface = ReliefShading.Surface(canvas, fieldInlay);
 
                 foreach (var recipe in design)
@@ -100,15 +101,16 @@ public static class FaithIconWriter
         foreach (var r in recipes)
         {
             var (cr, cg, cb) = r.Faith.Color;
-            string key = $"{r.Motif}|{r.Frame}|{r.Material}|{cr:F3},{cg:F3},{cb:F3}|{size}";
+            string key = $"{r.Motif}|{r.Frame}|{r.Engraving}|{r.Material}|{cr:F3},{cg:F3},{cb:F3}|{size}";
             if (PreviewCache.TryGetValue(key, out var cached)) result[r.Faith] = cached;
             else missing.Add((r, key));
         }
 
         var rendered = new System.Collections.Concurrent.ConcurrentDictionary<Faith, byte[]>();
-        Parallel.ForEach(missing.GroupBy(m => (m.Recipe.Motif, m.Recipe.Frame)), design =>
+        Parallel.ForEach(missing.GroupBy(m => (m.Recipe.Motif, m.Recipe.Frame, m.Recipe.Engraving)), design =>
         {
-            var (canvas, fieldInlay) = ReliefMotifs.Build(design.Key.Motif, design.Key.Frame, size * 8);
+            var (canvas, fieldInlay) = ReliefMotifs.Build(design.Key.Motif, design.Key.Frame, size * 8,
+                engraving: design.Key.Engraving);
             var surface = ReliefShading.Surface(canvas, fieldInlay);
             foreach (var (recipe, key) in design)
             {

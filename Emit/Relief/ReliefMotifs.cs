@@ -55,10 +55,16 @@ public static class ReliefMotifs
     /// A finished design: the frame drawn, the motif drawn inside it, and the frame's uncovered
     /// field (if it has one) marked as inlay alongside whatever the motif marked itself.
     /// </summary>
-    public static (ReliefCanvas Canvas, Mask? FieldInlay) Build(string motif, string frame, int n = 1000, double extent = 1.2)
+    /// <param name="engraving">
+    /// The pattern cut into a medallion's or lobed plaque's enamelled field, by
+    /// <see cref="Engraving"/> name. Ignored by frames without a field.
+    /// </param>
+    public static (ReliefCanvas Canvas, Mask? FieldInlay) Build(string motif, string frame, int n = 1000, double extent = 1.2,
+        string? engraving = null)
     {
         var cv = new ReliefCanvas(n, extent);
-        double scale = DrawFrame(cv, frame);
+        var pattern = Enum.TryParse<Engraving>(engraving, out var e) ? e : Engraving.Sunburst;
+        double scale = DrawFrame(cv, frame, pattern);
         cv.Scale = scale;
         var before = (double[])cv.H.Clone();
         Motifs[motif](cv);
@@ -936,48 +942,60 @@ public static class ReliefMotifs
 
     // ================================================================ frames
 
-    public enum FieldStyle { Flat, Domed, Engraved, DomedEngraved }
-
-    /// <summary>How a frame's enamelled field is shaped. Under evaluation; see <see cref="TreatField"/>.</summary>
-    public static FieldStyle FieldTreatment { get; set; } = FieldStyle.Flat;
-
     /// <summary>
-    /// Gives a frame's open field some surface for the enamel to catch light on: a shallow dome
-    /// rising toward the centre, fine engraving under the enamel, or both.
+    /// The patterns cut into a frame's enamelled field. A flat field read as a solid colour disc at
+    /// icon size; engraved, the enamel reads as enamel laid over guilloche, and the lines soften to
+    /// a sheen when the icon is drawn small. A domed field was tried too: low enough to leave the
+    /// motif alone it did not show, and high enough to show it swallowed the motif's lower edge.
     /// </summary>
-    private static void TreatField(ReliefCanvas cv, Mask field, double radius)
+    public enum Engraving { Sunburst, Diaper, Spirograph }
+
+    private const double LineHalfWidth = 0.006, LineDepth = 0.01;
+
+    /// <summary>Fine lines cut into a frame's field for the enamel to lie over, as guilloche is.</summary>
+    private static void Engrave(ReliefCanvas cv, Mask field, double radius, Engraving pattern)
     {
-        if (FieldTreatment is FieldStyle.Domed or FieldStyle.DomedEngraved)
+        void Line(Pt a, Pt b)
         {
-            var (cx, cy) = cv.Px(default);
-            double r = cv.U(radius), rise = cv.U(0.035);
-            for (int y = field.Y0; y < field.Y1; y++)
-                for (int x = field.X0; x < field.X1; x++)
-                {
-                    int i = y * cv.N + x;
-                    if (!field.Bits[i]) continue;
-                    double d2 = ((x + 0.5 - cx) * (x + 0.5 - cx) + (y + 0.5 - cy) * (y + 0.5 - cy)) / (r * r);
-                    cv.H[i] += rise * Math.Max(0, 1 - d2);
-                }
+            var d = (b - a).Unit;
+            var n = new Pt(-d.Y, d.X) * LineHalfWidth;
+            cv.Engrave(cv.Poly([a + n, b + n, b - n, a - n]) & field, LineDepth, LineHalfWidth * 0.8);
         }
 
-        if (FieldTreatment is FieldStyle.Engraved or FieldStyle.DomedEngraved)
+        void Circle(Pt c, double r) => cv.Engrave(cv.Ring(c, r - LineHalfWidth, r + LineHalfWidth) & field, LineDepth, LineHalfWidth * 0.8);
+
+        switch (pattern)
         {
-            // A sunburst of fine lines from the centre, and two rings: guilloche, as enamel is laid over.
-            for (int k = 0; k < 48; k++)
-            {
-                double a = k * Tau / 48, c = Math.Cos(a), s = Math.Sin(a), w = 0.006;
-                var ray = cv.Poly([new(0.1 * c - w * s, 0.1 * s + w * c), new(radius * c - w * s, radius * s + w * c),
-                                   new(radius * c + w * s, radius * s - w * c), new(0.1 * c + w * s, 0.1 * s - w * c)]);
-                cv.Engrave(ray & field, 0.01, 0.005);
-            }
-            foreach (double ring in new[] { radius * 0.55, radius * 0.8 })
-                cv.Engrave(cv.Ring(default, ring - 0.006, ring + 0.006) & field, 0.01, 0.005);
+            case Engraving.Sunburst:
+                for (int k = 0; k < 48; k++)
+                {
+                    double a = k * Tau / 48;
+                    Line(Pt.Polar(0.1, a), Pt.Polar(radius, a));
+                }
+                Circle(default, radius * 0.55);
+                Circle(default, radius * 0.8);
+                break;
+
+            case Engraving.Diaper:
+                // A lozenge lattice: two sets of parallel lines at 45 degrees.
+                for (double o = -1.4; o <= 1.4; o += 0.13)
+                {
+                    Line(new Pt(o - 1.2, -1.2), new Pt(o + 1.2, 1.2));
+                    Line(new Pt(o - 1.2, 1.2), new Pt(o + 1.2, -1.2));
+                }
+                break;
+
+            case Engraving.Spirograph:
+                // Twelve circles through the centre, overlapping into a rosette, inside a border ring.
+                for (int k = 0; k < 12; k++)
+                    Circle(Pt.Polar(radius * 0.45, k * Tau / 12), radius * 0.45);
+                Circle(default, radius * 0.92);
+                break;
         }
     }
 
     /// <summary>Draws a frame and returns the scale the motif should be drawn at inside it.</summary>
-    private static double DrawFrame(ReliefCanvas cv, string kind)
+    private static double DrawFrame(ReliefCanvas cv, string kind, Engraving engraving)
     {
         switch (kind)
         {
@@ -1008,7 +1026,7 @@ public static class ReliefMotifs
                 for (int y = disc.Y0; y < disc.Y1; y++)
                     for (int x = disc.X0; x < disc.X1; x++)
                         if (disc.Bits[y * cv.N + x] && cv.H[y * cv.N + x] < lim) field.Set(x, y);
-                TreatField(cv, field, 0.84);
+                Engrave(cv, field, 0.84, engraving);
                 cv.Floor = (double[])cv.H.Clone();
                 cv.Field = field;
                 return 0.7;
@@ -1025,7 +1043,7 @@ public static class ReliefMotifs
                 for (int y = m.Y0; y < m.Y1; y++)
                     for (int x = m.X0; x < m.X1; x++)
                         if (m.Bits[y * cv.N + x] && cv.H[y * cv.N + x] >= lim) field.Set(x, y);
-                TreatField(cv, field, 0.95);
+                Engrave(cv, field, 0.95, engraving);
                 cv.Floor = (double[])cv.H.Clone();
                 cv.Field = field;
                 return 0.72;
