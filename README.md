@@ -305,7 +305,11 @@ drainage, major-river carving, province partitioning, terrain classification, an
 hierarchy. Preview layers are published as these stages finish.
 
 `Core/Generator.WriteMod` exports the map and calls `Emit/ContentWriter.cs` to build and
-write the world content. Some raster work runs alongside content and history generation.
+write the world content. Its first step, `ContentWriter.BuildWorld`
+(`Emit/ContentWriter.World.cs`), decides the social layers (development, wilderness,
+cultures, realms, governments, faiths, cultivation, routes, water names) into a `WorldModel`
+without writing any files; the writers then emit from it. Some raster work runs alongside
+content and history generation.
 The installed game's vocabulary and data influence cultures, faiths, regiments, graphics,
 and compatibility output.
 

@@ -727,7 +727,9 @@ public static class MapDataWriter
     /// <summary>
     /// The straits and river crossings, in vanilla's shape. Overwrites the stub
     /// <see cref="WriteStubs"/> left, which is written first because the crossings need the
-    /// titles and the titles are made after the map data. Coordinates are measured from the
+    /// titles and the titles are made after the map data. The caller must have joined the thread
+    /// running <see cref="WriteAll"/> before calling this, or the stub can land on top of it.
+    /// Coordinates are measured from the
     /// bottom-left corner, as vanilla's are — checked against its own file: the Carrickfergus
     /// shore point lands on Carrickfergus only when y is taken from the bottom.
     /// </summary>
