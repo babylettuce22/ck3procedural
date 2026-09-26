@@ -1,0 +1,126 @@
+{
+  "format": "ck3-heightmap-forge-preset",
+  "version": 2,
+  "saved": "2026-09-25 00:00:00",
+  "project": {
+    "baseWidth": 8192,
+    "baseHeight": 4096,
+    "masterSeed": 830375,
+    "seaLevel": 0.07450981,
+    "previewLongEdge": 1024
+  },
+  "stages": [
+    {
+      "type": "ContinentStage",
+      "name": "Continents",
+      "enabled": true,
+      "params": {
+        "seed": 1337,
+        "frequency": 1.2,
+        "octaves": 8,
+        "lacunarity": 2.05,
+        "gain": 0.5,
+        "warpAmount": 0.75,
+        "warpFrequency": 0.5,
+        "warpOctaves": 1,
+        "landFraction": 0.36,
+        "fragmentation": 0.12,
+        "fragmentScale": 5,
+        "minFeature": 0.004,
+        "landHeight": 0.1,
+        "coastRamp": 0.0047,
+        "inlandRise": 0.04,
+        "inlandScale": 0.15,
+        "shoreDrop": 0.0001,
+        "shoreDepth": 0.4,
+        "shelfWidth": 0.039,
+        "oceanFloor": 0,
+        "edgeMode": 1,
+        "edgeMargin": 0.2,
+        "edgeStrength": 1.2,
+        "aspectCorrect": true
+      },
+      "layers": {
+        "coast": "00-coast.png"
+      }
+    },
+    {
+      "type": "BaseReliefStage",
+      "name": "Base Relief",
+      "enabled": true,
+      "params": {
+        "seed": 4242,
+        "frequency": 3,
+        "octaves": 5,
+        "gain": 0.5,
+        "warp": 0.35,
+        "amplitude": 0.08,
+        "shoreFade": 0.02,
+        "landOnly": true
+      }
+    },
+    {
+      "type": "HillStage",
+      "name": "Rolling Hills",
+      "enabled": true,
+      "params": {
+        "seed": 8080,
+        "frequency": 13.446,
+        "octaves": 5,
+        "gain": 0.44,
+        "warp": 0.3,
+        "amplitude": 0.12,
+        "slopeLimit": 4,
+        "patchiness": 0.472,
+        "patchScale": 2.3576999,
+        "landOnly": true
+      }
+    },
+    {
+      "type": "RidgeStage",
+      "name": "Ridges & Mountains",
+      "enabled": true,
+      "params": {
+        "seed": -89098401,
+        "rangeFrequency": 6,
+        "coverage": 0.36,
+        "edgeSoftness": 0.35,
+        "rangeWarp": 0.666,
+        "ridgeFrequency": 18.38,
+        "octaves": 6,
+        "lacunarity": 2.07,
+        "gain": 0.5,
+        "ridgeWarp": 0.21,
+        "sharpness": 1.6,
+        "amplitude": 1.0,
+        "basinDepth": 0.096,
+        "followElevation": 0.7,
+        "followInland": 0.6,
+        "inlandScale": 0.01,
+        "ceiling": 1,
+        "landOnly": true
+      }
+    },
+    {
+      "type": "HydraulicErosionStage",
+      "name": "Hydraulic Erosion (GPU)",
+      "enabled": true,
+      "params": {
+        "iterations": 350,
+        "reliefRatio": 0.094,
+        "timeStep": 0.04,
+        "rain": 0.02,
+        "evaporation": 0.02,
+        "capacity": 2.5,
+        "dissolve": 0.3,
+        "deposit": 0.3,
+        "minTilt": 0.01,
+        "channelThreshold": 0.05,
+        "talus": 0.35,
+        "thermalRate": 0.2,
+        "thermalEvery": 4,
+        "protectCoast": true
+      }
+    }
+  ]
+}

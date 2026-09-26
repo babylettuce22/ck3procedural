@@ -160,9 +160,10 @@ public sealed class ImageView : Control
             if (m.Msg != WmMouseWheel || view.IsDisposed || !view.IsHandleCreated || !view.Visible)
                 return false;
 
-            int packed = (int)(long)m.LParam;
-            var screen = new Point((short)(packed & 0xFFFF), (short)(packed >> 16));
-            if (!view.RectangleToScreen(view.ClientRectangle).Contains(screen)) return false;
+            // The window under the cursor, not the rectangle: an inspector floating over the map is
+            // inside the rectangle, and its wheel is its own. See WheelFollowsMouse.
+            var screen = WheelFollowsMouse.ScreenPoint(m.LParam);
+            if (!WheelFollowsMouse.IsOver(view, screen)) return false;
 
             var local = view.PointToClient(screen);
             int delta = (short)((long)m.WParam >> 16);

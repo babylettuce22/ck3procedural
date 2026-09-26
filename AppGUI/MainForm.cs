@@ -8,7 +8,7 @@ namespace Ck3MapGen.AppGUI;
 /// <summary>
 /// One window: choose a heightmap, tune the settings, look at what they produce, write the mod.
 /// </summary>
-public sealed partial class MainForm : Form
+public sealed partial class MainForm : ChromeForm
 {
     private readonly GenerationOptions _options;
     private readonly GuiState _state = GuiState.Load();
@@ -514,9 +514,9 @@ public sealed partial class MainForm : Form
         Controls.Add(BuildWorkspaces());
         Controls.Add(BuildWorkspaceBar());
 
-        // Docking lays out from the last control back, so the menu bar has to be added after the
-        // workspace bar to end up above it.
-        Controls.Add(BuildMenuBar());
+        // Docking lays out from the last control back, so the title row has to be added after the
+        // workspace bar to end up above it. The menu bar lives inside it; see ChromeForm.
+        Controls.Add(CaptionBar = new TitleBar(this, BuildMenuBar()));
         Controls.Add(BuildStatusBar());
 
         _lastModDir = _state.LastModDir;

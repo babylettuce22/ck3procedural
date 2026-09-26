@@ -20,7 +20,7 @@ namespace Ck3MapGen.AppGUI;
 /// Subclasses supply three things: the window's name, the wrappers for a selection, and any buttons
 /// beyond Revert.
 /// </summary>
-public abstract class InspectorForm : Form
+public abstract class InspectorForm : ChromeForm
 {
     protected readonly WorldEdits Edits;
 
@@ -96,6 +96,10 @@ public abstract class InspectorForm : Form
         MinimizeBox = false;
         MaximizeBox = false;
 
+        // The caption carries the name of what is inspected; the application's icon beside it
+        // would only repeat what the main window already says.
+        ShowIcon = false;
+
         Theme.ApplyLight(_grid);
 
         _revert.Click += (_, _) =>
@@ -114,6 +118,12 @@ public abstract class InspectorForm : Form
         Controls.Add(_grid);
         Controls.Add(_actions);
         Controls.Add(_heading);
+
+        // Added last so it docks first, above the heading. A hairline under it, because here the
+        // row below is the same white and would otherwise run straight into it.
+        Controls.Add(new Panel { Dock = DockStyle.Top, Height = 1, BackColor = Theme.Border });
+        Controls.Add(CaptionBar = new TitleBar(this));
+        WheelFollowsMouse.Install();
 
         AddAction(_revert);
         Edits.Changed += OnEditsChanged;
