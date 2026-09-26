@@ -211,9 +211,7 @@ public static class ReligionWriter
             entries[$"{religion.Key}_adj"] = religion.Name;
             entries[$"{religion.Key}_adherent"] = religion.Name;
             entries[$"{religion.Key}_adherent_plural"] = religion.Name + "s";
-            entries[$"{religion.Key}_desc"] =
-                $"The faiths gathered under {religion.Name} share their gods and their rites, " +
-                $"and disagree about everything else.";
+            entries[$"{religion.Key}_desc"] = FaithDescriptions.For(religion);
 
             foreach (var (key, value) in religion.LocalizationText) entries[key] = value;
         }
@@ -224,7 +222,7 @@ public static class ReligionWriter
             entries[$"{faith.Key}_adj"] = faith.Name;
             entries[$"{faith.Key}_adherent"] = faith.Name;
             entries[$"{faith.Key}_adherent_plural"] = faith.Name + "s";
-            entries[$"{faith.Key}_desc"] = $"The teachings of {faith.Name}.";
+            entries[$"{faith.Key}_desc"] = FaithDescriptions.For(faith);
 
             // Localization required for unreformed faiths when reforming
             if (!faith.IsOrganized)

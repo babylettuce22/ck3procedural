@@ -445,6 +445,28 @@ public sealed class MapConfig : CustomTypeDescriptor
     }
 
     /// <summary>
+    /// This configuration for a world whose start date has been moved to <paramref name="year"/> by
+    /// history run on in the History workspace — see <see cref="MapGen.AppliedHistory"/>.
+    ///
+    /// The calendar moves; how advanced the world is does not. "Follow World Year" is pinned to the
+    /// advancement it was following, the same way an Azgaar calendar is adopted, so that running
+    /// three centuries of politics does not also hand every culture three centuries of innovations.
+    /// Advancement stays the user's own setting to move.
+    ///
+    /// Additional bookmarks are switched off: their dates are placed around the generated start,
+    /// and nothing yet places them on the simulated timeline. A shallow copy, as
+    /// <see cref="AtAdvancement"/> is; the settings grid keeps showing the user's own values.
+    /// </summary>
+    internal MapConfig AtStartYear(int year)
+    {
+        var copy = (MapConfig)MemberwiseClone();
+        if (copy.EraAnchorYear <= 0) copy.EraAnchorYear = Math.Max(1, EraYear);
+        copy.StartYear = year;
+        copy.AdditionalBookmarks = false;
+        return copy;
+    }
+
+    /// <summary>
     /// Two more bookmarks around <see cref="StartYear"/>, filling out vanilla's 867 / 1066 / 1178.
     /// The start takes whichever of the three its advancement is nearest, and the other two are
     /// placed by vanilla's gaps from it — before it, after it, or one of each. See

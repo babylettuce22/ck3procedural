@@ -42,6 +42,14 @@ public sealed class GenerationOptions
     /// existed. See <see cref="MapGen.ClimatePaint"/>.
     /// </summary>
     public MapGen.ClimatePaint? ClimatePaint { get; set; }
+
+    /// <summary>
+    /// Realms run on in the History workspace, to be written as the start in place of the ones the
+    /// formation grows. Optional in the same way the climate paint is: with none, the realms are
+    /// exactly what they were before the workspace existed. The config the world is generated with
+    /// must carry the applied year — see <see cref="MapConfig.AtStartYear"/>.
+    /// </summary>
+    public MapGen.AppliedHistory? AppliedHistory { get; set; }
     public string ModName { get; set; } = DefaultModName;
 
     public const string DefaultModName = "Procedural Map";
@@ -328,7 +336,7 @@ public static class Generator
                                     mapDataBranch.JoinAndReplay();
                                     return shippedHeightmap!;
                                 },
-                                options.WriteHistory, result.Drainage, result.Azgaar);
+                                options.WriteHistory, result.Drainage, result.Azgaar, options.AppliedHistory);
         }
         finally
         {

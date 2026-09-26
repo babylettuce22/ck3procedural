@@ -158,6 +158,24 @@ public static class Realms
         return false;
     }
 
+    /// <summary>
+    /// Titles a realm map that was not grown by this run's own formation — an applied history, see
+    /// <see cref="AppliedHistory"/> — exactly as <see cref="Build"/> titles the one it grows: the
+    /// same <see cref="FromFormation"/>, over the same county graph and weights.
+    /// </summary>
+    public static RealmMap FromHistory(FormationHistory history, List<Title> empires,
+        Dictionary<Title, int> development, WildernessMap wilderness, MapConfig cfg, Rng rng,
+        Dictionary<Title, HashSet<Title>> countyAdj)
+    {
+        var all = Titles.Flatten(empires).ToList();
+        var weight = Weigh(empires, development, wilderness);
+        var holderCounty = all.Where(t => t.Tier == "c" && !wilderness.Contains(t)).ToDictionary(c => c, c => c);
+
+        var formed = FromFormation(history, all, development, weight, holderCounty, countyAdj, cfg, rng);
+        formed.CountyAdjacency = countyAdj;
+        return formed;
+    }
+
     public static RealmMap Build(
         List<Title> empires,
         Dictionary<Title, int> development,

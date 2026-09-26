@@ -24,6 +24,15 @@ public sealed record WorldCalendar(
     IReadOnlyList<string>? MonthsShort)
 {
     /// <summary>
+    /// The months as they were before the typed names were laid over: what each box on the
+    /// Calendar tab becomes when it is left blank. Null when the world keeps vanilla's months.
+    /// </summary>
+    public IReadOnlyList<string>? UntypedMonths { get; init; }
+
+    /// <summary>The era a blank Era box becomes: the export's, else the generated one.</summary>
+    public (string Name, string Short)? UntypedEra { get; init; }
+
+    /// <summary>
     /// The calendar a run writes, or null when the world keeps vanilla's months and "AD".
     ///
     /// <list type="bullet">
@@ -54,18 +63,23 @@ public sealed record WorldCalendar(
         // Generated, or vanilla's English where there is no generated language to draw from — a
         // world whose every culture is vanilla's, which only a typed name can reach here.
         string[] months = language?.MonthNames(rng) ?? [.. EnglishMonths];
+        string[] untypedMonths = [.. months];
         for (int m = 0; m < months.Length; m++)
             if (Typed(cfg.CalendarMonths, m) is { } typed) months[m] = typed;
 
         var generated = language is not null ? Era(language, rng) : ("", "");
+        var untypedEra = importedShort.Length > 0 ? (importedName, importedShort) : generated;
         string typedName = cfg.CalendarEraName.Trim(), typedShort = cfg.CalendarEraShort.Trim();
 
         var (eraName, eraShort) =
             typedName.Length > 0 || typedShort.Length > 0 ? (typedName, typedShort.Length > 0 ? typedShort : Initials(typedName))
-            : importedShort.Length > 0 ? (importedName, importedShort)
-            : generated;
+            : untypedEra;
 
-        return new WorldCalendar(eraName, eraShort, months, ShortForms(months));
+        return new WorldCalendar(eraName, eraShort, months, ShortForms(months))
+        {
+            UntypedMonths = untypedMonths,
+            UntypedEra = untypedEra,
+        };
 
         static string? Typed(string[]? names, int m)
             => names is not null && m < names.Length && names[m]?.Trim() is { Length: > 0 } name ? name : null;

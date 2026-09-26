@@ -32,7 +32,8 @@ public static partial class ContentWriter
             List<Title> empires, TerrainData terra, TerrainClassifier.Result classified, Rng rng,
             Func<ushort[]> shippedHeightmap,
             bool writeHistory = true, MapGen.Drainage? drainage = null,
-            MapGen.AzgaarImport? azgaar = null)
+            MapGen.AzgaarImport? azgaar = null,
+            AppliedHistory? applied = null)
     {
         var terrain = classified.Terrain;
         var provinceElevation = terra.ProvinceElevation;
@@ -44,7 +45,7 @@ public static partial class ContentWriter
         // that used to be written between those stages follow straight after, in the order they
         // always went out in. See WorldModel.
         var world = BuildWorld(gameDir, cfg, provinces, order, baronyCount, landCount, riverCount,
-            empires, terra, classified, drainage, azgaar);
+            empires, terra, classified, drainage, azgaar, applied);
 
         var provinceTerrain = world.ProvinceTerrain;
         var vocabulary = world.Vocabulary;
@@ -229,6 +230,10 @@ public static partial class ContentWriter
             Core.Stage.Time("character interactions",
                 () => InteractionWriter.PatchMarriageInteractions(modDir, gameDir));
         }
+
+        if (cfg.EnableWilderness)
+            Core.Stage.Time("poetry interactions",
+                () => InteractionWriter.PatchPoetryInteractions(modDir, gameDir));
 
         // These two come before the split below rather than in either half of it, because both
         // halves need them: the history branch reads `flatmap` for the struggle art and reads

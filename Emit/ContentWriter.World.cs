@@ -75,7 +75,8 @@ public static partial class ContentWriter
     public static WorldModel BuildWorld(string gameDir, MapConfig cfg,
             ProvinceMap provinces, int[] order, int baronyCount, int landCount, int riverCount,
             List<Title> empires, TerrainData terra, TerrainClassifier.Result classified,
-            MapGen.Drainage? drainage = null, MapGen.AzgaarImport? azgaar = null)
+            MapGen.Drainage? drainage = null, MapGen.AzgaarImport? azgaar = null,
+            AppliedHistory? applied = null)
     {
         var terrain = classified.Terrain;
         var provinceElevation = terra.ProvinceElevation;
@@ -348,6 +349,39 @@ public static partial class ContentWriter
         // has to be the same one its people's religion gives. See MapGen/Cultures.AlignGender.
         Core.Stage.Time("gender", () => MapGen.Cultures.AlignGender(cultures.Declared(), faiths, vocabulary,
             new Rng(cfg.Seed ^ 0x6E1D)));
+
+        // History run on in the History workspace replaces the realms the formation grew — here,
+        // after the faiths and not where the realms were built. Faiths.Build reads the governments,
+        // and a religion's tribal share decides its shape and gates draws that every later faith's
+        // names and tenets come off; built from the applied realms, the same world would come back
+        // with its religions renamed. So everything above is the generated world's own, and only
+        // what follows from who rules what is decided again: governments, the hegemony, and every
+        // stage below that reads them. The start date itself is moved by the caller — see
+        // MapConfig.AtStartYear.
+        if (applied is not null)
+        {
+            var history = applied.Resolve(counties, cultures, realms.History!, out string? problem)
+                ?? throw new InvalidOperationException(
+                    $"The history applied from the History workspace does not fit this world: {problem}. "
+                    + "Discard it in the History workspace, or go back to the settings it was run with.");
+
+            realms = Core.Stage.Time("applied history", () => Realms.FromHistory(history, empires, development,
+                wilderness, cfg, new Rng(cfg.Seed ^ 0x2E17), realms.CountyAdjacency!));
+
+            if (cfg.StartingHegemony) Realms.CrownHegemon(realms, empires, wilderness);
+
+            governments = MapGen.Governments.Build(empires, counties, realms, provinceTerrain, coastal,
+                development, cultures, worldCenters, cfg, new Rng(cfg.Seed ^ 0x6017), azgaar, stateGovernments);
+
+            if (cfg.StartingHegemony) Realms.ExpandHegemonRealm(realms, empires, wilderness);
+            hegemonShare = cfg.StartingHegemony ? Realms.HegemonDeJureShare(realms, empires, wilderness) : null;
+
+            int independent = history.Polities.Count(p => p.Suzerain is null);
+            Console.WriteLine($"  applied history: the realms of {applied.Year} (run on from {applied.FromYear}) "
+                + $"replace the generated start — {history.Polities.Count} realms, {independent} independent");
+            Console.WriteLine("  governments: " + string.Join(", ",
+                governments.Tally(counties, wilderness).Select(g => $"{g.Count} {g.Government[..^11]}")));
+        }
 
         // Farmland and oases, placed from settlement and drainage rather than from climate. Runs
         // here, after every social layer has been decided, so nothing reads a terrain that only

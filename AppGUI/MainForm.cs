@@ -133,6 +133,9 @@ public sealed partial class MainForm : ChromeForm
     /// <summary>The Climate workspace: paint the climate over the heightmap. See <see cref="ClimatePanel"/>.</summary>
     private readonly ClimatePanel _climate = new() { Dock = DockStyle.Fill };
 
+    /// <summary>The History workspace: the written world run on past its start date. See <see cref="HistoryPanel"/>.</summary>
+    private readonly HistoryPanel _history = new() { Dock = DockStyle.Fill };
+
     /// <summary>
     /// The world's calendar, shown in place of the settings grid when its entry in the sections
     /// list is picked. It is a short form, not a workspace, so it lives with the other settings.
@@ -580,13 +583,14 @@ public sealed partial class MainForm : ChromeForm
         var terrain = MenuItem("Terrain", () => SelectWorkspace(Workspace.Terrain), "Ctrl+1");
         var climate = MenuItem("Climate", () => SelectWorkspace(Workspace.Climate), "Ctrl+2");
         var world = MenuItem("World", () => SelectWorkspace(Workspace.World), "Ctrl+3");
+        var history = MenuItem("History", () => SelectWorkspace(Workspace.History), "Ctrl+4");
         var mapView = MenuItem("Map", () => SelectWorldView(WorldView.Map));
         var solidView = MenuItem("3D", () => SelectWorldView(WorldView.ThreeD));
         var titlesView = MenuItem("Titles", () => SelectWorldView(WorldView.Titles));
         var showLog = MenuItem("Log", () => SetLogOpen(!_logOpen, remember: true), "Ctrl+L");
 
         var view = TopMenu(menu, "&View",
-            terrain, climate, world, new ToolStripSeparator(),
+            terrain, climate, world, history, new ToolStripSeparator(),
             mapView, solidView, titlesView, new ToolStripSeparator(),
             showLog);
 
@@ -594,9 +598,11 @@ public sealed partial class MainForm : ChromeForm
         {
             terrain.Visible = _workspaceBar.IsAvailable(Workspace.Terrain);
             climate.Visible = _workspaceBar.IsAvailable(Workspace.Climate);
+            history.Visible = _workspaceBar.IsAvailable(Workspace.History);
             terrain.Checked = _workspace == Workspace.Terrain;
             climate.Checked = _workspace == Workspace.Climate;
             world.Checked = _workspace == Workspace.World;
+            history.Checked = _workspace == Workspace.History;
 
             bool inWorld = _workspace == Workspace.World;
             mapView.Checked = inWorld && _worldView == WorldView.Map;
@@ -861,8 +867,11 @@ public sealed partial class MainForm : ChromeForm
         _workspacePages[Workspace.Terrain] = Page(_forge);
         _workspacePages[Workspace.Climate] = Page(_climate);
         _workspacePages[Workspace.World] = BuildWorld();
+        _workspacePages[Workspace.History] = Page(_history);
+        _history.ApplyRequested += applied => ApplyHistoryAsync(applied).Forget("apply history");
+        _history.DiscardRequested += DiscardHistory;
 
-        // All three start visible, so the first layout sizes every one of them — the splitters
+        // All of them start visible, so the first layout sizes every one of them — the splitters
         // placed in OnLoad clamp to the size they are given, and a page that has never been laid
         // out is 150 px wide. OnLoad hides all but the current one once they are placed.
         foreach (var page in _workspacePages.Values) host.Controls.Add(page);
@@ -1690,6 +1699,7 @@ public sealed partial class MainForm : ChromeForm
         // them; anything they pass on falls through to the window's own shortcuts.
         if (_workspace == Workspace.Terrain && !TypingInText() && _forge.HandleKey(key)) return true;
         if (_workspace == Workspace.Climate && !TypingInText() && _climate.HandleKey(key)) return true;
+        if (_workspace == Workspace.History && !TypingInText() && _history.HandleKey(key)) return true;
 
         bool onMap = _workspace == Workspace.World && _worldView == WorldView.Map;
 
@@ -1705,6 +1715,10 @@ public sealed partial class MainForm : ChromeForm
 
             case Keys.Control | Keys.D3:
                 SelectWorkspace(Workspace.World);
+                return true;
+
+            case Keys.Control | Keys.D4:
+                SelectWorkspace(Workspace.History);
                 return true;
 
             case Keys.Control | Keys.L:
@@ -2837,6 +2851,46 @@ public sealed partial class MainForm : ChromeForm
     }
 
     /// <summary>
+    /// Makes the realms the History workspace has run on to the world's start, and writes the mod
+    /// with them through the ordinary write — the same carrying-over of edits, the same folder
+    /// guards — so the World workspace and everything edited there is built from the applied
+    /// realms. See <see cref="Core.GenerationOptions.AppliedHistory"/> for what is replaced.
+    /// </summary>
+    private async Task ApplyHistoryAsync(MapGen.AppliedHistory applied)
+    {
+        if (_busy) return;
+
+        var cfg = _options.Config;
+        var answer = MessageBox.Show(this,
+            $"Make the realms of {applied.Year} this world's start?\n\n"
+            + $"The mod is written again starting in {applied.Year}. Titles, cultures, faiths, development and "
+            + "wilderness stay as generated; rulers, families, governments and title history are drawn "
+            + "fresh for the new realms.\n\n"
+            + $"Advancement stays at {cfg.EraYear}"
+            + (cfg.EraAnchorYear <= 0 ? " — for this world it no longer follows the World Year" : "")
+            + ". Change Advancement Year in the settings to move it.\n\n"
+            + (cfg.UsesAdditionalBookmarks ? "Additional bookmarks are not written for an applied history yet.\n\n" : "")
+            + "The settings keep their own World Year. The History workspace says which history is in use "
+            + "until it is discarded there.",
+            "Apply history", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
+
+        if (answer != DialogResult.OK) return;
+
+        _options.AppliedHistory = applied;
+        _history.ShowApplied(applied);
+        SelectWorkspace(Workspace.World);
+        await WriteModAsync();
+    }
+
+    /// <summary>Back to the generated realms. Nothing on disk changes until the next write.</summary>
+    private void DiscardHistory()
+    {
+        _options.AppliedHistory = null;
+        _history.ShowApplied(null);
+        _status.Text = "Applied history discarded — the next write uses the realms the generator grows";
+    }
+
+    /// <summary>
     /// Asks whether the game should be set to load what was just written, and edits
     /// <c>dlc_load.json</c> if so. Only ever runs after a write that actually landed, and only
     /// asks when the answer would change something — a mod already listed says so in the log and
@@ -3065,7 +3119,14 @@ public sealed partial class MainForm : ChromeForm
             modDir is null ? "Building preview…" : "Writing mod…",
             () =>
             {
-                var cfg = _options.Config;
+                // A history applied in the History workspace moves the start date, on a copy: the
+                // grid keeps the user's own World Year, and discarding the history needs no undo.
+                var cfg = _options.AppliedHistory is { } applied
+                    ? _options.Config.AtStartYear(applied.Year)
+                    : _options.Config;
+                if (_options.AppliedHistory is not null)
+                    Console.WriteLine($"Applied history: written as {cfg.StartYear}, as advanced as {cfg.EraYear}"
+                        + (_options.Config.UsesAdditionalBookmarks ? "; additional bookmarks are not written for it" : ""));
                 var source = _source!;
 
                 Stage.Time(source.PhaseName, () =>
@@ -3349,6 +3410,10 @@ public sealed partial class MainForm : ChromeForm
         _realmFocus.Clear();
 
         _edits.Detach();
+
+        // After BuildAsync has set _written, so a write hands History its world and a preview
+        // takes the previous one away.
+        _history.Attach(result, _written);
 
         _viewer.SetImage(null);
         foreach (var bitmap in _rendered.Values) bitmap.Dispose();

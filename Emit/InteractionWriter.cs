@@ -43,4 +43,35 @@ public static class InteractionWriter
 
         patch.Ship(modDir);
     }
+
+    /// <summary>
+    /// Keeps poets from sending poems to the wilderness and ruins dummies.
+    ///
+    /// Most interactions never reach the dummies because their target test includes
+    /// <c>is_available</c>, which the dummy's <c>incapable</c> trait fails. <c>send_poem_interaction</c>
+    /// has no such test — its recipient only has to be an adult and not imprisoned — and its AI
+    /// target list includes <c>neighboring_rulers</c>, which the dummy is to almost every county on
+    /// the map. It is <c>auto_accept</c>, so nothing on the receiving end refuses it either.
+    ///
+    /// The guard goes in <c>is_shown</c>: the engine evaluates it for each AI target candidate, so it
+    /// drops the dummy from the AI's pick as well as taking the button off the player's menu.
+    /// </summary>
+    public static void PatchPoetryInteractions(string modDir, string gameDir)
+    {
+        var patch = VanillaPatch.Open(gameDir, "poetry interactions",
+            "common", "character_interactions", "00_poetry_interactions.txt");
+
+        if (patch is null) return;
+
+        string guard =
+            "\n\t\tscope:recipient = {\n"
+            + "\t\t\tNOT = { has_trait = wilderness }\n"
+            + "\t\t\tNOT = { government_has_flag = government_is_wilderness }\n"
+            + "\t\t}\n";
+
+        patch.InsertAfter("send_poem is_shown", guard,
+            "send_poem_interaction = {", "is_shown = {");
+
+        patch.Ship(modDir);
+    }
 }

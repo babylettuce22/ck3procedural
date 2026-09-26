@@ -44,6 +44,10 @@ public sealed class FormationEvent
     /// <summary>The capital of the other party, where there was one.</summary>
     public Title? Counterpart { get; init; }
 
+    /// <summary>The acting realm's capital when the event happened: the conqueror, the new
+    /// suzerain, the realm that fragmented. Null for an event with no actor.</summary>
+    public Title? Actor { get; init; }
+
     public Culture? Culture { get; init; }
     public Culture? CounterpartCulture { get; init; }
 
@@ -139,6 +143,33 @@ public sealed class FormationHistory
     /// additional bookmarks are on.
     /// </summary>
     public Dictionary<int, FormationHistory> Snapshots { get; init; } = [];
+
+    /// <summary>
+    /// What the simulation ran on, kept so it can be picked up again from where it stopped — see
+    /// <see cref="HistorySim"/>. Set on the history <see cref="Formation.Run"/> returns and null on
+    /// every snapshot. Reading it changes nothing about the run that produced it.
+    /// </summary>
+    public FormationRules? Rules { get; init; }
+}
+
+/// <summary>
+/// The constants of one formation run: the ground it moves counties across and the three dials it
+/// was tuned with. Everything <see cref="HistorySim"/> needs to go on from the start date that the
+/// polities themselves do not carry.
+/// </summary>
+public sealed class FormationRules
+{
+    public required Dictionary<Title, HashSet<Title>> Adjacent { get; init; }
+    public required Dictionary<Title, int> Development { get; init; }
+    public required Dictionary<Title, Culture> CountyCulture { get; init; }
+    public required double AvgKingdom { get; init; }
+    public required double Reach { get; init; }
+    public required double Aggression { get; init; }
+    public required double Turbulence { get; init; }
+    public required int Seed { get; init; }
+
+    /// <summary>The id the next polity born will take.</summary>
+    public required int NextId { get; init; }
 }
 
 /// <summary>
@@ -161,7 +192,7 @@ public sealed class FormationHistory
 public static class Formation
 {
     /// <summary>Years per tick. Roughly a reign, which is the rate realms actually change hands at.</summary>
-    private const int EpochYears = 25;
+    internal const int EpochYears = 25;
 
     /// <summary>
     /// Everything the simulation needs that does not change from epoch to epoch, in one place so
@@ -170,7 +201,7 @@ public static class Formation
     /// <see cref="Owner"/> and the polities' own county sets are the two halves of one fact and are
     /// only ever changed together, by <see cref="Transfer"/>. Nothing else may write either.
     /// </summary>
-    private sealed class Sim
+    internal sealed class Sim
     {
         public required List<Polity> Polities { get; init; }
         public required Dictionary<Title, Polity> Owner { get; init; }
@@ -178,6 +209,16 @@ public static class Formation
         public required Dictionary<Title, int> Development { get; init; }
         public required Dictionary<Title, Culture> CountyCulture { get; init; }
         public required List<FormationEvent> Events { get; init; }
+
+        /// <summary>Counties per de jure kingdom, which is what a realm's action rate scales with.</summary>
+        public required double AvgKingdom { get; init; }
+
+        /// <summary>
+        /// How many years one <see cref="Step"/> stands for. <see cref="EpochYears"/> is what
+        /// generation runs and what every rate below was tuned at; anything shorter is the live
+        /// simulation, which scales each per-epoch rate down to its share of the epoch.
+        /// </summary>
+        public int TickYears { get; init; } = EpochYears;
 
         /// <summary>How big a realm gets before it starts to strain.</summary>
         public required double Reach { get; init; }
@@ -198,6 +239,7 @@ public static class Formation
                 Year = Year,
                 Subject = subject,
                 Counterpart = other?.Capital,
+                Actor = actor?.Capital,
                 Culture = actor?.Culture,
                 CounterpartCulture = other?.Culture,
                 Tension = tension,
@@ -251,6 +293,7 @@ public static class Formation
             Development = development,
             CountyCulture = ordered.ToDictionary(c => c, cultures.For),
             Events = [],
+            AvgKingdom = avgKingdom,
             // Tighter than a de jure kingdom at the low end, so that realms of kingdom size and up
             // are the ones under strain. Set generously, nothing on a real map ever reaches it.
             Reach = Math.Max(4.0, avgKingdom * (0.70 + 0.80 * consolidation)),
@@ -331,6 +374,18 @@ public static class Formation
             Events = sim.Events,
             FirstYear = firstYear,
             Snapshots = snapshots,
+            Rules = new FormationRules
+            {
+                Adjacent = sim.Adjacent,
+                Development = sim.Development,
+                CountyCulture = sim.CountyCulture,
+                AvgKingdom = sim.AvgKingdom,
+                Reach = sim.Reach,
+                Aggression = sim.Aggression,
+                Turbulence = sim.Turbulence,
+                Seed = cfg.Seed,
+                NextId = sim.NextId,
+            },
         };
 
         // One tick of the simulation.
@@ -342,40 +397,77 @@ public static class Formation
             // epochs far apart in the seed space rather than one bit apart.
             var rng = new Rng(cfg.Seed ^ 0x5A17 ^ unchecked((int)(epoch * 0x9E3779B1u)));
 
-            // Strongest first, so a great power picks its target before its neighbours pick theirs.
-            // Tie-broken on the capital index, which never moves, so equal strength always resolves
-            // the same way twice.
-            var actors = s.Polities
-                .Where(p => p.Alive)
-                .OrderByDescending(p => Strength(s, p))
-                .ThenBy(p => p.Capital.Index)
-                .ToList();
-
-            foreach (var p in actors)
-            {
-                if (!p.Alive) continue;
-
-                // Big realms act more often, and this is the single number that decides whether the
-                // world consolidates at all. One action per epoch caps a realm's lifetime growth at
-                // the epoch count however strong it gets, which on a six-century run is about
-                // twenty counties — so every world came out a scatter of duchies with no great
-                // power in it, whatever the odds per fight said. Scaled against a quarter of a
-                // kingdom so the snowball engages on a small map as well as a large one.
-                int actions = Math.Clamp(
-                    1 + (int)(p.Counties.Count / Math.Max(2.0, avgKingdom * 0.25)), 1, 5);
-                for (int a = 0; a < actions && p.Alive; a++) Act(s, p, rng);
-            }
-
-            foreach (var p in Snapshot(s)) if (p.Alive) Strain(s, p, rng);
-
-            // Anything that came apart on the map rather than in the rules. A realm that loses a
-            // county in its middle is two realms whatever the ownership table says, and leaving it
-            // whole is what produces a ruler seated in an exclave with vassals he cannot reach.
-            foreach (var p in Snapshot(s)) if (p.Alive) ShedIslands(s, p);
-
-            foreach (var p in s.Polities) if (p.Alive) p.Peak = Math.Max(p.Peak, p.Counties.Count);
+            Step(s, rng);
         }
     }
+
+    /// <summary>
+    /// One tick of the simulation, of <see cref="Sim.TickYears"/> years, with the year already set.
+    ///
+    /// At <see cref="EpochYears"/> this is exactly the epoch generation has always run: the scaling
+    /// below is skipped outright rather than computed as a factor of one, so neither the arithmetic
+    /// nor the dice drawn differ by a bit. At a shorter tick every rate that was tuned per epoch
+    /// becomes that tick's share of it — see <see cref="PerTick"/> — so a century of one-year ticks
+    /// and four epochs are the same process sampled at different grains.
+    /// </summary>
+    internal static void Step(Sim s, Rng rng)
+    {
+        bool epoch = s.TickYears == EpochYears;
+
+        // Strongest first, so a great power picks its target before its neighbours pick theirs.
+        // Tie-broken on the capital index, which never moves, so equal strength always resolves
+        // the same way twice.
+        var actors = s.Polities
+            .Where(p => p.Alive)
+            .OrderByDescending(p => Strength(s, p))
+            .ThenBy(p => p.Capital.Index)
+            .ToList();
+
+        foreach (var p in actors)
+        {
+            if (!p.Alive) continue;
+
+            // Big realms act more often, and this is the single number that decides whether the
+            // world consolidates at all. One action per epoch caps a realm's lifetime growth at
+            // the epoch count however strong it gets, which on a six-century run is about
+            // twenty counties — so every world came out a scatter of duchies with no great
+            // power in it, whatever the odds per fight said. Scaled against a quarter of a
+            // kingdom so the snowball engages on a small map as well as a large one.
+            int actions = Math.Clamp(
+                1 + (int)(p.Counties.Count / Math.Max(2.0, s.AvgKingdom * 0.25)), 1, 5);
+
+            // A shorter tick gets its share of the epoch's attempts: the whole part always, the
+            // remainder as a chance. Each attempt then plays out exactly as an epoch's would, so
+            // the odds inside Act are per attempt and need no scaling of their own.
+            if (!epoch)
+            {
+                double expected = actions * (double)s.TickYears / EpochYears;
+                actions = (int)expected;
+                if (rng.Chance(expected - actions)) actions++;
+            }
+
+            for (int a = 0; a < actions && p.Alive; a++) Act(s, p, rng);
+        }
+
+        foreach (var p in Snapshot(s)) if (p.Alive) Strain(s, p, rng);
+
+        // Anything that came apart on the map rather than in the rules. A realm that loses a
+        // county in its middle is two realms whatever the ownership table says, and leaving it
+        // whole is what produces a ruler seated in an exclave with vassals he cannot reach.
+        foreach (var p in Snapshot(s)) if (p.Alive) ShedIslands(s, p);
+
+        foreach (var p in s.Polities) if (p.Alive) p.Peak = Math.Max(p.Peak, p.Counties.Count);
+    }
+
+    /// <summary>
+    /// A chance tuned as "per epoch", as the chance per tick that compounds to it over an epoch.
+    /// Returned untouched at an epoch's length — not computed as a power of one — so generation
+    /// draws against the identical number it always has.
+    /// </summary>
+    private static double PerTick(Sim s, double perEpoch)
+        => s.TickYears == EpochYears
+            ? perEpoch
+            : 1.0 - Math.Pow(1.0 - Math.Clamp(perEpoch, 0.0, 1.0), (double)s.TickYears / EpochYears);
 
     /// <summary>
     /// The simulation as it stands, on polity objects of its own, to be run on past the start date
@@ -392,6 +484,7 @@ public static class Formation
             Development = sim.Development,
             CountyCulture = sim.CountyCulture,
             Events = [],
+            AvgKingdom = sim.AvgKingdom,
             Reach = sim.Reach,
             Aggression = sim.Aggression,
             Turbulence = sim.Turbulence,
@@ -405,7 +498,7 @@ public static class Formation
     /// polities in place, and must not touch the simulation's own. Ids are kept, which is how a
     /// realm is recognised from one bookmark to the next.
     /// </summary>
-    private static FormationHistory Freeze(Sim sim, int firstYear)
+    internal static FormationHistory Freeze(Sim sim, int firstYear)
     {
         var copies = new Dictionary<Polity, Polity>();
         foreach (var p in sim.Polities.Where(p => p.Alive).OrderBy(p => p.Capital.Index))
@@ -609,7 +702,7 @@ public static class Formation
         var vassals = sim.Polities.Where(v => v.Alive && v.Suzerain == p)
                                   .OrderBy(v => v.Capital.Index).ToList();
 
-        if (vassals.Count > 0 && rng.Chance(instability * sim.Turbulence * 0.9))
+        if (vassals.Count > 0 && rng.Chance(PerTick(sim, instability * sim.Turbulence * 0.9)))
         {
             foreach (var v in vassals)
             {
@@ -627,7 +720,7 @@ public static class Formation
         // not a handful of enclaves. The size floor stays a hard gate: a realm of five counties
         // shedding two is not a fragmenting empire, it is noise.
         if (p.Counties.Count < 6) return;
-        if (!rng.Chance(instability * sim.Turbulence * 1.5)) return;
+        if (!rng.Chance(PerTick(sim, instability * sim.Turbulence * 1.5))) return;
 
         var block = PeripheralBlock(sim, p, Math.Max(2, p.Counties.Count / 3));
         if (block.Count == 0 || block.Count >= p.Counties.Count) return;
