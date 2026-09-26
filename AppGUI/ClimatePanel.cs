@@ -57,7 +57,6 @@ public sealed class ClimatePanel : UserControl
     private KoppenClass[]? _predicted;     // at paint resolution
     private TerrainClass[]? _landscape;    // at paint resolution
     private int _predictedVersion = -1, _landscapeVersion = -1;
-    private bool _predictedAutomatic;
 
     private int _previewGeneration;
     private bool _previewRunning;
@@ -1055,7 +1054,6 @@ public sealed class ClimatePanel : UserControl
 
             _predicted = predicted;
             _predictedVersion = version;
-            _predictedAutomatic = automatic;
             ReplaceBitmap(ref _climateBitmap, PreviewRenderer.ToBitmap(climateImage));
 
             if (landscapeImage is { } li)

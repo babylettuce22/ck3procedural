@@ -75,7 +75,7 @@ public static class MapDataWriter
         });
 
         var shipped = Core.Stage.Detail("  · heightmap",
-            () => WriteHeightmap(dir, cfg, writePacked, provinces, order, landCount, terra));
+            () => WriteHeightmap(dir, cfg, writePacked, provinces, terra));
         WriteDefaultMap(Path.Combine(dir, "default.map"), provinces.Count, baronyCount, landCount, riverCount);
         WriteStubs(dir);
 
@@ -266,8 +266,7 @@ public static class MapDataWriter
             : index == RiverIndexLand ? ((byte)255, (byte)255, (byte)255)
             : ((byte)2, (byte)0, (byte)1);
 
-    private static void ForceCoastlineToMatchProvinces(ushort[] height, MapConfig cfg,
-            ProvinceMap provinces, int[] order, int landCount)
+    private static void ForceCoastlineToMatchProvinces(ushort[] height, MapConfig cfg, ProvinceMap provinces)
     {
         int pw = provinces.Width, ph = provinces.Height;
         int scaleX = cfg.Width / pw, scaleY = cfg.Height / ph;
@@ -603,12 +602,11 @@ public static class MapDataWriter
     /// shoreline ends up once the terrain has been quantised into a tile atlas and reassembled,
     /// which is what the scatter passes need and what the preview draws.
     /// </summary>
-    public static ushort[] ShippedHeightmap(MapConfig cfg, ProvinceMap provinces, int[] order,
-        int landCount, MapGen.TerrainData terra)
+    public static ushort[] ShippedHeightmap(MapConfig cfg, ProvinceMap provinces, MapGen.TerrainData terra)
     {
         var full = Core.Stage.Detail("      · to 16-bit", () => ElevationTo16(terra.Elevation, cfg));
         Core.Stage.Detail("      · match provinces",
-            () => ForceCoastlineToMatchProvinces(full, cfg, provinces, order, landCount));
+            () => ForceCoastlineToMatchProvinces(full, cfg, provinces));
         Core.Stage.Detail("      · shape coastline", () => ShapeCoastline(full, cfg));
         return full;
     }
@@ -616,10 +614,10 @@ public static class MapDataWriter
     /// <returns>The heightmap as shipped, so the caller can hand it to anything that has to
     /// reason about the surface the engine will render rather than the one we computed.</returns>
     private static ushort[] WriteHeightmap(string dir, MapConfig cfg, bool writePacked,
-        ProvinceMap provinces, int[] order, int landCount, MapGen.TerrainData terra)
+        ProvinceMap provinces, MapGen.TerrainData terra)
     {
         var full = Core.Stage.Detail("    · coastline + shaping",
-            () => ShippedHeightmap(cfg, provinces, order, landCount, terra));
+            () => ShippedHeightmap(cfg, provinces, terra));
 
         ReportHypsometry(full);
         Core.Stage.Detail("    · heightmap.png encode",

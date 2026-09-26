@@ -28,20 +28,6 @@ using System.IO;
 public static class WeaponForgeStep
 {
     /// <summary>
-    /// The parts library, one file per weapon type.
-    ///
-    /// Deliberately not a fallback chain any more. Earlier libraries were kept as fallbacks so a
-    /// checkout with an older cut still forged, but that turned into a trap once recolouring
-    /// existed: a library without UV2 would still assemble weapons and then pattern them against a
-    /// UV set that is not there, which is a silent visual fault rather than a missing feature.
-    /// One canonical file, and a capability check on what it contains, is the honest arrangement.
-    /// </summary>
-    public static readonly string[] PartsRelPaths =
-    [
-        "weaponparts/sword_parts.mesh",
-    ];
-
-    /// <summary>
     /// One parts library per weapon kind. The **file** declares the kind, which is why families
     /// inside it need no type prefix in their names.
     ///
@@ -883,9 +869,6 @@ public static class WeaponForgeStep
         return made;
     }
 
-    private static WeaponPart PickPart(IEnumerable<WeaponPart> parts, string family, WeaponPartSlot slot)
-        => parts.First(p => p.Family == family && p.Slot == slot && p.HasTextures);
-
     /// <summary>
     /// The icon for a forged weapon: a render of its own geometry where that is proven, and a tint
     /// of the stock icon everywhere else.
@@ -912,23 +895,6 @@ public static class WeaponForgeStep
         return r.PrimaryColour.TryGetValue(weapon.Name, out var colour)
             ? ForgedWeaponIcon.Write(modDir, gameDir, weapon.Name, stock, colour) ?? stock
             : stock;
-    }
-
-    /// <summary>
-    /// Locates the parts library, or null if this checkout has none.
-    ///
-    /// Probed the same way <see cref="FlatmapWriter"/> finds its parchment: the assets folder is
-    /// copied beside the built exe, but a <c>dotnet run</c> from the repo resolves it from the
-    /// working directory instead.
-    /// </summary>
-    private static string? FindParts()
-    {
-        foreach (string relPath in PartsRelPaths)
-        {
-            if (Locate(relPath) is { } found) return found;
-        }
-
-        return null;
     }
 
     /// <summary>

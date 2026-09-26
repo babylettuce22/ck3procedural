@@ -17,9 +17,6 @@ public readonly record struct AzgaarShare(int Id, double Share)
     public static readonly AzgaarShare None = new(0, 0);
 
     public bool Exists => Id > 0;
-
-    /// <summary>True when this object covers enough of the title to speak for it.</summary>
-    public bool Dominates(double threshold = 0.5) => Id > 0 && Share >= threshold;
 }
 
 /// <summary>Everything Azgaar has to say about one of our titles.</summary>

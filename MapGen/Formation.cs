@@ -934,7 +934,7 @@ public static class Formation
     {
         if (p.Counties.Count < 2) return;
 
-        var mainland = Reachable(sim, p, p.Capital, within: p.Counties);
+        var mainland = Reachable(sim, p.Capital, within: p.Counties);
         if (mainland.Count == p.Counties.Count) return;
 
         var stranded = p.Counties.Where(c => !mainland.Contains(c)).OrderBy(c => c.Index).ToList();
@@ -942,14 +942,14 @@ public static class Formation
         while (stranded.Count > 0)
         {
             // One new realm per connected island, not one per county.
-            var island = Reachable(sim, p, stranded[0], within: p.Counties, except: mainland);
+            var island = Reachable(sim, stranded[0], within: p.Counties, except: mainland);
             Secede(sim, p, [.. island.OrderBy(c => c.Index)], FormationKind.Fragmented, 1);
             stranded.RemoveAll(island.Contains);
         }
     }
 
     private static HashSet<Title> Reachable(
-        Sim sim, Polity p, Title from, HashSet<Title> within, HashSet<Title>? except = null)
+        Sim sim, Title from, HashSet<Title> within, HashSet<Title>? except = null)
     {
         var seen = new HashSet<Title> { from };
         var queue = new Queue<Title>();

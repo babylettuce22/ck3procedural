@@ -386,7 +386,7 @@ public static class Ethnicities
         // The quota can never exceed the pool it draws from, and asking for more used to be actively
         // harmful rather than merely unmet — see above. Clamped once here so both the branch below
         // and the shortfall report agree on what was actually achievable.
-        var quotaPool = FantasyPoolFor(cfg);
+        var quotaPool = FantasyPoolFor();
         int targetQuota = Math.Clamp(cfg.GuaranteedRaceCount, 1, Math.Max(1, quotaPool.Count));
 
         // 4. Assign Culture Ethnicities.
@@ -418,7 +418,7 @@ public static class Ethnicities
             // is not scatter, it is the map, and the tie yields to it.
             var importedRace = culture.ImportedArchetype is { } tagged
                 && cfg.EnableFantasyEthnicities && cfg.RaceMode != FantasyRaceMode.HumanOnly
-                && FantasyPoolFor(cfg).Contains(tagged)
+                && FantasyPoolFor().Contains(tagged)
                     ? culture.ImportedArchetype
                     : null;
 
@@ -466,7 +466,7 @@ public static class Ethnicities
                     // honours the rule and settles on Human when the land suits nobody.
                     if (cfg.RaceTerrain == RaceTerrainRule.Require)
                     {
-                        var shares = GetTerrainShares([culture], provinceTerrain, rng);
+                        var shares = GetTerrainShares([culture], provinceTerrain);
                         available = available.Where(a => FitsTerrain(a, shares)).ToList();
                     }
 
@@ -558,7 +558,7 @@ public static class Ethnicities
                 // three cultures with one each read as a world.
                 if (hostsUsed.Contains(candidate) && hostsUsed.Count < cultures.Count(c => byCulture[c].Archetype == RaceArchetype.Human)) continue;
 
-                double score = HeritageAffinity(minorityRace, GetTerrainShares([candidate], provinceTerrain, rng))
+                double score = HeritageAffinity(minorityRace, GetTerrainShares([candidate], provinceTerrain))
                     + rng.Double(0.0, 0.3);
                 if (score > bestScore) { bestScore = score; bestHost = candidate; }
             }
@@ -679,7 +679,7 @@ public static class Ethnicities
         foreach (var heritage in heritages)
         {
             var heritageCultures = cultures.Where(c => c.Heritage == heritage || (c.Heritage != null && c.Heritage.Key == heritage.Key)).ToList();
-            heritageTerrain[heritage] = GetTerrainShares(heritageCultures, provinceTerrain, rng);
+            heritageTerrain[heritage] = GetTerrainShares(heritageCultures, provinceTerrain);
         }
 
         // Land bookkeeping for the mode ratio. Imported assignments spend budget too — the
@@ -710,7 +710,7 @@ public static class Ethnicities
                 foreach (var culture in cultures)
                 {
                     if (culture.Heritage != heritage && culture.Heritage?.Key != heritage.Key) continue;
-                    var cultureShares = GetTerrainShares([culture], provinceTerrain, rng);
+                    var cultureShares = GetTerrainShares([culture], provinceTerrain);
                     foreach (var r in TerrainRaces)
                         if (!fits.Contains(r) && FitsTerrain(r, cultureShares))
                             fits.Add(r);
@@ -721,7 +721,7 @@ public static class Ethnicities
 
         // Pool of available candidate races
         // FantasyPoolFor already includes Exotic in ExoticSurreal; adding it again here would put
-        var candidatePool = FantasyPoolFor(cfg).ToList();
+        var candidatePool = FantasyPoolFor().ToList();
 
         // Calculate how many distinct races we must guarantee
         int targetUnique = Math.Clamp(cfg.GuaranteedRaceCount, 1, Math.Min(heritages.Count, candidatePool.Count));
@@ -944,7 +944,7 @@ public static class Ethnicities
     /// heritage diversity phase and the shortfall report cannot disagree about what was achievable
     /// — they previously each built their own list and could disagree about what was reachable.
     /// </summary>
-    private static IReadOnlyList<RaceArchetype> FantasyPoolFor(MapConfig cfg)
+    private static IReadOnlyList<RaceArchetype> FantasyPoolFor()
     {
         // ExoticSurreal is an INTENSITY setting, not a ninth race. It pushes every race's colour
         // and morphology further from human; it does not add a people of its own. The roster is the
@@ -1072,7 +1072,7 @@ public static class Ethnicities
     /// a race might actually want.
     /// </summary>
     private static Dictionary<TerrainClass, double> GetTerrainShares(
-        List<Culture> cultures, TerrainClass[] provinceTerrain, Rng rng)
+        List<Culture> cultures, TerrainClass[] provinceTerrain)
     {
         var terrainCounts = new Dictionary<TerrainClass, int>();
         int total = 0;
@@ -1210,7 +1210,7 @@ public static class Ethnicities
         if (cfg.RaceTerrain == RaceTerrainRule.Ignore)
             return rng.Pick(CultureRaces);
 
-        var shares = GetTerrainShares([culture], provinceTerrain, rng);
+        var shares = GetTerrainShares([culture], provinceTerrain);
 
         if (cfg.RaceTerrain == RaceTerrainRule.Require)
         {
@@ -1267,8 +1267,8 @@ public static class Ethnicities
         };
 
         ApplyMorphGenes(def, archetype, mode, rng);
-        ApplyColorGenes(def, archetype, family, mode, rng);
-        BuildVariants(def, rng);
+        ApplyColorGenes(def, archetype, family, mode);
+        BuildVariants(def);
 
         return def;
     }
@@ -1898,12 +1898,12 @@ public static class Ethnicities
         public static readonly Swatch Gold = new(0.30f, 0.12f, 0.46f, 0.28f);       // #ab6c1e
     }
 
-    private static void ApplyColorGenes(EthnicityDef def, RaceArchetype archetype, string family, FantasyRaceMode mode, Rng rng)
+    private static void ApplyColorGenes(EthnicityDef def, RaceArchetype archetype, string family, FantasyRaceMode mode)
     {
         switch (archetype)
         {
             case RaceArchetype.HighElf:
-                ApplyRaceSkin(def, archetype, mode, rng);
+                ApplyRaceSkin(def, archetype, mode);
                 AddColor(def, "hair_color", Hair.Platinum, weight: 35);
                 AddColor(def, "hair_color", Hair.GoldBlonde, weight: 25);
                 AddColor(def, "hair_color", Hair.Silver, weight: 20);
@@ -1916,7 +1916,7 @@ public static class Ethnicities
                 break;
 
             case RaceArchetype.WoodElf:
-                ApplyRaceSkin(def, archetype, mode, rng);
+                ApplyRaceSkin(def, archetype, mode);
                 AddColor(def, "hair_color", Hair.Brown, weight: 30);
                 AddColor(def, "hair_color", Hair.DarkBrown, weight: 25);
                 AddColor(def, "hair_color", Hair.Auburn, weight: 20);
@@ -1929,7 +1929,7 @@ public static class Ethnicities
                 break;
 
             case RaceArchetype.Dwarf:
-                ApplyRaceSkin(def, archetype, mode, rng);
+                ApplyRaceSkin(def, archetype, mode);
                 AddColor(def, "hair_color", Hair.Ginger, weight: 25);
                 AddColor(def, "hair_color", Hair.Auburn, weight: 20);
                 AddColor(def, "hair_color", Hair.DarkBrown, weight: 20);
@@ -1944,7 +1944,7 @@ public static class Ethnicities
                 break;
 
             case RaceArchetype.Orc:
-                ApplyRaceSkin(def, archetype, mode, rng);
+                ApplyRaceSkin(def, archetype, mode);
                 // Coarse black hair. The old values put 75% of orcs on bright ginger, because the
                 // rect meant as "near-black desaturated" sat at x 0.80-0.95 — the fiery end of the
                 // warmth axis — rather than at the dark end of the darkness axis.
@@ -1958,7 +1958,7 @@ public static class Ethnicities
                 break;
 
             case RaceArchetype.Gnome:
-                ApplyRaceSkin(def, archetype, mode, rng);
+                ApplyRaceSkin(def, archetype, mode);
                 AddColor(def, "hair_color", Hair.Ginger, weight: 30);
                 AddColor(def, "hair_color", Hair.GoldBlonde, weight: 20);
                 AddColor(def, "hair_color", Hair.Brown, weight: 20);
@@ -1971,7 +1971,7 @@ public static class Ethnicities
                 break;
 
             case RaceArchetype.Giantkin:
-                ApplyRaceSkin(def, archetype, mode, rng);
+                ApplyRaceSkin(def, archetype, mode);
                 AddColor(def, "hair_color", Hair.Platinum, weight: 25);
                 AddColor(def, "hair_color", Hair.Silver, weight: 20);
                 AddColor(def, "hair_color", Hair.AshBlonde, weight: 20);
@@ -1987,7 +1987,7 @@ public static class Ethnicities
                 // Reaches the bottom of the ramp on purpose. Stopping at t=0.70 left the
                 // darkest third of the band unreachable, which is the third that makes a
                 // drow look like a drow.
-                ApplyRaceSkin(def, archetype, mode, rng);
+                ApplyRaceSkin(def, archetype, mode);
                 // White and silver against near-black skin is the whole drow silhouette. This is
                 // the one race whose old colours were accidentally right — its "black" entry
                 // landed on platinum, which is what a drow wants anyway.
@@ -2070,7 +2070,7 @@ public static class Ethnicities
     /// contained any. The race envelope is set once in ApplyColorGenes and this only redistributes
     /// inside it.
     /// </summary>
-    private static void BuildVariants(EthnicityDef def, Rng rng)
+    private static void BuildVariants(EthnicityDef def)
     {
         if (!def.ColorGenes.TryGetValue("hair_color", out var bands) || bands.Count < 2)
             return;
@@ -2178,7 +2178,7 @@ public static class Ethnicities
     /// single entry because every member of a people shares its hue.
     /// </summary>
     private static void ApplyRaceSkin(
-        EthnicityDef def, RaceArchetype archetype, FantasyRaceMode mode, Rng rng)
+        EthnicityDef def, RaceArchetype archetype, FantasyRaceMode mode)
     {
         string? template = RaceSkin.TemplateOf(archetype);
 

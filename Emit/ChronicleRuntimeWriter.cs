@@ -656,10 +656,6 @@ public static class ChronicleRuntimeWriter
         string notDummy = cfg.EnableWilderness ? "\n\t\t\tNOT = { has_trait = wilderness }" : "";
         string notDummyRuler = cfg.EnableWilderness ? "\n\t\t\tNOT = { has_trait = wilderness }" : "";
 
-        string crownArm(string cond, string tmpl, string world)
-            => $"\t\t\tif = {{\n\t\t\t\tlimit = {{ {cond} }}\n"
-             + $"\t\t\t\t{PushChainEffect} = {{ TMPL = {tmpl} ACTOR = root OTHER = scope:title WORLD = {world} }}\n\t\t\t}}\n";
-
         sb.Append($$"""
             # Root = the new holder; scope:title and scope:transfer_type, as on_title_gain gives them.
             gen_chr_on_title_gain_effect = {

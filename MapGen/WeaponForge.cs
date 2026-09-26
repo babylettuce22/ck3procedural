@@ -53,24 +53,6 @@ public sealed record WeaponBase(
     WeaponPiece Piece, float[] LeadLocator, bool LeadMountable, IReadOnlyList<WeaponPart> Parts);
 
 /// <summary>
-/// One pairing: which base, which lead, and nothing else. Both pieces are shared, so a pairing costs
-/// only the text that names them.
-///
-/// **The base is the root entity and the lead is attached to it**, which is the opposite of what the
-/// art would prefer and is forced by two measured facts. An attached child receives no
-/// <c>portrait_accessory</c> binding — not its own and not its parent's — so only the root can carry
-/// a procedural palette. And only the anchor's mesh is the same file in every combination, because
-/// <see cref="WeaponForge.Place"/> gives the anchor a shift of exactly zero. The anchor is the held
-/// part, so the held part is the root, so the fittings are what get recoloured.
-///
-/// Anchoring on the lead instead was measured and rejected: it slides the weapon along the hand by
-/// however much the hilts differ, which costs a quarter of the pairings on swords and nearly two
-/// thirds on hafted weapons, where haft lengths vary so much that a pinned spear head swings the
-/// grip 148 units. <c>--verify-compose</c> prints the table.
-/// </summary>
-public sealed record ComposedWeapon(string Name, WeaponBase Base, WeaponPiece Lead);
-
-/// <summary>
 /// Where a part sits on its weapon. Not every kind uses every slot — see <see cref="WeaponSchema"/>.
 /// </summary>
 public enum WeaponPartSlot

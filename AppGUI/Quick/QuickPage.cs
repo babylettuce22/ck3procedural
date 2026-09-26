@@ -227,7 +227,6 @@ internal sealed class QuickPage : Panel
     public string ModRoot => _modRoot;
     public string ModName => _name.Text.Trim();
     public string ModDir => Path.Combine(_modRoot, ModNameDialog.FolderName(_name.Text));
-    public bool IsRunning => _mode == Mode.Running;
 
     /// <summary>The size the page wants to be shown at: the column, its margins, and the tallest step.</summary>
     public Size PreferredPageSize => new(S(940) + 2 * S(32), S(60) + 1 + S(606) + 1 + S(68));
@@ -264,12 +263,6 @@ internal sealed class QuickPage : Panel
         _gameFix.Visible = !found;
         UpdateNameState();
         _reviewPanel.PerformLayout();
-    }
-
-    public void SetModRoot(string root)
-    {
-        _modRoot = root;
-        UpdateNameState();
     }
 
     /// <summary>Swaps the steps for the run view. The picture starts as the preview just approved.</summary>

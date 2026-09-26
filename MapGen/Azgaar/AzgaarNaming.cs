@@ -144,9 +144,7 @@ public static class AzgaarNaming
     /// empires and kingdoms, provinces by duchies and counties, burgs by counties and then by
     /// baronies — so the larger title gets first refusal and the smaller ones take what is left.
     /// </summary>
-    public static Dictionary<Title, string> TitleNames(AzgaarImport azgaar, List<Title> empires,
-        Dictionary<(string Culture, string Government), string>? tierForms = null,
-        CultureMap? cultures = null, Dictionary<int, string>? stateGovernments = null)
+    public static Dictionary<Title, string> TitleNames(AzgaarImport azgaar, List<Title> empires)
     {
         var names = new Dictionary<Title, string>();
         var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

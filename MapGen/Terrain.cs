@@ -13,31 +13,6 @@ namespace Ck3MapGen.MapGen;
 /// </summary>
 public static class Terrain
 {
-    // --- cleanup.js ---
-
-
-    /// <summary>Port of cleanupStrayCells(). Fewer than 3 like neighbours means the cell is a speck.</summary>
-    private static int CleanupStrayCell(WorldGrid w, int x, int y, int limit, int newElevation, bool isWater)
-    {
-        Span<int> neighbors = stackalloc int[8];
-        int count = w.NeighborsOf(x, y, neighbors);
-
-        int similar = 0;
-        for (int k = 0; k < count; k++)
-        {
-            int e = w.Elevation[neighbors[k]];
-            if (isWater ? e < limit : e >= limit) similar++;
-        }
-
-        if (similar >= 3) return 0;
-
-        int cell = w.Idx(x, y);
-        w.Elevation[cell] = newElevation;
-        if (newElevation == -1) w.Beach[cell] = false;
-        return 1;
-    }
-
-
     // --- getFeatures.js ---
 
     /// <summary>

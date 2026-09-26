@@ -89,19 +89,6 @@ public sealed class VanillaVocabulary
     /// </summary>
     public HashSet<string> NamedColors { get; } = new(StringComparer.Ordinal);
 
-    /// <summary>
-    /// Innovations already discovered at the 867 start, and the share of vanilla cultures that
-    /// have each one.
-    ///
-    /// Stored as frequencies rather than split into "core" and "optional" because the measured
-    /// distribution has no such split in it: over the 133 vanilla culture histories the commonest
-    /// innovation is held by 75% of them and the tenth-commonest by 34%, sloping the whole way
-    /// down. Sampling each innovation at its own frequency reproduces both the mix and the count —
-    /// about seven per culture, which is what vanilla cultures actually start with — and needs no
-    /// threshold anyone has to justify.
-    /// </summary>
-    public Dictionary<string, double> InnovationFrequency { get; } = [];
-
     /// <param name="UnlocksMaa">Whether the innovation carries an <c>unlock_maa</c>.</param>
     /// <param name="Regional">Whether it is flagged <c>global_regional</c> — vanilla's own marker
     /// for an innovation only some peoples can ever reach. The line between the two kinds of
@@ -685,6 +672,17 @@ public sealed class VanillaVocabulary
         }
     }
 
+    /// <summary>
+    /// Innovations already discovered by <paramref name="targetYear"/>, and the share of vanilla
+    /// cultures that have each one.
+    ///
+    /// Frequencies rather than a split into "core" and "optional" because the measured
+    /// distribution has no such split in it: over the 133 vanilla culture histories the commonest
+    /// innovation at 867 is held by 75% of them and the tenth-commonest by 34%, sloping the whole
+    /// way down. Sampling each innovation at its own frequency reproduces both the mix and the
+    /// count — about seven per culture at 867, which is what vanilla cultures actually start with
+    /// — and needs no threshold anyone has to justify.
+    /// </summary>
     public (Dictionary<string, double> Frequencies, double AverageCount) GetFrequenciesAtYear(int targetYear)
     {
         if (CultureHistories.Count == 0) return ([], 0);
@@ -719,13 +717,6 @@ public sealed class VanillaVocabulary
             StringComparer.Ordinal);
 
         return (freqs, (double)totalDiscovered / validCultures);
-    }
-
-    /// <summary>Where the 867-and-earlier part of a culture history file stops.</summary>
-    private static int IndexOfLaterDate(string text)
-    {
-        var later = Regex.Match(text, @"\b(8[7-9]\d|9\d\d|1[0-9]{3})\.\d+\.\d+\s*=\s*\{");
-        return later.Success ? later.Index : text.Length;
     }
 
     /// <summary>

@@ -77,8 +77,7 @@ public static class MajorRivers
         int fullWidth,
         int fullHeight,
         Drainage drainage,
-        MapConfig cfg,
-        Rng rng)
+        MapConfig cfg)
     {
         if (!cfg.EnableMajorRivers || cfg.MajorRiverCount <= 0)
             return [];
@@ -123,7 +122,7 @@ public static class MajorRivers
         {
             if (occupied[exit]) continue;
 
-            var rawCells = TraceUpstream(exit, drainage, feeders, pw, ph, occupied, cfg);
+            var rawCells = TraceUpstream(exit, drainage, feeders, occupied, cfg);
             rawCells.Reverse(); // Source -> lake exit
             rawCells.AddRange(TraceDownstream(drainage.Receiver[exit], drainage, occupied));
 
@@ -135,7 +134,7 @@ public static class MajorRivers
             if (systems - lakeSystems >= targetRivers) break;
             if (occupied[outlet]) continue;
 
-            var rawCells = TraceUpstream(outlet, drainage, feeders, pw, ph, occupied, cfg);
+            var rawCells = TraceUpstream(outlet, drainage, feeders, occupied, cfg);
             if (rawCells.Count < minLength) continue;
 
             rawCells.Reverse(); // Source -> mouth
@@ -222,8 +221,6 @@ public static class MajorRivers
         int outlet,
         Drainage drainage,
         List<int>[] feeders,
-        int width,
-        int height,
         bool[] occupied,
         MapConfig cfg)
     {

@@ -38,14 +38,12 @@ internal sealed class StartPage : Panel
     private readonly Label _subtitle;
     private readonly ModeCard _quick;
     private readonly ModeCard _complex;
-    private readonly Label _note;
     private readonly LinkButton _openWorld;
     private readonly LinkButton _guide;
     private readonly Panel _rule = new() { BackColor = Theme.Border };
     private readonly StatusGlyph _gameGlyph = new();
     private readonly FooterText _gameText = new();
     private readonly LinkButton _gameChange;
-    private readonly System.Windows.Forms.Timer _noteTimer = new() { Interval = 4500 };
 
     public StartPage()
     {
@@ -96,17 +94,6 @@ internal sealed class StartPage : Panel
             Available = true,
         };
 
-        _note = new Label
-        {
-            Text = "Quick mode is on its way. For now, Complex has everything.",
-            Font = FooterFont,
-            ForeColor = Theme.NoticeText,
-            BackColor = Theme.Notice,
-            AutoSize = true,
-            Padding = new Padding(8, 4, 8, 4),
-            Visible = false,
-        };
-
         _openWorld = new LinkButton { Name = "startOpenWorld", Glyph = "", Text = "Open a generated world…" };
         _guide = new LinkButton { Name = "startGuide", Glyph = "", Text = "Getting started" };
 
@@ -117,9 +104,8 @@ internal sealed class StartPage : Panel
         _openWorld.Click += (_, _) => OpenWorldPicked?.Invoke();
         _guide.Click += (_, _) => GuidePicked?.Invoke();
         _gameChange.Click += (_, _) => GameFolderPicked?.Invoke();
-        _noteTimer.Tick += (_, _) => { _noteTimer.Stop(); _note.Visible = false; };
 
-        Controls.AddRange([_banner, _title, _subtitle, _quick, _complex, _note, _openWorld, _guide,
+        Controls.AddRange([_banner, _title, _subtitle, _quick, _complex, _openWorld, _guide,
                            _rule, _gameGlyph, _gameText, _gameChange]);
     }
 
@@ -145,19 +131,6 @@ internal sealed class StartPage : Panel
             : "Crusader Kings III was not found. Set the game folder before writing a mod.";
         _gameChange.Text = found ? "Change…" : "Set game folder…";
         PerformLayout();
-    }
-
-    private void ShowNote()
-    {
-        _note.Visible = true;
-        _noteTimer.Stop();
-        _noteTimer.Start();
-    }
-
-    protected override void OnVisibleChanged(EventArgs e)
-    {
-        base.OnVisibleChanged(e);
-        if (!Visible) _note.Visible = false;
     }
 
     /// <summary>
@@ -239,7 +212,6 @@ internal sealed class StartPage : Panel
 
         _openWorld.Location = new Point(x, y + (linkH - _openWorld.Height) / 2);
         _guide.Location = new Point(_openWorld.Right + S(24), _openWorld.Top);
-        _note.Location = new Point(x + width - _note.Width, y + (linkH - _note.Height) / 2);
         y += linkH + S(18);
 
         _rule.Bounds = new Rectangle(x, y, width, S(1));
@@ -249,12 +221,6 @@ internal sealed class StartPage : Panel
         _gameGlyph.Bounds = new Rectangle(x, y + (footerH - glyph) / 2, glyph, glyph);
         _gameChange.Location = new Point(x + width - _gameChange.Width, y + (footerH - _gameChange.Height) / 2);
         _gameText.Bounds = Rectangle.FromLTRB(_gameGlyph.Right + S(8), y, _gameChange.Left - S(12), y + footerH);
-    }
-
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing) _noteTimer.Dispose();
-        base.Dispose(disposing);
     }
 
     private static GraphicsPath Rounded(RectangleF r, float radius)

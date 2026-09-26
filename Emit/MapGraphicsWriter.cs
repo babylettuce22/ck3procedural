@@ -7,10 +7,9 @@ namespace Ck3MapGen.Emit;
 
 public static class MapGraphicsWriter
 {
-    public static void WriteAll(string modDir, string gameDir, MapConfig cfg,
-        ProvinceMap provinces, int[] order, int landCount)
+    public static void WriteAll(string modDir, MapConfig cfg, ProvinceMap provinces, int[] order, int landCount)
     {
-        WriteWaterMaps(modDir, gameDir, cfg, provinces, order, landCount);
+        WriteWaterMaps(modDir, cfg, provinces, order, landCount);
         WriteSurroundMask(modDir);
 
         Console.WriteLine("  map gfx: water/foam/snow rebuilt, realistic surround mask generated");
@@ -38,14 +37,7 @@ public static class MapGraphicsWriter
         DdsWriter.WriteBgra(Path.Combine(dir, "surround_mask.dds"), width, height, pixels);
     }
 
-    private static float SmoothStep(float t)
-    {
-        t = Math.Clamp(t, 0.0f, 1.0f);
-        return t * t * (3.0f - 2.0f * t);
-    }
-
-    private static void WriteWaterMaps(string modDir, string gameDir, MapConfig cfg,
-        ProvinceMap provinces, int[] order, int landCount)
+    private static void WriteWaterMaps(string modDir, MapConfig cfg, ProvinceMap provinces, int[] order, int landCount)
     {
         int w = cfg.ProvinceWidth / 2, h = cfg.ProvinceHeight / 2;
 

@@ -7,12 +7,6 @@ public sealed class Drainage
 {
     private static readonly int[] Dx = [-1, 0, 1, -1, 1, -1, 0, 1];
     private static readonly int[] Dy = [-1, -1, -1, 0, 0, 1, 1, 1];
-    private static readonly float[] InvDist =
-    [
-        0.70710678f, 1f, 0.70710678f,
-        1f, 1f,
-        0.70710678f, 1f, 0.70710678f,
-    ];
 
     public required int Width { get; init; }
     public required int Height { get; init; }

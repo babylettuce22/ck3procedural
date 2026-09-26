@@ -242,8 +242,7 @@ public static class PreviewRenderer
     public static Image RenderHeightmap(GenerationResult result)
     {
         var cfg = result.Config;
-        var full = Emit.MapDataWriter.ShippedHeightmap(
-            cfg, result.Provinces, result.ProvinceOrder, result.LandCount, result.Terra);
+        var full = Emit.MapDataWriter.ShippedHeightmap(cfg, result.Provinces, result.Terra);
 
         return Downsample(cfg.Width, cfg.Height, i =>
         {
@@ -686,12 +685,12 @@ public static class PreviewRenderer
         var cfg = result.Config;
         var azgaar = result.Azgaar;
         var empires = result.Titles;
-        var (counties, provinceTerrain, development, wilderness) = EstimateWilderness(result);
+        var (counties, provinceTerrain, _, wilderness) = EstimateWilderness(result);
 
         // A second development pass, as ContentWriter runs one: wilderness above is decided before
         // the world centers exist, and only realms and governments see their boost. Folding the
         // boost into the first pass instead would change which counties come out wild.
-        development = MapGen.Development.ForCounties(
+        var development = MapGen.Development.ForCounties(
             counties, provinceTerrain, cfg, new Rng(cfg.Seed ^ 0x0DE7), worldCenters, azgaar);
 
         var realms = MapGen.Realms.Build(empires, development, wilderness, cfg,

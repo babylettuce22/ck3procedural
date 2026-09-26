@@ -39,7 +39,7 @@ public static class BookmarkWriter
         string modDir, string gameDir, MapConfig cfg,
         ProvinceMap provinces, int[] order, List<Title> empires,
         RealmMap realms, Dictionary<Title, int> development,
-        CultureMap cultures, FaithMap faiths, GovernmentMap governments,
+        CultureMap cultures, GovernmentMap governments,
         WildernessMap wilderness, PrehistoryMap prehistory, RulerMap rulers,
         AzgaarImport? azgaar = null, WorldCalendar? calendar = null)
     {
@@ -99,11 +99,11 @@ public static class BookmarkWriter
             }
         }
 
-        WriteBookmarks(modDir, cfg, cast, realms, cultures, faiths, governments, eras);
-        WriteChallengeCharacter(modDir, cfg, cast.Challenge, realms, cultures, faiths, governments, eras);
+        WriteBookmarks(modDir, cfg, cast, realms, governments, eras);
+        WriteChallengeCharacter(modDir, cfg, cast.Challenge, realms, governments, eras);
         WriteBookmarkLocalisation(modDir, cfg, cast, azgaar, calendar,
             TabSubtitle(cfg, seatCounties, governments),
-            BookmarkTitle(cast.Slots, realms, azgaar), eras, realms);
+            BookmarkTitle(cast.Slots, realms, azgaar), eras);
         WriteBookmarkGraphics(modDir, gameDir, eras);
         WriteRealmHighlights(modDir, cfg, provinces, order, cast.Slots, realms, empires);
         foreach (var era in eras?.Eras ?? [])
@@ -187,7 +187,7 @@ public static class BookmarkWriter
     /// <see cref="Ruler"/> objects the slots hold, which are the same objects the editor edits.
     /// </summary>
     internal static void ReWrite(string modDir, MapConfig cfg, BookmarkCast cast,
-        List<Title> empires, RealmMap realms, CultureMap cultures, FaithMap faiths,
+        List<Title> empires, RealmMap realms,
         GovernmentMap governments, WildernessMap wilderness, RulerMap rulers, AzgaarImport? azgaar,
         WorldCalendar? calendar, BookmarkEras? eras = null)
     {
@@ -195,11 +195,11 @@ public static class BookmarkWriter
             .Where(t => t.Tier == "c" && !wilderness.Contains(t) && rulers.Contains(t))
             .ToList();
 
-        WriteBookmarks(modDir, cfg, cast, realms, cultures, faiths, governments, eras);
-        WriteChallengeCharacter(modDir, cfg, cast.Challenge, realms, cultures, faiths, governments, eras);
+        WriteBookmarks(modDir, cfg, cast, realms, governments, eras);
+        WriteChallengeCharacter(modDir, cfg, cast.Challenge, realms, governments, eras);
         WriteBookmarkLocalisation(modDir, cfg, cast, azgaar, calendar,
             TabSubtitle(cfg, seats, governments),
-            BookmarkTitle(cast.Slots, realms, azgaar), eras, realms);
+            BookmarkTitle(cast.Slots, realms, azgaar), eras);
     }
 
     private static void Report(BookmarkCast cast)
@@ -319,8 +319,7 @@ public static class BookmarkWriter
     }
 
     private static void WriteBookmarks(string modDir, MapConfig cfg, BookmarkCast cast,
-        RealmMap realms, CultureMap cultures, FaithMap faiths, GovernmentMap governments,
-        BookmarkEras? eras)
+        RealmMap realms, GovernmentMap governments, BookmarkEras? eras)
     {
         string dir = Path.Combine(modDir, "common", "bookmarks", "bookmarks");
         Directory.CreateDirectory(dir);
@@ -362,7 +361,7 @@ public static class BookmarkWriter
                 b.Blank();
 
                 foreach (var slot in shown.Slots)
-                    AppendCharacter(b, slot, shownRealms, cultures, faiths, shownGovernments, withPosition: true,
+                    AppendCharacter(b, slot, shownRealms, shownGovernments, withPosition: true,
                         trailingBlank: slot != shown.Slots[^1]);
             }
         }
@@ -379,8 +378,8 @@ public static class BookmarkWriter
     /// that is the key history puts on him, and it is what makes the screen's house tooltip resolve.
     /// </summary>
     private static void AppendCharacter(
-        JominiBuilder b, BookmarkSlot slot, RealmMap realms, CultureMap cultures,
-        FaithMap faiths, GovernmentMap governments, bool withPosition, bool trailingBlank = true)
+        JominiBuilder b, BookmarkSlot slot, RealmMap realms, GovernmentMap governments, bool withPosition,
+        bool trailingBlank = true)
     {
         var ruler = slot.Ruler;
 
@@ -523,7 +522,7 @@ public static class BookmarkWriter
 
     private static void WriteBookmarkLocalisation(string modDir, MapConfig cfg, BookmarkCast cast,
         AzgaarImport? azgaar, WorldCalendar? calendar, string subtitle, string title,
-        BookmarkEras? eras, RealmMap realms)
+        BookmarkEras? eras)
     {
         string dir = Path.Combine(modDir, "localization", "english");
         Directory.CreateDirectory(dir);
@@ -720,8 +719,7 @@ public static class BookmarkWriter
     /// over one portrait.
     /// </summary>
     private static void WriteChallengeCharacter(string modDir, MapConfig cfg, BookmarkSlot challenge,
-        RealmMap realms, CultureMap cultures, FaithMap faiths, GovernmentMap governments,
-        BookmarkEras? eras)
+        RealmMap realms, GovernmentMap governments, BookmarkEras? eras)
     {
         string dir = Path.Combine(modDir, "common", "bookmarks", "challenge_characters");
         Directory.CreateDirectory(dir);
@@ -752,8 +750,7 @@ public static class BookmarkWriter
             {
                 b.Field("start_date", date);
                 b.Blank();
-                AppendCharacter(b, slot, shownRealms, cultures, faiths, shownGovernments,
-                    withPosition: false, trailingBlank: false);
+                AppendCharacter(b, slot, shownRealms, shownGovernments, withPosition: false, trailingBlank: false);
             }
         }
     }
@@ -774,8 +771,7 @@ public static class BookmarkWriter
 
         foreach (var b in bookmarks)
         {
-            var primaryTitle = HistoryWriter.Primary(b.County, realms);
-            var realmCounties = GetDeFactoRealmCounties(b.County, primaryTitle, realms, allCounties);
+            var realmCounties = GetDeFactoRealmCounties(b.County, realms, allCounties);
 
             var realmProvinces = new HashSet<int>();
             foreach (var c in realmCounties)
@@ -816,8 +812,7 @@ public static class BookmarkWriter
         }
     }
 
-    private static HashSet<Title> GetDeFactoRealmCounties(Title rulerCounty, Title primaryTitle,
-        RealmMap realms, List<Title> allCounties)
+    private static HashSet<Title> GetDeFactoRealmCounties(Title rulerCounty, RealmMap realms, List<Title> allCounties)
     {
         var realm = new HashSet<Title>();
         var rulersInRealm = new HashSet<Title> { rulerCounty };

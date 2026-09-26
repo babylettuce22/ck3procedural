@@ -260,15 +260,6 @@ county_borders_realm_trigger = {
 	}
 }
 
-# Character scope, with scope:wilderness set to a candidate county. The tooltipped wrapper the
-# decision and the AI gate use; the rule itself lives once, above.
-can_reach_wilderness_trigger = {
-	custom_tooltip = {
-		text = colonize_must_border_realm_tt
-		scope:wilderness = { county_borders_realm_trigger = { CHARACTER = root } }
-	}
-}
-
 
 # --- Building gates ----------------------------------------------------------------------------
 

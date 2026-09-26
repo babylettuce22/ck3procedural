@@ -165,9 +165,6 @@ public static class DecisionsWriter
     /// <summary>Vanilla's realm-scale illustration, used by its own empire-founding decisions.</summary>
     public const string RealmPicture = "gfx/interface/illustrations/decisions/decision_realm.dds";
 
-    /// <summary>Vanilla's title-founding illustration.</summary>
-    public const string FoundTitlePicture = "gfx/interface/illustrations/decisions/decision_found_kingdom.dds";
-
     public static readonly ScriptBody AlwaysYes = b => b.Field("always", "yes");
     public static readonly ScriptBody AlwaysNo = b => b.Field("always", "no");
 

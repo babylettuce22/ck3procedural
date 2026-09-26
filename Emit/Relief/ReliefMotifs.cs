@@ -409,8 +409,6 @@ public static class ReliefMotifs
         return m;
     }
 
-    private static Pt Rad(double r, double deg) => Pt.Polar(r, deg * Math.PI / 180);
-
     // ================================================================ suns and stars
 
     private static void Sun(ReliefCanvas cv)

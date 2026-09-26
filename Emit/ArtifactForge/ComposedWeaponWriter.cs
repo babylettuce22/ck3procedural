@@ -35,7 +35,10 @@ public sealed record ComposedKind(
 /// An attached child receives no <c>portrait_accessory</c> binding, its own or its parent's, so only
 /// the root can carry a procedural palette; and only the anchor's mesh is the same file in every
 /// combination, because placement gives the anchor a shift of exactly zero. The anchor is the part
-/// the hand holds. See <see cref="ComposedWeapon"/>.
+/// the hand holds. Anchoring on the lead instead was measured and rejected: it slides the weapon
+/// along the hand by however much the hilts differ, which costs a quarter of the pairings on swords
+/// and nearly two thirds on hafted weapons, where haft lengths vary so much that a pinned spear head
+/// swings the grip 148 units. <c>--verify-compose</c> prints the table.
 ///
 /// **Everything lands in one directory and one <c>.asset</c>**, which is vanilla's own arrangement —
 /// <c>ep1_artifacts_weapons_portrait.asset</c> declares hundreds of meshes and entities in a single
@@ -82,10 +85,6 @@ public static class ComposedWeaponWriter
     /// </summary>
     public static string PairName(string lead, string baseFamily)
         => $"gen_wpn_{lead}__{baseFamily}";
-
-    /// <summary>Entity for one pairing — what an artifact visual's <c>asset</c> field names.</summary>
-    public static string PairEntityName(string lead, string baseFamily)
-        => $"{PairName(lead, baseFamily)}_entity";
 
     /// <summary>
     /// Every pairing the kinds admit, without writing anything.

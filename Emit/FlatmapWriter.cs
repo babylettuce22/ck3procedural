@@ -24,8 +24,7 @@ public static class FlatmapWriter
 {
     public static Flatmap WriteAll(
         string modDir, MapConfig cfg, ProvinceMap provinces,
-        int[] order, int landCount, float[] elevation,
-        TerrainClass[]? provinceTerrain = null)
+        int[] order, int landCount, float[] elevation)
     {
         int w = cfg.ProvinceWidth;
         int h = cfg.ProvinceHeight;

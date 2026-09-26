@@ -91,9 +91,6 @@ public sealed class SteppeMap
 
     public bool Contains(Title county) => _subRegionOf.ContainsKey(county);
 
-    /// <summary>Index into <see cref="SubRegions"/>, or -1 outside the belt.</summary>
-    public int SubRegionOf(Title county) => _subRegionOf.GetValueOrDefault(county, -1);
-
     /// <summary>Every county in the situation, across all sub-regions.</summary>
     public IEnumerable<Title> Counties => SubRegions.SelectMany(s => s.Counties);
 

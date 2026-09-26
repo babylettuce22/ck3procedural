@@ -276,7 +276,7 @@ public sealed class StruggleMap
             int index = chosen.Count;
             string key = $"gen_struggle_{index}";
 
-            var phases = BuildPhases(key, living, creeds, rng);
+            var phases = BuildPhases(key, living, rng);
 
             // Starting mood is drawn rather than fixed, weighted by how bad the chronicle says it
             // got. A world that always starts in the same phase reads as scripted the second time
@@ -296,7 +296,7 @@ public sealed class StruggleMap
                 Cultures = living,
                 Faiths = creeds,
                 Tension = tension,
-                Illustration = Illustration(living, creeds, rng),
+                Illustration = Illustration(creeds, rng),
                 Phases = phases,
                 Endings = BuildEndings(key, kingdom, living, rng),
                 StartMood = start,
@@ -420,7 +420,7 @@ public sealed class StruggleMap
     public const string DriftCatalyst = "catalyst_passing_of_time";
 
     private static List<StrugglePhase> BuildPhases(
-        string key, List<Culture> cultures, List<Faith> faiths, Rng rng)
+        string key, List<Culture> cultures, Rng rng)
     {
         var phases = new List<StrugglePhase>();
 
@@ -454,7 +454,7 @@ public sealed class StruggleMap
                 Mood = mood,
                 Key = $"{key}_phase_{mood.ToString().ToLowerInvariant()}",
                 Name = rng.Pick(PhaseNames[mood]),
-                Description = PhaseDescription(mood, cultures, faiths),
+                Description = PhaseDescription(mood, cultures),
                 Futures = futures,
                 Parameters = Parameters(mood),
                 Modifiers = Modifiers(mood),
@@ -862,7 +862,7 @@ public sealed class StruggleMap
              + "whether that means killing or living alongside.";
     }
 
-    private static string PhaseDescription(StruggleMood mood, List<Culture> cultures, List<Faith> faiths)
+    private static string PhaseDescription(StruggleMood mood, List<Culture> cultures)
     {
         string who = List(cultures.Select(c => c.Heritage.Name).Distinct().ToList());
 
@@ -1029,7 +1029,7 @@ public sealed class StruggleMap
     /// texture for anybody who does not own them, and this tool cannot know what its user's users
     /// own. Everything below is unprefixed base-game art.
     /// </summary>
-    private static string Illustration(List<Culture> cultures, List<Faith> faiths, Rng rng)
+    private static string Illustration(List<Faith> faiths, Rng rng)
     {
         const string dir = "gfx/interface/illustrations/event_scenes";
 

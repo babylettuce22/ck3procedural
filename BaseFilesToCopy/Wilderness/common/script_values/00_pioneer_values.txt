@@ -64,32 +64,6 @@ pioneer_company_size = {
 	}
 }
 
-# What breaking ground costs up front.
-#
-# Read in the decision's cost block, which is evaluated before a target has been picked -- so
-# nothing here may look at scope:stake. The ground's own difficulty is priced in winters instead,
-# which is the right currency for it anyway.
-pioneer_stake_cost = {
-	value = 400
-
-	# A man who can count knows what to buy, and buys less of it.
-	subtract = { value = stewardship  multiply = 5 }
-
-	# Somebody has done this before.
-	if = { limit = { has_trait = lifestyle_traveler } subtract = 40 }
-
-	min = 250
-}
-
-pioneer_stake_prestige_cost = {
-	value = 200
-
-	# Reputation is the other thing being spent: a company that stops moving stops being feared.
-	if = { limit = { has_trait = ambitious } subtract = 40 }
-
-	min = 100
-}
-
 # How many winters have to be got through.
 #
 # Four, and the number is doing more work than it looks. It is long enough that no single lucky roll

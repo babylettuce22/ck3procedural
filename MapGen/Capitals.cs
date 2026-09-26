@@ -58,8 +58,7 @@ public static class Capitals
     /// </summary>
     /// <returns>How many counties had their seat moved.</returns>
     public static int SeatCounties(List<Title> empires, ProvinceMap provinces, int[] order,
-        int baronyCount, int landCount, TerrainClass[] provinceTerrain, Drainage? drainage,
-        AzgaarImport? azgaar)
+        int baronyCount, TerrainClass[] provinceTerrain, Drainage? drainage, AzgaarImport? azgaar)
     {
         var survey = ProvinceSurvey.Take(provinces, order, baronyCount, drainage);
         var coastal = survey.Coastal;

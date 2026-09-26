@@ -151,7 +151,7 @@ public static partial class ContentWriter
         // Everything downstream reads the seat as Children[0]. See MapGen/Capitals.cs.
         Core.Stage.Time("county seats", () =>
         {
-            int moved = MapGen.Capitals.SeatCounties(empires, provinces, order, baronyCount, landCount,
+            int moved = MapGen.Capitals.SeatCounties(empires, provinces, order, baronyCount,
                 provinceTerrain, drainage, azgaar);
             Console.WriteLine($"  county seats: {moved} of {counties.Count} moved off the cluster seed");
         });
@@ -221,7 +221,7 @@ public static partial class ContentWriter
             // and burg goes to the title that actually contains most of it — see AzgaarNaming.
             var borrowed = azgaar is null
                 ? null
-                : MapGen.AzgaarNaming.TitleNames(azgaar, empires, tierForms, map, stateGovernments);
+                : MapGen.AzgaarNaming.TitleNames(azgaar, empires);
 
             Titles.AssignNames(empires, map, new Rng(cfg.Seed ^ 0x7171), borrowed,
                                Titles.HegemonyOf(empires));
@@ -237,7 +237,7 @@ public static partial class ContentWriter
             if (cfg.ContentSource == MapConfig.ContentSourceMode.VanillaWorld)
             {
                 var catalog = VanillaCatalog.Read(gameDir);
-                titlePlan = VanillaTitles.Match(empires, grown, development, catalog,
+                titlePlan = VanillaTitles.Match(empires, grown, catalog,
                     CountyPosition(provinces, order, landCount), cfg.EraYear, MapGen.SilkRoad.ReservedCountyKeys,
                     new Rng(cfg.Seed ^ 0x7A13), cfg.VanillaRegionKeys);
 
@@ -460,7 +460,7 @@ public static partial class ContentWriter
         // The traced courses go in so each river can be named along its length rather than by the
         // latitude of its provinces — see WaterNaming.GroupRiverProvinces.
         var waterNames = Core.Stage.Time("water naming", () => WaterNaming.Generate(
-            provinces, order, landCount, riverCount, cultures, empires, cfg,
+            provinces, order, landCount, riverCount, cultures, empires,
             new Rng(cfg.Seed ^ 0x5EAE), terra.MajorRiversList, azgaar));
         Core.Showcase.Publish(() => ShowcaseItems.Waters(waterNames));
 

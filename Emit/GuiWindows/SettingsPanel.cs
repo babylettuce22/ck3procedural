@@ -135,7 +135,7 @@ public static class SettingsPanel
         // No gather. The index windows rebuild a list when they appear; this one has nothing to
         // rebuild, because every checkbox reads its own scripted_gui live.
         doc.Add(GuiBuilder.Types("gen_settings_panel").Add(CentredWindow.Types("gen_settings_panel",
-            WindowWidth, WindowHeight(), window, gather: null, Body(window, player))));
+            WindowWidth, WindowHeight(), window, gather: null, Body(player))));
 
         // The bare instantiation the registry resolves. Without it the file parses, loads, reports
         // that loading is complete, and then the registry says
@@ -163,7 +163,7 @@ public static class SettingsPanel
     }
 
     /// <summary>Everything inside the window frame: header, blurb, and the switches.</summary>
-    private static GuiBuilder Body(ScriptedGui window, GuiScope player)
+    private static GuiBuilder Body(GuiScope player)
     {
         var body = GuiBuilder.VBox()
             .Using("Window_Margins")

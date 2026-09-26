@@ -179,13 +179,6 @@ public sealed class AzgaarNames
         return Clean(word, rng);
     }
 
-    /// <summary>A shorter name, the way Azgaar draws one for a state out of a culture's base.</summary>
-    public string GenerateShort(Rng rng)
-    {
-        int min = Math.Max(2, MinLength - 1);
-        return Generate(rng, min, Math.Max(min + 1, MaxLength - 2));
-    }
-
     public string Generate(Rng rng) => Generate(rng, MinLength, MaxLength);
 
     private string Clean(string word, Rng rng)

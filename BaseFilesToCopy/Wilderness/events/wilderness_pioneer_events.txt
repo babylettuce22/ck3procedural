@@ -51,7 +51,7 @@
 #                every other option in this file put together, and pays for it with a man and a
 #                worse opening position. The answer when the county is nearly impossible.
 #   Send back -- straightforwardly buys the best opening. The answer when there is gold, which for
-#                a company that has just paid pioneer_stake_cost usually means there is not.
+#                a landless company out in the wild usually means there is not.
 
 wilderness_pioneer.0001 = {
 	type = character_event

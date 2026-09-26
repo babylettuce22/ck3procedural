@@ -211,9 +211,6 @@ public sealed class HierarchyPlan
     public int Demoted => States.Count(s => s.Demoted && !s.Landless);
     public int Landless => States.Count(s => s.Landless);
 
-    /// <summary>What every state's asking rank costs at the arity floors.</summary>
-    public int MinimumWanted => States.Sum(s => AzgaarTiers.Minimum(s.Desired, MinChildren));
-
     /// <summary>Provinces too thin to stand as their own duchy, and so bound to merge.</summary>
     public int ThinProvinces
         => ProvinceBaronies.Count(b => b > 0 && b < AzgaarTiers.Minimum(AzgaarTiers.Duchy, MinChildren));

@@ -14,8 +14,6 @@ namespace Ck3MapGen.MapGen;
 /// </summary>
 public static class Raster
 {
-    private static int Wrap(int v, int n) => ((v % n) + n) % n;
-
     /// <summary>
     /// Heightmap rows the province grid is offset by, relative to the obvious block
     /// [2y, 2y+1]. Every province-resolution field derived from the heightmap goes through

@@ -83,16 +83,6 @@ public sealed class EditableWorldFile
     // property change for every loaded file, and the character history alone is megabytes.
     public bool Changed => _edits.Count != _savedEdits.Count
         || _edits.Any(e => !_savedEdits.TryGetValue(e.Key, out string? saved) || saved != e.Value);
-    public IEnumerable<(string Before, string After)> Differences()
-    {
-        foreach (var range in _edits.Keys.Union(_savedEdits.Keys).OrderBy(r => r.Start))
-        {
-            string original = Original.Substring(range.Start, range.Length);
-            string before = _savedEdits.GetValueOrDefault(range, original);
-            string after = _edits.GetValueOrDefault(range, original);
-            if (before != after) yield return (before, after);
-        }
-    }
     public void Revert()
     {
         _edits.Clear();

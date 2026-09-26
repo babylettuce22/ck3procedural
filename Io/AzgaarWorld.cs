@@ -85,13 +85,6 @@ public sealed class AzgaarWorld
     public AzgaarReligion? Religion(int i) => i > 0 && i < Pack.Religions.Count ? Pack.Religions[i] : null;
     public AzgaarProvince? Province(int i) => i > 0 && i < Pack.Provinces.Count ? Pack.Provinces[i] : null;
     public AzgaarBurg? Burg(int i) => i > 0 && i < Pack.Burgs.Count ? Pack.Burgs[i] : null;
-
-    /// <summary>
-    /// The legend text attached to an object, or null. Azgaar keys these as the object kind
-    /// followed by its index, with no separator — "burg12", "state3", "religion7", "culture2".
-    /// </summary>
-    public string? NoteFor(string kind, int index)
-        => Notes.FirstOrDefault(n => n.Id == $"{kind}{index}")?.Legend;
 }
 
 public sealed class AzgaarInfo
@@ -650,9 +643,6 @@ public sealed class AzgaarRiver
     [JsonPropertyName("length")] public double Length { get; set; }
     [JsonPropertyName("width")] public double Width { get; set; }
     [JsonPropertyName("sourceWidth")] public double SourceWidth { get; set; }
-
-    /// <summary>True when nothing flows into this one — the head of its own system.</summary>
-    public bool IsMainStem => Parent == 0 || Parent == I;
 }
 
 /// <summary>A point of interest. The natural source for wonders and artifacts in a later tier.</summary>

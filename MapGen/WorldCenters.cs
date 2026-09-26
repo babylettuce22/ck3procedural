@@ -134,7 +134,7 @@ public sealed class WorldCenterMap
             var county = counties[i];
             if (wilderness.Contains(county)) continue;
 
-            double score = ScoreCounty(county, provinceTerrain, neighbours[i].Count, positions[i], cfg, rng);
+            double score = ScoreCounty(county, provinceTerrain, neighbours[i].Count, positions[i], rng);
             scored.Add((county, score, positions[i]));
         }
 
@@ -228,7 +228,7 @@ public sealed class WorldCenterMap
         return map;
     }
 
-    private static double ScoreCounty(Title county, TerrainClass[] terrain, int neighborCount, (double X, double Y) pos, MapConfig cfg, Rng rng)
+    private static double ScoreCounty(Title county, TerrainClass[] terrain, int neighborCount, (double X, double Y) pos, Rng rng)
     {
         double score = 0;
         bool coastal = false;

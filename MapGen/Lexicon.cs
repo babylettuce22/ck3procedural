@@ -113,7 +113,7 @@ public sealed class Lexicon
                 }
 
                 bool heavy = group == Nature || group == Built;
-                lex.Roots[concept] = Fresh(() => heavy ? p.Word(rng, rng.Chance(0.6) ? 1 : 2) : p.Element(rng), p, seen, rng);
+                lex.Roots[concept] = Fresh(() => heavy ? p.Word(rng, rng.Chance(0.6) ? 1 : 2) : p.Element(rng), p, seen);
             }
 
         // Name elements: the flavour's own, padded out with concept roots where they run thin.
@@ -230,7 +230,7 @@ public sealed class Lexicon
         }
     }
 
-    private static List<string> Fresh(Func<List<string>> make, Phonology p, HashSet<string> seen, Rng rng)
+    private static List<string> Fresh(Func<List<string>> make, Phonology p, HashSet<string> seen)
     {
         List<string> word = make();
         for (int attempt = 0; attempt < 8; attempt++)

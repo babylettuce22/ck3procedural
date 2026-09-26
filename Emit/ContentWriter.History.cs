@@ -271,7 +271,7 @@ public static partial class ContentWriter
         {
             Core.Stage.Time("de jure", () =>
             {
-                WriteLocalisation(modDir, empires, world.WaterNames, provinces, order, result.BaronyCount,
+                WriteLocalisation(modDir, empires, world.WaterNames, provinces, result.BaronyCount,
                     result.LandCount, result.RiverCount);
                 WriteFormationDecisions(modDir, empires, wilderness);
                 TitleTierWriter.WriteAll(modDir, cultures, empires);
@@ -566,7 +566,7 @@ public static partial class ContentWriter
 
         var bookmarkResult = Core.Stage.Detail("  · bookmarks", () => BookmarkWriter.WriteAll(
             modDir, gameDir, cfg, provinces, order, empires,
-            realms, development, cultures, faiths, governments, wilderness, prehistory,
+            realms, development, cultures, governments, wilderness, prehistory,
             rulers, azgaar, calendar));
 
         // Kept for the editor: re-emitting a ruler means re-emitting the bookmark that

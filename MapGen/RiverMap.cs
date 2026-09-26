@@ -155,7 +155,7 @@ public static class RiverMap
                 curr = into;
             }
 
-            course = Straighten(MakeOrthogonal(course, width, height), width);
+            course = Straighten(MakeOrthogonal(course, width), width);
 
             // Walk the course forward and decide where it ends.
             int endIndex = -1;
@@ -457,7 +457,7 @@ public static class RiverMap
     /// <summary>
     /// Ensures strictly 4-connected (orthogonal) river pixels without diagonal-only corners.
     /// </summary>
-    private static List<int> MakeOrthogonal(List<int> rawPath, int width, int height)
+    private static List<int> MakeOrthogonal(List<int> rawPath, int width)
     {
         var result = new List<int>();
         if (rawPath.Count == 0) return result;

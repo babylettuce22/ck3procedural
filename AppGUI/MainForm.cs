@@ -1318,8 +1318,7 @@ public sealed partial class MainForm : ChromeForm
             var (source, packed) = await Task.Run(() =>
             {
                 var cfg = result.Config;
-                var full = Emit.MapDataWriter.ShippedHeightmap(
-                    cfg, result.Provinces, result.ProvinceOrder, result.LandCount, result.Terra);
+                var full = Emit.MapDataWriter.ShippedHeightmap(cfg, result.Provinces, result.Terra);
 
                 var field = Heightfield.Downsample(
                     full, cfg.Width, cfg.Height, Heightfield.PreviewCols);
@@ -3241,18 +3240,14 @@ public sealed partial class MainForm : ChromeForm
         // page chose, so paint left on the Climate workspace does not reach it.
         var climatePaint = _onQuick ? null : _climate.EffectivePaint?.Clone();
 
+        // Set inside the run when the applied history turns out not to fit the world just built.
+        MapGen.AppliedHistory? dropped = null;
+
         var (result, cancelled) = await RunAsync(
             modDir is null ? "Building preview…" : "Writing mod…",
             () =>
             {
-                // A history applied in the History workspace moves the start date, on a copy: the
-                // grid keeps the user's own World Year, and discarding the history needs no undo.
-                var cfg = _options.AppliedHistory is { } applied
-                    ? _options.Config.AtStartYear(applied.Year)
-                    : _options.Config;
-                if (_options.AppliedHistory is not null)
-                    Console.WriteLine($"Applied history: written as {cfg.StartYear}, as advanced as {cfg.EraYear}"
-                        + (_options.Config.UsesAdditionalBookmarks ? "; additional bookmarks are not written for it" : ""));
+                var cfg = _options.Config;
                 var source = _source!;
 
                 Stage.Time(source.PhaseName, () =>
@@ -3277,12 +3272,41 @@ public sealed partial class MainForm : ChromeForm
                 var r = Generator.FromTerrain(terra, cfg, OnProgressivePreview,
                     climatePaint: climatePaint);
 
+                // A history applied in the History workspace moves the start date, on a copy: the
+                // grid keeps the user's own World Year, and discarding the history needs no undo.
+                // Moved after the world is built rather than before, as ContentWriter.ApplyHistory
+                // does — nothing up to here reads the start date, and only the built counties can
+                // say whether the history fits them. One that does not (restored from beside a mod
+                // now being written from another heightmap, seed or county setting, say) is let go
+                // here instead of failing the write after the whole world has been generated: the
+                // History workspace's run of it went with the world it was run on.
+                if (_options.AppliedHistory is { } applied)
+                {
+                    if (applied.Mismatch(r.Titles) is null)
+                    {
+                        r = r.WithConfig(r.Config.AtStartYear(applied.Year));
+                        Console.WriteLine($"Applied history: written as {r.Config.StartYear}, as advanced as {r.Config.EraYear}"
+                            + (cfg.UsesAdditionalBookmarks ? "; additional bookmarks are not written for it" : ""));
+                    }
+                    else
+                    {
+                        dropped = applied;
+                        _options.AppliedHistory = null;
+                        Console.WriteLine($"Applied history of {applied.Year} discarded: it was run on a different "
+                            + "county map (another heightmap, seed or county setting). The world starts at its own "
+                            + $"World Year, {cfg.StartYear}, with the realms the generator grows.");
+                    }
+                }
+
                 _written = null;
                 if (modDir is not null) _written = Generator.WriteMod(r, _options, modDir);
                 return r;
             },
             writing: modDir is not null,
             modDir: modDir);
+
+        // Even when the run went on to fail or was cancelled: the history is already let go.
+        if (dropped is not null) _history.ShowApplied(null);
 
         if (cancelled)
         {
@@ -3303,6 +3327,12 @@ public sealed partial class MainForm : ChromeForm
         _status.Text = modDir is null
             ? $"Preview — {result.Provinces.Count} provinces. Nothing written."
             : $"Mod written to {modDir} — {result.Provinces.Count} provinces";
+
+        // After the write, WriteModIntoAsync forgets the file beside the mod as it does for any
+        // write without a history. A preview leaves it there, so going back to the settings the
+        // history was run with and writing brings it back.
+        if (dropped is not null)
+            _status.Text += $" · the applied history of {dropped.Year} did not fit this map and was discarded";
 
         ShowHeightmapWarnings(modDir);
     }

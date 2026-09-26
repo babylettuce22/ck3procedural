@@ -58,8 +58,7 @@ public static class VanillaTitles
     private sealed record Window(List<VanillaCatalog.TitleDef> Counties, (double X, double Y) Centre,
         VanillaCatalog.TitleDef CentreCounty);
 
-    public static Plan? Match(List<Title> empires, CultureMap grown, Dictionary<Title, int> development,
-        VanillaCatalog catalog, Func<Title, (double X, double Y)?> position, int year,
+    public static Plan? Match(List<Title> empires, CultureMap grown, VanillaCatalog catalog, Func<Title, (double X, double Y)?> position, int year,
         IReadOnlySet<string> reserved, Rng rng, IReadOnlyList<string>? regions = null)
     {
         string date = $"{Math.Max(1, year)}.1.1";

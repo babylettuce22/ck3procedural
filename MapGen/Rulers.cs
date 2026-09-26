@@ -88,9 +88,6 @@ public sealed class Ruler
     /// <summary>The birth date as CK3 history writes it.</summary>
     public string BirthDate => $"{BirthYear}.{BirthMonth}.{BirthDay}";
 
-    /// <summary>Age in whole years at the start date.</summary>
-    public int AgeAt(int year) => year - BirthYear;
-
     /// <summary>Schooling, skills, traits and standing. See <see cref="RulerProfile"/>.</summary>
     public required RulerProfile Profile { get; set; }
 

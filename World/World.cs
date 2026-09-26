@@ -47,16 +47,9 @@ public sealed class WorldGrid
     // province raster's resolution, which is the wrong place to decide where a one-pixel river
     // goes, and copying an answer down to it and back up is how the two disagreed before.
 
-    /// <summary>Cell indices on a tectonic spreading line (world.tectonics.spreadingLine).</summary>
-    public readonly List<int> SpreadingLine = [];
-
-    /// <summary>Column positions of the spreading centres (world.tectonics.spreadingCenters).</summary>
-    public readonly List<int> SpreadingCenters = [];
-
-    // --- Flood-filled feature groups (world.mountains / continents / forests) ---
+    // --- Flood-filled feature groups (world.mountains / continents) ---
     public readonly List<CellGroup> Mountains = [];
     public readonly List<Continent> Continents = [];
-    public readonly List<CellGroup> Forests = [];
 
     // --- Geographical reference lines, in grid space (setGeographicalPoints) ---
     public int Equator;
@@ -117,20 +110,6 @@ public sealed class WorldGrid
         ReadOnlySpan<int> dy = [0, 0, 1, -1, 1, -1, 1, -1];
         int n = 0;
         for (int k = 0; k < 8; k++)
-        {
-            int i = At(x + dx[k], y + dy[k]);
-            if (i >= 0) buffer[n++] = i;
-        }
-        return n;
-    }
-
-    /// <summary>Port of getCardinalNeighbors(x, y) — W, E, S, N.</summary>
-    public int CardinalNeighborsOf(int x, int y, Span<int> buffer)
-    {
-        ReadOnlySpan<int> dx = [-1, 1, 0, 0];
-        ReadOnlySpan<int> dy = [0, 0, 1, -1];
-        int n = 0;
-        for (int k = 0; k < 4; k++)
         {
             int i = At(x + dx[k], y + dy[k]);
             if (i >= 0) buffer[n++] = i;

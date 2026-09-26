@@ -151,12 +151,12 @@ public static class AzgaarHierarchy
         }
 
         // --- Everything above the state, synthesised until every root is an empire. ----------------
-        var affinity = Affinity(azgaar, rootState);
+        var affinity = Affinity(azgaar);
         var current = roots;
 
         foreach (string tier in (string[])["d", "k", "e"])
             current = RaiseTo(tier, current, affinity, rootState, rootPosition,
-                              countyAdjacency, countySea, counties, countyPosition, cfg, rng);
+                              countyAdjacency, counties, countyPosition, cfg, rng);
 
         if (promoted > 0)
             Console.WriteLine($"    {promoted} duchy-ranked states hold more than a duchy's worth of " +
@@ -392,7 +392,7 @@ public static class AzgaarHierarchy
     private static List<Title> RaiseTo(string tier, List<Title> roots,
         Dictionary<int, int> affinity, Dictionary<Title, int> rootState,
         Dictionary<Title, (double X, double Y)> rootPosition,
-        Dictionary<int, HashSet<int>> countyAdjacency, Dictionary<int, HashSet<int>> countySea,
+        Dictionary<int, HashSet<int>> countyAdjacency,
         List<Title> counties, (double X, double Y)[] countyPosition,
         MapConfig cfg, Rng rng)
     {
@@ -573,7 +573,7 @@ public static class AzgaarHierarchy
     /// Returns a representative state id per group. A state in no group maps to itself, so it is
     /// wrapped alone rather than dropped.
     /// </summary>
-    private static Dictionary<int, int> Affinity(AzgaarImport azgaar, Dictionary<Title, int> rootState)
+    private static Dictionary<int, int> Affinity(AzgaarImport azgaar)
     {
         var states = azgaar.World.RealStates.ToList();
         var parent = states.ToDictionary(s => s.I, s => s.I);
@@ -679,18 +679,6 @@ public static class AzgaarHierarchy
         foreach (int m in members)
             result[m] = full.TryGetValue(m, out var n) ? [.. n.Where(allowed.Contains)] : [];
         return result;
-    }
-
-    private static int StateOf(List<int> baronies, AzgaarImport azgaar)
-    {
-        var votes = new Dictionary<int, int>();
-        foreach (int id in baronies)
-        {
-            int state = azgaar.StateOfBarony(id);
-            if (state > 0) votes[state] = votes.GetValueOrDefault(state) + 1;
-        }
-        return votes.Count == 0 ? 0
-             : votes.OrderByDescending(v => v.Value).ThenBy(v => v.Key).First().Key;
     }
 
     private static (double X, double Y) Centre(Title root, List<Title> counties,

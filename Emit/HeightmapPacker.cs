@@ -134,7 +134,7 @@ public static class HeightmapPacker
         for (int l = 0; l < Levels; l++) slotsPerLevel[l] = slots[l].Count;
 
         // ── Lay the atlas out ─────────────────────────────────────────────────────
-        var (atlasWidth, atlasHeight, cols, rows, offsets) = Layout(slotsPerLevel, step);
+        var (atlasWidth, atlasHeight, cols, _, offsets) = Layout(slotsPerLevel, step);
 
         var packed = new ushort[(long)atlasWidth * atlasHeight];
         for (int l = 0; l < Levels; l++)

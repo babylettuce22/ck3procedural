@@ -554,7 +554,7 @@ public static class Realms
             .Select(kv => kv.Key)
             .ToList();
 
-        Report(realized, primary, liege, all);
+        Report(primary, liege);
 
         return new RealmMap
         {
@@ -752,7 +752,7 @@ public static class Realms
         Console.WriteLine($"  realms: {history.Polities.Count} simulated realms titled — " +
                           $"{dukes} internal duchies, {counts} vassal counties");
 
-        Report(claimed, primary, map.Liege, all);
+        Report(primary, map.Liege);
         Console.WriteLine($"  realms: vassalage by origin — {map.OriginTally()}");
 
         return map;
@@ -1792,8 +1792,7 @@ public static class Realms
         _ => 0,
     };
 
-    private static void Report(HashSet<Title> realized, Dictionary<Title, Title> primary,
-        Dictionary<Title, Title> liege, List<Title> all)
+    private static void Report(Dictionary<Title, Title> primary, Dictionary<Title, Title> liege)
     {
         int emperors = primary.Values.Count(t => t.Tier == "e");
         int kings = primary.Values.Count(t => t.Tier == "k");

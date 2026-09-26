@@ -229,7 +229,7 @@ public static class Generator
         onPreview?.Invoke("Drainage", PreviewRenderer.RenderDrainage(drainage, provinceElevation, cfg));
 
         var majorRivers = Stage.Time("major rivers carve",
-            () => MajorRivers.ExtractAndCarve(terra.Elevation, cfg.Width, cfg.Height, drainage, cfg, rng));
+            () => MajorRivers.ExtractAndCarve(terra.Elevation, cfg.Width, cfg.Height, drainage, cfg));
         terra.MajorRiversList = majorRivers;
 
         provinceElevation = Stage.Time("recompute province elevation",
@@ -426,8 +426,7 @@ public static class Generator
             impassable.Width, impassable.Height, impassable.Rgb);
         {
             var cfg = result.Config;
-            var full = Emit.MapDataWriter.ShippedHeightmap(
-                cfg, result.Provinces, result.ProvinceOrder, result.LandCount, result.Terra);
+            var full = Emit.MapDataWriter.ShippedHeightmap(cfg, result.Provinces, result.Terra);
             var field = AppGUI.Heightfield.Downsample(full, cfg.Width, cfg.Height, AppGUI.Heightfield.PreviewCols);
             var frame = AppGUI.HeightfieldRenderer.Render(
                 field, AppGUI.HeightfieldView.Default, 1600, 900, 1, impassable);

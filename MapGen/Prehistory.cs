@@ -263,20 +263,20 @@ public sealed class PrehistoryMap
         map.RebuildNobleFamilies(realms, governments, wilderness);
 
         // 2. Build Multi-Generational Ancestry (Deceased Parents & Sibling Bonds)
-        BuildAncestryAndBrothers(map, rulerCounties, realms, cultures, faiths, cfg, rng);
+        BuildAncestryAndBrothers(map, rulerCounties, realms, cultures, faiths, cfg);
 
         // 3. Build Adjacencies (Ruler-to-Ruler and TopLiege-to-TopLiege)
         var rulerNeighbors = BuildRulerNeighbors(rulerCounties, countyNeighbors, realms);
         var topLiegeNeighbors = BuildTopLiegeNeighbors(rulerNeighbors, realms);
 
         // 4. Inter-Dynastic & Intra-Realm Marriages & Children (Vassal + Liege Network)
-        BuildMarriagesAndChildren(map, rulerCounties, rulerNeighbors, realms, cultures, faiths, cfg, rng);
+        BuildMarriagesAndChildren(map, rulerCounties, rulerNeighbors, realms, cultures, faiths, cfg);
 
         // 5. Border Friction, Nuanced House Relations, Truces, Claims, and Alliances
-        BuildInterDynasticRelations(map, topLiegeNeighbors, realms, faiths, cultures, cfg, rng);
+        BuildInterDynasticRelations(map, topLiegeNeighbors, realms, faiths, cfg);
 
         // 6. Internal Realm Drama & Sibling Cadet Branches
-        BuildInternalDrama(map, rulerCounties, realms, faiths, cultures, cfg, rng);
+        BuildInternalDrama(map, rulerCounties, realms, faiths, cfg);
 
         // 6b. The Khan's Sworn Men
         BuildNomadCompanions(map, rulerCounties, realms, governments, cfg);
@@ -311,7 +311,7 @@ public sealed class PrehistoryMap
             AddSimulatedDiplomacy(map, diplomacy, rulerCounties, realms, cfg);
         else if (cfg.EnableStartingWars && topLiegeNeighbors.Count > 0)
         {
-            GenerateActiveWars(map, topLiegeNeighbors, realms, faiths, cultures, worldCenters, cfg, rng);
+            GenerateActiveWars(map, topLiegeNeighbors, realms, faiths, cfg, rng);
         }
 
         int totalDynasties = map.Dynasties.Count;
@@ -617,8 +617,7 @@ public sealed class PrehistoryMap
         RealmMap realms,
         CultureMap cultures,
         FaithMap faiths,
-        MapConfig cfg,
-        Rng rng)
+        MapConfig cfg)
     {
         // Grouped by realm rather than walked flat, because a shared parent is a fact about a realm:
         // whether two rulers are brothers depends on who they both answer to.
@@ -784,8 +783,7 @@ public sealed class PrehistoryMap
         RealmMap realms,
         CultureMap cultures,
         FaithMap faiths,
-        MapConfig cfg,
-        Rng rng)
+        MapConfig cfg)
     {
         // Group vassals by their top liege
         var vassalsByLiege = new Dictionary<Title, List<Title>>();
@@ -1125,9 +1123,7 @@ public sealed class PrehistoryMap
         Dictionary<Title, HashSet<Title>> topLiegeNeighbors,
         RealmMap realms,
         FaithMap faiths,
-        CultureMap cultures,
-        MapConfig cfg,
-        Rng rng)
+        MapConfig cfg)
     {
         foreach (var (ruler, neighbors) in topLiegeNeighbors)
         {
@@ -1317,9 +1313,7 @@ public sealed class PrehistoryMap
         List<Title> rulerCounties,
         RealmMap realms,
         FaithMap faiths,
-        CultureMap cultures,
-        MapConfig cfg,
-        Rng rng)
+        MapConfig cfg)
     {
         var vassalsByLiege = new Dictionary<Title, List<Title>>();
         foreach (var vassalCounty in rulerCounties)
@@ -1423,8 +1417,6 @@ public sealed class PrehistoryMap
         Dictionary<Title, HashSet<Title>> topLiegeNeighbors,
         RealmMap realms,
         FaithMap faiths,
-        CultureMap cultures,
-        WorldCenterMap? worldCenters,
         MapConfig cfg,
         Rng rng)
     {

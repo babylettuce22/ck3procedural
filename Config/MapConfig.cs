@@ -693,11 +693,6 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Description("Target number of World Center metropolises across the globe.")]
     public int WorldCentersCount { get; set; } = 5;
 
-    [AdvancedSetting]
-    [Category("02 World State")]
-    [Description("Minimum spacing between World Centers in approximate county units.")]
-    public int MinCenterDistanceCounties { get; set; } = 12;
-
     [Category("02 World State")]
     [Description("Enable active wars raging at game start between rival rulers, contested holy sites, and disputed borders.")]
     public bool EnableStartingWars { get; set; } = true;
@@ -2875,10 +2870,6 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Browsable(false)]
     public double Equator => Height * Math.Clamp(EquatorPosition, 0.0, 1.0);
 
-    /// <summary>settings.pixelSize — raster pixels per simulation cell.</summary>
-    [Browsable(false)]
-    public double PixelSize => (double)Height / WorldHeight;
-
     /// <summary>
     /// How many heightmap pixels go to one province pixel, on each axis — and therefore to one
     /// world unit, because camera space *is* province space.
@@ -2964,9 +2955,6 @@ public sealed class MapConfig : CustomTypeDescriptor
 
     /// <summary>Vanilla's province-map width. The scale everything pixel-denominated is authored at.</summary>
     public const int ReferenceProvinceWidth = 9216;
-
-    /// <summary>Vanilla's heightmap width.</summary>
-    public const int ReferenceHeightmapWidth = 18432;
 
     /// <summary>This map's province raster relative to vanilla's, linearly.</summary>
     [Browsable(false)]
@@ -3127,7 +3115,6 @@ public enum HeightmapNormalization : byte
 /// <summary>Port of the <c>limits</c> global.</summary>
 public sealed class Limits
 {
-    public Range PineTree = new(10, 255);
     public Range Hills = new(205, 255);
     public MountainRange Mountains = new(255, 510, 450);
 

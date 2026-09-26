@@ -92,8 +92,7 @@ public static partial class ContentWriter
             (provinceRows, holdings) = BuildProvinceHistory(cfg, empires, provinceTerrain, development, cultures, faiths, governments, wilderness, worldCenters, silkRoad, cfg.Seed, azgaar);
             eraHoldings = BuildEraHoldings(cfg, empires, wilderness, eraGovernments, holdings);
             EmitProvinceHistory(modDir, provinceRows, holdings, eraHoldings);
-            WriteLocalisation(modDir, empires, waterNames, provinces, order, baronyCount,
-                landCount, riverCount);
+            WriteLocalisation(modDir, empires, waterNames, provinces, baronyCount, landCount, riverCount);
         });
 
         Core.Stage.Time("wonders", () => WonderWriter.WriteAll(modDir, gameDir, worldCenters));
@@ -257,13 +256,13 @@ public static partial class ContentWriter
         // flatmap.dds back off disk for the bookmark background, and neither can be racing the
         // writer that produces them. Neither takes the shared Rng, so hoisting them past the
         // terrain textures leaves that stream's order untouched.
-        Core.Stage.Time("map graphics", () => MapGraphicsWriter.WriteAll(modDir, gameDir, cfg, provinces, order, landCount));
+        Core.Stage.Time("map graphics", () => MapGraphicsWriter.WriteAll(modDir, cfg, provinces, order, landCount));
 
         // Kept rather than dropped: StruggleArt cuts each struggle's window background out of this
         // same buffer further down, and re-rendering or re-reading it there would be the same
         // parchment twice.
         var flatmap = Core.Stage.Time("flatmap", () => FlatmapWriter.WriteAll(
-            modDir, cfg, provinces, order, landCount, provinceElevation, provinceTerrain));
+            modDir, cfg, provinces, order, landCount, provinceElevation));
 
         // Everything from here to the holding models is the raster and scatter half of the run:
         // about eighteen seconds on a large map, and it shares nothing with the history half that
@@ -1574,7 +1573,6 @@ public static partial class ContentWriter
             List<Title> empires,
             Dictionary<int, string> waterNames,
             ProvinceMap provinces,
-            int[] order,
             int baronyCount,
             int landCount,
             int riverCount)

@@ -156,16 +156,6 @@ public sealed class Rng
     /// <summary>True with probability <paramref name="p"/>.</summary>
     public bool Chance(double p) => NextDouble() < p;
 
-    /// <summary>Port of subsetOf(arr) — keeps each element ~1/3 of the time, never returns empty.</summary>
-    public List<T> Subset<T>(IReadOnlyList<T> items)
-    {
-        var result = new List<T>();
-        for (int i = 0; i < items.Count; i++)
-            if (Int(0, 2) == 1) result.Add(items[i]);
-        if (result.Count == 0 && items.Count > 0) result.Add(Pick(items));
-        return result;
-    }
-
     /// <summary>In-place Fisher-Yates shuffle.</summary>
     public void Shuffle<T>(IList<T> items)
     {

@@ -13,7 +13,6 @@ public static class WaterNaming
         int riverCount,
         CultureMap cultures,
         List<Title> empires,
-        MapConfig cfg,
         Rng rng,
         List<MajorRiverPath>? majorRivers = null,
         AzgaarImport? azgaar = null)
@@ -29,19 +28,17 @@ public static class WaterNaming
         var adjacency = BuildAdjacency(provinces, order);
 
         // 1. Name Major River Provinces
-        NameMajorRivers(provinces, order, landCount, riverCount, byId, adjacency, cultures, empires,
+        NameMajorRivers(provinces, landCount, riverCount, byId, adjacency, cultures, empires,
             majorRivers, names, usedNames, rng, azgaar);
 
         // 2. Name Sea Zones by Agglomerative Clustering
-        NameSeaZones(provinces, order, riverCount, byId, adjacency, cultures, empires, cfg, names,
-            usedNames, rng, azgaar);
+        NameSeaZones(provinces, riverCount, byId, adjacency, cultures, empires, names, usedNames, rng, azgaar);
 
         return names;
     }
 
     private static void NameMajorRivers(
         ProvinceMap provinces,
-        int[] order,
         int landCount,
         int riverCount,
         int[] byId,
@@ -56,7 +53,7 @@ public static class WaterNaming
     {
         if (riverCount <= landCount) return;
 
-        var systems = GroupRiverProvinces(provinces, order, landCount, riverCount, byId,
+        var systems = GroupRiverProvinces(provinces, landCount, riverCount, byId,
             adjacency, majorRivers);
 
         foreach (var system in systems)
@@ -72,7 +69,7 @@ public static class WaterNaming
 
             string baseName = imported is { Length: > 0 } && !usedNames.Contains(imported)
                 ? Unique(imported, usedNames)
-                : UniqueFrom(() => FindNeighborCulture(system, adjacency, byId, cultures, provinces, empires)
+                : UniqueFrom(() => FindNeighborCulture(system, adjacency, cultures, empires)
                                        .Tongue.Word(rng, 1, 2), usedNames);
 
             Name(system, baseName, names);
@@ -140,7 +137,6 @@ public static class WaterNaming
     /// </summary>
     private static List<List<int>> GroupRiverProvinces(
         ProvinceMap provinces,
-        int[] order,
         int landCount,
         int riverCount,
         int[] byId,
@@ -227,13 +223,11 @@ public static class WaterNaming
 
     private static void NameSeaZones(
         ProvinceMap provinces,
-        int[] order,
         int riverCount,
         int[] byId,
         Dictionary<int, HashSet<int>> adjacency,
         CultureMap cultures,
         List<Title> empires,
-        MapConfig cfg,
         Dictionary<int, string> names,
         HashSet<string> usedNames,
         Rng rng,
@@ -292,7 +286,7 @@ public static class WaterNaming
 
             double enclosure = (double)landContact / Math.Max(1, cluster.Count);
 
-            var culture = FindNeighborCulture(cluster, adjacency, byId, cultures, provinces, empires);
+            var culture = FindNeighborCulture(cluster, adjacency, cultures, empires);
 
             // Azgaar writes some of these with an article — "the Sundering Sea". A CK3 title name is
             // a bare noun phrase the game puts its own words in front of, and the directional
@@ -402,9 +396,7 @@ public static class WaterNaming
     private static Culture FindNeighborCulture(
         List<int> waterIds,
         Dictionary<int, HashSet<int>> adjacency,
-        int[] byId,
         CultureMap cultures,
-        ProvinceMap provinces,
         List<Title> empires)
     {
         var baronies = Titles.Flatten(empires)

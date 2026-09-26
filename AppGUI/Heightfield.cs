@@ -182,8 +182,6 @@ public readonly record struct HeightfieldView(
             PanY = Math.Clamp(PanY - dRight * sin + dForward * cos, -3, 3),
         };
     }
-
-    public HeightfieldView Recentred() => this with { PanX = 0, PanY = 0, Distance = 0.92 };
 }
 
 /// <summary>
