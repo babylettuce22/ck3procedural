@@ -51,11 +51,51 @@ internal sealed class StepPanel : Panel
         foreach (var r in Rules) g.FillRectangle(rule, r);
     }
 
-    /// <summary>The launcher column: at most 940 wide, centred, with 32 either side.</summary>
+    /// <summary>The column's width at the size the launcher window opens at.</summary>
+    public const int PreferredColumn = 940;
+
+    /// <summary>
+    /// The widest the column gets. Past it the page stays centred rather than stretching cards and
+    /// lines across an ultrawide screen.
+    /// </summary>
+    public const int MaxColumn = 1600;
+
+    /// <summary>
+    /// The launcher column: the window's width less a margin either side — 32, or 3% of a wide
+    /// window — up to <see cref="MaxColumn"/>, centred. Every launcher view lays out in it, and
+    /// anchors to its edges, so all of them widen and narrow with the window together. At the size
+    /// the window opens at it is <see cref="PreferredColumn"/> wide.
+    /// </summary>
     public static (int X, int Width) Column(Control host)
     {
-        int width = Math.Min(host.ClientSize.Width - 2 * S(host, 32), S(host, 940));
-        return ((host.ClientSize.Width - width) / 2, Math.Max(width, 100));
+        int client = host.ClientSize.Width;
+        int margin = Math.Max(S(host, 32), client * 3 / 100);
+        int width = Math.Min(client - 2 * margin, S(host, MaxColumn));
+        return ((client - width) / 2, Math.Max(width, 100));
+    }
+
+    /// <summary>
+    /// The largest 2:1 rectangle — a map — that fits <paramref name="maxWidth"/> by
+    /// <paramref name="maxHeight"/>, at (<paramref name="x"/>, <paramref name="y"/>). A map is sized
+    /// by whichever runs out first, so a wide window never pushes what is under it off the bottom.
+    /// </summary>
+    public static Rectangle Map(int x, int y, int maxWidth, int maxHeight)
+    {
+        int h = Math.Max(1, Math.Min(maxWidth / 2, maxHeight));
+        return new Rectangle(x, y, h * 2, h);
+    }
+
+    /// <summary>
+    /// Places <paramref name="count"/> items in a row across <paramref name="width"/>, each at most
+    /// <paramref name="maxItem"/> wide. When they reach it the gaps grow instead, so the first item
+    /// stays on the left edge and the last on the right.
+    /// </summary>
+    public static (int Item, int Gap) Spread(int width, int count, int gap, int maxItem)
+    {
+        count = Math.Max(1, count);
+        int item = Math.Min((width - gap * (count - 1)) / count, maxItem);
+        if (count > 1) gap = (width - item * count) / (count - 1);
+        return (item, gap);
     }
 
     /// <summary>How tall a wrapping label is at a width.</summary>

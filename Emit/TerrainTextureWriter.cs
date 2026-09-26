@@ -112,6 +112,15 @@ public static class TerrainTextureWriter
     /// </summary>
     private const double FieldBlendReach = 4.0;
 
+    /// <summary>
+    /// Width of the transition around an oasis pocket, in pixels of a reference-width map. The
+    /// pocket is only about 14 px in radius (see Cultivation), so the 44 px biome band would carry
+    /// the oasis material three times the pocket's own width out into the sand. That spill is where
+    /// most of the old splotch came from. At 10 px the green fades into the sand over a fringe
+    /// about as wide as vanilla's.
+    /// </summary>
+    private const double OasisBlendReach = 10.0;
+
     /// <summary>Orthogonal step cost in the chamfer distance transform; diagonal is 4.</summary>
     private const int ChamferOrthogonal = 3;
     private const int ChamferDiagonal = 4;
@@ -905,6 +914,7 @@ public static class TerrainTextureWriter
         // hard index change. Two pixels of weight ramp keeps both materials present across the
         // seam, so the edge is crisp without being jagged.
         float fieldReach = (float)Math.Max(1.0, cfg.Scaled(FieldBlendReach));
+        float oasisReach = (float)Math.Max(1.0, cfg.Scaled(OasisBlendReach));
 
         // The scale the band's own edge wanders at, and the scale it is dithered at. Deliberately
         // far apart: the first decides where one biome fingers into the next, which happens over
@@ -920,6 +930,13 @@ public static class TerrainTextureWriter
 
         var (boundaryDistance, boundaryOther, boundaryDistance2, boundaryOther2) =
             BoundaryField(label, pWidth, pHeight);
+
+        // Inside an oasis pocket, or close enough to one to be in its band even after the band's
+        // edge noise has pushed it outward.
+        bool NearOasis(int p) =>
+            TerrainPalette.TerrainOf(label[p]) == TerrainClass.Oasis ||
+            (TerrainPalette.TerrainOf(boundaryOther[p]) == TerrainClass.Oasis &&
+             boundaryDistance[p] * (1f / ChamferOrthogonal) < oasisReach * 1.6f);
 
         // Coastal cliffs, the one thing on this map that is a property of the *slope* rather than
         // of the height. Everything above resolves from a scalar elevation against a percentile,
@@ -1053,6 +1070,16 @@ public static class TerrainTextureWriter
                     int sy = Math.Clamp((int)Math.Round(wy * scaleY), 0, pHeight - 1);
                     int pSrc = sy * pWidth + sx;
 
+                    // Oasis pockets are the one feature smaller than the warp. The broad term alone
+                    // moves a sample by up to 16 province pixels, which is more than a pocket's
+                    // radius, so a warped pocket landed beside its own palms (TreeWriter reads the
+                    // raster unwarped). Anything within the oasis band on either side of the warp
+                    // therefore samples where it stands. The switch happens out in plain sand,
+                    // which looks the same warped or not, so it leaves no line.
+                    int pFlat = Math.Clamp((int)Math.Round(hy * scaleY), 0, pHeight - 1) * pWidth
+                              + Math.Clamp((int)Math.Round(hx * scaleX), 0, pWidth - 1);
+                    if (NearOasis(pFlat) || NearOasis(pSrc)) pSrc = pFlat;
+
                     // Sampled at the pixel's own coordinate, not the warped one: the warp decides
                     // which ground this pixel is standing on, but how broken that ground is has to
                     // be read where the pixel actually is or the rock lands beside the slope
@@ -1089,7 +1116,11 @@ public static class TerrainTextureWriter
                         TerrainPalette.TerrainOf(self) == TerrainClass.Farmlands ||
                         TerrainPalette.TerrainOf(boundaryOther[pSrc]) == TerrainClass.Farmlands;
 
-                    float reach = fieldEdge ? fieldReach : blendReach;
+                    bool oasisEdge = !fieldEdge &&
+                        (TerrainPalette.TerrainOf(self) == TerrainClass.Oasis ||
+                         TerrainPalette.TerrainOf(boundaryOther[pSrc]) == TerrainClass.Oasis);
+
+                    float reach = fieldEdge ? fieldReach : oasisEdge ? oasisReach : blendReach;
 
                     float edge = boundaryDistance[pSrc] * (1f / ChamferOrthogonal);
                     if (edge < reach)
@@ -1097,18 +1128,20 @@ public static class TerrainTextureWriter
                         // Push the band in and out along its length so it is not a uniform ribbon.
                         // Several octaves rather than one: a single frequency displaces the edge in
                         // smooth lobes a few hundred pixels across, which the eye reads as a blotch.
-                        // Stacked octaves give it fingers at every scale.
+                        // Stacked octaves give it fingers at every scale. Scaled by this band's own
+                        // reach, not the biome one: at the biome's 15 px the noise would move an
+                        // oasis edge further than the pocket is wide.
                         if (!fieldEdge)
                         {
                             double ragged = Field.Fbm(bandField, sx * bandFrequency, sy * bandFrequency, 4);
-                            edge += (float)(ragged * blendReach * 0.35);
+                            edge += (float)(ragged * reach * 0.35);
 
                         // And a fine dither on top, at texture scale, so the outer edge of the band
                         // is not itself a clean iso-line along which every material switches on at
                         // once.
                             double interlock = Field.Fbm(interlockField,
                                 sx * interlockFrequency, sy * interlockFrequency, 2);
-                            edge += (float)(interlock * blendReach * 0.14);
+                            edge += (float)(interlock * reach * 0.14);
                         }
 
                         if (edge < reach)

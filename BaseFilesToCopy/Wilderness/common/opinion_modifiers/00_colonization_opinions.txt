@@ -22,10 +22,15 @@
 #
 # The size of each is passed at the call site with `opinion = N`, not fixed here — that is what lets
 # one modifier carry the tier scaling for the exile case instead of needing four.
+#
+# monthly_change is a RATE and is always positive, whatever the sign of the opinion: `decaying = yes`
+# is what points it toward zero (vanilla: extolled_virtue_opinion, +30, monthly_change = 0.1). A
+# negative rate is rejected at load — "Decaying modifier '…' should have a duration or
+# monthly_change!" — and the three positive opinions below, which had one, never decayed at all.
 
 # Raised from nothing. Applied to the colonist, about the liege who granted the land.
 colonist_raised_up_opinion = {
-	monthly_change = -0.15
+	monthly_change = 0.15
 	decaying = yes
 }
 
@@ -42,7 +47,7 @@ colonist_sent_to_the_frontier_opinion = {
 
 # Tribute sent up the hill, honest books shown, a colony visibly working.
 colony_good_stewardship_opinion = {
-	monthly_change = -0.15
+	monthly_change = 0.15
 	decaying = yes
 }
 
@@ -70,6 +75,6 @@ lost_a_colony_opinion = {
 # the county (the 0070 submission chain). Decays like the rest: choosing sense over siege is a fact
 # about a day, and ten years on the man is just another vassal.
 colony_knelt_opinion = {
-	monthly_change = -0.15
+	monthly_change = 0.15
 	decaying = yes
 }

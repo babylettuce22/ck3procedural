@@ -319,13 +319,27 @@ public static class GuiWriter
 
         row.Set("ignoreinvisible", "yes");
 
+        // ---- Two boxes, because the engine's `And` does not short-circuit ----
+        //
+        // A scripted_gui rooted on a character that does not exist logs "Scoped object of type
+        // 'character' is not valid" every frame rather than merely evaluating false, and the HUD
+        // is drawn with no player: observer mode, and between a death and the next heir. This was
+        // once one box whose `visible` read `And( Not( IsObserver ), IsShown )` — which looks
+        // guarded and is not, since both arguments are evaluated regardless. It logged 25,228
+        // errors in one five-minute session (2026-09-26), two a frame, is_shown and is_valid.
+        //
+        // What does stop the question being asked is a HIDDEN PARENT: nothing under an invisible
+        // widget is evaluated. So the guard is the outer box and uses no script at all —
+        // `GetPlayer.IsValid`, the same gate vanilla's own hud.gui puts over its player-only
+        // widgets, with AGOT's Not(IsObserver) kept beside it — and the scripted_gui lives only
+        // on the inner box and its background. `ignoreinvisible` on the outer box lets it
+        // collapse to nothing when a ruler has no colonies, the same job the row's does for it.
         doc.At("domain limit number", row.Node?.Children.First(IsDomainBox))
             .InsertBefore(GuiBuilder.HBox("gen_colony_limit")
-            // Observers have no player, and a scripted_gui rooted on one that does not exist logs
-            // an error every frame rather than merely evaluating false. Vanilla guards the cap
-            // itself with IsLandlessAdventurer and AGOT guards its counter with Not(IsObserver);
-            // this is the latter, for the same reason.
-            .Visible(GuiExpr.And(GuiExpr.Not(GuiExpr.Raw("IsObserver")), counter.IsShown()))
+            .Visible(GuiExpr.And(GuiExpr.Not(GuiExpr.Raw("IsObserver")), GuiExpr.Raw("GetPlayer.IsValid")))
+            .IgnoreInvisible()
+            .Add(GuiBuilder.HBox()
+            .Visible(counter.IsShown())
             // ---- The fit, as arithmetic, because it is tight and nothing here can measure it ----
             //
             // The cap is 112 wide. Vanilla's domain box spends 5 + 25 (icon) + 5 (spacing) + about
@@ -372,7 +386,7 @@ public static class GuiWriter
                 .Text("[gen_colony_limit_count]")
                 .Align("nobaseline")
                 .MarginBottom(1)
-                .MaxWidth(110))
+                .MaxWidth(110)))
             .Node);
     }
 

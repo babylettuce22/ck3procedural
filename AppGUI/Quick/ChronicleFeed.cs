@@ -1,0 +1,209 @@
+using System.ComponentModel;
+using System.Drawing.Drawing2D;
+using static Ck3MapGen.AppGUI.LaunchUi;
+
+namespace Ck3MapGen.AppGUI;
+
+/// <summary>
+/// The chronicle beside the map while a Quick world's history runs: one line per headline, newest
+/// at the top, on a card. The year stands in a gutter on the first line of each year only, so a
+/// busy year reads as one block; a swatch in the realm's map colour ties each line to the map.
+/// A new line glows briefly as it arrives.
+///
+/// Painted as one control, like <see cref="ShowcaseFeed"/>: lines are text, not buttons, and one
+/// surface scrolls and animates without flicker. Line heights are measured once per width.
+/// </summary>
+internal sealed class ChronicleFeed : Control
+{
+    /// <summary>Lines kept; older ones fall off the bottom. The written chronicle keeps its own record.</summary>
+    private const int Limit = 400;
+
+    private static readonly Font YearFont = new("Segoe UI Semibold", 9f);
+    private static readonly Font LineFont = new("Segoe UI", 9f);
+    private static readonly Font EmptyFont = new("Segoe UI", 9f);
+
+    private sealed class Entry(ChronicleLine line)
+    {
+        public ChronicleLine Line { get; } = line;
+        public float Glow { get; set; } = 1f;
+        public int MeasuredFor { get; set; } = -1;
+        public int Height { get; set; }
+    }
+
+    private readonly List<Entry> _entries = [];          // newest first
+    private readonly System.Windows.Forms.Timer _animate = new() { Interval = 30 };
+    private int _scroll;
+    private int _contentHeight;
+
+    public ChronicleFeed()
+    {
+        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer
+                 | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
+        SetStyle(ControlStyles.Selectable, false);
+        TabStop = false;
+        BackColor = Theme.Background;
+        _animate.Tick += (_, _) => Animate();
+    }
+
+    /// <summary>What to say while nothing has happened yet.</summary>
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public string EmptyText { get; set; } = "";
+
+    public int Count => _entries.Count;
+
+    private int S(int logical) => LaunchUi.S(this, logical);
+
+    public void Clear()
+    {
+        _animate.Stop();
+        _entries.Clear();
+        _scroll = 0;
+        Invalidate();
+    }
+
+    /// <summary>Lines that just happened, oldest first. The view stays put when scrolled back.</summary>
+    public void Add(IReadOnlyList<ChronicleLine> lines)
+    {
+        if (lines.Count == 0) return;
+
+        int added = 0;
+        foreach (var line in lines)
+        {
+            var entry = new Entry(line);
+            _entries.Insert(0, entry);
+            added += HeightOf(entry);
+        }
+
+        // Only a reader who has scrolled back is kept where they were; at the top, the news shows.
+        if (_scroll > 0) _scroll += added;
+        while (_entries.Count > Limit) _entries.RemoveAt(_entries.Count - 1);
+
+        _animate.Start();
+        Invalidate();
+    }
+
+    private void Animate()
+    {
+        bool moving = false;
+        foreach (var entry in _entries)
+        {
+            if (entry.Glow <= 0f) break;   // newest first: everything below has long faded
+            entry.Glow = Math.Max(0f, entry.Glow - 0.03f);
+            moving = true;
+        }
+        if (!moving) _animate.Stop();
+        Invalidate();
+    }
+
+    protected override void OnMouseWheel(MouseEventArgs e)
+    {
+        base.OnMouseWheel(e);
+        int max = Math.Max(0, _contentHeight - Height);
+        _scroll = Math.Clamp(_scroll - e.Delta / 2, 0, max);
+        Invalidate();
+    }
+
+    protected override void OnMouseEnter(EventArgs e)
+    {
+        base.OnMouseEnter(e);
+        // The wheel goes to the focused control; hovering the column should scroll it.
+        if (_contentHeight > Height) Focus();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _animate.Dispose();
+        base.Dispose(disposing);
+    }
+
+    // ------------------------------------------------------------------ layout and paint
+
+    private int Pad => S(14);
+    private int Gutter => S(46);
+    private int TextLeft => Pad + Gutter + S(14);
+    private int TextWidth => Math.Max(S(40), Width - TextLeft - Pad);
+
+    private const TextFormatFlags Wrap = TextFormatFlags.NoPadding | TextFormatFlags.WordBreak;
+
+    /// <summary>The entry's height at the current width, measured once per width.</summary>
+    private int HeightOf(Entry entry)
+    {
+        int width = TextWidth;
+        if (entry.MeasuredFor != width)
+        {
+            var size = TextRenderer.MeasureText(entry.Line.Text, LineFont, new Size(width, 0), Wrap);
+            entry.Height = size.Height + S(10);
+            entry.MeasuredFor = width;
+        }
+        return entry.Height;
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.Clear(BackColor);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+
+        var card = new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
+        using var cardPath = Rounded(card, S(10));
+        using (var fill = new SolidBrush(Theme.Surface)) g.FillPath(fill, cardPath);
+
+        if (_entries.Count == 0)
+        {
+            TextRenderer.DrawText(g, EmptyText, EmptyFont, new Rectangle(Pad, Pad, Width - 2 * Pad, Height - 2 * Pad),
+                Theme.TextDim, Wrap);
+        }
+        else
+        {
+            g.SetClip(cardPath);
+            int y = S(8) - _scroll;
+            int? lastYear = null;
+            _contentHeight = S(16);
+            foreach (var entry in _entries)
+            {
+                int h = HeightOf(entry);
+                _contentHeight += h;
+                bool firstOfYear = entry.Line.Year != lastYear;
+                lastYear = entry.Line.Year;
+
+                if (y + h > 0 && y < Height) DrawEntry(g, entry, y, h, firstOfYear);
+                y += h;
+            }
+            g.ResetClip();
+        }
+
+        using var edge = new Pen(Theme.Border);
+        g.DrawPath(edge, cardPath);
+    }
+
+    private void DrawEntry(Graphics g, Entry entry, int y, int h, bool firstOfYear)
+    {
+        if (entry.Glow > 0f)
+        {
+            using var glow = new SolidBrush(Color.FromArgb((int)(entry.Glow * 255), Theme.AccentSoft));
+            g.FillRectangle(glow, 1, y, Width - 2, h);
+        }
+
+        if (firstOfYear)
+        {
+            // A hairline between years, the year itself in the gutter.
+            if (y > S(8))
+            {
+                using var rule = new Pen(Theme.SurfaceHigh);
+                g.DrawLine(rule, Pad, y, Width - Pad, y);
+            }
+            TextRenderer.DrawText(g, $"{entry.Line.Year}", YearFont, new Rectangle(Pad, y + S(5), Gutter, S(18)),
+                Theme.Accent, TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+        }
+
+        if (entry.Line.Colour is { } c)
+        {
+            int dot = S(8);
+            using var swatch = new SolidBrush(Color.FromArgb(c.R, c.G, c.B));
+            g.FillEllipse(swatch, Pad + Gutter, y + S(9), dot, dot);
+        }
+
+        TextRenderer.DrawText(g, entry.Line.Text, LineFont, new Rectangle(TextLeft, y + S(5), TextWidth, h - S(5)),
+            Theme.Text, Wrap);
+    }
+}

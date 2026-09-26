@@ -24,12 +24,26 @@ internal sealed class RunScreen : Panel
     public event Action? AnotherRequested;
     public event Action? RetryRequested;
 
-    private enum Mode { Idle, Running, Done }
+    /// <summary>The history view's Pause / Resume.</summary>
+    public event Action? PlayPauseRequested;
+
+    /// <summary>The history view's pace switch.</summary>
+    public event Action? PaceRequested;
+
+    /// <summary>The world is to be written as it stands in the history view now.</summary>
+    public event Action? AcceptRequested;
+
+    /// <summary>The done view's "Continue its history": back to the history, from where it stopped.</summary>
+    public event Action? ContinueHistoryRequested;
+
+    private enum Mode { Idle, Running, History, Done }
     private Mode _mode;
     private bool _failed;
     private bool _gameFound = true;
+    private bool _historyOffered;
 
     private readonly StepPanel _runPanel = new();
+    private readonly StepPanel _historyPanel = new();
     private readonly StepPanel _donePanel = new();
 
     // discoveries, shared by the run and done views
@@ -41,6 +55,23 @@ internal sealed class RunScreen : Panel
     private readonly MilestoneStrip _milestones = new();
     private readonly TallyRow _tallies = new();
     private readonly Label _talliesTitle = MakeLabel("At a glance", GroupTitle, Theme.Text);
+
+    // history view: the world living on past its start date, until the player accepts it
+    private readonly Label _historyTitle = MakeLabel("Its history unfolds", Title, Theme.Text);
+    private readonly Label _historySubtitle = MakeLabel("", Subtitle, Theme.TextDim, wrap: true);
+    private readonly MapPreview _historyMap = new();
+    private readonly PillButton _playPause = new() { Text = "Pause", Glyph = "", MinWidth = 104 };
+    private readonly PillButton _pace = new() { Text = "Faster", Kind = PillKind.Quiet, MinWidth = 80 };
+    private readonly PillButton _accept = new() { Text = "Begin here", Kind = PillKind.Primary, Glyph = "", MinWidth = 150 };
+    private readonly Label _standing = MakeLabel("", Small, Theme.TextDim);
+    private readonly Label _chronicleTitle = MakeLabel("Chronicle", GroupTitle, Theme.Text);
+    private readonly Label _chronicleCount = MakeLabel("", Small, Theme.TextDim);
+    private readonly ChronicleFeed _chronicle = new()
+    {
+        EmptyText = "Wars won, realms divided, thrones seized: the chronicle fills as the years pass.",
+    };
+    private readonly PillButton _continueHistory = new() { Text = "Continue its history", Glyph = "" };
+    private readonly ToolTip _tips = new() { InitialDelay = 500 };
 
     // run view
     private readonly MapPreview _runMap = new();
@@ -86,12 +117,25 @@ internal sealed class RunScreen : Panel
         _another.Name = namePrefix + "Another";
         _retry.Name = namePrefix + "Retry";
         _details.Name = namePrefix + "Details";
+        _continueHistory.Name = namePrefix + "ContinueHistory";
+        _playPause.Name = namePrefix + "PlayPause";
+        _pace.Name = namePrefix + "Pace";
+        _accept.Name = namePrefix + "Accept";
+        _chronicle.Name = namePrefix + "Chronicle";
 
         BuildRunView();
+        BuildHistoryView();
         BuildDoneView();
 
         Controls.Add(_runPanel);
+        Controls.Add(_historyPanel);
         Controls.Add(_donePanel);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _tips.Dispose();
+        base.Dispose(disposing);
     }
 
     private int S(int logical) => LaunchUi.S(this, logical);
@@ -134,6 +178,13 @@ internal sealed class RunScreen : Panel
         _feedTitle.Text = "Discoveries";
         UpdateFeedCount();
         MoveFeedTo(_runPanel);
+
+        // A new world, a new history.
+        _historyOffered = false;
+        _historyMap.Image = null;
+        _chronicle.Clear();
+        UpdateChronicleCount();
+
         Show(_runPanel);
     }
 
@@ -181,18 +232,24 @@ internal sealed class RunScreen : Panel
     }
 
     /// <summary>The run finished and the mod is on disk.</summary>
-    public void ShowDone(string modName, string modDir, TimeSpan took)
+    /// <param name="history">What the history view left the world as — "It begins in 1123, after
+    /// 57 years of history." — or null when there was none, or it was accepted where it began.</param>
+    public void ShowDone(string modName, string modDir, TimeSpan took, string? history = null)
     {
+        bool fromHistory = _mode == Mode.History;
         _mode = Mode.Done;
         _failed = false;
         _doneTitle.Text = "Your world is ready";
         _doneSubtitle.Text = $"“{modName}” was made in {Describe(took)}. "
+                           + (history is null ? "" : history + " ")
                            + "Launch the game, or open it in Complex to fine-tune anything.";
         _donePath.Text = modDir;
-        _doneMap.Image = _runMap.Image is { } img ? new Bitmap(img) : null;
+        var picture = fromHistory ? _historyMap.Image : _runMap.Image;
+        _doneMap.Image = picture is { } img ? new Bitmap(img) : null;
         _doneMap.Chip = "Drawing the realms…";
         foreach (var b in (Control[])[_launch, _openFolder, _customize, _another]) b.Visible = true;
         foreach (var b in (Control[])[_retry, _details]) b.Visible = false;
+        _continueHistory.Visible = _historyOffered;
         _launch.Enabled = _gameFound;
         HandFeedToDone("Discovered in this world");
         Show(_donePanel);
@@ -217,7 +274,7 @@ internal sealed class RunScreen : Panel
         _donePath.Text = "";
         _doneMap.Image = _runMap.Image is { } img ? new Bitmap(img) : null;
         _doneMap.Chip = cancelled ? "Cancelled" : "Stopped here";
-        foreach (var b in (Control[])[_launch, _openFolder, _customize, _another]) b.Visible = false;
+        foreach (var b in (Control[])[_launch, _openFolder, _customize, _another, _continueHistory]) b.Visible = false;
         foreach (var b in (Control[])[_retry, _details]) b.Visible = true;
         HandFeedToDone("Made before it stopped");
         Show(_donePanel);
@@ -233,6 +290,7 @@ internal sealed class RunScreen : Panel
     {
         SuspendLayout();
         _runPanel.Visible = ReferenceEquals(panel, _runPanel);
+        _historyPanel.Visible = ReferenceEquals(panel, _historyPanel);
         _donePanel.Visible = ReferenceEquals(panel, _donePanel);
         ResumeLayout();
         panel.PerformLayout();
@@ -276,10 +334,113 @@ internal sealed class RunScreen : Panel
         };
     }
 
+    private void BuildHistoryView()
+    {
+        _historyPanel.Controls.AddRange([_historyTitle, _historySubtitle, _historyMap, _playPause, _pace, _accept, _standing,
+            _chronicleTitle, _chronicleCount, _chronicle]);
+        _playPause.Click += (_, _) => PlayPauseRequested?.Invoke();
+        _pace.Click += (_, _) => PaceRequested?.Invoke();
+        _accept.Click += (_, _) => AcceptRequested?.Invoke();
+        _tips.SetToolTip(_accept, "Stop here: the game begins in this year, with the world as it stands.");
+
+        _historyPanel.Arrange = panel =>
+        {
+            var (x, w) = StepPanel.Column(panel);
+            int y = S(18);
+            _historyTitle.Location = new Point(x - S(2), y);
+            y += _historyTitle.PreferredHeight + S(4);
+            _historySubtitle.Bounds = new Rectangle(x, y, w, StepPanel.Wrapped(_historySubtitle, w));
+            y += _historySubtitle.Height + S(16);
+
+            // The map on the left with its controls under it; the chronicle in a column on the right.
+            int columnW = S(310), gap = S(24);
+            int left = w - columnW - gap;
+            int cx = x + left + gap;
+            _chronicleTitle.Location = new Point(cx, y);
+            _chronicleCount.Location = new Point(cx + columnW - _chronicleCount.PreferredWidth,
+                y + (_chronicleTitle.PreferredHeight - _chronicleCount.PreferredHeight) / 2);
+            int top = y + _chronicleTitle.PreferredHeight + S(8);
+            _chronicle.Bounds = new Rectangle(cx, top, columnW, Math.Max(S(60), panel.ClientSize.Height - top - S(10)));
+
+            int mapH = Math.Min(left / 2, panel.ClientSize.Height - y - S(100));
+            int mapW = mapH * 2;
+            _historyMap.Bounds = new Rectangle(x, y, mapW, mapH);
+            y += mapH + S(16);
+
+            foreach (var b in (PillButton[])[_playPause, _pace, _accept]) b.FitWidth();
+            _playPause.Location = new Point(x, y);
+            _pace.Location = new Point(_playPause.Right + S(8), y);
+            _accept.Location = new Point(x + mapW - _accept.Width, y);
+            y += S(36) + S(10);
+            _standing.Location = new Point(x, y);
+        };
+    }
+
+    public bool InHistory => _mode == Mode.History;
+
+    /// <summary>
+    /// Shows the history view: the world living on from <paramref name="began"/>. The chronicle
+    /// keeps what it had, so coming back from the done view carries straight on.
+    /// </summary>
+    public void ShowHistory(int began)
+    {
+        _mode = Mode.History;
+        _historyOffered = true;
+        _historySubtitle.Text = $"The world lives on from {began}: wars are won and lost, realms divide, thrones change "
+                                + "hands. Stop whenever you like the world you see — the game begins in the year you accept.";
+        _historyMap.Busy = null;
+        Show(_historyPanel);
+    }
+
+    /// <summary>The map as it stands in <paramref name="year"/>. Takes ownership of the picture.</summary>
+    public void SetHistoryFrame(Bitmap frame, int year, int began, string standing)
+    {
+        if (_mode != Mode.History) { frame.Dispose(); return; }
+        _historyMap.Image = frame;
+        _historyMap.Chip = year > began ? $"{year} · {Years(year - began)} on" : $"{year}";
+        _accept.Text = $"Begin in {year}";
+        _standing.Text = standing;
+        _historyPanel.PerformLayout();
+    }
+
+    public void AddChronicle(IReadOnlyList<ChronicleLine> lines)
+    {
+        _chronicle.Add(lines);
+        UpdateChronicleCount();
+    }
+
+    /// <summary>
+    /// The history view's controls: playing or paused, at which pace, and whether something is
+    /// under way — the world being written, or the history being picked up again. Then nothing can
+    /// be pressed, and the map says what is happening.
+    /// </summary>
+    public void SetHistoryState(bool playing, bool fast, string? busy)
+    {
+        _playPause.Text = playing ? "Pause" : "Resume";
+        _playPause.Glyph = playing ? "" : "";
+        _pace.Text = fast ? "Slower" : "Faster";
+        _playPause.Enabled = _pace.Enabled = _accept.Enabled = busy is null;
+        _historyMap.Busy = busy;
+        _tips.SetToolTip(_pace, fast ? "Back to a year a second" : "Five years a second");
+        _playPause.Invalidate();
+        _historyPanel.PerformLayout();
+    }
+
+    private void UpdateChronicleCount()
+    {
+        int n = _chronicle.Count;
+        _chronicleCount.Text = n == 0 ? "" : n == 1 ? "1 entry" : $"{n} entries";
+        _historyPanel.PerformLayout();
+    }
+
+    private static string Years(int n) => n == 1 ? "1 year" : $"{n} years";
+
     private void BuildDoneView()
     {
-        _donePanel.Controls.AddRange([_doneTitle, _doneSubtitle, _donePath, _doneMap, _launch, _openFolder, _customize, _another, _retry, _details,
-            _talliesTitle, _tallies]);
+        _donePanel.Controls.AddRange([_doneTitle, _doneSubtitle, _donePath, _doneMap, _launch, _openFolder, _continueHistory, _customize,
+            _another, _retry, _details, _talliesTitle, _tallies]);
+        _continueHistory.Click += (_, _) => ContinueHistoryRequested?.Invoke();
+        _tips.SetToolTip(_continueHistory, "Back to the history, from where you stopped it. The world is written again when you accept it.");
         _launch.Click += (_, _) => LaunchRequested?.Invoke();
         _openFolder.Click += (_, _) => OpenFolderRequested?.Invoke();
         _customize.Click += (_, _) => CustomizeRequested?.Invoke();
@@ -304,7 +465,8 @@ internal sealed class RunScreen : Panel
             int left = w - feedW - gap;
             PlaceFeed(panel, x + left + gap, y, feedW);
 
-            var buttons = (_failed ? (Control[])[_retry, _details] : [_launch, _openFolder, _customize, _another]).ToList();
+            List<Control> buttons = _failed ? [_retry, _details] : [_launch, _openFolder, _customize, _another];
+            if (!_failed && _historyOffered) buttons.Insert(2, _continueHistory);
             foreach (var b in buttons) if (b is PillButton p) p.FitWidth();
 
             // Buttons flow into as many rows as the map's width needs.

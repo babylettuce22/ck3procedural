@@ -490,17 +490,22 @@ public static class TerrainPalette
 
             case TerrainClass.Oasis:
                 {
-                    // The oasis material is the green itself, so it leads, and the desert it sits
-                    // in shows through the other three slots — an oasis reads as an oasis only
-                    // against sand. Wet mud at the waterline, dune and cracked pan around it.
-                    ref readonly var around = ref Families[(int)Climate.Desert];
-                    var (lowA, _, confA, _) = LowlandPair(around, nA, nB);
+                    // The oasis material is the green itself, so it leads, and scrub carries the
+                    // rest: measured where vanilla paints oasis above 100, the other slots are
+                    // gen_drylands lowland (14%), drylands_grassy (3%) and the desert set, with no
+                    // mud at all. The wetlands mud this used to carry is what turned the patch a
+                    // flat blue-green. The pocket is small and the band around it wide against
+                    // it, so the sand comes in from the edge rather than from these slots.
+                    ref readonly var scrub = ref Families[(int)Climate.Drylands];
+                    ref readonly var sand = ref Families[(int)Climate.Desert];
+                    var (scrubA, _, confA, _) = LowlandPair(scrub, nA, nB);
+                    var (sandA, _, confS, _) = LowlandPair(sand, nB, nC);
 
                     return Mix(
-                        Oasis, (byte)(130 + nA * 50),
-                        lowA, (byte)((55 + (1.0 - nA) * 35) * confA),
-                        WetlandsMud, (byte)(35 + nB * 30),
-                        nC < 0.5 ? DesertWavy : DesertCracked, (byte)((25 + nC * 25) * CutConfidence(nC, 0.5))
+                        Oasis, (byte)(95 + nA * 35),
+                        scrubA, (byte)((60 + (1.0 - nA) * 30) * confA),
+                        DrylandsGrassy, (byte)(40 + nB * 25),
+                        sandA, (byte)((30 + nC * 20) * confS)
                     );
                 }
 

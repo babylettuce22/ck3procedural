@@ -89,6 +89,9 @@ public sealed record WorldModel
     /// </summary>
     internal IReadOnlyDictionary<Title, PastRuler>? SeatParents { get; init; }
 
+    /// <summary>Under an applied history, what the chronicle remembers of it; null for a generated world.</summary>
+    internal ContentWriter.RememberedPast? AppliedPast { get; init; }
+
     /// <summary>What the realm layer writes from: <see cref="AppliedWilds"/>, or the generated maps.</summary>
     internal ContentWriter.WildsLayer RealmLayer
         => AppliedWilds ?? ContentWriter.WildsLayer.Unmoved(Wilderness, Cultures, Faiths, Frontier);
@@ -528,8 +531,9 @@ public static partial class ContentWriter
         WildsLayer? appliedWilds = null;
         SimDiplomacy? appliedDiplomacy = null;
         IReadOnlyDictionary<Title, PastRuler>? seatParents = null;
+        RememberedPast? appliedPast = null;
         if (applied is not null)
-            (realms, governments, hegemonShare, lineage, pastRulers, realmColours, _, appliedWilds, appliedDiplomacy, seatParents) = ApplyRealms(applied,
+            (realms, governments, hegemonShare, lineage, pastRulers, realmColours, _, appliedWilds, appliedDiplomacy, seatParents, appliedPast) = ApplyRealms(applied,
                 realms, cfg, empires, counties, provinces, order, baronyCount, provinceTerrain, development, cultures,
                 worldCenters, wilderness, azgaar, stateGovernments, faiths, landCount, frontier);
 
@@ -542,6 +546,7 @@ public static partial class ContentWriter
             AppliedWilds = appliedWilds,
             AppliedDiplomacy = appliedDiplomacy,
             SeatParents = seatParents,
+            AppliedPast = appliedPast,
             ProvinceTerrain = provinceTerrain,
             Vocabulary = vocabulary,
             Counties = counties,

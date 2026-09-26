@@ -333,9 +333,10 @@ public static class DebugPanel
     /// </summary>
     private static GuiBuilder Tabs()
     {
+        // No `align` on a box: hbox/vbox do not take it (none of vanilla's 6,105 boxes does), and it
+        // logged "Property 'align' not handled" plus "Error setting properties" per box per load.
         return GuiBuilder.HBox()
             .ExpandingH()
-            .Align("left")
             .Spacing(6)
             .MarginBottom(6)
             .Add(Tab(WorldTab, "GEN_DEBUG_PANEL_TAB_WORLD"),
@@ -682,7 +683,6 @@ public static class DebugPanel
     private static GuiBuilder Panel(string tab)
         => GuiBuilder.VBox()
             .ExpandingH()
-            .Align("left")
             .Spacing(2)
             .Visible(GuiExpr.VariableHasValue(TabVariable, tab));
 
@@ -701,7 +701,6 @@ public static class DebugPanel
     internal static GuiBuilder Heading(string key)
         => GuiBuilder.VBox()
             .ExpandingH()
-            .Align("left")
             .Spacing(2)
             .MarginBottom(4)
             .Add(GuiBuilder.TextSingle()

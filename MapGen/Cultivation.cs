@@ -28,8 +28,29 @@ public static class Cultivation
     /// <summary>Province ids, not labels — the same space <c>provinceTerrain</c> is indexed in.</summary>
     public sealed record Result(HashSet<int> Farmlands, HashSet<int> Oases);
 
-    /// <summary>Per-province drainage summary, gathered in the one pass over the raster.</summary>
-    private readonly record struct Water(float PeakFlow, float LakeDepth, int Area);
+    /// <summary>
+    /// Per-province drainage summary, gathered in the one pass over the raster. <see cref="Spring"/>
+    /// is the pixel where the water actually is — the deepest point of standing water, or the
+    /// strongest flow where nothing stands — and -1 until a land pixel has been seen.
+    /// </summary>
+    private readonly record struct Water(float PeakFlow, float LakeDepth, int Area, int Spring);
+
+    /// <summary>
+    /// Radius of the green pocket an oasis paints around its spring, in pixels of a reference-width
+    /// map, before the texture band adds its own fringe.
+    ///
+    /// An absolute size and not a share of the province, because desert provinces are the largest
+    /// on the map: the one oasis on the Ondrerol-sized test world sat in a province of 16k pixels,
+    /// and painting all of it put 6,194 pixels of the oasis material above 70% where vanilla has
+    /// 2,129 on its whole map. Vanilla's pockets, measured off its oasis mask, run 40-70 px across
+    /// including the faint fringe — this plus <see cref="Emit.TerrainTextureWriter"/>'s oasis band
+    /// lands in that range.
+    /// </summary>
+    private const double OasisPocketRadius = 14;
+
+    /// <summary>The largest share of its own province's equivalent radius a pocket may take, so a
+    /// small desert province still reads as sand with water in it rather than as water.</summary>
+    private const double OasisPocketShare = 0.45;
 
     /// <summary>
     /// Choose which provinces are cultivated, then rewrite both the pixel raster and the
@@ -71,7 +92,7 @@ public static class Cultivation
         foreach (int id in farmlands) provinceTerrain[id] = TerrainClass.Farmlands;
         foreach (int id in oases) provinceTerrain[id] = TerrainClass.Oasis;
 
-        RepaintRaster(cfg, provinces, order, terrain, farmlands, oases);
+        RepaintRaster(cfg, provinces, order, terrain, farmlands, oases, water, rng);
 
         Console.WriteLine($"  cultivation: {farmlands.Count} farmland provinces " +
                           $"({100.0 * farmlands.Count / Math.Max(1, landCount):F2}% of land), " +
@@ -92,6 +113,8 @@ public static class Cultivation
         int landCount, Drainage? drainage, float[] provinceElevation)
     {
         var water = new Water[provinces.Count + 1];
+        Array.Fill(water, new Water(0f, 0f, 0, -1));
+        var springFlow = new float[provinces.Count + 1];
         int total = cfg.ProvinceWidth * cfg.ProvinceHeight;
 
         for (int i = 0; i < total; i++)
@@ -108,10 +131,22 @@ public static class Cultivation
                 depth = drainage.LakeDepth(provinceElevation, i);
             }
 
+            // Standing water outranks any amount of through-flow, the same order ChooseOases
+            // scores in: the spring is the bottom of the pan, and only a province with no pan at
+            // all falls back to its strongest channel.
+            int spring = cell.Spring;
+            if (spring < 0 || depth > cell.LakeDepth ||
+                (depth == cell.LakeDepth && flow > springFlow[id]))
+            {
+                spring = i;
+                springFlow[id] = flow;
+            }
+
             water[id] = new Water(
                 Math.Max(cell.PeakFlow, flow),
                 Math.Max(cell.LakeDepth, depth),
-                cell.Area + 1);
+                cell.Area + 1,
+                spring);
         }
 
         return water;
@@ -262,11 +297,39 @@ public static class Cultivation
     /// <summary>
     /// Stamp the chosen classes back onto the pixel raster the detail textures are painted from,
     /// so the ground under a farmland province is farmland rather than whatever climate put there.
+    ///
+    /// Farmland takes the whole province; an oasis takes only a pocket around its spring. Fields
+    /// run to the property line, but an oasis is a patch of green in a province that is otherwise
+    /// still desert — painted province-wide it was a blue-green lake the size of a county. The
+    /// province keeps its <c>oasis</c> terrain vote either way; only the paint is local, and the
+    /// palms follow it, since TreeWriter reads this same raster.
     /// </summary>
     private static void RepaintRaster(MapConfig cfg, ProvinceMap provinces, int[] order,
-        TerrainClass[] terrain, HashSet<int> farmlands, HashSet<int> oases)
+        TerrainClass[] terrain, HashSet<int> farmlands, HashSet<int> oases, Water[] water, Rng rng)
     {
-        int total = cfg.ProvinceWidth * cfg.ProvinceHeight;
+        int width = cfg.ProvinceWidth;
+        int total = width * cfg.ProvinceHeight;
+
+        // Per oasis: spring position, radius, and three lobes that stop the pocket reading as a
+        // compass circle. Drawn in id order so the shapes do not depend on HashSet iteration.
+        var pockets = new Dictionary<int, (int X, int Y, double R, double[] Lobes)>();
+        foreach (int id in oases.Order())
+        {
+            var w = water[id];
+            if (w.Spring < 0) continue;
+
+            double equivalent = Math.Sqrt(w.Area / Math.PI);
+            double r = Math.Max(3.0, Math.Min(cfg.Scaled(OasisPocketRadius), equivalent * OasisPocketShare));
+
+            var lobes = new double[6];
+            for (int k = 0; k < 3; k++)
+            {
+                lobes[2 * k] = rng.NextDouble() * Math.Tau;
+                lobes[2 * k + 1] = 0.08 + rng.NextDouble() * 0.14;
+            }
+
+            pockets[id] = (w.Spring % width, w.Spring / width, r, lobes);
+        }
 
         Parallel.For(0, total, i =>
         {
@@ -276,7 +339,20 @@ public static class Cultivation
 
             int id = order[provinces.Label[i]];
             if (farmlands.Contains(id)) terrain[i] = TerrainClass.Farmlands;
-            else if (oases.Contains(id)) terrain[i] = TerrainClass.Oasis;
+            else if (pockets.TryGetValue(id, out var p))
+            {
+                double dx = i % width - p.X, dy = i / width - p.Y;
+                double d = Math.Sqrt(dx * dx + dy * dy);
+                if (d > p.R * 1.7) return;   // past the largest the three lobes can reach
+
+                double theta = Math.Atan2(dy, dx);
+                double reach = p.R * (1.0
+                    + p.Lobes[1] * Math.Sin(2 * theta + p.Lobes[0])
+                    + p.Lobes[3] * Math.Sin(3 * theta + p.Lobes[2])
+                    + p.Lobes[5] * Math.Sin(5 * theta + p.Lobes[4]));
+
+                if (d <= reach) terrain[i] = TerrainClass.Oasis;
+            }
         });
     }
 }

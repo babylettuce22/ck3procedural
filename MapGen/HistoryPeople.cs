@@ -232,6 +232,8 @@ public sealed partial class HistorySim
             var house = FoundHouse(p.Culture, rng);
             var usurper = NewRuler(p, house, rng, age: rng.Int(25, 50));
             Seat(p, usurper);
+            Remember(law == SuccessionLaw.Elective ? "chosen" : "seized", p.Capital, p,
+                person: $"{usurper.Name} of {house.Name}", female: usurper.Female, other: dead.Name);
             _sim.Log(FormationKind.Usurped, p.Capital, p, null, 2,
                 law == SuccessionLaw.Elective
                     ? $"{dead} died; {usurper.Name} of {house.Name} was chosen to rule {p.Capital.Name}"
@@ -277,6 +279,7 @@ public sealed partial class HistorySim
                 $"{dead} died and the realm was divided: {sibling.Name} took the "
                 + $"{(share.Title.Tier == "k" ? "kingdom" : "duchy")} of {share.Title.Name}, {eldest.Name} kept {p.Capital.Name}");
             if (part is null) break;
+            Remember("divided", share.Title, p, person: sibling.Name, female: sibling.Female, other: dead.Name);
 
             // A duchy is held under the eldest, who kept the crown above it; a second crown goes
             // its own way, unless the eldest's own realm is an empire it lies inside.
@@ -356,15 +359,7 @@ public sealed partial class HistorySim
     /// <summary>Whether a realm stays in one piece around its capital without <paramref name="given"/>.</summary>
     private bool WholeWithout(Polity p, HashSet<Title> given)
     {
-        var seen = new HashSet<Title> { p.Capital };
-        var queue = new Queue<Title>([p.Capital]);
-        while (queue.Count > 0)
-        {
-            if (!_sim.Adjacent.TryGetValue(queue.Dequeue(), out var near)) continue;
-            foreach (var n in near)
-                if (p.Counties.Contains(n) && !given.Contains(n) && seen.Add(n)) queue.Enqueue(n);
-        }
-        return seen.Count == p.Counties.Count - given.Count;
+        return Whole(p, given);
     }
 
     /// <summary>The dead ruler's child: of his house and culture, born a generation after him.</summary>

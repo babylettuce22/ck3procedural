@@ -1534,11 +1534,17 @@ public static class PreviewRenderer
     {
         int width = map.Width, height = map.Height;
         var diag = map.Impassability;
+        var cut = map.AutoCut;
         float sea = cfg.Limits.SeaLevelUpper;
-        float[]? slope = diag is null ? null : Provinces.Slopes(elevation, width, height);
 
-        bool Steep(int i) => slope is not null && slope[i] >= diag!.SteepLine;
-        bool High(int i) => diag is not null && elevation[i] >= diag.MountainLine;
+        // Either pass leaves its lines behind; the auto-cut scores no province, so only these tints
+        // come from it.
+        float steepLine = diag?.SteepLine ?? cut?.SteepLine ?? float.MaxValue;
+        float mountainLine = diag?.MountainLine ?? cut?.MountainLine ?? float.MaxValue;
+        float[]? slope = diag is null && cut is null ? null : Provinces.Slopes(elevation, width, height);
+
+        bool Steep(int i) => slope is not null && slope[i] >= steepLine;
+        bool High(int i) => elevation[i] >= mountainLine;
 
         bool Edge(int i)
         {
@@ -1575,7 +1581,7 @@ public static class PreviewRenderer
 
                 var colour = seed.ImpassableCause switch
                 {
-                    ImpassableCause.Score => Mix(ground, ImpassableFill, 0.6),
+                    ImpassableCause.Score or ImpassableCause.Cut => Mix(ground, ImpassableFill, 0.6),
                     ImpassableCause.Height => Mix(ground, HeightFill, 0.6),
                     ImpassableCause.Mask => Mix(ground, MaskFill, 0.6),
                     ImpassableCause.Trapped => Mix(ground, TrappedFill, 0.6),
@@ -1618,6 +1624,18 @@ public static class PreviewRenderer
                 ImpassableCause.Trapped => "impassable — trapped (landlocked behind the painted wall)",
                 _ when seed.IsImpassable => "impassable",
                 _ => "passable — not painted in the mask",
+            };
+
+        // Nor does the auto-cut: the partition was cut to the mountains, so a province is on one
+        // side of the cut or the other.
+        if (map.AutoCut is { } cut)
+            return seed.ImpassableCause switch
+            {
+                ImpassableCause.Cut => $"impassable — cut to the mountains (ground above {cut.GateLine:F0} m" +
+                    (float.IsNegativeInfinity(cut.CutHeight) ? ")" : $", highest first down to about {cut.CutHeight:F0} m)"),
+                ImpassableCause.Trapped => "impassable — trapped (landlocked behind impassables)",
+                _ when seed.IsImpassable => "impassable",
+                _ => "passable — outside the mountain cut",
             };
 
         var diag = map.Impassability;

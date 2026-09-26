@@ -245,6 +245,17 @@ public sealed partial class PrehistoryMap
     private const int MaxAlliancesPerRuler = 3;
     private const int MaxLiegeHouseMarriages = 4;
 
+    /// <summary>
+    /// How many consorts one dead parent can have given the world: a consort is drawn as a sibling of
+    /// the ruler of the county they come from, so every ruler marrying into one seat added a child
+    /// to the same parent, and one was seen with seven married-off daughters. With the ruler, a
+    /// family of four at most, which the kin drawn later (PrehistoryKin) tops up to no more than five.
+    /// </summary>
+    private const int MaxMatchesPerParent = 3;
+
+    /// <summary>The oldest a mother is at a child's birth, as the dynasty trees and the kin keep it.</summary>
+    private const int MaxMotherAge = 45;
+
     public static PrehistoryMap Build(
         List<Title> counties,
         ProvinceMap provinces,
@@ -858,6 +869,13 @@ public sealed partial class PrehistoryMap
         // cap a large empire handed its emperor one alliance per vassal (50+ observed).
         var liegeHouseMarriages = new Dictionary<Title, int>();
 
+        // A seat can give a consort while its ruler's dead parent has children to spare. Until that
+        // parent reaches the cap every list below is what it always was, so a world that never
+        // reached it draws exactly the marriages it always did.
+        var matchesOf = new Dictionary<string, int>(StringComparer.Ordinal);
+        bool CanGive(Title origin)
+            => !map.DeceasedParents.TryGetValue(origin, out var parent) || matchesOf.GetValueOrDefault(parent.Id) < MaxMatchesPerParent;
+
         foreach (var ruler in sortedRulers)
         {
             if (marriedRulers.Contains(ruler)) continue;
@@ -883,12 +901,13 @@ public sealed partial class PrehistoryMap
                 var foreignEligible = neighbors
                     .Where(n => TopLiegeCounty(n, realms) != topLiege &&
                                 faiths.For(n).Religion == rulerFaith.Religion &&
-                                map.CharacterHouseMap.GetValueOrDefault(n) != map.CharacterHouseMap.GetValueOrDefault(ruler))
+                                map.CharacterHouseMap.GetValueOrDefault(n) != map.CharacterHouseMap.GetValueOrDefault(ruler) &&
+                                CanGive(n))
                     .ToList();
 
                 // B) Powerful Internal Vassal House (Internal Realm Stability)
                 var internalVassals = vassalsByLiege.GetValueOrDefault(ruler, [])
-                    .Where(v => map.CharacterHouseMap.GetValueOrDefault(v) != map.CharacterHouseMap.GetValueOrDefault(ruler))
+                    .Where(v => map.CharacterHouseMap.GetValueOrDefault(v) != map.CharacterHouseMap.GetValueOrDefault(ruler) && CanGive(v))
                     .ToList();
 
                 if (foreignEligible.Count > 0 && mRng.Chance(0.55))
@@ -909,18 +928,20 @@ public sealed partial class PrehistoryMap
             {
                 // A) Liege's Royal House (Liege-Vassal Alliance)
                 bool canMarryLiege = map.CharacterHouseMap.GetValueOrDefault(topLiege) != map.CharacterHouseMap.GetValueOrDefault(ruler) &&
-                                     liegeHouseMarriages.GetValueOrDefault(topLiege) < MaxLiegeHouseMarriages;
+                                     liegeHouseMarriages.GetValueOrDefault(topLiege) < MaxLiegeHouseMarriages &&
+                                     CanGive(topLiege);
 
                 // B) Fellow Co-Vassals (Intra-Realm Alliance)
                 var coVassals = vassalsByLiege.GetValueOrDefault(topLiege, [])
-                    .Where(v => v != ruler && map.CharacterHouseMap.GetValueOrDefault(v) != map.CharacterHouseMap.GetValueOrDefault(ruler))
+                    .Where(v => v != ruler && map.CharacterHouseMap.GetValueOrDefault(v) != map.CharacterHouseMap.GetValueOrDefault(ruler) && CanGive(v))
                     .ToList();
 
                 // C) External Border Neighbor
                 var foreignBorder = neighbors
                     .Where(n => TopLiegeCounty(n, realms) != topLiege &&
                                 faiths.For(n).Religion == rulerFaith.Religion &&
-                                map.CharacterHouseMap.GetValueOrDefault(n) != map.CharacterHouseMap.GetValueOrDefault(ruler))
+                                map.CharacterHouseMap.GetValueOrDefault(n) != map.CharacterHouseMap.GetValueOrDefault(ruler) &&
+                                CanGive(n))
                     .ToList();
 
                 if (canMarryLiege && mRng.Chance(0.35))
@@ -971,6 +992,7 @@ public sealed partial class PrehistoryMap
                 {
                     spouseParent = df.Id;
                     spouseParentIsMother = df.Female;
+                    matchesOf[df.Id] = matchesOf.GetValueOrDefault(df.Id) + 1;
                     int parentBirthYear = int.Parse(df.BirthDate.Split('.')[0]);
                     spouseBirthYear = Math.Max(spouseBirthYear, parentBirthYear + 17);
 
@@ -1088,12 +1110,23 @@ public sealed partial class PrehistoryMap
                 ? int.Parse(spouse.MarriageDate.Split('.')[0])
                 : cfg.StartYear - 10;
 
+            // The mother is the ruler under a matriarchy, else the consort. Dated from the wedding
+            // alone, a late match had children by a woman of fifty-odd.
+            int motherBorn = rulerFemale
+                ? HistoryWriter.GetRulerBirthYear(ruler, cfg)
+                : int.Parse(spouse.BirthDate.Split('.')[0]);
+
             for (int i = 0; i < childCount; i++)
             {
                 bool isFemale = cRng.Chance(0.48);
                 string childName = GivenName(culture, isFemale, cRng);
 
                 int birthYear = Math.Min(cfg.StartYear, weddingYear + 1 + (i * cRng.Int(2, 4)) + cRng.Int(0, 2));
+
+                // Past her childbearing years this child was never born, and neither were any after
+                // it: the births only climb. A couple married late may have none, which the heir
+                // lookups below and in the bookmarks already allow for.
+                if (birthYear - motherBorn > MaxMotherAge) break;
 
                 var child = new HistoricalCharacter
                 {

@@ -221,15 +221,16 @@ public static class SettingsPanel
     {
         var gui = new ScriptedGui(setting.Key, player);
 
+        // No `align` on the boxes and no `parentanchor` on the checkbox: a box takes neither (the
+        // engine logged "Property 'align' not handled" and "Widget cannot have a position in a
+        // layout" every load), and an hbox already centres its children vertically.
         return GuiBuilder.HBox()
             .ExpandingH()
-            .Align("left")
             .Spacing(10)
             .MarginBottom(4)
 
             .Gap().Add(GuiBuilder.Of("button_checkbox")
                 .Size(30, 30)
-                .ParentAnchor("vcenter")
                 .Quoted("checked", gui.IsShown().ToString())
                 .OnClick(gui.Execute())
                 .Tooltip(setting.Description))
@@ -239,7 +240,6 @@ public static class SettingsPanel
             // logs an unlocalized-text error per line per load.
             .Gap().Add(GuiBuilder.VBox()
                 .ExpandingH()
-                .Align("left")
                 .Add(GuiBuilder.TextSingle()
                         .ExpandingH()
                         .Align("left")

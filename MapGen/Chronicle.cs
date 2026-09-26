@@ -182,9 +182,16 @@ public sealed class ChronicleMap
         ArtifactMap artifacts,
         WorldCenterMap worldCenters,
         MapConfig cfg,
-        Rng rng)
+        Rng rng,
+        int? pastEnd = null,
+        IEnumerable<ChronicleEvent>? remembered = null)
     {
         var map = new ChronicleMap();
+
+        // Under an applied history, the past this invents ends where the history began: the years
+        // since are the history's, and remembered rather than made up (see HistoryChronicle). The
+        // lines drawn from real people and real wars — seats, feuds, wars — keep their own dates.
+        var past = pastEnd is { } since ? cfg.AtStartYear(since) : cfg;
 
         // Roots, not the empire list: the hegemony sits above every empire it covers, so walking
         // from the empires down never reaches it and it ends up the one title on the map with no
@@ -225,9 +232,9 @@ public sealed class ChronicleMap
             var faith = faiths.For(county);
             int dev = development.TryGetValue(county, out int d) ? d : 0;
 
-            Settlement(map, county, culture, dev, cfg, rng);
-            Frontier(map, county, cultures, faiths, wilderness, cfg, rng);
-            FaithTook(map, county, culture, faith, faiths, wilderness, cfg, rng);
+            Settlement(map, county, culture, dev, past, rng);
+            Frontier(map, county, cultures, faiths, wilderness, past, rng);
+            FaithTook(map, county, culture, faith, faiths, wilderness, past, rng);
 
             if (rulerCounties.Contains(county))
             {
@@ -238,10 +245,10 @@ public sealed class ChronicleMap
             War(map, county, prehistory, cultures, faiths, cfg);
 
             if (holySite.TryGetValue(county, out var siteFaith))
-                Sanctity(map, county, siteFaith, cfg, rng);
+                Sanctity(map, county, siteFaith, past, rng);
 
             if (wonderAt.TryGetValue(county, out var wonder))
-                Wonder(map, county, wonder, cfg, rng);
+                Wonder(map, county, wonder, past, rng);
 
             // The best piece in the strongbox, not the first one out of it. Rarity now varies
             // within a ruler's holdings, and the one worth a line of history is the good one.
@@ -265,9 +272,17 @@ public sealed class ChronicleMap
             Realm(map, title, cultures, faiths, wilderness, cfg, rng);
         }
 
+        // What an applied history remembers, beside what is invented about the time before it.
+        int fromHistory = 0;
+        foreach (var e in remembered ?? [])
+        {
+            map.Add(e);
+            fromHistory++;
+        }
+
         int contested = map.All.Count(e => e.Tension > 0);
         Console.WriteLine($"  chronicle: {map.All.Count} events across {map.ByTitle.Count} titles "
-            + $"({contested} contested)");
+            + $"({contested} contested)" + (fromHistory > 0 ? $", {fromHistory} of them remembered from the applied history" : ""));
 
         return map;
     }

@@ -227,7 +227,8 @@ internal sealed class HistoryPanel : Panel
         {
             if (_sim is null || _canvas is null) return;
             Pause();
-            ApplyRequested?.Invoke(AppliedHistory.Capture(_sim, _canvas.Counties, _rulers, _prehistory, _colourOf));
+            // The history in force, if this one runs on from it: its chronicle is carried forward.
+            ApplyRequested?.Invoke(AppliedHistory.Capture(_sim, _canvas.Counties, _rulers, _prehistory, _colourOf, _applied));
         };
         _discard.Click += (_, _) => DiscardRequested?.Invoke();
         _changeYear.Click += (_, _) => ChangeYearRequested?.Invoke();
@@ -327,6 +328,15 @@ internal sealed class HistoryPanel : Panel
     /// without the window saying why.
     /// </summary>
     public void ShowApplied(AppliedHistory? applied)
+    {
+        _applied = applied;
+        ShowAppliedBar(applied);
+    }
+
+    /// <summary>The history the world is written with, pending or in force; null for none.</summary>
+    private AppliedHistory? _applied;
+
+    private void ShowAppliedBar(AppliedHistory? applied)
     {
         _appliedBar.Visible = applied is not null;
         if (applied is null) return;

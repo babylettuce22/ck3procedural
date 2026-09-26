@@ -209,18 +209,23 @@ activity_oversee_colony = {
 	# GRAPHICS
 	###################
 
-	# One unconditional background, and no `environment` or `ambience` line.
+	# One unconditional background, with the `environment` and `ambience` vanilla pairs this texture
+	# with (feast.txt, festival.txt, coronation.txt, chariot_race.txt all ship forest.dds with exactly
+	# these two keys; the stake-wilderness activity uses the same set).
 	#
-	# The first draft had both, naming an `environment_event_wilderness` and a forest ambience event
-	# that do not exist — invented asset keys are the quiet failure mode this whole file set is
-	# written to avoid, and ck3-tiger caught them. A background with only a texture falls back to the
-	# engine's defaults for the rest, which is correct rather than merely safe.
+	# The first draft named an `environment_event_wilderness` and a forest ambience event that do not
+	# exist — invented asset keys are the quiet failure mode this whole file set is written to avoid,
+	# and ck3-tiger caught them. Dropping both lines was not the fix it looked like: the engine still
+	# wants them, and logged `Field 'background' not set at/near 'activity_oversee_colony'` at load.
+	# Vanilla's own keys satisfy it without inventing anything.
 	#
 	# The texture is vanilla's own. This mod ships two placeholder .dds files and no more; adding a
 	# third that has to be drawn before the activity looks right would make the mechanic wait on art.
 	background = {
 		trigger = { always = yes }
 		texture = "gfx/interface/illustrations/event_scenes/forest.dds"
+		environment = "environment_event_forest"
+		ambience = "event:/SFX/Events/Backgrounds/deciduous_forest_day"
 	}
 
 	window_characters = {

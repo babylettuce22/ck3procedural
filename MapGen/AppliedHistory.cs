@@ -132,6 +132,8 @@ public sealed class AppliedHistory
             Wars = [.. Wars.Select(w => w with { Started = w.Started + delta })],
             Truces = [.. Truces.Select(t => t with { Until = t.Until + delta })],
             Claims = [.. Claims.Select(c => c with { Until = c.Until + delta })],
+            Chronicle = [.. Chronicle.Select(r => r with { Year = r.Year + delta })],
+            ChronicleFrom = ChronicleFrom != 0 ? ChronicleFrom + delta : 0,
         };
     }
 
@@ -206,6 +208,68 @@ public sealed class AppliedHistory
 
     /// <summary>The wars under way on the applied date. Empty in a file saved before wars were simulated.</summary>
     public List<War> Wars { get; init; } = [];
+
+    /// <summary>
+    /// One thing the chronicle will remember, by title key and seat county index — see
+    /// <see cref="SimMemory"/> for the fields and <see cref="HistoryChronicle"/> for the words.
+    /// </summary>
+    public sealed record Remembered(string What, int Year, string Subject, int Actor = -1, string? ActorCulture = null,
+        int Counterpart = -1, string? CounterpartCulture = null, string? Person = null, bool Female = false,
+        string? Other = null, string? Into = null, int[]? Counties = null);
+
+    /// <summary>
+    /// What the chronicle remembers of the history — this one's and those it was run on from —
+    /// capped per title and in all. Empty in a file saved before the chronicle read the history.
+    /// </summary>
+    public List<Remembered> Chronicle { get; init; } = [];
+
+    /// <summary>
+    /// The year the first of a chain of histories began, where the invented past ends and the
+    /// remembered one takes over. Zero in a file saved before it existed, which means <see cref="FromYear"/>.
+    /// </summary>
+    public int ChronicleFrom { get; init; }
+
+    /// <summary>Where the invented past ends: <see cref="ChronicleFrom"/>, or the year this history began.</summary>
+    public int ChronicleSince => ChronicleFrom != 0 ? ChronicleFrom : FromYear;
+
+    /// <summary>How many things one title is remembered for, and all titles together.</summary>
+    public const int MaxRememberedPerTitle = 3, MaxRemembered = 2000;
+
+    /// <summary>
+    /// The simulation's memory as the file keeps it: every recorded moment plus the homage,
+    /// independence and collapse the event log already holds structured, and everything an earlier
+    /// history remembered, cut to <see cref="MaxRememberedPerTitle"/> a title — most bad blood first,
+    /// then most recent — and <see cref="MaxRemembered"/> in all.
+    /// </summary>
+    private static List<Remembered> Memory(HistorySim sim, AppliedHistory? earlier)
+    {
+        static int Index(Title? t) => t?.Index ?? -1;
+        var now = sim.Memory.Select(m => new Remembered(m.What, m.Year, m.Subject.Key, Index(m.Actor), m.ActorCulture?.Key,
+            Index(m.Counterpart), m.CounterpartCulture?.Key, m.Person, m.Female, m.Other, m.Into?.Key,
+            m.Counties is { } counties ? [.. counties.Select(c => c.Index)] : null)).ToList();
+
+        foreach (var e in sim.Events)
+        {
+            string? what = e.Kind switch
+            {
+                FormationKind.Vassalized => "swore",
+                FormationKind.Freed => "freed",
+                FormationKind.Collapsed => "collapsed",
+                _ => null,
+            };
+            if (what is null) continue;
+            now.Add(new Remembered(what, e.Year, e.Subject.Key, Index(e.Actor ?? e.Subject), e.Culture?.Key,
+                Index(e.Counterpart), e.CounterpartCulture?.Key));
+        }
+
+        return [.. (earlier?.Chronicle ?? []).Concat(now)
+            .GroupBy(r => r.Subject)
+            .SelectMany(g => g.OrderByDescending(HistoryChronicle.TensionOf).ThenByDescending(r => r.Year)
+                              .Take(MaxRememberedPerTitle))
+            .OrderByDescending(r => r.Year)
+            .Take(MaxRemembered)
+            .OrderBy(r => r.Year).ThenBy(r => r.Subject, StringComparer.Ordinal)];
+    }
 
     /// <summary>A truce between two realms, by id, and the year it ends.</summary>
     public sealed record Truce(int A, int B, int Until);
@@ -373,7 +437,7 @@ public sealed class AppliedHistory
     /// </summary>
     public static AppliedHistory Capture(HistorySim sim, IEnumerable<Title> counties,
         RulerMap? rulers = null, PrehistoryMap? prehistory = null,
-        IReadOnlyDictionary<int, (byte R, byte G, byte B)>? colours = null)
+        IReadOnlyDictionary<int, (byte R, byte G, byte B)>? colours = null, AppliedHistory? earlier = null)
     {
         var seatLineage = new Dictionary<int, Lineage>();
         if (rulers is not null && prehistory is not null)
@@ -413,6 +477,8 @@ public sealed class AppliedHistory
                 [.. w.Goal.Select(c => c.Index).Order()], w.Started, w.Score, w.Name))],
             Truces = [.. sim.Truces.Select(t => new Truce(t.A, t.B, t.Until))],
             Claims = [.. sim.Claims.Select(c => new Claim(c.County.Index, c.Claimant.Id, c.Until))],
+            Chronicle = Memory(sim, earlier),
+            ChronicleFrom = earlier?.ChronicleSince ?? 0,
             Settled = [.. sim.Settled.Select(c => c.Index).Order()],
             SettlerCultures = sim.Settled.Where(c => sim.SettlerCulture(c) is not null)
                 .ToDictionary(c => c.Index, c => sim.SettlerCulture(c)!.Key),

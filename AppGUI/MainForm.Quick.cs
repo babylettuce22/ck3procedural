@@ -43,6 +43,15 @@ public sealed partial class MainForm
         _quick.OpenFolderRequested += OpenModFolder;
         _quick.CustomizeRequested += CustomizeQuickWorld;
         _quick.GameFolderRequested += PickGameFolder;
+        _quick.PlayPauseRequested += () => SetHistoryPlaying(!_historyClock.Enabled);
+        _quick.PaceRequested += () =>
+        {
+            _historyFast = !_historyFast;
+            SetHistoryPlaying(_historyClock.Enabled);
+        };
+        _quick.AcceptRequested += () => AcceptQuickHistoryAsync().Forget("accept history");
+        _quick.ContinueHistoryRequested += () => ContinueQuickHistoryAsync().Forget("continue history");
+        _historyClock.Tick += (_, _) => OnHistoryYear();
         return _quick;
     }
 
@@ -127,6 +136,12 @@ public sealed partial class MainForm
 
         if (completed)
         {
+            // The world's history runs on from here until the player accepts it; a world with no
+            // grown realms to run goes straight to the done screen.
+            (_quickModDir, _quickTook) = (modDir, took);
+            _quickHistory = null;
+            if (await StartQuickHistoryAsync()) return;
+
             _quick.ShowDone(modDir, took);
             FinishLauncherRun(_quick.Run);
         }
@@ -155,7 +170,7 @@ public sealed partial class MainForm
         Core.Showcase.Published += OnShowcase;
         try
         {
-            await WriteModIntoAsync(modDir, carried: null);
+            await WriteModIntoAsync(modDir, carried: null, restoreHistory: false);
         }
         finally
         {
@@ -279,6 +294,169 @@ public sealed partial class MainForm
         {
             Console.WriteLine($"Could not draw the finished world's map: {ex.Message}");
         }
+    }
+
+    // --- History: the Quick world lived on until the player accepts it ---------------------------
+
+    /// <summary>Milliseconds a simulated year takes on screen, at the two paces the page offers.</summary>
+    private const int SlowYearMs = 1000, FastYearMs = 200;
+
+    /// <summary>The history of the world just made, running on from its start date. See <see cref="QuickHistory"/>.</summary>
+    private QuickHistory? _quickHistory;
+
+    /// <summary>
+    /// True once the world has been written again from <see cref="_quickHistory"/>: continuing then
+    /// picks the history up from the world as written — the History workspace's chaining — rather
+    /// than running on a simulation whose titles the write has since moved.
+    /// </summary>
+    private bool _quickHistoryWritten;
+
+    private readonly System.Windows.Forms.Timer _historyClock = new() { Interval = SlowYearMs };
+    private bool _historyFast;
+    private string _quickModDir = "";
+    private TimeSpan _quickTook;
+
+    /// <summary>
+    /// Readies the written world's history and starts it on the page. False when there is none to
+    /// run — the world's realms were not grown — or it could not be prepared; the caller then shows
+    /// the done screen as before.
+    /// </summary>
+    private async Task<bool> StartQuickHistoryAsync()
+    {
+        var history = await PrepareQuickHistoryAsync();
+        if (history is null) return false;
+
+        _quickHistory = history;
+        _quickHistoryWritten = false;
+        _quick.ShowHistory(history.Began);
+        ShowHistoryYear();
+        SetHistoryPlaying(true);
+        return true;
+    }
+
+    private async Task<QuickHistory?> PrepareQuickHistoryAsync()
+    {
+        if (_result is not { } result || _written is not { } written) return null;
+        try
+        {
+            return await QuickHistory.PrepareAsync(result, written, _options.AppliedHistory);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine();
+            Console.WriteLine($"The world's history could not be prepared: {ex}");
+            return null;
+        }
+    }
+
+    /// <summary>Starts or stops the clock, at the pace chosen, and says so on the page.</summary>
+    private void SetHistoryPlaying(bool playing)
+    {
+        _historyClock.Interval = _historyFast ? FastYearMs : SlowYearMs;
+        if (playing && _quickHistory is not null) _historyClock.Start();
+        else _historyClock.Stop();
+        _quick.Run.SetHistoryState(_historyClock.Enabled, _historyFast, busy: null);
+    }
+
+    /// <summary>
+    /// A year of history. The clock stops itself when the page has gone — Start, Make another,
+    /// or anything else that leaves the history view — so nothing runs where nobody is watching.
+    /// </summary>
+    private void OnHistoryYear()
+    {
+        if (_quickHistory is not { } history || _busy || !_quick.Visible || !_quick.Run.InHistory)
+        {
+            _historyClock.Stop();
+            return;
+        }
+
+        history.Tick();
+        ShowHistoryYear();
+    }
+
+    private void ShowHistoryYear()
+    {
+        if (_quickHistory is not { } history) return;
+        _quick.Run.SetHistoryFrame(history.Render(), history.Year, history.Began, history.Standing());
+        _quick.Run.AddChronicle(history.TakeHeadlines());
+    }
+
+    /// <summary>
+    /// The world as it stands is the one the game starts with. Accepted where it began, the mod
+    /// on disk already is that world; otherwise the realm and calendar layers are written again
+    /// over it (<see cref="Emit.ContentWriter.ApplyHistory"/>, seconds rather than the minutes of
+    /// the first run), and the page moves on to the done screen.
+    /// </summary>
+    private async Task AcceptQuickHistoryAsync()
+    {
+        if (_quickHistory is not { } history || _busy) return;
+        SetHistoryPlaying(false);
+
+        if (history.Moved)
+        {
+            if (_edits.Target is not { Written.World: not null } target || !Directory.Exists(target.ModDir))
+            {
+                MessageBox.Show(this, "The world's mod folder is no longer where it was written, so its history cannot be "
+                    + "written into it. Make the world again.", "Accept this world", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var applied = history.Capture();
+            _quick.Run.SetHistoryState(false, _historyFast, $"Writing the world as it stands in {applied.Year}…");
+            _quick.SetWriting(true);
+            bool written;
+            try
+            {
+                written = await ReemitHistoryAsync(target, applied);
+            }
+            finally
+            {
+                _quick.SetWriting(false);
+            }
+
+            if (!written)
+            {
+                _quick.Run.SetHistoryState(false, _historyFast, busy: null);
+                return;
+            }
+
+            _options.AppliedHistory = applied;
+            _history.ShowApplied(applied);
+            _quickHistoryWritten = true;
+        }
+
+        string? note = _options.AppliedHistory is { } now
+            ? $"It begins in {now.Year}, after {now.Year - now.ChronicleSince} years of history."
+            : null;
+        _quick.ShowDone(_quickModDir, _quickTook, note);
+        FinishLauncherRun(_quick.Run);
+    }
+
+    /// <summary>
+    /// Back from the done screen to the history, from where it was accepted. After a write that is
+    /// the world as written, picked up again; otherwise the same simulation simply carries on.
+    /// </summary>
+    private async Task ContinueQuickHistoryAsync()
+    {
+        if (_busy || _quickHistory is not { } history) return;
+
+        _quick.ShowHistory(history.Began);
+        if (_quickHistoryWritten)
+        {
+            _quick.Run.SetHistoryState(false, _historyFast, "Picking up the thread…");
+            var resumed = await PrepareQuickHistoryAsync();
+            if (!_quick.Visible || !_quick.Run.InHistory) return;
+            if (resumed is null)
+            {
+                _quick.Run.SetHistoryState(false, _historyFast, busy: null);
+                return;
+            }
+            _quickHistory = resumed;
+            _quickHistoryWritten = false;
+        }
+
+        ShowHistoryYear();
+        SetHistoryPlaying(true);
     }
 
     /// <summary>

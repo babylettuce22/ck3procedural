@@ -10,7 +10,13 @@ public static partial class ContentWriter
     internal sealed record AppliedRealms(RealmMap Realms, GovernmentMap Governments, double? HegemonShare,
         IReadOnlyDictionary<Title, AppliedHistory.Lineage> Lineage, List<PastRuler> PastRulers,
         IReadOnlyDictionary<Title, (byte R, byte G, byte B)> Colours, int Drifted, WildsLayer Wilds, SimDiplomacy? Diplomacy,
-        IReadOnlyDictionary<Title, PastRuler> SeatParents);
+        IReadOnlyDictionary<Title, PastRuler> SeatParents, RememberedPast Past);
+
+    /// <summary>
+    /// What the chronicle remembers of an applied history, as events on the world being written, and
+    /// the year the invented past ends — see <see cref="ChronicleMap.Build"/>.
+    /// </summary>
+    internal sealed record RememberedPast(List<ChronicleEvent> Events, int Since);
 
     /// <summary>
     /// The wilderness at the applied date and what follows from it: the wilds cut from it, and the
@@ -115,7 +121,8 @@ public static partial class ContentWriter
             + $"{AppliedHistory.MaxReigns} in all)");
 
         return new AppliedRealms(realms, governments, hegemonShare, lineage, pastRulers, applied.ColoursFor(capitals),
-            drifted, wilds, applied.DiplomacyFor(capitals, counties), seatParents);
+            drifted, wilds, applied.DiplomacyFor(capitals, counties), seatParents,
+            new RememberedPast(HistoryChronicle.Events(applied.Chronicle, empires, cultures, wilderness), applied.ChronicleSince));
     }
 
     /// <summary>
@@ -235,7 +242,7 @@ public static partial class ContentWriter
         var worldCenters = world.WorldCenters;
         var retinues = written.Retinues;
 
-        var (realms, governments, hegemonShare, lineage, pastRulers, colours, drifted, wilds, diplomacy, seatParents) = ApplyRealms(applied, current,
+        var (realms, governments, hegemonShare, lineage, pastRulers, colours, drifted, wilds, diplomacy, seatParents, past) = ApplyRealms(applied, current,
             cfg, empires, counties, provinces, order, result.BaronyCount, world.ProvinceTerrain, development, cultures,
             worldCenters, wilderness, result.Azgaar, world.StateGovernments, faiths, result.LandCount, world.Frontier);
 
@@ -330,7 +337,7 @@ public static partial class ContentWriter
             provinces, order, result.LandCount, empires, counties, realms, cultures, world.Ethnicities, faiths,
             governments, worldCenters, wilderness, development, world.TitlePlan, eraGovernments: null,
             retinues, result.Azgaar, written.Calendar, flatmap, wilds.Wilds, cultureAssets: false, lineage,
-            pastRulers, diplomacy, seatParents));
+            pastRulers, diplomacy, seatParents, past));
 
         Core.Stage.Time("debug panel", () => DebugPanel.Write(modDir, DebugFacts(
             modDir, cfg, provinces, empires, counties, cultures, faiths, wilderness, worldCenters,
@@ -348,6 +355,7 @@ public static partial class ContentWriter
             AppliedWilds = wilds,
             AppliedDiplomacy = diplomacy,
             SeatParents = seatParents,
+            AppliedPast = past,
         };
         var appliedContent = written with
         {
@@ -381,6 +389,9 @@ public static partial class ContentWriter
         (string[] Dir, string Pattern)[] owned =
         [
             (["common", "bookmark_portraits"], "bm_char_*.txt"),                          // PortraitWriter
+            // The generated challenge character and his companions — never vanilla's own, which are
+            // named for their bookmark (challenge_character_ashot_armenia) and shipped static.
+            (["common", "bookmark_portraits"], "challenge_character_generated*.txt"),
             (["gfx", "models", "artifacts", "gen_weapons"], "gen_hero_*"),                // WeaponForgeStep.FinishTopArtifacts
             (["gfx", "interface", "icons", "artifact"], "gen_hero_*"),                    // the same, icons
             (["gfx", "interface", "illustrations", "struggle_backgrounds"], "gen_struggle_*"), // StruggleArt
@@ -438,7 +449,8 @@ public static partial class ContentWriter
         Dictionary<int, GovernmentMap>? eraGovernments, RetinueMap? retinues, AzgaarImport? azgaar,
         WorldCalendar? calendar, Flatmap flatmap, FrontierMap frontier, bool cultureAssets = true,
         IReadOnlyDictionary<Title, AppliedHistory.Lineage>? lineage = null, List<PastRuler>? pastRulers = null,
-        SimDiplomacy? diplomacy = null, IReadOnlyDictionary<Title, PastRuler>? seatParents = null)
+        SimDiplomacy? diplomacy = null, IReadOnlyDictionary<Title, PastRuler>? seatParents = null,
+        RememberedPast? past = null)
     {
         PrehistoryMap? prehistory = null;
         RulerMap? rulers = null;
@@ -594,7 +606,7 @@ public static partial class ContentWriter
         // at the player, and the GUI already treats a missing key as "no button".
         var chronicle = Core.Stage.Time("chronicle", () => ChronicleMap.Build(
             empires, realms, development, cultures, faiths, wilderness, prehistory,
-            artifacts, worldCenters, cfg, new Rng(cfg.Seed ^ 0x104E)));
+            artifacts, worldCenters, cfg, new Rng(cfg.Seed ^ 0x104E), past?.Since, past?.Events));
 
         // After the chronicle, which is the thing that decides where a struggle is. Reads
         // the counties for its membership and the chronicle only for its tension, so it

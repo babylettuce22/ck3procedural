@@ -157,6 +157,7 @@ public sealed partial class HistorySim
             _sim.Log(FormationKind.Drifted, title.Capital ?? counties[0], null, null, 0,
                 $"The {kind} of {title.Name} became de jure part of the {into} of {toward.Name}, "
                 + $"after {_sim.Year - clock.Since} years under its rule");
+            Remember("drifted", title, into: toward);
         }
     }
 

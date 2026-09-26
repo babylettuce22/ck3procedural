@@ -10,12 +10,13 @@
 #
 # WHAT IT IS ACTUALLY CHECKING
 # The visual override in common/artifacts/visuals resolves a vanilla visual key -- `sword`, `axe`
-# -- to a forged look by reading the gen_forge_index variable, which is set by a hidden event
-# hooked onto on_artifact_changed_owner. That leaves one thing unproven on paper: whether
-# create_artifact firing with an owner counts as an ownership CHANGE. If it does, a weapon made
-# here arrives already dressed. If it does not, it arrives wearing look #1 -- the untriggered
-# default -- and only picks up a real index the first time it changes hands. One click answers it,
-# and the answer decides whether the on_action hook is sufficient on its own.
+# -- to a forged look, gated on the owner's culture and the artifact's rarity (see
+# Emit/ArtifactForge/ForgedVisualOverrides.cs). An earlier design read a gen_forge_index variable
+# set from on_artifact_changed_owner; the game's own error log showed why that could never work --
+# the visual is resolved INSIDE create_artifact, before any on_action runs -- so nothing sets
+# gen_forge_index any more. The effect still reports it (always "unindexed") as a deliberate probe:
+# see the note in common/scripted_effects/zz_pmg_debug_forge_effects.txt. What a click here shows
+# is which forged look a real creation path picks for the character's culture and the rarity.
 #
 # Two weapon types have no parts library: spear has none at all, and hammer is cut into the mace
 # library as families rather than given its own. Both are offered anyway, because seeing what they

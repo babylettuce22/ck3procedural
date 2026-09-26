@@ -134,6 +134,7 @@ public sealed partial class HistorySim
 
         var history = new HistorySim(sim, rules.Seed, startYear);
         history.SeatStartRulers(rulers, prehistory);
+        history.SeatExclaves();
         history.SeatDeJure();
         history.SeatWilds(wilds);
         history.SeatWars();
@@ -232,17 +233,65 @@ public sealed partial class HistorySim
         return problems;
     }
 
-    private bool Contiguous(Polity p)
+    private bool Contiguous(Polity p) => Whole(p);
+
+    /// <summary>
+    /// Whether a realm is in one piece around its capital without <paramref name="without"/> — its
+    /// start-date exclaves apart, which it may keep (see <see cref="Formation.Sim.Exclaves"/>). The
+    /// one test behind the invariant, a partition's shares and a county's fall to ruin.
+    /// </summary>
+    private bool Whole(Polity p, IReadOnlySet<Title>? without = null)
     {
+        if (without?.Contains(p.Capital) == true) return false;
         var seen = new HashSet<Title> { p.Capital };
-        var queue = new Queue<Title>();
-        queue.Enqueue(p.Capital);
+        var queue = new Queue<Title>([p.Capital]);
         while (queue.Count > 0)
         {
             if (!_sim.Adjacent.TryGetValue(queue.Dequeue(), out var near)) continue;
             foreach (var n in near)
-                if (p.Counties.Contains(n) && seen.Add(n)) queue.Enqueue(n);
+                if (p.Counties.Contains(n) && without?.Contains(n) != true && seen.Add(n)) queue.Enqueue(n);
         }
-        return seen.Count == p.Counties.Count;
+
+        // Whatever the capital cannot reach must lie in pieces that each hold one of the realm's
+        // start-date exclaves — an exclave may grow, as ShedIslands allows.
+        var apart = p.Counties.Where(c => !seen.Contains(c) && without?.Contains(c) != true).ToHashSet();
+        while (apart.Count > 0)
+        {
+            var start = apart.First();
+            var piece = new HashSet<Title> { start };
+            var next = new Queue<Title>([start]);
+            apart.Remove(start);
+            while (next.Count > 0)
+            {
+                if (!_sim.Adjacent.TryGetValue(next.Dequeue(), out var near)) continue;
+                foreach (var n in near)
+                    if (apart.Remove(n)) { piece.Add(n); next.Enqueue(n); }
+            }
+            if (!piece.Any(c => _sim.IsExclave(c, p))) return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Marks every start-date realm's pieces apart from its capital as its exclaves, which it keeps
+    /// — the written world's shape, not the simulation's to correct on the first tick.
+    /// </summary>
+    private void SeatExclaves()
+    {
+        var exclaves = new Dictionary<Title, Polity>();
+        foreach (var p in _sim.Polities.Where(p => p.Alive))
+        {
+            if (Whole(p)) continue;
+            var seen = new HashSet<Title> { p.Capital };
+            var queue = new Queue<Title>([p.Capital]);
+            while (queue.Count > 0)
+            {
+                if (!_sim.Adjacent.TryGetValue(queue.Dequeue(), out var near)) continue;
+                foreach (var n in near)
+                    if (p.Counties.Contains(n) && seen.Add(n)) queue.Enqueue(n);
+            }
+            foreach (var county in p.Counties.Where(c => !seen.Contains(c))) exclaves[county] = p;
+        }
+        if (exclaves.Count > 0) _sim.Exclaves = exclaves;
     }
 }

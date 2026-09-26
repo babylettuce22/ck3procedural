@@ -86,6 +86,7 @@ public static class WorldOverwrite
         {
             yield return "gen_titles_l_english.yml";
             yield return "gen_hegemony_l_english.yml";
+            yield return ContentWriter.ReservedTitleLocFile;
         }
         if (aspects.HasFlag(WorldAspect.TitleColors)) yield return "00_landed_titles.txt";
 

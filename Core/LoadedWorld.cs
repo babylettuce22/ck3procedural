@@ -260,11 +260,14 @@ public sealed class LoadedWorld
                 var range = file.ValueRange(name);
                 entry.Fields.Add(new WorldField
                 {
-                    Name = "Name", Category = "Identity", Read = () => Unquote(file.Read(range)),
+                    // History names a character by a loc key (cul_x, or a vanilla name key), so both
+                    // the shown name and the bookmark text a rename must match are its localisation.
+                    // An edit writes the plain name, which the game shows as-is.
+                    Name = "Name", Category = "Identity", Read = () => Localized(Unquote(file.Read(range))),
                     Write = value =>
                     {
                         ValidateName(value);
-                        string old = Unquote(file.Read(range));
+                        string old = Localized(Unquote(file.Read(range)));
                         file.Set(range, Quote(value));
                         foreach (string key in _bookmarkNames.GetValueOrDefault(node.Key) ?? [])
                             if (_loc.TryGetValue(key, out var loc))

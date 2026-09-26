@@ -2895,11 +2895,14 @@ public sealed partial class MainForm : ChromeForm
     /// world to the editor and offer to enable the mod. Split out of <see cref="WriteModAsync"/> so
     /// the Quick page, which asks for the name itself, writes through exactly the same path.
     /// </summary>
-    private async Task WriteModIntoAsync(string modDir, EditOverlay? carried)
+    /// <param name="restoreHistory">False for a new world — a launcher page's — which a history
+    /// saved beside an older mod in the same folder does not belong to: restored, it would make
+    /// the write refuse the new map as a mismatch.</param>
+    private async Task WriteModIntoAsync(string modDir, EditOverlay? carried, bool restoreHistory = true)
     {
         // A history this mod was last written with is written again, unless one is already in
         // hand. Discarding it removes the file, so this never brings back what the user let go of.
-        if (_options.AppliedHistory is null && MapGen.AppliedHistory.Load(modDir) is { } saved)
+        if (restoreHistory && _options.AppliedHistory is null && MapGen.AppliedHistory.Load(modDir) is { } saved)
         {
             _options.AppliedHistory = saved;
             _history.ShowApplied(saved);
@@ -2983,6 +2986,18 @@ public sealed partial class MainForm : ChromeForm
             return;
         }
 
+        await ReemitHistoryAsync(written, applied);
+    }
+
+    /// <summary>
+    /// The re-emit itself: <paramref name="applied"/> laid over the mod already written, and the
+    /// window moved onto the result — the World workspace, its editor and the History workspace.
+    /// Shared by the apply button and the Quick page's history, which asks nothing first. Says
+    /// what went wrong when it fails, and returns whether it worked.
+    /// </summary>
+    private async Task<bool> ReemitHistoryAsync((GenerationResult Result, Emit.WrittenContent Written, string ModDir) written,
+        MapGen.AppliedHistory applied)
+    {
         _busy = true;
         SetEnabled(false);
         _status.Text = $"Applying the history of {applied.Year}…";
@@ -3004,6 +3019,7 @@ public sealed partial class MainForm : ChromeForm
             _status.Text = $"History of {applied.Year} applied to {written.ModDir} in {clock.ElapsedMilliseconds / 1000.0:F1} s";
             Console.WriteLine($"History of {applied.Year} applied in {clock.ElapsedMilliseconds / 1000.0:F1} s — "
                               + "restart the game, not just the mod, to see it");
+            return true;
         }
         catch (Exception ex)
         {
@@ -3012,6 +3028,7 @@ public sealed partial class MainForm : ChromeForm
             _status.Text = "Applying the history failed — see log";
             MessageBox.Show(this, $"The history could not be applied:\n\n{ex.Message}",
                 "Apply history", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return false;
         }
         finally
         {

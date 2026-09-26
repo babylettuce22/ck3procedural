@@ -391,7 +391,7 @@ public static partial class ContentWriter
                 var layer = WriteHistoryLayer(modDir, gameDir, cfg, provinces, order, landCount, empires,
                     counties, realms, cultures, ethnicities, faiths, governments, worldCenters, wilderness,
                     development, titlePlan, eraGovernments, retinues, azgaar, calendar, flatmap, frontier,
-                    lineage: world.Lineage, pastRulers: world.PastRulers, diplomacy: world.AppliedDiplomacy, seatParents: world.SeatParents);
+                    lineage: world.Lineage, pastRulers: world.PastRulers, diplomacy: world.AppliedDiplomacy, seatParents: world.SeatParents, past: world.AppliedPast);
 
                 prehistory = layer.Prehistory;
                 rulers = layer.Rulers;
@@ -1609,6 +1609,13 @@ public static partial class ContentWriter
         // lack of an adjective; this one has to say so, or it stays "Chinese".
         var crownLoc = new LocFile();
 
+        // The Silk Road's bazaar counties take vanilla county keys (SilkRoad.ReservedCountyKeys) but
+        // keep their generated names — the same situation as the hegemony. In gen_titles they were
+        // logged as duplicates (c_khiva "Tiki" against vanilla's "Khiva") and whichever loaded last
+        // won; and vanilla's adjective (c_khiva_adj "Khivan") went on describing the renamed county.
+        // Both keys go to localization/replace/, where the mod's text wins.
+        var reservedLoc = new LocFile();
+
         foreach (var title in named)
         {
             string name = ParadoxText.Loc(title.Name);
@@ -1617,6 +1624,13 @@ public static partial class ContentWriter
             {
                 crownLoc.AddBuilt(title.Key, name);
                 crownLoc.AddBuilt($"{title.Key}_adj", name);
+                continue;
+            }
+
+            if (!title.Inherited && SilkRoad.ReservedCountyKeys.Contains(title.Key))
+            {
+                reservedLoc.AddBuilt(title.Key, name);
+                reservedLoc.AddBuilt($"{title.Key}_adj", name);
                 continue;
             }
 
@@ -1649,7 +1663,17 @@ public static partial class ContentWriter
 
         if (Titles.HegemonyOf(empires) is not null)
             crownLoc.Write(Path.Combine(modDir, "localization", "replace", "english", "gen_hegemony_l_english.yml"));
+
+        if (named.Any(t => !t.Inherited && t.Tier != "h" && SilkRoad.ReservedCountyKeys.Contains(t.Key)))
+        {
+            Directory.CreateDirectory(Path.Combine(modDir, "localization", "replace", "english"));
+            reservedLoc.Write(Path.Combine(modDir, "localization", "replace", "english", ReservedTitleLocFile));
+        }
     }
+
+    /// <summary>Names and adjectives of generated counties that carry a vanilla key (the Silk Road's
+    /// bazaar counties), in localization/replace/english.</summary>
+    internal const string ReservedTitleLocFile = "gen_reserved_titles_l_english.yml";
 
     private static void BlankVanillaData(string modDir, string gameDir)
     {

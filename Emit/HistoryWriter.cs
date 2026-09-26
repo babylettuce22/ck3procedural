@@ -201,18 +201,29 @@ public static class HistoryWriter
 
     /// <summary>
     /// What a character's name is written as: the vanilla localisation key for a name a vanilla
-    /// culture's list supplied (<see cref="Culture.NameKeys"/>), else the name itself. Map-wide
-    /// rather than per culture, because a wife's name comes from her own people's list.
+    /// culture's list supplied (<see cref="Culture.NameKeys"/>), else the `cul_` key
+    /// <see cref="CultureWriter"/> localises every name-list name under, else the name itself.
+    /// Map-wide rather than per culture, because a wife's name comes from her own people's list.
+    ///
+    /// The engine reads a history `name` as a loc key. Writing the raw name ("Ahadro") displayed
+    /// the same text but logged "Missing loc for name" once per character — 5,130 lines in one
+    /// session, a large share of error.log's 100,000-entry cap.
     /// </summary>
     private static Func<string, string> NameTokens(CultureMap cultures)
     {
         var keys = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var culture in cultures.Cultures)
             foreach (var (name, key) in culture.NameKeys) keys.TryAdd(name, key);
+        foreach (var culture in cultures.Cultures)
+            foreach (string name in culture.MaleNames.Concat(culture.FemaleNames))
+                keys.TryAdd(name, CultureWriter.GivenNameKey(name));
         return name => keys.GetValueOrDefault(name, name);
     }
 
     public static string DynastyId(Title county) => $"gen_dynasty_{county.Index}";
+
+    /// <summary>The description every history truce carries; localised in WriteDynastyLocalisation.</summary>
+    internal const string HistoryTruceName = "gen_history_truce_name";
 
     /// <summary>The <see cref="RulerNames(Title, Culture, bool, int, int)"/> salt for a head of faith named from a seat.</summary>
     internal const int HeadOfFaithSalt = 0x4F48;
@@ -493,21 +504,27 @@ public static class HistoryWriter
                     }
                 }
 
+                // Rivalries, friendships and blood brotherhoods are stored on both counties
+                // (Prehistory.AddRivalry / AddFriendship / AddRelation) and are mutual, like
+                // alliances: written from both sides, the second set_relation_* failed with
+                // "Scripted relation already exists" (64 + 6 + 3 error.log lines in one session).
+                // Written from the lower county index only.
+
                 // --- Chronologically Dated Rivalries ---
                 if (prehistory.Rivals.TryGetValue(county, out var rivals))
-                    foreach (var rival in rivals)
+                    foreach (var rival in rivals.Where(r => county.Index < r.TargetCounty.Index))
                         DatedEffect(rival.Date, () =>
                             b.Field("set_relation_rival", $"character:{CharacterId(rival.TargetCounty)}"));
 
                 // --- Chronologically Dated Friendships ---
                 if (prehistory.Friends.TryGetValue(county, out var friends))
-                    foreach (var friend in friends)
+                    foreach (var friend in friends.Where(f => county.Index < f.TargetCounty.Index))
                         DatedEffect(friend.Date, () =>
                             b.Field("set_relation_friend", $"character:{CharacterId(friend.TargetCounty)}"));
 
                 // --- Sworn Blood Brothers (nomad khans and their anda) ---
                 if (prehistory.BloodBrothers.TryGetValue(county, out var bloodBrothers))
-                    foreach (var brother in bloodBrothers)
+                    foreach (var brother in bloodBrothers.Where(r => county.Index < r.TargetCounty.Index))
                         DatedEffect(brother.Date, () =>
                             b.Field("set_relation_blood_brother", $"character:{CharacterId(brother.TargetCounty)}"));
 
@@ -553,8 +570,13 @@ public static class HistoryWriter
                                 // one silently restarted its clock.
                                 if (county.Index >= truceTarget.Index) continue;
 
+                                // A truce needs what caused it: a war, a casus belli, or a `name`
+                                // (loc key) describing it. History has no war to point at, and
+                                // without one the engine rejected the effect outright ("Missing
+                                // casus_belli or name field", "Invalid war"), so no history truce
+                                // ever existed in game. Vanilla names its script-made truces too.
                                 b.Inline("add_truce_both_ways",
-                                    $"character = character:{CharacterId(truceTarget)} days = {days}");
+                                    $"character = character:{CharacterId(truceTarget)} days = {days} name = {HistoryTruceName}");
                             }
                         }
 
@@ -1363,11 +1385,17 @@ public static class HistoryWriter
 
         var loc = new LocFile();
 
-        // Generic fallback descriptions
-        loc.AddBuilt("house_relation_reason_preexisting_marriage_desc", "Royal marriage alliance established between dynasties");
+        // Generic fallback descriptions. Not house_relation_reason_preexisting_marriage_desc: that key
+        // is vanilla's (a dynamic "X married Y" line its game-start pass fills in), nothing here uses
+        // the preexisting_marriage reason, and redefining it outside localization/replace only logged
+        // "Duplicate localization key" while hiding vanilla's better text.
         loc.AddBuilt("house_relation_reason_traditional_friendship_desc", "Traditional dynastic friendship enduring across generations");
         loc.AddBuilt("house_relation_reason_ancient_rivalry_desc", "Generational border rivalry and ancestral disputes");
         loc.AddBuilt("house_relation_reason_blood_feud_desc", "Bitter generational blood feud and contested sovereignty");
+        loc.Blank();
+
+        // The truce tooltip's description for every truce written into character history.
+        loc.AddBuilt(HistoryTruceName, "Peace from an earlier war");
         loc.Blank();
 
         // Specific house relation descriptions embedding the real prehistory start date

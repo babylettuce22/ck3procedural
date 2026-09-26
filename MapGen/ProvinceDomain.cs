@@ -72,9 +72,11 @@ public static class ProvinceDomain
     /// The domain of every pixel, at province-raster resolution.
     /// <paramref name="painted"/> is the impassable mask to cut provinces against, or null when
     /// there is none or it is in Touch mode; white on water is ignored, water is water.
+    /// <paramref name="generated"/> names the mask's source when the terrain drew it rather than
+    /// the user, so the report does not tell anyone to repaint it.
     /// </summary>
     public static int[] Build(byte[] mask, AzgaarImport? azgaar, int width, int height, MapConfig cfg,
-                              bool[]? painted = null)
+                              bool[]? painted = null, string? generated = null)
     {
         var domain = new int[width * height];
 
@@ -126,7 +128,7 @@ public static class ProvinceDomain
             : cfg.MinProvincePixels;
         AbsorbSlivers(domain, width, height, cfg, fragmentFloor);
         if (azgaar is not null) Report(domain, cfg);
-        if (painted is not null) ReportPainted(domain, width, height, cfg);
+        if (painted is not null) ReportPainted(domain, width, height, cfg, generated);
         return domain;
     }
 
@@ -136,7 +138,7 @@ public static class ProvinceDomain
     /// stroke drawn too thin is absorbed by <see cref="AbsorbSlivers"/> and simply vanishes, and
     /// the user who painted it deserves to be told so rather than left to look for it in game.
     /// </summary>
-    private static void ReportPainted(int[] domain, int width, int height, MapConfig cfg)
+    private static void ReportPainted(int[] domain, int width, int height, MapConfig cfg, string? generated)
     {
         long pixels = 0;
         int components = 0, underBarony = 0;
@@ -177,6 +179,15 @@ public static class ProvinceDomain
             pixels += size;
             smallest = Math.Min(smallest, size);
             if (size < cfg.BaronyPixels) underBarony++;
+        }
+
+        if (generated is not null)
+        {
+            Console.WriteLine(components == 0
+                ? $"  domain: {generated} — no wall region survived the sliver floor"
+                : $"  domain: {generated} cut into {components} wall region(s), {pixels} px " +
+                  $"({pixels / cfg.BaronyPixels:F1} baronies' worth), smallest {smallest} px");
+            return;
         }
 
         if (components == 0)

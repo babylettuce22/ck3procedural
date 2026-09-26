@@ -197,6 +197,8 @@ public sealed partial class HistorySim
             {
                 // A claim fought for and lost is given up.
                 foreach (var county in war.Goal) if (_claims.TryGetValue(county, out var c) && c.Claimant == war.Attacker) _claims.Remove(county);
+                Remember("held", war.Duchy ?? war.Goal.MinBy(c => c.Index)!, war.Defender, war.Attacker,
+                    counties: war.Duchy is null ? [.. war.Goal.OrderBy(c => c.Index)] : null);
                 End(war, $"The realm of {war.Defender.Capital.Name} won {war.Name} against {war.Attacker.Capital.Name}");
             }
             else if (years >= MaxWarYears)
@@ -227,6 +229,11 @@ public sealed partial class HistorySim
             foreach (var n in near.OrderBy(n => n.Index))
                 if (war.Goal.Contains(n) && seen.Add(n)) queue.Enqueue(n);
         }
+
+        // Remembered before the peace moves anything: the loser's seat is the one he fought from.
+        if (taken.Count > 0)
+            Remember("won", war.Duchy ?? taken.MinBy(c => c.Index)!, war.Attacker, war.Defender,
+                counties: [.. taken.OrderBy(c => c.Index)]);
 
         var losers = new HashSet<Polity>();
         foreach (var county in taken.OrderBy(c => c.Index))

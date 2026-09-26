@@ -30,7 +30,9 @@ pmg_show_equipped_weapon_trigger = {
 	# player already had, rather than switched off by a flag nothing had ever set.
 	NOT = { has_global_variable = gen_setting_no_portrait_weapons }
 
-	# explicit suppression always wins
+	# explicit suppression always wins. A console hook: no script or button in the mod sets this
+	# flag (the engine logs it as "used but never set" for that reason), so it is only ever on for a
+	# character someone flagged by hand.
 	NOT = { has_character_flag = pmg_hide_equipped_weapon }
 
 	OR = {

@@ -59,7 +59,9 @@ gen_settings_panel_window = {
 # Distinct from the two toggles that already exist, and deliberately coarser than either:
 #
 #   gen_artifact_hide_on_portrait   one artifact, set from the artifact details window
-#   pmg_hide_equipped_weapon        one character, a character flag
+#   pmg_hide_equipped_weapon        one character, a character flag -- console only: nothing in
+#                                   the mod sets it (`effect = { add_character_flag =
+#                                   pmg_hide_equipped_weapon }` on the character does)
 #   this                            the whole feature, the whole world
 #
 # The two finer ones keep working underneath it. Turning this off silences everything regardless of

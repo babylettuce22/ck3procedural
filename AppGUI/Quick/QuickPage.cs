@@ -29,6 +29,12 @@ internal sealed class QuickPage : Panel
     public event Action? CustomizeRequested;
     public event Action? GameFolderRequested;
 
+    // the history run on after the world is written; see RunScreen's history view
+    public event Action? PlayPauseRequested;
+    public event Action? PaceRequested;
+    public event Action? AcceptRequested;
+    public event Action? ContinueHistoryRequested;
+
     private const int MapStep = 0, WorldStep = 1, PeopleStep = 2, ReviewStep = 3;
     private static readonly string[] StepNames = ["Map", "World", "People", "Review"];
 
@@ -252,11 +258,31 @@ internal sealed class QuickPage : Panel
     }
 
     /// <summary>The run finished and the mod is on disk.</summary>
-    public void ShowDone(string modDir, TimeSpan took)
+    /// <param name="history">What the history left the world as, for the done screen's line; see <see cref="RunScreen.ShowDone"/>.</param>
+    public void ShowDone(string modDir, TimeSpan took, string? history = null)
     {
         _mode = Mode.Done;
-        _run.ShowDone(ModName, modDir, took);
+        _run.ShowDone(ModName, modDir, took, history);
         ShowView(_run);
+        UpdateChrome();
+    }
+
+    /// <summary>The mod is on disk and its history is running on; see <see cref="RunScreen.ShowHistory"/>.</summary>
+    public void ShowHistory(int began)
+    {
+        _mode = Mode.Done;
+        _run.ShowHistory(began);
+        ShowView(_run);
+        UpdateChrome();
+    }
+
+    /// <summary>
+    /// The world is being written again as the history left it: the page cannot be left until it
+    /// is, the way it cannot during the first run.
+    /// </summary>
+    public void SetWriting(bool writing)
+    {
+        _mode = writing ? Mode.Running : Mode.Done;
         UpdateChrome();
     }
 
@@ -276,6 +302,10 @@ internal sealed class QuickPage : Panel
         _run.OpenFolderRequested += () => OpenFolderRequested?.Invoke();
         _run.CustomizeRequested += () => CustomizeRequested?.Invoke();
         _run.RetryRequested += () => Go(ReviewStep);
+        _run.PlayPauseRequested += () => PlayPauseRequested?.Invoke();
+        _run.PaceRequested += () => PaceRequested?.Invoke();
+        _run.AcceptRequested += () => AcceptRequested?.Invoke();
+        _run.ContinueHistoryRequested += () => ContinueHistoryRequested?.Invoke();
         _run.AnotherRequested += () =>
         {
             _choices.Seed = Random.Shared.Next(1, 1_000_000);
@@ -467,21 +497,23 @@ internal sealed class QuickPage : Panel
             subtitle.Location = new Point(x, y);
             y += subtitle.PreferredHeight + S(16);
 
-            int n = Math.Max(1, _tiles.Count);
-            int gap = S(10);
-            int tileW = (w - gap * (n - 1)) / n;
+            // The tiles span the column; a tile's picture is as tall as half its width, so past a
+            // point they stop growing and spread apart instead, and the preview keeps its height.
+            var (tileW, gap) = StepPanel.Spread(w, _tiles.Count, S(10), S(210));
             int tileH = (tileW - S(12)) / 2 + S(12) + S(28);
             for (int i = 0; i < _tiles.Count; i++)
                 _tiles[i].Tile.Bounds = new Rectangle(x + i * (tileW + gap), y, tileW, tileH);
             y += tileH + S(18);
 
-            int side = S(200);
-            int previewW = w - side - S(24);
-            int previewH = Math.Min(previewW / 2, panel.ClientSize.Height - y - S(12));
-            previewW = previewH * 2;
-            _preview.Bounds = new Rectangle(x, y, previewW, previewH);
-
-            int sx = x + previewW + S(24), sw = x + w - sx;
+            // The seed and relief controls keep to the right edge at a readable width; the preview
+            // takes the rest, as large as the height allows, centred in it.
+            int sw = Math.Clamp(w / 4, S(200), S(280));
+            int sx = x + w - sw;
+            int area = sx - S(24) - x;
+            var map = StepPanel.Map(x, y, area, panel.ClientSize.Height - y - S(12));
+            map.X = x + (area - map.Width) / 2;
+            _preview.Bounds = map;
+            int previewH = map.Height;
             int sy = y;
             _typeName.Location = new Point(sx - S(1), sy);
             sy += _typeName.PreferredHeight + S(4);

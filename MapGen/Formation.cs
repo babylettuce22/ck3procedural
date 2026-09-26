@@ -341,6 +341,21 @@ public static class Formation
         public Func<Polity, Polity, Title, bool>? Wage { get; set; }
 
         /// <summary>
+        /// Counties a realm holds apart from the rest of it at the start date, and the realm: the
+        /// written world's own exclaves. Titling folds a vassal with no tier left into his lord's
+        /// realm, and a vassal can border his liege's realm without touching his lord, so a few
+        /// start-date realms are in pieces — as they are in the game. Left alone while the realm
+        /// that started with them holds them; <see cref="ShedIslands"/> would otherwise split them
+        /// off on the first tick, and the map would change the moment history began. Only the
+        /// History workspace sets it; generation never does.
+        /// </summary>
+        public Dictionary<Title, Polity>? Exclaves { get; set; }
+
+        /// <summary>Whether a county is one of <paramref name="p"/>'s start-date exclaves, still held by it.</summary>
+        public bool IsExclave(Title county, Polity p)
+            => Exclaves is not null && Exclaves.TryGetValue(county, out var holder) && holder == p;
+
+        /// <summary>
         /// Asked, once homage's own dice have come up, whether the would-be vassal (first) will
         /// swear to the would-be suzerain (second); false turns the homage into the attack a failed
         /// roll falls through to. Only the History workspace sets it (see
@@ -959,9 +974,11 @@ public static class Formation
 
         while (stranded.Count > 0)
         {
-            // One new realm per connected island, not one per county.
+            // One new realm per connected island, not one per county. An island holding one of the
+            // realm's start-date exclaves is that exclave, grown or not, and stays: see Sim.Exclaves.
             var island = Reachable(sim, stranded[0], within: p.Counties, except: mainland);
-            Secede(sim, p, [.. island.OrderBy(c => c.Index)], FormationKind.Fragmented, 1);
+            if (!island.Any(c => sim.IsExclave(c, p)))
+                Secede(sim, p, [.. island.OrderBy(c => c.Index)], FormationKind.Fragmented, 1);
             stranded.RemoveAll(island.Contains);
         }
     }

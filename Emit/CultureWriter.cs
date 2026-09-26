@@ -224,7 +224,7 @@ public static class CultureWriter
                 for (int i = 0; i < names.Count; i += 8)
                 {
                     // Clean the keys and prefix with "cul_" to prevent Murmur3A hash collisions
-                    var cleanNames = names.Skip(i).Take(8).Select(n => $"cul_{CleanKey(n)}");
+                    var cleanNames = names.Skip(i).Take(8).Select(GivenNameKey);
                     b.Token(string.Join(' ', cleanNames));
                 }
 
@@ -284,6 +284,14 @@ public static class CultureWriter
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_name_lists.txt"), b.ToString());
     }
     private static string CleanKey(string input) => Core.Ascii.Fold(input, keepSeparators: true);
+
+    /// <summary>
+    /// The loc key a given name from a generated name list is written under — `cul_` plus the
+    /// ASCII-folded name (vanilla's name keys are all ASCII; `Ælfgifu` sits under a plain key too).
+    /// Character history names a character by this key as well: a history `name` is looked up as a
+    /// loc key, and the raw name logged "Missing loc for name" once per character.
+    /// </summary>
+    internal static string GivenNameKey(string name) => $"cul_{CleanKey(name)}";
 
     /// <summary>
     /// What each culture has already worked out by the start date.
@@ -711,8 +719,8 @@ public static class CultureWriter
             entries[$"dynnpat_suf_{culture.Key}_female"] = culture.PatronymSuffixFemale + pad;
 
             // Apply the "cul_" prefix to character names in the localization file
-            foreach (string name in culture.MaleNames) entries[$"cul_{CleanKey(name)}"] = name;
-            foreach (string name in culture.FemaleNames) entries[$"cul_{CleanKey(name)}"] = name;
+            foreach (string name in culture.MaleNames) entries[GivenNameKey(name)] = name;
+            foreach (string name in culture.FemaleNames) entries[GivenNameKey(name)] = name;
             foreach (string name in culture.DynastyNames) entries[$"dynn_{CleanKey(name)}"] = name;
         }
 

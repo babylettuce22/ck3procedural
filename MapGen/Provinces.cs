@@ -20,7 +20,9 @@ public sealed class ProvinceSeed
     /// <see cref="MapConfig.ImpassableHeightFraction"/>'s line, or above the mountain line when
     /// <see cref="MapConfig.ImpassableMountainPlateaus"/> is on, though its score did not rank it in;
     /// <c>Mask</c> means the user painted it in
-    /// <see cref="MapConfig.ImpassableMaskPath"/>; <c>Trapped</c> means the connectivity pass
+    /// <see cref="MapConfig.ImpassableMaskPath"/>; <c>Cut</c> means the partition was cut to the
+    /// mountains by <see cref="MapConfig.ImpassableAutoCut"/> and it grew inside the cut;
+    /// <c>Trapped</c> means the connectivity pass
     /// filled it because it was landlocked behind other impassables; <c>None</c> for every
     /// passable province.
     /// </summary>
@@ -50,7 +52,7 @@ public sealed class ProvinceSeed
     public int Domain;
 }
 
-public enum ImpassableCause : byte { None, Score, Trapped, Mask, Height }
+public enum ImpassableCause : byte { None, Score, Trapped, Mask, Height, Cut }
 
 /// <summary>
 /// What the impassable pass measured on this map, kept so the preview can show the same lines
@@ -92,6 +94,10 @@ public sealed class ProvinceMap
     /// relief scoring, so the preview can say "not painted" rather than "no pass ran".
     /// </summary>
     public bool ImpassableMaskUsed;
+
+    /// <summary>Set when <see cref="MapConfig.ImpassableAutoCut"/> cut the partition to the
+    /// mountains, in which case <see cref="Impassability"/> is null: no province was scored.</summary>
+    public AutoCutDiagnostics? AutoCut;
 
     public int Count => Seeds.Count;
 
@@ -173,10 +179,22 @@ public static class Provinces
         var painted = ImpassableMask.Load(cfg, width, height);
         bool snap = painted is not null && cfg.ImpassableMaskMode == ImpassableMaskMode.Snap;
 
+        // Without a painted mask, the terrain draws one, and the partition is cut along it the same
+        // way. A painted mask always wins: it is the user saying where the walls go.
+        AutoCutDiagnostics? autoCut = null;
+        if (painted is null && cfg.ImpassableAutoCut
+            && Core.Stage.Detail("  · impassable auto-cut",
+                () => ImpassableAutoCut.Build(mask, elevation, width, height, cfg)) is { } cut)
+        {
+            (painted, autoCut) = cut;
+            snap = true;
+        }
+
         // The region each pixel grows inside. Without an import this is the land mask by another
         // name; with one it is the export's provinces, and the partition below cannot cross them.
         var domain = Core.Stage.Detail("  · domain field",
-            () => ProvinceDomain.Build(mask, azgaar, width, height, cfg, snap ? painted : null));
+            () => ProvinceDomain.Build(mask, azgaar, width, height, cfg, snap ? painted : null,
+                autoCut is not null ? "mountain auto-cut" : null));
 
         foreach (var seed in seeds) seed.Domain = domain[seed.Y * width + seed.X];
 
@@ -206,7 +224,8 @@ public static class Provinces
         {
             // A painted mask replaces the relief scoring outright; the pocket fill and the range
             // fusing run either way, since a drawn wall can enclose land just as a ridge can.
-            if (snap) MarkSnappedImpassable(map);
+            if (autoCut is not null) MarkCutImpassable(map, autoCut);
+            else if (snap) MarkSnappedImpassable(map);
             else if (painted is not null) MarkPaintedImpassable(map, painted, cfg);
             else MarkImpassable(map, elevation, mask, cfg);
             MarkTrappedProvincesImpassable(map);
@@ -926,7 +945,7 @@ public static class Provinces
     ///
     /// A floor belongs on the answer, not on the population. Apply it to the returned line.
     /// </summary>
-    private static float LandLine(float[] field, byte[] mask, double fraction)
+    internal static float LandLine(float[] field, byte[] mask, double fraction)
     {
         var land = new List<float>();
         for (int i = 0; i < field.Length; i += 7)
@@ -939,8 +958,36 @@ public static class Provinces
         if (land.Count < (mask.Length / 7) * 0.01)
             return float.MaxValue;
 
-        land.Sort();
-        return land[(int)Math.Clamp(land.Count * fraction, 0, land.Count - 1)];
+        return Select(land.ToArray(), (int)Math.Clamp(land.Count * fraction, 0, land.Count - 1));
+    }
+
+    /// <summary>
+    /// The value a full sort would put at index <paramref name="k"/>, found without sorting:
+    /// quickselect, reordering <paramref name="values"/> in place. Linear on average, which
+    /// matters on the millions of values an 8192 map's land holds.
+    /// </summary>
+    internal static float Select(float[] values, int k)
+    {
+        int lo = 0, hi = values.Length - 1;
+        while (lo < hi)
+        {
+            float a = values[lo], b = values[(lo + hi) >>> 1], c = values[hi];
+            float pivot = Math.Max(Math.Min(a, b), Math.Min(Math.Max(a, b), c));   // median of three
+            int i = lo, j = hi;
+            while (i <= j)
+            {
+                while (values[i] < pivot) i++;
+                while (values[j] > pivot) j--;
+                if (i > j) break;
+                (values[i], values[j]) = (values[j], values[i]);
+                i++;
+                j--;
+            }
+            if (k <= j) hi = j;
+            else if (k >= i) lo = i;
+            else return values[k];
+        }
+        return values[k];
     }
 
     /// <summary>
@@ -952,12 +999,29 @@ public static class Provinces
     private static void MarkSnappedImpassable(ProvinceMap map)
     {
         map.ImpassableMaskUsed = true;
+        int marked = MarkInsideCut(map, ImpassableCause.Mask, out int land, out long pixels);
+        Console.WriteLine($"  impassable: {marked} of {land} land provinces cut to the mask ({pixels} px)");
+    }
 
+    /// <summary>
+    /// <see cref="ImpassableAutoCut"/>'s marking, which is Snap mode's with a different cause: the
+    /// mask came from the terrain rather than the user, and the preview says so.
+    /// </summary>
+    private static void MarkCutImpassable(ProvinceMap map, AutoCutDiagnostics cut)
+    {
+        map.AutoCut = cut;
+        int marked = MarkInsideCut(map, ImpassableCause.Cut, out int land, out long pixels);
+        Console.WriteLine($"  impassable: {marked} of {land} land provinces cut to the mountains ({pixels} px)");
+    }
+
+    private static int MarkInsideCut(ProvinceMap map, ImpassableCause cause, out int land, out long pixels)
+    {
         var area = new int[map.Count];
         foreach (int label in map.Label) area[label]++;
 
-        int land = 0, marked = 0;
-        long pixels = 0;
+        int marked = 0;
+        land = 0;
+        pixels = 0;
         for (int i = 0; i < map.Count; i++)
         {
             var seed = map.Seeds[i];
@@ -965,12 +1029,11 @@ public static class Provinces
             land++;
             if (!ProvinceDomain.IsPainted(seed.Domain)) continue;
             seed.IsImpassable = true;
-            seed.ImpassableCause = ImpassableCause.Mask;
+            seed.ImpassableCause = cause;
             marked++;
             pixels += area[i];
         }
-
-        Console.WriteLine($"  impassable: {marked} of {land} land provinces cut to the mask ({pixels} px)");
+        return marked;
     }
 
     /// <summary>
@@ -1028,15 +1091,7 @@ public static class Provinces
         if (mountainLine == float.MaxValue) return;
 
         var slope = Slopes(elevation, map.Width, map.Height);
-
-        // Guard the setting, then convert it to this map's scale — not the other way round, or the
-        // 0.01 degenerate-guard would become the binding floor on a small map. A gradient authored
-        // against vanilla-scale terrain has to travel with the relief; see MapConfig.ReliefScale.
-        float minSlope = (float)(Math.Max(0.01, cfg.MinPhysicalSlope) * cfg.ReliefScale);
-
-        // Floor on the line, never a filter on the population — see LandLine.
-        float steepLine = MathF.Max(minSlope,
-            LandLine(slope, mask, 1.0 - Math.Clamp(cfg.SteepLineShare, 0, 1)));
+        float steepLine = SteepLine(slope, mask, cfg);
 
         float heightLine = HeightLine(elevation, mask, cfg);
         float gateLine = GateLine(mountainLine, cfg);
@@ -1177,10 +1232,25 @@ public static class Provinces
     /// 313; capped, it released 42 with a median of 112, the same kind of ground it releases on
     /// Lowlands.
     /// </summary>
-    private static float GateLine(float mountainLine, MapConfig cfg)
+    internal static float GateLine(float mountainLine, MapConfig cfg)
     {
         double cap = CappedGateHeight(cfg);
         return cap > 0 ? MathF.Min(mountainLine, (float)cap) : mountainLine;
+    }
+
+    /// <summary>
+    /// The gradient at or above which a pixel counts as steep: <see cref="MapConfig.SteepLineShare"/>
+    /// of this map's land, floored at <see cref="MapConfig.MinPhysicalSlope"/>.
+    /// </summary>
+    internal static float SteepLine(float[] slope, byte[] mask, MapConfig cfg)
+    {
+        // Guard the setting, then convert it to this map's scale — not the other way round, or the
+        // 0.01 degenerate-guard would become the binding floor on a small map. A gradient authored
+        // against vanilla-scale terrain has to travel with the relief; see MapConfig.ReliefScale.
+        float minSlope = (float)(Math.Max(0.01, cfg.MinPhysicalSlope) * cfg.ReliefScale);
+
+        // Floor on the line, never a filter on the population — see LandLine.
+        return MathF.Max(minSlope, LandLine(slope, mask, 1.0 - Math.Clamp(cfg.SteepLineShare, 0, 1)));
     }
 
     /// <summary>

@@ -175,6 +175,7 @@ public sealed partial class HistorySim
             _sim.Log(FormationKind.Colonised, county, colonist, null, 0,
                 ruin ? $"The realm of {colonist.Capital.Name} resettled the ruins of {county.Name}"
                      : $"The realm of {colonist.Capital.Name} settled {county.Name}");
+            Remember(ruin ? "resettled" : "settled", county, colonist);
         }
     }
 
@@ -212,6 +213,7 @@ public sealed partial class HistorySim
 
             _sim.Log(FormationKind.Ruined, county, realm, null, 0,
                 $"{county.Name} was abandoned by the realm of {realm.Capital.Name} and fell to ruin");
+            Remember("ruined", county.Parent ?? county, realm, counties: [county]);
         }
     }
 
@@ -219,19 +221,7 @@ public sealed partial class HistorySim
         => _wilds!.Adjacency.TryGetValue(county, out var near) ? near : [];
 
     /// <summary>Whether a realm stays in one piece without <paramref name="lost"/>.</summary>
-    private bool StaysWhole(Polity realm, Title lost)
-    {
-        var seen = new HashSet<Title> { realm.Capital };
-        var queue = new Queue<Title>();
-        queue.Enqueue(realm.Capital);
-        while (queue.Count > 0)
-        {
-            if (!_sim.Adjacent.TryGetValue(queue.Dequeue(), out var near)) continue;
-            foreach (var n in near)
-                if (n != lost && realm.Counties.Contains(n) && seen.Add(n)) queue.Enqueue(n);
-        }
-        return seen.Count == realm.Counties.Count - 1;
-    }
+    private bool StaysWhole(Polity realm, Title lost) => Whole(realm, new HashSet<Title> { lost });
 
     private void CheckWilds(List<string> problems)
     {

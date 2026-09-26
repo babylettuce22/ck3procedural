@@ -1049,12 +1049,14 @@ public sealed class MapConfig : CustomTypeDescriptor
 
     /// <summary>
     /// Share of desert provinces that become <c>oasis</c>. Vanilla spends 0.02% of its painted
-    /// weight on the oasis material — the rarest thing it paints — so this gate is tighter still
-    /// than the farmland one.
+    /// weight on the oasis material, the rarest thing it paints, but it spends it on about forty
+    /// small sites and not a few large ones. The scarcity is now kept by the pocket size in
+    /// <see cref="MapGen.Cultivation"/>, which paints green only around the spring. This share
+    /// sets how many sites there are, and 6% gives a desert of 160 provinces about ten.
     /// </summary>
     [Category("03 Provinces")]
-    [Description("Share of desert provinces that become oases. Only provinces holding a drainage sink — a depression water actually collects in — are eligible, and the wettest of those win. Oasis is vanilla's least-painted material; keep this small.")]
-    public double OasisShare { get; set; } = 0.005;
+    [Description("Share of desert provinces that become oases. Only provinces holding a drainage sink — a depression water actually collects in — are eligible, and the wettest of those win. Each oasis paints only a small pocket of green around its spring, so this sets how many oases there are, not how much green.")]
+    public double OasisShare { get; set; } = 0.06;
 
     /// <summary>
     /// How far, in vanilla province pixels, one biome's materials bleed across its boundary into
@@ -1212,6 +1214,52 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Category("03 Provinces")]
     [Description("Share of a province's ground that must be above the mountain line (capped at ImpassableGateHeight) before it may be impassable. Stops the steep sides of low hills being walled on flat maps. 0 turns it off.")]
     public double ImpassableMinMountainGround { get; set; } = 0.1;
+
+    /// <summary>
+    /// Draws the impassable walls from the terrain before the provinces are partitioned, and cuts
+    /// the partition along them, instead of scoring provinces afterwards. See
+    /// <see cref="MapGen.ImpassableAutoCut"/>.
+    ///
+    /// Scoring can only take a province or leave it, and a province grown without regard to the
+    /// mountains straddles the foot of the range, so the walls come out as coarse as the provinces:
+    /// foothills walled, and summits or plateaus left passable inside rings of flank walls. The cut
+    /// puts each wall's edge on the foot of the range, or on a contour where the quota stops partway
+    /// up it. Measured on three pangaea worlds (small Lowlands, Lowlands and Highlands), ground that
+    /// is not mountain fell from 14.3%, 8.3% and 4.1% of the walls to 0.3%, 2.2% and 0%, and no
+    /// summit was left passable beside a wall. It costs about a second on an 8192 map.
+    ///
+    /// Still read with it on: <see cref="ImpassableShareOfLand"/> (now a share of land area, with
+    /// plateaus outside it), <see cref="ImpassableMinMountainGround"/>,
+    /// <see cref="ImpassableGateHeight"/>, <see cref="ImpassableMountainPlateaus"/>, the mountain
+    /// and steep lines, and the slope weight and score floors, which cap the share where the map's
+    /// mountains run out before it does, as they stop the scored pass. A painted
+    /// <see cref="ImpassableMaskPath"/> always takes precedence. Moves every province near a
+    /// mountain, so a seed made with it off comes out differently with it on.
+    /// Recommended: on.
+    /// </summary>
+    [Category("03 Provinces")]
+    [Description("Cut the provinces to the mountains before partitioning, so walls end at the foot of each range instead of wherever a province border fell. Off scores whole provinces after partitioning instead.")]
+    public bool ImpassableAutoCut { get; set; } = true;
+
+    /// <summary>
+    /// How far down its own slopes an auto-cut wall runs: to where the ground stands this share of
+    /// the way from its local floor to its local peak, both measured three baronies around. Only
+    /// read with <see cref="ImpassableAutoCut"/> on.
+    ///
+    /// The walls' cores are chosen by height, which is what keeps a summit or plateau from being
+    /// left passable inside its own walls, but a height cut on its own ends every wall at the same
+    /// elevation, whatever the range. On a continents map, 80% of wall edges fell between 257 and
+    /// 294. With the foot at 0.45 they spanned 198 to 325, winding into valleys and ending where
+    /// each range's slopes give out, with the same share of land walled and none of it below 119.
+    /// Lower reaches further down the flanks and opens valleys between ranges (0.3 spanned 174 to
+    /// 388, and left passable basins inside the largest massifs); 0 turns it off and ends walls on
+    /// the height cut alone.
+    /// Recommended: 0.45.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("03 Provinces")]
+    [Description("How far down its own slopes an auto-cut wall runs, as a share of the local relief from valley floor to peak. Lower walls more of the flanks; 0 ends every wall on one height line.")]
+    public double ImpassableFootRelief { get; set; } = 0.45;
 
     /// <summary>
     /// The highest the gate line for <see cref="ImpassableMinMountainGround"/> may sit, in the

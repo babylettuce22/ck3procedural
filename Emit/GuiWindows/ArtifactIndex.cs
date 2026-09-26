@@ -154,9 +154,10 @@ public static class ArtifactIndex
             // tooltip, all from the datacontext already in scope.
             .Gap().Add(GuiBuilder.Of("icon_artifact").Size(64, 64))
 
+            // No `align` on the boxes: hbox/vbox do not take it (the engine logs "Property 'align'
+            // not handled" per box); the text widgets inside carry the alignment.
             .Gap().Add(GuiBuilder.VBox()
                 .ExpandingH()
-                .Align("left")
                 .Add(GuiBuilder.TextSingle()
                         .ExpandingH()
                         .Align("left")
@@ -169,7 +170,6 @@ public static class ArtifactIndex
                         .Text(GuiExpr.Raw("Artifact.GetRarityAndSlotType"))))
 
             .Gap().Add(GuiBuilder.VBox()
-                .Align("right")
                 .Add(GuiBuilder.TextSingle()
                         .Align("right")
                         .Text(GuiExpr.Raw("Artifact.GetOwner.GetNameNoTooltip")),
