@@ -357,6 +357,9 @@ public static class HistoryWriter
                 b.Field("culture", past.House.CultureKey);
                 if (cultures.Cultures.FirstOrDefault(c => c.Key == past.House.CultureKey) is { } pastCulture)
                     b.Field("trait", GetPhenotypeTrait(pastCulture, ethnicities, cfg));
+                // The dynasty tree: the past ruler this one was the child of, written earlier in
+                // this block list whenever the history wrote both. Field skips a null.
+                b.Field(past.ParentIsMother ? "mother" : "father", past.ParentId);
                 b.Inline(past.BirthDate, "birth = yes");
                 b.Inline(past.DeathDate, "death = yes");
             }
@@ -973,6 +976,13 @@ public static class HistoryWriter
             wilderness, wild, prehistory);
     }
 
+    /// <summary>A CK3 date string as a sortable (year, month, day).</summary>
+    private static (int, int, int) ReignOrder(string date)
+    {
+        var parts = date.Split('.');
+        return (int.Parse(parts[0]), int.Parse(parts[1]), int.Parse(parts[2]));
+    }
+
     private static void WriteTitleHistory(string modDir, MapConfig cfg, List<Title> empires,
         Dictionary<Title, int> development, RealmMap realms, GovernmentMap governments,
         FaithMap faiths, WildernessMap wilderness, List<Title> wild,
@@ -1007,8 +1017,9 @@ public static class HistoryWriter
         // the grant, oldest first. Only a holder line — the liege and government lines stay on the
         // grant, so the file-order rule above is untouched. Empty for a generated world.
         var pastByTitle = (prehistory?.PastRulers ?? [])
-            .GroupBy(p => p.TitleKey)
-            .ToDictionary(g => g.Key, g => g.ToList());
+            .Where(p => p.TitleKey is not null)
+            .GroupBy(p => p.TitleKey!)
+            .ToDictionary(g => g.Key, g => g.OrderBy(p => ReignOrder(p.ReignDate!)).ToList());
 
         if (eras is not null)
             WriteEraTitleHistory(b, cfg, all, development, realms, governments, wilderness, eras, titleGrantDate);

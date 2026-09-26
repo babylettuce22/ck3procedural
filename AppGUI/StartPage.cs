@@ -29,6 +29,9 @@ internal sealed class StartPage : Panel
     public event Action? GuidePicked;
     public event Action? GameFolderPicked;
 
+    /// <summary>The "Remember my choice" switch was flipped by the user.</summary>
+    public event Action<bool>? RememberChanged;
+
     private static readonly Font TitleFont = new("Segoe UI Semibold", 20f);
     private static readonly Font SubtitleFont = new("Segoe UI", 10.5f);
     private static readonly Font FooterFont = new("Segoe UI", 9f);
@@ -44,6 +47,8 @@ internal sealed class StartPage : Panel
     private readonly StatusGlyph _gameGlyph = new();
     private readonly FooterText _gameText = new();
     private readonly LinkButton _gameChange;
+    private readonly RememberSwitch _remember = new() { Name = "startRemember" };
+    private readonly ToolTip _tips = new() { InitialDelay = 400 };
 
     public StartPage()
     {
@@ -104,8 +109,18 @@ internal sealed class StartPage : Panel
         _openWorld.Click += (_, _) => OpenWorldPicked?.Invoke();
         _guide.Click += (_, _) => GuidePicked?.Invoke();
         _gameChange.Click += (_, _) => GameFolderPicked?.Invoke();
+        _remember.Click += (_, _) =>
+        {
+            _remember.On = !_remember.On;
+            if (!_remember.On) _remember.Remembered = null;
+            RememberChanged?.Invoke(_remember.On);
+            PerformLayout();
+        };
+        _tips.SetToolTip(_remember,
+            "Open straight into whichever you pick next — Quick or Complex — from now on.\n"
+            + "The Start link on the Quick page, or File ▸ Start page, brings this page back.");
 
-        Controls.AddRange([_banner, _title, _subtitle, _quick, _complex, _openWorld, _guide,
+        Controls.AddRange([_banner, _title, _subtitle, _quick, _complex, _openWorld, _guide, _remember,
                            _rule, _gameGlyph, _gameText, _gameChange]);
     }
 
@@ -116,6 +131,14 @@ internal sealed class StartPage : Panel
     {
         SetGameFolder(gameFound, gameDir, modRoot);
         _banner.Draw();
+    }
+
+    /// <summary>What the "Remember my choice" switch shows: whether it is on, and what it remembers.</summary>
+    public void SetRemember(bool on, string? remembered)
+    {
+        _remember.On = on;
+        _remember.Remembered = on ? remembered : null;
+        PerformLayout();
     }
 
     /// <summary>
@@ -212,6 +235,8 @@ internal sealed class StartPage : Panel
 
         _openWorld.Location = new Point(x, y + (linkH - _openWorld.Height) / 2);
         _guide.Location = new Point(_openWorld.Right + S(24), _openWorld.Top);
+        _remember.FitWidth();
+        _remember.Location = new Point(x + width - _remember.Width, y + (linkH - _remember.Height) / 2);
         y += linkH + S(18);
 
         _rule.Bounds = new Rectangle(x, y, width, S(1));
@@ -642,6 +667,84 @@ internal sealed class StartPage : Panel
             => TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle, ForeColor,
                 TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis
                 | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+    }
+
+    /// <summary>
+    /// "Remember my choice": a small switch and its label, deliberately quieter than the links
+    /// beside it — it is a preference, not a destination. When on and a choice has been made, the
+    /// label says which ("Opens in Quick") so the page explains its own absence next time.
+    /// </summary>
+    private sealed class RememberSwitch : Button
+    {
+        private static readonly Font LabelFont = new("Segoe UI", 9f);
+        private bool _on;
+        private string? _remembered;
+        private bool _hover;
+
+        public RememberSwitch()
+        {
+            Cursor = Cursors.Hand;
+            FlatStyle = FlatStyle.Flat;
+            UseVisualStyleBackColor = false;
+            UseMnemonic = false;
+            BackColor = Theme.Background;
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint, true);
+            Text = "Remember my choice";
+        }
+
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public bool On
+        {
+            get => _on;
+            set { _on = value; AccessibleDescription = value ? "On" : "Off"; Text = Label; FitWidth(); Refresh(); }
+        }
+
+        /// <summary>"Quick" or "Complex" once a choice is remembered; shown in the label.</summary>
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public string? Remembered
+        {
+            get => _remembered;
+            // The label is the button's text too, so a screen reader hears what the page shows.
+            set { _remembered = value; Text = Label; FitWidth(); Invalidate(); }
+        }
+
+        private string Label => _on && _remembered is not null ? $"Remember my choice · opens in {_remembered}" : "Remember my choice";
+
+        private int S(int logical) => logical * DeviceDpi / 96;
+
+        public void FitWidth()
+        {
+            int text = TextRenderer.MeasureText(Label, LabelFont, Size.Empty, TextFormatFlags.NoPadding).Width;
+            Size = new Size(S(30) + S(8) + text + S(4), S(26));
+        }
+
+        protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); FitWidth(); }
+        protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _hover = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.Clear(Parent?.BackColor ?? Theme.Background);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+
+            var track = new RectangleF(0.5f, (Height - S(16)) / 2f, S(30), S(16));
+            var off = _hover ? Color.FromArgb(170, 177, 188) : Color.FromArgb(196, 202, 212);
+            using (var path = Rounded(track, track.Height / 2))
+            using (var fill = new SolidBrush(_on ? Theme.Accent : off))
+                g.FillPath(fill, path);
+            float knob = track.Height - S(4);
+            float kx = _on ? track.Right - S(2) - knob : track.X + S(2);
+            using (var white = new SolidBrush(Color.White)) g.FillEllipse(white, kx, track.Y + S(2), knob, knob);
+
+            var textRect = new Rectangle((int)track.Right + S(8), 0, Width - (int)track.Right - S(8), Height);
+            TextRenderer.DrawText(g, Label, LabelFont, textRect, _on || _hover ? Theme.Text : Theme.TextDim,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
+
+            if (Focused && ShowFocusCues) ControlPaint.DrawFocusRectangle(g, new Rectangle(0, 0, Width, Height));
+        }
     }
 
     /// <summary>A tick in a green disc, or a warning in a red one.</summary>

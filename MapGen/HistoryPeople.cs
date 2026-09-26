@@ -38,6 +38,19 @@ public sealed class SimRuler
     /// <summary>The year the reign ended without a death — the realm itself was swallowed.</summary>
     public int? Deposed { get; set; }
 
+    /// <summary>
+    /// The ruler this one is the child of — the one who died and left the throne to them, or who
+    /// divided the realm between them and their siblings. Null for a founder: a usurper, a
+    /// breakaway's first ruler, or a ruler of the start date whose parents the history never saw.
+    /// </summary>
+    public SimRuler? Parent { get; init; }
+
+    /// <summary>
+    /// The character id an applied history already wrote this ruler under, for one carried in from
+    /// an earlier history — so the next one links to the same person. Null for anyone this history made.
+    /// </summary>
+    public string? Key { get; init; }
+
     public override string ToString() => $"{Name} of {House.Name}";
 }
 
@@ -108,6 +121,7 @@ public sealed partial class HistorySim
                 {
                     Id = _nextRuler++, Name = ruler.Name, Female = ruler.Female, Born = ruler.BirthYear,
                     House = house, Crowned = StartYear,
+                    Parent = ruler.ParentId is { } parentId ? Carried(parentId, prehistory, house) : null,
                 });
             }
             else
@@ -118,6 +132,40 @@ public sealed partial class HistorySim
             }
         }
     }
+
+    /// <summary>
+    /// An ancestor an earlier applied history wrote, brought back as a dead ruler with its line
+    /// above it, so a history run on from an applied one extends the same dynasty trees rather
+    /// than starting them again. Null for a parent the prehistory invented — the written world's
+    /// generated ancestors are not the history's, and are drawn afresh on every write.
+    /// </summary>
+    private SimRuler? Carried(string id, PrehistoryMap prehistory, SimHouse heirs)
+    {
+        if (_carried.TryGetValue(id, out var known)) return known;
+        _pastById ??= prehistory.PastRulers.GroupBy(p => p.Id).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        if (!_pastById.TryGetValue(id, out var past)) return null;
+
+        // The house it wrote: the heir's own when the dynasty is the same, else one of its own that
+        // carries the written keys. Its culture only names children, and the dead have none to name.
+        var house = heirs.Carried?.DynastyId == past.House.DynastyId
+            ? heirs
+            : new SimHouse { Id = _nextHouse++, Name = past.House.DynastyName, Culture = heirs.Culture, Founded = StartYear, Carried = past.House };
+
+        static int Year(string date) => int.Parse(date.Split('.')[0]);
+        var ruler = new SimRuler
+        {
+            Id = _nextRuler++, Name = past.Name, Female = past.Female, Born = Year(past.BirthDate),
+            Died = Year(past.DeathDate), House = house,
+            Crowned = past.ReignDate is { } reign ? Year(reign) : Year(past.BirthDate),
+            Parent = past.ParentId is { } parentId ? Carried(parentId, prehistory, house) : null,
+            Key = past.Id,
+        };
+        _carried[id] = ruler;
+        return ruler;
+    }
+
+    private readonly Dictionary<string, SimRuler> _carried = new(StringComparer.Ordinal);
+    private Dictionary<string, PastRuler>? _pastById;
 
     /// <summary>The rulers' year: seats for realms born in it, then deaths and what follows them.</summary>
     private void RulersYear()
@@ -246,9 +294,30 @@ public sealed partial class HistorySim
         return new SimRuler
         {
             Id = _nextRuler++, Name = GivenName(parent.House.Culture, female, rng), Female = female,
-            Born = born, House = parent.House, Crowned = year,
+            Born = born, House = parent.House, Crowned = year, Parent = ParentFor(parent, born),
         };
     }
+
+    /// <summary>
+    /// Whose child an heir born in <paramref name="born"/> is: the ruler who died, as a rule. One who
+    /// died before he could have fathered him — a boy king dead at fifteen — was succeeded by a
+    /// sibling rather than a son, so the heir is his parent's child instead; and failing that, of
+    /// the house but of no line the history knows. Draws nothing: the dice are the heir's own.
+    /// </summary>
+    private static SimRuler? ParentFor(SimRuler dead, int born)
+    {
+        if (CouldBeParent(dead, born)) return dead;
+        return dead.Parent is { } elder && CouldBeParent(elder, born) ? elder : null;
+    }
+
+    /// <summary>
+    /// Whether a ruler could be the parent of a child born in <paramref name="born"/>: at least
+    /// sixteen at the birth, a mother no older than forty-five, and alive in the year before it.
+    /// </summary>
+    internal static bool CouldBeParent(SimRuler parent, int born)
+        => born - parent.Born >= 16
+           && (!parent.Female || born - parent.Born <= 45)
+           && (parent.Died is not { } died || died > born);
 
     private SimRuler NewRuler(Polity p, SimHouse house, Rng rng, int age)
     {
@@ -361,5 +430,10 @@ public sealed partial class HistorySim
             int age = _sim.Year - ruler.Born;
             if (age < 0 || age > 110) problems.Add($"{p}: ruler {ruler} is {age}");
         }
+
+        // Every line the dynasty trees will be drawn from is one CK3 would accept.
+        foreach (var (_, ruler) in _reigns)
+            if (ruler.Parent is { } parent && !CouldBeParent(parent, ruler.Born))
+                problems.Add($"{ruler}, born {ruler.Born}, cannot be the child of {parent}, born {parent.Born}, died {parent.Died}");
     }
 }

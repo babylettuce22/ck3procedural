@@ -385,7 +385,7 @@ public static partial class ContentWriter
                 var layer = WriteHistoryLayer(modDir, gameDir, cfg, provinces, order, landCount, empires,
                     counties, realms, cultures, ethnicities, faiths, governments, worldCenters, wilderness,
                     development, titlePlan, eraGovernments, retinues, azgaar, calendar, flatmap, frontier,
-                    lineage: world.Lineage, pastRulers: world.PastRulers, diplomacy: world.AppliedDiplomacy);
+                    lineage: world.Lineage, pastRulers: world.PastRulers, diplomacy: world.AppliedDiplomacy, seatParents: world.SeatParents);
 
                 prehistory = layer.Prehistory;
                 rulers = layer.Rulers;

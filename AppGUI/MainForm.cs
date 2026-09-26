@@ -1546,7 +1546,7 @@ public sealed partial class MainForm : ChromeForm
         RestoreClimatePaint();
 
         // Last, once every splitter above has been placed against a visible page.
-        if (OpensToStartPage) ShowStartPage();
+        if (OpensToStartPage) OpenOnLaunch();
     }
 
     private void ReportFolders()
@@ -2288,7 +2288,7 @@ public sealed partial class MainForm : ChromeForm
         base.OnShown(e);
 
         // On the start page the walkthrough waits for the Complex card; see EnterComplex.
-        if (_state.WelcomeShown || _onStart) return;
+        if (_state.WelcomeShown || _inLauncher) return;
         _state.WelcomeShown = true;
         ShowWelcomeGuide();
     }

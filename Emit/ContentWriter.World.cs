@@ -83,6 +83,12 @@ public sealed record WorldModel
     /// </summary>
     internal SimDiplomacy? AppliedDiplomacy { get; init; }
 
+    /// <summary>
+    /// Under an applied history, the past ruler each seat's ruler is the child of — the dynasty tree's
+    /// link to the living. Null for a generated world, whose parents the prehistory invents.
+    /// </summary>
+    internal IReadOnlyDictionary<Title, PastRuler>? SeatParents { get; init; }
+
     /// <summary>What the realm layer writes from: <see cref="AppliedWilds"/>, or the generated maps.</summary>
     internal ContentWriter.WildsLayer RealmLayer
         => AppliedWilds ?? ContentWriter.WildsLayer.Unmoved(Wilderness, Cultures, Faiths, Frontier);
@@ -478,8 +484,9 @@ public static partial class ContentWriter
         IReadOnlyDictionary<Title, (byte R, byte G, byte B)>? realmColours = null;
         WildsLayer? appliedWilds = null;
         SimDiplomacy? appliedDiplomacy = null;
+        IReadOnlyDictionary<Title, PastRuler>? seatParents = null;
         if (applied is not null)
-            (realms, governments, hegemonShare, lineage, pastRulers, realmColours, _, appliedWilds, appliedDiplomacy) = ApplyRealms(applied,
+            (realms, governments, hegemonShare, lineage, pastRulers, realmColours, _, appliedWilds, appliedDiplomacy, seatParents) = ApplyRealms(applied,
                 realms, cfg, empires, counties, provinces, order, baronyCount, provinceTerrain, development, cultures,
                 worldCenters, wilderness, azgaar, stateGovernments, faiths, landCount, frontier);
 
@@ -491,6 +498,7 @@ public static partial class ContentWriter
             RealmColours = realmColours,
             AppliedWilds = appliedWilds,
             AppliedDiplomacy = appliedDiplomacy,
+            SeatParents = seatParents,
             ProvinceTerrain = provinceTerrain,
             Vocabulary = vocabulary,
             Counties = counties,

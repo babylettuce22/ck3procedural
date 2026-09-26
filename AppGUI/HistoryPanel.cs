@@ -692,6 +692,7 @@ internal sealed class HistoryPanel : Panel
         if (owner.Root != owner && owner.Root != owner.Suzerain) text += $" under {owner.Root.Capital.Name}";
         if (_sim.RulerOf(owner) is { } ruler)
             text += $" · ruled by {ruler.Name} of {ruler.House.Name}, {_sim.Year - ruler.Born}, since {ruler.Crowned}"
+                    + (ruler.Parent is { } parent ? $", {(ruler.Female ? "daughter" : "son")} of {parent.Name}" : "")
                     + (_sim.LawOf(owner) switch
                     {
                         SuccessionLaw.Partition => " · partition",

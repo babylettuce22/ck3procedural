@@ -119,6 +119,16 @@ public sealed class GuiState
     public QuickChoices? Quick { get; set; }
 
     /// <summary>
+    /// The start page's "Remember my choice": when on, the next launch skips the start page and
+    /// opens straight into <see cref="StartWith"/>, the card picked while it was on. Turning it off
+    /// forgets the choice as well, so turning it back on never revives an old one silently.
+    /// </summary>
+    public bool RememberStartChoice { get; set; }
+
+    /// <summary>"Quick" or "Complex": where a remembered launch opens. Null until a card is picked.</summary>
+    public string? StartWith { get; set; }
+
+    /// <summary>
     /// What the last run of each kind cost, phase by phase — the whole basis of the progress
     /// estimate. Two of them because writing the mod runs a dozen phases a preview never does, so
     /// one shared profile would over-predict every preview and under-predict every write.

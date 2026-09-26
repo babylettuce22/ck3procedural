@@ -75,8 +75,10 @@ public static class BookmarkWriter
         // Map county -> DNA key (e.g. "dna_bm_char_hegemon"). The challenge character is a sixth
         // ruler, so this no longer overwrites a bookmark's entry with its own — which is what left
         // `dna_bm_char_warlord` written and pointed at nobody.
+        // First slot wins for the one case where a ruler is in two: a world of five playable seats or
+        // fewer, where the challenge is the last slot's man again. He wears the slot's face.
         var bookmarkDnaMap = new Dictionary<Title, string>();
-        foreach (var slot in cast.All) bookmarkDnaMap[slot.County] = $"dna_{slot.Key}";
+        foreach (var slot in cast.All) bookmarkDnaMap.TryAdd(slot.County, $"dna_{slot.Key}");
 
         // The portrait follows the character, not the bookmark: stamping the key on the ruler is
         // what lets the character writer emit `dna =` without being handed this map.
@@ -119,17 +121,23 @@ public static class BookmarkWriter
         // bookmark character with no record in common/bookmark_portraits — ck3-tiger grades it
         // fatal — so the nested blocks are not free to be lookups alone.
         var requests = new List<PortraitWriter.CharacterPortraitRequest>();
+        var drawn = new Dictionary<string, string>();
         foreach (var slot in cast.All)
         {
+            // The same man in a second entry borrows the face drawn for his first.
             requests.Add(new PortraitWriter.CharacterPortraitRequest(
                 slot.Key, cultures.For(slot.County), slot.Ruler.Female, Tier: slot.Ruler.Tier,
-                Traits: slot.Ruler.Profile.OtherTraits));
+                Traits: slot.Ruler.Profile.OtherTraits,
+                AliasOf: drawn.TryAdd(slot.Ruler.Id, slot.Key) ? null : drawn[slot.Ruler.Id]));
         }
 
         // Companions after all six, because a companion who is himself one of the six borrows that
         // slot's face rather than drawing a second one — a liege standing small beside his vassal
         // and large in his own slot is one man, and the alias is what keeps him looking like it.
-        var bookmarked = cast.All.ToDictionary(s => s.Ruler.Id, s => s.Key);
+        // First key wins: on a world of five playable seats or fewer, the challenge is recomposed
+        // from the last slot's ruler (see BookmarkCast.Build), so one man stands in two entries, and
+        // a companion who is him borrows the slot's face, the one drawn first.
+        var bookmarked = drawn;
         foreach (var slot in cast.All)
         {
             foreach (var mate in slot.Companions)

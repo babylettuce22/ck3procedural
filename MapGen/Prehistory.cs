@@ -142,9 +142,15 @@ public sealed class NobleFamilyDef
 /// A ruler the History workspace's simulation saw reign and die before the date a history was
 /// applied at: written as a dead character, and as a dated holder of <see cref="TitleKey"/>, so the
 /// title's history in game names who actually held it. Dates are CK3 date strings.
+///
+/// <see cref="TitleKey"/> and <see cref="ReignDate"/> are null for an ancestor kept only for the
+/// dynasty tree — one whose realm is gone. <see cref="ParentId"/> is the past ruler this one is
+/// the child of, written as its <c>mother</c> when <see cref="ParentIsMother"/>, else its
+/// <c>father</c>; null for the founder of a line, or where the dates would not let it be.
 /// </summary>
 public sealed record PastRuler(string Id, string Name, bool Female, AppliedHistory.Lineage House,
-    string FaithKey, string BirthDate, string DeathDate, string TitleKey, string ReignDate);
+    string FaithKey, string BirthDate, string DeathDate, string? TitleKey, string? ReignDate,
+    string? ParentId = null, bool ParentIsMother = false);
 
 public sealed class PrehistoryMap
 {
@@ -245,7 +251,8 @@ public sealed class PrehistoryMap
         MapConfig cfg,
         Rng rng,
         IReadOnlyDictionary<Title, AppliedHistory.Lineage>? lineage = null,
-        SimDiplomacy? diplomacy = null)
+        SimDiplomacy? diplomacy = null,
+        IReadOnlyDictionary<Title, PastRuler>? seatParents = null)
     {
         var map = new PrehistoryMap();
         if (counties.Count == 0) return map;
@@ -263,7 +270,7 @@ public sealed class PrehistoryMap
         map.RebuildNobleFamilies(realms, governments, wilderness);
 
         // 2. Build Multi-Generational Ancestry (Deceased Parents & Sibling Bonds)
-        BuildAncestryAndBrothers(map, rulerCounties, realms, cultures, faiths, cfg);
+        BuildAncestryAndBrothers(map, rulerCounties, realms, cultures, faiths, cfg, seatParents);
 
         // 3. Build Adjacencies (Ruler-to-Ruler and TopLiege-to-TopLiege)
         var rulerNeighbors = BuildRulerNeighbors(rulerCounties, countyNeighbors, realms);
@@ -617,8 +624,38 @@ public sealed class PrehistoryMap
         RealmMap realms,
         CultureMap cultures,
         FaithMap faiths,
-        MapConfig cfg)
+        MapConfig cfg,
+        IReadOnlyDictionary<Title, PastRuler>? seatParents = null)
     {
+        // Under an applied history, a ruler whose parent the simulation saw reign has that parent,
+        // not an invented one: the dynasty tree's link from the past rulers to the living. Written
+        // by the past-ruler block, so not added to the characters written here. Nothing below
+        // invents a parent for a seat that already has one.
+        var simulated = new HashSet<HistoricalCharacter>();
+        foreach (var (seat, past) in seatParents ?? new Dictionary<Title, PastRuler>())
+        {
+            if (!map.CharacterDynastyMap.ContainsKey(seat)) continue;
+            var parent = new HistoricalCharacter
+            {
+                Id = past.Id, Name = past.Name, Female = past.Female,
+                DynastyId = past.House.DynastyId, DynastyHouseKey = past.House.HouseKey,
+                CultureKey = past.House.CultureKey, FaithKey = past.FaithKey,
+                BirthDate = past.BirthDate, DeathDate = past.DeathDate,
+                AssociatedCounty = seat, IsDeadAncestor = true,
+            };
+            map.DeceasedParents[seat] = parent;
+            simulated.Add(parent);
+        }
+
+        // Whether a simulated parent could have had a child born in this year; an invented one is
+        // drawn to fit and is not asked, so a generated world comes out as it always has.
+        bool Fits(HistoricalCharacter parent, int born)
+        {
+            if (!simulated.Contains(parent)) return true;
+            int from = int.Parse(parent.BirthDate.Split('.')[0]), to = int.Parse(parent.DeathDate!.Split('.')[0]);
+            return born - from >= 16 && (!parent.Female || born - from <= 45) && to > born;
+        }
+
         // Grouped by realm rather than walked flat, because a shared parent is a fact about a realm:
         // whether two rulers are brothers depends on who they both answer to.
         var byTopLiege = new Dictionary<Title, List<Title>>();
@@ -647,23 +684,26 @@ public sealed class PrehistoryMap
             int topParentBirth = topBirthYear - topRng.Int(22, 35);
             int topParentDeath = cfg.StartYear - topRng.Int(2, 12);
 
-            var topParent = new HistoricalCharacter
+            if (!map.DeceasedParents.TryGetValue(topLiege, out var topParent))
             {
-                Id = $"gen_char_parent_{topLiege.Index}",
-                Name = topParentName,
-                Female = topFemale,
-                DynastyId = map.CharacterDynastyMap[topLiege],
-                DynastyHouseKey = MainHouseOf(map, topLiege),
-                CultureKey = culture.Key,
-                FaithKey = faith.Key,
-                BirthDate = $"{topParentBirth}.{topRng.Int(1, 12)}.{topRng.Int(1, 28)}",
-                DeathDate = $"{topParentDeath}.{topRng.Int(1, 12)}.{topRng.Int(1, 28)}",
-                AssociatedCounty = topLiege,
-                IsDeadAncestor = true
-            };
+                topParent = new HistoricalCharacter
+                {
+                    Id = $"gen_char_parent_{topLiege.Index}",
+                    Name = topParentName,
+                    Female = topFemale,
+                    DynastyId = map.CharacterDynastyMap[topLiege],
+                    DynastyHouseKey = MainHouseOf(map, topLiege),
+                    CultureKey = culture.Key,
+                    FaithKey = faith.Key,
+                    BirthDate = $"{topParentBirth}.{topRng.Int(1, 12)}.{topRng.Int(1, 28)}",
+                    DeathDate = $"{topParentDeath}.{topRng.Int(1, 12)}.{topRng.Int(1, 28)}",
+                    AssociatedCounty = topLiege,
+                    IsDeadAncestor = true
+                };
 
-            map.DeceasedParents[topLiege] = topParent;
-            map.AllExtraCharacters.Add(topParent);
+                map.DeceasedParents[topLiege] = topParent;
+                map.AllExtraCharacters.Add(topParent);
+            }
 
             // Only vassals of the same dynasty can be the liege's brother, highest tier first so the
             // brother is the realm's second man rather than whichever county came up first.
@@ -684,7 +724,10 @@ public sealed class PrehistoryMap
                 var kinTitle = HistoryWriter.Primary(kinCounty, realms);
                 var kinRng = Rng.For(cfg.Seed, 0x481A, kinCounty.Index);
 
-                if (!brotherTaken && ageGap <= 10 && kinRng.Chance(0.4))
+                // A vassal with a parent of his own from the history keeps it; a brother must fit
+                // the parent he would share.
+                if (!brotherTaken && ageGap <= 10 && !map.DeceasedParents.ContainsKey(kinCounty) && kinRng.Chance(0.4)
+                    && Fits(topParent, kinBirthYear))
                 {
                     map.DeceasedParents[kinCounty] = topParent;
                     brotherTaken = true;

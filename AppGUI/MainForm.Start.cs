@@ -49,8 +49,16 @@ public sealed partial class MainForm
 
     private StartPage BuildStartPage()
     {
-        _start.QuickPicked += ShowQuickPage;
-        _start.ComplexPicked += EnterComplex;
+        _start.QuickPicked += () => { RememberStart("Quick"); ShowQuickPage(); };
+        _start.ComplexPicked += () => { RememberStart("Complex"); EnterComplex(); };
+        _start.RememberChanged += on =>
+        {
+            // Saved now rather than on close: it is a choice about the next launch, and a crash
+            // between here and closing should not undo it.
+            _state.RememberStartChoice = on;
+            if (!on) _state.StartWith = null;
+            _state.Save();
+        };
         _start.OpenWorldPicked += () => OpenGeneratedWorldAsync().Forget("open generated world");
         _start.GuidePicked += ShowWelcomeGuide;
         _start.GameFolderPicked += PickGameFolder;
@@ -63,7 +71,31 @@ public sealed partial class MainForm
 
         ShowLauncherPage(_start);
         _start.Present(Core.GameLocator.IsGameDir(_options.GameDir), _options.GameDir, _modRoot);
+        _start.SetRemember(_state.RememberStartChoice, _state.StartWith);
         _start.Focus();
+    }
+
+    /// <summary>
+    /// Where the window opens: the start page, or — when "Remember my choice" is on and a card
+    /// was picked with it — straight into Quick, or straight into the generator as it was left.
+    /// </summary>
+    private void OpenOnLaunch()
+    {
+        if (_state.RememberStartChoice && _state.StartWith == "Complex") return;
+        if (_state.RememberStartChoice && _state.StartWith == "Quick")
+        {
+            ShowQuickPage();
+            return;
+        }
+        ShowStartPage();
+    }
+
+    /// <summary>Records the card picked, if the start page is remembering choices.</summary>
+    private void RememberStart(string mode)
+    {
+        if (!_state.RememberStartChoice || _state.StartWith == mode) return;
+        _state.StartWith = mode;
+        _state.Save();
     }
 
     /// <summary>

@@ -102,7 +102,7 @@ public sealed class AppliedHistory
     /// before rulers were simulated, when the seat's ruler is drawn as any other.
     /// </summary>
     public sealed record Realm(int Id, int Capital, int? Suzerain, string Culture, int Founded, int Peak, int[] Counties,
-        string? Ruler = null, bool RulerFemale = false, int RulerBorn = 0);
+        string? Ruler = null, bool RulerFemale = false, int RulerBorn = 0, string? RulerParent = null);
 
     /// <summary>
     /// A dynasty and the house of it that rules, carried by value: the history is laid over a world
@@ -266,7 +266,14 @@ public sealed class AppliedHistory
     /// A reign that ended in death before the applied date, in a realm still standing then — the
     /// predecessors a title's history in game lists. See <see cref="PastRulersFor"/>.
     /// </summary>
-    public sealed record Reign(int RealmId, string Name, bool Female, int Born, int Crowned, int Died, Lineage House);
+    /// <remarks>
+    /// <see cref="Key"/> is the character the ruler is written as, and <see cref="Parent"/> the
+    /// key of the ruler they are the child of — the dynasty tree. A reign whose realm is gone by
+    /// the applied date (<see cref="RealmId"/> not among <see cref="Realms"/>) is kept only as an
+    /// ancestor: a character with no title history. Both null in a file saved before trees.
+    /// </remarks>
+    public sealed record Reign(int RealmId, string Name, bool Female, int Born, int Crowned, int Died, Lineage House,
+        string? Key = null, string? Parent = null);
 
     /// <summary>
     /// Past reigns, most recent first within a realm, cut by the backstop in <see cref="Capture"/>.
@@ -329,7 +336,8 @@ public sealed class AppliedHistory
             NextId = sim.NextId,
             Realms = [.. sim.Realms.OrderBy(p => p.Id).Select(p => sim.RulerOf(p) is { } r
                 ? new Realm(p.Id, p.Capital.Index, p.Suzerain?.Id, p.Culture.Key, p.Founded, p.Peak,
-                    [.. p.Counties.Select(c => c.Index).Order()], r.Name, r.Female, r.Born)
+                    [.. p.Counties.Select(c => c.Index).Order()], r.Name, r.Female, r.Born,
+                    r.Parent is { } parent ? PersonKey(parent, sim.StartYear) : null)
                 : new Realm(p.Id, p.Capital.Index, p.Suzerain?.Id, p.Culture.Key, p.Founded, p.Peak,
                     [.. p.Counties.Select(c => c.Index).Order()]))],
             RealmLineage = realmLineage,
@@ -361,19 +369,56 @@ public sealed class AppliedHistory
             .GroupBy(r => r.PolityId)
             .ToDictionary(g => g.Key, g => g.Select(r => r.Ruler).OrderByDescending(r => r.Died).ThenByDescending(r => r.Id).ToList());
 
+        // The realm each ruler reigned in, for an ancestor whose realm is gone: kept as a person,
+        // not as a title holder. Rulers carried in from an earlier history reigned in none of these.
+        var realmOf = new Dictionary<SimRuler, int>();
+        foreach (var (polity, ruler) in sim.Reigns) realmOf.TryAdd(ruler, polity);
+
         var reigns = new List<Reign>();
+        var taken = new HashSet<SimRuler>();
+
+        bool Add(SimRuler ruler, int realm)
+        {
+            if (reigns.Count >= MaxReigns) return false;
+            if (!taken.Add(ruler)) return true;
+            reigns.Add(new Reign(realm, ruler.Name, ruler.Female, ruler.Born, ruler.Crowned, ruler.Died!.Value,
+                ruler.House.Carried ?? Minted(ruler.House, sim.StartYear), PersonKey(ruler, sim.StartYear),
+                ruler.Parent is { } parent ? PersonKey(parent, sim.StartYear) : null));
+            return true;
+        }
+
+        // The line behind someone: parent, grandparent, up to MaxGenerations — whatever realm each
+        // of them ruled, so a partition's younger son still has his father when the father's realm
+        // is long gone. That is where a tree branches, and where a per-realm list would cut it.
+        bool Ancestors(SimRuler? from)
+        {
+            for (var (a, g) = (from?.Parent, 0); a is not null && g < MaxGenerations; a = a.Parent, g++)
+                if (a.Died is not null && !Add(a, realmOf.GetValueOrDefault(a, -1))) return false;
+            return true;
+        }
+
+        // Larger realms first, as before: its title holders, then the lines behind its ruler and
+        // behind each of them. Most of those are the holders already — a line is mostly one throne.
         foreach (var p in sim.Realms.OrderByDescending(p => p.Counties.Count).ThenBy(p => p.Capital.Index))
         {
-            if (!dead.TryGetValue(p.Id, out var rulers)) continue;
-            foreach (var ruler in rulers.Take(MaxReignsPerRealm))
-            {
-                if (reigns.Count >= MaxReigns) return reigns;
-                reigns.Add(new Reign(p.Id, ruler.Name, ruler.Female, ruler.Born, ruler.Crowned, ruler.Died!.Value,
-                    ruler.House.Carried ?? Minted(ruler.House, sim.StartYear)));
-            }
+            var holders = dead.GetValueOrDefault(p.Id)?.Take(MaxReignsPerRealm).ToList() ?? [];
+            foreach (var ruler in holders)
+                if (!Add(ruler, p.Id)) return reigns;
+            if (!Ancestors(sim.RulerOf(p))) return reigns;
+            foreach (var ruler in holders)
+                if (!Ancestors(ruler)) return reigns;
         }
         return reigns;
     }
+
+    /// <summary>How many generations behind a ruler the tree is kept: about two centuries.</summary>
+    public const int MaxGenerations = 8;
+
+    /// <summary>
+    /// The character a simulated ruler is written as: the one an earlier history gave it, or a new
+    /// id stamped with this history's start year so that no two histories can mint the same one.
+    /// </summary>
+    internal static string PersonKey(SimRuler ruler, int fromYear) => ruler.Key ?? $"gen_char_hist_r{ruler.Id}_{fromYear}";
 
     /// <summary>
     /// The past rulers of the titled applied world, dated for its title history: each realm's
@@ -382,44 +427,138 @@ public sealed class AppliedHistory
     /// before <paramref name="grantYear"/> — the date every current holder is granted his titles
     /// on — are written: a later one would sit between the grant and the start and contradict it.
     /// </summary>
-    public List<PastRuler> PastRulersFor(IReadOnlyDictionary<int, Title> capitals, RealmMap realms,
-        FaithMap faiths, int grantYear, int startYear, int seed)
+    /// <returns>
+    /// The past rulers, and for every seat whose ruler is the child of one of them, that parent —
+    /// what <see cref="PrehistoryMap.Build"/> takes in place of the parent it would invent.
+    /// </returns>
+    public (List<PastRuler> PastRulers, Dictionary<Title, PastRuler> SeatParents) PastRulersFor(
+        IReadOnlyDictionary<int, Title> capitals, RealmMap realms, FaithMap faiths, int grantYear, int startYear,
+        int seed)
     {
         var seats = realms.HolderCounty.Values.ToHashSet();
-        var result = new List<PastRuler>();
+        var people = new Dictionary<string, Person>(StringComparer.Ordinal);
+        var order = new List<string>();
 
+        // The title holders: each realm's predecessors on its primary title, dated end to end.
         foreach (var group in Reigns.GroupBy(r => r.RealmId))
         {
             if (!capitals.TryGetValue(group.Key, out var seat) || !seats.Contains(seat)) continue;
             var title = Emit.HistoryWriter.Primary(seat, realms);
             string faith = faiths.For(seat).Key;
 
+            // The most recent reigns only, which follow one another without a gap. An ancestor who
+            // held the same throne further back is kept for the tree below, not dated end to end
+            // with a successor he never met — that would stretch his reign over everyone between.
             (int Y, int M, int D)? previousDeath = null;
             int n = 0;
-            foreach (var reign in group.OrderBy(r => r.Crowned).ThenBy(r => r.Died))
+            foreach (var reign in group.OrderByDescending(r => r.Died).ThenByDescending(r => r.Crowned)
+                                       .Take(MaxReignsPerRealm).OrderBy(r => r.Crowned).ThenBy(r => r.Died))
             {
                 var start = previousDeath is { } before ? NextDay(before) : (reign.Crowned, 1, 1);
                 if (start.Item1 >= grantYear) break;
 
-                string id = $"gen_char_hist_{reign.RealmId}_{n++}_{FromYear}";
+                string id = reign.Key ?? $"gen_char_hist_{reign.RealmId}_{n}_{FromYear}";
+                n++;
                 var rng = Core.Rng.For(seed, 0, Core.Rng.StableHash(id));
                 (int Y, int M, int D) death = (Math.Min(reign.Died, startYear - 1), rng.Int(1, 12), rng.Int(1, 28));
                 if (Before(death, NextDay(start))) death = NextDay(start);
                 var birth = (Math.Min(reign.Born, start.Item1 - 1), rng.Int(1, 12), rng.Int(1, 28));
 
-                result.Add(new PastRuler(id, reign.Name, reign.Female, reign.House, faith,
-                    Date(birth), Date(death), title.Key, Date(start)));
+                if (people.TryAdd(id, new Person(reign, birth, death, faith, title.Key, Date(start)))) order.Add(id);
                 previousDeath = death;
             }
         }
 
-        return result;
+        // Everyone else the tree keeps: ancestors whose realm is gone, and holders of a realm whose
+        // throne the applied world no longer has. A character, with no title of its own.
+        foreach (var reign in Reigns)
+        {
+            if (reign.Key is not { } id || people.ContainsKey(id)) continue;
+            var rng = Core.Rng.For(seed, 0, Core.Rng.StableHash(id));
+            (int Y, int M, int D) death = (Math.Min(reign.Died, startYear - 1), rng.Int(1, 12), rng.Int(1, 28));
+            var birth = (Math.Min(reign.Born, death.Y - 1), rng.Int(1, 12), rng.Int(1, 28));
+            people[id] = new Person(reign, birth, death, null, null, null);
+            order.Add(id);
+        }
+
+        // An ancestor with no throne of its own keeps the faith of the line it heads: its child's,
+        // youngest generations first so a faith climbs as far as the line goes.
+        foreach (var realm in Realms.OrderBy(r => r.Id))
+            if (realm.RulerParent is { } key && capitals.TryGetValue(realm.Id, out var seat) && seats.Contains(seat)
+                && people.TryGetValue(key, out var parent) && parent.Faith is null)
+                parent.Faith = faiths.For(seat).Key;
+        foreach (var person in people.Values.OrderByDescending(p => p.Birth.Y))
+            if (person.Reign.Parent is { } key && people.TryGetValue(key, out var parent) && parent.Faith is null)
+                parent.Faith = person.Faith;
+        string fallback = faiths.Faiths.FirstOrDefault(f => !f.Inherited)?.Key ?? faiths.Faiths[0].Key;
+
+        // Eldest first: every parent is then written before its children, so the character file
+        // never asks the game to resolve a father it has not read yet.
+        var result = new List<PastRuler>();
+        int linked = 0, refused = 0;
+        foreach (string id in order.OrderBy(id => people[id].Birth).ThenBy(id => id, StringComparer.Ordinal))
+        {
+            var person = people[id];
+            string? parentId = null;
+            bool mother = false;
+            if (person.Reign.Parent is { } key && people.TryGetValue(key, out var parent))
+            {
+                if (CouldBeParent(parent.Reign.Female, parent.Birth, parent.Death, person.Birth))
+                {
+                    (parentId, mother) = (key, parent.Reign.Female);
+                    linked++;
+                }
+                else refused++;
+            }
+
+            result.Add(new PastRuler(id, person.Reign.Name, person.Reign.Female, person.Reign.House,
+                person.Faith ?? fallback, Date(person.Birth), Date(person.Death), person.TitleKey, person.ReignDate,
+                parentId, mother));
+        }
+
+        // The living rulers' parents, checked against the birth year the character file will carry
+        // (see PeopleFor, which may write a child crowned lately a little older).
+        var seatParents = new Dictionary<Title, PastRuler>();
+        var byId = result.ToDictionary(p => p.Id, StringComparer.Ordinal);
+        foreach (var realm in Realms)
+        {
+            if (realm.RulerParent is not { } key || realm.RulerBorn <= 0 || !byId.TryGetValue(key, out var parent)) continue;
+            if (!capitals.TryGetValue(realm.Id, out var seat) || !seats.Contains(seat)) continue;
+            int born = Math.Min(realm.RulerBorn, Year - 6);
+            var p = people[key];
+            if (CouldBeParent(p.Reign.Female, p.Birth, p.Death, (born, 12, 28))) seatParents[seat] = parent;
+            else refused++;
+        }
+
+        if (linked + refused > 0)
+            Console.WriteLine($"  applied history: dynasty trees — {linked} past rulers and {seatParents.Count} living ones "
+                + $"linked to a parent, {refused} links refused on their dates, {result.Count(r => r.TitleKey is null)} "
+                + "ancestors kept for the tree alone");
+        return (result, seatParents);
 
         static (int, int, int) NextDay((int Y, int M, int D) d)
             => d.D < 28 ? (d.Y, d.M, d.D + 1) : d.M < 12 ? (d.Y, d.M + 1, 1) : (d.Y + 1, 1, 1);
         static bool Before((int Y, int M, int D) a, (int Y, int M, int D) b)
             => a.Y != b.Y ? a.Y < b.Y : a.M != b.M ? a.M < b.M : a.D < b.D;
         static string Date((int Y, int M, int D) d) => $"{d.Y}.{d.M}.{d.D}";
+
+        // What CK3 will take as a parent: sixteen at the birth, a mother no older than forty-five,
+        // and not yet dead. The father's posthumous months are not used — the margin is kept.
+        static bool CouldBeParent(bool female, (int Y, int M, int D) birth, (int Y, int M, int D) death,
+            (int Y, int M, int D) child)
+            => child.Y - birth.Y >= 16 && (!female || child.Y - birth.Y <= 45) && Before(child, death);
+    }
+
+    /// <summary>One person the applied history writes, with the dates it will be written with.</summary>
+    private sealed class Person(Reign reign, (int Y, int M, int D) birth, (int Y, int M, int D) death,
+        string? faith, string? titleKey, string? reignDate)
+    {
+        public Reign Reign { get; } = reign;
+        public (int Y, int M, int D) Birth { get; } = birth;
+        public (int Y, int M, int D) Death { get; } = death;
+        public string? Faith { get; set; } = faith;
+        public string? TitleKey { get; } = titleKey;
+        public string? ReignDate { get; } = reignDate;
     }
 
     /// <summary>
