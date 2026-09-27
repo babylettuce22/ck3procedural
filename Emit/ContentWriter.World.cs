@@ -313,10 +313,12 @@ public static partial class ContentWriter
             counties, provinces, order, landCount, provinceTerrain, cultures, wilderness, cfg, new Rng(cfg.Seed ^ 0x93FA)));
 
         // A culture's name, heritage, tongue, name lists and traditions are all settled by here, so
-        // the peoples are shown now, with the wonders. Read only; nothing when nobody watches.
-        // See Showcase.
-        Core.Showcase.Publish(() => ShowcaseItems.Cultures(cultures));
-        Core.Showcase.Publish(() => ShowcaseItems.Wonders(worldCenters, gameDir));
+        // the peoples are shown now, with the wonders: their map first, so the pins land on it.
+        // Read only; nothing when nobody watches. See Showcase.
+        Core.Showcase.Picture("Cultures", () => ShowcaseItems.CulturePicture(cultures, provinces, order,
+            baronyCount, landCount, empires, wilderness));
+        Core.Showcase.Publish(() => ShowcaseItems.Cultures(cultures, new(provinces, order), ethnicities, wilderness));
+        Core.Showcase.Publish(() => ShowcaseItems.Wonders(worldCenters, gameDir, new(provinces, order)));
 
         development = Core.Stage.Time("development", () =>
         {
@@ -360,7 +362,7 @@ public static partial class ContentWriter
         if (cfg.StartingHegemony) Realms.CrownHegemon(realms, empires, wilderness);
 
         // For anyone watching the run; reads only, and does nothing when nobody is. See Showcase.
-        Core.Showcase.Publish(() => ShowcaseItems.Realms(realms));
+        Core.Showcase.Publish(() => ShowcaseItems.Realms(realms, new(provinces, order)));
 
         if (titlePlan is not null)
             Console.WriteLine($"  vanilla titles: {VanillaTitles.Fragmentation(empires, realms)}");
@@ -514,7 +516,7 @@ public static partial class ContentWriter
         var waterNames = Core.Stage.Time("water naming", () => WaterNaming.Generate(
             provinces, order, landCount, riverCount, cultures, empires,
             new Rng(cfg.Seed ^ 0x5EAE), terra.MajorRiversList, azgaar));
-        Core.Showcase.Publish(() => ShowcaseItems.Waters(waterNames));
+        Core.Showcase.Publish(() => ShowcaseItems.Waters(waterNames, new(provinces, order)));
 
         // History run on in the History workspace replaces the realms the formation grew — last,
         // after everything above has been decided from the generated ones. Faiths.Build reads the

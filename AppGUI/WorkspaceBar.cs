@@ -109,7 +109,7 @@ internal sealed class WorkspaceBar : Panel
             Text = "›",
             AutoSize = true,
             Font = new Font("Segoe UI", 12f),
-            ForeColor = Color.FromArgb(170, 176, 186),
+            ForeColor = Theme.TextFaint,
             Margin = new Padding(0, 8, 0, 0),
         };
         _chevrons.Add(chevron);

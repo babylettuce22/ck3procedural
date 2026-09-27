@@ -91,6 +91,13 @@ public static class ReliefShading
             (255, 255, 255), 0.7, 60, SurfaceTexture.Stone, 0.03),
         ["obsidian"] = new(R((0, (4, 4, 6)), (.3, (14, 14, 18)), (.52, (30, 30, 38)), (.72, (58, 58, 70)), (.88, (110, 110, 128)), (1, (220, 220, 240))),
             (255, 255, 255), 1.0, 120, SurfaceTexture.Metal, 0.01),
+        // Fired clay: matt, grainy, red-orange.
+        ["terracotta"] = new(R((0, (40, 16, 8)), (.3, (112, 50, 26)), (.52, (168, 86, 50)), (.72, (200, 122, 80)), (.88, (222, 160, 120)), (1, (240, 200, 170))),
+            (255, 235, 220), 0.06, 10, SurfaceTexture.Stone, 0.07),
+        // Polished horn: near black in the hollows, honey only on the highlights. Lighter, it
+        // read as bronze; with wood's grain it read as wood.
+        ["horn"] = new(R((0, (6, 4, 3)), (.3, (22, 14, 9)), (.52, (46, 30, 18)), (.72, (92, 60, 30)), (.88, (168, 120, 60)), (1, (236, 200, 130))),
+            (255, 232, 190), 0.5, 45, SurfaceTexture.Stone, 0.02),
     };
 
     /// <summary>

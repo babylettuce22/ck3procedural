@@ -35,7 +35,79 @@ public sealed record ShowcaseItem
     /// </summary>
     public int ImageFrames { get; init; } = 1;
     public int ImageFrame { get; init; }
+
+    /// <summary>
+    /// Where on the map the thing is, as fractions of the map's width and height: a people's
+    /// heartland, a faith's, the county a wonder stands in. A watching screen puts a pin there when
+    /// the card is shown. Null for what has no one place — a regiment, a calendar.
+    /// </summary>
+    public (float X, float Y)? MapAt { get; init; }
+
+    /// <summary>
+    /// The pin's own picture, when it should not be the card's — the badge of a people's race —
+    /// tried in order like <see cref="Images"/>. Empty means the pin wears the card's icon, or the
+    /// card's colour when its picture is an illustration.
+    /// </summary>
+    public IReadOnlyList<string> PinImages { get; init; } = [];
+
+    /// <summary>A drawn glyph for the pin in place of any picture, by name: a <see cref="MapGen.WonderArchetype"/>.</summary>
+    public string? PinGlyph { get; init; }
 }
+
+/// <summary>Which moment of the province partition a <see cref="PartitionSketch"/> shows.</summary>
+public enum PartitionStep
+{
+    /// <summary>The seeds are scattered; nothing has grown yet.</summary>
+    Seeded,
+
+    /// <summary>Every seed has grown until it met its neighbours.</summary>
+    Grown,
+
+    /// <summary>A round of relaxation: each seed moved to the middle of what it grew, and all grew again.</summary>
+    Relaxed,
+
+    /// <summary>The tidy-up passes done and the impassable mountains marked: the provinces as written.</summary>
+    Settled,
+}
+
+public enum SketchSeed : byte { Land, River, Sea, Impassable }
+
+/// <summary>
+/// The province partition caught at one <see cref="PartitionStep"/>, at preview size, for a screen
+/// that wants to show the provinces forming. Plain arrays, like a <see cref="ShowcaseItem"/>, so it
+/// crosses to another thread as it is.
+///
+/// A seed keeps its slot from the run's first sketch to its last, so it can be followed as
+/// relaxation moves it; one the tidy-up dissolved stays in its slot as NaN.
+/// </summary>
+public sealed record PartitionSketch
+{
+    public required PartitionStep Step { get; init; }
+    public required int Width { get; init; }
+    public required int Height { get; init; }
+
+    /// <summary>Each seed's position in preview pixels, by slot.</summary>
+    public required float[] SeedX { get; init; }
+    public required float[] SeedY { get; init; }
+    public required SketchSeed[] SeedKind { get; init; }
+
+    /// <summary>The provinces' colours, RGB row by row. Null on <see cref="PartitionStep.Seeded"/>.</summary>
+    public byte[]? Rgb { get; init; }
+
+    /// <summary>
+    /// On <see cref="PartitionStep.Grown"/>: when growth reached each pixel, from 0 at a seed to
+    /// <see cref="ushort.MaxValue"/> at the last pixel reached. Land and sea spread at one pace
+    /// until the land is full; the open sea's remainder is squeezed into the last fifth.
+    /// </summary>
+    public ushort[]? Arrival { get; init; }
+
+    /// <summary>On <see cref="PartitionStep.Relaxed"/>: which round this is, of how many.</summary>
+    public int Pass { get; init; }
+    public int Passes { get; init; }
+}
+
+/// <summary>A whole-map picture a stage drew of what it decided — the peoples, the faiths — named as a view.</summary>
+public sealed record ShowcasePicture(string View, AppGUI.PreviewRenderer.Image Image);
 
 /// <summary>
 /// A window onto a run as it happens, for a screen that wants something to show while it waits.
@@ -57,15 +129,31 @@ public static class Showcase
 {
     public static event Action<ShowcaseItem>? Published;
 
+    /// <summary>The province partition as it forms; see <see cref="PartitionSketch"/>.</summary>
+    public static event Action<PartitionSketch>? Sketched;
+
+    /// <summary>Whole-map pictures of the social layers as they are decided.</summary>
+    public static event Action<ShowcasePicture>? Pictured;
+
     public static bool Listening => Published is not null;
+    public static bool Sketching => Sketched is not null;
 
     /// <summary>Builds and publishes items, but only if someone is listening.</summary>
-    public static void Publish(Func<IEnumerable<ShowcaseItem>> build)
+    public static void Publish(Func<IEnumerable<ShowcaseItem>> build) => Deliver(Published, build);
+
+    /// <summary>Builds and publishes a sketch of the partition, but only if someone is watching it.</summary>
+    public static void Sketch(Func<PartitionSketch?> build)
+        => Deliver(Sketched, () => build() is { } sketch ? new[] { sketch } : []);
+
+    /// <summary>Draws and publishes a picture of the map, but only if someone is watching.</summary>
+    public static void Picture(string view, Func<AppGUI.PreviewRenderer.Image> draw)
+        => Deliver(Pictured, () => new[] { new ShowcasePicture(view, draw()) });
+
+    private static void Deliver<T>(Action<T>? handler, Func<IEnumerable<T>> build)
     {
-        var handler = Published;
         if (handler is null) return;
 
-        List<ShowcaseItem> items;
+        List<T> items;
         try
         {
             items = build().ToList();

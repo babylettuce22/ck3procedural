@@ -47,9 +47,22 @@ public static class ReliefMotifs
             ["cross_patee"] = CrossPatee,
             ["ringed_cross"] = RingedCross,
             ["looped_cross"] = LoopedCross,
+            ["skull"] = Skull,
+            ["hand"] = Hand,
+            ["scales"] = Scales,
+            ["chalice"] = Chalice,
+            ["waves"] = Waves,
+            ["sword"] = cv => Sword(cv, 0),
+            ["crossed_swords"] = CrossedSwords,
+            ["sabre"] = Sabre,
+            ["leaf_sword"] = LeafSword,
+            ["war_hammer"] = WarHammer,
+            ["hammer_anvil"] = HammerAnvil,
+            ["crossed_hammers"] = CrossedHammers,
+            ["smith_hammer"] = cv => SmithHammer(cv, 0),
         };
 
-    public static readonly string[] Frames = ["none", "ring", "medallion", "lobed", "rayed"];
+    public static readonly string[] Frames = ["none", "ring", "medallion", "lobed", "rayed", "wreath"];
 
     /// <summary>
     /// A finished design: the frame drawn, the motif drawn inside it, and the frame's uncovered
@@ -140,6 +153,50 @@ public static class ReliefMotifs
 
     private static Pt[] Rect(double x0, double y0, double x1, double y1)
         => [new(x0, y0), new(x1, y0), new(x1, y1), new(x0, y1)];
+
+    /// <summary>A right half-outline, top to bottom, completed by its mirror image into a closed one.</summary>
+    private static Pt[] Mirrored(IReadOnlyList<Pt> right)
+        => right.Concat(right.Reverse().Select(p => new Pt(-p.X, p.Y))).ToArray();
+
+    /// <summary>A closed Catmull-Rom curve through <paramref name="p"/>: a smooth outline from a few key points.</summary>
+    private static Pt[] CatmullRom(IReadOnlyList<Pt> p, int per = 16)
+    {
+        var o = new List<Pt>();
+        int n = p.Count;
+        for (int i = 0; i < n; i++)
+        {
+            Pt p0 = p[(i - 1 + n) % n], p1 = p[i], p2 = p[(i + 1) % n], p3 = p[(i + 2) % n];
+            for (int k = 0; k < per; k++)
+            {
+                double t = k / (double)per, t2 = t * t, t3 = t2 * t;
+                o.Add(0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (3 * p1 - p0 - 3 * p2 + p3) * t3));
+            }
+        }
+        return o.ToArray();
+    }
+
+    /// <summary>A straight engraved line of half-width <paramref name="hw"/>.</summary>
+    private static void CutLine(ReliefCanvas cv, Pt a, Pt b, double hw, double depth)
+    {
+        var d = (b - a).Unit;
+        var n = new Pt(-d.Y, d.X) * hw;
+        cv.Engrave(cv.Poly([a + n, b + n, b - n, a - n]), depth, hw * 0.9);
+    }
+
+    /// <summary>A thin engraved curve: the polyline widened by <paramref name="hw"/> either side.</summary>
+    private static void CutCurve(ReliefCanvas cv, Pt[] pts, double hw, double depth)
+    {
+        var left = new Pt[pts.Length];
+        var right = new Pt[pts.Length];
+        for (int i = 0; i < pts.Length; i++)
+        {
+            var d = (pts[Math.Min(i + 1, pts.Length - 1)] - pts[Math.Max(i - 1, 0)]).Unit;
+            var n = new Pt(-d.Y, d.X) * hw;
+            left[i] = pts[i] + n;
+            right[i] = pts[i] - n;
+        }
+        cv.Engrave(cv.Poly(left.Concat(right.Reverse()).ToArray()), depth, hw * 0.9);
+    }
 
     /// <summary>A densely sampled closed polygon, its corners rounded by <paramref name="round"/>.</summary>
     private static Pt[] ClosedPoly(Pt[] pts, int nPer, double round)
@@ -604,27 +661,69 @@ public static class ReliefMotifs
         cv.Accent.OrWith(cv.Circle(default, 0.08));
     }
 
+    /// <summary>
+    /// A serpent biting its tail, head in profile at the top: skull on the outside of the ring,
+    /// lower jaw inside, the tail running into an open gape. Enamelled diamonds run down the spine.
+    /// </summary>
     private static void Ouroboros(ReliefCanvas cv)
     {
-        double headA = Math.PI / 2, R = 0.66;
-        var body = Lin(headA - 0.35, headA - 0.35 - Tau * 0.9, 900).Select(a => Pt.Polar(R, a)).ToArray();
-        cv.Stroke(body, t => 0.02 + 0.15 * Math.Pow(1 - t, 0.6), 0, flat: 0.75, groove: 0.25);
-        var hc = Pt.Polar(R, headA);
-        var head = Lin(0, 1, 80).Select(s => new Pt(hc.X - 0.3 + 0.5 * s, hc.Y + 0.02 * Math.Sin(Math.PI * s))).ToArray();
-        cv.Stroke(head, t => 0.17 * Math.Pow(Math.Sin(Math.PI * (0.3 + 0.62 * t)), 0.6) + 0.03, 0.05, flat: 0.7);
-        var eye = new Pt(hc.X + 0.04, hc.Y + 0.07);
-        cv.Dome(eye, 0.045, 0.14, 0.03);
-        cv.Accent.OrWith(cv.Circle(eye, 0.042));
-        cv.Engrave(cv.Poly([new(hc.X + 0.2, hc.Y - 0.012), new(hc.X + 0.02, hc.Y - 0.04), new(hc.X + 0.2, hc.Y - 0.03)]), 0.03, 0.01);
-        foreach (double t in Lin(0.06, 0.82, 22))
+        const double R = 0.64, top = Math.PI / 2;
+        // The head runs counter-clockwise from its back to its snout. The body starts hidden under
+        // the head and runs clockwise almost all the way round, its tail ending inside the jaws.
+        double aBack = top - 0.15, aSnout = top + 0.48;
+        double aNeck = top + 0.05, aTail = top + 0.26;
+        double sweep = Tau - (aTail - aNeck);
+
+        // Body: full width for most of its length, pinched at the neck, tapering to a fine tail.
+        double W(double t) => (0.024 + 0.108 * Math.Pow(1 - SmoothStep(0.4, 1.0, t), 0.9)) * (0.72 + 0.28 * SmoothStep(0.02, 0.2, t));
+        Pt B(double t) => Pt.Polar(R, aNeck - t * sweep);
+        cv.Stroke(Lin(0, 1, 1400).Select(B).ToArray(), W, 0, flat: 0.8);
+
+        // Diamonds tip to tip along the spine, sized to the body under them.
+        double arc = sweep * R;
+        for (double s = 0.10 * arc; s < 0.88 * arc;)
         {
-            double ang = headA - 0.35 - Tau * 0.9 * t;
-            foreach (int side in new[] { -1, 1 })
-            {
-                double rr = R + side * (0.05 * (1 - t) + 0.01);
-                cv.Engrave(cv.Circle(Pt.Polar(rr, ang), 0.02 * (1 - t) + 0.008), 0.015, 0.008);
-            }
+            double w = W(s / arc), L = 0.95 * w, tc = (s + L) / arc;
+            Pt c = B(tc), tan = (B(tc + 0.001) - B(tc - 0.001)).Unit, nrm = new(-tan.Y, tan.X);
+            var diamond = cv.Poly([c + tan * L, c + nrm * (0.5 * w), c - tan * L, c - nrm * (0.5 * w)]);
+            cv.Engrave(diamond, 0.01, 0.012);
+            cv.Accent.OrWith(diamond);
+            s += 2 * L + 0.012;
         }
+
+        // Head outline along the ring: widest at the jaw hinge, a blunt rounded snout.
+        double HW(double u) => u < 0.32 ? 0.095 + 0.12 * SmoothStep(0, 0.32, u) : 0.215 - 0.08 * Math.Pow((u - 0.32) / 0.68, 1.4);
+        double HA(double u) => aBack + u * (aSnout - aBack);
+        Pt HC(double u) => Pt.Polar(R, HA(u));
+        Pt HN(double u) => Pt.Polar(1, HA(u));         // outward
+        Pt HT(double u) => Pt.Polar(1, HA(u) + top);   // toward the snout
+        var us = Lin(0, 1, 120);
+        double rTip = HW(1);
+        var outline = new List<Pt>(us.Select(u => HC(u) + HN(u) * HW(u)));
+        outline.AddRange(Lin(0, Math.PI, 40).Select(q => HC(1) + HN(1) * (rTip * Math.Cos(q)) + HT(1) * (rTip * 0.75 * Math.Sin(q))));
+        outline.AddRange(us.Reverse().Select(u => HC(u) - HN(u) * HW(u)));
+
+        // The gape sits below the midline, so the upper jaw is the heavier one.
+        Pt tip = HC(1) + HT(1) * (rTip * 1.2) - HN(1) * 0.02;
+        var gape = cv.Poly([HC(0.62) - HN(0.62) * 0.01, tip + HN(1) * 0.055, tip - HN(1) * 0.075]);
+        cv.Plate(cv.Poly(outline) & !gape, 0.05, 0.11, 0.08);
+
+        // Mouth line back from the gape, the eye under a brow ridge, a nostril.
+        var mu = Lin(0.62, 0.3, 30);
+        Pt Mouth(double u, double side) => HC(u) - HN(u) * (0.01 + 0.03 * (0.62 - u) / 0.32 + side);
+        cv.Engrave(cv.Poly(mu.Select(u => Mouth(u, 0.008)).Concat(mu.Reverse().Select(u => Mouth(u, -0.008))).ToArray()), 0.03, 0.008);
+        Pt eye = HC(0.5) + HN(0.5) * 0.085;
+        cv.Dome(eye, 0.05, 0.12, 0.045);
+        cv.Accent.OrWith(cv.Circle(eye, 0.047));
+        var brow = Lin(0.34, 0.68, 40).Select(u => HC(u) + HN(u) * (0.145 - 0.022 * Math.Pow((u - 0.5) / 0.17, 2))).ToArray();
+        cv.Stroke(brow, t => 0.022 * Math.Sin(Math.PI * t) + 0.006, 0.11, flat: 0.8);
+        cv.Engrave(cv.Circle(HC(0.92) + HN(0.92) * 0.065, 0.015), 0.025, 0.012);
+    }
+
+    private static double SmoothStep(double e0, double e1, double x)
+    {
+        double t = Math.Clamp((x - e0) / (e1 - e0), 0, 1);
+        return t * t * (3 - 2 * t);
     }
 
     private static void Hexagram(ReliefCanvas cv)
@@ -684,31 +783,151 @@ public static class ReliefMotifs
         }
     }
 
+    /// <summary>A stag's skull face on, a jewel on its brow, antlers branching from the pedicles.</summary>
     private static void Antlers(ReliefCanvas cv)
     {
         foreach (int sg in new[] { 1, -1 })
         {
-            var beam = Bezier(new(0.12 * sg, -0.3), new(0.62 * sg, -0.24), new(0.74 * sg, 0.3), new(0.46 * sg, 0.94), 220);
-            cv.Stroke(beam, t => 0.1 * (1 - t) + 0.03, 0, flat: 0.8, groove: 0.2);
-            foreach (var (t, L, ang) in new[] { (0.14, 0.34, 150.0), (0.38, 0.44, 118.0), (0.62, 0.38, 104.0), (0.82, 0.26, 96.0) })
+            // Main beam: out from the pedicle, up, and curling back in at the crown.
+            var beam = Bezier(new(0.12 * sg, -0.1), new(0.52 * sg, -0.04), new(0.84 * sg, 0.44), new(0.48 * sg, 0.94), 240);
+            double BW(double t) => 0.09 - 0.056 * t;
+            cv.Stroke(beam, BW, 0, flat: 0.8);
+            cv.Dome(beam[0], 0.085, 0.01, 0.06);     // the burr where the antler leaves the skull
+
+            // Tines rise from the inside of the beam and lean in toward the centre line as they
+            // rise. The brow tine, lowest, stays short and steep: angled in any further, the two
+            // met over the forehead.
+            foreach (var (t, L, ang, bend) in new[] { (0.12, 0.24, 112.0, 0.0), (0.3, 0.4, 100.0, 0.1), (0.52, 0.38, 94.0, 0.1), (0.75, 0.26, 104.0, 0.06) })
             {
                 var p = beam[(int)(t * (beam.Length - 1))];
                 double a = sg > 0 ? ang * Math.PI / 180 : Math.PI - ang * Math.PI / 180;
                 var d = Pt.Polar(1, a);
-                var tine = Bezier(p, p + d * (0.55 * L), p + d * L + new Pt(0, 0.12), 70);
-                double r0 = 0.1 * (1 - t) + 0.03;
-                cv.Stroke(tine, s => r0 * 0.8 * (1 - 0.8 * s) + 0.006, 0, flat: 0.8);
+                var tine = Bezier(p, p + d * (0.45 * L), p + d * (0.85 * L) + new Pt(-bend * sg, 0), p + d * L + new Pt(-bend * 1.6 * sg, -0.02), 60);
+                double r0 = BW(t) * 0.95;
+                cv.Stroke(tine, s => r0 * Math.Pow(1 - s, 0.65) + 0.01, 0.005, flat: 0.8);
             }
         }
-        var skull = cv.Circle(new Pt(0, -0.46), 0.25) | cv.Poly([new(-0.2, -0.5), new(0.2, -0.5), new(0.07, -0.95), new(-0.07, -0.95)]);
-        cv.Plate(skull, 0.04, 0.1, 0.07, ReliefCanvas.Profile.Smooth);
+
+        // The skull: broad brow between the pedicles, eye sockets, a long tapering snout.
+        var skull = cv.Poly(CatmullRom(Mirrored(new Pt[]
+        {
+            new(0.001, -0.06), new(0.14, -0.08), new(0.24, -0.18), new(0.25, -0.3), new(0.17, -0.44),
+            new(0.12, -0.62), new(0.09, -0.84), new(0.05, -0.93), new(0.001, -0.94),
+        })));
+        cv.Plate(skull, 0.03, 0.14, 0.09, ReliefCanvas.Profile.Smooth);
+        cv.Stroke([new(0, -0.3), new(0, -0.86)], t => 0.022 + 0.01 * t, 0.1, flat: 0.7);   // nasal ridge
         foreach (int sg in new[] { 1, -1 })
         {
-            cv.Engrave(cv.Circle(new Pt(0.1 * sg, -0.5), 0.05), 0.04, 0.025);
-            cv.Engrave(cv.Circle(new Pt(0.035 * sg, -0.86), 0.02), 0.03, 0.015);
+            cv.Engrave(cv.Poly(CatmullRom([new(0.12 * sg, -0.2), new(0.21 * sg, -0.22), new(0.22 * sg, -0.3), new(0.14 * sg, -0.32)], 10)), 0.07, 0.03);
+            cv.Engrave(cv.Ellipse(new Pt(0.035 * sg, -0.88), 0.022, 0.032, false), 0.04, 0.015);
         }
-        cv.Accent.OrWith(cv.Circle(new Pt(0, -0.3), 0.06));
-        cv.Dome(new Pt(0, -0.3), 0.06, 0.12, 0.04);
+        var gem = cv.Poly([new(0, -0.1), new(0.07, -0.19), new(0, -0.28), new(-0.07, -0.19)]);
+        cv.Plate(gem, 0.1, 0.03, 0.04);
+        cv.Accent.OrWith(gem);
+    }
+
+    /// <summary>A human skull face on, its eye sockets inlaid.</summary>
+    private static void Skull(ReliefCanvas cv)
+    {
+        // Cranium, a pinch at the temples, cheekbones flaring out, the upper jaw, then the
+        // mandible's angle and a narrow chin.
+        var outline = cv.Poly(CatmullRom(Mirrored(new Pt[]
+        {
+            new(0.001, 0.82), new(0.3, 0.77), new(0.48, 0.6), new(0.56, 0.36), new(0.55, 0.14), new(0.49, 0.0),
+            new(0.53, -0.13), new(0.44, -0.25), new(0.31, -0.3), new(0.29, -0.4), new(0.35, -0.5), new(0.32, -0.64),
+            new(0.2, -0.76), new(0.001, -0.8),
+        })));
+        cv.Plate(outline, 0, 0.26, 0.1, ReliefCanvas.Profile.Smooth);
+        using (cv.Clip(outline)) cv.Dome(new Pt(0, 0.3), 0.52, 0.02, 0.16);
+
+        foreach (int sg in new[] { 1, -1 })
+        {
+            // Temple hollow, brow ridge, a deep socket slanting down at its outer corner, cheekbone.
+            cv.Engrave(cv.Ellipse(new Pt(0.47 * sg, 0.06), 0.07, 0.12, false), 0.03, 0.05);
+            cv.Stroke(Bezier(new(0.04 * sg, 0.15), new(0.14 * sg, 0.22), new(0.3 * sg, 0.22), new(0.42 * sg, 0.12), 50),
+                t => 0.035 * Math.Sin(Math.PI * (0.15 + 0.7 * t)) + 0.01, 0.12, flat: 0.8);
+            var socket = cv.Poly(CatmullRom([new(0.06 * sg, 0.1), new(0.2 * sg, 0.15), new(0.36 * sg, 0.08), new(0.38 * sg, -0.06),
+                                             new(0.26 * sg, -0.14), new(0.1 * sg, -0.09)]));
+            cv.Engrave(socket, 0.15, 0.06);
+            cv.Accent.OrWith(socket);
+            cv.Stroke(Bezier(new(0.16 * sg, -0.19), new(0.3 * sg, -0.21), new(0.44 * sg, -0.17), new(0.52 * sg, -0.1), 40),
+                t => 0.03 * Math.Sin(Math.PI * t) + 0.012, 0.1, flat: 0.8);
+            // Where the mandible meets the skull.
+            CutCurve(cv, Bezier(new(0.3 * sg, -0.3), new(0.34 * sg, -0.4), new(0.33 * sg, -0.5), new(0.28 * sg, -0.58), 20), 0.008, 0.02);
+        }
+        // Nasal cavity: two lobes under a point.
+        cv.Engrave(cv.Poly(CatmullRom([new(0, -0.05), new(0.06, -0.17), new(0.065, -0.26), new(0.02, -0.25), new(0, -0.21),
+                                       new(-0.02, -0.25), new(-0.065, -0.26), new(-0.06, -0.17)], 10)), 0.1, 0.03);
+
+        // Teeth: two rows of rounded blocks meeting at the bite, set in a recess.
+        static Pt[] Tooth(double x, double yTop, double yBot, bool upper)
+        {
+            const double w = 0.032, r = 0.022;
+            return upper
+                ? [new(x - w, yTop), new(x + w, yTop), new(x + w, yBot + r), new(x + w - r * 0.4, yBot), new(x - w + r * 0.4, yBot), new(x - w, yBot + r)]
+                : [new(x - w, yBot), new(x + w, yBot), new(x + w, yTop - r), new(x + w - r * 0.4, yTop), new(x - w + r * 0.4, yTop), new(x - w, yTop - r)];
+        }
+        cv.Engrave(cv.Poly(Rect(-0.25, -0.58, 0.25, -0.33)), 0.05, 0.02);
+        foreach (double x in Lin(-0.19, 0.19, 6))
+        {
+            double drop = 0.02 * (1 - Math.Abs(x) / 0.19);
+            cv.Plate(cv.Poly(Tooth(x, -0.33, -0.44 - drop, upper: true)), 0.04, 0.025, 0.05);
+            cv.Plate(cv.Poly(Tooth(x, -0.465 - drop, -0.57, upper: false)), 0.03, 0.025, 0.05);
+        }
+    }
+
+    /// <summary>
+    /// An open right hand raised palm out, a jewel in the palm. One sculpted piece: fingers,
+    /// thumb, palm and wrist are a single silhouette raised together, the fingers told apart by
+    /// cut lines rather than gaps. Drawn as separate tubes it read as a glove.
+    /// </summary>
+    private static void Hand(ReliefCanvas cv)
+    {
+        static Pt[] Capsule(Pt b, double ang, double len, double w0, double w1)
+        {
+            Pt d = Pt.Polar(1, ang), n = new(-d.Y, d.X), tip = b + d * len;
+            return Lin(0, 1, 30).Select(s => b + d * (s * len) + n * (w0 + (w1 - w0) * s))
+                .Concat(Lin(0, Math.PI, 24).Select(q => tip + n * (w1 * Math.Cos(q)) + d * (w1 * Math.Sin(q))))
+                .Concat(Lin(1, 0, 30).Select(s => b + d * (s * len) - n * (w0 + (w1 - w0) * s)))
+                .ToArray();
+        }
+
+        // Index to little finger: base, lean from vertical (toward the thumb is positive), length.
+        (Pt Base, double Lean, double Len)[] fingers =
+        [
+            (new(-0.235, 0.06), 0.1, 0.5), (new(-0.08, 0.1), 0.03, 0.58),
+            (new(0.075, 0.08), -0.05, 0.54), (new(0.22, 0.02), -0.14, 0.42),
+        ];
+        var hand = cv.Poly(CatmullRom([new(-0.3, 0.12), new(0.29, 0.08), new(0.34, -0.2), new(0.26, -0.48), new(0.22, -0.74),
+                                       new(-0.22, -0.74), new(-0.26, -0.48), new(-0.34, -0.22)], 20));
+        foreach (var (b, lean, len) in fingers)
+            hand.OrWith(cv.Poly(Capsule(b - new Pt(0, 0.12), Math.PI / 2 + lean, len + 0.12, 0.084, 0.068)));
+        hand.OrWith(cv.Poly(Capsule(new(-0.22, -0.32), Math.PI / 2 + 0.8, 0.44, 0.1, 0.078)));
+        cv.Plate(hand, 0, 0.16, 0.1, ReliefCanvas.Profile.Smooth);
+
+        // Cuts between the fingers from the tips down to the knuckles, a crease across each
+        // finger, and the crease at the root of the thumb.
+        for (int i = 0; i + 1 < fingers.Length; i++)
+        {
+            var (b0, l0, n0) = fingers[i];
+            var (b1, l1, n1) = fingers[i + 1];
+            Pt mid = (b0 + b1) * 0.5;
+            double lean = (l0 + l1) / 2;
+            CutLine(cv, mid + Pt.Polar(0.02, Math.PI / 2 + lean), mid + Pt.Polar(Math.Min(n0, n1), Math.PI / 2 + lean), 0.009, 0.05);
+        }
+        foreach (var (b, lean, len) in fingers)
+        {
+            Pt d = Pt.Polar(1, Math.PI / 2 + lean), n = new(-d.Y, d.X), k = b + d * (len * 0.55);
+            CutLine(cv, k - n * 0.04, k + n * 0.04, 0.006, 0.015);
+        }
+        CutCurve(cv, Bezier(new(-0.335, 0.0), new(-0.275, -0.165), new(-0.215, -0.285), new(-0.12, -0.385), 30), 0.006, 0.02);
+
+        Pt jewel = new(-0.01, -0.32);
+        cv.Dome(jewel, 0.11, 0.07, 0.065);
+        cv.Accent.OrWith(cv.Circle(jewel, 0.1));
+        cv.Engrave(cv.Ring(jewel, 0.13, 0.145), 0.02, 0.008);
+        cv.Stroke([new(-0.25, -0.72), new(0.25, -0.72)], 0.06, 0.05, flat: 0.8);
+        foreach (double x in Lin(-0.18, 0.18, 5)) cv.Dome(new Pt(x, -0.72), 0.04, 0.09, 0.04);
     }
 
     private static void Lotus(ReliefCanvas cv)
@@ -792,6 +1011,31 @@ public static class ReliefMotifs
         }
     }
 
+    /// <summary>
+    /// Three rows of running scroll: each wave rises, crests and curls under into a spiral, the
+    /// next rising from beneath it. An enamel bead sits in every curl.
+    /// </summary>
+    private static void Waves(ReliefCanvas cv)
+    {
+        const double p = 0.42, r0 = 0.15;
+        foreach (var (y0, x0, n) in new[] { (0.5, -0.56, 3), (0.0, -0.8, 4), (-0.5, -0.56, 3) })
+        {
+            Pt start = new(x0 - 0.12, y0 - 0.1);
+            for (int k = 0; k < n; k++)
+            {
+                var c = new Pt(x0 + k * p + 0.2, y0 + 0.02);
+                var top = c + new Pt(0, r0);
+                var rise = Bezier(start, start + new Pt(0.12, 0), top - new Pt(0.2, 0.02), top, 50);
+                var curl = Lin(0, 1, 160).Select(u => c + Pt.Polar(r0 * (1 - 0.78 * u), Math.PI / 2 - u * Tau * 0.95));
+                cv.Stroke(rise.Concat(curl).ToArray(), t => 0.058 - 0.026 * Math.Max(0, t - 0.45) / 0.55, 0, flat: 0.85);
+                cv.Dome(c, 0.045, 0.03, 0.04);
+                cv.Accent.OrWith(cv.Circle(c, 0.04));
+                start = c + new Pt(0, -r0);
+            }
+            cv.Stroke(Bezier(start, start + new Pt(0.08, 0), start + new Pt(0.14, 0), start + new Pt(0.2, 0.03), 20), 0.056, 0, flat: 0.85);
+        }
+    }
+
     private static void Trident(ReliefCanvas cv)
     {
         cv.Stroke([new(0, -0.95), new(0, 0.3)], 0.05, 0, flat: 0.8);
@@ -863,6 +1107,141 @@ public static class ReliefMotifs
         cv.Dome(new Pt(0, -0.36), 0.045, 0.1, 0.03);
     }
 
+    /// <summary>
+    /// A smith's hammer, haft down: flat striking face to the left, a wedge peen to the right,
+    /// the head centred on (0.01, 0.53) and the haft ending at <paramref name="bottom"/>.
+    /// </summary>
+    private static void SmithHammer(ReliefCanvas cv, double z, double bottom = -0.86)
+    {
+        cv.Stroke([new(0, bottom), new(0, 0.44)], t => 0.06 - 0.012 * t, z, flat: 0.85);
+        foreach (double y in Lin(bottom + 0.28, bottom + 0.06, 4)) CutLine(cv, new(-0.06, y - 0.025), new(0.06, y + 0.025), 0.007, 0.02);
+        cv.Dome(new Pt(0, bottom - 0.01), 0.065, z, 0.05);
+
+        var head = cv.Poly([
+            new(-0.42, 0.38), new(-0.45, 0.42), new(-0.45, 0.64), new(-0.42, 0.68), new(-0.1, 0.68), new(-0.07, 0.72),
+            new(0.09, 0.72), new(0.13, 0.66), new(0.46, 0.565), new(0.48, 0.53), new(0.46, 0.495), new(0.13, 0.4),
+            new(0.09, 0.34), new(-0.07, 0.34), new(-0.1, 0.38)]);
+        cv.Plate(head, z + 0.04, 0.08, 0.08, ReliefCanvas.Profile.Smooth);
+        cv.InsetGroove(head, 0.035, 0.011, 0.014);
+        CutLine(cv, new(-0.36, 0.4), new(-0.36, 0.66), 0.01, 0.025);
+        cv.Dome(new Pt(0.01, 0.53), 0.065, z + 0.1, 0.045);
+        cv.Accent.OrWith(cv.Circle(new Pt(0.01, 0.53), 0.055));
+    }
+
+    /// <summary>
+    /// Two smith's hammers in saltire, the second mirrored so both faces point inward. Crossed
+    /// any steeper than this, the two faces met at the top and read as a roof.
+    /// </summary>
+    private static void CrossedHammers(ReliefCanvas cv)
+    {
+        double rot0 = cv.Rot, s0 = cv.Scale, m0 = cv.Mirror;
+        var o0 = cv.Offset;
+        cv.Scale = s0 * 0.96;
+        cv.Offset = new Pt(o0.X, o0.Y - 0.1 * s0);
+        cv.Rot = rot0 - 0.98;
+        SmithHammer(cv, 0);
+        cv.Mirror = -m0;
+        cv.Rot = rot0 + 0.98;
+        SmithHammer(cv, 0.05);
+        cv.Rot = rot0;
+        cv.Scale = s0;
+        cv.Mirror = m0;
+        cv.Offset = o0;
+    }
+
+    /// <summary>
+    /// An anvil in profile, a smith's hammer coming down head first onto its face, enamel
+    /// sparks flying. The first draft had the hammer upside down (haft into the anvil, head in
+    /// the air), a flat blade for a horn, and round beads for sparks that read as pins.
+    /// </summary>
+    private static void HammerAnvil(ReliefCanvas cv)
+    {
+        double scale0 = cv.Scale;
+        cv.Scale = scale0 * 1.08;
+        Pt A = new(0.12, 0.02);
+        Pt P(double x, double y) => new Pt(x, y) + A;
+        Pt[] Bz(Pt a, Pt b, Pt c, Pt d, int n) => Bezier(a + A, b + A, c + A, d + A, n);
+
+        // Body: heel overhang at the right, waist, arched feet, underside running out to the horn.
+        var body = cv.Poly(new[] { P(-0.3, -0.02), P(0.56, -0.02), P(0.56, -0.15) }
+            .Concat(Bz(new(0.52, -0.17), new(0.36, -0.19), new(0.22, -0.24), new(0.18, -0.34), 16))
+            .Concat(Bz(new(0.18, -0.36), new(0.2, -0.48), new(0.3, -0.56), new(0.46, -0.6), 16))
+            .Concat(new[] { P(0.48, -0.7), P(0.14, -0.7) })
+            .Concat(Bz(new(0.12, -0.7), new(0.08, -0.62), new(-0.08, -0.62), new(-0.12, -0.7), 16))
+            .Concat(new[] { P(-0.48, -0.7), P(-0.46, -0.6) })
+            .Concat(Bz(new(-0.3, -0.56), new(-0.2, -0.48), new(-0.18, -0.36), new(-0.2, -0.3), 16))
+            .Concat(Bz(new(-0.22, -0.26), new(-0.28, -0.2), new(-0.36, -0.17), new(-0.42, -0.16), 12))
+            .Concat(new[] { P(-0.42, -0.05), P(-0.3, -0.05) })
+            .ToArray());
+        cv.Plate(body, 0, 0.14, 0.1, ReliefCanvas.Profile.Smooth);
+
+        // Horn: a rounded cone, its top level with the table, tapering to a blunt point.
+        cv.Stroke(Bz(new(-0.36, -0.11), new(-0.56, -0.1), new(-0.76, -0.08), new(-0.92, -0.04), 60),
+            t => 0.062 * Math.Pow(1 - t, 0.8) + 0.012, 0.02, flat: 0.85);
+
+        // Steel face plate, the step down to the table, the seam where the face meets the body,
+        // and a boss on the waist.
+        cv.Plate(cv.Poly([P(-0.28, 0.0), P(0.56, 0.0), P(0.56, -0.06), P(-0.28, -0.06)]), 0.08, 0.03, 0.03);
+        cv.Plate(cv.Poly([P(-0.42, -0.03), P(-0.28, -0.03), P(-0.28, -0.08), P(-0.42, -0.08)]), 0.06, 0.02, 0.02);
+        CutLine(cv, P(-0.26, -0.09), P(0.52, -0.09), 0.007, 0.02);
+        cv.Dome(P(0.0, -0.36), 0.06, 0.08, 0.04);
+        cv.Accent.OrWith(cv.Circle(P(0.0, -0.36), 0.05));
+
+        // Sparks: four-pointed stars scattered either side of the strike, clear of the hammer.
+        Pt strike = P(-0.06, 0.02);
+        foreach (var (deg, dist, r) in new[] { (148.0, 0.3, 0.1), (170.0, 0.46, 0.078), (192.0, 0.28, 0.06), (126.0, 0.46, 0.06),
+                                                 (18.0, 0.38, 0.09), (40.0, 0.3, 0.06), (4.0, 0.58, 0.052) })
+        {
+            var sc = strike + Pt.Polar(dist, deg * Math.PI / 180);
+            var star = cv.Poly(Enumerable.Range(0, 8).Select(i => sc + Pt.Polar(i % 2 == 0 ? r : r * 0.3, Math.PI / 2 + i * Math.PI / 4)).ToArray());
+            cv.Plate(star, 0.02, r * 0.6, r * 0.5, ReliefCanvas.Profile.Linear);
+            cv.Accent.OrWith(star);
+        }
+
+        // The hammer, rotated head down with its haft rising to the upper right, and placed so
+        // its striking face lands on the strike point.
+        double rot0 = cv.Rot, s0 = cv.Scale;
+        var o0 = cv.Offset;
+        const double k = 0.7, rot = 2.0;
+        double c = Math.Cos(rot), s = Math.Sin(rot);
+        Pt headLocal = new(0.01, 0.53);
+        Pt headRot = new Pt(headLocal.X * c - headLocal.Y * s, headLocal.X * s + headLocal.Y * c) * k;
+        Pt target = strike + new Pt(-0.135, 0.31);
+        cv.Scale = s0 * k;
+        cv.Rot = rot0 + rot;
+        cv.Offset = new Pt(o0.X + (target.X - headRot.X) * s0, o0.Y + (target.Y - headRot.Y) * s0);
+        SmithHammer(cv, 0.04, bottom: -0.5);
+        cv.Rot = rot0;
+        cv.Offset = o0;
+        cv.Scale = scale0;
+    }
+
+    /// <summary>A war hammer: long haft with langets, a toothed hammer face, a curved beak behind, a spike on top.</summary>
+    private static void WarHammer(ReliefCanvas cv)
+    {
+        cv.Stroke([new(0, -0.88), new(0, 0.62)], 0.05, 0, flat: 0.85);
+        foreach (int sg in new[] { 1, -1 })
+        {
+            cv.Stroke([new(0.052 * sg, 0.42), new(0.052 * sg, 0.08)], 0.018, 0.045, flat: 0.85);
+            foreach (double y in new[] { 0.34, 0.14 }) cv.Dome(new Pt(0.052 * sg, y), 0.024, 0.055, 0.02);
+        }
+        foreach (double y in Lin(-0.52, -0.8, 5)) CutLine(cv, new(-0.045, y - 0.02), new(0.045, y + 0.02), 0.007, 0.02);
+        cv.Dome(new Pt(0, -0.9), 0.06, 0.01, 0.05);
+
+        cv.Plate(cv.Poly([new(-0.07, 0.6), new(0.07, 0.6), new(0, 0.95)]), 0.02, 0.07, 0.06, ReliefCanvas.Profile.Linear);
+        var block = cv.Poly(Rect(-0.38, 0.4, -0.08, 0.62));
+        cv.Plate(block, 0.04, 0.05, 0.06);
+        cv.InsetGroove(block, 0.03, 0.01, 0.012);
+        foreach (double y in new[] { 0.45, 0.57 })
+            cv.Plate(cv.Poly([new(-0.38, y - 0.05), new(-0.44, y), new(-0.38, y + 0.05)]), 0.04, 0.04, 0.05, ReliefCanvas.Profile.Linear);
+        var beak = cv.Poly(Bezier(new(0.08, 0.62), new(0.3, 0.62), new(0.46, 0.5), new(0.54, 0.24), 40)
+            .Concat(Bezier(new(0.54, 0.24), new(0.4, 0.4), new(0.24, 0.44), new(0.08, 0.42), 40)).ToArray());
+        cv.Plate(beak, 0.04, 0.08, 0.07, ReliefCanvas.Profile.Linear);
+        cv.Plate(cv.Poly(Rect(-0.1, 0.36, 0.1, 0.66)), 0.06, 0.04, 0.06);
+        cv.Dome(new Pt(0, 0.51), 0.06, 0.1, 0.045);
+        cv.Accent.OrWith(cv.Circle(new Pt(0, 0.51), 0.05));
+    }
+
     private static void Key(ReliefCanvas cv)
     {
         double rot0 = cv.Rot;
@@ -880,6 +1259,136 @@ public static class ReliefMotifs
         cv.Dome(new Pt(0, 0.5), 0.13, 0, 0.08);
         cv.Accent.OrWith(cv.Circle(new Pt(0, 0.5), 0.11));
         cv.Rot = rot0;
+    }
+
+    private static void Scales(ReliefCanvas cv)
+    {
+        cv.Stroke([new(0, -0.7), new(0, 0.5)], 0.045, 0, flat: 0.8);
+        cv.Plate(cv.Poly([new(-0.36, -0.88), new(0.36, -0.88), new(0.14, -0.7), new(-0.14, -0.7)]), 0.02, 0.05, 0.05);
+        cv.Dome(new Pt(0, -0.7), 0.09, 0.02, 0.06);
+        cv.Stroke(Lin(0, 1, 80).Select(t => new Pt(-0.62 + 1.24 * t, 0.44)).ToArray(),
+            t => 0.036 + 0.024 * (1 - Math.Abs(2 * t - 1)), 0.03, flat: 0.8);
+        foreach (int sg in new[] { 1, -1 })
+        {
+            var end = new Pt(0.62 * sg, 0.44);
+            cv.Dome(end, 0.05, 0.03, 0.05);
+            var pc = new Pt(0.62 * sg, -0.16);
+            foreach (int e in new[] { 1, -1 })
+                cv.Stroke([end, new(pc.X + 0.22 * e, pc.Y + 0.02)], 0.022, 0, flat: 0.8);
+            var pan = cv.Ellipse(pc, 0.25, 0.14, lowerHalf: true);
+            cv.Plate(pan, 0.02, 0.07, 0.07);
+            cv.InsetGroove(pan, 0.03, 0.01, 0.012);
+            cv.Stroke([new(pc.X - 0.26, pc.Y), new(pc.X + 0.26, pc.Y)], 0.025, 0.05, flat: 0.8);
+        }
+        cv.Dome(new Pt(0, 0.44), 0.08, 0.05, 0.06);
+        cv.Dome(new Pt(0, 0.64), 0.1, 0.02, 0.08);
+        cv.Accent.OrWith(cv.Circle(new Pt(0, 0.64), 0.085));
+    }
+
+    private static void Chalice(ReliefCanvas cv)
+    {
+        var bowl = cv.Poly(Mirrored(Bezier(new(0.44, 0.62), new(0.46, 0.22), new(0.26, 0.04), new(0.06, 0.0), 60)));
+        cv.Plate(bowl, 0.02, 0.2, 0.1, ReliefCanvas.Profile.Smooth);
+        cv.InsetGroove(bowl, 0.04, 0.012, 0.015);
+        cv.Stroke([new(-0.47, 0.62), new(0.47, 0.62)], 0.045, 0.07, flat: 0.8);
+        foreach (var (x, y) in new[] { (-0.22, 0.34), (0.0, 0.3), (0.22, 0.34) })
+        {
+            cv.Dome(new Pt(x, y), 0.065, 0.09, 0.05);
+            cv.Accent.OrWith(cv.Circle(new Pt(x, y), 0.058));
+        }
+        cv.Stroke([new(0, 0.02), new(0, -0.58)], 0.05, 0, flat: 0.8);
+        cv.Dome(new Pt(0, -0.25), 0.11, 0.02, 0.08);
+        foreach (double y in new[] { -0.02, -0.54 })
+            cv.Stroke([new(-0.12, y), new(0.12, y)], 0.03, 0.04, flat: 0.85);
+        var foot = cv.Poly(Mirrored(Bezier(new(0.07, -0.56), new(0.1, -0.66), new(0.3, -0.72), new(0.4, -0.84), 40)));
+        cv.Plate(foot, 0, 0.08, 0.07);
+        cv.InsetGroove(foot, 0.035, 0.011, 0.014);
+    }
+
+    /// <summary>A straight arming sword, point up, raised by <paramref name="z"/> so a crossed pair can overlap.</summary>
+    private static void Sword(ReliefCanvas cv, double z)
+    {
+        var blade = cv.Poly([new(-0.11, -0.26), new(0.11, -0.26), new(0.095, 0.58), new(0, 0.95), new(-0.095, 0.58)]);
+        cv.Plate(blade, z, 0.1, 0.075, ReliefCanvas.Profile.Linear);
+        CutLine(cv, new(0, -0.2), new(0, 0.56), 0.014, 0.025);
+        cv.Stroke(Bezier(new(-0.3, -0.19), new(-0.14, -0.28), new(0.14, -0.28), new(0.3, -0.19), 60), 0.05, z + 0.04, flat: 0.85);
+        foreach (int sg in new[] { 1, -1 }) cv.Dome(new Pt(0.31 * sg, -0.18), 0.055, z + 0.04, 0.05);
+        cv.Stroke([new(0, -0.3), new(0, -0.74)], 0.065, z, flat: 0.85);
+        foreach (double y in Lin(-0.36, -0.68, 6)) CutLine(cv, new(-0.06, y - 0.03), new(0.06, y + 0.03), 0.007, 0.02);
+        cv.Dome(new Pt(0, -0.27), 0.07, z + 0.06, 0.05);
+        cv.Accent.OrWith(cv.Circle(new Pt(0, -0.27), 0.06));
+        cv.Dome(new Pt(0, -0.83), 0.1, z + 0.01, 0.08);
+    }
+
+    private static void CrossedSwords(ReliefCanvas cv)
+    {
+        double rot0 = cv.Rot, s0 = cv.Scale;
+        cv.Scale = s0 * 1.02;
+        cv.Rot = rot0 + 0.62;
+        Sword(cv, 0);
+        cv.Rot = rot0 - 0.62;
+        Sword(cv, 0.05);
+        cv.Rot = rot0;
+        cv.Scale = s0;
+    }
+
+    /// <summary>A curved sabre, point up and sweeping right: edge on the convex side, fuller along the spine.</summary>
+    private static void Sabre(ReliefCanvas cv)
+    {
+        var spine = Bezier(new(0, -0.24), new(0, 0.3), new(0.06, 0.66), new(0.26, 0.9), 120);
+        Pt Nrm(int i)
+        {
+            var d = (spine[Math.Min(i + 1, spine.Length - 1)] - spine[Math.Max(i - 1, 0)]).Unit;
+            return new Pt(-d.Y, d.X);   // toward the convex, cutting side
+        }
+        var edge = new List<Pt>();
+        var back = new List<Pt>();
+        for (int i = 0; i < spine.Length; i++)
+        {
+            double s = i / (double)(spine.Length - 1);
+            edge.Add(spine[i] + Nrm(i) * (0.12 * Math.Pow(1 - s, 0.6)));
+            back.Add(spine[i] - Nrm(i) * (0.06 * (1 - s * s * s)));
+        }
+        cv.Plate(cv.Poly(edge.Concat(Enumerable.Reverse(back)).ToArray()), 0, 0.1, 0.07, ReliefCanvas.Profile.Linear);
+        CutCurve(cv, spine.Take(84).Skip(6).Select((p, i) => p - Nrm(i + 6) * 0.025).ToArray(), 0.012, 0.022);
+
+        cv.Stroke([new(-0.22, -0.26), new(0.22, -0.26)], 0.05, 0.04, flat: 0.85);
+        foreach (int sg in new[] { 1, -1 }) cv.Dome(new Pt(0.21 * sg, -0.26), 0.05, 0.04, 0.045);
+        cv.Dome(new Pt(0, -0.26), 0.07, 0.06, 0.05);
+        cv.Accent.OrWith(cv.Circle(new Pt(0, -0.26), 0.06));
+        var grip = Bezier(new(0, -0.3), new(0, -0.5), new(-0.03, -0.66), new(-0.07, -0.76), 40);
+        cv.Stroke(grip, 0.058, 0, flat: 0.85);
+        foreach (int i in new[] { 8, 16, 24, 32 }) CutLine(cv, grip[i] + new Pt(-0.055, -0.02), grip[i] + new Pt(0.055, 0.02), 0.007, 0.02);
+        cv.Dome(new Pt(-0.09, -0.82), 0.085, 0.01, 0.07);
+    }
+
+    /// <summary>An ancient leaf-bladed sword with a raised midrib and a spiral antenna pommel.</summary>
+    private static void LeafSword(ReliefCanvas cv)
+    {
+        const double y0 = -0.22, y1 = 0.94;
+        double W(double s) => s < 0.6
+            ? 0.075 + 0.08 * SmoothStep(0, 0.6, s)
+            : 0.155 * Math.Pow(Math.Max(0, 1 - (s - 0.6) / 0.4), 0.7);
+        var ss = Lin(0, 1, 120);
+        var blade = ss.Select(s => new Pt(W(s), y0 + (y1 - y0) * s))
+                      .Concat(ss.Reverse().Select(s => new Pt(-W(s), y0 + (y1 - y0) * s))).ToArray();
+        cv.Plate(cv.Poly(blade), 0, 0.15, 0.08, ReliefCanvas.Profile.Linear);
+        cv.Stroke([new(0, y0), new(0, 0.78)], t => 0.024 - 0.012 * t, 0.06, flat: 0.8);
+
+        cv.Stroke(Bezier(new(-0.18, -0.15), new(-0.1, -0.27), new(0.1, -0.27), new(0.18, -0.15), 40), 0.045, 0.03, flat: 0.85);
+        cv.Stroke([new(0, -0.26), new(0, -0.66)], 0.052, 0, flat: 0.85);
+        foreach (double y in new[] { -0.38, -0.54 }) cv.Stroke([new(-0.06, y), new(0.06, y)], 0.022, 0.04, flat: 0.9);
+        cv.Dome(new Pt(0, -0.21), 0.06, 0.06, 0.045);
+        cv.Accent.OrWith(cv.Circle(new Pt(0, -0.21), 0.05));
+        foreach (int sg in new[] { 1, -1 })
+        {
+            // Antennae: each arm leaves the grip and rolls outward into a spiral.
+            var c = new Pt(0.17 * sg, -0.76);
+            var arm = Bezier(new(0, -0.66), new(0.04 * sg, -0.76), new(0.1 * sg, -0.86), c + new Pt(0, -0.08), 30)
+                .Concat(Lin(0, 1, 80).Select(u => c + Pt.Polar(0.08 * (1 - 0.7 * u), -Math.PI / 2 + sg * u * Tau * 0.9))).ToArray();
+            cv.Stroke(arm, t => 0.04 - 0.018 * t, 0, flat: 0.85);
+            cv.Dome(c, 0.03, 0.02, 0.03);
+        }
     }
 
     private static void HornedDisc(ReliefCanvas cv)
@@ -994,6 +1503,45 @@ public static class ReliefMotifs
         }
     }
 
+    /// <summary>
+    /// Two leafy branches rising from a knot at the bottom and stopping short of the top, with
+    /// enamel berries among the leaves.
+    /// </summary>
+    private static void Wreath(ReliefCanvas cv)
+    {
+        const double R = 0.84, a0 = -Math.PI / 2 + 0.16, a1 = Math.PI / 2 - 0.42;
+        const int leaves = 11;
+        foreach (int sg in new[] { 1, -1 })
+        {
+            Pt At(double u)
+            {
+                double a = a0 + u * (a1 - a0);
+                return new Pt(sg * Math.Cos(a) * R, Math.Sin(a) * R);
+            }
+            cv.Stroke(Lin(0, 1, 200).Select(At).ToArray(), t => 0.024 - 0.01 * t, 0, flat: 0.8);
+            for (int k = 0; k < leaves; k++)
+            {
+                double u = (k + 0.5) / leaves;
+                Pt p = At(u), tan = (At(u + 0.01) - At(u - 0.01)).Unit;
+                double ta = Math.Atan2(tan.Y, tan.X), L = 0.19 - 0.05 * u, W = 0.058 - 0.014 * u;
+                Leaf(cv, p, ta + 0.55 * sg, L, W, 0.02);
+                Leaf(cv, p, ta - 0.55 * sg, L, W, 0.02);
+                if (k % 3 == 1)
+                {
+                    Pt berry = p + Pt.Polar(0.085, ta - 1.3 * sg);
+                    cv.Dome(berry, 0.03, 0.04, 0.03);
+                    cv.Accent.OrWith(cv.Circle(berry, 0.027));
+                }
+            }
+            Pt e1 = At(1), e0 = At(0.98);
+            Leaf(cv, e1, Math.Atan2(e1.Y - e0.Y, e1.X - e0.X), 0.16, 0.05, 0.02);
+        }
+        foreach (int sg in new[] { 1, -1 })
+            cv.Stroke(Bezier(new(0, -0.84), new(0.08 * sg, -0.9), new(0.16 * sg, -0.96), new(0.2 * sg, -1.02), 30),
+                t => 0.04 - 0.015 * t, 0.03, flat: 0.8);
+        cv.Dome(new Pt(0, -0.84), 0.065, 0.04, 0.05);
+    }
+
     /// <summary>Draws a frame and returns the scale the motif should be drawn at inside it.</summary>
     private static double DrawFrame(ReliefCanvas cv, string kind, Engraving engraving)
     {
@@ -1048,6 +1596,10 @@ public static class ReliefMotifs
                 cv.Field = field;
                 return 0.72;
             }
+
+            case "wreath":
+                Wreath(cv);
+                return 0.66;
 
             default:
                 return 1.0;

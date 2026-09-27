@@ -27,7 +27,7 @@ internal static class LaunchUi
     public static readonly Font Strong = new("Segoe UI Semibold", 9.5f);
 
     /// <summary>A selected card's wash: a whisper of the accent, lighter than <see cref="Theme.AccentSoft"/>.</summary>
-    public static readonly Color SelectedWash = Color.FromArgb(244, 248, 255);
+    public static readonly Color SelectedWash = Theme.SelectedWash;
     public static readonly Color Good = Color.FromArgb(46, 140, 87);
 
     public static int S(Control control, int logical) => logical * control.DeviceDpi / 96;
@@ -263,7 +263,7 @@ internal static class LaunchUi
             float radius = S(10);
             using var path = Rounded(box, radius);
 
-            var fill = _selected ? SelectedWash : Hover && Enabled ? Color.FromArgb(250, 251, 253) : Theme.Surface;
+            var fill = _selected ? SelectedWash : Hover && Enabled ? Theme.SurfaceHover : Theme.Surface;
             using (var brush = new SolidBrush(fill)) g.FillPath(brush, path);
 
             var edge = _selected ? Theme.Accent : Hover && Enabled ? Color.FromArgb(150, Theme.Accent) : Theme.Border;
@@ -382,13 +382,13 @@ internal static class LaunchUi
             var box = new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
             float radius = S(10);
             using var path = Rounded(box, radius);
-            using (var brush = new SolidBrush(Hover ? Color.FromArgb(250, 251, 253) : Theme.Surface)) g.FillPath(brush, path);
+            using (var brush = new SolidBrush(Hover ? Theme.SurfaceHover : Theme.Surface)) g.FillPath(brush, path);
             using (var pen = new Pen(Hover ? Color.FromArgb(150, Theme.Accent) : Theme.Border)) g.DrawPath(pen, path);
 
             // The switch, top right.
             var track = new RectangleF(Width - S(14) - S(36), S(13), S(36), S(20));
             using (var tp = Rounded(track, track.Height / 2))
-            using (var tb = new SolidBrush(_on ? Theme.Accent : Color.FromArgb(196, 202, 212)))
+            using (var tb = new SolidBrush(_on ? Theme.Accent : Theme.Track))
                 g.FillPath(tb, tp);
             float knob = track.Height - S(6);
             float kx = _on ? track.Right - S(3) - knob : track.X + S(3);
@@ -621,6 +621,11 @@ internal static class LaunchUi
         private string? _chip;
         private string? _busy;
 
+        // The picture already scaled to the size it is drawn at. A high-quality scale of a full
+        // preview costs tens of milliseconds; an overlay animating at sixty frames a second
+        // repaints the whole control each frame, so the scale is done once and blitted after.
+        private Bitmap? _scaled;
+
         public MapPreview()
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer
@@ -637,7 +642,16 @@ internal static class LaunchUi
         public Bitmap? Image
         {
             get => _image;
-            set { if (ReferenceEquals(_image, value)) return; var old = _image; _image = value; Invalidate(); old?.Dispose(); }
+            set
+            {
+                if (ReferenceEquals(_image, value)) return;
+                var old = _image;
+                _image = value;
+                _scaled?.Dispose();
+                _scaled = null;
+                Invalidate();
+                old?.Dispose();
+            }
         }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -646,9 +660,29 @@ internal static class LaunchUi
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string? Busy { get => _busy; set { _busy = value; Invalidate(); } }
 
+        /// <summary>
+        /// Painted over the picture, inside the frame, and told where the picture lies: whatever a
+        /// screen animates on top of it (<see cref="LiveMap"/>). Invalidate to have it painted again.
+        /// </summary>
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public Action<Graphics, RectangleF>? Overlay { get; set; }
+
+        /// <summary>Where a picture of this size is drawn: whole, centred, letterboxed.</summary>
+        public RectangleF PictureBounds(Size picture)
+        {
+            if (picture.Width <= 0 || picture.Height <= 0) return new RectangleF(0, 0, Width, Height);
+            float scale = Math.Min((float)Width / picture.Width, (float)Height / picture.Height);
+            float w = picture.Width * scale, h = picture.Height * scale;
+            return new RectangleF((Width - w) / 2, (Height - h) / 2, w, h);
+        }
+
         protected override void Dispose(bool disposing)
         {
-            if (disposing) _image?.Dispose();
+            if (disposing)
+            {
+                _image?.Dispose();
+                _scaled?.Dispose();
+            }
             base.Dispose(disposing);
         }
 
@@ -665,12 +699,12 @@ internal static class LaunchUi
                        Color.FromArgb(22, 52, 104), Color.FromArgb(34, 84, 150), LinearGradientMode.Vertical))
                 g.FillPath(sea, path);
 
-            if (_image is { } image)
+            var bounds = Rectangle.Round(PictureBounds(_image?.Size ?? new Size(2, 1)));
+            if (_image is not null || Overlay is not null)
             {
-                float scale = Math.Min((float)Width / image.Width, (float)Height / image.Height);
-                float w = image.Width * scale, h = image.Height * scale;
                 g.SetClip(path);
-                g.DrawImage(image, new RectangleF((Width - w) / 2, (Height - h) / 2, w, h));
+                if (Scaled(bounds.Size) is { } picture) g.DrawImage(picture, bounds);
+                Overlay?.Invoke(g, bounds);
                 g.ResetClip();
             }
 
@@ -678,6 +712,22 @@ internal static class LaunchUi
 
             if (!string.IsNullOrEmpty(_chip)) DrawChip(g, _chip, S(12), Height - S(12), false);
             if (!string.IsNullOrEmpty(_busy)) DrawChip(g, _busy, Width - S(12), S(12) + ChipHeight, true);
+        }
+
+        private Bitmap? Scaled(Size size)
+        {
+            if (_image is null || size.Width <= 0 || size.Height <= 0) return null;
+            if (_scaled is { } cached && cached.Size == size) return cached;
+
+            _scaled?.Dispose();
+            _scaled = new Bitmap(size.Width, size.Height, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+            using var g = Graphics.FromImage(_scaled);
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            using var wrap = new System.Drawing.Imaging.ImageAttributes();
+            wrap.SetWrapMode(WrapMode.TileFlipXY);   // no pale seam where the filter reads past the edge
+            g.DrawImage(_image, new Rectangle(Point.Empty, size), 0, 0, _image.Width, _image.Height, GraphicsUnit.Pixel, wrap);
+            return _scaled;
         }
 
         private int ChipHeight => TextRenderer.MeasureText("Ag", ChipFont, Size.Empty, TextFormatFlags.NoPadding).Height + S(10);
@@ -688,7 +738,7 @@ internal static class LaunchUi
             var chip = new Rectangle(0, bottom - size.Height - S(10), size.Width + S(20), size.Height + S(10));
             chip.X = alignRight ? x - chip.Width : x;
             using var path = Rounded(chip, chip.Height / 2f);
-            using var back = new SolidBrush(Color.FromArgb(220, 255, 255, 255));
+            using var back = new SolidBrush(Color.FromArgb(220, Theme.Surface));
             g.FillPath(back, path);
             TextRenderer.DrawText(g, text, ChipFont, chip, Theme.Text,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);

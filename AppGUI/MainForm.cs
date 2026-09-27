@@ -396,7 +396,7 @@ public sealed partial class MainForm : ChromeForm
             Icon = exeIcon;
         }
 
-        Theme.ApplyLight(_grid);
+        Theme.Apply(_grid);
 
         _settingsView = new SettingsView(_options.Config);
         _grid.SelectedObject = _settingsView;
@@ -597,10 +597,19 @@ public sealed partial class MainForm : ChromeForm
         var titlesView = MenuItem("Titles", () => SelectWorldView(WorldView.Titles));
         var showLog = MenuItem("Log", () => SetLogOpen(!_logOpen, remember: true), "Ctrl+L");
 
+        // Checked against the saved choice rather than Theme.Dark, so a click shows as taken even
+        // though the window keeps its palette until the next launch.
+        var darkMode = MenuItem("Dark mode", () =>
+        {
+            _state.DarkMode = !_state.DarkMode;
+            _state.Save();
+        });
+
         var view = TopMenu(menu, "&View",
             terrain, climate, world, history, new ToolStripSeparator(),
             mapView, solidView, titlesView, new ToolStripSeparator(),
-            showLog);
+            showLog, new ToolStripSeparator(),
+            darkMode);
 
         view.DropDownOpening += (_, _) =>
         {
@@ -618,6 +627,8 @@ public sealed partial class MainForm : ChromeForm
             titlesView.Checked = inWorld && _worldView == WorldView.Titles;
             solidView.Enabled = _worldViewButtons[WorldView.ThreeD].Enabled;
             showLog.Checked = _logOpen;
+            darkMode.Checked = _state.DarkMode;
+            darkMode.Text = _state.DarkMode == Theme.Dark ? "Dark mode" : "Dark mode (applies on restart)";
         };
 
         // ---- Generate -------------------------------------------------------------------
@@ -1522,7 +1533,7 @@ public sealed partial class MainForm : ChromeForm
     protected override void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
-        Theme.ApplyLightTitleBar(this);
+        Theme.ApplyTitleBar(this);
         RestorePlacement();
 
         // Every page is still visible here (see BuildWorkspaces), so each splitter is placed

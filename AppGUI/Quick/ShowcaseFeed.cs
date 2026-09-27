@@ -57,6 +57,9 @@ internal sealed class ShowcaseFeed : Control
         _animate.Tick += (_, _) => Animate();
     }
 
+    /// <summary>A card has just been shown — the moment its pin belongs on the map.</summary>
+    public event Action<ShowcaseItem>? Revealed;
+
     /// <summary>What to say while nothing has arrived yet.</summary>
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public string EmptyText { get; set; } = "Peoples, faiths, armies and treasures appear here as the world is made.";
@@ -111,6 +114,7 @@ internal sealed class ShowcaseFeed : Control
         _reveal.Interval = Math.Clamp(1500 - 160 * _pending.Count, 450, 1500);
         _animate.Start();
         Invalidate();
+        Revealed?.Invoke(entry.Item);
     }
 
     private void Animate()
@@ -181,7 +185,7 @@ internal sealed class ShowcaseFeed : Control
     /// evenly. Anything else is shown whole, which is right for an icon that turned out not to be
     /// a strip after all.
     /// </summary>
-    private static Bitmap? Frame(Bitmap? image, int frames, int frame)
+    internal static Bitmap? Frame(Bitmap? image, int frames, int frame)
     {
         if (image is null || frames <= 1 || image.Width % frames != 0 || image.Width / frames < image.Height / 2)
             return image;
@@ -192,7 +196,7 @@ internal sealed class ShowcaseFeed : Control
         return cropped;
     }
 
-    private static Bitmap? Decode(string path)
+    internal static Bitmap? Decode(string path)
     {
         try
         {

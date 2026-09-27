@@ -58,7 +58,7 @@ public abstract class GuideForm : ChromeForm
     protected override void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
-        Theme.ApplyLightTitleBar(this);
+        Theme.ApplyTitleBar(this);
     }
 
     protected void AddAction(Button button) => _bar.Controls.Add(button);

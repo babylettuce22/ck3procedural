@@ -142,7 +142,7 @@ internal sealed class ModListDialog : ChromeForm
     protected override void OnShown(EventArgs e)
     {
         base.OnShown(e);
-        Theme.ApplyLightTitleBar(this);
+        Theme.ApplyTitleBar(this);
     }
 
     /// <summary>

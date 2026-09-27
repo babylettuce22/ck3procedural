@@ -47,7 +47,7 @@ internal sealed class StepPanel : Panel
             g.DrawPath(pen, path);
         }
         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.None;
-        using var rule = new SolidBrush(Color.FromArgb(232, 236, 242));
+        using var rule = new SolidBrush(Theme.Rule);
         foreach (var r in Rules) g.FillRectangle(rule, r);
     }
 

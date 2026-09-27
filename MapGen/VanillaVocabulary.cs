@@ -56,6 +56,14 @@ public sealed class VanillaVocabulary
 
     public List<string> FaithIcons { get; } = [];
 
+    /// <summary>
+    /// The icons vanilla offers a player who founds or reforms a faith: every religion's
+    /// <c>custom_faith_icons</c> list, merged in vanilla's own order. The picker shows nothing but
+    /// the religion's list, so a religion that declares none leaves it empty. Only icons whose art
+    /// is on disk are kept.
+    /// </summary>
+    public List<string> CustomFaithIcons { get; } = [];
+
     /// <summary>Temple model sets a generated religion may point its faiths at.</summary>
     public List<string> GraphicalFaiths { get; } = [];
 
@@ -291,7 +299,8 @@ public sealed class VanillaVocabulary
             Path.Combine(gameDir, "gfx", "interface", "coat_of_arms", "frames"));
         v.ReadDoctrines(Path.Combine(gameDir, "common", "religion", "doctrine_group_types"));
         v.ReadDoctrineConflicts(Path.Combine(gameDir, "common", "religion", "doctrine_types"));
-        v.ReadReligions(Path.Combine(gameDir, "common", "religion", "religion_types"));
+        v.ReadReligions(Path.Combine(gameDir, "common", "religion", "religion_types"),
+            Path.Combine(gameDir, "gfx", "interface", "icons", "faith"));
         v.ReadInnovationDefs(Path.Combine(gameDir, "common", "culture", "innovations"));
         v.ReadInnovations(Path.Combine(gameDir, "history", "cultures"));
         v.ReadMenAtArms(gameDir);
@@ -529,11 +538,12 @@ public sealed class VanillaVocabulary
         static bool Transparent(string block) => block is "OR" or "custom_description";
     }
 
-    private void ReadReligions(string dir)
+    private void ReadReligions(string dir, string iconDir)
     {
         if (!Directory.Exists(dir)) return;
 
         var icons = new HashSet<string>(StringComparer.Ordinal);
+        var customIcons = new HashSet<string>(StringComparer.Ordinal);
         var graphical = new HashSet<string>(StringComparer.Ordinal);
         var virtues = new HashSet<string>(StringComparer.Ordinal);
         var sins = new HashSet<string>(StringComparer.Ordinal);
@@ -559,6 +569,11 @@ public sealed class VanillaVocabulary
                     Collect(Block(traits, "virtues"), virtues);
                     Collect(Block(traits, "sins"), sins);
                 }
+
+                if (Block(body, "custom_faith_icons") is { } custom)
+                    foreach (Match m in Regex.Matches(Regex.Replace(custom, "#[^\n]*", " "), @"\w+"))
+                        if (customIcons.Add(m.Value) && File.Exists(Path.Combine(iconDir, m.Value + ".dds")))
+                            CustomFaithIcons.Add(m.Value);
 
                 string? loc = Block(body, "localization");
                 if (loc is null) continue;

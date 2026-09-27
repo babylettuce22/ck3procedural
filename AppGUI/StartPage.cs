@@ -34,6 +34,9 @@ internal sealed class StartPage : Panel
     /// <summary>The "Remember my choice" switch was flipped by the user.</summary>
     public event Action<bool>? RememberChanged;
 
+    /// <summary>The corner's dark-mode glyph was clicked. The host flips the saved choice and calls <see cref="SetDarkMode"/>.</summary>
+    public event Action? DarkModeToggled;
+
     private static readonly Font TitleFont = new("Segoe UI Semibold", 20f);
     private static readonly Font SubtitleFont = new("Segoe UI", 10.5f);
     private static readonly Font FooterFont = new("Segoe UI", 9f);
@@ -51,6 +54,7 @@ internal sealed class StartPage : Panel
     private readonly FooterText _gameText = new();
     private readonly LinkButton _gameChange;
     private readonly RememberSwitch _remember = new() { Name = "startRemember" };
+    private readonly ThemeGlyph _theme = new() { Name = "startTheme" };
     private readonly ToolTip _tips = new() { InitialDelay = 400 };
 
     public StartPage()
@@ -134,9 +138,22 @@ internal sealed class StartPage : Panel
         _tips.SetToolTip(_remember,
             "Open straight into whichever you pick next — Azgaar, Quick or Complex — from now on.\n"
             + "The Start link on the Quick page, or File ▸ Start page, brings this page back.");
+        _theme.Click += (_, _) => DarkModeToggled?.Invoke();
 
         Controls.AddRange([_banner, _title, _subtitle, _azgaar, _quick, _complex, _openWorld, _guide, _remember,
-                           _rule, _gameGlyph, _gameText, _gameChange]);
+                           _rule, _gameGlyph, _gameText, _gameChange, _theme]);
+    }
+
+    /// <summary>
+    /// What the corner glyph shows: the saved choice, which differs from the palette on screen
+    /// between a click and the next launch — and then says so, since nothing else on the page moves.
+    /// </summary>
+    public void SetDarkMode(bool saved)
+    {
+        _theme.Saved = saved;
+        string tip = saved ? "Switch to light mode" : "Switch to dark mode";
+        if (saved != Theme.Dark) tip = (saved ? "Dark" : "Light") + " mode on the next launch";
+        _tips.SetToolTip(_theme, tip);
     }
 
     private int S(int logical) => logical * DeviceDpi / 96;
@@ -215,6 +232,9 @@ internal sealed class StartPage : Panel
         int width = Math.Min(ClientSize.Width - 2 * margin, S(StepPanel.MaxColumn));
         if (width <= 0) return;
         int x = (ClientSize.Width - width) / 2;
+
+        // Out of the column altogether, tucked in the page's corner above where the banner starts.
+        _theme.Bounds = new Rectangle(ClientSize.Width - S(6) - S(24), S(2), S(24), S(24));
 
         int titleH = _title.PreferredHeight;
         int subtitleH = TextRenderer.MeasureText("Ag", SubtitleFont).Height;
@@ -434,7 +454,7 @@ internal sealed class StartPage : Panel
             chip.X = alignRight ? x - chip.Width : x;
 
             using var path = Rounded(chip, chip.Height / 2f);
-            using var back = new SolidBrush(Color.FromArgb(215, 255, 255, 255));
+            using var back = new SolidBrush(Color.FromArgb(215, Theme.Surface));
             g.FillPath(back, path);
             TextRenderer.DrawText(g, text, ChipFont, chip, Theme.Text,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
@@ -571,7 +591,7 @@ internal sealed class StartPage : Panel
                 using var cp = Rounded(chip, S(6));
                 using var cb = new SolidBrush(Theme.Background);
                 g.FillPath(cb, cp);
-                using var cpen = new Pen(Color.FromArgb(225, 230, 238));
+                using var cpen = new Pen(Theme.Rule);
                 g.DrawPath(cpen, cp);
                 TextRenderer.DrawText(g, feature, ChipFont, chip, Theme.Text,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
@@ -751,7 +771,7 @@ internal sealed class StartPage : Panel
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
             var track = new RectangleF(0.5f, (Height - S(16)) / 2f, S(30), S(16));
-            var off = _hover ? Color.FromArgb(170, 177, 188) : Color.FromArgb(196, 202, 212);
+            var off = _hover ? Theme.TrackHover : Theme.Track;
             using (var path = Rounded(track, track.Height / 2))
             using (var fill = new SolidBrush(_on ? Theme.Accent : off))
                 g.FillPath(fill, path);
@@ -762,6 +782,63 @@ internal sealed class StartPage : Panel
             var textRect = new Rectangle((int)track.Right + S(8), 0, Width - (int)track.Right - S(8), Height);
             TextRenderer.DrawText(g, Label, LabelFont, textRect, _on || _hover ? Theme.Text : Theme.TextDim,
                 TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
+
+            if (Focused && ShowFocusCues) ControlPaint.DrawFocusRectangle(g, new Rectangle(0, 0, Width, Height));
+        }
+    }
+
+    /// <summary>
+    /// The dark-mode switch: a lone moon (or sun, once dark is chosen) in the page's corner, faint
+    /// until hovered. A preference nobody comes to this page for, so it stays out of the column.
+    /// A small accent dot beside it marks a choice still waiting for the next launch.
+    /// </summary>
+    private sealed class ThemeGlyph : Button
+    {
+        private static readonly Font GlyphFont = new(GlyphFamily, 11f);
+        private bool _saved = Theme.Dark;
+        private bool _hover;
+
+        public ThemeGlyph()
+        {
+            Cursor = Cursors.Hand;
+            FlatStyle = FlatStyle.Flat;
+            UseVisualStyleBackColor = false;
+            BackColor = Theme.Background;
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint, true);
+            AccessibleName = "Dark mode";
+        }
+
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public bool Saved
+        {
+            get => _saved;
+            set { _saved = value; AccessibleDescription = value ? "On" : "Off"; Invalidate(); }
+        }
+
+        private int S(int logical) => logical * DeviceDpi / 96;
+
+        protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
+        protected override void OnMouseLeave(EventArgs e) { _hover = false; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+        protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.Clear(Parent?.BackColor ?? Theme.Background);
+
+            // The mode a click leads to: a moon while light is chosen, a sun while dark is.
+            string glyph = _saved ? "" : "";
+            TextRenderer.DrawText(g, glyph, GlyphFont, ClientRectangle, _hover ? Theme.TextDim : Theme.TextFaint,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+
+            if (_saved != Theme.Dark)
+            {
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                int d = S(5);
+                using var dot = new SolidBrush(Theme.Accent);
+                g.FillEllipse(dot, Width - d - S(2), S(2), d, d);
+            }
 
             if (Focused && ShowFocusCues) ControlPaint.DrawFocusRectangle(g, new Rectangle(0, 0, Width, Height));
         }

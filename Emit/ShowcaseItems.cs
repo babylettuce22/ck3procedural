@@ -16,8 +16,82 @@ namespace Ck3MapGen.Emit;
 /// </summary>
 internal static class ShowcaseItems
 {
-    /// <summary>The largest realms on the map, named.</summary>
-    public static IEnumerable<ShowcaseItem> Realms(RealmMap realms)
+    /// <summary>
+    /// Where things are, for the pins a watching screen puts on its map: provinces and counties as
+    /// fractions of the map's width and height. Read off the partition's seeds, because the point a
+    /// province grew from is always inside it, where a centroid need not be.
+    /// </summary>
+    public sealed class Places
+    {
+        private readonly ProvinceMap _map;
+        private readonly int[] _labelOf;
+
+        public Places(ProvinceMap map, int[] order)
+        {
+            _map = map;
+            _labelOf = new int[order.Length == 0 ? 1 : Math.Max(1, order.Max() + 1)];
+            Array.Fill(_labelOf, -1);
+            for (int label = 0; label < order.Length; label++)
+                if (order[label] >= 0) _labelOf[order[label]] = label;
+        }
+
+        /// <summary>A province's seed, by province id.</summary>
+        public (float X, float Y)? Province(int id)
+        {
+            if (id < 0 || id >= _labelOf.Length) return null;
+            int label = _labelOf[id];
+            if (label < 0 || label >= _map.Count) return null;
+
+            var seed = _map.Seeds[label];
+            return ((seed.X + 0.5f) / _map.Width, (seed.Y + 0.5f) / _map.Height);
+        }
+
+        /// <summary>A county's seat.</summary>
+        public (float X, float Y)? County(Title? county)
+            => county?.Capital is { ProvinceId: > 0 } seat ? Province(seat.ProvinceId) : null;
+
+        /// <summary>
+        /// The middle of a spread of counties, pinned to a real seat: the seat nearest their mean,
+        /// wilderness left out — the place the map modes put a faith's or a people's badge.
+        /// </summary>
+        public (float X, float Y)? Heart(IEnumerable<Title> counties, WildernessMap? wilderness)
+        {
+            var seats = counties.Where(c => wilderness?.Contains(c) != true)
+                .Select(County).OfType<(float X, float Y)>().ToList();
+            if (seats.Count == 0) return null;
+
+            float mx = seats.Average(p => p.X), my = seats.Average(p => p.Y);
+            return seats.MinBy(p => (p.X - mx) * (p.X - mx) + (p.Y - my) * (p.Y - my) * 0.25f);
+        }
+    }
+
+    /// <summary>
+    /// Every county in the colour <paramref name="colourOf"/> gives it, wilderness in its usual tint:
+    /// the whole-map picture of a layer, drawn the way the World workspace's map modes draw it.
+    /// </summary>
+    public static AppGUI.PreviewRenderer.Image CountyPicture(ProvinceMap provinces, int[] order, int baronyCount,
+        int landCount, List<Title> empires, WildernessMap? wilderness, Func<Title, (byte R, byte G, byte B)?> colourOf)
+        => AppGUI.PreviewRenderer.RenderByCounty(
+            new AppGUI.PreviewRenderer.ProvinceRaster(provinces.Width, provinces.Height, i => order[provinces.Label[i]],
+                baronyCount, landCount, empires, wilderness is null ? null : wilderness.Contains),
+            colourOf);
+
+    /// <summary>The peoples' map: every county in its culture's colour.</summary>
+    public static AppGUI.PreviewRenderer.Image CulturePicture(CultureMap cultures, ProvinceMap provinces, int[] order,
+        int baronyCount, int landCount, List<Title> empires, WildernessMap? wilderness)
+        => CountyPicture(provinces, order, baronyCount, landCount, empires, wilderness,
+            county => cultures.ByCounty.TryGetValue(county, out var culture) ? culture.Color : null);
+
+    /// <summary>The faiths' map: every county in its faith's colour.</summary>
+    public static AppGUI.PreviewRenderer.Image FaithPicture(FaithMap faiths, ProvinceMap provinces, int[] order,
+        int baronyCount, int landCount, List<Title> empires, WildernessMap? wilderness)
+        => CountyPicture(provinces, order, baronyCount, landCount, empires, wilderness,
+            county => faiths.ByCounty.TryGetValue(county, out var faith)
+                ? (ToByte(faith.Color.R), ToByte(faith.Color.G), ToByte(faith.Color.B))
+                : null);
+
+    /// <summary>The largest realms on the map, named, with a crown on the greatest one's seat.</summary>
+    public static IEnumerable<ShowcaseItem> Realms(RealmMap realms, Places? places = null)
     {
         var greatest = realms.Greatest
             .Where(t => t.Tier is "h" or "e" or "k" && !string.IsNullOrWhiteSpace(t.Name))
@@ -31,11 +105,13 @@ internal static class ShowcaseItems
             Title = greatest[0].Name,
             Subtitle = $"The greatest realm, among {greatest.Count - 1} other great powers",
             Chips = greatest.Skip(1).Select(t => $"{t.Name} · {TierWord(t.Tier)}").ToList(),
+            MapAt = places?.County(realms.HolderCounty.GetValueOrDefault(greatest[0])),
+            PinGlyph = nameof(WonderArchetype.ImperialPalace),
         };
     }
 
     /// <summary>The world's wonders, with the game's building art.</summary>
-    public static IEnumerable<ShowcaseItem> Wonders(WorldCenterMap centers, string gameDir)
+    public static IEnumerable<ShowcaseItem> Wonders(WorldCenterMap centers, string gameDir, Places? places = null)
     {
         foreach (var center in centers.Centers.Take(3))
         {
@@ -47,12 +123,18 @@ internal static class ShowcaseItems
                 Subtitle = $"In {center.County.Name}",
                 Body = Clip(wonder.Description, 170),
                 Images = [GamePath(gameDir, wonder.IconTexture)],
+                MapAt = places?.Province(center.CapitalBarony.ProvinceId),
+                PinGlyph = wonder.Archetype.ToString(),
             };
         }
     }
 
-    /// <summary>The largest peoples: their colour, their heritage, and names in their language.</summary>
-    public static IEnumerable<ShowcaseItem> Cultures(CultureMap cultures)
+    /// <summary>
+    /// The largest peoples: their colour, their heritage, and names in their language. Pinned at
+    /// their heartland, wearing their race's badge when they are not human.
+    /// </summary>
+    public static IEnumerable<ShowcaseItem> Cultures(CultureMap cultures, Places? places = null,
+        EthnicityMap? ethnicities = null, WildernessMap? wilderness = null)
     {
         var sizes = new Dictionary<Culture, int>();
         foreach (var culture in cultures.ByCounty.Values)
@@ -84,6 +166,11 @@ internal static class ShowcaseItems
                 Chips = new[] { culture.Ethos }.Concat(culture.Traditions.Take(3)).Select(Readable)
                     .Where(s => s.Length > 0).ToList(),
                 Color = culture.Color,
+                MapAt = places?.Heart(culture.Counties, wilderness),
+                PinImages = ethnicities is not null
+                            && AppGUI.PreviewRenderer.PhenotypeIconPath(ethnicities.For(culture).Archetype) is { } badge
+                    ? [badge]
+                    : [],
             };
         }
     }
@@ -145,7 +232,8 @@ internal static class ShowcaseItems
     /// The largest faiths, with the icon just drawn for each. Called once the religion files are on
     /// disk, since that is when a generated icon exists to show.
     /// </summary>
-    public static IEnumerable<ShowcaseItem> Faiths(FaithMap faiths, string modDir, string gameDir)
+    public static IEnumerable<ShowcaseItem> Faiths(FaithMap faiths, string modDir, string gameDir,
+        Places? places = null, WildernessMap? wilderness = null)
     {
         var largest = faiths.Faiths
             .Where(f => f.Counties.Count > 0)
@@ -170,19 +258,19 @@ internal static class ShowcaseItems
                     Path.Combine(modDir, "gfx", "interface", "icons", "faith", file),
                     GamePath(gameDir, "gfx/interface/icons/faith/" + file),
                 ],
+                MapAt = places?.Heart(faith.Counties, wilderness),
             };
         }
     }
 
-    /// <summary>A few of the names the seas, lakes and great rivers were given.</summary>
-    public static IEnumerable<ShowcaseItem> Waters(IReadOnlyDictionary<int, string> names)
+    /// <summary>A few of the names the seas, lakes and great rivers were given; an anchor on the first.</summary>
+    public static IEnumerable<ShowcaseItem> Waters(IReadOnlyDictionary<int, string> names, Places? places = null)
     {
-        var distinct = names
+        var named = names
             .OrderBy(kv => kv.Key)
-            .Select(kv => kv.Value)
-            .Where(n => !string.IsNullOrWhiteSpace(n))
-            .Distinct(StringComparer.Ordinal)
+            .Where(kv => !string.IsNullOrWhiteSpace(kv.Value))
             .ToList();
+        var distinct = named.Select(kv => kv.Value).Distinct(StringComparer.Ordinal).ToList();
         if (distinct.Count == 0) yield break;
 
         yield return new ShowcaseItem
@@ -191,6 +279,8 @@ internal static class ShowcaseItems
             Title = distinct[0],
             Subtitle = $"{distinct.Count} seas, lakes and rivers were named",
             Chips = distinct.Skip(1).Take(8).ToList(),
+            MapAt = places?.Province(named[0].Key),
+            PinGlyph = nameof(WonderArchetype.GreatHarbor),
         };
     }
 

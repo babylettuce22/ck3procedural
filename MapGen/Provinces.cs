@@ -212,16 +212,24 @@ public static class Provinces
 
         Core.Stage.Detail("  · seed coverage", () => EnsureSeedsCoverComponents(domain, width, height, seeds));
 
+        // For anyone watching the run: the provinces forming, sketched at each step below. Null,
+        // and every sketch line skipped, when nobody is. See PartitionSketcher.
+        var sketcher = PartitionSketcher.Start(width, height, cfg);
+        if (sketcher is not null) Core.Showcase.Sketch(() => sketcher.Seeded(seeds));
+
         // Rivers add crossing resistance to CostElevation
         var cost = Core.Stage.Detail("  · cost elevation blur", () => CostElevation(elevation, mask, drainage, width, height, cfg));
 
         var bucketManager = new ThreadBucketManager();
+        ushort[]? arrival = null;
         var label = Core.Stage.Detail("  · delta-stepping partition",
-            () => Partition(domain, cost, width, height, cfg, seeds, bucketManager));
+            () => Partition(domain, cost, width, height, cfg, seeds, bucketManager,
+                sketcher is null ? null : state => arrival = sketcher.Arrival(state, seeds)));
 
         var map = new ProvinceMap { Width = width, Height = height, Label = label, Seeds = seeds };
         Core.Stage.Detail("  · repair unlabeled", () => RepairUnlabeled(map, domain));
-        Core.Stage.Detail("  · lloyd relaxation", () => Relax(map, domain, cost, cfg, bucketManager));
+        if (sketcher is not null) Core.Showcase.Sketch(() => sketcher.Draw(map, Core.PartitionStep.Grown, arrival));
+        Core.Stage.Detail("  · lloyd relaxation", () => Relax(map, domain, cost, cfg, bucketManager, sketcher));
         Core.Stage.Detail("  · border smoothing", () => SmoothBorders(map, cfg));
         Core.Stage.Detail("  · sever waists", () => SeverWaists(map));
         Core.Stage.Detail("  · reconnect fragments", () => ReconnectFragments(map));
@@ -237,6 +245,7 @@ public static class Provinces
             MarkTrappedProvincesImpassable(map);
             MergeImpassableRanges(map, cfg);
         });
+        if (sketcher is not null) Core.Showcase.Sketch(() => sketcher.Draw(map, Core.PartitionStep.Settled));
         Core.Stage.Detail("  · province report", () => Report(map, elevation, cfg));
         if (azgaar is not null || snap) VerifyDomains(map, domain);
         return map;
@@ -378,7 +387,7 @@ public static class Provinces
     }
 
     private static void Relax(ProvinceMap map, int[] domain, float[] elevation, MapConfig cfg,
-        ThreadBucketManager bucketManager)
+        ThreadBucketManager bucketManager, PartitionSketcher? sketcher = null)
     {
         int iterations = Math.Max(0, cfg.ProvinceRelaxIterations);
         if (iterations == 0) return;
@@ -506,6 +515,10 @@ public static class Provinces
 
             map.Label = Partition(domain, elevation, map.Width, map.Height, cfg, map.Seeds, bucketManager);
             RepairUnlabeled(map, domain);
+
+            int round = pass + 1;
+            if (sketcher is not null)
+                Core.Showcase.Sketch(() => sketcher.Draw(map, Core.PartitionStep.Relaxed, pass: round, passes: iterations));
         }
 
         Console.WriteLine($"  relaxed {iterations}x: seeds moved {moved:F1} px on the last pass " +
@@ -1654,8 +1667,13 @@ public static class Provinces
             Console.WriteLine($"  added {added} seeds to cover otherwise-unreachable components");
     }
 
+    /// <param name="grown">
+    /// Handed the finished distance-and-label state before it is discarded, for a watcher's sketch
+    /// of the growth (<see cref="PartitionSketcher.Arrival"/>). Must only read it.
+    /// </param>
     private static int[] Partition(int[] domainField, float[] elevation, int width, int height,
-        MapConfig cfg, List<ProvinceSeed> seeds, ThreadBucketManager bucketManager)
+        MapConfig cfg, List<ProvinceSeed> seeds, ThreadBucketManager bucketManager,
+        Action<ulong[]>? grown = null)
     {
         int n = width * height;
         var state = new ulong[n];
@@ -1746,6 +1764,8 @@ public static class Provinces
                 currentBucketCount = bucketManager.CollectBucket(activeBucket, ref currentBucketItems);
             }
         }
+
+        grown?.Invoke(state);
 
         var label = new int[n];
         Parallel.For(0, height, y =>

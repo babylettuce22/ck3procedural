@@ -60,6 +60,12 @@ public sealed partial class MainForm
             if (!on) _state.StartWith = null;
             _state.Save();
         };
+        _start.DarkModeToggled += () =>
+        {
+            _state.DarkMode = !_state.DarkMode;
+            _state.Save();
+            _start.SetDarkMode(_state.DarkMode);
+        };
         _start.OpenWorldPicked += () => OpenGeneratedWorldAsync().Forget("open generated world");
         _start.GuidePicked += ShowWelcomeGuide;
         _start.GameFolderPicked += PickGameFolder;
@@ -73,6 +79,7 @@ public sealed partial class MainForm
         ShowLauncherPage(_start);
         _start.Present(Core.GameLocator.IsGameDir(_options.GameDir), _options.GameDir, _modRoot);
         _start.SetRemember(_state.RememberStartChoice, _state.StartWith);
+        _start.SetDarkMode(_state.DarkMode);
         _start.Focus();
     }
 

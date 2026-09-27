@@ -1406,7 +1406,7 @@ public static class PreviewRenderer
     /// tenth of the badge, because below that the glyphs stop being distinguishable from each other
     /// and a map full of identical smudges is worse than no badges at all.
     /// </summary>
-    private static bool InWonderGlyph(WonderArchetype archetype, double u, double v) => archetype switch
+    internal static bool InWonderGlyph(WonderArchetype archetype, double u, double v) => archetype switch
     {
         // A domed hall: finial, dome, then a plinth wider than the dome so the two read as
         // separate parts of a building rather than as one bell-shaped blob.
@@ -1475,16 +1475,17 @@ public static class PreviewRenderer
     {
         if (IconCache.TryGetValue(archetype, out var cached)) return cached;
 
+        return IconCache[archetype] = PhenotypeIconPath(archetype) is { } path ? DdsReader.Load(path) : null;
+    }
+
+    /// <summary>The badge a race wears on the Ethnicities view, as a file; null for humans, who have none.</summary>
+    internal static string? PhenotypeIconPath(RaceArchetype archetype)
+    {
         string? filename = GetPhenotypeIconFilename(archetype);
-        if (filename is null) return IconCache[archetype] = null;
+        if (filename is null) return null;
 
-        string traitDir = Path.Combine(
-            Emit.StaticFileWriter.SetDirectory(Emit.StaticFileWriter.Core),
-            "gfx", "interface", "icons", "traits");
-
-        string path = Path.Combine(traitDir, filename);
-        var loaded = DdsReader.Load(path);
-        return IconCache[archetype] = loaded;
+        return Path.Combine(Emit.StaticFileWriter.SetDirectory(Emit.StaticFileWriter.Core),
+            "gfx", "interface", "icons", "traits", filename);
     }
 
     public static (byte R, byte G, byte B) HueColour(double hueDegrees, double s, double v)

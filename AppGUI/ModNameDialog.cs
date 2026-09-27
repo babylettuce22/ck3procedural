@@ -148,7 +148,7 @@ internal sealed class ModNameDialog : ChromeForm
     protected override void OnShown(EventArgs e)
     {
         base.OnShown(e);
-        Theme.ApplyLightTitleBar(this);
+        Theme.ApplyTitleBar(this);
 
         // Selected rather than merely focused: the common case is replacing the last map's name
         // outright, not editing it.

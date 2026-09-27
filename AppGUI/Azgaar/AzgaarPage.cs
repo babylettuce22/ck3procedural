@@ -1082,11 +1082,11 @@ internal sealed class AzgaarPage : Panel
             using var path = Rounded(box, radius);
 
             bool empty = _state == State.Empty;
-            var fill = empty ? (Hover ? SelectedWash : Theme.Background) : Hover ? Color.FromArgb(250, 251, 253) : Theme.Surface;
+            var fill = empty ? (Hover ? SelectedWash : Theme.Background) : Hover ? Theme.SurfaceHover : Theme.Surface;
             using (var brush = new SolidBrush(fill)) g.FillPath(brush, path);
 
             var edge = _state == State.Error ? Theme.Danger
-                     : empty ? (Hover ? Theme.Accent : Color.FromArgb(170, 182, 200))
+                     : empty ? (Hover ? Theme.Accent : Theme.BorderStrong)
                      : Hover ? Color.FromArgb(150, Theme.Accent) : Theme.Border;
             using (var pen = new Pen(edge, empty ? 1.5f : 1f) { DashStyle = empty ? System.Drawing.Drawing2D.DashStyle.Dash : System.Drawing.Drawing2D.DashStyle.Solid })
                 g.DrawPath(pen, path);

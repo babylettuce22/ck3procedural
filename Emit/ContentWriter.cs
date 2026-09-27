@@ -209,8 +209,12 @@ public static partial class ContentWriter
         Core.Stage.Time("religion files", () => ReligionWriter.WriteAll(modDir, generatedFaiths.Declared(), cfg.Seed));
 
         // After the religion files rather than with the faiths: a generated faith's icon is drawn
-        // by the writer above, and this is the first moment it exists to be shown. See Showcase.
-        Core.Showcase.Publish(() => ShowcaseItems.Faiths(generatedFaiths, modDir, gameDir));
+        // by the writer above, and this is the first moment it exists to be shown. Their map
+        // first, so the pins land on it. See Showcase.
+        Core.Showcase.Picture("Faiths", () => ShowcaseItems.FaithPicture(generatedFaiths, provinces, order,
+            baronyCount, landCount, empires, generatedWilderness));
+        Core.Showcase.Publish(() => ShowcaseItems.Faiths(generatedFaiths, modDir, gameDir, new(provinces, order),
+            generatedWilderness));
 
         // After the religions, whose crown-or-regalia answer it writes into CK3's triggers, and
         // after the titles it reads seats off. It writes nothing anything else reads.

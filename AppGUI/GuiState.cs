@@ -66,6 +66,12 @@ public sealed class GuiState
     /// <summary>Where the last exported view PNG went.</summary>
     public string? ExportDir { get; set; }
 
+    /// <summary>
+    /// The dark palette. Read by <see cref="Theme.Dark"/> once at startup, so a change made from
+    /// the View menu lands at the next launch.
+    /// </summary>
+    public bool DarkMode { get; set; }
+
     /// <summary>Whether the first-launch walkthrough has had its one uninvited showing.</summary>
     public bool WelcomeShown { get; set; }
     public string? PresetDir { get; set; }

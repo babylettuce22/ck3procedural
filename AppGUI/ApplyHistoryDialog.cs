@@ -129,7 +129,7 @@ internal sealed class ApplyHistoryDialog : ChromeForm
     protected override void OnShown(EventArgs e)
     {
         base.OnShown(e);
-        Theme.ApplyLightTitleBar(this);
+        Theme.ApplyTitleBar(this);
         _year.Focus();
         _year.SelectAll();
     }

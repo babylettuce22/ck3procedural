@@ -97,6 +97,8 @@ public static class ReligionWriter
                 }
 
                 b.Blank();
+                b.Inline("custom_faith_icons", string.Join(' ', CustomFaithIcons(religion)));
+                b.Blank();
 
                 using (b.Block("localization"))
                     foreach (var (tag, value) in religion.Localization) b.Field(tag, value);
@@ -193,6 +195,29 @@ public static class ReligionWriter
         }
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_religions.txt"), b.ToString());
+    }
+
+    /// <summary>
+    /// The icons the game offers when a faith of this religion reforms or a new faith is founded
+    /// from it — the picker lists this and nothing else, so without it the list is empty. The
+    /// religion's own icons first, each faith's and the reformed one drawn for an unreformed
+    /// faith, then vanilla's shared list, which every vanilla religion carries.
+    ///
+    /// <see cref="VanillaVocabulary.Current"/> for the same reason as
+    /// <see cref="CultureWriter.HouseFrameFor"/>: the editor's rewrite has no vocabulary in hand.
+    /// </summary>
+    private static IEnumerable<string> CustomFaithIcons(Religion religion)
+    {
+        var icons = new List<string>();
+        foreach (var faith in religion.Faiths)
+        {
+            icons.Add(faith.Icon);
+            if (!faith.IsOrganized && FaithIcons.HasGeneratedIcon(faith) && faith.ReformedIcon is { } reformed)
+                icons.Add(reformed);
+        }
+
+        if (VanillaVocabulary.Current is { } vocab) icons.AddRange(vocab.CustomFaithIcons);
+        return icons.Distinct(StringComparer.Ordinal);
     }
 
     /// <summary>

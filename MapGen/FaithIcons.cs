@@ -23,7 +23,8 @@ public sealed record FaithIconRecipe(
 /// then takes a variant of the family, a frame, and a material, and no two faiths of one religion
 /// end up with the same combination.
 ///
-/// **Material follows standing.** An unreformed faith is carved in wood, stone, bone or iron; a
+/// **Material follows standing.** An unreformed faith is carved or fired in wood, stone, bone,
+/// iron, terracotta or horn; a
 /// reformed one is cast in bronze, verdigris, silver or jade; an Abrahamic-shaped faith or one with
 /// a head of faith is gold, silver, electrum, obsidian or enamel. The inlay (a boss, a gem, a
 /// medallion's field) is enamel in the faith's own map colour, which is what ties the icon to the
@@ -58,13 +59,19 @@ public static class FaithIcons
         ["rosette"] = ["rosette8", "rosette12"],
         ["hexagram"] = ["hexagram"],
         ["labrys"] = ["labrys"],
-        ["hammer"] = ["hammer"],
+        ["hammer"] = ["hammer", "war_hammer", "hammer_anvil", "crossed_hammers", "smith_hammer"],
         ["trident"] = ["trident"],
         ["key"] = ["key"],
         ["horned_disc"] = ["horned_disc"],
         ["mountain"] = ["mountain"],
         ["ouroboros"] = ["ouroboros"],
         ["cross"] = ["cross_patee", "ringed_cross", "looped_cross"],
+        ["skull"] = ["skull"],
+        ["hand"] = ["hand"],
+        ["scales"] = ["scales"],
+        ["chalice"] = ["chalice"],
+        ["waves"] = ["waves"],
+        ["sword"] = ["sword", "crossed_swords", "sabre", "leaf_sword"],
     };
 
     /// <summary>Which families a tenet calls to mind, and how strongly.</summary>
@@ -80,17 +87,17 @@ public static class FaithIcons
         ["tenet_esotericism"] = [("eye", 4), ("ouroboros", 3), ("hexagram", 2)],
         ["tenet_gnosticism"] = [("eye", 3), ("ouroboros", 3), ("star", 1)],
         ["tenet_alexandrian_catechism"] = [("key", 3), ("eye", 2), ("hexagram", 1)],
-        ["tenet_sacred_shadows"] = [("moon", 5), ("crescent", 3), ("eye", 2)],
-        ["tenet_warmonger"] = [("labrys", 3), ("hammer", 3), ("trident", 2)],
-        ["tenet_armed_pilgrimages"] = [("cross", 3), ("labrys", 1), ("trident", 1)],
-        ["tenet_fp3_fedayeen"] = [("labrys", 2), ("crescent", 2)],
+        ["tenet_sacred_shadows"] = [("moon", 5), ("crescent", 3), ("eye", 2), ("skull", 1)],
+        ["tenet_warmonger"] = [("sword", 3), ("labrys", 3), ("hammer", 3), ("trident", 2)],
+        ["tenet_armed_pilgrimages"] = [("cross", 3), ("sword", 3), ("labrys", 1), ("trident", 1)],
+        ["tenet_fp3_fedayeen"] = [("labrys", 2), ("crescent", 2), ("sword", 1)],
         ["tenet_struggle_submission"] = [("crescent", 2), ("flame", 2)],
-        ["tenet_pursuit_of_power"] = [("hammer", 2), ("labrys", 2), ("horned_disc", 1)],
-        ["tenet_ritual_cannibalism"] = [("antlers", 3), ("flame", 2)],
-        ["tenet_human_sacrifice"] = [("flame", 3), ("antlers", 2), ("labrys", 1)],
-        ["tenet_cranial_trophies"] = [("antlers", 4)],
-        ["tenet_sacrificial_ceremonies"] = [("flame", 4), ("labrys", 1)],
-        ["tenet_exaltation_of_pain"] = [("flame", 2), ("knot", 1)],
+        ["tenet_pursuit_of_power"] = [("hammer", 2), ("labrys", 2), ("horned_disc", 1), ("sword", 1)],
+        ["tenet_ritual_cannibalism"] = [("antlers", 3), ("skull", 3), ("flame", 2)],
+        ["tenet_human_sacrifice"] = [("flame", 3), ("skull", 3), ("antlers", 2), ("labrys", 1), ("chalice", 1)],
+        ["tenet_cranial_trophies"] = [("skull", 4), ("antlers", 4)],
+        ["tenet_sacrificial_ceremonies"] = [("flame", 4), ("chalice", 2), ("labrys", 1)],
+        ["tenet_exaltation_of_pain"] = [("flame", 2), ("knot", 1), ("skull", 1)],
         ["tenet_asceticism"] = [("lotus", 2), ("wheel", 2)],
         ["tenet_monasticism"] = [("lotus", 2), ("wheel", 2), ("key", 1)],
         ["tenet_vows_of_poverty"] = [("wheel", 2), ("lotus", 2)],
@@ -98,28 +105,28 @@ public static class FaithIcons
         ["tenet_inner_journey"] = [("lotus", 2), ("eye", 2), ("knot", 1)],
         ["tenet_pure_land"] = [("lotus", 4)],
         ["tenet_extinction_of_dharma"] = [("wheel", 4)],
-        ["tenet_bhakti"] = [("lotus", 3), ("rosette", 2)],
-        ["tenet_legalism"] = [("key", 3), ("wheel", 1)],
-        ["tenet_literalism"] = [("key", 2), ("hexagram", 1)],
-        ["tenet_religious_legal_pronouncements"] = [("key", 3)],
-        ["tenet_rite"] = [("wheel", 2), ("rosette", 1)],
-        ["tenet_benevolent_governance"] = [("wheel", 2), ("key", 1)],
-        ["tenet_harmonious_society"] = [("wheel", 2), ("knot", 2), ("rosette", 1)],
+        ["tenet_bhakti"] = [("lotus", 3), ("rosette", 2), ("hand", 1)],
+        ["tenet_legalism"] = [("scales", 3), ("key", 3), ("wheel", 1)],
+        ["tenet_literalism"] = [("key", 2), ("hexagram", 1), ("scales", 1)],
+        ["tenet_religious_legal_pronouncements"] = [("key", 3), ("scales", 2)],
+        ["tenet_rite"] = [("wheel", 2), ("rosette", 1), ("scales", 1)],
+        ["tenet_benevolent_governance"] = [("wheel", 2), ("hand", 1), ("key", 1), ("scales", 1)],
+        ["tenet_harmonious_society"] = [("wheel", 2), ("knot", 2), ("rosette", 1), ("hand", 1)],
         ["tenet_filial_piety"] = [("tree", 2), ("knot", 2)],
-        ["tenet_ritual_celebrations"] = [("rosette", 3), ("sun", 1)],
-        ["tenet_carnal_exaltation"] = [("rosette", 3), ("horned_disc", 1)],
-        ["tenet_hedonistic"] = [("rosette", 2), ("horned_disc", 1)],
-        ["tenet_gruesome_festivals"] = [("flame", 2), ("antlers", 1)],
-        ["tenet_communal_possessions"] = [("knot", 2), ("key", 1)],
-        ["tenet_mendicant_preachers"] = [("cross", 1), ("key", 1)],
-        ["tenet_tax_nonbelievers"] = [("key", 1), ("crescent", 1)],
+        ["tenet_ritual_celebrations"] = [("rosette", 3), ("chalice", 2), ("sun", 1)],
+        ["tenet_carnal_exaltation"] = [("rosette", 3), ("horned_disc", 1), ("chalice", 1)],
+        ["tenet_hedonistic"] = [("rosette", 2), ("chalice", 2), ("horned_disc", 1)],
+        ["tenet_gruesome_festivals"] = [("flame", 2), ("skull", 2), ("antlers", 1)],
+        ["tenet_communal_possessions"] = [("knot", 2), ("hand", 2), ("key", 1)],
+        ["tenet_mendicant_preachers"] = [("hand", 2), ("cross", 1), ("key", 1)],
+        ["tenet_tax_nonbelievers"] = [("key", 1), ("crescent", 1), ("scales", 1)],
         ["tenet_aniconism"] = [("hexagram", 3), ("star", 2), ("knot", 2)],
         ["tenet_sacred_destruction"] = [("flame", 2), ("hammer", 2)],
         ["tenet_mystical_birthright"] = [("eye", 2), ("star", 1)],
         ["tenet_false_conversion_sanction"] = [("crescent", 1)],
-        ["tenet_consolamentum"] = [("cross", 2), ("flame", 1)],
-        ["tenet_adaptive"] = [("triskele", 2)],
-        ["tenet_sacred_waters"] = [("trident", 4), ("crescent", 1)],
+        ["tenet_consolamentum"] = [("cross", 2), ("chalice", 2), ("flame", 1)],
+        ["tenet_adaptive"] = [("triskele", 2), ("waves", 1)],
+        ["tenet_sacred_waters"] = [("trident", 4), ("waves", 4), ("crescent", 1)],
     };
 
     /// <summary>
@@ -136,11 +143,11 @@ public static class FaithIcons
         ["Ancestor Worship"] = [("tree", 3), ("ouroboros", 2), ("knot", 2)],
         ["Polytheism"] = [("horned_disc", 1.5), ("sun", 1), ("triskele", 1), ("trident", 1), ("rosette", 1)],
         ["Monotheism"] = [("sun", 1.5), ("eye", 1.5), ("star", 1), ("flame", 1)],
-        ["Dualism"] = [("moon", 3), ("sun", 2), ("crescent", 2)],
+        ["Dualism"] = [("moon", 3), ("sun", 2), ("crescent", 2), ("scales", 2)],
         ["Pantheism"] = [("rosette", 2), ("wheel", 2), ("knot", 2)],
         ["Non-theism"] = [("wheel", 3), ("lotus", 3)],
         ["Cult"] = [("eye", 2), ("ouroboros", 2)],
-        ["Dark Cult"] = [("ouroboros", 3), ("eye", 2), ("moon", 2)],
+        ["Dark Cult"] = [("ouroboros", 3), ("skull", 3), ("eye", 2), ("moon", 2)],
         ["Sect"] = [("key", 2), ("eye", 1)],
         ["Heresy"] = [("flame", 1)],
     };
@@ -177,17 +184,26 @@ public static class FaithIcons
         ("bull", "horned_disc"), ("mother", "horned_disc"), ("fertil", "horned_disc"),
         ("flower", "rosette"), ("bloom", "rosette"), ("rose", "rosette"), ("feast", "rosette"), ("joy", "rosette"),
         ("lotus", "lotus"), ("peace", "lotus"), ("serene", "lotus"), ("pure", "lotus"),
+        ("death", "skull"), ("dead", "skull"), ("skull", "skull"), ("bone", "skull"), ("grave", "skull"), ("tomb", "skull"),
+        ("doom", "skull"), ("decay", "skull"), ("reaper", "skull"),
+        ("hand", "hand"), ("giver", "hand"), ("merciful", "hand"), ("mercy", "hand"), ("healer", "hand"), ("gift", "hand"),
+        ("justice", "scales"), ("just", "scales"), ("judge", "scales"), ("law", "scales"), ("balance", "scales"),
+        ("cup", "chalice"), ("wine", "chalice"), ("drunk", "chalice"), ("revel", "chalice"), ("feast", "chalice"),
+        ("sea", "waves"), ("wave", "waves"), ("ocean", "waves"), ("tide", "waves"), ("water", "waves"), ("deep", "waves"),
+        ("sword", "sword"), ("blade", "sword"), ("war", "sword"), ("warrior", "sword"), ("battle", "sword"),
+        ("conquer", "sword"), ("knight", "sword"),
     ];
 
     private static readonly (string, double)[] AbrahamicBias =
-        [("cross", 5), ("crescent", 4), ("hexagram", 3), ("star", 2), ("key", 1.5), ("eye", 1.5), ("flame", 1)];
-    private static readonly (string, double)[] MonotheistPaganBias = [("sun", 1.5), ("eye", 1.5), ("flame", 1)];
+        [("cross", 5), ("crescent", 4), ("hexagram", 3), ("star", 2), ("key", 1.5), ("eye", 1.5), ("flame", 1),
+         ("scales", 1), ("sword", 1)];
+    private static readonly (string, double)[] MonotheistPaganBias = [("sun", 1.5), ("eye", 1.5), ("flame", 1), ("hand", 1)];
     private static readonly (string, double)[] PolytheistPaganBias =
-        [("tree", 1), ("triskele", 1.2), ("knot", 1), ("antlers", 1), ("trident", 1), ("moon", 1), ("horned_disc", 1)];
+        [("tree", 1), ("triskele", 1.2), ("knot", 1), ("antlers", 1), ("trident", 1), ("moon", 1), ("horned_disc", 1), ("waves", 0.8)];
 
     private static readonly Dictionary<Tier, string[]> TierMaterials = new()
     {
-        [Tier.Unreformed] = ["wood", "stone", "bone", "iron"],
+        [Tier.Unreformed] = ["wood", "stone", "bone", "iron", "terracotta", "horn"],
         [Tier.Reformed] = ["bronze", "verdigris", "silver", "jade", "iron"],
         [Tier.Exalted] = ["gold", "silver", "enamel", "electrum", "obsidian"],
     };
@@ -197,7 +213,7 @@ public static class FaithIcons
     {
         ["wood"] = "brown", ["bronze"] = "brown", ["gold"] = "yellow", ["silver"] = "grey", ["iron"] = "grey",
         ["stone"] = "grey", ["bone"] = "cream", ["verdigris"] = "green", ["jade"] = "green", ["enamel"] = "colour",
-        ["electrum"] = "pale", ["obsidian"] = "black",
+        ["electrum"] = "pale", ["obsidian"] = "black", ["terracotta"] = "red", ["horn"] = "dark",
     };
 
     /// <summary>
@@ -223,7 +239,7 @@ public static class FaithIcons
 
     /// <summary>Half of all flagships go unframed; the rest of the faiths draw frames from this bag.</summary>
     private static readonly (string Frame, int Weight)[] FrameBag =
-        [("none", 5), ("ring", 2), ("medallion", 2), ("lobed", 1), ("rayed", 1)];
+        [("none", 5), ("ring", 2), ("medallion", 2), ("lobed", 1), ("rayed", 1), ("wreath", 1)];
 
     // -------------------------------------------------------------------------------------------
 

@@ -75,6 +75,7 @@ internal sealed class RunScreen : Panel
 
     // run view
     private readonly MapPreview _runMap = new();
+    private readonly LiveMap _live;
     private readonly ProgressLine _bar = new();
     private readonly Label _percent = MakeLabel("", new Font("Segoe UI Semibold", 12f), Theme.Text);
     private readonly Label _eta = MakeLabel("", Body, Theme.TextDim);
@@ -123,6 +124,14 @@ internal sealed class RunScreen : Panel
         _accept.Name = namePrefix + "Accept";
         _chronicle.Name = namePrefix + "Chronicle";
 
+        // A discovery with a place gets its pin as its card is shown, not as it arrives: the column
+        // paces the cards, and the pin keeps step with the card it belongs to.
+        _live = new LiveMap(_runMap);
+        _feed.Revealed += item =>
+        {
+            if (_mode == Mode.Running) _live.Pin(item);
+        };
+
         BuildRunView();
         BuildHistoryView();
         BuildDoneView();
@@ -134,7 +143,11 @@ internal sealed class RunScreen : Panel
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) _tips.Dispose();
+        if (disposing)
+        {
+            _tips.Dispose();
+            _live.Dispose();
+        }
         base.Dispose(disposing);
     }
 
@@ -170,8 +183,7 @@ internal sealed class RunScreen : Panel
         _mode = Mode.Running;
         _runTitle.Text = title;
         _runSubtitle.Text = subtitle;
-        _runMap.Image = picture;
-        _runMap.Chip = chip;
+        _live.Reset(picture, chip);
         _bar.Fraction = null;
         _percent.Text = "Starting…";
         _eta.Text = "";
@@ -206,18 +218,27 @@ internal sealed class RunScreen : Panel
         _runPanel.PerformLayout();
     }
 
+    /// <summary>
+    /// The pictures that read well as a map filling in, and what each is captioned. The provinces
+    /// are not among them: the partition's own sketches show those forming (<see cref="OfferSketch"/>).
+    /// </summary>
     private static readonly Dictionary<string, string> LiveViews = new()
     {
         ["Relief"] = "Raising the land",
         ["Climate"] = "Settling the climate",
+        ["Drainage"] = "Finding the rivers",
         ["Terrain"] = "Painting the terrain",
         ["Counties"] = "Drawing the counties",
         ["Duchies"] = "Drawing the duchies",
+        ["Kingdoms"] = "Drawing the kingdoms",
+        ["Empires"] = "Drawing the empires",
+        ["Cultures"] = "Placing the peoples",
+        ["Faiths"] = "Spreading the faiths",
     };
 
     /// <summary>
-    /// A picture the run just drew. The screen keeps the ones that read well as a map filling in and
-    /// disposes the rest. Takes ownership either way.
+    /// A picture the run just drew. The screen keeps the ones that read well as a map filling in —
+    /// each takes its turn on the map — and disposes the rest. Takes ownership either way.
     /// </summary>
     public void OfferLiveImage(string view, Bitmap bitmap)
     {
@@ -227,8 +248,13 @@ internal sealed class RunScreen : Panel
             return;
         }
 
-        _runMap.Image = bitmap;
-        _runMap.Chip = caption;
+        _live.Show(bitmap, caption);
+    }
+
+    /// <summary>The province partition at one of its steps, played out on the map in its turn.</summary>
+    public void OfferSketch(Core.PartitionSketch sketch)
+    {
+        if (_mode == Mode.Running) _live.Sketch(sketch);
     }
 
     public void CancelPending()
@@ -243,6 +269,7 @@ internal sealed class RunScreen : Panel
     /// 57 years of history." — or null when there was none, or it was accepted where it began.</param>
     public void ShowDone(string modName, string modDir, TimeSpan took, string? history = null)
     {
+        _live.Finish();
         bool fromHistory = _mode == Mode.History;
         _mode = Mode.Done;
         _failed = false;
@@ -272,6 +299,7 @@ internal sealed class RunScreen : Panel
     /// <summary>The run stopped short: cancelled, or failed.</summary>
     public void ShowFailed(bool cancelled, string? message)
     {
+        _live.Finish();
         _mode = Mode.Done;
         _failed = true;
         _doneTitle.Text = cancelled ? "Stopped" : "The world could not be made";
@@ -288,7 +316,11 @@ internal sealed class RunScreen : Panel
     }
 
     /// <summary>Back to idle, as the page returns to its steps.</summary>
-    public void Reset() => _mode = Mode.Idle;
+    public void Reset()
+    {
+        _live.Finish();
+        _mode = Mode.Idle;
+    }
 
     private static string Describe(TimeSpan t)
         => t.TotalMinutes >= 1 ? $"{(int)t.TotalMinutes} min {t.Seconds} s" : $"{t.TotalSeconds:F0} s";
@@ -391,6 +423,7 @@ internal sealed class RunScreen : Panel
     /// </summary>
     public void ShowHistory(int began)
     {
+        _live.Finish();
         _mode = Mode.History;
         _historyOffered = true;
         _historySubtitle.Text = $"The world lives on from {began}: wars are won and lost, realms divide, thrones change "

@@ -128,8 +128,8 @@ public static class FaithIconWriter
 
     /// <summary>
     /// The main material and the inlay for one faith. The inlay is enamel in the faith's colour:
-    /// glossy on metal, matt on wood, stone and iron, and bone where the colour is too grey to
-    /// read as enamel at all. An all-enamel icon and an obsidian one take gold.
+    /// glossy on metal, matt on the carved and fired materials, and bone where the colour is too
+    /// grey to read as enamel at all. An all-enamel icon and an obsidian one take gold.
     /// </summary>
     private static (Material Main, Material? Inlay) MaterialsFor(string name, (double R, double G, double B) colour)
     {
@@ -138,7 +138,7 @@ public static class FaithIconWriter
         if (name == "obsidian") return (shading["obsidian"], shading["gold"]);
         if (name == "bone") return (shading["bone"], shading["obsidian"]);
 
-        if (name is "wood" or "stone" or "iron")
+        if (name is "wood" or "stone" or "iron" or "terracotta" or "horn")
         {
             double spread = Math.Max(colour.R, Math.Max(colour.G, colour.B)) - Math.Min(colour.R, Math.Min(colour.G, colour.B));
             return (shading[name], spread * 255 > 40 ? ReliefShading.Enamel(colour, glossy: false) : shading["bone"]);

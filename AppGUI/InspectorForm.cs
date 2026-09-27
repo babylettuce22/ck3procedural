@@ -100,7 +100,7 @@ public abstract class InspectorForm : ChromeForm
         // would only repeat what the main window already says.
         ShowIcon = false;
 
-        Theme.ApplyLight(_grid);
+        Theme.Apply(_grid);
 
         _revert.Click += (_, _) =>
         {
@@ -133,7 +133,7 @@ public abstract class InspectorForm : ChromeForm
     protected override void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
-        Theme.ApplyLightTitleBar(this);
+        Theme.ApplyTitleBar(this);
     }
 
     /// <summary>

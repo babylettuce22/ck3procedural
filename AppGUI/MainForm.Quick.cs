@@ -168,6 +168,8 @@ public sealed partial class MainForm
         // to only for this run: with nobody listening, the generator builds none of it.
         _launcherRun = run;
         Core.Showcase.Published += OnShowcase;
+        Core.Showcase.Sketched += OnSketch;
+        Core.Showcase.Pictured += OnPicture;
         try
         {
             await WriteModIntoAsync(modDir, carried: null, restoreHistory: false);
@@ -175,6 +177,8 @@ public sealed partial class MainForm
         finally
         {
             Core.Showcase.Published -= OnShowcase;
+            Core.Showcase.Sketched -= OnSketch;
+            Core.Showcase.Pictured -= OnPicture;
             _launcherRun = null;
         }
 
@@ -218,6 +222,15 @@ public sealed partial class MainForm
 
     /// <summary>Called on the generator's thread; the item is plain values, so it crosses as it is.</summary>
     private void OnShowcase(Core.ShowcaseItem item) => Post(() => _launcherRun?.OfferShowcase(item));
+
+    /// <summary>The partition forming; plain arrays, so it crosses as it is too.</summary>
+    private void OnSketch(Core.PartitionSketch sketch) => Post(() => _launcherRun?.OfferSketch(sketch));
+
+    /// <summary>A picture of a layer the content stages decided: the peoples, the faiths.</summary>
+    private void OnPicture(Core.ShowcasePicture picture) => Post(() =>
+    {
+        if (_launcherRun is { } run) run.OfferLiveImage(picture.View, ToBitmap(picture.Image));
+    });
 
     /// <summary>
     /// Anything changed in Complex this session is written to a preset before Quick replaces it,
