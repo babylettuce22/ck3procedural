@@ -55,6 +55,7 @@
 
   <ItemGroup>
     <PackageReference Include="SixLabors.ImageSharp" Version="4.0.0" />
+    <PackageReference Include="SixLabors.ImageSharp.Drawing" Version="3.0.0" />
     <ProjectReference Include="$(NoiseToolDir)NoiseTool.Core\NoiseTool.Core.csproj" />
     <ProjectReference Include="$(NoiseToolDir)NoiseTool.Ui\NoiseTool.Ui.csproj" />
   </ItemGroup>

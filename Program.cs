@@ -137,12 +137,32 @@ public static class Program
                     return MapGen.RuinLogReport.Run(args[++i]) ? 0 : 1;
                 }
 
+                // Redraws thumbnail.png for a mod already written, from its flatmap and the name in
+                // its descriptor.mod, and exits. Takes a path or a name in the mod folder, as --mod
+                // does. A full generation writes the thumbnail itself; this is for mods made before
+                // it did, or renamed since.
+                case "--thumbnail":
+                {
+                    if (i + 1 >= args.Length || args[i + 1].StartsWith("--"))
+                    {
+                        Console.Error.WriteLine("--thumbnail needs a mod folder or mod name.");
+                        return 1;
+                    }
+                    return Emit.ThumbnailWriter.WriteFromDisk(ModDir(args[++i]), options.GameDir) ? 0 : 1;
+                }
+
                 case "--static-only":
                     staticOnly = true;
                     break;
 
                 case "--gui-only": 
                     guiOnly = true;
+                    break;
+
+                // A settings preset, as the GUI's Load preset… reads it — or the JSON block out of
+                // a mod's proctool.txt. Applied where it appears, so flags after it override it.
+                case "--settings" when i + 1 < args.Length:
+                    AppGUI.Preset.Load(cfg, args[++i]);
                     break;
 
                 case "--seed" when i + 1 < args.Length:

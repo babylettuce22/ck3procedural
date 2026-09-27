@@ -274,6 +274,9 @@ public static partial class ContentWriter
         var flatmap = Core.Stage.Time("flatmap", () => FlatmapWriter.WriteAll(
             modDir, cfg, provinces, order, landCount, provinceElevation));
 
+        // The launcher and Workshop picture, cut from the same buffer while it is still in memory.
+        Core.Stage.Time("thumbnail", () => ThumbnailWriter.Write(modDir, gameDir, flatmap));
+
         // Everything from here to the holding models is the raster and scatter half of the run:
         // about eighteen seconds on a large map, and it shares nothing with the history half that
         // follows. It writes gfx/map/terrain and gfx/map/map_object_data; history writes common,

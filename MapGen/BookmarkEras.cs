@@ -62,7 +62,8 @@ public sealed class BookmarkEra
 /// is copied as it runs, and one after the start comes from running it on past the start on a copy
 /// (<see cref="FormationHistory.Snapshots"/>). Each is titled the same way the start date is
 /// (<see cref="RealmMap.EraMaps"/>). Everything here is the people: one ruler per seat, dead before
-/// the next bookmark, and a house for each. A realm that is also standing on the start date keeps
+/// the next bookmark, and a house for each — and, in BookmarkEraFamilies.cs, the ancestors, spouses
+/// and children that tie each date's rulers into their houses' trees. A realm that is also standing on the start date keeps
 /// the house that rules it there — before, its ancestors; after, its descendants — and one that is
 /// not gets a house of its own.
 ///
@@ -71,7 +72,7 @@ public sealed class BookmarkEra
 /// grown (an export that draws its own countries) the start date's map is reused and only the
 /// people change.
 /// </summary>
-public sealed class BookmarkEras
+public sealed partial class BookmarkEras
 {
     /// <summary>Oldest first.</summary>
     public required List<BookmarkEra> Eras { get; init; }
@@ -234,6 +235,10 @@ public sealed class BookmarkEras
                               + $"{minted.Count - founded} houses founded"
                               + (realms.EraMaps is null ? " (the start date's map: realms were not grown)" : ""));
         }
+
+        // Last, once every date's rulers exist: each one's ancestors run through the others'.
+        result.BuildFamilies(rulers, prehistory, cultures);
+        Console.WriteLine($"  additional bookmarks' families: {result.Summary}");
 
         return result;
 

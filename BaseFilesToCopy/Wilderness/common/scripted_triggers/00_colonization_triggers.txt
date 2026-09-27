@@ -18,12 +18,24 @@ is_wilderness_county_trigger = {
 }
 
 # Title scope. Is this county a colony that has not yet grown into a real holding?
+#
+# The landless guard is load-bearing. A noble family title is county tier under celestial,
+# meritocratic and Japanese governments, its `title_province` is the family head's capital, and its
+# `county_control` always reads 0 — so a family whose head sat in a colony passed `tier =
+# tier_county` + this trigger + `county_control <= 0` and the yearly control check "collapsed" the
+# family title every two years while the real colony never moved (reported 2026-09-26, x_nf_57).
+# Vanilla guards its own title triggers with the same pair (petition_liege_title_liege_trigger).
 is_colony_county_trigger = {
+	is_landless_type_title = no
+	is_noble_family_title = no
 	title_province ?= { has_holding_type = settlement_holding }
 }
 
 # Title scope. Neither wild nor a colony — i.e. finished, a normal county like any other.
+# Landless-guarded for the same reason as is_colony_county_trigger.
 is_settled_county_trigger = {
+	is_landless_type_title = no
+	is_noble_family_title = no
 	title_province ?= {
 		NOR = {
 			has_holding_type = wilderness_holding

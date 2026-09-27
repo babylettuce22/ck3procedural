@@ -158,6 +158,10 @@ public static class ModWriter
         // A mod with no name is one the launcher lists as a blank row. Falling back on the folder
         // it lives in beats that, and the folder can never be empty.
         if (string.IsNullOrWhiteSpace(name)) name = folder;
+
+        // picture= is what the launcher's mod library reads; without it the tile stays blank even
+        // with thumbnail.png sitting in the folder. (The Workshop upload finds the file by name.)
+        // ContentWriter writes the file itself later in the run.
         string replacements =
             string.Concat(ReplacePaths.Select(p => $"replace_path=\"{p}\"\n"));
 
@@ -169,6 +173,7 @@ public static class ModWriter
               	"Map"
               }
               name="{{name}}"
+              picture="{{ThumbnailWriter.FileName}}"
               {{replacements}}supported_version="{{SupportedVersion}}"
 
               """;

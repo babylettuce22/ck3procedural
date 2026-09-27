@@ -599,10 +599,10 @@ wilderness_on_title_gain = {
 			}
 
 			scope:title = { save_scope_as = identity_county }
-			save_scope_value_as = {
-				name = identity_transfer
-				value = scope:transfer_type
-			}
+			# Entered and saved as a scope, the way vanilla carries it (title_on_actions.txt,
+			# real_transfer_type). transfer_type is a flag, and `save_scope_value_as` reads its
+			# `value` as a script value: "Value of wrong type ... Got value of type 'flag'".
+			scope:transfer_type ?= { save_scope_as = identity_transfer }
 			trigger_event = {
 				id = wilderness_colonization.0098
 				days = 7

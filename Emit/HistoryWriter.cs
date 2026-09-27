@@ -317,6 +317,21 @@ public static class HistoryWriter
                 body();
         }
 
+        // A parent the additional bookmarks' lines gave a start-date character that had none. See
+        // BookmarkEras.BuildFamilies.
+        void AddedParent(string id)
+        {
+            if (prehistory.Eras?.Parents.TryGetValue(id, out var parent) == true)
+                b.Field(parent.Mother ? "mother" : "father", parent.Id);
+        }
+
+        // =========================================================================
+        // 1. The earlier additional bookmarks' people — ahead of everyone else
+        // =========================================================================
+        // Their lines run down to the start date's own dead parents, written next, and a parent has
+        // to be read before a character naming it. All of them are dead before the start date.
+        foreach (var person in prehistory.Eras?.Before ?? []) WriteEraPerson(person);
+
         // =========================================================================
         // 2. Deceased Ancestors (Fathers) — Stamped with historical birth and death
         // =========================================================================
@@ -343,9 +358,11 @@ public static class HistoryWriter
                 if (ancestorCulture is not null)
                     b.Field("trait", GetPhenotypeTrait(ancestorCulture, ethnicities, cfg));
 
-                // Only kin have parents among the ancestors; Field skips a null.
+                // Only kin have parents among the ancestors — and, with an earlier additional
+                // bookmark, the invented parents its houses carry on to. Field skips a null.
                 b.Field("father", ancestor.FatherId);
                 b.Field("mother", ancestor.MotherId);
+                if (ancestor.FatherId is null && ancestor.MotherId is null) AddedParent(ancestor.Id);
 
                 b.Inline(ancestor.BirthDate, "birth = yes");
 
@@ -457,6 +474,7 @@ public static class HistoryWriter
 
                 b.Field("trait", GetPhenotypeTrait(culture, ethnicities, cfg));
                 b.Field(ruler.ParentIsMother ? "mother" : "father", ruler.ParentId);
+                if (ruler.ParentId is null) AddedParent(ruler.Id);
 
                 // --- Character Birth Date ---
                 b.Inline(ruler.BirthDate, "birth = yes");
@@ -671,28 +689,14 @@ public static class HistoryWriter
         foreach (string block in prehistory.HistoricalCharacters) b.Raw(block);
 
         // =========================================================================
-        // 6. The additional bookmarks' rulers and heads of faith — dead before the next one
+        // 6. The later additional bookmarks' people, and every one's heads of faith
         // =========================================================================
+        // Last, because their lines hang from the start date's people written above. The rulers
+        // of an earlier bookmark went out with their families in section 1.
+        foreach (var person in prehistory.Eras?.After ?? []) WriteEraPerson(person);
+
         foreach (var era in prehistory.Eras?.Eras ?? [])
         {
-            foreach (var ruler in era.Rulers.All)
-            {
-                using (b.Block(ruler.Id))
-                {
-                    b.Quoted("name", nameToken(ruler.Name));
-                    if (ruler.Female) b.Field("female", "yes");
-                    b.Field("dynasty_house", ruler.HouseKey);
-                    b.Field("religion", ruler.Faith.Key);
-                    b.Field("culture", ruler.Culture.Key);
-                    WriteProfile(b, ruler);
-                    b.Field("trait", GetPhenotypeTrait(ruler.Culture, ethnicities, cfg));
-                    b.Inline(ruler.BirthDate, "birth = yes");
-                    if (era.Deaths.TryGetValue(ruler.Id, out var death)) b.Inline(death, "death = yes");
-                }
-
-                b.Blank();
-            }
-
             foreach (var priest in era.Priests)
             {
                 using (b.Block(priest.Id))
@@ -712,6 +716,60 @@ public static class HistoryWriter
         }
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_characters.txt"), b.ToString());
+
+        // One of the additional bookmarks' people: a ruler of one of their dates, or someone of the
+        // family drawn around them. Every date is on each, so none is given MainDeath.
+        void WriteEraPerson(EraPerson person)
+        {
+            if (person is { Ruler: { } ruler, Era: { } era })
+            {
+                using (b.Block(ruler.Id))
+                {
+                    b.Quoted("name", nameToken(ruler.Name));
+                    if (ruler.Female) b.Field("female", "yes");
+                    b.Field("dynasty_house", ruler.HouseKey);
+                    b.Field("religion", ruler.Faith.Key);
+                    b.Field("culture", ruler.Culture.Key);
+                    WriteProfile(b, ruler);
+                    b.Field("trait", GetPhenotypeTrait(ruler.Culture, ethnicities, cfg));
+                    AddedParent(ruler.Id);
+                    b.Inline(ruler.BirthDate, "birth = yes");
+
+                    // Matrilineal for a reigning woman, as on the start date: her children are
+                    // already written into her house.
+                    if (prehistory.Eras!.Marriages.TryGetValue(ruler.Id, out var marriage))
+                        using (b.Block(marriage.Date))
+                            b.Field(ruler.Female ? "add_matrilineal_spouse" : "add_spouse", marriage.SpouseId);
+
+                    if (era.Deaths.TryGetValue(ruler.Id, out var death)) b.Inline(death, "death = yes");
+                }
+
+                b.Blank();
+                return;
+            }
+
+            if (person.Character is not { } c) return;
+            using (b.Block(c.Id))
+            {
+                b.Quoted("name", nameToken(c.Name));
+                if (c.Female) b.Field("female", "yes");
+
+                // A lowborn spouse has no dynasty at all, which is what leaving both out means.
+                if (c.DynastyHouseKey is not null) b.Field("dynasty_house", c.DynastyHouseKey);
+                else if (c.DynastyId.Length > 0) b.Field("dynasty", c.DynastyId);
+
+                b.Field("religion", c.FaithKey);
+                b.Field("culture", c.CultureKey);
+                if (cultures.Cultures.FirstOrDefault(k => k.Key == c.CultureKey) is { } culture)
+                    b.Field("trait", GetPhenotypeTrait(culture, ethnicities, cfg));
+                b.Field("father", c.FatherId);
+                b.Field("mother", c.MotherId);
+                b.Inline(c.BirthDate, "birth = yes");
+                if (c.DeathDate is not null) b.Inline(c.DeathDate, "death = yes");
+            }
+
+            b.Blank();
+        }
     }
     /// <summary>What an additional bookmark's ruler carries beyond an ancestor's name and dates.</summary>
     private static void WriteProfile(JominiBuilder b, Ruler ruler)

@@ -1,0 +1,45 @@
+diff --git a/Emit/MapDataWriter.cs b/Emit/MapDataWriter.cs
+index 983755d..13a10a4 100644
+--- a/Emit/MapDataWriter.cs
++++ b/Emit/MapDataWriter.cs
+@@ -244,6 +244,22 @@ public static class MapDataWriter
+         int scaleX = cfg.Width / pw, scaleY = cfg.Height / ph;
+         long changed = 0;
+ 
++        // Every land/water question below is asked of this snapshot, never of the array being
++        // written. The shore probe reads a (2*scaleY+1) x (2*scaleX+1) box — two rows either side
++        // at the default 8192x4096 — and the writes invert the very classification the probe
++        // tests, so probing `height` meant reading rows other Parallel.For workers were still
++        // rewriting. Whether a contested pixel saw its neighbour before or after that neighbour
++        // flipped came down to thread scheduling, and the same seed shipped a different
++        // heightmap.png run to run; a few moved pixels then re-levelled a tile in
++        // HeightmapPacker and cascaded into the indirection texture and every scatter pass that
++        // samples the shipped surface.
++        //
++        // The snapshot is also what the question means: "is this pixel near the shore" is about
++        // the terrain we were handed, not about a half-reconciled buffer. Probing the live array
++        // let each flip suppress its neighbours' flips, so a solid block of macro-mismatch came
++        // out reconciled in a checkerboard. Same clone-the-source shape as ShapeCoastline below.
++        var natural = (ushort[])height.Clone();
++
+         Parallel.For(0, cfg.Height, () => 0L, (y, _, local) =>
+         {
+             int py = Math.Min(y / scaleY, ph - 1);
+@@ -257,7 +273,7 @@ public static class MapDataWriter
+                 bool provinceIsLand = seed.IsLand;
+ 
+                 long i = row + x;
+-                ushort v = height[i];
++                ushort v = natural[i];
+                 bool heightmapIsLand = v > WaterLevel16;
+ 
+                 if (heightmapIsLand == provinceIsLand) continue;
+@@ -271,7 +287,7 @@ public static class MapDataWriter
+                     for (int dx = -scaleX; dx <= scaleX; dx++)
+                     {
+                         int nx = Math.Clamp(x + dx, 0, cfg.Width - 1);
+-                        if ((height[nrow + nx] > WaterLevel16) != heightmapIsLand)
++                        if ((natural[nrow + nx] > WaterLevel16) != heightmapIsLand)
+                         {
+                             nearNaturalShore = true;
+                             break;
