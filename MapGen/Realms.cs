@@ -67,6 +67,12 @@ public sealed class RealmMap
     /// </summary>
     public Dictionary<int, RealmMap>? EraMaps { get; set; }
 
+    /// <summary>
+    /// On an additional bookmark's map, the wilderness on its date when that differs from the start
+    /// date's — an applied history moves the frontier — else null, meaning the start date's.
+    /// </summary>
+    public WildernessMap? Wilderness { get; set; }
+
     /// <summary>Records that <paramref name="vassal"/> answers to <paramref name="lord"/>.</summary>
     public void SetLiege(Title vassal, Title lord, LiegeOrigin origin)
     {
@@ -129,13 +135,13 @@ public static class Realms
     /// </summary>
     public static RealmMap FromHistory(FormationHistory history, List<Title> empires,
         Dictionary<Title, int> development, WildernessMap wilderness, MapConfig cfg, Rng rng,
-        Dictionary<Title, HashSet<Title>> countyAdj)
+        Dictionary<Title, HashSet<Title>> countyAdj, bool quiet = false)
     {
         var all = Titles.Flatten(empires).ToList();
         var weight = Weigh(empires, development, wilderness);
         var holderCounty = all.Where(t => t.Tier == "c" && !wilderness.Contains(t)).ToDictionary(c => c, c => c);
 
-        var formed = FromFormation(history, all, development, weight, holderCounty, countyAdj, cfg, rng);
+        var formed = FromFormation(history, all, development, weight, holderCounty, countyAdj, cfg, rng, quiet);
         formed.CountyAdjacency = countyAdj;
         return formed;
     }

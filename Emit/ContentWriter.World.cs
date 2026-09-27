@@ -353,6 +353,10 @@ public static partial class ContentWriter
         // are the ones the formation grew for the year the history was run on from — the formation
         // counts its epochs back from the start date, and a moved start would grow a different map.
         var formationCfg = applied is null ? cfg : cfg.AtStartYear(applied.FromYear);
+
+        // Nor does it place the additional bookmarks: they sit around the applied year, not the one
+        // the formation runs to, and are read from its frames and the history's (see HistoryEras).
+        if (applied is not null) formationCfg.AdditionalBookmarks = false;
         var realms = Core.Stage.Time("realms", () => Realms.Build(
                     empires, development, wilderness, formationCfg, new Rng(cfg.Seed ^ 0x2E17), provinces, order,
                     baronyCount, azgaar, cultures, vanillaRealms));
@@ -375,31 +379,12 @@ public static partial class ContentWriter
         Console.WriteLine("  governments: " + string.Join(", ",
             governments.Tally(counties, wilderness).Select(g => $"{g.Count} {g.Government[..^11]}")));
 
-        // The same cascade for each additional bookmark: its own map, at its own advancement and
-        // with the development it had then, on its own stream. Nothing above reads these. A world
-        // that starts with a hegemon has one on a later date too, crowned and sworn to the same way.
-        Dictionary<int, GovernmentMap>? eraGovernments = null;
-        if (cfg.UsesAdditionalBookmarks)
-        {
-            eraGovernments = [];
-            foreach (int year in cfg.AdditionalBookmarkYears)
-            {
-                var eraRealms = realms.EraMaps?.GetValueOrDefault(year) ?? realms;
-                bool crown = cfg.StartingHegemony && year > cfg.StartYear && !ReferenceEquals(eraRealms, realms);
-                if (crown) Realms.CrownHegemon(eraRealms, empires, wilderness);
-
-                var eraDevelopment = development.ToDictionary(kv => kv.Key,
-                    kv => BookmarkEras.EraDevelopment(kv.Value, cfg, year));
-                eraGovernments[year] = MapGen.Governments.Build(empires, counties, eraRealms, provinceTerrain,
-                    coastal, eraDevelopment, cultures, worldCenters, cfg.AtAdvancement(cfg.EraYearAt(year)),
-                    new Rng(cfg.Seed ^ 0x6017 ^ year), azgaar, stateGovernments);
-
-                if (crown) Realms.ExpandHegemonRealm(eraRealms, empires, wilderness);
-
-                Console.WriteLine($"  governments in {year} (as advanced as {cfg.EraYearAt(year)}): " + string.Join(", ",
-                    eraGovernments[year].Tally(counties, wilderness).Select(g => $"{g.Count} {g.Government[..^11]}")));
-            }
-        }
+        // The same cascade for each additional bookmark. An applied history's bookmarks are placed
+        // around its own year and drawn from its own runs, so they get theirs in ApplyRealms.
+        var eraGovernments = cfg.UsesAdditionalBookmarks && applied is null
+            ? EraGovernments(cfg, realms, empires, counties, provinceTerrain, coastal, development, cultures,
+                worldCenters, wilderness, azgaar, stateGovernments)
+            : null;
 
         // After the governments, never before: this brings whole kingdoms under the hegemon, and
         // governments are decided one per realm grouped by top liege — done first, every absorbed
@@ -535,7 +520,7 @@ public static partial class ContentWriter
         IReadOnlyDictionary<Title, PastRuler>? seatParents = null;
         RememberedPast? appliedPast = null;
         if (applied is not null)
-            (realms, governments, hegemonShare, lineage, pastRulers, realmColours, _, appliedWilds, appliedDiplomacy, seatParents, appliedPast) = ApplyRealms(applied,
+            (realms, governments, hegemonShare, lineage, pastRulers, realmColours, _, appliedWilds, appliedDiplomacy, seatParents, appliedPast, eraGovernments) = ApplyRealms(applied,
                 realms, cfg, empires, counties, provinces, order, baronyCount, provinceTerrain, development, cultures,
                 worldCenters, wilderness, azgaar, stateGovernments, faiths, landCount, frontier);
 
@@ -573,5 +558,38 @@ public static partial class ContentWriter
             SilkRoad = silkRoad,
             WaterNames = waterNames,
         };
+    }
+
+    /// <summary>
+    /// The government cascade for each additional bookmark: its own map, at its own advancement and
+    /// with the development it had then, on its own stream. A world that starts with a hegemon has
+    /// one on a later date too, crowned and sworn to the same way. An era map that carries its own
+    /// wilderness (<see cref="RealmMap.Wilderness"/>) is crowned and tallied on it.
+    /// </summary>
+    internal static Dictionary<int, GovernmentMap> EraGovernments(MapConfig cfg, RealmMap realms, List<Title> empires,
+        List<Title> counties, TerrainClass[] provinceTerrain, bool[] coastal, Dictionary<Title, int> development,
+        CultureMap cultures, WorldCenterMap worldCenters, WildernessMap wilderness, AzgaarImport? azgaar,
+        Dictionary<int, string>? stateGovernments)
+    {
+        var eraGovernments = new Dictionary<int, GovernmentMap>();
+        foreach (int year in cfg.AdditionalBookmarkYears)
+        {
+            var eraRealms = realms.EraMaps?.GetValueOrDefault(year) ?? realms;
+            var wild = eraRealms.Wilderness ?? wilderness;
+            bool crown = cfg.StartingHegemony && year > cfg.StartYear && !ReferenceEquals(eraRealms, realms);
+            if (crown) Realms.CrownHegemon(eraRealms, empires, wild);
+
+            var eraDevelopment = development.ToDictionary(kv => kv.Key,
+                kv => BookmarkEras.EraDevelopment(kv.Value, cfg, year));
+            eraGovernments[year] = MapGen.Governments.Build(empires, counties, eraRealms, provinceTerrain,
+                coastal, eraDevelopment, cultures, worldCenters, cfg.AtAdvancement(cfg.EraYearAt(year)),
+                new Rng(cfg.Seed ^ 0x6017 ^ year), azgaar, stateGovernments);
+
+            if (crown) Realms.ExpandHegemonRealm(eraRealms, empires, wild);
+
+            Console.WriteLine($"  governments in {year} (as advanced as {cfg.EraYearAt(year)}): " + string.Join(", ",
+                eraGovernments[year].Tally(counties, wild).Select(g => $"{g.Count} {g.Government[..^11]}")));
+        }
+        return eraGovernments;
     }
 }

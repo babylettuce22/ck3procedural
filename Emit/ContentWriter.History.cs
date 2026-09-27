@@ -10,7 +10,8 @@ public static partial class ContentWriter
     internal sealed record AppliedRealms(RealmMap Realms, GovernmentMap Governments, double? HegemonShare,
         IReadOnlyDictionary<Title, AppliedHistory.Lineage> Lineage, List<PastRuler> PastRulers,
         IReadOnlyDictionary<Title, (byte R, byte G, byte B)> Colours, int Drifted, WildsLayer Wilds, SimDiplomacy? Diplomacy,
-        IReadOnlyDictionary<Title, PastRuler> SeatParents, RememberedPast Past);
+        IReadOnlyDictionary<Title, PastRuler> SeatParents, RememberedPast Past,
+        Dictionary<int, GovernmentMap>? EraGovernments);
 
     /// <summary>
     /// What the chronicle remembers of an applied history, as events on the world being written, and
@@ -90,6 +91,18 @@ public static partial class ContentWriter
         var governments = MapGen.Governments.Build(empires, counties, realms, provinceTerrain, coastal,
             development, cultures, worldCenters, cfg, new Rng(cfg.Seed ^ 0x6017), azgaar, stateGovernments);
 
+        // The additional bookmarks, around the applied year: each date's map from whichever run
+        // covered it, titled on the frontier it had, and the governments that follow. Before the
+        // hegemon's realm is expanded, as BuildWorld orders it for a generated world.
+        Dictionary<int, GovernmentMap>? eraGovernments = null;
+        if (cfg.UsesAdditionalBookmarks)
+        {
+            realms.EraMaps = HistoryEras.Maps(applied, history, cfg, empires, counties, cultures, development,
+                generatedWilderness, wilderness.RuinsEnabled, provinces, order, baronyCount);
+            eraGovernments = EraGovernments(cfg, realms, empires, counties, provinceTerrain, coastal, development,
+                cultures, worldCenters, wilderness, azgaar, stateGovernments);
+        }
+
         if (cfg.StartingHegemony) Realms.ExpandHegemonRealm(realms, empires, wilderness);
         double? hegemonShare = cfg.StartingHegemony ? Realms.HegemonDeJureShare(realms, empires, wilderness) : null;
 
@@ -123,7 +136,8 @@ public static partial class ContentWriter
 
         return new AppliedRealms(realms, governments, hegemonShare, lineage, pastRulers, applied.ColoursFor(capitals),
             drifted, wilds, applied.DiplomacyFor(capitals, counties), seatParents,
-            new RememberedPast(HistoryChronicle.Events(applied.Chronicle, empires, cultures, wilderness), applied.ChronicleSince));
+            new RememberedPast(HistoryChronicle.Events(applied.Chronicle, empires, cultures, wilderness), applied.ChronicleSince),
+            eraGovernments);
     }
 
     /// <summary>
@@ -243,7 +257,7 @@ public static partial class ContentWriter
         var worldCenters = world.WorldCenters;
         var retinues = written.Retinues;
 
-        var (realms, governments, hegemonShare, lineage, pastRulers, colours, drifted, wilds, diplomacy, seatParents, past) = ApplyRealms(applied, current,
+        var (realms, governments, hegemonShare, lineage, pastRulers, colours, drifted, wilds, diplomacy, seatParents, past, eraGovernments) = ApplyRealms(applied, current,
             cfg, empires, counties, provinces, order, result.BaronyCount, world.ProvinceTerrain, development, cultures,
             worldCenters, wilderness, result.Azgaar, world.StateGovernments, faiths, result.LandCount, world.Frontier);
 
@@ -262,12 +276,15 @@ public static partial class ContentWriter
                 DeleteIfPresent(modDir, "common", "governments", "zz_generated_nomad_government.txt");
         });
 
+        EraHoldings? eraHoldings = null;
         var (provinceRows, holdings) = Core.Stage.Time("title and province history", () =>
         {
             WriteLandedTitles(modDir, empires, faiths, wilderness, HegemonSeat(empires, realms));
             var built = BuildProvinceHistory(cfg, empires, world.ProvinceTerrain, development, cultures, faiths,
                 governments, wilderness, worldCenters, world.SilkRoad, cfg.Seed, result.Azgaar);
-            EmitProvinceHistory(modDir, built.Rows, built.Holdings, null);
+            eraHoldings = BuildEraHoldings(cfg, empires, wilderness, eraGovernments, built.Holdings, realms,
+                world.Cultures, world.Faiths);
+            EmitProvinceHistory(modDir, built.Rows, built.Holdings, eraHoldings);
             return built;
         });
 
@@ -336,7 +353,7 @@ public static partial class ContentWriter
 
         var layer = Core.Stage.Detail("history and bookmarks", () => WriteHistoryLayer(modDir, gameDir, cfg,
             provinces, order, result.LandCount, empires, counties, realms, cultures, world.Ethnicities, faiths,
-            governments, worldCenters, wilderness, development, world.TitlePlan, eraGovernments: null,
+            governments, worldCenters, wilderness, development, world.TitlePlan, eraGovernments,
             retinues, result.Azgaar, written.Calendar, flatmap, wilds.Wilds, cultureAssets: false, lineage,
             pastRulers, diplomacy, seatParents, past));
 
@@ -357,6 +374,7 @@ public static partial class ContentWriter
             AppliedDiplomacy = diplomacy,
             SeatParents = seatParents,
             AppliedPast = past,
+            EraGovernments = eraGovernments,
         };
         var appliedContent = written with
         {
@@ -372,7 +390,7 @@ public static partial class ContentWriter
             Bookmarks = layer.Bookmarks,
             Holdings = holdings,
             ProvinceHistory = provinceRows,
-            EraHoldings = null,
+            EraHoldings = eraHoldings,
         };
 
         return (result.WithConfig(cfg), appliedContent);

@@ -59,8 +59,17 @@ public static class HistoryWriter
         ContentWriter.WriteNobleFamilyTitles(modDir, prehistory);
         WriteTitleHistory(modDir, cfg, empires, development, realms, governments, faiths, wilderness, wild, prehistory);
         WriteDynastyLocalisation(modDir, prehistory, calendar);
+        // Removed when there are none: a re-emit without them would otherwise keep the file an
+        // earlier write left, naming rulers the character file no longer has.
         if (prehistory.Eras is { } eras) WriteEraStartEffects(modDir, cfg, eras);
+        else
+        {
+            string stale = Path.Combine(modDir, "common", "on_action", EraStartEffectsFile);
+            if (File.Exists(stale)) File.Delete(stale);
+        }
     }
+
+    private const string EraStartEffectsFile = "00_generated_additional_bookmarks.txt";
 
     /// <summary>
     /// Whether the ruler of a seat is a woman.
@@ -396,6 +405,7 @@ public static class HistoryWriter
                 // The dynasty tree: the past ruler this one was the child of, written earlier in
                 // this block list whenever the history wrote both. Field skips a null.
                 b.Field(past.ParentIsMother ? "mother" : "father", past.ParentId);
+                if (past.ParentId is null) AddedParent(past.Id);
                 b.Inline(past.BirthDate, "birth = yes");
                 b.Inline(past.DeathDate, "death = yes");
             }
@@ -850,7 +860,7 @@ public static class HistoryWriter
             }
         }
 
-        ParadoxText.WriteBom(Path.Combine(dir, "00_generated_additional_bookmarks.txt"), b.ToString());
+        ParadoxText.WriteBom(Path.Combine(dir, EraStartEffectsFile), b.ToString());
     }
 
     private static void WriteHeadOfFaithCharacters(string modDir, MapConfig cfg,
@@ -1120,7 +1130,7 @@ public static class HistoryWriter
             .ToDictionary(g => g.Key, g => g.OrderBy(p => ReignOrder(p.ReignDate!)).ToList());
 
         if (eras is not null)
-            WriteEraTitleHistory(b, cfg, all, development, realms, governments, wilderness, eras, titleGrantDate);
+            WriteEraTitleHistory(b, cfg, all, development, realms, governments, wilderness, eras, titleGrantDate, pastByTitle);
         else
         foreach (var title in all)
         {
@@ -1204,11 +1214,17 @@ public static class HistoryWriter
         // at runtime, and neither can a character be given a birth in history after the game starts.
         if (wild.Count > 0)
         {
-            var unsettled = wild.Where(c => !wilderness.IsRuin(c)).Select(c => c.Key).ToList();
-            if (unsettled.Count > 0) unsettled.Insert(0, WildernessMap.TitleKey);
+            // A county wild on one bookmark and held on another — the frontier an applied history
+            // moved — is written date by date with the realms (WriteEraTitleHistory). These are the
+            // counties wild on every date; the two titular titles are seated whatever is left.
+            List<Title> always = eras is null ? wild
+                : [.. wild.Where(c => eras.Eras.All(e => (e.Realms.Wilderness ?? wilderness).Contains(c)))];
+
+            var unsettled = always.Where(c => !wilderness.IsRuin(c)).Select(c => c.Key).ToList();
+            if (wild.Any(c => !wilderness.IsRuin(c))) unsettled.Insert(0, WildernessMap.TitleKey);
 
             var ruined = wilderness.RuinsEnabled
-                ? [WildernessMap.RuinsTitleKey, .. wild.Where(wilderness.IsRuin).Select(c => c.Key)]
+                ? [WildernessMap.RuinsTitleKey, .. always.Where(wilderness.IsRuin).Select(c => c.Key)]
                 : new List<string>();
 
             Seat(unsettled, WildernessMap.HolderId);
@@ -1289,26 +1305,36 @@ public static class HistoryWriter
     /// written when it changes — <c>liege = 0</c> for a realm that walked free — and again whenever
     /// a destroyed title comes back, since destruction may have cleared it. Development is a setter
     /// per date, as vanilla uses it, a level per fifty years either side of the start date's.
+    ///
+    /// Under an applied history two more things go in. Its past rulers' dated holder lines, in date
+    /// order among the bookmarks' blocks, so a title's history in game still lists its real
+    /// predecessors. And the frontier it moved: a county wild on one date (<see cref="RealmMap.Wilderness"/>)
+    /// and held on another is the wilderness dummy's on the dates it is wild, the ruins dummy's when
+    /// somebody held it once. A county wild on every date is left to the wilderness block.
     /// </summary>
     private static void WriteEraTitleHistory(JominiBuilder b, MapConfig cfg, List<Title> all,
         Dictionary<Title, int> development, RealmMap realms, GovernmentMap governments,
-        WildernessMap wilderness, BookmarkEras eras, string titleGrantDate)
+        WildernessMap wilderness, BookmarkEras eras, string titleGrantDate,
+        Dictionary<string, List<MapGen.PastRuler>> pastByTitle)
     {
         var dates = eras.Eras
-            .Select(e => (Date: e.GrantDate, e.Year, e.Realms, e.Governments, Id: (Func<Title, string>)(s => e.Rulers.For(s).Id)))
+            .Select(e => (Date: e.GrantDate, e.Year, e.Realms, e.Governments, Id: (Func<Title, string>)(s => e.Rulers.For(s).Id),
+                Wild: e.Realms.Wilderness ?? wilderness))
             .Append((Date: titleGrantDate, Year: cfg.StartYear, Realms: realms, Governments: governments,
-                Id: (Func<Title, string>)CharacterId))
+                Id: (Func<Title, string>)CharacterId, Wild: wilderness))
             .OrderBy(d => d.Year)
             .ToList();
 
         foreach (var title in all)
         {
-            if (wilderness.Contains(title)) continue;
+            if (dates.All(d => d.Wild.Contains(title))) continue;
 
-            bool everHeld = dates.Any(d => d.Realms.HolderCounty.TryGetValue(title, out var h) && !wilderness.Contains(h));
+            bool everHeld = dates.Any(d => d.Realms.HolderCounty.TryGetValue(title, out var h) && !d.Wild.Contains(h));
             if (!everHeld) continue;
 
             int level = title.Tier == "c" ? development.GetValueOrDefault(title) : 0;
+            var past = pastByTitle.GetValueOrDefault(title.Key) ?? [];
+            int pastWritten = 0;
 
             using (b.Block(title.Key))
             {
@@ -1317,9 +1343,34 @@ public static class HistoryWriter
                 string governmentWritten = GovernmentMap.Feudal;
                 int levelWritten = 0;
 
-                foreach (var (date, year, map, eraGovernments, idOf) in dates)
+                foreach (var (date, year, map, eraGovernments, idOf, wild) in dates)
                 {
-                    if (!map.HolderCounty.TryGetValue(title, out var holder) || wilderness.Contains(holder))
+                    // The history's own predecessors up to this date: a holder line each, as the
+                    // title history without bookmarks writes them.
+                    for (; pastWritten < past.Count && ReignOrder(past[pastWritten].ReignDate!).CompareTo(ReignOrder(date)) < 0; pastWritten++)
+                    {
+                        using (b.Block(past[pastWritten].ReignDate)) b.Field("holder", past[pastWritten].Id);
+                        held = true;
+                        reheld = false;
+                    }
+
+                    // Wild on this date and held on another: the dummy's, free of any liege.
+                    if (wild.Contains(title))
+                    {
+                        using (b.Block(date))
+                        {
+                            b.Field("holder", wild.IsRuin(title) ? WildernessMap.RuinsHolderId : WildernessMap.HolderId);
+                            b.Field("government", "wilderness_government");
+                            if (liegeWritten is not null) b.Field("liege", "0");
+                        }
+                        governmentWritten = "wilderness_government";
+                        liegeWritten = null;
+                        held = true;
+                        reheld = false;
+                        continue;
+                    }
+
+                    if (!map.HolderCounty.TryGetValue(title, out var holder) || wild.Contains(holder))
                     {
                         if (held) using (b.Block(date)) b.Field("holder", "0");
                         reheld |= held;

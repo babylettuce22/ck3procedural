@@ -1699,7 +1699,9 @@ public static class GuiWriter
 
         return GuiBuilder.TextSingle("gen_bookmark_group_subtitle")
             .Text(subtitle)
-            .Format("#weak;glow_color:{0,0,0,1}")
+            // The year's own `#high` minus its bold: `#weak` is a grey-brown meant for dark panels,
+            // and on the tab's stone frame it all but vanishes. Size alone keeps this line second.
+            .Format("#high;glow_color:{0,0,0,1}")
             .Using("Font_Size_Small", "Font_Type_Flavor")
             .MaxWidth(190)
             .Visible(GuiExpr.Not(GuiExpr.StringIsEmpty(subtitle)));

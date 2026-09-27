@@ -147,6 +147,8 @@ public sealed class AppliedHistory
             Standings = Standings,
             Chronicle = [.. Chronicle.Select(r => r with { Year = r.Year + delta })],
             ChronicleFrom = ChronicleFrom != 0 ? ChronicleFrom + delta : 0,
+            Timeline = [.. Timeline.Select(f => new Frame(f.Year + delta,
+                [.. f.Realms.Select(r => r with { Founded = r.Founded + delta })]))],
         };
     }
 
@@ -182,6 +184,83 @@ public sealed class AppliedHistory
     /// </summary>
     public sealed record Realm(int Id, int Capital, int? Suzerain, string Culture, int Founded, int Peak, int[] Counties,
         string? Ruler = null, bool RulerFemale = false, int RulerBorn = 0, string? RulerParent = null);
+
+    /// <summary>The realms as the simulation had them in one year, without their rulers.</summary>
+    public sealed record Frame(int Year, List<Realm> Realms);
+
+    /// <summary>
+    /// The realm map every <see cref="FrameYears"/> years of the history, oldest first — this one's
+    /// and those it was run on from — so an additional bookmark dated inside the simulated years can
+    /// be drawn as the history had it then. The map at <see cref="Year"/> is <see cref="Realms"/>.
+    /// Empty in a file saved before it was kept, when such a bookmark falls back on the start's map.
+    /// </summary>
+    public List<Frame> Timeline { get; init; } = [];
+
+    /// <summary>
+    /// How often the timeline keeps the map. The formation's epochs are twenty-five years and an
+    /// additional bookmark reads the last one at or before its date; ten is finer than that for a
+    /// file a few hundred kilobytes long.
+    /// </summary>
+    public const int FrameYears = 10;
+
+    /// <summary>
+    /// The latest frame at or before <paramref name="year"/>, or null when the timeline starts after
+    /// it or has nothing.
+    /// </summary>
+    public Frame? FrameAt(int year)
+    {
+        Frame? best = null;
+        foreach (var frame in Timeline)
+            if (frame.Year <= year && (best is null || frame.Year > best.Year)) best = frame;
+        return best;
+    }
+
+    /// <summary>
+    /// A frame's realms as a formation history the titling step can dress: the same polities
+    /// <see cref="Resolve"/> builds, on whatever ground the realms held that year. Suzerains that the
+    /// frame does not have are dropped rather than refused — the frame is a picture, not a world to
+    /// lay a history over.
+    /// </summary>
+    public static FormationHistory FrameHistory(Frame frame, List<Title> counties, CultureMap cultures, int firstYear)
+    {
+        var byIndex = counties.Where(c => c.Tier == "c").ToDictionary(c => c.Index);
+        var cultureByKey = cultures.Cultures.GroupBy(c => c.Key).ToDictionary(g => g.Key, g => g.First());
+        var polities = new Dictionary<int, Polity>();
+        var owner = new Dictionary<Title, Polity>();
+
+        foreach (var realm in frame.Realms)
+        {
+            if (!byIndex.TryGetValue(realm.Capital, out var capital)) continue;
+            var p = new Polity
+            {
+                Id = realm.Id, Capital = capital,
+                Culture = cultureByKey.GetValueOrDefault(realm.Culture) ?? cultures.For(capital),
+                Founded = realm.Founded, Peak = realm.Peak,
+            };
+            foreach (int index in realm.Counties)
+                if (byIndex.TryGetValue(index, out var county) && owner.TryAdd(county, p)) p.Counties.Add(county);
+            if (p.Counties.Contains(capital)) polities[realm.Id] = p;
+            else foreach (var c in p.Counties) owner.Remove(c);
+        }
+
+        foreach (var realm in frame.Realms)
+            if (realm.Suzerain is { } lord && polities.TryGetValue(realm.Id, out var vassal)
+                && polities.TryGetValue(lord, out var suzerain))
+                vassal.Suzerain = suzerain;
+
+        return new FormationHistory
+        {
+            Polities = [.. polities.Values.OrderBy(p => p.Capital.Index)],
+            Owner = owner,
+            Events = [],
+            FirstYear = firstYear,
+        };
+    }
+
+    /// <summary>One realm as a frame keeps it: where it is and who it answers to, no ruler.</summary>
+    internal static Realm FrameRealm(Polity p)
+        => new(p.Id, p.Capital.Index, p.Suzerain?.Id, p.Culture.Key, p.Founded, p.Peak,
+            [.. p.Counties.Select(c => c.Index).Order()]);
 
     /// <summary>
     /// A dynasty and the house of it that rules, carried by value: the history is laid over a world
@@ -584,6 +663,8 @@ public sealed class AppliedHistory
                 .ToDictionary(c => c.Index, c => sim.SettlerCulture(c)!.Key),
             Fallen = [.. sim.Fallen.Select(c => c.Index).Order()],
             Colours = colours?.ToDictionary(kv => kv.Key, kv => kv.Value.R << 16 | kv.Value.G << 8 | kv.Value.B) ?? [],
+            // The earlier history's years, then this one's, so a chain of histories is one timeline.
+            Timeline = [.. (earlier?.Timeline ?? []).Where(f => f.Year < sim.StartYear), .. sim.Frames],
         };
     }
 
@@ -1040,6 +1121,9 @@ public sealed class AppliedHistory
             Owner = owner,
             Events = [],
             FirstYear = generated.FirstYear,
+            // The formation's own years, for an additional bookmark before the history began.
+            Frames = generated.Frames,
+            EndYear = generated.EndYear,
             Rules = new FormationRules
             {
                 Adjacent = adjacent ?? rules.Adjacent,

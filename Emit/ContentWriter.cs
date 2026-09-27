@@ -90,7 +90,8 @@ public static partial class ContentWriter
             WriteLandedTitles(modDir, empires, faiths, wilderness, HegemonSeat(empires, realms));
             WriteProvinceTerrain(modDir, provinceTerrain, landCount);
             (provinceRows, holdings) = BuildProvinceHistory(cfg, empires, provinceTerrain, development, cultures, faiths, governments, wilderness, worldCenters, silkRoad, cfg.Seed, azgaar);
-            eraHoldings = BuildEraHoldings(cfg, empires, wilderness, eraGovernments, holdings);
+            eraHoldings = BuildEraHoldings(cfg, empires, wilderness, eraGovernments, holdings, realms,
+                generatedCultures, generatedFaiths);
             EmitProvinceHistory(modDir, provinceRows, holdings, eraHoldings);
             WriteLocalisation(modDir, empires, waterNames, provinces, baronyCount, landCount, riverCount);
         });
@@ -1326,11 +1327,18 @@ public static partial class ContentWriter
         int ProvinceId, string Culture, string Faith, string? SpecialSlot, string? SpecialBuilding);
 
     /// <summary>
-    /// The seat holdings the additional bookmarks' governments need, oldest date first, by province
-    /// id and only where they differ from the start date's; and the date the start date's holding is
-    /// restored on after an earlier one, which is the day its holders take their titles.
+    /// What a province is on an additional bookmark where that differs from the start date: its
+    /// holding, and — for a county wild on one date and held on the other — its people and faith.
+    /// A null culture or faith is the start date's.
     /// </summary>
-    public sealed record EraHoldings(List<(int Year, string Date, Dictionary<int, string> Capitals)> Dates,
+    public sealed record ProvinceThen(string Holding, string? Culture = null, string? Faith = null);
+
+    /// <summary>
+    /// The provinces the additional bookmarks need changed, oldest date first, by province id and
+    /// only where they differ from the start date's; and the date the start date's are restored on
+    /// after an earlier one, which is the day its holders take their titles.
+    /// </summary>
+    public sealed record EraHoldings(List<(int Year, string Date, Dictionary<int, ProvinceThen> Provinces)> Dates,
         int MainYear, string RevertDate);
 
     /// <summary>
@@ -1338,32 +1346,67 @@ public static partial class ContentWriter
     /// county its ruler governs as a tribe needs a tribal hall, one he governs as a lord a castle.
     /// The seat only — a county's other holdings are ones any government may keep — and never a
     /// holding no government seats in, such as a wonder's or the wilderness's.
+    ///
+    /// Under an applied history the frontier moves, and a date's map carries its own wilderness
+    /// (<see cref="RealmMap.Wilderness"/>). A county settled since then is wild on that date — the
+    /// wilderness holding on its seat, nothing elsewhere, the unsettled people — and one fallen
+    /// since is held: its ruler's seat holding, and the people and faith the generated world gave it.
     /// </summary>
     private static EraHoldings? BuildEraHoldings(MapConfig cfg, List<Title> empires, WildernessMap wilderness,
-        Dictionary<int, GovernmentMap>? eraGovernments, IReadOnlyDictionary<int, string> holdings)
+        Dictionary<int, GovernmentMap>? eraGovernments, IReadOnlyDictionary<int, string> holdings,
+        RealmMap? realms = null, CultureMap? generatedCultures = null, FaithMap? generatedFaiths = null)
     {
         if (eraGovernments is null) return null;
 
         string[] seatHoldings = ["castle_holding", "tribal_holding", "city_holding", "church_holding",
             "nomad_holding", "temple_citadel_holding"];
+        var counties = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
 
-        var dates = new List<(int, string, Dictionary<int, string>)>();
+        var dates = new List<(int, string, Dictionary<int, ProvinceThen>)>();
         foreach (var (year, governments) in eraGovernments.OrderBy(kv => kv.Key))
         {
-            var capitals = new Dictionary<int, string>();
-            foreach (var county in Titles.Flatten(empires).Where(t => t.Tier == "c" && !wilderness.Contains(t)))
-            {
-                if (county.Capital is not { ProvinceId: > 0 } seat) continue;
-                if (!holdings.TryGetValue(seat.ProvinceId, out var today) || !seatHoldings.Contains(today)) continue;
+            var provinces = new Dictionary<int, ProvinceThen>();
+            var wildThen = realms?.EraMaps?.GetValueOrDefault(year)?.Wilderness;
+            int settledSince = 0, fallenSince = 0;
 
-                string then = GovernmentMap.CapitalHolding(BookmarkEras.EraGovernment(governments.For(county)));
-                if (then != today) capitals[seat.ProvinceId] = then;
+            foreach (var county in counties)
+            {
+                bool wildNow = wilderness.Contains(county);
+                bool wasWild = wildThen?.Contains(county) ?? wildNow;
+                if (county.Capital is not { ProvinceId: > 0 } seat) continue;
+
+                if (!wildNow && !wasWild)
+                {
+                    if (!holdings.TryGetValue(seat.ProvinceId, out var today) || !seatHoldings.Contains(today)) continue;
+
+                    string then = GovernmentMap.CapitalHolding(BookmarkEras.EraGovernment(governments.For(county)));
+                    if (then != today) provinces[seat.ProvinceId] = new ProvinceThen(then);
+                }
+                else if (!wildNow && wasWild)
+                {
+                    settledSince++;
+                    foreach (var barony in county.SeatFirst().Where(b => b.ProvinceId > 0))
+                        provinces[barony.ProvinceId] = new ProvinceThen(barony == seat ? "wilderness_holding" : "none",
+                            MapGen.Cultures.UnsettledKey, MapGen.Faiths.UnsettledFaithKey);
+                }
+                else if (wildNow && !wasWild && generatedCultures is not null && generatedFaiths is not null)
+                {
+                    fallenSince++;
+                    string people = generatedCultures.For(county).Key, faith = generatedFaiths.For(county).Key;
+                    foreach (var barony in county.SeatFirst().Where(b => b.ProvinceId > 0))
+                        provinces[barony.ProvinceId] = new ProvinceThen(barony == seat
+                                ? GovernmentMap.CapitalHolding(BookmarkEras.EraGovernment(governments.For(county)))
+                                : "none",
+                            people, faith);
+                }
             }
 
-            dates.Add((year, $"{year - 1}.1.1", capitals));
-            Console.WriteLine($"  additional bookmark {year}: {capitals.Count} seats held as "
-                + string.Join(", ", capitals.Values.GroupBy(h => h).OrderByDescending(g => g.Count())
-                    .Select(g => $"{g.Count()} {g.Key.Replace("_holding", "")}")));
+            dates.Add((year, $"{year - 1}.1.1", provinces));
+            var seats = provinces.Values.Where(p => p.Culture is null).ToList();
+            Console.WriteLine($"  additional bookmark {year}: {seats.Count} seats held as "
+                + string.Join(", ", seats.GroupBy(p => p.Holding).OrderByDescending(g => g.Count())
+                    .Select(g => $"{g.Count()} {g.Key.Replace("_holding", "")}"))
+                + (wildThen is null ? "" : $"; {settledSince} counties wild then and settled since, {fallenSince} held then and fallen since"));
         }
 
         return new EraHoldings(dates, cfg.StartYear, $"{Math.Max(1, cfg.StartYear - 5)}.1.1");
@@ -1404,26 +1447,33 @@ public static partial class ContentWriter
                 // takes it — the way vanilla's tribal halls become castles between its bookmarks.
                 if (eras is null) continue;
 
-                string state = holding;
-                void Apply(IEnumerable<(int Year, string Date, Dictionary<int, string> Capitals)> which)
+                // What the province is on the start date, and what the file last said it was.
+                var today = (Holding: holding, Culture: row.Culture, Faith: row.Faith);
+                var state = today;
+
+                // Only what changed, culture and faith before the holding, as vanilla writes them.
+                void Write(string date, (string Holding, string Culture, string Faith) then)
                 {
-                    foreach (var (_, date, capitals) in which)
+                    if (then == state) return;
+                    using (b.Block(date))
                     {
-                        string then = capitals.GetValueOrDefault(row.ProvinceId, holding);
-                        if (then == state) continue;
-                        using (b.Block(date)) b.Field("holding", then);
-                        state = then;
+                        if (then.Culture != state.Culture) b.Field("culture", then.Culture);
+                        if (then.Faith != state.Faith) b.Field("religion", then.Faith);
+                        if (then.Holding != state.Holding) b.Field("holding", then.Holding);
                     }
+                    state = then;
+                }
+
+                void Apply(IEnumerable<(int Year, string Date, Dictionary<int, ProvinceThen> Provinces)> which)
+                {
+                    foreach (var (_, date, provinces) in which)
+                        Write(date, provinces.TryGetValue(row.ProvinceId, out var then)
+                            ? (then.Holding, then.Culture ?? today.Culture, then.Faith ?? today.Faith)
+                            : today);
                 }
 
                 Apply(eras.Dates.Where(d => d.Year < eras.MainYear));
-
-                if (state != holding)
-                {
-                    using (b.Block(eras.RevertDate)) b.Field("holding", holding);
-                    state = holding;
-                }
-
+                Write(eras.RevertDate, today);
                 Apply(eras.Dates.Where(d => d.Year > eras.MainYear));
             }
         }

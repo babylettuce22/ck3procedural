@@ -480,9 +480,10 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// three centuries of politics does not also hand every culture three centuries of innovations.
     /// Advancement stays the user's own setting to move.
     ///
-    /// Additional bookmarks are switched off: their dates are placed around the generated start,
-    /// and nothing yet places them on the simulated timeline. A shallow copy, as
-    /// <see cref="AtAdvancement"/> is; the settings grid keeps showing the user's own values.
+    /// Additional bookmarks follow the start: their dates are placed around <paramref name="year"/>
+    /// like any start's, and an applied history reads each one's map from whichever run covered it
+    /// (see <see cref="MapGen.HistoryEras"/>). A shallow copy, as <see cref="AtAdvancement"/> is; the
+    /// settings grid keeps showing the user's own values.
     /// </summary>
     /// <param name="salt">The <see cref="PeopleSalt"/> to draw people with: the year by default, or
     /// the one an applied history was first captured at, which stays with it when its dates are
@@ -492,7 +493,6 @@ public sealed class MapConfig : CustomTypeDescriptor
         var copy = (MapConfig)MemberwiseClone();
         if (copy.EraAnchorYear <= 0) copy.EraAnchorYear = Math.Max(1, EraYear);
         copy.StartYear = year;
-        copy.AdditionalBookmarks = false;
         copy.PeopleSalt = salt ?? year;
         return copy;
     }

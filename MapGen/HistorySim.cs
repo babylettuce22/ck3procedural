@@ -94,6 +94,19 @@ public sealed partial class HistorySim
     /// <summary>The id the next realm born will take. Carried by <see cref="AppliedHistory"/>.</summary>
     internal int NextId => _sim.NextId;
 
+    private readonly List<AppliedHistory.Frame> _frames = [];
+
+    /// <summary>
+    /// The map at the start and every <see cref="AppliedHistory.FrameYears"/> years since, for an
+    /// additional bookmark dated inside the history. Read-only to the simulation: taken after a
+    /// tick, it changes no dice.
+    /// </summary>
+    public IReadOnlyList<AppliedHistory.Frame> Frames => _frames;
+
+    private void KeepFrame()
+        => _frames.Add(new AppliedHistory.Frame(_sim.Year,
+            [.. _sim.Polities.Where(p => p.Alive).OrderBy(p => p.Id).Select(AppliedHistory.FrameRealm)]));
+
     /// <summary>
     /// Picks the formation up at the start date. Null when there is nothing to pick up: a world
     /// whose realms were handed out down the de jure tree, or read from an Azgaar export or a
@@ -144,6 +157,7 @@ public sealed partial class HistorySim
         history.SeatWilds(wilds);
         history.SeatWars();
         history.SeatIndependence();
+        history.KeepFrame();
         return history;
     }
 
@@ -195,6 +209,11 @@ public sealed partial class HistorySim
         // The houses' year's end, likewise read-only: grudges and standing worn down a year, and
         // the year's holdings added to standing. See HistoryHouses.
         HousesYear();
+
+        // Read-only too: the map, whenever the tick crossed into a new stretch of the timeline.
+        if ((_sim.Year - StartYear) / AppliedHistory.FrameYears
+            != (_sim.Year - _sim.TickYears - StartYear) / AppliedHistory.FrameYears)
+            KeepFrame();
     }
 
     /// <summary>

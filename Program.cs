@@ -23,6 +23,7 @@ public static class Program
         string outDir = Path.Combine(AppContext.BaseDirectory, "out");
         int scale = 2;
         string? modDir = null;
+        List<int> historyYears = [];
         bool gui = args.Length == 0;
         bool staticOnly = false;
         bool guiOnly = false;
@@ -150,6 +151,13 @@ public static class Program
                     }
                     return Emit.ThumbnailWriter.WriteFromDisk(ModDir(args[++i]), options.GameDir) ? 0 : 1;
                 }
+
+                // The Quick page's last step without the page: after the write, the world's history
+                // is run on this many years and accepted there, as the player would. Comma separated
+                // to accept, continue and accept again ("--history-years 150,60"). See QuickHistory.
+                case "--history-years" when i + 1 < args.Length:
+                    historyYears = [.. args[++i].Split(',').Select(int.Parse)];
+                    break;
 
                 case "--static-only":
                     staticOnly = true;
@@ -805,7 +813,11 @@ public static class Program
         try
         {
             var result = Generator.Generate(options);
-            if (modDir is not null) Generator.WriteMod(result, options, modDir);
+            if (modDir is not null)
+            {
+                var written = Generator.WriteMod(result, options, modDir);
+                if (historyYears.Count > 0) AcceptHistory(result, written, modDir, options.GameDir, historyYears);
+            }
             if (debugImages ?? modDir is null)
                 Core.Stage.Time("debug images", () => Generator.WriteDebugImages(result, outDir, scale));
             Core.Stage.Report();
@@ -821,6 +833,29 @@ public static class Program
 
         if (modDir is not null) Core.RunLog.Write(modDir, options, "completed");
         return 0;
+    }
+
+    /// <summary>
+    /// Runs the written world's history on and accepts it, once per entry in
+    /// <paramref name="years"/>, each carrying on from the last — what the Quick page does when the
+    /// player watches the history and accepts, continues and accepts again.
+    /// </summary>
+    private static void AcceptHistory(GenerationResult result, Emit.WrittenContent written, string modDir,
+        string gameDir, List<int> years)
+    {
+        MapGen.AppliedHistory? applied = null;
+        foreach (int span in years)
+        {
+            var history = AppGUI.QuickHistory.PrepareAsync(result, written, applied).GetAwaiter().GetResult()
+                ?? throw new InvalidOperationException("This world has no grown realms to run a history on.");
+            for (int y = 0; y < span; y++) history.Tick();
+
+            applied = history.Capture();
+            Console.WriteLine($"History: run on {span} years, accepted in {applied.Year}");
+            (result, written) = Core.Stage.Time("apply history",
+                () => Emit.ContentWriter.ApplyHistory(modDir, gameDir, result, written, applied));
+            applied.Save(modDir);
+        }
     }
 
     /// <summary>

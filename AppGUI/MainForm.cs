@@ -2974,7 +2974,7 @@ public sealed partial class MainForm : ChromeForm
                   + "titles, cultures, faiths and everything else stay as written."
                 : "The mod is written in full. Titles, cultures, faiths, development and wilderness stay as "
                   + "generated; rulers, families, governments and title history follow the history's realms.")
-            + (cfg.UsesAdditionalBookmarks ? " Additional bookmarks are not written for an applied history yet." : "")
+            + (cfg.UsesAdditionalBookmarks ? " The additional bookmarks move with it, drawn from the history's own years." : "")
             + " The settings keep their own World Year.";
 
         using (var dialog = new ApplyHistoryDialog(applied.Year, applied.YearRange(cfg), _written?.Calendar, what,
@@ -3338,7 +3338,9 @@ public sealed partial class MainForm : ChromeForm
                     {
                         r = r.WithConfig(r.Config.AtStartYear(applied.Year, applied.PeopleSalt));
                         Console.WriteLine($"Applied history: written as {r.Config.StartYear}, as advanced as {r.Config.EraYear}"
-                            + (cfg.UsesAdditionalBookmarks ? "; additional bookmarks are not written for it" : ""));
+                            + (r.Config.UsesAdditionalBookmarks
+                                ? $"; additional bookmarks in {string.Join(" and ", r.Config.AdditionalBookmarkYears)}"
+                                : ""));
                     }
                     else
                     {

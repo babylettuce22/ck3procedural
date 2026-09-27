@@ -140,6 +140,11 @@ public sealed class QuickChoices
         cfg.EnableMagic = false;
         cfg.EnableWilderness = Wilderness;
         cfg.EnableStartingWars = Wars;
+
+        // Three start dates, as vanilla has. They follow the world's history when the player
+        // accepts it later than it began — see MapGen.HistoryEras — and a world of real CK3 people
+        // has vanilla's own dates instead (UsesAdditionalBookmarks says no to it).
+        cfg.AdditionalBookmarks = true;
     }
 
     /// <summary>A different world with the same page layout: every choice drawn at random.</summary>

@@ -276,6 +276,30 @@ public sealed class FormationHistory
     public Dictionary<int, FormationHistory> Snapshots { get; init; } = [];
 
     /// <summary>
+    /// The map at the first year and after every epoch, keyed by year, on polity objects of their
+    /// own — for an additional bookmark of an applied history that falls before the history began,
+    /// whose date nobody knew when the formation ran. Kept on the history
+    /// <see cref="Formation.Run"/> returns and carried across <see cref="AppliedHistory.Resolve"/>;
+    /// empty everywhere else.
+    /// </summary>
+    public SortedList<int, FormationHistory> Frames { get; init; } = [];
+
+    /// <summary>The start date the formation ran up to; 0 on a snapshot.</summary>
+    public int EndYear { get; init; }
+
+    /// <summary>The frame at or before <paramref name="year"/>, or the first when it is earlier still.</summary>
+    public FormationHistory? FrameAt(int year)
+    {
+        FormationHistory? best = null;
+        foreach (var (y, frame) in Frames)
+        {
+            if (y > year) return best ?? frame;
+            best = frame;
+        }
+        return best;
+    }
+
+    /// <summary>
     /// What the simulation ran on, kept so it can be picked up again from where it stopped — see
     /// <see cref="HistorySim"/>. Set on the history <see cref="Formation.Run"/> returns and null on
     /// every snapshot. Reading it changes nothing about the run that produced it.
@@ -497,12 +521,16 @@ public static class Formation
                     snapshots[year] = Freeze(at, firstYear);
         }
 
+        // Every epoch's map as well, without its event log, for dates asked for after the run.
+        var frames = new SortedList<int, FormationHistory> { [firstYear] = Freeze(sim, firstYear, events: false) };
+
         Capture(sim, firstYear);
 
         for (int epoch = 0; epoch < epochs; epoch++)
         {
             Epoch(sim, epoch);
             Capture(sim, sim.Year);
+            frames[sim.Year] = Freeze(sim, firstYear, events: false);
         }
 
         var survivors = sim.Polities.Where(p => p.Alive).OrderBy(p => p.Capital.Index).ToList();
@@ -543,6 +571,8 @@ public static class Formation
             Events = sim.Events,
             FirstYear = firstYear,
             Snapshots = snapshots,
+            Frames = frames,
+            EndYear = cfg.StartYear,
             Rules = new FormationRules
             {
                 Adjacent = sim.Adjacent,
@@ -667,7 +697,7 @@ public static class Formation
     /// polities in place, and must not touch the simulation's own. Ids are kept, which is how a
     /// realm is recognised from one bookmark to the next.
     /// </summary>
-    internal static FormationHistory Freeze(Sim sim, int firstYear)
+    internal static FormationHistory Freeze(Sim sim, int firstYear, bool events = true)
     {
         var (polities, owner) = CopyLiving(sim.Polities);
 
@@ -675,9 +705,58 @@ public static class Formation
         {
             Polities = polities,
             Owner = owner,
-            Events = [.. sim.Events.Where(e => e.Year <= sim.Year)],
+            Events = events ? [.. sim.Events.Where(e => e.Year <= sim.Year)] : [],
             FirstYear = firstYear,
         };
+    }
+
+    /// <summary>
+    /// The realms of <paramref name="start"/> run on past <paramref name="startYear"/> an epoch at a
+    /// time, as <see cref="Run"/> runs a generated world on for a later bookmark, and the map at the
+    /// last epoch at or before each of <paramref name="years"/>. For an applied history's later
+    /// bookmarks. On streams of its own, on copies: <paramref name="start"/> is not touched.
+    /// </summary>
+    internal static Dictionary<int, FormationHistory> RunOn(FormationHistory start, int startYear,
+        IReadOnlyCollection<int> years, int seed)
+    {
+        var result = new Dictionary<int, FormationHistory>();
+        if (start.Rules is not { } rules || years.Count == 0) return result;
+
+        var (polities, owner) = CopyLiving(start.Polities);
+        var sim = new Sim
+        {
+            Polities = polities,
+            Owner = owner,
+            Adjacent = rules.Adjacent,
+            Development = rules.Development,
+            CountyCulture = rules.CountyCulture,
+            Events = [],
+            AvgKingdom = rules.AvgKingdom,
+            Reach = rules.Reach,
+            Aggression = rules.Aggression,
+            Turbulence = rules.Turbulence,
+            NextId = rules.NextId,
+            Year = startYear,
+        };
+
+        void Capture()
+        {
+            foreach (int year in years)
+                if (!result.ContainsKey(year) && year < sim.Year + EpochYears)
+                    result[year] = Freeze(sim, start.FirstYear, events: false);
+        }
+
+        Capture();
+        while (years.Any(y => !result.ContainsKey(y)))
+        {
+            sim.Year += EpochYears;
+            Step(sim, new Rng(seed ^ 0x5A1E ^ unchecked((int)((uint)sim.Year * 0x9E3779B1u))));
+            foreach (var p in sim.Polities)
+                if (p.Alive && p.Suzerain is { Alive: false }) p.Suzerain = null;
+            Capture();
+        }
+
+        return result;
     }
 
     /// <summary>

@@ -265,6 +265,16 @@ public sealed partial class PrehistoryMap
     /// <summary>The oldest a mother is at a child's birth, as the dynasty trees and the kin keep it.</summary>
     private const int MaxMotherAge = 45;
 
+    /// <summary>
+    /// The oldest a father is at a child's birth. A generated ruler is fifty at most on the start
+    /// date, so only an applied history's rulers — the simulation keeps them to eighty and past —
+    /// ever reach it.
+    /// </summary>
+    private const int MaxFatherAge = 65;
+
+    /// <summary>The youngest either partner is married at, and so the youngest a parent is at a child's birth.</summary>
+    private const int MinMarriageAge = 16;
+
     public static PrehistoryMap Build(
         List<Title> counties,
         ProvinceMap provinces,
@@ -886,9 +896,15 @@ public sealed partial class PrehistoryMap
         // A seat can give a consort while its ruler's dead parent has children to spare. Until that
         // parent reaches the cap every list below is what it always was, so a world that never
         // reached it draws exactly the marriages it always did.
+        //
+        // And only while that parent could have had a child old enough to be wed by the start date:
+        // the consort is born no earlier than the parent's seventeenth year, and an applied history's
+        // parent can be young — the father of a child ruler — so a match drawn from one was married
+        // at eleven. A generated world's invented parents are all forty-odd years past that.
         var matchesOf = new Dictionary<string, int>(StringComparer.Ordinal);
         bool CanGive(Title origin)
-            => !map.DeceasedParents.TryGetValue(origin, out var parent) || matchesOf.GetValueOrDefault(parent.Id) < MaxMatchesPerParent;
+            => !map.DeceasedParents.TryGetValue(origin, out var parent)
+               || matchesOf.GetValueOrDefault(parent.Id) < MaxMatchesPerParent && CouldHaveMarriageableChild(parent, cfg);
 
         foreach (var ruler in sortedRulers)
         {
@@ -902,6 +918,14 @@ public sealed partial class PrehistoryMap
             if (!mRng.Chance(0.88)) continue;
 
             int rulerBirthYear = HistoryWriter.GetRulerBirthYear(ruler, cfg);
+
+            // A ruler not yet of age by the latest wedding date stays single, and so childless. Only
+            // an applied history seats one — its simulation crowns children, where a generated ruler
+            // is 24 or older — and the wedding pulled back to the start date regardless married a
+            // boy of eight and made him a father at twelve. Before any match is drawn, so no house's
+            // count of consorts given moves for a wedding that never happens.
+            if (rulerBirthYear + MinMarriageAge > LatestWeddingYear(cfg)) continue;
+
             var topLiege = TopLiegeCounty(ruler, realms);
             bool isTopLiege = (ruler == topLiege);
 
@@ -1014,9 +1038,7 @@ public sealed partial class PrehistoryMap
                     // father past 60, or either already dead (a father's child can come the year
                     // after). Drawn from the start date alone, a consort could be born to a
                     // 62-year-old mother, or years after the parent's grave.
-                    int latest = parentBirthYear + (df.Female ? 45 : 60);
-                    if (df.DeathDate is { } died)
-                        latest = Math.Min(latest, int.Parse(died.Split('.')[0]) - (df.Female ? 1 : 0));
+                    int latest = LatestChildYear(df, parentBirthYear);
                     spouseBirthYear = Math.Max(parentBirthYear + 17, Math.Min(spouseBirthYear, latest));
                 }
             }
@@ -1061,8 +1083,11 @@ public sealed partial class PrehistoryMap
             bool spouseFemale = !rulerFemale;
             string spouseName = GivenName(spouseCulture, spouseFemale, mRng);
 
-            int earliestMarriageYear = Math.Max(rulerBirthYear + 16, spouseBirthYear + 16);
-            int marriageYear = Math.Min(cfg.StartYear - 2, earliestMarriageYear + mRng.Int(0, 8));
+            // Both are of age by the latest wedding date — the ruler by the check above, the consort
+            // by CanGive or by being drawn twenty or more years before the start — so the cap only
+            // ever trims the years of waiting, never the age.
+            int earliestMarriageYear = Math.Max(rulerBirthYear + MinMarriageAge, spouseBirthYear + MinMarriageAge);
+            int marriageYear = Math.Min(LatestWeddingYear(cfg), earliestMarriageYear + mRng.Int(0, 8));
             string weddingDate = $"{marriageYear}.{mRng.Int(1, 12)}.{mRng.Int(1, 28)}";
 
             var spouse = new HistoricalCharacter
@@ -1130,17 +1155,30 @@ public sealed partial class PrehistoryMap
                 ? HistoryWriter.GetRulerBirthYear(ruler, cfg)
                 : int.Parse(spouse.BirthDate.Split('.')[0]);
 
+            // And the father, who is the ruler unless a matriarchy made him the consort. An applied
+            // history's ruler can be old on the start date, and a wedding dated from a young consort's
+            // side gave children to a man of seventy.
+            int fatherBorn = rulerFemale
+                ? int.Parse(spouse.BirthDate.Split('.')[0])
+                : HistoryWriter.GetRulerBirthYear(ruler, cfg);
+
             for (int i = 0; i < childCount; i++)
             {
                 bool isFemale = cRng.Chance(0.48);
                 string childName = GivenName(culture, isFemale, cRng);
 
-                int birthYear = Math.Min(cfg.StartYear, weddingYear + 1 + (i * cRng.Int(2, 4)) + cRng.Int(0, 2));
+                // By the year before the start at the latest. Capped at the start year itself, a
+                // late child took a drawn month and day in it — after the bookmark's first of
+                // January — and CK3 never creates a history character born after its bookmark,
+                // then or when the day comes: a quarter of all children, heirs among them, were
+                // nobody. The wedding is two years before the start at the latest, so the cap never
+                // puts a birth before it; the draws are the same ones in the same order.
+                int birthYear = Math.Min(LatestBirthYear(cfg), weddingYear + 1 + (i * cRng.Int(2, 4)) + cRng.Int(0, 2));
 
                 // Past her childbearing years this child was never born, and neither were any after
                 // it: the births only climb. A couple married late may have none, which the heir
-                // lookups below and in the bookmarks already allow for.
-                if (birthYear - motherBorn > MaxMotherAge) break;
+                // lookups below and in the bookmarks already allow for. Likewise past his.
+                if (birthYear - motherBorn > MaxMotherAge || birthYear - fatherBorn > MaxFatherAge) break;
 
                 var child = new HistoricalCharacter
                 {
@@ -1183,6 +1221,41 @@ public sealed partial class PrehistoryMap
 
             map.Children[ruler] = childrenList;
         }
+    }
+
+    /// <summary>The last year a start-date ruler's wedding is dated to: two before the start.</summary>
+    private static int LatestWeddingYear(MapConfig cfg) => cfg.StartYear - 2;
+
+    /// <summary>
+    /// The last year a start-date ruler's child is born in: the one before the start. The bookmark
+    /// opens on the start year's first day (<see cref="MapConfig.StartDate"/>), and a history
+    /// character born after its bookmark is never created — a save's <c>character_lookup</c> holds
+    /// none, twenty years on. Any month and day of this year is before it.
+    /// </summary>
+    private static int LatestBirthYear(MapConfig cfg) => cfg.StartYear - 1;
+
+    /// <summary>
+    /// The last year a dead parent could have had a child: a mother to 45, a father to 60, and
+    /// neither after dying — though a father's child can come in the year he died.
+    /// </summary>
+    private static int LatestChildYear(HistoricalCharacter parent, int parentBirthYear)
+    {
+        int latest = parentBirthYear + (parent.Female ? 45 : 60);
+        if (parent.DeathDate is { } died)
+            latest = Math.Min(latest, int.Parse(died.Split('.')[0]) - (parent.Female ? 1 : 0));
+        return latest;
+    }
+
+    /// <summary>
+    /// Whether a dead parent could have had a child who is of age by the latest wedding date — a
+    /// consort drawn as that parent's child is born between the parent's seventeenth year and
+    /// <see cref="LatestChildYear"/>, so both have to leave room before
+    /// <see cref="LatestWeddingYear"/> less <see cref="MinMarriageAge"/>.
+    /// </summary>
+    private static bool CouldHaveMarriageableChild(HistoricalCharacter parent, MapConfig cfg)
+    {
+        int born = int.Parse(parent.BirthDate.Split('.')[0]);
+        return born + 17 <= Math.Min(LatestChildYear(parent, born), LatestWeddingYear(cfg) - MinMarriageAge);
     }
 
     private static void AddMarriageAlliance(PrehistoryMap map, Title rulerCounty, Title spouseOriginCounty, string spouseId, string weddingDate)

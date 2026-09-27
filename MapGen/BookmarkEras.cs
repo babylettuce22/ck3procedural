@@ -131,6 +131,7 @@ public sealed partial class BookmarkEras
         // the start — both read by HouseFor.
         var polityAt = new Dictionary<Title, int>();
         int yearsAway = 0;
+        RealmMap? current = null;
 
         for (int i = 0; i < dates.Length; i++)
         {
@@ -140,6 +141,7 @@ public sealed partial class BookmarkEras
             yearsAway = Math.Abs(cfg.StartYear - year);
 
             var map = realms.EraMaps?.GetValueOrDefault(year) ?? WithoutHegemony(realms);
+            current = map;
             polityAt.Clear();
             foreach (var p in map.History?.Polities ?? []) polityAt[p.Capital] = p.Id;
 
@@ -162,14 +164,17 @@ public sealed partial class BookmarkEras
                 .Where(c => c is not null)
                 .ToHashSet();
 
+            // The frontier on this date, which an applied history moves.
+            var wildThen = map.Wilderness ?? wilderness;
+
             int founded = minted.Count, kept = 0;
-            var seats = map.HolderCounty.Values.Where(c => !wilderness.Contains(c)).Distinct().OrderBy(c => c.Index);
+            var seats = map.HolderCounty.Values.Where(c => !wildThen.Contains(c)).Distinct().OrderBy(c => c.Index);
 
             foreach (var seat in seats)
             {
                 var rng = Rng.For(cfg.Seed, 0x3E2D, seat.Index, salt);
-                var culture = cultures.For(seat);
-                var faith = faiths.For(seat);
+                var culture = CultureAt(seat, map);
+                var faith = FaithAt(seat, map);
                 var primary = HistoryWriter.Primary(seat, map);
                 string government = eraGovernments.GetValueOrDefault(seat, GovernmentMap.Feudal);
 
@@ -225,7 +230,7 @@ public sealed partial class BookmarkEras
                 if (carried) era.Enduring++;
             }
 
-            SeatFaithHeads(era, next, salt);
+            SeatFaithHeads(era, next, salt, wildThen);
             result.Eras.Add(era);
 
             Console.WriteLine($"  additional bookmark {year} ({tag}, as advanced as {cfg.EraYearAt(year)}): "
@@ -241,6 +246,23 @@ public sealed partial class BookmarkEras
         Console.WriteLine($"  additional bookmarks' families: {result.Summary}");
 
         return result;
+
+        // A seat's people and faith on a date. The maps are the start date's, where a county an
+        // applied history let fall to ruin is the unsettled people's; on a date its realm still held
+        // it, it keeps the realm's people and the faith of the realm's settled ground.
+        Culture CultureAt(Title seat, RealmMap map)
+        {
+            var culture = cultures.For(seat);
+            return culture.Key == Cultures.UnsettledKey && map.History?.Owner.GetValueOrDefault(seat) is { } p
+                ? p.Culture : culture;
+        }
+
+        Faith FaithAt(Title seat, RealmMap map)
+        {
+            var faith = faiths.For(seat);
+            if (faith.Key != Faiths.UnsettledFaithKey || map.History?.Owner.GetValueOrDefault(seat) is not { } p) return faith;
+            return p.Counties.OrderBy(c => c.Index).Select(faiths.For).FirstOrDefault(f => f.Key != Faiths.UnsettledFaithKey) ?? faith;
+        }
 
         // The house a seat's ruler belongs to on an additional date, and whether it is one that also
         // rules on the start date.
@@ -280,7 +302,7 @@ public sealed partial class BookmarkEras
 
         (string Dynasty, string House) Mint(string key, Title seat)
         {
-            var culture = cultures.For(seat);
+            var culture = current is null ? cultures.For(seat) : CultureAt(seat, current);
             string name = FreshName(culture, seat, key);
 
             string dynId = $"gen_dynasty_old_{key}";
@@ -318,7 +340,7 @@ public sealed partial class BookmarkEras
 
         // Temporal heads go to the faith's greatest ruler on the date, as at the start; spiritual
         // ones, and a temporal one with no ruler of its faith, to a theocrat of their own.
-        void SeatFaithHeads(BookmarkEra era, int? next, int salt)
+        void SeatFaithHeads(BookmarkEra era, int? next, int salt, WildernessMap wildThen)
         {
             int n = 0;
             foreach (var faith in faiths.Faiths)
@@ -328,7 +350,7 @@ public sealed partial class BookmarkEras
                 if (faith.Head.Temporal)
                 {
                     var seat = era.Realms.HolderCounty
-                        .Where(kv => !wilderness.Contains(kv.Value) && faiths.For(kv.Value) == faith)
+                        .Where(kv => !wildThen.Contains(kv.Value) && faiths.For(kv.Value) == faith)
                         .OrderByDescending(kv => HistoryWriter.Rank(kv.Key))
                         .ThenBy(kv => kv.Value.Index)
                         .Select(kv => kv.Value)
@@ -341,7 +363,7 @@ public sealed partial class BookmarkEras
                     }
                 }
 
-                var sample = counties.FirstOrDefault(c => !wilderness.Contains(c) && faiths.For(c) == faith)
+                var sample = counties.FirstOrDefault(c => !wildThen.Contains(c) && faiths.For(c) == faith)
                              ?? counties[0];
                 var culture = cultures.For(sample);
                 bool female = HistoryWriter.ClergyIsFemale(faith, cfg.Seed);

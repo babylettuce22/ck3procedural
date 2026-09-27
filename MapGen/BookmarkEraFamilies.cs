@@ -304,6 +304,12 @@ public sealed partial class BookmarkEras
                 if (r.ParentId is null && r.HistoricalBody is null)
                     roots.Add(new Target(r.Id, r.BirthYear, r.HouseKey, r.DynastyId, r.Culture.Key, r.Faith.Key, r.Seat));
 
+            // An applied history's predecessors whose line it did not keep: the oldest of each.
+            foreach (var p in prehistory.PastRulers)
+                if (p.ParentId is null)
+                    roots.Add(new Target(p.Id, Year(p.BirthDate), p.House.HouseKey, p.House.DynastyId, p.House.CultureKey,
+                        p.FaithKey, null));
+
             foreach (var root in roots.OrderBy(t => t.Born).ThenBy(t => t.Id, StringComparer.Ordinal))
             {
                 if (Anchor(root, before) is not { } plan) continue;
@@ -326,6 +332,15 @@ public sealed partial class BookmarkEras
                     Seat = r.Seat, Line = true,
                 });
             }
+
+            // An applied history's predecessors, all dead before the start.
+            foreach (var p in prehistory.PastRulers)
+                Add(new Member
+                {
+                    Id = p.Id, Born = Year(p.BirthDate), Died = Year(p.DeathDate), Female = p.Female,
+                    House = p.House.HouseKey, Dynasty = p.House.DynastyId, Culture = p.House.CultureKey,
+                    Faith = p.FaithKey, Line = !p.Female,
+                });
 
             foreach (var c in prehistory.AllExtraCharacters)
             {
