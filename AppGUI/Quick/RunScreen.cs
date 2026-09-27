@@ -140,6 +140,13 @@ internal sealed class RunScreen : Panel
 
     private int S(int logical) => LaunchUi.S(this, logical);
 
+    /// <summary>
+    /// The column beside the map — discoveries, or the chronicle — a third of a wide page, never
+    /// narrower than it is at the size the window opens at, nor so wide its lines stop reading well.
+    /// It keeps to the page's right edge; the map takes the rest.
+    /// </summary>
+    private int SideColumn(int width) => Math.Clamp(width * 33 / 100, S(310), S(420));
+
     /// <summary>What "Make another" says on this page: Quick makes another, Azgaar imports another.</summary>
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public string AnotherText { get => _another.Text; set => _another.Text = value; }
@@ -313,7 +320,7 @@ internal sealed class RunScreen : Panel
             y += _runSubtitle.PreferredHeight + S(18);
 
             // The map on the left, the discoveries in a column on the right.
-            int feedW = S(310), gap = S(24);
+            int feedW = SideColumn(w), gap = S(24);
             int left = w - feedW - gap;
             PlaceFeed(panel, x + left + gap, y, feedW);
 
@@ -353,7 +360,7 @@ internal sealed class RunScreen : Panel
             y += _historySubtitle.Height + S(16);
 
             // The map on the left with its controls under it; the chronicle in a column on the right.
-            int columnW = S(310), gap = S(24);
+            int columnW = SideColumn(w), gap = S(24);
             int left = w - columnW - gap;
             int cx = x + left + gap;
             _chronicleTitle.Location = new Point(cx, y);
@@ -461,7 +468,7 @@ internal sealed class RunScreen : Panel
             y += pathH + S(14);
 
             // The world on the left with what to do next under it; everything discovered on the right.
-            int feedW = S(310), gap = S(24);
+            int feedW = SideColumn(w), gap = S(24);
             int left = w - feedW - gap;
             PlaceFeed(panel, x + left + gap, y, feedW);
 

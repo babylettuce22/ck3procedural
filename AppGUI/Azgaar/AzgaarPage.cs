@@ -189,7 +189,7 @@ internal sealed class AzgaarPage : Panel
     public RunScreen Run => _run;
 
     /// <summary>The same page size as Quick, so moving between launcher pages never resizes the window.</summary>
-    public Size PreferredPageSize => new(S(940) + 2 * S(32), S(60) + 1 + S(606) + 1 + S(68));
+    public Size PreferredPageSize => new(S(StepPanel.PreferredColumn) + 2 * S(32), S(60) + 1 + S(606) + 1 + S(68));
 
     /// <summary>
     /// Opens the page on its first step with the files used last time and every override on Azgaar.
@@ -495,9 +495,18 @@ internal sealed class AzgaarPage : Panel
             y += subtitle.PreferredHeight + S(18);
 
             // The files on the left, the world as it will be imported on the right.
-            int leftW = S(330), gap = S(24);
+            int leftW = Math.Clamp(w * 35 / 100, S(330), S(440)), gap = S(24);
             int rightX = x + leftW + gap, rightW = x + w - rightX;
             int top = y;
+
+            // The preview as large as the column allows, but short enough to leave the counts and
+            // the world line under it on screen; they take the preview's width.
+            int countsH = _counts.PreferredGridHeight;
+            int worldH = StepPanel.Wrapped(_worldLine, rightW);
+            var map = StepPanel.Map(rightX, top, rightW,
+                Math.Max(S(120), panel.ClientSize.Height - top - (countsH > 0 ? countsH + S(24) : S(12)) - worldH - S(12)));
+            int previewH = map.Height;
+            rightW = map.Width;
 
             int slotH = S(92);
             _imageSlot.Bounds = new Rectangle(x, y, leftW, slotH);
@@ -507,8 +516,6 @@ internal sealed class AzgaarPage : Panel
             _pairing.Bounds = new Rectangle(x + S(2), y, leftW - S(4), StepPanel.Wrapped(_pairing, leftW - S(4)));
 
             // The help card sits at the foot of the column, level with the bottom of the counts.
-            int previewH = rightW / 2;
-            int countsH = _counts.PreferredGridHeight;
             int countsTop = top + previewH + S(14);
             int columnFoot = countsH > 0 ? countsTop + countsH : top + previewH;
             int pad = S(14);
@@ -524,7 +531,7 @@ internal sealed class AzgaarPage : Panel
             _guide.Location = new Point(x + pad - S(2), hy);
             _openAzgaar.Location = new Point(_guide.Right + S(14), hy);
 
-            _preview.Bounds = new Rectangle(rightX, top, rightW, previewH);
+            _preview.Bounds = map;
             _counts.Bounds = new Rectangle(rightX, countsTop, rightW, countsH);
             int ly = countsH > 0 ? countsTop + countsH + S(10) : top + previewH + S(12);
             _worldLine.Bounds = new Rectangle(rightX, ly, rightW, StepPanel.Wrapped(_worldLine, rightW));
@@ -943,10 +950,10 @@ internal sealed class AzgaarPage : Panel
             }
 
             int ty = y;
-            int mapH = rightW / 2;
-            _reviewMap.Bounds = new Rectangle(rightX, ty, rightW, mapH);
+            var map = StepPanel.Map(rightX, ty, rightW, Math.Max(S(120), panel.ClientSize.Height - ty - ReviewFootHeight(rightW)));
+            _reviewMap.Bounds = map;
             _reviewMap.Chip = _export is { MapName.Length: > 0 } e ? e.MapName : null;
-            ty += mapH + S(18);
+            ty += map.Height + S(18);
             _nameCaption.Location = new Point(rightX, ty);
             ty += _nameCaption.PreferredHeight + S(4);
             _name.Bounds = new Rectangle(rightX, ty, rightW, _name.PreferredHeight);
@@ -963,6 +970,21 @@ internal sealed class AzgaarPage : Panel
             ty += _gameLine.Height + S(10);
             _complexNote.Bounds = new Rectangle(rightX, ty, rightW, string.IsNullOrEmpty(_complexNote.Text) ? 0 : StepPanel.Wrapped(_complexNote, rightW));
         };
+    }
+
+    /// <summary>
+    /// How much the review's right column needs under its map: the name, the folder, the game line
+    /// and the note. The map gives way to it, so on a wide, short window it is the map that shrinks.
+    /// </summary>
+    private int ReviewFootHeight(int rightW)
+    {
+        int noteW = rightW - _changeFolder.Width - S(8);
+        int gameW = rightW - (_gameFix.Visible ? _gameFix.Width + S(8) : 0);
+        return S(18) + _nameCaption.PreferredHeight + S(4) + _name.PreferredHeight + S(6)
+               + TextRenderer.MeasureText("Ag", _path.Font).Height + S(4)
+               + Math.Max(StepPanel.Wrapped(_nameNote, noteW), _changeFolder.Height) + S(14)
+               + StepPanel.Wrapped(_gameLine, gameW) + S(10)
+               + (string.IsNullOrEmpty(_complexNote.Text) ? 0 : StepPanel.Wrapped(_complexNote, rightW)) + S(12);
     }
 
     private void RefreshReview()

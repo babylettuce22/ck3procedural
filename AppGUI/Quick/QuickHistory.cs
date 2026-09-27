@@ -181,6 +181,8 @@ internal sealed class QuickHistory
             // left out.
             FormationKind.WarEnded => e.Note is { } note && note.Contains(" won ") && !note.Contains("none of it") ? note : null,
             FormationKind.Partitioned or FormationKind.Usurped or FormationKind.Drifted or FormationKind.Ruined => e.Note,
+            // A feud begun is a headline; one cooling is detail.
+            FormationKind.Feud => e.Tension > 0 ? e.Note : null,
             _ => null,
         };
     }

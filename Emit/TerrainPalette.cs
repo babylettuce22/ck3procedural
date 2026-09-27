@@ -490,22 +490,19 @@ public static class TerrainPalette
 
             case TerrainClass.Oasis:
                 {
-                    // The oasis material is the green itself, so it leads, and scrub carries the
-                    // rest: measured where vanilla paints oasis above 100, the other slots are
-                    // gen_drylands lowland (14%), drylands_grassy (3%) and the desert set, with no
-                    // mud at all. The wetlands mud this used to carry is what turned the patch a
-                    // flat blue-green. The pocket is small and the band around it wide against
-                    // it, so the sand comes in from the edge rather than from these slots.
-                    ref readonly var scrub = ref Families[(int)Climate.Drylands];
-                    ref readonly var sand = ref Families[(int)Climate.Desert];
-                    var (scrubA, _, confA, _) = LowlandPair(scrub, nA, nB);
-                    var (sandA, _, confS, _) = LowlandPair(sand, nB, nC);
+                    // Scrub, not the oasis material. Vanilla's oasis texture is a flat teal (mean
+                    // 54,84,79) that reads as standing water at any size; these four are the
+                    // olive-to-green end of the arid set. The pocket is small and the band around
+                    // it is the normal biome band, so the sand comes in from the edge rather than
+                    // from these slots. Three of the four are fixed picks on purpose, so the patch
+                    // has no bucket edges of its own.
+                    var (scrub, _, confA, _) = LowlandPair(Families[(int)Climate.Drylands], nA, nB);
 
                     return Mix(
-                        Oasis, (byte)(95 + nA * 35),
-                        scrubA, (byte)((60 + (1.0 - nA) * 30) * confA),
-                        DrylandsGrassy, (byte)(40 + nB * 25),
-                        sandA, (byte)((30 + nC * 20) * confS)
+                        DrylandsGrassy, (byte)(90 + nA * 40),
+                        MediGrass, (byte)(60 + nB * 30),
+                        scrub, (byte)((50 + (1.0 - nA) * 30) * confA),
+                        Floodplains, (byte)(25 + nC * 25)
                     );
                 }
 

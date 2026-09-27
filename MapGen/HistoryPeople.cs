@@ -234,6 +234,9 @@ public sealed partial class HistorySim
             Seat(p, usurper);
             Remember(law == SuccessionLaw.Elective ? "chosen" : "seized", p.Capital, p,
                 person: $"{usurper.Name} of {house.Name}", female: usurper.Female, other: dead.Name);
+            // A throne taken is the dead ruler's house's to avenge, while it holds anything to avenge
+            // it from; one chosen by election wrongs no one.
+            if (law != SuccessionLaw.Elective) Grieve(dead.House, house, ThroneSeized, "seized", p.Capital);
             _sim.Log(FormationKind.Usurped, p.Capital, p, null, 2,
                 law == SuccessionLaw.Elective
                     ? $"{dead} died; {usurper.Name} of {house.Name} was chosen to rule {p.Capital.Name}"

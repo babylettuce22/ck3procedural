@@ -54,6 +54,9 @@ public enum FormationKind
 
     /// <summary>A war ended in a peace: won, lost, white, or overtaken by events. The History workspace's only.</summary>
     WarEnded,
+
+    /// <summary>Two houses' grudge became a feud, or a feud cooled. The History workspace's only.</summary>
+    Feud,
 }
 
 /// <summary>
@@ -127,7 +130,24 @@ public enum RealmRules
     /// </summary>
     Independence = 512,
 
-    All = Conquest | Homage | Secession | Collapse | Succession | DeJureDrift | Colonisation | Ruination | Wars | Independence,
+    /// <summary>
+    /// Houses remember what was done to them — a war lost, a throne seized, a vassal gone its own
+    /// way — and a grudge renewed faster than it fades becomes a quarrel, a rivalry or a feud, written
+    /// as CK3's house relations. Records only, rolls nothing: off or on, the realms play out the
+    /// same. Only the History workspace; see <c>HistorySim.Grieve</c>.
+    /// </summary>
+    Feuds = 1024,
+
+    /// <summary>
+    /// A dynasty's renown follows its history: half of what the start date hands out goes by the land
+    /// its house has held down the years, remembered long after it is lost, so old houses keep their
+    /// name and new ones have yet to make it. Never more renown in all than without it. Records only,
+    /// read at apply; see <c>HistorySim.Standing</c>.
+    /// </summary>
+    Standing = 2048,
+
+    All = Conquest | Homage | Secession | Collapse | Succession | DeJureDrift | Colonisation | Ruination | Wars | Independence
+          | Feuds | Standing,
 }
 
 /// <summary>One thing the simulation did, dated, with both parties named.</summary>

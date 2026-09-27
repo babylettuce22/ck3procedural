@@ -102,6 +102,12 @@ internal sealed class HistoryPanel : Panel
             + "has just taken the throne. A freed realm will not swear to that realm again for a generation"),
         ("People", RealmRules.Succession, "Succession", "A ruler's death can divide the realm among heirs or put another house on the throne. "
             + "Off, rulers still die, and one heir of the same house takes everything"),
+        ("People", RealmRules.Feuds, "Feuds", "Houses remember wars lost, thrones seized and vassals gone. A grudge fades by half "
+            + "in fifty years; wrongs repeated faster than that become a quarrel, a rivalry or a feud, written as house "
+            + "relations. Changes nothing on the map"),
+        ("People", RealmRules.Standing, "Renown follows history", "Half the renown the start date hands out goes by the land "
+            + "each house has held over the years, fading by half in seventy. Old houses keep their name after losing "
+            + "their land. Never more renown in all than without it"),
         ("Titles", RealmRules.DeJureDrift, "De jure drift", "A duchy held for a century by a realm based in another de jure kingdom "
             + "becomes part of that kingdom, as in CK3; kingdoms drift into empires the same way"),
         ("Wilds", RealmRules.Colonisation, "Colonisation", "Realms settle the wilderness on their borders, never by war. "
@@ -936,7 +942,7 @@ internal sealed class HistoryPanel : Panel
             FormationKind.WarDeclared => _showConquests.Checked ? e.Note : null,
             FormationKind.WarEnded => _showConquests.Checked || e.Note?.Contains(" was abandoned:") != true ? e.Note : null,
             FormationKind.Partitioned or FormationKind.Usurped or FormationKind.Drifted
-                or FormationKind.Colonised or FormationKind.Ruined => e.Note,
+                or FormationKind.Colonised or FormationKind.Ruined or FormationKind.Feud => e.Note,
             _ => null,
         };
 

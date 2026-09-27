@@ -30,7 +30,9 @@ public sealed record AutoCutDiagnostics(
 /// <item>Plateaus: mountain ground whose barony-wide neighbourhood is mostly above the mountain
 /// line is always taken, outside the quota, as <see cref="MapConfig.ImpassableMountainPlateaus"/>
 /// does for provinces.</item>
-/// <item>Cores: the rest of the mountain ground, ranked by its lightly smoothed height.</item>
+/// <item>Cores: the rest of the mountain ground, ranked by its lightly smoothed height — less
+/// flat ground below the mountain line, which <see cref="MapConfig.ImpassableMinRuggedness"/>
+/// keeps passable however high it stands.</item>
 /// <item>Foot: each core runs down its own slopes to where the ground stands
 /// <see cref="MapConfig.ImpassableFootRelief"/> of the way from its local floor to its local peak.
 /// The core height cut is searched so the walls, flanks included, cover
@@ -141,7 +143,23 @@ public static class ImpassableAutoCut
         // The foot needs the smoothed terrain everywhere, to find each place's local floor and peak;
         // without it only the candidates are ranked, so only their rows are finished.
         double foot = Math.Clamp(cfg.ImpassableFootRelief, 0, 1);
-        var smooth = Gaussian(elevation, land, foot > 0 ? null : candidate, width, height, radius / 4.0);
+        double rugged = Math.Max(0, cfg.ImpassableMinRuggedness);
+        var smooth = Gaussian(elevation, land, foot > 0 || rugged > 0 ? null : candidate, width, height, radius / 4.0);
+
+        // Flat ground below the mountain line is not wall, however high it stands: a tableland or
+        // a bench partway up a range is somewhere people live and armies march. Height alone let
+        // it in — on an inland-sea map 14.6% of the walls were flat ground under the mountain line,
+        // long smooth shelves lower than the peaks beside them. The plateau rule still takes flat
+        // ground mostly above the mountain line; nothing here touches it.
+        var flat = rugged > 0
+            ? FlatGround(smooth, elevation, mountainLine, land, width, height, Math.Max(1, radius / 2), rugged)
+            : null;
+        if (flat is not null)
+            Parallel.For(0, height, y =>
+            {
+                for (int i = y * width, end = i + width; i < end; i++)
+                    if (flat[i]) candidate[i] = false;
+            });
         int candidates = 0;
         for (int i = 0; i < n; i++) if (candidate[i]) candidates++;
 
@@ -164,6 +182,12 @@ public static class ImpassableAutoCut
             // leave the quota's room for the flanks. See FootGround.
             var footGround = FootGround(smooth, landNear, gateNear, land, gateMin, width, height,
                 (int)Math.Round(3.0 * radius), (float)foot);
+            if (flat is not null)
+                Parallel.For(0, height, y =>
+                {
+                    for (int i = y * width, end = i + width; i < end; i++)
+                        if (flat[i]) footGround[i] = false;
+                });
             cutHeight = FootCut(raw, candidate, smooth, footGround, candidates,
                 target * landTotal + plateauPixels, width, height);
             raw = Grow(raw, candidate, smooth, cutHeight, footGround, width, height, out _);
@@ -192,7 +216,10 @@ public static class ImpassableAutoCut
         {
             for (int i = y * width, end = i + width; i < end; i++) mask[i] &= land[i] == 1;
         });
-        int open = Math.Max(1, close / 2);
+        // The opening also clears strips narrower than about a quarter of a barony: with flat ground
+        // left out, the steep rim of a freed tableland would otherwise stay walled as a thin ring
+        // around it.
+        int open = Math.Max(Math.Max(1, close / 2), radius / 4);
         mask = Dilate(Erode(mask, width, height, open), width, height, open);
 
         FillHoles(mask, land, width, height, (int)Math.Ceiling(barony));
@@ -362,6 +389,90 @@ public static class ImpassableAutoCut
             }
         });
         return ground;
+    }
+
+    /// <summary>
+    /// Land below the mountain line whose ruggedness is under <paramref name="rugged"/> times the
+    /// map's median. Ruggedness is the slope of the smoothed terrain — the lie of the land at a
+    /// barony's scale, not the erosion texture a single-pixel slope picks up — averaged over the
+    /// (2<paramref name="r"/>+1)² square around each pixel, so a shelf reads flat as a whole rather
+    /// than pixel by pixel.
+    /// </summary>
+    private static bool[] FlatGround(float[] smooth, float[] elevation, float mountainLine, byte[] land,
+        int width, int height, int r, double rugged)
+    {
+        // Central differences, one-sided at the edges.
+        var slope = new float[smooth.Length];
+        Parallel.For(0, height, y =>
+        {
+            int up = y > 0 ? y - 1 : y, down = y < height - 1 ? y + 1 : y;
+            float dyScale = down - up == 2 ? 0.5f : 1f;
+            for (int x = 0; x < width; x++)
+            {
+                int left = x > 0 ? x - 1 : x, right = x < width - 1 ? x + 1 : x;
+                float dxScale = right - left == 2 ? 0.5f : 1f;
+                float dx = (smooth[y * width + right] - smooth[y * width + left]) * dxScale;
+                float dy = (smooth[down * width + x] - smooth[up * width + x]) * dyScale;
+                slope[y * width + x] = MathF.Sqrt(dx * dx + dy * dy);
+            }
+        });
+
+        var sample = new List<float>();
+        for (int i = 0; i < land.Length; i++) if (land[i] != 0) sample.Add(slope[i]);
+        if (sample.Count == 0) return new bool[smooth.Length];
+        var values = sample.ToArray();
+        float line = (float)(rugged * Provinces.Select(values, values.Length / 2));
+
+        var mean = BoxMean(slope, width, height, r);
+        var flat = new bool[smooth.Length];
+        Parallel.For(0, height, y =>
+        {
+            for (int i = y * width, end = i + width; i < end; i++)
+                flat[i] = land[i] != 0 && elevation[i] < mountainLine && mean[i] < line;
+        });
+        return flat;
+    }
+
+    /// <summary>The mean over the (2r+1)² square around every pixel, edges mirrored.</summary>
+    private static float[] BoxMean(float[] src, int width, int height, int r)
+    {
+        var rows = new float[src.Length];
+        Parallel.For(0, height, y =>
+        {
+            int row = y * width;
+            double sum = 0;
+            for (int d = -r; d <= r; d++) sum += src[row + Mirror(d, width)];
+            for (int x = 0; x < width; x++)
+            {
+                rows[row + x] = (float)sum;
+                sum += src[row + Mirror(x + r + 1, width)] - src[row + Mirror(x - r, width)];
+            }
+        });
+
+        const int band = 512;
+        float area = (2 * r + 1) * (2 * r + 1);
+        var result = new float[src.Length];
+        Parallel.For(0, (width + band - 1) / band, b =>
+        {
+            int x0 = b * band, count = Math.Min(width, x0 + band) - x0;
+            var sum = new double[count];
+            for (int d = -r; d <= r; d++)
+            {
+                int row = Mirror(d, height) * width + x0;
+                for (int x = 0; x < count; x++) sum[x] += rows[row + x];
+            }
+            for (int y = 0; y < height; y++)
+            {
+                int o = y * width + x0;
+                int add = Mirror(y + r + 1, height) * width + x0, sub = Mirror(y - r, height) * width + x0;
+                for (int x = 0; x < count; x++)
+                {
+                    result[o + x] = (float)(sum[x] / area);
+                    sum[x] += rows[add + x] - rows[sub + x];
+                }
+            }
+        });
+        return result;
     }
 
     /// <summary>The lowest and highest value in each <paramref name="q"/>² block.</summary>

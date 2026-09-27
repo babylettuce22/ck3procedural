@@ -115,6 +115,8 @@ public sealed partial class HistorySim
             if (!v.Alive || v.Suzerain != liege) continue;
 
             var root = liege.Root;
+            // The lord it left holds it against the house that left; the bloc above him, not his to feel.
+            Grieve(RulerOf(liege)?.House, RulerOf(v)?.House, BrokeAway, "freed", v.Capital);
             v.Suzerain = null;
             v.Founded = year;
             _sovereign[v.Id] = (root.Id, year + SovereignYears);

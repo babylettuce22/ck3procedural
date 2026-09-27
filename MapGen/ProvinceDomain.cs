@@ -42,8 +42,29 @@ namespace Ck3MapGen.MapGen;
 /// </summary>
 public static class ProvinceDomain
 {
-    /// <summary>Sea, lakes and carved river corridors — everything the land mask calls water.</summary>
+    /// <summary>Sea and lakes — everything the land mask calls water that was water before the
+    /// major-river carve.</summary>
     public const int Water = 0;
+
+    /// <summary>
+    /// Water the major-river carve made out of land: the channels, and nothing past the old
+    /// coastline or lake shore.
+    ///
+    /// River seeds used to share <see cref="Water"/> with the sea zones and race them on distance
+    /// alone, and every course ends in open water — so the seed nearest each mouth took the bay
+    /// until it was halfway to the nearest sea-zone seed. Measured 2026-09-26 that was 68% of all
+    /// river-province area on an 8192 archipelago (52% at ocean mouths, 16% at the ends of lakes),
+    /// straight Voronoi edges and all, and it made every barony round such a bay "riverside". As
+    /// a domain of its own the channel is a wall both ways: river provinces end at the coast, as
+    /// vanilla's do, and no sea zone reaches up a river.
+    ///
+    /// A positive sentinel rather than a negative one because <see cref="IsPainted"/> tests bit 30,
+    /// which every negative int has set. Azgaar ids stay far below it.
+    /// </summary>
+    public const int RiverChannel = 1 << 29;
+
+    /// <summary>Whether a domain is water of either kind.</summary>
+    public static bool IsWater(int domain) => domain == Water || domain == RiverChannel;
 
     /// <summary>Land no Azgaar province claims, and every land pixel when there is no import.</summary>
     public const int UnclaimedLand = 1;
@@ -74,9 +95,12 @@ public static class ProvinceDomain
     /// there is none or it is in Touch mode; white on water is ignored, water is water.
     /// <paramref name="generated"/> names the mask's source when the terrain drew it rather than
     /// the user, so the report does not tell anyone to repaint it.
+    /// <paramref name="riverChannel"/> marks the pixels the major-river carve turned from land to
+    /// water; those become <see cref="RiverChannel"/>. Null leaves every water pixel
+    /// <see cref="Water"/>, as before.
     /// </summary>
     public static int[] Build(byte[] mask, AzgaarImport? azgaar, int width, int height, MapConfig cfg,
-                              bool[]? painted = null, string? generated = null)
+                              bool[]? painted = null, string? generated = null, byte[]? riverChannel = null)
     {
         var domain = new int[width * height];
 
@@ -111,9 +135,13 @@ public static class ProvinceDomain
             });
         }
 
+        if (riverChannel is not null)
+            for (int i = 0; i < domain.Length; i++)
+                if (riverChannel[i] != 0 && domain[i] == Water) domain[i] = RiverChannel;
+
         if (painted is not null)
             for (int i = 0; i < domain.Length; i++)
-                if (painted[i] && domain[i] != Water) domain[i] |= Painted;
+                if (painted[i] && !IsWater(domain[i])) domain[i] |= Painted;
 
         // With neither an import nor a mask the field is the land mask by another name and has no
         // slivers to absorb; every pass over it would be a no-op and a second or two.
@@ -246,7 +274,7 @@ public static class ProvinceDomain
 
             for (int start = 0; start < domain.Length; start++)
             {
-                if (component[start] >= 0 || domain[start] == Water) continue;
+                if (component[start] >= 0 || IsWater(domain[start])) continue;
 
                 int id = members.Count;
                 var cells = new List<int>();
@@ -310,7 +338,7 @@ public static class ProvinceDomain
                         if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
 
                         int other = domain[ny * width + nx];
-                        if (other == Water || other == domain[cell]) continue;
+                        if (IsWater(other) || other == domain[cell]) continue;
                         votes[other] = votes.GetValueOrDefault(other) + 1;
                     }
                 }
@@ -345,7 +373,7 @@ public static class ProvinceDomain
         var sizes = new Dictionary<int, int>();
         foreach (int d in domain)
         {
-            if (d == Water) continue;
+            if (IsWater(d)) continue;
             sizes[d] = sizes.GetValueOrDefault(d) + 1;
         }
 

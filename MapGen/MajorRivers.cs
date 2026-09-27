@@ -79,7 +79,7 @@ public static class MajorRivers
         Drainage drainage,
         MapConfig cfg)
     {
-        if (!cfg.EnableMajorRivers || cfg.MajorRiverCount <= 0)
+        if (!cfg.EnableMajorRivers || cfg.MajorRiverDensity <= 0)
             return [];
 
         int pw = cfg.ProvinceWidth;
@@ -91,8 +91,15 @@ public static class MajorRivers
 
         var paths = new List<MajorRiverPath>();
         var occupied = new bool[pw * ph];
-        int targetRivers = cfg.MajorRiverCount;
         int systems = 0, lakeCrossings = 0;
+
+        // The length budget: MajorRiverDensity units of course per thousand square units of land.
+        // Province pixels are world units, and the courses are resampled a unit apart, so a path's
+        // point count is its length.
+        long landCells = 0;
+        for (int i = 0; i < pw * ph; i++) if (drainage.IsLand(i)) landCells++;
+        double budget = cfg.MajorRiverDensity * landCells / 1000.0;
+        double traced = 0, tracedFromLakes = 0;
 
         // Lakes feed as land does: a lake cell's receiver is the next cell towards the spill, so
         // the trace can walk in over the outlet, across the water and out again up the strongest
@@ -110,7 +117,8 @@ public static class MajorRivers
         int minLength = (int)Math.Max(15, cfg.Scaled(30));
         int lakeSystems = 0;
 
-        // Lakes first, and over and above the count. A lake's outlet is not something to be
+        // Lakes first, and whatever the budget says — their length counts against it, but they are
+        // carved even past it. A lake's outlet is not something to be
         // chosen by discharge against the other rivers on the map: the lake is there, the water in
         // it has to get to the sea, and the course from the spill downhill always exists — it is
         // walked downstream along the receivers, so unlike a trace up from the sea it cannot be
@@ -128,10 +136,13 @@ public static class MajorRivers
 
             if (AddCourses(rawCells)) { systems++; lakeSystems++; }
         }
+        tracedFromLakes = traced;
 
+        // Then the sea outlets, biggest first, until the courses add up to the budget. The river
+        // that crosses the line is kept whole.
         foreach (var (outlet, flow) in candidateOutlets)
         {
-            if (systems - lakeSystems >= targetRivers) break;
+            if (traced >= budget) break;
             if (occupied[outlet]) continue;
 
             var rawCells = TraceUpstream(outlet, drainage, feeders, occupied, cfg);
@@ -183,6 +194,7 @@ public static class MajorRivers
                             TotalLength = smoothedPoints.Count,
                             SourceIsWater = fromWater,
                         });
+                        traced += smoothedPoints.Count - 1;
                         added++;
                         if (fromWater) lakeCrossings++;
                     }
@@ -195,10 +207,14 @@ public static class MajorRivers
         }
 
         // 2. Carve channels aggressively with sheer vertical drops to black (carvedBedElevation)
-        CarveHeightmapChannels(fullElev, fullWidth, fullHeight, paths, cfg);
+        CarveHeightmapChannels(fullElev, fullWidth, fullHeight, paths, drainage, cfg);
 
         Console.WriteLine($"  major rivers: {systems} system(s) ({lakeSystems} from lakes) traced into {paths.Count} course(s), " +
                           $"{lakeCrossings} of them flowing out of a lake; spline-smoothed and carved");
+        Console.WriteLine($"  major rivers: {traced:N0} u of course against a budget of {budget:N0} " +
+                          $"({cfg.MajorRiverDensity:0.##} per 1000 u² of {landCells:N0} land) — " +
+                          $"{tracedFromLakes:N0} of it lake outlets, achieved density {1000.0 * traced / Math.Max(1, landCells):0.00}" +
+                          (traced < budget ? $"; ran out of outlets at {100.0 * traced / Math.Max(1, budget):F0}% of the budget" : ""));
         return paths;
     }
 
@@ -493,35 +509,113 @@ public static class MajorRivers
     /// </summary>
     private const double NavigableWidth = 5.0;
 
+    /// <summary>
+    /// Carves every major river into the heightmap: a channel at sea level with a sheer bank, a
+    /// flood plain either side, and valley walls rising back to the land.
+    ///
+    /// <b>Width follows discharge.</b> Each point takes the drainage flow under it, held to a
+    /// running maximum so a river never narrows downstream, and the channel is placed between
+    /// <see cref="MapConfig.RiverChannelWidthMin"/> and <see cref="MapConfig.RiverChannelWidthMax"/>
+    /// on a log scale from the trace floor (<see cref="MapConfig.RiverTraceMinFlow"/>) to the
+    /// largest mouth on the map. So the map's biggest river is the widest, a short coastal river
+    /// stays narrow its whole length, and a trunk steps wider where tributaries come in — where
+    /// it used to open on one fixed curve from source to mouth whatever it carried.
+    ///
+    /// <b>The valley spends height over distance.</b> A major river runs at sea level the whole
+    /// way, so all the height of the land beside it has to be lost between the bank and the valley
+    /// rim. The old ramp lost it over a fixed multiple of the channel, which on high ground made a
+    /// trench. Here the land beside the flood plain is *sunk* by the depth the bank needs, fading
+    /// to nothing over a distance chosen so the added slope stays under
+    /// <see cref="MapConfig.RiverValleyWallSlope"/>, up to <see cref="MapConfig.RiverValleyMaxReach"/>
+    /// — past which it steepens instead. Sinking rather than replacing keeps every hill its own
+    /// shape: a slope-limited ceiling was tried first and planed flat facets onto any hill in
+    /// reach. Most reaches need no sinking at all, because the course already follows the valley
+    /// floor; measured 2026-09-26, the median reach sank 0 and p90 sank 9 elevation units, and
+    /// all of the few that steepened were sea-traced rivers climbing towards
+    /// <see cref="MapConfig.RiverMaxRiseAboveSea"/>, none of them lake outlets.
+    /// </summary>
     private static void CarveHeightmapChannels(
             float[] fullElev,
             int fullWidth,
             int fullHeight,
             List<MajorRiverPath> paths,
+            Drainage drainage,
             MapConfig cfg)
     {
         float sea = cfg.Limits.SeaLevelUpper;
         // Pure deep bed elevation (drops straight to 0 / black in the heightmap)
         float carvedBedElevation = cfg.SeaFloorElevation;
 
-        float scaleX = (float)fullWidth / cfg.ProvinceWidth;
-        float scaleY = (float)fullHeight / cfg.ProvinceHeight;
+        int pw = cfg.ProvinceWidth, ph = cfg.ProvinceHeight;
+        float scaleX = (float)fullWidth / pw;
+        float scaleY = (float)fullHeight / ph;
 
         // The widths are bank-to-bank in world units; the carve works in heightmap pixels from the
         // centreline, so halve and multiply by the heightmap pixels behind each world unit. Not
         // MapScale — see RiverChannelWidthMin.
         double floorRadius = NavigableWidth * 0.5 * scaleX;
         double minWidthFull = Math.Max(NavigableWidth, cfg.RiverChannelWidthMin) * 0.5 * scaleX;
-        double maxWidthFull = cfg.RiverChannelWidthMax * 0.5 * scaleX;
+        double maxWidthFull = Math.Max(minWidthFull, cfg.RiverChannelWidthMax * 0.5 * scaleX);
 
-        if (maxWidthFull < minWidthFull) maxWidthFull = minWidthFull;
-
-        float valleyReach = (float)Math.Max(1.0, cfg.RiverValleyReach);
         float bankElevation = sea + 3.0f; // Firm low bank line
+
+        // The valley, in heightmap pixels and elevation per heightmap pixel. The flood plain is a
+        // multiple of channel width, so of twice the radius; it rises a little across its width so
+        // it does not read as a terrace, then the wall eases in over a few units rather than
+        // starting on a crease.
+        float floodplainPerRadius = (float)Math.Max(0.0, cfg.RiverFloodplainWidth) * 2f;
+        float wallSlope = (float)(Math.Max(0.05, cfg.RiverValleyWallSlope) * cfg.ReliefScale) / scaleX;
+        float maxReach = (float)Math.Max(1.0, cfg.RiverValleyMaxReach) * scaleX;
+        float ease = 4f * scaleX;
+        float plainRise = wallSlope * 0.08f;
 
         double variation = Math.Clamp(cfg.RiverWidthVariation, 0.0, 0.95);
         double variationScale = Math.Max(1.0, cfg.Scaled(cfg.RiverWidthVariationScale));
         var wobbleField = new SimplexNoise(new Rng(cfg.Seed ^ 0x81DE));
+
+        // Discharge along each course. The 3x3 max tolerates the spline wandering a cell off the
+        // drainage path it was smoothed from; the running max keeps the width from ever falling
+        // downstream.
+        var flow = new float[paths.Count][];
+        float topFlow = 1f;
+        for (int p = 0; p < paths.Count; p++)
+        {
+            var pts = paths[p].Points;
+            var f = new float[pts.Count];
+            float running = 0f;
+            for (int i = 0; i < pts.Count; i++)
+            {
+                int cx = Math.Clamp((int)MathF.Round(pts[i].X), 0, pw - 1);
+                int cy = Math.Clamp((int)MathF.Round(pts[i].Y), 0, ph - 1);
+                float here = 0f;
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        int nx = cx + dx, ny = cy + dy;
+                        if (nx < 0 || ny < 0 || nx >= pw || ny >= ph) continue;
+                        here = Math.Max(here, drainage.Flow[ny * pw + nx]);
+                    }
+                }
+                running = Math.Max(running, here);
+                f[i] = running;
+            }
+            flow[p] = f;
+            topFlow = Math.Max(topFlow, running);
+        }
+
+        double logLow = Math.Log(Math.Max(1.0, cfg.RiverTraceMinFlow));
+        double logSpan = Math.Max(1e-6, Math.Log(topFlow) - logLow);
+
+        var widths = new List<float>();
+        var drops = new List<float>();
+        var reaches = new List<float>();
+        int steepened = 0, steepenedFromLakes = 0;
+
+        // Every course is measured against the land as it was before any carving, so the order the
+        // rivers are carved in cannot change how steep another's valley is.
+        var courses = new (float[] Hx, float[] Hy, float[] Chan, float[] Taper, float[] Plain,
+            float[] Sink, float[] Reach, bool TaperHead)[paths.Count];
 
         for (int pathIndex = 0; pathIndex < paths.Count; pathIndex++)
         {
@@ -538,7 +632,10 @@ public static class MajorRivers
             double arc = 0;
 
             var radChannel = new float[count];
-            var radValley = new float[count];
+            var tapers = new float[count];
+            var plains = new float[count];
+            var slopes = new float[count];
+            var reachAt = new float[count];
             var hx = new float[count];
             var hy = new float[count];
 
@@ -559,7 +656,8 @@ public static class MajorRivers
                 // Smooth cubic taper: 0 at vertex 0, opening over first 15%
                 float taper = taperHead && t < 0.15f ? (t / 0.15f) * (t / 0.15f) * (3f - 2f * (t / 0.15f)) : 1.0f;
 
-                double radius = minWidthFull + (maxWidthFull - minWidthFull) * Math.Pow(t, 0.65);
+                double carried = Math.Clamp((Math.Log(Math.Max(1f, flow[pathIndex][i])) - logLow) / logSpan, 0.0, 1.0);
+                double radius = minWidthFull + (maxWidthFull - minWidthFull) * carried;
 
                 if (variation > 0)
                 {
@@ -568,9 +666,60 @@ public static class MajorRivers
                         radius * Math.Clamp(wobble, 1.0 - variation, 1.0 + variation));
                 }
 
-                radChannel[i] = (float)radius * taper;
-                radValley[i] = radChannel[i] * valleyReach;
+                float r = (float)radius * taper;
+                float plain = floodplainPerRadius * r;
+
+                radChannel[i] = r;
+                tapers[i] = taper;
+                plains[i] = plain;
+
+                // How far the land just past the flood plain stands above it: the depth this
+                // reach of valley has to sink.
+                slopes[i] = Math.Max(0f, BankHeight(fullElev, fullWidth, fullHeight, hx[i], hy[i], r + plain + ease)
+                                         - (bankElevation + plainRise * plain));
             }
+
+            // The sink is smoothed along the course so one high spoke does not dent the valley
+            // wall at a single point, then turned into the distance the wall needs to spend it at
+            // no more than the wall slope — capped by the reach, which steepens it instead.
+            var sink = Smooth(slopes, 12);
+            for (int i = 0; i < count; i++)
+            {
+                float room = Math.Max(ease, maxReach - radChannel[i] - plains[i]);
+                float wall = Math.Max(ease, 1.5f * sink[i] / wallSlope);
+                if (wall > room)
+                {
+                    wall = room;
+                    if (tapers[i] >= 1f)
+                    {
+                        steepened++;
+                        if (path.SourceIsWater) steepenedFromLakes++;
+                    }
+                }
+
+                slopes[i] = sink[i];                                   // depth to sink
+                reachAt[i] = radChannel[i] + plains[i] + wall;         // where the sag ends
+
+                if (tapers[i] >= 1f)
+                {
+                    widths.Add(2f * radChannel[i] / scaleX);
+                    drops.Add(sink[i]);
+                    reaches.Add(reachAt[i] / scaleX);
+                }
+            }
+
+            courses[pathIndex] = (hx, hy, radChannel, tapers, plains, slopes, reachAt, taperHead);
+        }
+
+        // Every segment reads the land as it was, so overlapping segments take the deeper of their
+        // two sags rather than sinking the same ground twice.
+        var before = (float[])fullElev.Clone();
+
+        for (int pathIndex = 0; pathIndex < paths.Count; pathIndex++)
+        {
+            var (hx, hy, radChannel, tapers, plains, slopes, reachAt, taperHead) = courses[pathIndex];
+            if (hx is null) continue;
+            int count = hx.Length;
 
             for (int i = 0; i < count - 1; i++)
             {
@@ -578,9 +727,8 @@ public static class MajorRivers
                 float bx = hx[i + 1], by = hy[i + 1];
 
                 float rChanA = radChannel[i], rChanB = radChannel[i + 1];
-                float rValA = radValley[i], rValB = radValley[i + 1];
 
-                float maxR = Math.Max(rValA, rValB);
+                float maxR = Math.Max(reachAt[i], reachAt[i + 1]);
                 if (maxR < 0.5f) continue;
 
                 int minX = Math.Clamp((int)(Math.Min(ax, bx) - maxR - 2), 0, fullWidth - 1);
@@ -611,33 +759,115 @@ public static class MajorRivers
                         float dist = MathF.Sqrt(dx * dx + dy * dy);
 
                         float curChanR = rChanA + u * (rChanB - rChanA);
-                        float curValR = rValA + u * (rValB - rValA);
+                        float curReach = reachAt[i] + u * (reachAt[i + 1] - reachAt[i]);
 
-                        if (dist > curValR || curValR < 0.5f) continue;
+                        if (dist > curReach) continue;
 
                         int idx = y * fullWidth + x;
-                        float original = fullElev[idx];
+                        float original = before[idx];
 
                         // 1. INSIDE WATER CHANNEL: Sheer, sharp vertical drop straight to deep black (no smoothing)
                         if (dist <= curChanR && curChanR > 0.5f)
                         {
                             fullElev[idx] = carvedBedElevation;
+                            continue;
                         }
-                        // 2. OUTSIDE BANK: Gentle surrounding valley slope on dry land only
-                        else if (curValR > curChanR)
-                        {
-                            float valleyT = (dist - curChanR) / (curValR - curChanR);
-                            float smoothValley = (1.0f - MathF.Cos(valleyT * MathF.PI)) * 0.5f;
-                            float targetHeight = bankElevation + (original - bankElevation) * smoothValley;
 
-                            if (targetHeight < original)
-                            {
-                                fullElev[idx] = targetHeight;
-                            }
+                        // 2. OUTSIDE BANK: a flat flood plain, then the land sunk by the depth
+                        // this reach needs, fading to nothing at the reach. Sinking rather than
+                        // replacing keeps every hill its own shape; nothing is taken below the
+                        // plain's line, so a low bank is never flooded; and it fades in with the
+                        // taper so a river rising in the hills does not open at full depth.
+                        float weight = tapers[i] + u * (tapers[i + 1] - tapers[i]);
+                        if (weight <= 0f) continue;
+
+                        float plain = plains[i] + u * (plains[i + 1] - plains[i]);
+                        float depth = slopes[i] + u * (slopes[i + 1] - slopes[i]);
+                        float d = Math.Max(0f, dist - curChanR);
+                        float floorLine = bankElevation + plainRise * Math.Min(d, plain);
+
+                        float target;
+                        if (d <= plain)
+                        {
+                            target = floorLine;
+                        }
+                        else
+                        {
+                            float fade = 1f - (d - plain) / Math.Max(1f, curReach - curChanR - plain);
+                            fade = Math.Clamp(fade, 0f, 1f);
+                            fade = fade * fade * (3f - 2f * fade);
+                            target = Math.Max(original - depth * fade, floorLine);
+                        }
+
+                        if (target < original)
+                        {
+                            target = original + (target - original) * weight;
+                            if (target < fullElev[idx]) fullElev[idx] = target;
                         }
                     }
                 }
             }
         }
+
+        if (widths.Count > 0)
+        {
+            Console.WriteLine($"  major river valleys: channel {Pct(widths, 0.1):F1}/{Pct(widths, 0.5):F1}/{Pct(widths, 0.9):F1} u wide (p10/50/90), " +
+                              $"valley sunk {Pct(drops, 0.5):F0}/{Pct(drops, 0.9):F0}/{Pct(drops, 1.0):F0} elevation (p50/90/max), " +
+                              $"reaching {Pct(reaches, 0.5):F0}/{Pct(reaches, 0.9):F0} u, " +
+                              $"{100.0 * steepened / widths.Count:F1}% of reaches steeper than the wall slope to fit " +
+                              $"({steepenedFromLakes} of those {steepened} on courses leaving a lake)");
+        }
+
+        static float Pct(List<float> values, double q)
+        {
+            var sorted = values.ToArray();
+            Array.Sort(sorted);
+            return sorted[(int)Math.Clamp(Math.Round(q * (sorted.Length - 1)), 0, sorted.Length - 1)];
+        }
+    }
+
+    /// <summary>
+    /// The height of the land on a ring of <paramref name="radius"/> around a course point: the
+    /// upper quartile of sixteen spokes. The spokes running along the course land on the valley
+    /// floor and the ones across it on the banks, and the quartile takes the higher bank rather
+    /// than the average of the two — the low one is protected by the floor line instead.
+    /// </summary>
+    private static float BankHeight(float[] elevation, int width, int height, float cx, float cy, float radius)
+    {
+        const int Spokes = 16;
+        Span<float> ring = stackalloc float[Spokes];
+        int n = 0;
+
+        for (int k = 0; k < Spokes; k++)
+        {
+            double angle = k * (2 * Math.PI / Spokes);
+            int x = (int)(cx + radius * Math.Cos(angle));
+            int y = (int)(cy + radius * Math.Sin(angle));
+            if (x < 0 || y < 0 || x >= width || y >= height) continue;
+            ring[n++] = elevation[(long)y * width + x];
+        }
+
+        if (n == 0) return 0f;
+        var taken = ring[..n];
+        taken.Sort();
+        return taken[(int)(0.75f * (n - 1))];
+    }
+
+    /// <summary>A centred moving average of <paramref name="halfWidth"/> points either side.</summary>
+    private static float[] Smooth(float[] values, int halfWidth)
+    {
+        var result = new float[values.Length];
+        double sum = 0;
+        int lo = 0, hi = -1;
+
+        for (int i = 0; i < values.Length; i++)
+        {
+            int wantLo = Math.Max(0, i - halfWidth), wantHi = Math.Min(values.Length - 1, i + halfWidth);
+            while (hi < wantHi) sum += values[++hi];
+            while (lo < wantLo) sum -= values[lo++];
+            result[i] = (float)(sum / (hi - lo + 1));
+        }
+
+        return result;
     }
 }

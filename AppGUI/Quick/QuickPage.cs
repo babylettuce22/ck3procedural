@@ -206,7 +206,7 @@ internal sealed class QuickPage : Panel
     public RunScreen Run => _run;
 
     /// <summary>The size the page wants to be shown at: the column, its margins, and the tallest step.</summary>
-    public Size PreferredPageSize => new(S(940) + 2 * S(32), S(60) + 1 + S(606) + 1 + S(68));
+    public Size PreferredPageSize => new(S(StepPanel.PreferredColumn) + 2 * S(32), S(60) + 1 + S(606) + 1 + S(68));
 
     /// <summary>
     /// Opens the page on its first step, with the choices the last Quick world was made with and a
@@ -507,7 +507,7 @@ internal sealed class QuickPage : Panel
 
             // The seed and relief controls keep to the right edge at a readable width; the preview
             // takes the rest, as large as the height allows, centred in it.
-            int sw = Math.Clamp(w / 4, S(200), S(280));
+            int sw = Math.Clamp(w * 21 / 100, S(200), S(280));
             int sx = x + w - sw;
             int area = sx - S(24) - x;
             var map = StepPanel.Map(x, y, area, panel.ClientSize.Height - y - S(12));
@@ -819,12 +819,12 @@ internal sealed class QuickPage : Panel
 
             // The map, the name, and what the write will touch.
             int ty = y;
-            int mapH = rightW / 2;
-            _reviewMap.Bounds = new Rectangle(rightX, ty, rightW, mapH);
+            var map = StepPanel.Map(rightX, ty, rightW, Math.Max(S(120), panel.ClientSize.Height - ty - ReviewFootHeight(rightW)));
+            _reviewMap.Bounds = map;
             _reviewMap.Chip = _choices.Relief == QuickRelief.Standard
                 ? $"{CurrentType?.Title}  ·  seed {_choices.Seed}"
                 : $"{CurrentType?.Title}  ·  {_choices.Relief}  ·  seed {_choices.Seed}";
-            ty += mapH + S(18);
+            ty += map.Height + S(18);
             _nameCaption.Location = new Point(rightX, ty);
             ty += _nameCaption.PreferredHeight + S(4);
             _name.Bounds = new Rectangle(rightX, ty, rightW, _name.PreferredHeight);
@@ -839,6 +839,21 @@ internal sealed class QuickPage : Panel
             ty += _gameLine.Height + S(10);
             _complexNote.Bounds = new Rectangle(rightX, ty, rightW, string.IsNullOrEmpty(_complexNote.Text) ? 0 : Wrapped(_complexNote, rightW));
         };
+    }
+
+    /// <summary>
+    /// How much the review's right column needs under its map: the name, the folder, the game line
+    /// and the note. The map gives way to it, so on a wide, short window it is the map that shrinks.
+    /// </summary>
+    private int ReviewFootHeight(int rightW)
+    {
+        int noteW = rightW - _changeFolder.Width - S(8);
+        int gameW = rightW - (_gameFix.Visible ? _gameFix.Width + S(8) : 0);
+        return S(18) + _nameCaption.PreferredHeight + S(4) + _name.PreferredHeight + S(6)
+               + TextRenderer.MeasureText("Ag", _path.Font).Height + S(4)
+               + Math.Max(Wrapped(_nameNote, noteW), _changeFolder.Height) + S(14)
+               + Wrapped(_gameLine, gameW) + S(10)
+               + (string.IsNullOrEmpty(_complexNote.Text) ? 0 : Wrapped(_complexNote, rightW)) + S(12);
     }
 
     private void RefreshReview()

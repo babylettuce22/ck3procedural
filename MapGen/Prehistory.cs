@@ -113,6 +113,15 @@ public sealed class HouseRelationDef
     public required string Level { get; init; } // "feud", "rivalry", "quarrel", "cordial", "friendly", "amity"
     public string? StartDate { get; init; }
     public string? DescriptionKey { get; set; }
+
+    /// <summary>
+    /// For a relation an applied history left, the wrong it is about — won, held, fought, conquest,
+    /// walked, seized, freed — and the title and year it was done over, which its description names.
+    /// Null for one the prehistory invents, which is described by level alone.
+    /// </summary>
+    public string? Cause { get; init; }
+    public string? CauseTitle { get; init; }
+    public int CauseYear { get; init; }
 }
 
 /// <summary>
@@ -333,12 +342,17 @@ public sealed partial class PrehistoryMap
 
         // 8. Active Starting Wars — or, under an applied history, the wars, truces and claims it
         // left, in place of the invented ones: the start date opens on the history's own quarrels.
-        if (diplomacy is not null)
+        if (diplomacy is { CarriesWars: true })
             AddSimulatedDiplomacy(map, diplomacy, rulerCounties, realms, cfg);
         else if (cfg.EnableStartingWars && topLiegeNeighbors.Count > 0)
         {
             GenerateActiveWars(map, topLiegeNeighbors, realms, faiths, cfg, rng);
         }
+
+        // 8b. The houses' grudges an applied history left, in place of the invented ones. After
+        // every draw above, which still happened: only which relations are kept changes.
+        if (diplomacy?.Feuds is { } feuds)
+            AddSimulatedFeuds(map, feuds);
 
         int totalDynasties = map.Dynasties.Count;
         int totalHouses = map.Houses.Count;
@@ -1457,6 +1471,35 @@ public sealed partial class PrehistoryMap
     /// is given a pressed claim on the county it went to war from, so the casus belli is valid for
     /// any government. Draws nothing, so the stream the rest of the prehistory used is untouched.
     /// </summary>
+    /// <summary>
+    /// An applied history's quarrels, rivalries and feuds between houses, in place of the invented
+    /// ones: the history knows who wronged whom, and a border rivalry dated a few years back would
+    /// contradict it. The invented friendships stay — the history keeps no goodwill — except between
+    /// two houses it has at odds, where the grudge is the one written. A house is found by the seat
+    /// of the ruler heading it; a pair that turns out to be one house after titling is dropped.
+    /// </summary>
+    private static void AddSimulatedFeuds(PrehistoryMap map, List<SimDiplomacy.HouseFeud> feuds)
+    {
+        var sim = new List<HouseRelationDef>();
+        foreach (var f in feuds)
+        {
+            if (!map.CharacterHouseMap.TryGetValue(f.A, out var a) || !map.CharacterHouseMap.TryGetValue(f.B, out var b) || a == b) continue;
+            if (sim.Any(r => (r.HouseA == a && r.HouseB == b) || (r.HouseA == b && r.HouseB == a))) continue;
+            sim.Add(new HouseRelationDef
+            {
+                HouseA = a, HouseB = b, Level = f.Level, StartDate = $"{Math.Max(1, f.Since)}.1.1",
+                Cause = f.Cause, CauseTitle = f.CauseTitle, CauseYear = f.CauseYear,
+            });
+        }
+
+        var pairs = sim.Select(r => (r.HouseA, r.HouseB)).Concat(sim.Select(r => (r.HouseB, r.HouseA))).ToHashSet();
+        int invented = map.HouseRelations.RemoveAll(r => r.Level is "quarrel" or "rivalry" or "feud" || pairs.Contains((r.HouseA, r.HouseB)));
+        map.HouseRelations.AddRange(sim);
+        Console.WriteLine($"  applied history: {sim.Count} house grudges ({sim.Count(r => r.Level == "feud")} feuds, "
+            + $"{sim.Count(r => r.Level == "rivalry")} rivalries, {sim.Count(r => r.Level == "quarrel")} quarrels) "
+            + $"in place of {invented} invented relations");
+    }
+
     private static void AddSimulatedDiplomacy(PrehistoryMap map, SimDiplomacy diplomacy, List<Title> rulerCounties,
         RealmMap realms, MapConfig cfg)
     {

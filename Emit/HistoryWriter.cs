@@ -541,9 +541,11 @@ public static class HistoryWriter
                         // dynasty on the map start equally renowned.
                         bool independent = ruler.Independent;
 
-                        // A lowborn historical ruler has no dynasty to give it to.
-                        if (ruler.Renown > 0 && independent && ruler.DynastyId.Length > 0)
-                            b.Inline("dynasty", $"add_dynasty_prestige = {ruler.Renown}");
+                        // Under an applied history, the house's head also carries what its past earned
+                        // it, vassal or not (Ruler.Legacy). A lowborn historical ruler has no dynasty to
+                        // give it to.
+                        if (ruler.DynastyPrestige > 0 && ruler.DynastyId.Length > 0)
+                            b.Inline("dynasty", $"add_dynasty_prestige = {ruler.DynastyPrestige}");
 
                         // Lifestyle perk points, in the tree his education belongs to. Vanilla already
                         // auto-assigns baseline perks on game start for adult characters based on age and
@@ -1417,6 +1419,30 @@ public static class HistoryWriter
                 "cordial" => $"Cordial diplomatic ties and mutual respect (established in {yearStr})",
                 _ => $"Traditional dynastic relations (established in {yearStr})"
             };
+
+            // A grudge an applied history left says what it is about: the wrong that weighs most in
+            // it now, where and when. The county through its key, so a rename follows it.
+            if (rel.Cause is { } cause && rel.CauseTitle is { } where && rel.CauseYear > 0)
+            {
+                string what = rel.Level switch { "feud" => "Blood feud", "rivalry" => "Rivalry", _ => "Quarrel" };
+                string place = $"${where}$";
+                string when = $"{rel.CauseYear} {era}";
+                string? about = cause switch
+                {
+                    "won" => $"land lost in the war over {place} in {when}",
+                    "held" => $"the failed war for {place} in {when}",
+                    "fought" => $"the war over {place} that ended in a white peace in {when}",
+                    "conquest" => $"the taking of {place} in {when}",
+                    "walked" => $"{place} leaving its liege in {when}",
+                    "seized" => $"the throne of {place} seized in {when}",
+                    "freed" => $"{place} breaking away in {when}",
+                    _ => null,
+                };
+                if (about is not null)
+                    desc = rel.CauseYear.ToString() == yearStr.Split(' ')[0]
+                        ? $"{what} over {about}"
+                        : $"{what} since {yearStr}, now over {about}";
+            }
 
             loc.AddBuilt(key, desc);
         }

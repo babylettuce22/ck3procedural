@@ -134,6 +134,8 @@ public sealed partial class HistorySim
 
         var history = new HistorySim(sim, rules.Seed, startYear);
         history.SeatStartRulers(rulers, prehistory);
+        history.SeatGrudges(prehistory);
+        history.SeatStanding();
         history.SeatExclaves();
         history.SeatDeJure();
         history.SeatWilds(wilds);
@@ -150,7 +152,11 @@ public sealed partial class HistorySim
         // Its own stream per year, as the formation has per epoch, and a different constant from
         // the formation's so the two never replay each other's dice.
         var rng = new Rng(_seed ^ 0x4157 ^ unchecked((int)((uint)_sim.Year * 0x9E3779B1u)));
+        int logged = _sim.Events.Count;
         Formation.Step(_sim, rng);
+
+        // The step's conquests and walkouts, as grudges, while its realms are as it left them.
+        GrieveStep(logged);
 
         // The wars the year's conquests declared or fought, and the peaces that end them, before the
         // dead are cleared: a peace can take a realm's last county like any conquest.
@@ -182,6 +188,10 @@ public sealed partial class HistorySim
         // Last: drift reads who holds what once the year's conquests and partitions are done, and
         // changes no realm, so nothing after it could depend on it.
         DriftYear();
+
+        // The houses' year's end, likewise read-only: grudges and standing worn down a year, and
+        // the year's holdings added to standing. See HistoryHouses.
+        HousesYear();
     }
 
     /// <summary>
@@ -230,6 +240,7 @@ public sealed partial class HistorySim
         CheckDeJure(problems);
         CheckWilds(problems);
         CheckWars(problems);
+        CheckHouses(problems);
         return problems;
     }
 

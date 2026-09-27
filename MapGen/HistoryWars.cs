@@ -199,10 +199,14 @@ public sealed partial class HistorySim
                 foreach (var county in war.Goal) if (_claims.TryGetValue(county, out var c) && c.Claimant == war.Attacker) _claims.Remove(county);
                 Remember("held", war.Duchy ?? war.Goal.MinBy(c => c.Index)!, war.Defender, war.Attacker,
                     counties: war.Duchy is null ? [.. war.Goal.OrderBy(c => c.Index)] : null);
+                Grieve(RulerOf(war.Defender)?.House, RulerOf(war.Attacker)?.House, WarHeld, "held", war.Target);
                 End(war, $"The realm of {war.Defender.Capital.Name} won {war.Name} against {war.Attacker.Capital.Name}");
             }
             else if (years >= MaxWarYears)
+            {
+                Grieve(RulerOf(war.Defender)?.House, RulerOf(war.Attacker)?.House, WhitePeace, "fought", war.Target);
                 End(war, $"{Capitalise(war.Name)} between {war.Attacker.Capital.Name} and {war.Defender.Capital.Name} ended in a white peace");
+            }
         }
     }
 
@@ -234,6 +238,13 @@ public sealed partial class HistorySim
         if (taken.Count > 0)
             Remember("won", war.Duchy ?? taken.MinBy(c => c.Index)!, war.Attacker, war.Defender,
                 counties: [.. taken.OrderBy(c => c.Index)]);
+
+        // Every house that gave up land holds it against the house that declared the war — a vassal
+        // it was fought for is the attacker's instrument, not the offender. Weighed before the land moves.
+        var winners = RulerOf(war.Attacker)?.House;
+        foreach (var group in taken.GroupBy(c => _sim.Owner[c]).OrderBy(g => g.Key.Capital.Index))
+            Grieve(RulerOf(group.Key)?.House, winners,
+                Math.Min(WarLostCap, WarLostBase + WarLostPerCounty * group.Count()), "won", war.Target);
 
         var losers = new HashSet<Polity>();
         foreach (var county in taken.OrderBy(c => c.Index))

@@ -177,11 +177,12 @@ internal sealed class StartPage : Panel
     /// goes, so the cards, which are the page's purpose, never fall off the bottom.
     /// </summary>
     /// <summary>
-    /// The widest the column gets, and the margin kept either side of it. The page is meant to be
-    /// seen as a small launch window, so <see cref="PreferredPageSize"/> is this column plus these
-    /// margins and nothing more.
+    /// The column's width at the size the window opens at, and the margin kept either side of it.
+    /// The page is meant to be seen as a small launch window, so <see cref="PreferredPageSize"/> is
+    /// this column plus these margins and nothing more. A window made wider widens the column
+    /// with it, as every launcher page does (<see cref="StepPanel.Column"/>).
     /// </summary>
-    private int ColumnWidth => S(940);
+    private int ColumnWidth => S(StepPanel.PreferredColumn);
     private int SideMargin => S(28);
     private int TopPad => S(26);
     private int BottomPad => S(20);
@@ -210,7 +211,8 @@ internal sealed class StartPage : Panel
         base.OnLayout(e);
         if (_title is null) return;
 
-        int width = Math.Min(ClientSize.Width - 2 * SideMargin, ColumnWidth);
+        int margin = Math.Max(SideMargin, ClientSize.Width * 3 / 100);
+        int width = Math.Min(ClientSize.Width - 2 * margin, S(StepPanel.MaxColumn));
         if (width <= 0) return;
         int x = (ClientSize.Width - width) / 2;
 

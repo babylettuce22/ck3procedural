@@ -1,0 +1,25 @@
+﻿# The dynasty-house window's "Show extinct houses" checkbox asks this whether there is anything for
+# it to show: the checkbox is only drawn while the viewed dynasty has at least one extinct house.
+# See PatchDynastyHouseWindow in Emit/GuiWriter.cs, which builds the call.
+#
+# "Extinct" is the list row's own test — a founded house with nobody in it alive (the row hides on
+# GreaterThan_int32( DynastyHouse.GetNumberOfMembers, 0 ), a count of the living). is_alive is asked
+# outright so the answer does not hang on whether any_house_member also walks the dead, and
+# `exists = house_founder` stands in for the row's HasBeenFounded.
+#
+# Scoped to the player, as nearly every vanilla scripted_gui is; the house being viewed arrives as
+# scope:house (GuiScope.With in the writer). house_dynasty is vanilla's link from a house to its
+# dynasty (tgp_values.txt: `scope:house.house_dynasty`).
+gen_dynasty_has_extinct_house = {
+	scope = character
+
+	is_shown = {
+		exists = scope:house
+		scope:house.house_dynasty = {
+			any_dynasty_house = {
+				exists = house_founder
+				NOT = { any_house_member = { is_alive = yes } }
+			}
+		}
+	}
+}

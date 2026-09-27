@@ -11,10 +11,21 @@ namespace Ck3MapGen.MapGen;
 public sealed record SimDiplomacy(
     List<SimDiplomacy.OngoingWar> Wars,
     List<(Title A, Title B, int Days)> Truces,
-    List<(Title Claimant, Title Target)> Claims)
+    List<(Title Claimant, Title Target)> Claims,
+    List<SimDiplomacy.HouseFeud>? Feuds = null)
 {
     /// <summary>A war under way on the start date, by the seats of its two sides and the county fought from.</summary>
     public sealed record OngoingWar(Title Attacker, Title Defender, Title Target, int Started, double Score, string Name);
+
+    /// <summary>A house relation the history left, by the seats of the two houses' heads. See <see cref="AppliedHistory.Feud"/>.</summary>
+    public sealed record HouseFeud(Title A, Title B, string Level, int Since, string? Cause, string? CauseTitle, int CauseYear);
+
+    /// <summary>
+    /// Whether the history carried wars, truces or claims, which replace the starting wars the
+    /// prehistory would invent. A history with feuds and no wars keeps the invented wars, as one
+    /// saved before feuds did.
+    /// </summary>
+    public bool CarriesWars => Wars.Count > 0 || Truces.Count > 0 || Claims.Count > 0;
 }
 
 /// <summary>
@@ -132,6 +143,8 @@ public sealed class AppliedHistory
             Wars = [.. Wars.Select(w => w with { Started = w.Started + delta })],
             Truces = [.. Truces.Select(t => t with { Until = t.Until + delta })],
             Claims = [.. Claims.Select(c => c with { Until = c.Until + delta })],
+            Feuds = Feuds?.Select(f => f with { Since = f.Since + delta, CauseYear = f.CauseYear != 0 ? f.CauseYear + delta : 0 }).ToList(),
+            Standings = Standings,
             Chronicle = [.. Chronicle.Select(r => r with { Year = r.Year + delta })],
             ChronicleFrom = ChronicleFrom != 0 ? ChronicleFrom + delta : 0,
         };
@@ -277,6 +290,85 @@ public sealed class AppliedHistory
     /// <summary>A claim: the county, the claimant realm's id, and the year it lapses.</summary>
     public sealed record Claim(int County, int Claimant, int Until);
 
+    /// <summary>
+    /// A quarrel, rivalry or feud between two houses on the applied date, by the realm each is headed
+    /// from (see <see cref="HistorySim.RealmOf"/>): its level, the year it began, and the wrong it is
+    /// about now — see <see cref="SimGrudge"/>. <see cref="CauseTitle"/> is a county key.
+    /// </summary>
+    public sealed record Feud(int A, int B, string Level, int Since, string? Cause, string? CauseTitle, int CauseYear);
+
+    /// <summary>
+    /// The house relations the history left, strongest first, capped at <see cref="MaxFeudsPerHouse"/>
+    /// a house and <see cref="MaxFeuds"/> in all. Null — not empty — in a file saved before houses
+    /// kept grudges, or captured with <see cref="RealmRules.Feuds"/> off, when the start date keeps
+    /// the ones the prehistory invents.
+    /// </summary>
+    public List<Feud>? Feuds { get; init; }
+
+    /// <summary>
+    /// How many grudges one house carries into the start date, and all houses together. Vanilla keeps
+    /// few relations for an AI house (<c>house_relation_is_valid_to_start_trigger</c> refuses any
+    /// house under five members), so a house at odds with half the map would read as noise; the
+    /// strongest are the ones anyone would remember.
+    /// </summary>
+    public const int MaxFeudsPerHouse = 3, MaxFeuds = 200;
+
+    /// <summary>What a ruling house's history has earned it, by the realm it is headed from. See <see cref="HistorySim.StandingOf"/>.</summary>
+    public sealed record Standing(int Realm, double Glory);
+
+    /// <summary>
+    /// Every ruling house's standing on the applied date. Null in a file saved before it was kept, or
+    /// captured with <see cref="RealmRules.Standing"/> off, when renown is graded by tier alone.
+    /// </summary>
+    public List<Standing>? Standings { get; init; }
+
+    /// <summary>
+    /// <see cref="Standings"/> by the seat county index each house's head rules from, or null when
+    /// the history carried none. Two houses headed from one seat after titling — a realm folded
+    /// into its lord's — keep the larger.
+    /// </summary>
+    public IReadOnlyDictionary<int, double>? StandingFor(IReadOnlyDictionary<int, Title> capitals)
+    {
+        if (Standings is null) return null;
+        var bySeat = new Dictionary<int, double>();
+        foreach (var s in Standings)
+            if (capitals.TryGetValue(s.Realm, out var seat))
+                bySeat[seat.Index] = Math.Max(bySeat.GetValueOrDefault(seat.Index), s.Glory);
+        return bySeat;
+    }
+
+    private static List<Feud>? FeudsOf(HistorySim sim)
+    {
+        if (!sim.Rules.HasFlag(RealmRules.Feuds)) return null;
+
+        var perHouse = new Dictionary<SimHouse, int>();
+        var feuds = new List<Feud>();
+        foreach (var g in sim.Grudges)
+        {
+            if (feuds.Count >= MaxFeuds) break;
+            if (g.Level is not { } level) continue;
+            if (perHouse.GetValueOrDefault(g.A) >= MaxFeudsPerHouse || perHouse.GetValueOrDefault(g.B) >= MaxFeudsPerHouse) continue;
+            if (sim.RealmOf(g.A) is not { } a || sim.RealmOf(g.B) is not { } b) continue;
+
+            perHouse[g.A] = perHouse.GetValueOrDefault(g.A) + 1;
+            perHouse[g.B] = perHouse.GetValueOrDefault(g.B) + 1;
+            feuds.Add(g.Cause == "carried"
+                ? new Feud(a.Id, b.Id, level, g.Since, g.Carried?.Cause, g.Carried?.CauseTitle, g.Carried?.CauseYear ?? 0)
+                : new Feud(a.Id, b.Id, level, g.Since, g.Cause, g.Where?.Key, g.CauseYear));
+        }
+        return feuds;
+    }
+
+    private static List<Standing>? StandingsOf(HistorySim sim)
+    {
+        if (!sim.Rules.HasFlag(RealmRules.Standing)) return null;
+        return [.. sim.Standings
+            .Select(s => (Realm: sim.RealmOf(s.House), s.Standing))
+            .Where(s => s.Realm is not null)
+            .Select(s => new Standing(s.Realm!.Id, Math.Round(s.Standing, 1)))
+            .OrderBy(s => s.Realm)];
+    }
+
     /// <summary>The truces running on the applied date. Records, not tuples: the file's serialiser skips tuple fields.</summary>
     public List<Truce> Truces { get; init; } = [];
 
@@ -295,7 +387,7 @@ public sealed class AppliedHistory
     /// or run with them off — so the start date keeps the starting wars it would invent.</returns>
     public SimDiplomacy? DiplomacyFor(IReadOnlyDictionary<int, Title> capitals, IEnumerable<Title> counties)
     {
-        if (Wars.Count == 0 && Truces.Count == 0 && Claims.Count == 0) return null;
+        if (Wars.Count == 0 && Truces.Count == 0 && Claims.Count == 0 && Feuds is null) return null;
 
         var byIndex = counties.Where(c => c.Tier == "c").ToDictionary(c => c.Index);
         var wars = new List<SimDiplomacy.OngoingWar>();
@@ -317,7 +409,13 @@ public sealed class AppliedHistory
             .Select(c => (capitals[c.Claimant], byIndex[c.County]))
             .ToList();
 
-        return new SimDiplomacy(wars, truces, claims);
+        // A house whose head's realm titling folded away takes its grudges with it, as a war's side does.
+        var feuds = Feuds?
+            .Where(f => capitals.ContainsKey(f.A) && capitals.ContainsKey(f.B) && capitals[f.A] != capitals[f.B])
+            .Select(f => new SimDiplomacy.HouseFeud(capitals[f.A], capitals[f.B], f.Level, f.Since, f.Cause, f.CauseTitle, f.CauseYear))
+            .ToList();
+
+        return new SimDiplomacy(wars, truces, claims, feuds);
     }
 
     /// <summary>Whether the history moved the edge of the wild at all.</summary>
@@ -477,6 +575,8 @@ public sealed class AppliedHistory
                 [.. w.Goal.Select(c => c.Index).Order()], w.Started, w.Score, w.Name))],
             Truces = [.. sim.Truces.Select(t => new Truce(t.A, t.B, t.Until))],
             Claims = [.. sim.Claims.Select(c => new Claim(c.County.Index, c.Claimant.Id, c.Until))],
+            Feuds = FeudsOf(sim),
+            Standings = StandingsOf(sim),
             Chronicle = Memory(sim, earlier),
             ChronicleFrom = earlier?.ChronicleSince ?? 0,
             Settled = [.. sim.Settled.Select(c => c.Index).Order()],

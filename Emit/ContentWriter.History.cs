@@ -100,6 +100,7 @@ public static partial class ContentWriter
         // the same three draws, so the man on the throne is the one the History workspace showed.
         // On the configuration the world is written with, which is this run's own copy.
         cfg.SeatPeople = applied.PeopleFor(capitals, realms);
+        cfg.SeatStanding = applied.StandingFor(capitals);
 
         int independent = history.Polities.Count(p => p.Suzerain is null);
         var startDynasties = applied.StartDynasties();

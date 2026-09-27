@@ -154,17 +154,23 @@ public static class Provinces
                 Rng rng,
                 List<MajorRiverPath>? majorRivers = null,
                 Drainage? drainage = null,
-                AzgaarImport? azgaar = null)
+                AzgaarImport? azgaar = null,
+                byte[]? riverChannel = null)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
         var size = ProvinceSizeField.Build(mask, elevation, climate, width, height, cfg, rng);
         var seeds = PlaceSeeds(mask, width, height, cfg, rng, size);
 
+        // A sea-zone seed the scatter dropped inside a carved channel would become a sea zone up
+        // the river once the channel is its own domain; the channel's provinces are the river's.
+        if (riverChannel is not null)
+            seeds.RemoveAll(s => !s.IsLand && riverChannel[s.Y * width + s.X] != 0);
+
         // --- Place dedicated seeds along carved Major River corridors ---
         if (majorRivers is { Count: > 0 })
         {
-            int riverSeedsAdded = PlaceMajorRiverSeeds(seeds, majorRivers, mask, width, height, cfg);
+            int riverSeedsAdded = PlaceMajorRiverSeeds(seeds, majorRivers, mask, riverChannel, width, height, cfg);
             if (riverSeedsAdded > 0)
                 Console.WriteLine($"  seeded {riverSeedsAdded} major river provinces along {majorRivers.Count} river system(s)");
         }
@@ -194,7 +200,7 @@ public static class Provinces
         // name; with one it is the export's provinces, and the partition below cannot cross them.
         var domain = Core.Stage.Detail("  · domain field",
             () => ProvinceDomain.Build(mask, azgaar, width, height, cfg, snap ? painted : null,
-                autoCut is not null ? "mountain auto-cut" : null));
+                autoCut is not null ? "mountain auto-cut" : null, riverChannel));
 
         foreach (var seed in seeds) seed.Domain = domain[seed.Y * width + seed.X];
 
@@ -1637,7 +1643,8 @@ public static class Provinces
             {
                 X = cell % width,
                 Y = cell / width,
-                IsLand = domain[cell] != ProvinceDomain.Water,
+                IsLand = !ProvinceDomain.IsWater(domain[cell]),
+                IsMajorRiver = domain[cell] == ProvinceDomain.RiverChannel,
                 Domain = domain[cell],
             });
             added++;
@@ -1660,7 +1667,7 @@ public static class Provinces
         int samples = 0;
         for (int i = width; i < n - width; i += 97)
         {
-            if (domainField[i] == ProvinceDomain.Water || domainField[i - 1] == ProvinceDomain.Water) continue;
+            if (ProvinceDomain.IsWater(domainField[i]) || ProvinceDomain.IsWater(domainField[i - 1])) continue;
             total += Math.Abs(elevation[i] - elevation[i - 1]);
             samples++;
         }
@@ -1895,10 +1902,14 @@ public static class Provinces
                 List<ProvinceSeed> seeds,
                 List<MajorRiverPath> rivers,
                 byte[] mask,
+                byte[]? riverChannel,
                 int width,
                 int height,
                 MapConfig cfg)
     {
+        // With a channel mask, a seed only goes on the carved channel: every course runs a cell or
+        // two on into the sea or lake it ends in, and a seed out there would sit in the Water
+        // domain and grow into the bay. A point off the channel defers the seed to the next one.
         double segmentLength = Math.Max(1.0, cfg.Scaled(cfg.RiverProvinceLength));
         int added = 0;
 
@@ -1921,11 +1932,12 @@ public static class Provinces
 
                 if (accumulated >= segmentLength)
                 {
-                    accumulated = 0;
                     int sx = Math.Clamp((int)MathF.Round(pts[i].X), 0, width - 1);
                     int sy = Math.Clamp((int)MathF.Round(pts[i].Y), 0, height - 1);
 
                     int cell = sy * width + sx;
+                    if (riverChannel is not null && riverChannel[cell] == 0) continue;
+                    accumulated = 0;
 
                     // Ensure the mask registers this seed location as water
                     mask[cell] = 0;
@@ -2039,7 +2051,7 @@ public static class Provinces
             if (id < 0 || !map.Seeds[id].IsLand) continue;
 
             int d = domain[i];
-            if (d == ProvinceDomain.Water) continue;
+            if (ProvinceDomain.IsWater(d)) continue;
 
             if (first[id] == ProvinceDomain.Water) { first[id] = d; continue; }
             if (first[id] == d) continue;

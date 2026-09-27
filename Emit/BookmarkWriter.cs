@@ -399,7 +399,7 @@ public static class BookmarkWriter
             // A lowborn one has neither, and then neither is written.
             if (ruler.HouseKey.Length > 0) b.Field("dynasty_house", ruler.HouseKey);
             else if (ruler.DynastyId.Length > 0) b.Field("dynasty", ruler.DynastyId);
-            b.Field("dynasty_splendor_level", SplendorLevel(ruler.Renown));
+            b.Field("dynasty_splendor_level", SplendorLevel(ruler.Renown + ruler.Legacy));
             b.Field("type", ruler.Female ? "female" : "male");
 
             // The whole date, not the year. The screen prints `[BookmarkCharacter.GetAge]` beside

@@ -236,13 +236,24 @@ public static class Generator
             () => Raster.ProvinceElevation(terra.Elevation, cfg));
         terra.ProvinceElevation = provinceElevation;
 
+        var landBeforeCarve = landMask;
         landMask = Stage.Time("recompute land mask",
             () => Raster.LandMask(terra.Elevation, cfg));
+
+        // What the carve turned from land into water: the major rivers' own channels, which the
+        // partition gives a domain of their own so river provinces stop at the old coastline.
+        byte[]? riverChannel = null;
+        if (majorRivers.Count > 0)
+        {
+            riverChannel = new byte[landMask.Length];
+            for (int i = 0; i < landMask.Length; i++)
+                if (landBeforeCarve[i] == 1 && landMask[i] == 0) riverChannel[i] = 1;
+        }
 
         // 5. Partition provinces with river seeds
         var provinces = Stage.Time("province partition",
             () => Provinces.Build(landMask, provinceElevation, climate,
-                cfg.ProvinceWidth, cfg.ProvinceHeight, cfg, rng, majorRivers, drainage, azgaar));
+                cfg.ProvinceWidth, cfg.ProvinceHeight, cfg, rng, majorRivers, drainage, azgaar, riverChannel));
         Console.WriteLine($"  {provinces.Count} provinces total");
 
         // --- PREVIEWS READY HERE ---

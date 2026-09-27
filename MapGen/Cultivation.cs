@@ -30,26 +30,21 @@ public static class Cultivation
 
     /// <summary>
     /// Per-province drainage summary, gathered in the one pass over the raster. <see cref="Spring"/>
-    /// is the pixel where the water actually is — the deepest point of standing water, or the
-    /// strongest flow where nothing stands — and -1 until a land pixel has been seen.
+    /// is the pixel where the water is: the deepest point of standing water, or the strongest flow
+    /// where nothing stands. It is -1 until a land pixel has been seen.
     /// </summary>
     private readonly record struct Water(float PeakFlow, float LakeDepth, int Area, int Spring);
 
     /// <summary>
-    /// Radius of the green pocket an oasis paints around its spring, in pixels of a reference-width
-    /// map, before the texture band adds its own fringe.
-    ///
-    /// An absolute size and not a share of the province, because desert provinces are the largest
-    /// on the map: the one oasis on the Ondrerol-sized test world sat in a province of 16k pixels,
-    /// and painting all of it put 6,194 pixels of the oasis material above 70% where vanilla has
-    /// 2,129 on its whole map. Vanilla's pockets, measured off its oasis mask, run 40-70 px across
-    /// including the faint fringe — this plus <see cref="Emit.TerrainTextureWriter"/>'s oasis band
-    /// lands in that range.
+    /// Radius of the scrub pocket an oasis paints around its spring, in pixels of a reference-width
+    /// map. The texture band then fades it into the sand over its usual width, so the green reaches
+    /// further than this. Absolute rather than a share of the province, because desert provinces
+    /// are the largest on the map: painted province-wide, one oasis covered 16k pixels.
     /// </summary>
     private const double OasisPocketRadius = 14;
 
     /// <summary>The largest share of its own province's equivalent radius a pocket may take, so a
-    /// small desert province still reads as sand with water in it rather than as water.</summary>
+    /// small desert province stays mostly sand.</summary>
     private const double OasisPocketShare = 0.45;
 
     /// <summary>
@@ -298,11 +293,15 @@ public static class Cultivation
     /// Stamp the chosen classes back onto the pixel raster the detail textures are painted from,
     /// so the ground under a farmland province is farmland rather than whatever climate put there.
     ///
-    /// Farmland takes the whole province; an oasis takes only a pocket around its spring. Fields
-    /// run to the property line, but an oasis is a patch of green in a province that is otherwise
-    /// still desert — painted province-wide it was a blue-green lake the size of a county. The
-    /// province keeps its <c>oasis</c> terrain vote either way; only the paint is local, and the
-    /// palms follow it, since TreeWriter reads this same raster.
+    /// Farmland takes the whole province; an oasis takes only a pocket around its spring. Painted
+    /// province-wide, an oasis was a green splotch the size of a county. The province keeps its
+    /// <c>oasis</c> terrain vote either way; only the paint is local. The palms follow it, since
+    /// TreeWriter reads this same raster.
+    ///
+    /// The pocket is an ordinary terrain label, so TerrainTextureWriter blends it into the sand
+    /// with the same band as every other boundary. A first attempt gave oasis edges their own
+    /// narrow band and unwarped sampling, and both drew hard seams wherever a pocket sat near a
+    /// real biome boundary. Do not special-case it there.
     /// </summary>
     private static void RepaintRaster(MapConfig cfg, ProvinceMap provinces, int[] order,
         TerrainClass[] terrain, HashSet<int> farmlands, HashSet<int> oases, Water[] water, Rng rng)

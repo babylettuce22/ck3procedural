@@ -1175,7 +1175,11 @@ public static class GuiWriter
     /// Related base files:
     ///   Core/localization/english/gen_dynasty_house_l_english.yml   GEN_HOUSE_LIST_SHOW_EXTINCT,
     ///                                                                 …_TT
+    ///   Core/common/scripted_guis/00_gen_dynasty_house_guis.txt      gen_dynasty_has_extinct_house
     /// </code>
+    ///
+    /// The checkbox only appears while the viewed dynasty has an extinct house (that scripted_gui):
+    /// until then there is nothing for it to reveal.
     /// </summary>
     private static void PatchDynastyHouseWindow(string modDir, string gameDir)
     {
@@ -1212,9 +1216,17 @@ public static class GuiWriter
     /// <summary>The UI variable the checkbox writes and the row's <c>visible</c> reads.</summary>
     private const string ShowExtinctHouses = "gen_show_extinct_houses";
 
+    /// <summary>Whether the viewed dynasty has an extinct house at all — a toggle for showing the
+    /// dead is noise on a dynasty that has none, which early in a game is every dynasty.</summary>
+    private static readonly ScriptedGui HasExtinctHouse = new("gen_dynasty_has_extinct_house",
+        GuiScope.Root("GetPlayer").With("house", "DynastyHouseView.GetDynastyHouse"));
+
+    // No parentanchor: the checkbox sits in the sort dropdown's hbox, and a widget in a layout
+    // cannot be positioned ("Widget cannot have a position in a layout", logged every load); the
+    // hbox centres it vertically on its own.
     private static GuiNode ShowExtinctToggle(GuiExpr showExtinct)
         => GuiBuilder.Of("button_checkbox_label", "gen_show_extinct_houses")
-            .ParentAnchor("vcenter")
+            .Visible(HasExtinctHouse.IsShown())
             .OnClick(GuiExpr.VariableToggle(ShowExtinctHouses))
             .Tooltip("GEN_HOUSE_LIST_SHOW_EXTINCT_TT")
             .Add(

@@ -101,6 +101,16 @@ public sealed class Ruler
     public required int Renown { get; set; }
 
     /// <summary>
+    /// Under an applied history, the dynasty prestige the house's past has earned it, paid out to
+    /// the ruler heading the house whether or not anyone is above him: a fallen house keeps its name.
+    /// Zero for everyone else, and for every ruler of a generated world. See <see cref="RulerMap.ByStanding"/>.
+    /// </summary>
+    public int Legacy { get; set; }
+
+    /// <summary>What the character file adds to the dynasty's prestige for this ruler.</summary>
+    public int DynastyPrestige => (Independent ? Renown : 0) + Legacy;
+
+    /// <summary>
     /// The <c>dna</c> key of a bookmark portrait, stamped on by the bookmark writer after it has
     /// chosen its characters; null for everyone who is not on the bookmark screen.
     /// </summary>
@@ -145,7 +155,7 @@ public sealed class Ruler
             Independent = Independent, HasVassals = HasVassals,
             Name = name, Female = female,
             BirthYear = birth.Year, BirthMonth = birth.Month, BirthDay = birth.Day,
-            Profile = Profile, Gold = Gold, Prestige = Prestige, Renown = Renown, DnaKey = DnaKey,
+            Profile = Profile, Gold = Gold, Prestige = Prestige, Renown = Renown, Legacy = Legacy, DnaKey = DnaKey,
             HistoricalBody = body, HistoricalId = vanillaId, HistoricalNameKey = nameKey, HistoricalName = name,
         };
 
@@ -279,7 +289,47 @@ public sealed class RulerMap
             map.All.Add(ruler);
         }
 
+        if (cfg.SeatStanding is { Count: > 0 } standing) map.ByStanding(standing);
         return map;
+    }
+
+    /// <summary>
+    /// The start date's renown shared by history as well as rank: every ruler's tier purse halved,
+    /// and the other half of all the renown the map would have handed out given to the houses in
+    /// proportion to their standing — the land each has held down the years, fading. An old house
+    /// fallen to a county keeps a name; a new house on a throne has yet to make one.
+    ///
+    /// Never more renown than without it: the total is the one the tier purses make, and no dynasty
+    /// is taken above what it would have had or a hegemon's purse, whichever is more. Renown buys
+    /// legacies at 250 + 500 a legacy owned (vanilla's PERK_COST_BASE and PERK_COST_MULTIPLIER), so
+    /// a ceiling on it is a ceiling on how many a dynasty opens the game with.
+    /// </summary>
+    private void ByStanding(IReadOnlyDictionary<int, double> standing)
+    {
+        const int Ceiling = 10000; // the hegemon's purse at its highest; see Purse
+
+        var tierRenown = All.Where(r => r.Independent && r.DynastyId.Length > 0)
+            .GroupBy(r => r.DynastyId, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.Sum(r => r.Renown), StringComparer.Ordinal);
+        int pool = tierRenown.Values.Sum() / 2;
+
+        // One head a dynasty: the seat of its greatest standing.
+        var heads = All.Where(r => r.DynastyId.Length > 0 && standing.ContainsKey(r.Seat.Index))
+            .GroupBy(r => r.DynastyId, StringComparer.Ordinal)
+            .Select(g => (Head: g.OrderByDescending(r => standing[r.Seat.Index]).ThenBy(r => r.Seat.Index).First(),
+                          Glory: g.Max(r => standing[r.Seat.Index])))
+            .ToList();
+        double total = heads.Sum(h => h.Glory);
+
+        foreach (var r in All) r.Renown /= 2;
+        if (total <= 0 || pool <= 0) return;
+
+        foreach (var (head, glory) in heads)
+        {
+            int had = tierRenown.GetValueOrDefault(head.DynastyId);
+            int kept = had / 2;
+            int ceiling = Math.Max(had, Ceiling);
+            head.Legacy = Math.Clamp((int)Math.Round(pool * glory / total), 0, Math.Max(0, ceiling - kept));
+        }
     }
 
     /// <summary>

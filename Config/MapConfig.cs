@@ -525,6 +525,14 @@ public sealed class MapConfig : CustomTypeDescriptor
     internal IReadOnlyDictionary<int, (string Name, bool Female, int Born)>? SeatPeople { get; set; }
 
     /// <summary>
+    /// Under an applied history, what each ruling house's history earned it, by the seat county index
+    /// of the ruler heading it — one seat a house. <c>RulerMap.Build</c> hands half the start date's
+    /// renown out by it (see <c>Rulers.ByStanding</c>). Set by <c>ContentWriter.ApplyRealms</c>; null
+    /// for a generated world, or a history captured without standing, when renown goes by tier alone.
+    /// </summary>
+    internal IReadOnlyDictionary<int, double>? SeatStanding { get; set; }
+
+    /// <summary>
     /// Two more bookmarks around <see cref="StartYear"/>, filling out vanilla's 867 / 1066 / 1178.
     /// The start takes whichever of the three its advancement is nearest, and the other two are
     /// placed by vanilla's gaps from it — before it, after it, or one of each. See
@@ -1049,13 +1057,15 @@ public sealed class MapConfig : CustomTypeDescriptor
 
     /// <summary>
     /// Share of desert provinces that become <c>oasis</c>. Vanilla spends 0.02% of its painted
-    /// weight on the oasis material, the rarest thing it paints, but it spends it on about forty
-    /// small sites and not a few large ones. The scarcity is now kept by the pocket size in
-    /// <see cref="MapGen.Cultivation"/>, which paints green only around the spring. This share
-    /// sets how many sites there are, and 6% gives a desert of 160 provinces about ten.
+    /// weight on the oasis material, the rarest thing it paints, but across about forty small
+    /// sites rather than a few large ones.
+    ///
+    /// Each oasis paints only a small pocket of scrub around its spring (see
+    /// <see cref="MapGen.Cultivation"/>), so this sets how many there are rather than how much
+    /// ground is green. 6% gives a desert of 160 provinces about ten.
     /// </summary>
     [Category("03 Provinces")]
-    [Description("Share of desert provinces that become oases. Only provinces holding a drainage sink — a depression water actually collects in — are eligible, and the wettest of those win. Each oasis paints only a small pocket of green around its spring, so this sets how many oases there are, not how much green.")]
+    [Description("Share of desert provinces that become oases. Only provinces holding a drainage sink — a depression water actually collects in — are eligible, and the wettest of those win. Each oasis paints a small patch of green scrub around its spring, so this sets how many there are, not how much green.")]
     public double OasisShare { get; set; } = 0.06;
 
     /// <summary>
@@ -1260,6 +1270,24 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Category("03 Provinces")]
     [Description("How far down its own slopes an auto-cut wall runs, as a share of the local relief from valley floor to peak. Lower walls more of the flanks; 0 ends every wall on one height line.")]
     public double ImpassableFootRelief { get; set; } = 0.45;
+
+    /// <summary>
+    /// How rugged ground below the mountain line must be for the auto-cut to wall it, as a multiple
+    /// of the map's median ruggedness (the slope of the terrain smoothed to a barony's scale,
+    /// averaged over half a barony). Only read with <see cref="ImpassableAutoCut"/> on.
+    ///
+    /// Without it, height alone decided, and flat tablelands and benches that happened to stand
+    /// high were walled while lower but steeper ground beside them was not. On an inland-sea map,
+    /// 14.6% of the walls were flat ground below the mountain line; at 1 it was 6.2%, with the same
+    /// share of land walled and no passable pocket left standing above its walls. Flat ground mostly
+    /// above the mountain line is still taken by <see cref="ImpassableMountainPlateaus"/>. 0 turns
+    /// it off.
+    /// Recommended: 1.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("03 Provinces")]
+    [Description("How rugged ground below the mountain line must be to become impassable, as a multiple of the map's median. Keeps flat tablelands and benches passable however high they stand. 0 turns it off.")]
+    public double ImpassableMinRuggedness { get; set; } = 1;
 
     /// <summary>
     /// The highest the gate line for <see cref="ImpassableMinMountainGround"/> may sit, in the
@@ -1520,9 +1548,28 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Description("Enable navigable major river corridors carved into the heightmap as river provinces.")]
     public bool EnableMajorRivers { get; set; } = true;
 
+    /// <summary>
+    /// How much navigable major river the map gets, as world units of river course per thousand
+    /// square world units of land — a drainage density, so the same number means the same thing on
+    /// any size of map and any shape of land.
+    ///
+    /// Replaced MajorRiverCount (8), which was not scaled by anything: a 4096 world and a 9216 one,
+    /// a Pangaea and an archipelago, all got eight chosen rivers, and qualifying lake outlets came
+    /// on top — on a 2026-09-26 archipelago that was 14 lake systems against the 8 the setting
+    /// governed. Now rivers are traced from the lake outlets and then the sea outlets by falling
+    /// discharge until the courses add up to this much length. Lake outlets count against it but
+    /// are carved regardless, and the last river is kept whole rather than cut to fit: how far up a
+    /// river is carved stays the business of <see cref="RiverTraceMinFlow"/> and
+    /// <see cref="RiverMaxRiseAboveSea"/>.
+    ///
+    /// Calibrated on vanilla 1.19, whose river provinces run about 0.95 units per thousand square
+    /// units of land (22,000 units of river over 23.7 million of land, two estimators agreeing:
+    /// area over mean width, and half the perimeter). A map with too little room for long rivers
+    /// falls short rather than inventing them, and the log says how short.
+    /// </summary>
     [Category("05 Rivers")]
-    [Description("Target number of navigable major river systems across the map.")]
-    public int MajorRiverCount { get; set; } = 8;
+    [Description("How much navigable major river the map gets: world units of river per thousand square units of land, so it scales with the land rather than being a fixed count. Vanilla has about 1. Lake outlets count towards it but are always carved; a map without room for long rivers falls short rather than inventing them.")]
+    public double MajorRiverDensity { get; set; } = 1.0;
 
     /// <summary>
     /// How large a body of water a major river has to empty into, measured in sea zones.
@@ -1549,13 +1596,13 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// whole catchment flows on over the spill — but only a lake of some size earns a carved
     /// corridor, because the channel is a fixed width and a pond narrower than the river leaving
     /// it reads as a mistake. Smaller lakes still get their outlet drawn as a tributary in
-    /// rivers.png wherever the discharge merits one. Lakes that qualify are traced over and above
-    /// <see cref="MajorRiverCount"/>: that cap is for rivers the generator chooses, and a lake's
-    /// outlet is not a choice.
+    /// rivers.png wherever the discharge merits one. Lakes that qualify are always traced, and
+    /// traced first: their courses count towards <see cref="MajorRiverDensity"/> but a lake's
+    /// outlet is not a choice, so it is carved even when it overspends the budget.
     /// </summary>
     [AdvancedSetting]
     [Category("05 Rivers")]
-    [Description("How big a lake must be, counted in sea zones, before a navigable river is carved from it to the sea. Lakes that qualify come on top of the major river count. Lower to connect smaller lakes; raise to leave them to tributaries in rivers.png.")]
+    [Description("How big a lake must be, counted in sea zones, before a navigable river is carved from it to the sea. Lakes that qualify are always carved, and their rivers count towards the major river density. Lower to connect smaller lakes; raise to leave them to tributaries in rivers.png.")]
     public double LakeOutletMinSeaZones { get; set; } = 0.1;
 
     /// <summary>
@@ -1570,8 +1617,12 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// Calibrated on vanilla 1.19. The water CK3 draws over vanilla's river provinces — the
     /// heightmap under the plane at 3932 — is 7 world units across at the median, 6–9 from p10 to
     /// p90; the river provinces themselves are 3–5. The defaults here and in
-    /// <see cref="RiverChannelWidthMax"/> open from 7 to 13 on the carve's source-to-mouth curve,
-    /// which puts the median reach at about 10.5: one and a half times vanilla.
+    /// <see cref="RiverChannelWidthMax"/> aim for one and a half times that.
+    ///
+    /// Width follows discharge: this is the width at the smallest flow a major river is traced at
+    /// (<see cref="RiverTraceMinFlow"/>) and the Max is the width at the largest river mouth on the
+    /// map, on a log scale between. Measured 2026-09-26 on an 8192 archipelago world, that put the
+    /// channel at 9.0/10.8/13.2 units wide at p10/p50/p90, wobble included.
     ///
     /// These replace RiverChannelRadiusMin/Max (9 and 14), which were radii in *vanilla heightmap*
     /// pixels — two per world unit — and were never converted when ProvinceDownscale went to 1, then
@@ -1582,16 +1633,16 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// </summary>
     [AdvancedSetting]
     [Category("05 Rivers")]
-    [Description("Width of a major river's channel at its source, bank to bank, in world units (province pixels). Not scaled with map size, because counties are not. Vanilla's rivers draw about 7 across; the default runs from 7 at the source to 13 at the mouth. The carve will not go below 5, which keeps the river province chain unbroken.")]
+    [Description("Width of a major river's channel at its source, bank to bank, in world units (province pixels). Not scaled with map size, because counties are not. Width follows how much water a river carries: this is the width of the smallest, the Max that of the biggest river mouth on the map. Vanilla's rivers draw about 7 across. The carve will not go below 5, which keeps the river province chain unbroken.")]
     public double RiverChannelWidthMin { get; set; } = 7.0;
 
     /// <summary>
-    /// Width of a major river's carved channel at its mouth, bank to bank, in world units. Same
+    /// Width of the map's biggest major river at its mouth, bank to bank, in world units. Same
     /// convention and calibration as <see cref="RiverChannelWidthMin"/>.
     /// </summary>
     [AdvancedSetting]
     [Category("05 Rivers")]
-    [Description("Width of a major river's channel at its mouth, bank to bank, in world units (province pixels). The channel opens from the source width to this along its length.")]
+    [Description("Width of the map's biggest major river at its mouth, bank to bank, in world units (province pixels). Every other river is placed between the Min and this by how much water it carries.")]
     public double RiverChannelWidthMax { get; set; } = 13.0;
 
     /// <summary>
@@ -1599,8 +1650,8 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// radius it would otherwise have. 0.25 lets it run between three quarters and five quarters of
     /// its nominal width.
     ///
-    /// Without this the channel opens on a fixed curve from source to mouth and never does anything
-    /// else, which is the one thing a real river never does. The variation is low-frequency — see
+    /// Without this the channel only ever widens downstream, stepping out where tributaries come
+    /// in, and never does anything else — which is the one thing a real river never does. The variation is low-frequency — see
     /// <see cref="RiverWidthVariationScale"/> — because per-vertex jitter reads as a ragged edge
     /// rather than as narrows and broads.
     ///
@@ -1609,7 +1660,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// the taper is deliberately closing it.
     /// </summary>
     [Category("05 Rivers")]
-    [Description("How much a major river widens and narrows along its length, as a fraction of its nominal width. 0 gives a channel that only ever opens from source to mouth; 0.25 lets it run between three quarters and five quarters of that. The valley follows, so wide reaches get flood plains and narrow ones get gorges.")]
+    [Description("How much a major river widens and narrows along its length, as a fraction of its nominal width. 0 gives a channel that only ever widens downstream as it gathers water; 0.25 lets it run between three quarters and five quarters of that. The flood plain follows, so wide reaches get wide plains.")]
     public double RiverWidthVariation { get; set; } = 0.25;
 
     /// <summary>
@@ -1623,13 +1674,43 @@ public sealed class MapConfig : CustomTypeDescriptor
     public double RiverWidthVariationScale { get; set; } = 150.0;
 
     /// <summary>
-    /// How far the carved valley reaches beyond the channel itself, as a multiple of channel width.
-    /// The channel is the water; this is the shoulder of lower ground either side of it.
+    /// The flat ground either side of a major river, as a multiple of the channel's width, measured
+    /// out from each bank. Sits just above the water and rises only slightly before the valley wall
+    /// begins, so a wide reach gets a wide plain and a narrow one a narrow strip.
+    ///
+    /// The valley replaced RiverValleyReach, which ramped from the bank back to the original ground
+    /// over a fixed multiple of the channel. A major river has to run at sea level the whole way,
+    /// so wherever its course is high the ramp became a trench — the whole height lost over a few
+    /// pixels. The wall is now slope-limited instead: see <see cref="RiverValleyWallSlope"/>.
     /// </summary>
     [AdvancedSetting]
     [Category("05 Rivers")]
-    [Description("How far a major river's valley shoulders reach beyond the water itself, as a multiple of channel width. Higher carves a broad flood plain; 1 leaves the river in a trench with no valley around it.")]
-    public double RiverValleyReach { get; set; } = 4.0;
+    [Description("Width of the flat flood plain on each bank of a major river, as a multiple of the channel's width. 0 puts the valley wall right at the water's edge.")]
+    public double RiverFloodplainWidth { get; set; } = 0.75;
+
+    /// <summary>
+    /// The steepest a major river's valley wall is allowed to be, in elevation units per world
+    /// unit, before it is scaled by <see cref="ReliefScale"/> as every authored gradient is.
+    ///
+    /// The channel is at sea level wherever it runs, so the height of the land beside it has to be
+    /// lost somewhere. This spends it over distance: the higher the ground, the wider the valley,
+    /// and the wall never gets steeper than this. Where even that would reach past
+    /// <see cref="RiverValleyMaxReach"/>, the wall steepens just enough to fit — a gorge only where
+    /// the land leaves no room for anything else.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("05 Rivers")]
+    [Description("Steepest slope allowed for a major river's valley walls, in elevation units per world unit. Lower gives broad, gentle valleys that spread further into high ground; higher gives narrower valleys with steeper sides.")]
+    public double RiverValleyWallSlope { get; set; } = 1.5;
+
+    /// <summary>
+    /// The furthest a major river's valley may reach from its centreline, in world units. Bounds
+    /// how much land one river can lower; past it the wall steepens rather than spreading.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("05 Rivers")]
+    [Description("Furthest a major river's valley may reach from the middle of the river, in world units. Where high ground would need a wider valley than this, the walls steepen instead.")]
+    public double RiverValleyMaxReach { get; set; } = 45.0;
 
     /// <summary>
     /// Spacing of river province seeds along a carved corridor, in vanilla province pixels. This is
