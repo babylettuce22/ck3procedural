@@ -55,8 +55,17 @@ public enum FormationKind
     /// <summary>A war ended in a peace: won, lost, white, or overtaken by events. The History workspace's only.</summary>
     WarEnded,
 
-    /// <summary>Two houses' grudge became a feud, or a feud cooled. The History workspace's only.</summary>
+    /// <summary>
+    /// Two houses' grudge crossed a level: <see cref="FormationEvent.Tension"/> 3 a feud began, 2 a
+    /// rivalry, 0 a feud cooled. The History workspace's only.
+    /// </summary>
     Feud,
+
+    /// <summary>
+    /// A house's standing changed its place: <see cref="FormationEvent.Tension"/> 1 it became the
+    /// greatest house, 0 one of the greatest lost its last realm. The History workspace's only.
+    /// </summary>
+    Standing,
 }
 
 /// <summary>

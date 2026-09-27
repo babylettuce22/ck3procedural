@@ -88,7 +88,7 @@ internal sealed class QuickHistory
                     result.ProvinceOrder, (int)Math.Round(result.Config.Scaled(result.Config.SeaBridgePixelsAtVanilla))))
                 : null;
 
-            var sim = HistorySim.Resume(realms, startYear, rulers: rulers, prehistory: prehistory, wilds: wilds);
+            var sim = HistorySim.Resume(realms, startYear, rulers: rulers, prehistory: prehistory, wilds: wilds, earlier: applied);
             return sim is null ? null : new QuickHistory(sim, canvas, realms, rulers, prehistory, applied, kept);
         });
     }
@@ -157,8 +157,10 @@ internal sealed class QuickHistory
             if (Headline(e) is not { } text) continue;
 
             // The realm the line is about, as it now stands, for its swatch.
+            // A fallen house has no realm left to colour it by; its old seat is someone else's now.
             var about = e.Actor ?? e.Subject;
-            var colour = _sim.OwnerOf(about) is { } owner ? ColourOf(owner.Root) : ((byte, byte, byte)?)null;
+            bool fallen = e.Kind == FormationKind.Standing && e.Tension == 0;
+            var colour = !fallen && _sim.OwnerOf(about) is { } owner ? ColourOf(owner.Root) : ((byte, byte, byte)?)null;
             lines.Add(new ChronicleLine(e.Year, text, colour));
         }
         return lines;
@@ -182,7 +184,10 @@ internal sealed class QuickHistory
             FormationKind.WarEnded => e.Note is { } note && note.Contains(" won ") && !note.Contains("none of it") ? note : null,
             FormationKind.Partitioned or FormationKind.Usurped or FormationKind.Drifted or FormationKind.Ruined => e.Note,
             // A feud begun is a headline; one cooling is detail.
+            // Houses: a rivalry or a feud begun (not a feud cooling, nor a quarrel), a house become
+            // the greatest, one of the greatest fallen.
             FormationKind.Feud => e.Tension > 0 ? e.Note : null,
+            FormationKind.Standing => e.Note,
             _ => null,
         };
     }

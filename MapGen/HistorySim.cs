@@ -104,8 +104,11 @@ public sealed partial class HistorySim
     /// starts under a ruler and house drawn here.</param>
     /// <param name="wilds">The wilderness and every county's neighbours, wild ones included, for
     /// colonisation and ruination; without it neither ever happens. See <see cref="WildsGround"/>.</param>
+    /// <param name="earlier">The history the written world was applied from, if any: its houses'
+    /// standing carries on rather than being read afresh off the map. See <see cref="SeatStanding"/>.</param>
     public static HistorySim? Resume(RealmMap realms, int startYear, int tickYears = 1,
-        RulerMap? rulers = null, PrehistoryMap? prehistory = null, WildsGround? wilds = null)
+        RulerMap? rulers = null, PrehistoryMap? prehistory = null, WildsGround? wilds = null,
+        AppliedHistory? earlier = null)
     {
         if (realms.History is not { Rules: { } rules } start) return null;
 
@@ -135,7 +138,7 @@ public sealed partial class HistorySim
         var history = new HistorySim(sim, rules.Seed, startYear);
         history.SeatStartRulers(rulers, prehistory);
         history.SeatGrudges(prehistory);
-        history.SeatStanding();
+        history.SeatStanding(earlier);
         history.SeatExclaves();
         history.SeatDeJure();
         history.SeatWilds(wilds);

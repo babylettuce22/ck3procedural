@@ -486,7 +486,7 @@ internal sealed class HistoryPanel : Panel
         if (_realms is null || _canvas is null) return;
 
         Pause();
-        _sim = HistorySim.Resume(_realms, _startYear, rulers: _rulers, prehistory: _prehistory, wilds: _wildsGround);
+        _sim = HistorySim.Resume(_realms, _startYear, rulers: _rulers, prehistory: _prehistory, wilds: _wildsGround, earlier: _applied);
         _colourOf.Clear();
         _nextColour = 0;
         _shownEvents = 0;
@@ -942,7 +942,7 @@ internal sealed class HistoryPanel : Panel
             FormationKind.WarDeclared => _showConquests.Checked ? e.Note : null,
             FormationKind.WarEnded => _showConquests.Checked || e.Note?.Contains(" was abandoned:") != true ? e.Note : null,
             FormationKind.Partitioned or FormationKind.Usurped or FormationKind.Drifted
-                or FormationKind.Colonised or FormationKind.Ruined or FormationKind.Feud => e.Note,
+                or FormationKind.Colonised or FormationKind.Ruined or FormationKind.Feud or FormationKind.Standing => e.Note,
             _ => null,
         };
 

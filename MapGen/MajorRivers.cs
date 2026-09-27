@@ -18,6 +18,24 @@ public sealed class MajorRiverPath
     public bool SourceIsWater { get; init; }
 }
 
+/// <summary>Why an upstream trace ended where it did — reported per run in the build log.</summary>
+public enum TraceStop
+{
+    /// <summary>Discharge fell under <see cref="MapConfig.RiverTraceMinFlow"/>.</summary>
+    FlowFloor,
+    /// <summary>The filled surface climbed past <see cref="MapConfig.RiverMaxRiseAboveSea"/>.</summary>
+    HeightCeiling,
+    /// <summary>Ended for one of the other reasons while inside a filled bowl that held no lake, so
+    /// the bowl was given back and the course ends on its near rim.</summary>
+    DryBowl,
+    /// <summary>The only feeder big enough was already another course's.</summary>
+    Occupied,
+    /// <summary>No cell drains into this one: the drainage's own source.</summary>
+    Source,
+    /// <summary>Hit the trace's cell cap.</summary>
+    Length,
+}
+
 public static class MajorRivers
 {
     /// <summary>
@@ -100,6 +118,7 @@ public static class MajorRivers
         for (int i = 0; i < pw * ph; i++) if (drainage.IsLand(i)) landCells++;
         double budget = cfg.MajorRiverDensity * landCells / 1000.0;
         double traced = 0, tracedFromLakes = 0;
+        var stops = new int[Enum.GetValues<TraceStop>().Length];
 
         // Lakes feed as land does: a lake cell's receiver is the next cell towards the spill, so
         // the trace can walk in over the outlet, across the water and out again up the strongest
@@ -130,11 +149,11 @@ public static class MajorRivers
         {
             if (occupied[exit]) continue;
 
-            var rawCells = TraceUpstream(exit, drainage, feeders, occupied, cfg);
+            var rawCells = TraceUpstream(exit, drainage, feeders, occupied, cfg, out var stop);
             rawCells.Reverse(); // Source -> lake exit
             rawCells.AddRange(TraceDownstream(drainage.Receiver[exit], drainage, occupied));
 
-            if (AddCourses(rawCells)) { systems++; lakeSystems++; }
+            if (AddCourses(rawCells)) { systems++; lakeSystems++; stops[(int)stop]++; }
         }
         tracedFromLakes = traced;
 
@@ -145,11 +164,11 @@ public static class MajorRivers
             if (traced >= budget) break;
             if (occupied[outlet]) continue;
 
-            var rawCells = TraceUpstream(outlet, drainage, feeders, occupied, cfg);
+            var rawCells = TraceUpstream(outlet, drainage, feeders, occupied, cfg, out var stop);
             if (rawCells.Count < minLength) continue;
 
             rawCells.Reverse(); // Source -> mouth
-            if (AddCourses(rawCells)) systems++;
+            if (AddCourses(rawCells)) { systems++; stops[(int)stop]++; }
         }
 
         // One trace, several courses: the water between the inflow of a lake and its outlet is
@@ -215,6 +234,8 @@ public static class MajorRivers
                           $"({cfg.MajorRiverDensity:0.##} per 1000 u² of {landCells:N0} land) — " +
                           $"{tracedFromLakes:N0} of it lake outlets, achieved density {1000.0 * traced / Math.Max(1, landCells):0.00}" +
                           (traced < budget ? $"; ran out of outlets at {100.0 * traced / Math.Max(1, budget):F0}% of the budget" : ""));
+        Console.WriteLine("  major rivers: heads stopped by " +
+                          string.Join(", ", Enum.GetValues<TraceStop>().Select(s => $"{s} {stops[(int)s]}")));
         return paths;
     }
 
@@ -222,29 +243,34 @@ public static class MajorRivers
     /// Walks up the strongest feeder from a sea outlet, or from the cell a lake drains through,
     /// and returns the cells, mouth first.
     ///
-    /// Two stops and one suspension. The trace stops where the filled surface climbs past the
-    /// configured rise above sea, and where the discharge falls under the major-river floor. It
-    /// is suspended, not stopped, on entering a filled depression: a dry bowl in the heightmap is
-    /// no place to trench a navigable river, but a bowl with a lake at the bottom is exactly
-    /// where one belongs, and there is no telling the two apart from the rim. So the trace carries
-    /// on provisionally: if it reaches water the bowl was a lake basin and every cell of it is
-    /// kept, and if it climbs out the far side dry the bowl was a bowl, the trace ends on the near
-    /// rim as it always did, and the cells inside are given back. Coming out of a lake the same
-    /// basin is crossed in the other direction, and that crossing is always kept — it is the lake's
-    /// own shore, and the river upstream of the lake has to climb it to get anywhere.
+    /// Two stops. The trace stops where the filled surface climbs past the configured rise above
+    /// sea, and where the discharge falls under the major-river floor. A filled depression on the
+    /// way is crossed: kept if the trace reaches water in it (a lake basin) or climbs out the far
+    /// side (a dry bowl), and given back only if the trace ends inside it, so the course then ends
+    /// on the near rim rather than in the bottom of a pit.
+    ///
+    /// Climbing out of a dry bowl used to *end* the trace, on the reasoning that a bowl is no place
+    /// to trench a navigable river. But the channel is carved to sea level everywhere, the height
+    /// ceiling already bounds any rim it must cut, and a bowl is any fill over 2 elevation units —
+    /// 0.2 world units, so every noise pit. Measured 2026-09-26 on an 8192 inland-sea world, that
+    /// rule ended 76 of 103 rivers mid-trunk with discharge still in the hundreds of thousands:
+    /// rivers stopping a short way from the far coast, and a length budget spent on coastal stubs.
+    /// Crossing bowls gave 13 whole rivers for the same length. The cost is that a course over a
+    /// filled flat follows the flat's drainage routing, which runs in straight lines.
     /// </summary>
     private static List<int> TraceUpstream(
         int outlet,
         Drainage drainage,
         List<int>[] feeders,
         bool[] occupied,
-        MapConfig cfg)
+        MapConfig cfg,
+        out TraceStop stop)
     {
+        stop = TraceStop.Length;
         var cells = new List<int>();
         int curr = outlet;
         int committed = 0;
         bool leavingLake = false;   // on land inside the basin of a lake just walked out of
-        bool inDryDip = false;      // inside a filled bowl entered from dry ground, not yet proven a lake basin
 
         float sea = cfg.Limits.SeaLevelUpper;
         // Stop major river before it cuts into high mountains
@@ -257,17 +283,16 @@ public static class MajorRivers
             occupied[curr] = true;
 
             // 1. Where the course may end: water, drained ground (<= 2.0m of fill tolerated), or
-            //    the basin of a lake it has just left. A bowl entered from dry ground is provisional
-            //    until water proves it a lake basin; climbing out of it dry ends the trace.
+            //    the basin of a lake it has just left. Inside a bowl entered from dry ground nothing
+            //    is committed, so a trace that ends in there gives the bowl back; one that reaches
+            //    water or climbs out the far side commits all of it.
             if (!drainage.IsLand(curr))
             {
                 committed = cells.Count;
                 leavingLake = true;
-                inDryDip = false;
             }
             else if (drainage.LakeDepth(curr) <= 2.0f)
             {
-                if (inDryDip) break;
                 committed = cells.Count;
                 leavingLake = false;
             }
@@ -275,17 +300,12 @@ public static class MajorRivers
             {
                 committed = cells.Count;
             }
-            else
-            {
-                inDryDip = true;
-            }
 
             // 2. Stop if elevation climbs into the mountain foothills
-            if (drainage.Filled[curr] > maxMajorRiverElevation)
-                break;
+            if (drainage.Filled[curr] > maxMajorRiverElevation) { stop = TraceStop.HeightCeiling; break; }
 
             var upstream = feeders[curr];
-            if (upstream == null || upstream.Count == 0) break;
+            if (upstream == null || upstream.Count == 0) { stop = TraceStop.Source; break; }
 
             int bestFeeder = -1;
             float maxFlow = 0f;
@@ -301,12 +321,17 @@ public static class MajorRivers
 
             // 3. Stop when flow falls below major river volume
             if (bestFeeder < 0 || maxFlow < minTraceFlow)
+            {
+                stop = bestFeeder < 0 && upstream.Any(f => occupied[f] && drainage.Flow[f] >= minTraceFlow)
+                    ? TraceStop.Occupied : TraceStop.FlowFloor;
                 break;
+            }
 
             curr = bestFeeder;
         }
 
         // Give back the dry bowl the trace wandered into without finding a lake in it.
+        if (committed < cells.Count) stop = TraceStop.DryBowl;
         for (int k = committed; k < cells.Count; k++) occupied[cells[k]] = false;
         cells.RemoveRange(committed, cells.Count - committed);
 

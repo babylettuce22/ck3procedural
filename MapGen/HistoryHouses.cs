@@ -40,8 +40,10 @@ public sealed record SimGrudge(SimHouse A, SimHouse B, double Score, int Since, 
 ///
 /// The scale is set against what a claim is worth: a war lost leaves a claim for fifty years and a
 /// grudge that is a quarrel for about as long; only wrongs repeated inside that span — or a throne
-/// taken — reach a rivalry, and a feud needs both. Measured on the worlds in the history harness:
-/// see the calibration in memory, history-feuds.
+/// taken — reach a rivalry, and a feud needs both. Feud is kept rare on purpose: in CK3 it opens
+/// the eradication war (<c>may_use_eradicate_cb</c>). Measured at seed 4242 on Desktop\height.png,
+/// 250 years from 900: 7 relations kept (5 quarrels, 2 rivalries, no feud) among 29 ruling houses,
+/// against the 1-7 the prehistory invents; the median one began 120 years before.
 /// </summary>
 public sealed partial class HistorySim
 {
@@ -66,6 +68,20 @@ public sealed partial class HistorySim
 
     private readonly Dictionary<(int, int), SimGrudge> _grudges = [];
     private readonly Dictionary<SimHouse, double> _standing = [];
+
+    /// <summary>
+    /// How many houses count as "among the greatest" for the chronicle's news of a fall, and by how
+    /// much a house must lead the greatest to take its place. Both only decide what is logged.
+    /// </summary>
+    private const int GreatHouses = 5;
+    private const double GreatestLead = 1.1;
+
+    /// <summary>The greatest house by standing, as the chronicle last announced it.</summary>
+    private SimHouse? _greatest;
+    private bool _greatestSeen;
+
+    /// <summary>Where each house ruling now rules from, kept so a house that falls can be named by its last seat.</summary>
+    private readonly Dictionary<SimHouse, Title> _lastSeat = [];
 
     /// <summary>Every grudge still remembered, strongest first. Carried by <see cref="AppliedHistory"/>.</summary>
     public IEnumerable<SimGrudge> Grudges
@@ -94,10 +110,9 @@ public sealed partial class HistorySim
 
         if (!_grudges.TryGetValue(key, out var had))
         {
-            _grudges[key] = new SimGrudge(a, b, weight, year, cause, year, weight, where);
-            if (weight >= FeudAt)
-                _sim.Log(FormationKind.Feud, where ?? SeatOf(offender) ?? SeatOf(victim)!, RealmOf(offender), RealmOf(victim), 3,
-                    $"The houses of {a.Name} and {b.Name} are at feud");
+            var fresh = new SimGrudge(a, b, weight, year, cause, year, weight, where);
+            _grudges[key] = fresh;
+            LogLevel(null, fresh, victim, offender);
             return;
         }
 
@@ -109,10 +124,30 @@ public sealed partial class HistorySim
             ? had with { Score = had.Score + weight, Cause = cause, CauseYear = year, Weight = weight, Where = where, Carried = null }
             : had with { Score = had.Score + weight };
         _grudges[key] = now;
+        LogLevel(before, now, victim, offender);
+    }
 
-        if (now.Level == "feud" && before != "feud")
-            _sim.Log(FormationKind.Feud, where ?? SeatOf(offender) ?? SeatOf(victim)!, RealmOf(offender), RealmOf(victim), 3,
-                $"The houses of {a.Name} and {b.Name} are at feud");
+    /// <summary>
+    /// A grudge that has just risen to a rivalry or a feud goes in the log — the chronicle's news of
+    /// it. A quarrel does not: one war lost makes one, and the chronicle would be full of them.
+    /// Record only; nothing reads it back.
+    /// </summary>
+    private void LogLevel(string? before, SimGrudge now, SimHouse victim, SimHouse offender)
+    {
+        int tension = now.Level switch { "feud" => 3, "rivalry" => 2, _ => 0 };
+        int was = before switch { "feud" => 3, "rivalry" => 2, _ => 0 };
+        if (tension <= was) return;
+
+        string? why = now.Where is not { } where ? null : now.Cause switch
+        {
+            "seized" => $", since the throne of {where.Name} was seized",
+            "freed" or "walked" => $", since {where.Name} broke away",
+            _ => $", over {where.Name}",
+        };
+        string text = tension == 3
+            ? $"The houses of {now.A.Name} and {now.B.Name} are at feud{why}"
+            : $"The houses of {now.A.Name} and {now.B.Name} are now rivals{why}";
+        _sim.Log(FormationKind.Feud, now.Where ?? SeatOf(offender) ?? SeatOf(victim)!, RealmOf(offender), RealmOf(victim), tension, text);
     }
 
     /// <summary>
@@ -148,12 +183,26 @@ public sealed partial class HistorySim
     /// The land each house holds, as standing: every realm's own counties to its ruler's house, and
     /// half its vassals' to the house above them — what the start date's renown ladder grades by
     /// tier. Seeded as though the start date's houses had always held what they hold, which is the
-    /// renown the written world already gave them for it.
+    /// renown the written world already gave them for it — except where the world was written from
+    /// an earlier history that kept standing: there a house goes on from what it had earned, so a
+    /// house that had already fallen is not raised back up to what it holds now. Realm ids survive
+    /// an apply (<see cref="AppliedHistory.Resolve"/>), and each house's standing was filed under
+    /// the realm it was headed from.
     /// </summary>
-    private void SeatStanding()
+    private void SeatStanding(AppliedHistory? earlier)
     {
         foreach (var (house, held) in Held())
             _standing[house] = held / (1 - StandingFade);
+
+        // Only over the world that history was written as: one still pending, over a world written
+        // without it, stands at another year, and its realm ids name other realms.
+        if (earlier?.Standings is not { } kept || earlier.Year != _sim.Year) return;
+        var byRealm = kept.ToDictionary(s => s.Realm, s => s.Glory);
+        var carried = new Dictionary<SimHouse, double>();
+        foreach (var p in _sim.Polities)
+            if (p.Alive && RulerOf(p) is { } ruler && byRealm.TryGetValue(p.Id, out double glory))
+                carried[ruler.House] = Math.Max(carried.GetValueOrDefault(ruler.House), glory);
+        foreach (var (house, glory) in carried) _standing[house] = glory;
     }
 
     private Dictionary<SimHouse, double> Held()
@@ -177,11 +226,38 @@ public sealed partial class HistorySim
     private void HousesYear()
     {
         var held = Held();
+        bool news = _settings.Rules.HasFlag(RealmRules.Standing);
 
+        // A house among the greatest that rules nowhere any more has fallen — news before it is
+        // forgotten. Where it last ruled from names the event.
+        var greatest = _standing.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key.Id).Take(GreatHouses)
+            .Select(kv => kv.Key).ToHashSet();
         foreach (var house in _standing.Keys.ToList())
-            if (!held.ContainsKey(house)) _standing.Remove(house);
+        {
+            if (held.ContainsKey(house)) continue;
+            if (news && greatest.Contains(house) && _lastSeat.TryGetValue(house, out var seat))
+                _sim.Log(FormationKind.Standing, seat, null, null, 0, $"The house of {house.Name}, once among the greatest, rules no more");
+            _standing.Remove(house);
+            _lastSeat.Remove(house);
+            if (_greatest == house) _greatest = null;
+        }
         foreach (var (house, land) in held)
             _standing[house] = _standing.GetValueOrDefault(house) * StandingFade + land;
+        foreach (var (house, realm) in HeadRealms()) _lastSeat[house] = realm.Capital;
+
+        // The greatest house changes hands only when the new one clearly leads, so two houses
+        // neck and neck do not trade the title back and forth year by year.
+        var top = _standing.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key.Id).Select(kv => kv.Key).FirstOrDefault();
+        if (top is not null && top != _greatest
+            && (_greatest is null || _standing[top] >= _standing[_greatest] * GreatestLead))
+        {
+            // Not news on the first year: the start date's greatest house is where the story begins.
+            if (news && _greatestSeen && _lastSeat.TryGetValue(top, out var seat))
+                _sim.Log(FormationKind.Standing, seat, RealmOf(top), null, 1,
+                    $"The house of {top.Name} is now the greatest of all, ruling from {seat.Name}");
+            _greatest = top;
+        }
+        _greatestSeen = true;
 
         foreach (var (key, g) in _grudges.ToList())
         {
@@ -208,6 +284,21 @@ public sealed partial class HistorySim
             .FirstOrDefault();
 
     private Title? SeatOf(SimHouse house) => RealmOf(house)?.Capital;
+
+    /// <summary><see cref="RealmOf"/> for every ruling house at once, in one pass over the realms.</summary>
+    private Dictionary<SimHouse, Polity> HeadRealms()
+    {
+        static bool Better(Polity p, Polity than)
+            => (p.Suzerain is null) != (than.Suzerain is null) ? p.Suzerain is null
+               : p.Counties.Count != than.Counties.Count ? p.Counties.Count > than.Counties.Count
+               : p.Capital.Index < than.Capital.Index;
+
+        var head = new Dictionary<SimHouse, Polity>();
+        foreach (var p in _sim.Polities)
+            if (p.Alive && RulerOf(p) is { } ruler && (!head.TryGetValue(ruler.House, out var best) || Better(p, best)))
+                head[ruler.House] = p;
+        return head;
+    }
 
     /// <summary>
     /// The formation's own wrongs this year — counties taken outside a war, vassals walking out of a
