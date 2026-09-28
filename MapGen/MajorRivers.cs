@@ -109,6 +109,7 @@ public static class MajorRivers
 
         var paths = new List<MajorRiverPath>();
         var occupied = new bool[pw * ph];
+        var mouths = new List<(int X, int Y)>();   // where a course reaches the sea or a sea-sized lake
         int systems = 0, lakeCrossings = 0;
 
         // The length budget: MajorRiverDensity units of course per thousand square units of land.
@@ -207,6 +208,10 @@ public static class MajorRivers
 
                     if (smoothedPoints.Count >= 2)
                     {
+                        int last = rawCells[to];
+                        if (drainage.IsLand(last) && !drainage.IsLand(drainage.Receiver[last]))
+                            mouths.Add((last % pw, last / pw));
+
                         paths.Add(new MajorRiverPath
                         {
                             Points = smoothedPoints,
@@ -236,6 +241,27 @@ public static class MajorRivers
                           (traced < budget ? $"; ran out of outlets at {100.0 * traced / Math.Max(1, budget):F0}% of the budget" : ""));
         Console.WriteLine("  major rivers: heads stopped by " +
                           string.Join(", ", Enum.GetValues<TraceStop>().Select(s => $"{s} {stops[(int)s]}")));
+
+        // Nothing keeps two outlets apart, so two mouths can land a few units from each other and
+        // leave a sliver of land between their river provinces. Reported, not acted on.
+        if (mouths.Count >= 2)
+        {
+            double closest = double.MaxValue;
+            (int X, int Y) ca = default, cb = default;
+            int under10 = 0, under20 = 0;
+            for (int a = 0; a < mouths.Count; a++)
+            {
+                for (int b = a + 1; b < mouths.Count; b++)
+                {
+                    double d = Math.Sqrt(Math.Pow(mouths[a].X - mouths[b].X, 2) + Math.Pow(mouths[a].Y - mouths[b].Y, 2));
+                    if (d < 10) under10++;
+                    if (d < 20) under20++;
+                    if (d < closest) { closest = d; ca = mouths[a]; cb = mouths[b]; }
+                }
+            }
+            Console.WriteLine($"  major rivers: {mouths.Count} mouths, closest pair {closest:F1} u apart " +
+                              $"at ({ca.X},{ca.Y}) and ({cb.X},{cb.Y}); {under10} pair(s) under 10 u, {under20} under 20 u");
+        }
         return paths;
     }
 

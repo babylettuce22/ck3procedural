@@ -21,6 +21,22 @@ public enum QuickPolitics { Fragmented, Kingdoms, Hegemony }
 public enum QuickPeople { Invented, RealCk3 }
 
 /// <summary>
+/// Which tuning of the map types' presets to build from. Ranges is the current one: its Contrast
+/// curve never reaches the stage ceiling, so the highest ground keeps a slope and ridge crests
+/// round off instead of clipping. Classic is the tuning before that, kept in the presets folder's
+/// <c>classic</c> subfolder, whose highest ground is cut flat into snow-capped tables.
+/// </summary>
+public enum QuickMountains { Ranges, Classic }
+
+/// <summary>
+/// How much of the fantastic the world holds. For now that is its peoples: whether elves, dwarves,
+/// orcs and the other races live alongside humans, and how much of the land they hold
+/// (<see cref="MapConfig.RaceMode"/>). Only invented peoples can be anything but human; see
+/// <see cref="QuickChoices.FantasyInWorld"/>.
+/// </summary>
+public enum QuickFantasy { None, Low, High }
+
+/// <summary>
 /// Everything the Quick generator asks, and nothing else. It is a way of <em>filling in</em> the
 /// normal settings, not a generator of its own: <see cref="ApplyTo"/> writes these onto a
 /// <see cref="MapConfig"/> that has just been reset to defaults, the chosen Forge preset becomes
@@ -40,11 +56,13 @@ public sealed class QuickChoices
     public string MapType { get; set; } = "continents";
     public int Seed { get; set; } = 1;
     public QuickRelief Relief { get; set; } = QuickRelief.Standard;
+    public QuickMountains Mountains { get; set; } = QuickMountains.Ranges;
     public QuickSize Size { get; set; } = QuickSize.Standard;
     public QuickEra Era { get; set; } = QuickEra.High;
     public QuickClimate Climate { get; set; } = QuickClimate.Temperate;
     public QuickDensity Density { get; set; } = QuickDensity.Balanced;
     public QuickPeople People { get; set; } = QuickPeople.Invented;
+    public QuickFantasy Fantasy { get; set; } = QuickFantasy.None;
     public QuickPolitics Politics { get; set; } = QuickPolitics.Kingdoms;
     public GenderPreference Rulers { get; set; } = GenderPreference.Historical;
     public bool Wilderness { get; set; } = true;
@@ -57,6 +75,14 @@ public sealed class QuickChoices
     public bool NativeRealms { get; set; }
 
     public QuickChoices Clone() => (QuickChoices)MemberwiseClone();
+
+    /// <summary>
+    /// The fantasy the world is actually made with. Vanilla's cultures are human by construction,
+    /// and the generator refuses races on them (see Generator), so a world of real CK3 people is
+    /// None whatever was picked. The pick itself is kept, so switching back to invented peoples
+    /// finds it again.
+    /// </summary>
+    public QuickFantasy FantasyInWorld => People == QuickPeople.Invented ? Fantasy : QuickFantasy.None;
 
     /// <summary>The heightmap's pixel size, which becomes the map's.</summary>
     public (int Width, int Height) Pixels => Size switch
@@ -153,6 +179,16 @@ public sealed class QuickChoices
         cfg.NativeRankTitles = invented && NativeTitles;
         cfg.NativeRealmNames = invented && NativeRealms;
 
+        // The fantasy choice, which for now is the world's races. Low and High are the generator's
+        // own two tunings; every other race setting (how many races, terrain, minorities) stays at
+        // its default, which is what those tunings are built around. None leaves RaceMode as the
+        // reset left it and only switches races off, so a None world is the human world a Quick
+        // run made before this choice existed.
+        var fantasy = FantasyInWorld;
+        cfg.EnableFantasyEthnicities = fantasy != QuickFantasy.None;
+        if (fantasy == QuickFantasy.Low) cfg.RaceMode = MapConfig.FantasyRaceMode.LowFantasy;
+        else if (fantasy == QuickFantasy.High) cfg.RaceMode = MapConfig.FantasyRaceMode.HighFantasy;
+
         // Three start dates, as vanilla has. They follow the world's history when the player
         // accepts it later than it began — see MapGen.HistoryEras — and a world of real CK3 people
         // has vanilla's own dates instead (UsesAdditionalBookmarks says no to it).
@@ -191,6 +227,17 @@ public sealed class QuickChoices
 public sealed record QuickMapType(string Key, string Title, string Blurb)
 {
     public string PresetPath => Path.Combine(QuickCatalogue.PresetDirectory, Key + ".json");
+
+    /// <summary>
+    /// The preset for a mountain style. A type with no classic copy (one dropped into the presets
+    /// folder by hand) has only the one tuning, and uses it for both.
+    /// </summary>
+    public string PresetPathFor(QuickMountains mountains)
+    {
+        if (mountains != QuickMountains.Classic) return PresetPath;
+        string classic = Path.Combine(QuickCatalogue.ClassicDirectory, Key + ".json");
+        return File.Exists(classic) ? classic : PresetPath;
+    }
 }
 
 /// <summary>
@@ -200,6 +247,10 @@ public sealed record QuickMapType(string Key, string Title, string Blurb)
 public static class QuickCatalogue
 {
     public static string PresetDirectory => Path.Combine(AppContext.BaseDirectory, "assets", "forge-presets");
+
+    /// <summary>The presets as they were tuned before Ranges; see <see cref="QuickMountains.Classic"/>.
+    /// A subfolder, so the scan below does not list them as map types of their own.</summary>
+    public static string ClassicDirectory => Path.Combine(PresetDirectory, "classic");
 
     private static readonly QuickMapType[] Curated =
     [

@@ -143,10 +143,11 @@ public static class FlatmapWriter
 
         // Pen work over the finished parchment, before it is encoded — so the thumbnail and the
         // struggle art cut from the returned buffer carry it too.
-        if (cfg.FlatmapRoads || cfg.FlatmapFlourishes)
+        if (cfg.FlatmapRoads || cfg.FlatmapFlourishes || cfg.FlatmapHachures)
         {
             string inked = FlatmapInk.Draw(pixels, w, h, landMask, provinces, order, routes, wilderness,
-                cfg.Seed, cfg.FlatmapRoads, cfg.FlatmapFlourishes, cfg.FlatmapFeather);
+                cfg.Seed, cfg.FlatmapRoads, cfg.FlatmapFlourishes, cfg.FlatmapFeather,
+                elevation, cfg.FlatmapHachures);
             Console.WriteLine($"  flatmap: {inked}");
         }
 

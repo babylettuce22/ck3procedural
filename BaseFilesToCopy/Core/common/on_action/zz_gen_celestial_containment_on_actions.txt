@@ -1,0 +1,84 @@
+﻿# Keeping celestial_government on the hegemony's ground.
+#
+# ---- What happened ----
+#
+# Observed on a 1073 start run to 1469 (seed 994228): every county on the map ended under a
+# celestial top liege, 242 of 244. The hegemon held 120 of h_china's 121 de jure counties, which is
+# the design. The other 122 were three independent kingdoms that were never in the hegemony at all,
+# all celestial.
+#
+# The chain, read from the save's title histories:
+#
+#   1. The emperor of e_gen_bramabia_1 — outside h_china's de jure — formed the hegemony in 1260
+#      through gen_form_h_china_decision and claimed the Mandate. claim_mandate converts every
+#      vassal whose capital is a castle, city or temple citadel (10_dlc_tgp_dynastic_cycle_scripted_
+#      effects.txt ~270) with no test of WHERE they are, so his home empire went celestial with him.
+#   2. He then created three kingdoms inside bramabia and appointed holders; celestial vassals.
+#   3. The Dynastic Cycle's chaos shattered h_china five times after that (1287, 1328, 1368, 1403,
+#      1454). tgp_chaos_shattering_effect releases every vassal not de jure under what the old
+#      emperor keeps, and changes no government, and celestial is `sticky_government`.
+#   4. So the bramabia kingdoms stood independent and celestial, appointed celestial governors to
+#      everything they took, and inherited the map.
+#
+# On Earth step 4 cannot happen: China's shards are all inside h_china, where vanilla means them to
+# stay celestial and contend for the Mandate. A generated hegemon rules land outside its hegemony as
+# a matter of course — the formation decision asks for two empires inside it, not for nothing
+# outside — so the shards land anywhere.
+#
+# ---- The rule ----
+#
+# Celestial is the hegemon's government: hold h_china or serve whoever does
+# (zz_gen_admin_conversion_triggers.txt says the same for adoption). An independent celestial
+# ruler whose capital is outside h_china's de jure, and who does not hold it, is neither, and is
+# moved off celestial along with the celestial vassals under him. See gen_leave_celestial_effect for
+# where they land.
+#
+# Left alone on purpose:
+#   * independents with their capital INSIDE h_china — vanilla's warring shards, the contenders the
+#     Dynastic Cycle is about;
+#   * the hegemon's own vassals wherever they sit — serving the hegemon is the other half of the rule;
+#   * players, as claim_mandate leaves them (`is_ai = yes` there too) — a government is theirs to
+#     choose.
+#
+# The capital test is claim_mandate's own region test (`capital_province.county ?= {
+# target_is_de_jure_liege_or_above = title:h_china }`), not a share of held counties: the shard
+# holding one h_china county among 28 is still a bramabian kingdom.
+#
+# title:h_china always exists here — CompatibilityWriter shims it when no hegemony is built, and a
+# world with no hegemony has no celestial ruler to test. The first line is a government-flag lookup,
+# so a world with no celestial ruler costs one flag test per ruler per year.
+#
+# Appended, not redefined: an on_action key declared again adds its on_actions to vanilla's list.
+
+yearly_playable_pulse = {
+	on_actions = {
+		gen_yearly_celestial_containment
+	}
+}
+
+gen_yearly_celestial_containment = {
+	trigger = {
+		government_has_flag = government_is_celestial
+		is_ai = yes
+		is_landed = yes
+		is_independent_ruler = yes
+		NOT = { has_title = title:h_china }
+		capital_county ?= {
+			NOT = { target_is_de_jure_liege_or_above = title:h_china }
+		}
+	}
+
+	effect = {
+		# The ruler first: gen_leave_celestial_effect picks a vassal's landing from his top liege's
+		# new government.
+		gen_leave_celestial_effect = yes
+
+		every_vassal_or_below = {
+			limit = {
+				government_has_flag = government_is_celestial
+				is_ai = yes
+			}
+			gen_leave_celestial_effect = yes
+		}
+	}
+}

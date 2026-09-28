@@ -5,6 +5,10 @@
  # writes gen_race_skin into every persistent DNA record on every map, so the gene must always
  # be registered. (Trait localisation lives in Fantasy/localization/gen_fantasy_traits_l_english.yml.)
  gen_race_skin:0 "Racial Complexion"
+ # The pointed-ear gene, in Core for the same reason (common/genes/gen_bs_elf_ears.txt).
+ gen_bs_elf_ears:0 "Pointed Ears"
+ # The orc tusk gene, likewise (common/genes/gen_bs_orc_tusks.txt).
+ gen_bs_orc_tusks:0 "Tusks"
 
  gen_early_realm_stability:0 "A Stable Realm"
  gen_early_realm_stability_desc:0 "This realm is in a period of internal alignment."

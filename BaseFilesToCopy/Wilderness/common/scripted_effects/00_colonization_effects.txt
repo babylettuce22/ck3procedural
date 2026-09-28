@@ -921,6 +921,104 @@ colony_government_exit_effect = {
 
 
 # =====================================================================================
+#  Keeping wilderness_government on the dummies
+# =====================================================================================
+
+# Character scope. Puts a character back on the right side of wilderness_government: a dummy back
+# onto it, anybody else off it. Government only; no title moves here (see
+# wilderness_government_reclaim_effect for the land).
+#
+# Called by the on_government_change guard, the game-start pass and the yearly sweep in
+# 00_colonization_on_actions.txt, always behind wilderness_government_out_of_place_trigger.
+#
+# ---- How the wilderness dummy left it (1469 save of seed 994228) ----
+#
+# On 1210.4.18 abandon_county_effect handed the dummy back c_gen_faesmalth_133, the capital county
+# of both k_gen_wilderness and k_gen_ruins, from a count who had been holding it as a colony. The
+# dummy came out of that transfer on feudal_government: a royal court switched on the same day,
+# feudal's default realm laws, a council, and twelve days later the first grant of one of its own
+# counties to a courtier. Six earlier abandons, all of counties that were not the capital, had
+# changed nothing.
+#
+# No script in vanilla or here changes such a ruler's government on a title transfer (every
+# vanilla change_government on that path is gated on admin, nomad, laamp or celestial), so this is
+# the engine. The reading that fits every fact: taking the kingdom's capital county moved the
+# dummy's realm capital onto it, and the engine re-picked a government for a capital whose holding
+# was still the colony's settlement_holding. wilderness_government cannot hold that,
+# colony_government refuses a king, and feudal is fallback 1. abandon_county_effect used to convert
+# the holding only AFTER the transfer; it now converts it first. This effect stands behind that in
+# case the engine finds another door.
+#
+# What it cost: domain_limit = 1000 and the empty-court fields belong to the government, so they
+# went with it. As a feudal ruler the dummy had a live court, and it cannot validly hold
+# wilderness_holding, so the AI granted one wild county away roughly every nine days. That came to
+# 10,610 grants by 1469, each one reverted seven days later by wilderness_colonization.0099 with a
+# toast to every player. And because is_wilderness_county_trigger asks the holder's government,
+# none of the dummy's remaining counties could be claimed for colonisation for 259 years.
+#
+# ---- How anybody else lands on it ----
+#
+# The engine picks a government when a character becomes landed, from the ones whose
+# can_get_government passes, and this one had no can_get_government at all. Two ways were seen: a
+# courtier granted a county whose capital is wilderness_holding (the only government whose
+# primary_holding matches it), and the head of a lay-clergy faith, who cannot be a theocrat and
+# holds only the titular head-of-faith title. 00_wilderness_government.txt now gates it on the
+# trait, so this half should only ever be repairing old saves.
+#
+# ---- Where a real ruler lands ----
+#
+# On colony_government if that is the state he is in (colonization_make_colonist_effect asks
+# colony_government_valid_trigger for itself). Otherwise wherever vanilla sends a ruler whose
+# government has to go: admin_change_government_effect, which picks feudal or clan from the liege
+# and the faith. The celestial containment sweep leaves celestial by the same door. A head of faith
+# lands on feudal, which is where the engine's fallback would have put him.
+wilderness_government_repair_effect = {
+	if = {
+		limit = { has_trait = wilderness }
+		if = {
+			limit = { NOT = { government_has_flag = government_is_wilderness } }
+			change_government = wilderness_government
+		}
+	}
+	else_if = {
+		limit = { government_has_flag = government_is_wilderness }
+		if = {
+			limit = { colony_government_valid_trigger = yes }
+			colonization_make_colonist_effect = yes
+		}
+		else = {
+			admin_change_government_effect = yes
+		}
+	}
+}
+
+# Character scope. The land half of the repair: every county this character holds whose capital is
+# still wild ground goes back to the wilderness dummy. It goes through abandon_county_effect, the
+# same effect 0099 reverts a leak with, so obstacles, claims and the Wilds situation are all handled
+# one way.
+#
+# Yearly only, never from the on_government_change guard. That guard can fire in the middle of a
+# title transfer, and colonize_county_effect moves a county BEFORE it converts the holding, so a
+# land pass there would catch every colony in the instant it is founded and hand it straight back.
+# It is the same reason 0099 waits seven days.
+#
+# Never on a dummy's own titles. abandon_county_effect's recipient IS the wilderness dummy, and
+# handing it its own county would strip and re-seed ground that is already right. The sweep calls
+# this on a dummy's vassals instead.
+wilderness_government_reclaim_effect = {
+	every_held_title = {
+		limit = {
+			tier = tier_county
+			county_is_wild_ground_trigger = yes
+		}
+		save_temporary_scope_as = leak_county
+		debug_log = wilderness_leak_debug_log
+		abandon_county_effect = { COUNTY = this }
+	}
+}
+
+
+# =====================================================================================
 #  Granting a colony away
 # =====================================================================================
 
@@ -1077,6 +1175,29 @@ colonization_make_colonist_effect = {
 			}
 		}
 	}
+
+	# ---- A colonist heads no noble family ----
+	#
+	# Reached by a bureaucrat: a celestial realm appoints its counties (min_appointment_tier = county),
+	# so the man who arrives in a colony is often a noble-family head with an x_nf_ title beside it —
+	# 21 of 23 colony holders in the 1469 save that found this. Vanilla's own way out of a bureaucracy,
+	# admin_change_government_effect (07_dlc_ep3_scripted_effects.txt), ends by destroying every
+	# family title the character still holds, because nothing but an administrative government may
+	# carry one. Same rule here, same idiom.
+	#
+	# Outside the conversion block on purpose: the engine can hand colony_government over by itself at
+	# landing (can_get_government), and a colonist made that way reaches this effect already converted.
+	if = {
+		limit = {
+			is_colonist_trigger = yes
+			any_held_title = { is_noble_family_title = yes }
+		}
+		every_held_title = {
+			limit = { is_noble_family_title = yes }
+			save_temporary_scope_as = family_title
+			prev = { destroy_title = scope:family_title }
+		}
+	}
 }
 
 colonization_grant_reaction_effect = {
@@ -1221,6 +1342,30 @@ abandon_county_effect = {
 			limit = { exists = scope:wilderness_holder }
 
 			hidden_effect = {
+				# ---- The capital goes wild BEFORE the county moves ----
+				#
+				# The conversion further down used to be the only one, and it ran after
+				# change_title_holder, so for the length of the transfer the dummy held a castle,
+				# city, temple or settlement that wilderness_government cannot hold. When that
+				# county was the capital of the dummy's own kingdom, the engine moved its realm
+				# capital there and picked it a new government to suit: feudal. That was the 1210
+				# flip in the 1469 save of seed 994228, and the note on
+				# wilderness_government_repair_effect has the rest.
+				#
+				# So the dummy only ever receives wild ground. The departing holder is still holding
+				# it for this one line. wilderness_government's can_get_government keeps any
+				# government re-pick that line causes for HIM off the wilderness, and he loses the
+				# county a line later anyway. The conversion below stays as it was and is now a
+				# no-op on the capital.
+				every_county_province = {
+					limit = {
+						has_holding = yes
+						is_county_capital = yes
+						NOT = { has_holding_type = wilderness_holding }
+					}
+					set_holding_type = wilderness_holding
+				}
+
 				create_title_and_vassal_change = {
 					type = revoked
 					save_scope_as = change

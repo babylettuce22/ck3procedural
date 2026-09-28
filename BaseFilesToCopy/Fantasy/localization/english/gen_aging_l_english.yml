@@ -41,6 +41,8 @@
  gen_aging.0010.b.failure: "No Child Comes"
  gen_aging.0010.b.failure.desc: "The seasons turn and [mother.GetFirstName] does not conceive. Neither of you is much surprised."
  gen_aging.0010.c: "No. Let the chance pass."
+ gen_late_child_fertility_modifier: "A Late Child"
+ gen_late_child_fertility_modifier_desc: "Long past the age when most women stop bearing children, this character has conceived once more."
 
  # ============ Core debug inspector (console: event gen_aging.0090) ============
  gen_aging.0090.t: "Core Debug: Phenotype & Aging"

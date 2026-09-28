@@ -170,6 +170,8 @@ public sealed partial class HistorySim
         // the formation's so the two never replay each other's dice.
         var rng = new Rng(_seed ^ 0x4157 ^ unchecked((int)((uint)_sim.Year * 0x9E3779B1u)));
         int logged = _sim.Events.Count;
+        int remembered = _memory.Count;
+        var blocs = BlocsByCounty();
         Formation.Step(_sim, rng);
 
         // The step's conquests and walkouts, as grudges, while its realms are as it left them.
@@ -209,6 +211,10 @@ public sealed partial class HistorySim
         // The houses' year's end, likewise read-only: grudges and standing worn down a year, and
         // the year's holdings added to standing. See HistoryHouses.
         HousesYear();
+
+        // Read-only: how big the powers were in everything the year logged and remembered, so the
+        // chronicle can pick the world's headlines out of it. See HistoryMemory.
+        MeasureYear(logged, remembered, blocs);
 
         // Read-only too: the map, whenever the tick crossed into a new stretch of the timeline.
         if ((_sim.Year - StartYear) / AppliedHistory.FrameYears

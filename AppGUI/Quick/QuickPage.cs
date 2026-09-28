@@ -91,6 +91,15 @@ internal sealed class QuickPage : Panel
     };
     private FlowLayoutPanel? _reliefTrack;
     private readonly WrappingToolTip _reliefTips = new() { InitialDelay = 400 };
+
+    // The mountain style: a small, secondary switch under Relief. See QuickMountains.
+    private readonly Label _mountainsCaption = MakeLabel("Mountains", Small, Theme.TextDim);
+    private readonly Dictionary<QuickMountains, Theme.SegmentButton> _mountainButtons = new()
+    {
+        [QuickMountains.Ranges] = new() { Text = "Ranges", Name = "quickMountainsRanges" },
+        [QuickMountains.Classic] = new() { Text = "Classic", Name = "quickMountainsClassic" },
+    };
+    private FlowLayoutPanel? _mountainsTrack;
     private readonly Label _mapHint = MakeLabel(
         "Every seed is a different world. This is the bare terrain: rivers, climate and erosion are added when the world is made.",
         Small, Theme.TextDim, wrap: true);
@@ -103,6 +112,7 @@ internal sealed class QuickPage : Panel
 
     // people step
     private readonly ChoiceGroup<QuickPeople> _peopleGroup;
+    private readonly ChoiceGroup<QuickFantasy> _fantasy;
     private readonly ChoiceGroup<QuickPolitics> _politics;
     private readonly ChoiceGroup<GenderPreference> _rulers;
     private readonly ToggleCard _wilderness = new() { Name = "quickWilderness", Text = "Wilderness", Description = "Unsettled lands to clear, claim and colonise." };
@@ -153,6 +163,10 @@ internal sealed class QuickPage : Panel
         _peopleGroup = new ChoiceGroup<QuickPeople>("Cultures & faiths", "Who lives here.", QuickPeople.Invented)
             .Add(QuickPeople.Invented, "Invented", "New cultures, faiths, languages and names", "quickPeopleInvented")
             .Add(QuickPeople.RealCk3, "Real CK3", "Vanilla's cultures and faiths laid onto this map", "quickPeopleReal");
+        _fantasy = new ChoiceGroup<QuickFantasy>("Fantasy", "Whether other races share the world with humans.", QuickFantasy.None)
+            .Add(QuickFantasy.None, "None", "Humans only, as in vanilla", "quickFantasyNone")
+            .Add(QuickFantasy.Low, "Low fantasy", "Mostly human, a few other races", "quickFantasyLow")
+            .Add(QuickFantasy.High, "High fantasy", "Elves, dwarves, orcs and more", "quickFantasyHigh");
         _politics = new ChoiceGroup<QuickPolitics>("Politics", "How the realms stand on the first day.", QuickPolitics.Kingdoms)
             .Add(QuickPolitics.Fragmented, "Fragmented", "Every count rules alone", "quickPoliticsFragmented")
             .Add(QuickPolitics.Kingdoms, "Kingdoms", "Realms great and small", "quickPoliticsKingdoms")
@@ -170,7 +184,9 @@ internal sealed class QuickPage : Panel
         {
             _choices.People = v;
             ShowNativeToggles();
+            ShowFantasy();
         };
+        _fantasy.Changed += v => _choices.Fantasy = v;
         _politics.Changed += v => _choices.Politics = v;
         _rulers.Changed += v => _choices.Rulers = v;
         _wilderness.Toggled += on => _choices.Wilderness = on;
@@ -183,7 +199,7 @@ internal sealed class QuickPage : Panel
         BuildGroupsStep(_worldPanel, "Shape the world", "Size, era and climate. The defaults make a good first world.",
             [_size, _era, _climate, _density], toggles: null);
         BuildGroupsStep(_peoplePanel, "People and politics", "Who lives here, who rules, and what else the world holds.",
-            [_peopleGroup, _politics, _rulers], toggles: [_wilderness, _wars, _nativeTitles, _nativeRealms]);
+            [_peopleGroup, _fantasy, _politics, _rulers], toggles: [_wilderness, _wars, _nativeTitles, _nativeRealms]);
         BuildReviewStep();
         WireRunScreen();
 
@@ -213,8 +229,11 @@ internal sealed class QuickPage : Panel
     /// <summary>The run and done views; the main window reports the run to it directly.</summary>
     public RunScreen Run => _run;
 
-    /// <summary>The size the page wants to be shown at: the column, its margins, and the tallest step.</summary>
-    public Size PreferredPageSize => new(S(StepPanel.PreferredColumn) + 2 * S(32), S(60) + 1 + S(606) + 1 + S(68));
+    /// <summary>
+    /// The size the page wants to be shown at: the column, its margins, and the tallest step. That
+    /// is People since it gained the Fantasy row, with every group shown and every extra on.
+    /// </summary>
+    public Size PreferredPageSize => new(S(StepPanel.PreferredColumn) + 2 * S(32), S(60) + 1 + S(616) + 1 + S(68));
 
     /// <summary>
     /// Opens the page on its first step, with the choices the last Quick world was made with and a
@@ -433,6 +452,9 @@ internal sealed class QuickPage : Panel
         // A matter of taste rather than of the world, so a surprise keeps what the player chose.
         _choices.NativeTitles = kept.NativeTitles;
         _choices.NativeRealms = kept.NativeRealms;
+        _choices.Mountains = kept.Mountains;
+        // So is fantasy: a surprise should not put elves into a player's historical game.
+        _choices.Fantasy = kept.Fantasy;
         _previousSeeds.Push(kept.Seed);
         SyncControls();
         RenderPreview();
@@ -452,6 +474,13 @@ internal sealed class QuickPage : Panel
         _nativeRealms.Visible = invented;
     }
 
+    /// <summary>
+    /// Fantasy is only offered for invented peoples: vanilla's cultures are human, and the
+    /// generator refuses races on them. Hidden rather than greyed, like the native switches, and
+    /// the step closes up around it.
+    /// </summary>
+    private void ShowFantasy() => _fantasy.Shown = _choices.People == QuickPeople.Invented;
+
     /// <summary>Puts every control in step with <see cref="_choices"/>.</summary>
     private void SyncControls()
     {
@@ -461,6 +490,8 @@ internal sealed class QuickPage : Panel
         _climate.Value = _choices.Climate;
         _density.Value = _choices.Density;
         _peopleGroup.Value = _choices.People;
+        _fantasy.Value = _choices.Fantasy;
+        ShowFantasy();
         _politics.Value = _choices.Politics;
         _rulers.Value = _choices.Rulers;
         _wilderness.On = _choices.Wilderness;
@@ -470,6 +501,11 @@ internal sealed class QuickPage : Panel
         ShowNativeToggles();
         _seedBox.Text = _choices.Seed.ToString();
         foreach (var (relief, button) in _reliefButtons) Theme.StyleSegment(button, relief == _choices.Relief);
+        foreach (var (style, button) in _mountainButtons)
+        {
+            Theme.StyleSegment(button, style == _choices.Mountains);
+            button.Font = Small;
+        }
         var type2 = CurrentType;
         _typeName.Text = type2?.Title ?? "";
         _typeBlurb.Text = type2?.Blurb ?? "";
@@ -499,6 +535,15 @@ internal sealed class QuickPage : Panel
         _reliefTips.SetToolTip(_reliefButtons[QuickRelief.Highlands], "Rugged country: more ranges, more hills, more impassable peaks.");
         foreach (var (relief, button) in _reliefButtons)
             button.Click += (_, _) => PickRelief(relief);
+
+        _mountainsTrack = Theme.MakeSegmented(_mountainButtons.Values);
+        _mountainsTrack.Margin = new Padding(0);
+        _mapPanel.Controls.Add(_mountainsCaption);
+        _mapPanel.Controls.Add(_mountainsTrack);
+        _reliefTips.SetToolTip(_mountainButtons[QuickMountains.Ranges], "Peaks rise from ridged ranges and keep their slopes all the way up.");
+        _reliefTips.SetToolTip(_mountainButtons[QuickMountains.Classic], "The earlier tuning: the highest ground is cut flat into broad snow-capped tables.");
+        foreach (var (style, button) in _mountainButtons)
+            button.Click += (_, _) => PickMountains(style);
 
         foreach (var type in _types)
         {
@@ -568,7 +613,20 @@ internal sealed class QuickPage : Panel
                 foreach (var button in _reliefButtons.Values) button.Size = new Size(each, buttonH);
                 track.AutoSize = false;
                 track.Bounds = new Rectangle(sx, sy, each * _reliefButtons.Count + S(4), buttonH + S(4));
-                sy += track.Height + S(14);
+                sy += track.Height + S(8);
+            }
+
+            // Secondary to Relief, so smaller: its caption sits on the same line, left of it.
+            if (_mountainsTrack is { } styles)
+            {
+                int buttonH = S(20);
+                int each = S(58);
+                foreach (var button in _mountainButtons.Values) button.Size = new Size(each, buttonH);
+                styles.AutoSize = false;
+                int trackW = each * _mountainButtons.Count + S(4);
+                styles.Bounds = new Rectangle(sx + sw - trackW, sy, trackW, buttonH + S(4));
+                _mountainsCaption.Location = new Point(sx, sy + (styles.Height - _mountainsCaption.PreferredHeight) / 2);
+                sy += styles.Height + S(14);
             }
 
             // In full, even when that runs below the preview: on a short window the view scrolls.
@@ -582,6 +640,14 @@ internal sealed class QuickPage : Panel
     {
         if (_choices.Relief == relief) return;
         _choices.Relief = relief;
+        SyncControls();
+        RenderPreview();
+    }
+
+    private void PickMountains(QuickMountains style)
+    {
+        if (_choices.Mountains == style) return;
+        _choices.Mountains = style;
         SyncControls();
         RenderPreview();
     }
@@ -637,11 +703,10 @@ internal sealed class QuickPage : Panel
         int seed = _choices.Seed;
         _preview.Busy = "Drawing…";
         var relief = _choices.Relief;
-        _preview.Chip = relief == QuickRelief.Standard
-            ? $"{type.Title}  ·  seed {seed}"
-            : $"{type.Title}  ·  {relief}  ·  seed {seed}";
+        string path = type.PresetPathFor(_choices.Mountains);
+        _preview.Chip = MapChip(type);
 
-        Task.Run(() => ForgePreview.Render(type.PresetPath, seed, 1024, 512, cts.Token, relief)).ContinueWith(task =>
+        Task.Run(() => ForgePreview.Render(path, seed, 1024, 512, cts.Token, relief)).ContinueWith(task =>
         {
             var bitmap = task.Result;
             if (IsDisposed || !IsHandleCreated) { bitmap?.Dispose(); return; }
@@ -654,6 +719,16 @@ internal sealed class QuickPage : Panel
                 _reviewMap.Image = new Bitmap(bitmap);
             });
         }, TaskContinuationOptions.OnlyOnRanToCompletion);
+    }
+
+    /// <summary>The line on the map pictures: the type, whatever differs from the defaults, the seed.</summary>
+    private string MapChip(QuickMapType? type)
+    {
+        var parts = new List<string> { type?.Title ?? _choices.MapType };
+        if (_choices.Relief != QuickRelief.Standard) parts.Add(_choices.Relief.ToString());
+        if (_choices.Mountains == QuickMountains.Classic) parts.Add("Classic mountains");
+        parts.Add($"seed {_choices.Seed}");
+        return string.Join("  ·  ", parts);
     }
 
     /// <summary>One small picture per map type, drawn once, one after another, at a fixed seed.</summary>
@@ -683,7 +758,7 @@ internal sealed class QuickPage : Panel
         var subtitleLabel = MakeLabel(subtitle, Subtitle, Theme.TextDim);
         panel.Controls.AddRange([titleLabel, subtitleLabel]);
 
-        var headers = new List<(Label Title, Label Hint, List<ChoiceCard> Cards)>();
+        var headers = new List<(IChoiceGroup View, Label Title, Label Hint, List<ChoiceCard> Cards)>();
         foreach (var view in views)
         {
             var t = MakeLabel(view.Title, GroupTitle, Theme.Text);
@@ -692,7 +767,7 @@ internal sealed class QuickPage : Panel
             panel.Controls.Add(t);
             panel.Controls.Add(h);
             foreach (var card in cards) panel.Controls.Add(card);
-            headers.Add((t, h, cards));
+            headers.Add((view, t, h, cards));
         }
 
         Label? extrasTitle = null, extrasHint = null;
@@ -726,7 +801,12 @@ internal sealed class QuickPage : Panel
                 y += cardH + S(16);
             }
 
-            foreach (var (t, h, cards) in headers) Row(t, h, cards);
+            // A hidden group takes its heading with it, and the rows below close up.
+            foreach (var (view, t, h, cards) in headers)
+            {
+                t.Visible = h.Visible = view.Shown;
+                if (view.Shown) Row(t, h, cards);
+            }
             if (toggles is not null && extrasTitle is not null && extrasHint is not null)
                 Row(extrasTitle, extrasHint, [.. toggles.Where(c => c.Visible)]);
         };
@@ -752,6 +832,8 @@ internal sealed class QuickPage : Panel
         { [QuickDensity.Fewer] = "Fewer, larger counties", [QuickDensity.Balanced] = "Balanced", [QuickDensity.More] = "Many, smaller counties" };
     private static readonly Dictionary<QuickPeople, string> PeopleNames = new()
         { [QuickPeople.Invented] = "Invented", [QuickPeople.RealCk3] = "Real CK3 cultures and faiths" };
+    private static readonly Dictionary<QuickFantasy, string> FantasyNames = new()
+        { [QuickFantasy.None] = "None  ·  humans only", [QuickFantasy.Low] = "Low fantasy  ·  mostly human", [QuickFantasy.High] = "High fantasy  ·  many races" };
     private static readonly Dictionary<QuickPolitics, string> PoliticsNames = new()
         { [QuickPolitics.Fragmented] = "Fragmented", [QuickPolitics.Kingdoms] = "Kingdoms", [QuickPolitics.Hegemony] = "Hegemony" };
     private static readonly Dictionary<GenderPreference, string> RulerNames = new()
@@ -760,7 +842,7 @@ internal sealed class QuickPage : Panel
     private (string Key, int Step)[] SummaryRows =>
     [
         ("Map", MapStep), ("Relief", MapStep), ("Size", WorldStep), ("Era", WorldStep), ("Climate", WorldStep), ("Provinces", WorldStep),
-        ("Cultures & faiths", PeopleStep), ("Politics", PeopleStep), ("Rulers", PeopleStep), ("Extras", PeopleStep),
+        ("Cultures & faiths", PeopleStep), ("Fantasy", PeopleStep), ("Politics", PeopleStep), ("Rulers", PeopleStep), ("Extras", PeopleStep),
     ];
 
     private string[] SummaryValues()
@@ -779,12 +861,13 @@ internal sealed class QuickPage : Panel
                 QuickRelief.Lowlands => "Lowlands  ·  fewer hills and mountains",
                 QuickRelief.Highlands => "Highlands  ·  more hills and mountains",
                 _ => "Standard",
-            },
+            } + (_choices.Mountains == QuickMountains.Classic ? "  ·  classic mountains" : ""),
             $"{SizeNames[_choices.Size]}  ·  {w} × {h}",
             $"{EraNames[_choices.Era]}  ·  {_choices.StartYear}",
             ClimateNames[_choices.Climate],
             DensityNames[_choices.Density],
             PeopleNames[_choices.People],
+            FantasyNames[_choices.FantasyInWorld],
             PoliticsNames[_choices.Politics],
             RulerNames[_choices.Rulers],
             extras.Count == 0 ? "None" : string.Join("  ·  ", extras),
@@ -842,9 +925,7 @@ internal sealed class QuickPage : Panel
             int ty = y;
             var map = StepPanel.Map(rightX, ty, rightW, Math.Max(S(120), panel.ClientSize.Height - ty - ReviewFootHeight(rightW)));
             _reviewMap.Bounds = map;
-            _reviewMap.Chip = _choices.Relief == QuickRelief.Standard
-                ? $"{CurrentType?.Title}  ·  seed {_choices.Seed}"
-                : $"{CurrentType?.Title}  ·  {_choices.Relief}  ·  seed {_choices.Seed}";
+            _reviewMap.Chip = MapChip(CurrentType);
             ty += map.Height + S(18);
             _nameCaption.Location = new Point(rightX, ty);
             ty += _nameCaption.PreferredHeight + S(4);

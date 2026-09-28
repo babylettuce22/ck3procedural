@@ -1,0 +1,37 @@
+﻿# Lower orc tusks. Emit/RaceHeadWriter.cs appends two tusks to the vanilla teeth mesh, collapsed onto
+# their roots inside the mouth, and builds a teeth blendshape that grows them; this gene drives it.
+# MapGen/OrcTusks.cs is the shape. The value is the blendshape weight, 0 none to 1 full-grown, so it
+# tiers like the gene_bs_ genes (MapGen/Ethnicities.cs NeutralOf) and a half-orc gets half-grown tusks.
+#
+# The attribute lives on the TEETH entity; the head declares it too, mapped to its neutral shape, as
+# vanilla does for its own teeth attributes.
+#
+# In Core beside gen_race_skin and gen_bs_elf_ears for the same reason: Emit/PortraitWriter.cs writes
+# it into every persistent DNA record on every map. Index 0 must stay the empty template.
+
+morph_genes = {
+	gen_bs_orc_tusks = {
+		inheritable = yes
+		group = mouth
+
+		gen_orc_tusks_none = {
+			index = 0
+			visible = no
+			male = {}
+			female = male
+			boy = male
+			girl = male
+		}
+
+		gen_orc_tusks_lower = {
+			index = 1
+			visible = no
+			male = {
+				setting = { attribute = "gen_bs_orc_tusks_lower"  value = { min = 0.0 max = 1.0 }  age = age_preset_child_features_wide_range }
+			}
+			female = male
+			boy = male
+			girl = male
+		}
+	}
+}

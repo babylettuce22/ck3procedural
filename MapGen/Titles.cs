@@ -716,7 +716,8 @@ public static class Titles
         // heartland: `empireAdjacency` is a graph of kingdoms, and the crown reasons about empires.
         Crown(empires, rng,
               ByTitle(empires, LiftAdjacency(empireClusters, empireAdjacency)),
-              ByTitle(empires, LiftAdjacency(empireClusters, empireSea)));
+              ByTitle(empires, LiftAdjacency(empireClusters, empireSea)),
+              provincePosition);
 
         int seaLinked = seaAdjacency.Values.Sum(s => s.Count) / 2;
         Console.WriteLine($"  titles: {empires.Count} empires, {kingdoms.Count} kingdoms, " +
@@ -869,13 +870,19 @@ public static class Titles
     /// tell a heartland from a scatter, and the extent falls back to the two largest empires.
     /// </param>
     /// <param name="sea">Empire borders across the short crossings the map counts as adjacency.</param>
+    /// <param name="provincePosition">
+    /// Where each barony's province sits, indexed by province id, when the caller knows. It lets
+    /// the search bridge open water wider than <paramref name="sea"/> reaches when nothing else
+    /// joins two empires (see <see cref="ChooseExtent"/>); without it such a map gets no hegemony.
+    /// </param>
     internal static Title? Crown(List<Title> empires, Rng rng,
         IReadOnlyDictionary<Title, HashSet<Title>>? land = null,
-        IReadOnlyDictionary<Title, HashSet<Title>>? sea = null)
+        IReadOnlyDictionary<Title, HashSet<Title>>? sea = null,
+        (double X, double Y)[]? provincePosition = null)
     {
         if (empires.Count < MinEmpiresPerHegemony) return null;
 
-        var extent = ChooseExtent(empires, land, sea);
+        var extent = ChooseExtent(empires, land, sea, provincePosition);
 
         if (extent is not { Count: >= MinEmpiresPerHegemony })
         {
@@ -931,12 +938,13 @@ public static class Titles
     /// and under the cap is the shape being aimed at; then the same without the cap, for a world of
     /// three empires where any pair is most of it; then the same allowing the short sea crossings
     /// the rest of the hierarchy already treats as adjacency, for an archipelago; and last, when no
-    /// group can outweigh the biggest empire at all, the largest landmass entire — the "one whole
-    /// continent" hegemony, which is what a small continent beside a giant one deserves anyway.
+    /// two empires meet even across those, the narrowest stretches of open water between them (see
+    /// <see cref="Crossings"/>) — an archipelago whose empires each sit on their own island group.
     /// </summary>
     private static HashSet<Title>? ChooseExtent(List<Title> empires,
         IReadOnlyDictionary<Title, HashSet<Title>>? land,
-        IReadOnlyDictionary<Title, HashSet<Title>>? sea)
+        IReadOnlyDictionary<Title, HashSet<Title>>? sea,
+        (double X, double Y)[]? provincePosition = null)
     {
         var weight = empires.ToDictionary(e => e, e => Flatten([e]).Count(t => t.Tier == "c"));
 
@@ -964,7 +972,8 @@ public static class Titles
         // Three strategies, each tried at the preferred cap before any of them is tried at the
         // ceiling. Nothing is tried past the ceiling at all: a map that cannot put a hegemony on
         // less than that much of itself gets no hegemony (see HegemonyHardMaxShare).
-        foreach (int limit in (int[])[(int)(HegemonyMaxShare * total), ceiling])
+        int[] limits = [(int)(HegemonyMaxShare * total), ceiling];
+        foreach (int limit in limits)
         {
             // A whole landmass, when one of them happens to be the right size to be a hegemony.
             // The best answer the map can give — the border is a coastline rather than a line drawn
@@ -988,7 +997,77 @@ public static class Titles
             if (Grow(empires, union, weight, floor, limit) is { } overseas) return overseas;
         }
 
+        // Open water, when nothing above joined any two empires. The clusterer that builds kingdoms
+        // and empires falls back to the nearest title when a stranded one has no neighbour at all
+        // (AbsorbUndersized), so on an archipelago every empire can span several island groups
+        // while no two of them come within a sea link of each other. Measured 2026-09-28 on a Forge
+        // archipelago (seed 478829, Highlands): four empires, the nearest pair 104 px of water
+        // apart against a 98 px link, weights that allowed four different crowns — and no
+        // hegemony, because the graph the groups grow over had no edges.
+        //
+        // So the gaps are opened one at a time, narrowest first, and the search re-run after each:
+        // the first crossing that makes a hegemony possible is the one it reaches over. The
+        // preferred cap is tried across every crossing before the ceiling is tried across any —
+        // the same order as above, because a wider strait costs the crown less than half the world.
+        if (provincePosition is not null)
+        {
+            var crossings = Crossings(empires, union, provincePosition);
+
+            foreach (int limit in limits)
+            {
+                var reach = empires.ToDictionary(e => e,
+                    e => union.TryGetValue(e, out var n) ? new HashSet<Title>(n) : []);
+
+                foreach (var (a, b, gap) in crossings)
+                {
+                    reach[a].Add(b);
+                    reach[b].Add(a);
+
+                    if (Grow(empires, reach, weight, floor, limit) is not { } bridged) continue;
+
+                    Console.WriteLine($"  hegemony: no two empires meet by land or sea link — reaching " +
+                                      $"over open water, {gap:0} px between the nearest baronies");
+                    return bridged;
+                }
+            }
+        }
+
         return null;
+    }
+
+    /// <summary>
+    /// Every pair of empires the adjacency graph does not already join, with the gap between them —
+    /// the distance between their two nearest baronies — narrowest first. Ties by index, so the
+    /// same world always bridges the same water.
+    /// </summary>
+    private static List<(Title A, Title B, double Gap)> Crossings(List<Title> empires,
+        IReadOnlyDictionary<Title, HashSet<Title>> adjacency, (double X, double Y)[] provincePosition)
+    {
+        var points = empires.ToDictionary(e => e, e => Flatten([e])
+            .Where(t => t.Tier == "b" && t.ProvinceId >= 0 && t.ProvinceId < provincePosition.Length)
+            .Select(t => provincePosition[t.ProvinceId])
+            .ToArray());
+
+        var result = new List<(Title A, Title B, double Gap)>();
+
+        for (int i = 0; i < empires.Count; i++)
+            for (int j = i + 1; j < empires.Count; j++)
+            {
+                var (a, b) = (empires[i], empires[j]);
+                if (adjacency.TryGetValue(a, out var joined) && joined.Contains(b)) continue;
+                if (points[a].Length == 0 || points[b].Length == 0) continue;
+
+                double nearest = double.PositiveInfinity;
+                foreach (var p in points[a])
+                    foreach (var q in points[b])
+                        nearest = Math.Min(nearest, DistanceSquared(p, q));
+
+                result.Add((a, b, Math.Sqrt(nearest)));
+            }
+
+        return [.. result.OrderBy(c => c.Gap)
+                         .ThenBy(c => Math.Min(c.A.Index, c.B.Index))
+                         .ThenBy(c => Math.Max(c.A.Index, c.B.Index))];
     }
 
     /// <summary>

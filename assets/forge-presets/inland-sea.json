@@ -114,6 +114,7 @@
         "followInland": 0.6,
         "inlandScale": 0.01,
         "ceiling": 1,
+        "softCeiling": 0.12,
         "landOnly": true
       }
     },

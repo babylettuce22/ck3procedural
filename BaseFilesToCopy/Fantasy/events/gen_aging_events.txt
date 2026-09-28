@@ -182,7 +182,7 @@ gen_aging.0010 = {
 	option = {
 		name = gen_aging.0010.a
 		scope:mother = {
-			make_pregnant = { father = scope:father }
+			gen_late_child_conceive_effect = yes
 		}
 		stress_impact = {
 			lazy = minor_stress_impact_gain
@@ -226,7 +226,7 @@ gen_aging.0010 = {
 					left_icon = scope:mother
 					right_icon = scope:father
 					scope:mother = {
-						make_pregnant = { father = scope:father }
+						gen_late_child_conceive_effect = yes
 					}
 				}
 			}

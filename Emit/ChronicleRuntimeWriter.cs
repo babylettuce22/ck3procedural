@@ -1144,7 +1144,7 @@ public static class ChronicleRuntimeWriter
         loc.Add("GEN_CHRONICLE_TITLE", "The Chronicle");
         loc.Add("GEN_CHRONICLE_TAB_BUTTON", "#T The Chronicle#!");
         loc.Add("GEN_CHRONICLE_BLURB",
-            "What the world remembers, newest first. Every realm keeps its own book as well -- look for it in the title window.");
+            "What the world remembers: the age before the bookmark, oldest first, and living memory, newest first. Every realm keeps its own book as well -- look for it in the title window.");
         loc.Add("GEN_CHRONICLE_EMPTY", "Nothing has happened yet that the world will remember.");
         loc.Add("GEN_CHRONICLE_BEFORE", "Before the bookmark");
         loc.Add("GEN_CHRONICLE_SINCE", "In living memory");

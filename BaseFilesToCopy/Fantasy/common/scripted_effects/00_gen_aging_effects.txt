@@ -249,6 +249,17 @@ gen_late_child_pulse_effect = {
 	}
 }
 
+# The conception itself, run in the mother's scope with scope:father set. make_pregnant alone
+# fails past 45 ("visibly infertile"), so the modifier pushes her cutoff out first. It lasts a year
+# to cover the pregnancy, in case the engine checks again at birth.
+gen_late_child_conceive_effect = {
+	add_character_modifier = {
+		modifier = gen_late_child_fertility_modifier
+		years = 1
+	}
+	make_pregnant = { father = scope:father }
+}
+
 # Day-one seeding, called from the game-start sweep in 00_gen_aging_on_actions.txt for every
 # living long-lived character. Elders already past onset start mid-fade instead of fresh —
 # gen_world_weary_seed_value gives 3 XP per year past 80, capped short of the killing threshold.

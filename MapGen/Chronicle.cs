@@ -107,6 +107,76 @@ public sealed class ChronicleMap
     public List<ChronicleEvent> All { get; } = [];
 
     /// <summary>
+    /// The world's own past, oldest first: what the world chronicle shows before the bookmark. The
+    /// most notable of what an applied history remembered (<see cref="AppliedHistory.Headlines"/>),
+    /// after a few of the most notable invented lines about the time before it — or, with no
+    /// history, more of those. Each event is also in <see cref="All"/>, or is the history's
+    /// headline form of something that is; this list is read by the world window and nothing else.
+    /// </summary>
+    public List<ChronicleEvent> WorldPast { get; private set; } = [];
+
+    /// <summary>How many invented lines the world's past opens with, with a history after them and without.</summary>
+    private const int InventedBeforeHistory = 6, InventedAlone = 16;
+
+    /// <summary>
+    /// How much an invented line belongs in the world's past. Only what a reader of the whole
+    /// world would care about scores well: wonders, holy ground, feuds, the wars live at the
+    /// bookmark. A settlement or a seat is every county's line and scores least, so it is picked
+    /// only when there is little else.
+    /// </summary>
+    private static double Notability(ChronicleEvent e) => e.Kind switch
+    {
+        ChronicleKind.Wonder => 5,
+        ChronicleKind.War => 4,
+        ChronicleKind.Feud => e.Tension >= 3 ? 4 : 1.5,
+        ChronicleKind.Sanctity => 3,
+        ChronicleKind.Frontier or ChronicleKind.Relic => 2,
+        ChronicleKind.Faith => e.Tension > 0 ? 2 : 0.5,
+        ChronicleKind.Seat => 1,
+        ChronicleKind.Settlement => 0.5,
+        _ => 0,
+    };
+
+    /// <summary>
+    /// The <paramref name="max"/> most notable of <paramref name="pool"/>, oldest first, kept from
+    /// being one kind of thing over and over: each pick makes the next of the same kind worth 0.6
+    /// of what it was, and the next about the same place half. A world whose history is mostly
+    /// wars still shows its wars first — just not only its wars. Ties go to the older, then to
+    /// <paramref name="key"/> in ordinal order, so the pick never depends on the pool's order.
+    /// </summary>
+    internal static List<T> PickHeadlines<T>(IEnumerable<T> pool, Func<T, double> score, Func<T, string> kind,
+        Func<T, string> subject, Func<T, int> year, Func<T, string> key, int max)
+    {
+        var left = pool.Select(x => (Item: x, Score: score(x))).Where(x => x.Score > 0)
+            .OrderBy(x => year(x.Item)).ThenBy(x => key(x.Item), StringComparer.Ordinal).ToList();
+        var kinds = new Dictionary<string, int>();
+        var places = new HashSet<string>();
+        var picked = new List<T>();
+
+        while (picked.Count < max && left.Count > 0)
+        {
+            int best = -1;
+            double bestScore = 0;
+            for (int i = 0; i < left.Count; i++)
+            {
+                var (item, s) = left[i];
+                double v = s * Math.Pow(0.6, kinds.GetValueOrDefault(kind(item)))
+                             * (places.Contains(subject(item)) ? 0.5 : 1);
+                if (v > bestScore) (best, bestScore) = (i, v);
+            }
+            if (best < 0) break;
+
+            var chosen = left[best].Item;
+            left.RemoveAt(best);
+            picked.Add(chosen);
+            kinds[kind(chosen)] = kinds.GetValueOrDefault(kind(chosen)) + 1;
+            places.Add(subject(chosen));
+        }
+
+        return [.. picked.OrderBy(year).ThenBy(key, StringComparer.Ordinal)];
+    }
+
+    /// <summary>
     /// Everything remembered about a title, oldest first: its own events, plus those of everything
     /// beneath it that was worth carrying up.
     ///
@@ -184,7 +254,8 @@ public sealed class ChronicleMap
         MapConfig cfg,
         Rng rng,
         int? pastEnd = null,
-        IEnumerable<ChronicleEvent>? remembered = null)
+        IEnumerable<ChronicleEvent>? remembered = null,
+        IEnumerable<ChronicleEvent>? headlines = null)
     {
         var map = new ChronicleMap();
 
@@ -271,6 +342,26 @@ public sealed class ChronicleMap
 
             Realm(map, title, cultures, faiths, wilderness, cfg, rng);
         }
+
+        // The world's past: the history's headlines, opened by the most notable of what is invented
+        // about the time before them. Under a history, the invented feuds and wars are left out —
+        // they are the history's own feuds and wars, carried to the start date, and its headlines
+        // already tell them, and so do lines dated inside the history. Picked before the remembered
+        // events join All, so only invented ones compete.
+        // A war or a feud is remembered by both sides, one line each; the world tells it once, from
+        // whichever side comes first.
+        var told = headlines?.ToList() ?? [];
+        var pairs = new HashSet<(ChronicleKind, string, string, int)>();
+        var invented = (told.Count > 0
+                ? map.All.Where(e => e.Kind is not (ChronicleKind.Feud or ChronicleKind.War) && e.Year < (pastEnd ?? int.MaxValue))
+                : map.All)
+            .Where(e => e.Kind is not (ChronicleKind.War or ChronicleKind.Feud) || e.Counterpart is not { } other
+                        || pairs.Add(string.CompareOrdinal(e.Subject.Key, other.Key) < 0
+                            ? (e.Kind, e.Subject.Key, other.Key, e.Year) : (e.Kind, other.Key, e.Subject.Key, e.Year)))
+            .ToList();
+        map.WorldPast = [.. PickHeadlines(invented, Notability, e => e.Kind.ToString(), e => e.Subject.Key, e => e.Year,
+                e => $"{e.Subject.Key}|{e.Text}", told.Count > 0 ? InventedBeforeHistory : InventedAlone)
+            .Concat(told).OrderBy(e => e.Year)];
 
         // What an applied history remembers, beside what is invented about the time before it.
         int fromHistory = 0;

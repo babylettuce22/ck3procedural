@@ -53,6 +53,31 @@ wilderness_government = {
 	court_generate_commanders = no
 	royal_court = none
 
+	# ---- Only the dummies may land on this government ----
+	#
+	# can_get_government is the engine's gate at the moment a character becomes landed, and a
+	# government with no gate is a candidate for everybody. This one had none, and it is registered
+	# second to last (Emit/CompatibilityWriter.cs appends it and colony_government to vanilla's
+	# NGovernment.GOVERNMENT_TYPES), so it was what the engine reached for when nothing better
+	# applied. A 1469 save of seed 994228 had real rulers on it by two routes:
+	#
+	#   * a courtier granted a county whose capital is wilderness_holding. This is the only
+	#     government whose primary_holding matches, so he became a ruler of the Wilds. The dummy had
+	#     gone feudal and was giving its counties away every nine days, which put 10,610 of them
+	#     here one after another, each until wilderness_colonization.0099 took the county back;
+	#   * the head of a lay-clergy faith. theocracy_government's own can_get_government refuses
+	#     doctrine_theocracy_lay_clergy, and he holds only the titular head-of-faith title, so no
+	#     holding decided for him either.
+	#
+	# A real ruler on this government reads as wilderness to every trigger that asks the flag
+	# (is_wilderness_county_trigger), so his county can be claimed for colonisation. The trait is the
+	# dummies' identity everywhere else in this file set, and Emit/HistoryWriter.cs gives it to both
+	# at birth, long before either is seated, so both pass at history load.
+	# wilderness_on_game_start re-checks the government anyway.
+	can_get_government = {
+		has_trait = wilderness
+	}
+
 	primary_holding = wilderness_holding
 	valid_holdings = { wilderness_holding }
 

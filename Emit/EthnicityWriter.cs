@@ -31,6 +31,19 @@ public static class EthnicityWriter
             }
         }
 
+        void MorphGenes(Dictionary<string, List<GeneMorphEntry>> genes)
+        {
+            foreach (var (geneKey, entries) in genes)
+            {
+                using (b.Block(geneKey))
+                    foreach (var entry in entries)
+                        b.Inline($"{entry.Weight}",
+                            $"name = {entry.SubGeneName} range = {{ {G(entry.Min)} {G(entry.Max)} }}");
+
+                b.Blank();
+            }
+        }
+
         foreach (var eth in ethnicityMap.Ethnicities.Values)
         {
             // -----------------------------------------------------------------
@@ -49,30 +62,25 @@ public static class EthnicityWriter
                 ColorGenes(eth.ColorGenes);
 
                 // Morph overrides (Facial sculpting, height, body composition)
-                foreach (var (geneKey, entries) in eth.MorphGenes)
-                {
-                    using (b.Block(geneKey))
-                        foreach (var entry in entries)
-                            b.Inline($"{entry.Weight}",
-                                $"name = {entry.SubGeneName} range = {{ {G(entry.Min)} {G(entry.Max)} }}");
-
-                    b.Blank();
-                }
+                MorphGenes(eth.MorphGenes);
             }
 
             b.Blank();
 
             // -----------------------------------------------------------------
-            // 2. Child Palette Variants (Hair/Eye Color leans inheriting base)
+            // 2. Child Variants. A fantasy variant is a hair lean over its base; a human one is a
+            //    culture's dress over one vanilla ethnicity (see MapGen/HumanLooks.cs) and names
+            //    that key as its template instead.
             // -----------------------------------------------------------------
             foreach (var variant in eth.Variants)
             {
                 using (b.Block(variant.Key))
                 {
-                    b.Quoted("template", eth.Key);
+                    b.Quoted("template", variant.Template ?? eth.Key);
                     b.Blank();
 
                     ColorGenes(variant.ColorGenes);
+                    MorphGenes(variant.MorphGenes);
                 }
 
                 b.Blank();

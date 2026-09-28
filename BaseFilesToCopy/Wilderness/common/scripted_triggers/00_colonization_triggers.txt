@@ -71,6 +71,49 @@ county_obstacles_cleared_trigger = {
 	}
 }
 
+# Title scope. Is this county wild GROUND, whoever is holding it?
+#
+# Not the same question as is_wilderness_county_trigger, and the difference is the point.
+# That one asks the holder's government, which is right for every ordinary use and is exactly what
+# a government leak falsifies: in the 1469 save of seed 994228 the wilderness dummy was feudal, so
+# its own wild counties answered no, while a courtier it had just granted one to sat on
+# wilderness_government and his answered yes. This asks the ground, so the repair sweep can find
+# wild land in the wrong hands without trusting the thing that went wrong.
+#
+# The capital's holding is the test 0099 already uses for a leaked county. Landless-guarded for the
+# reason is_colony_county_trigger gives: a county-tier noble-family title's title_province is the
+# family head's capital.
+county_is_wild_ground_trigger = {
+	is_landless_type_title = no
+	is_noble_family_title = no
+	title_province ?= { has_holding_type = wilderness_holding }
+}
+
+
+# --- Who rules the wilderness ------------------------------------------------------------------
+
+# Character scope. Is this character on the wrong side of wilderness_government — a dummy that
+# has left it, or anybody else who has landed on it?
+#
+# Both halves were seen in one save, and they are the same bug from two ends: the government and
+# the `wilderness` trait are supposed to describe the same two characters, and the flag is what
+# the colonisation triggers read, so a mismatch in either direction breaks them silently. See
+# wilderness_government_repair_effect for how each half happened.
+#
+# Two lookups per character, so it is cheap enough to open a yearly pulse over every ruler.
+wilderness_government_out_of_place_trigger = {
+	OR = {
+		AND = {
+			has_trait = wilderness
+			NOT = { government_has_flag = government_is_wilderness }
+		}
+		AND = {
+			government_has_flag = government_is_wilderness
+			NOT = { has_trait = wilderness }
+		}
+	}
+}
+
 
 # --- Colonists ---------------------------------------------------------------------------------
 
@@ -106,10 +149,14 @@ is_colonist_trigger = {
 # no move-seat decision spends a paragraph on exactly this state being unreachable. It was reachable
 # from the other end.
 #
-# `highest_held_title_tier` rather than an `any_held_title` sweep for the tier: it is vanilla's own
-# idiom for this question (00_accolade_names.txt uses the identical comparison), it is one lookup
-# instead of a pass over the domain, and it reads the right way round — a colonist's ceiling is a
-# county, and his capital barony sits below it and never trips the test.
+# ---- Why the tier is read from held titles, not highest_held_title_tier ----
+#
+# It was `NOT = { highest_held_title_tier > tier_county }`, and that counts titles which are not
+# land. A noble-family title is DUCHY tier under administrative_government (county tier under the
+# celestial and Japanese ones), so an admin governor whose only county was a colony read as a duke
+# and was never made a colonist — he kept a bureaucrat's government on a settlement_holding it does
+# not list, collecting "The Lord Is Here" for living in his own capital. The same pair of landless
+# guards the two county triggers above carry keeps the rule about land.
 colony_government_valid_trigger = {
 	any_held_title = {
 		tier = tier_county
@@ -121,7 +168,13 @@ colony_government_valid_trigger = {
 			is_settled_county_trigger = yes
 		}
 	}
-	NOT = { highest_held_title_tier > tier_county }
+	NOT = {
+		any_held_title = {
+			tier > tier_county
+			is_landless_type_title = no
+			is_noble_family_title = no
+		}
+	}
 }
 
 # Character scope. Is this character standing in a colony they themselves hold?

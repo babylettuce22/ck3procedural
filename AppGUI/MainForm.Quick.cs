@@ -261,7 +261,7 @@ public sealed partial class MainForm
                    ?? throw new InvalidOperationException($"No map type called '{choices.MapType}' is installed.");
 
         var (width, height) = choices.Pixels;
-        var switchedOff = _forge.AdoptPreset(type.PresetPath, choices.Seed, width, height);
+        var switchedOff = _forge.AdoptPreset(type.PresetPathFor(choices.Mountains), choices.Seed, width, height);
 
         // The relief choice bends the preset's own relief stages; the Terrain workspace shows the
         // result as ordinary parameter values, so it can be tuned further from there.

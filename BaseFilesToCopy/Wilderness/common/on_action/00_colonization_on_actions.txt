@@ -24,6 +24,16 @@ on_game_start_after_lobby = {
 # them into history — so this is one pass over one character's titles, not a world scan.
 wilderness_on_game_start = {
 	effect = {
+		# The government first, because the setup below and every colonisation trigger after it
+		# find wild ground by the government flag. History seats both dummies on
+		# wilderness_government, and its can_get_government is their trait, so this should
+		# never fire. It is here because if it ever does, finding out at the first yearly sweep would
+		# mean a year of a feudal dummy granting counties away. See wilderness_government_repair_effect.
+		every_ruler = {
+			limit = { wilderness_government_out_of_place_trigger = yes }
+			wilderness_government_repair_effect = yes
+		}
+
 		every_ruler = {
 			limit = { has_trait = wilderness }
 			wilderness_setup_on_start_effect = yes
@@ -157,6 +167,12 @@ wilderness_yearly_cleanup = {
 		# Independence rather than a transfer to anyone: the county is real land with a real holder
 		# who won it back through the engine's own rules, and there is no liege it should go to.
 		# `independency` is the change type vanilla uses for exactly this in title_on_actions.txt.
+		#
+		# The exception is a vassal holding ground that is still WILD, which is what a feudal dummy's
+		# grants produced (see wilderness_government_repair_effect). That county goes back to the
+		# dummy instead, through wilderness_yearly_government_repair. It does not matter which of
+		# the two runs first: a vassal released here is then a real ruler holding wild ground, and
+		# that sweep takes it back from him too.
 		every_ruler = {
 			limit = {
 				has_trait = wilderness
@@ -215,9 +231,12 @@ yearly_playable_pulse = {
 		wilderness_yearly_colonist_development_aid_check
 		wilderness_yearly_control_check
 		wilderness_yearly_colonist_validity
+		wilderness_yearly_colonist_entry
+		wilderness_yearly_colony_development_ceiling
 		wilderness_yearly_stranded_colony_check
 		wilderness_yearly_tribal_labour_sweep
 		wilderness_yearly_unsettled_identity_sweep
+		wilderness_yearly_government_repair
 	}
 }
 
@@ -343,6 +362,142 @@ wilderness_yearly_colonist_validity = {
 
 	effect = {
 		colony_government_exit_effect = yes
+	}
+}
+
+# The same backstop facing the other way: a ruler who IS in the colonist's state and is not on the
+# colonist's government.
+#
+# wilderness_on_title_gain now makes a colonist on every transfer type, but a government can also
+# change with no title moving at all — vanilla's change_to_administrative_effect runs from faction,
+# prison and ministry code with no holding test, and claim_mandate's is one realm-wide sweep. And
+# saves already carry the state: this is what repairs the 23 celestial colony governors of the 1469
+# save, whose colonies were appointed long before the title-gain hook listened for appointments.
+#
+# Nomads and herders are left to wilderness_yearly_stranded_colony_check, which turns their colony
+# into pasture instead — neither can build, so neither can finish one. The wilderness dummies never
+# pass the trigger (they hold a kingdom), and are named anyway so that stays true if that changes.
+#
+# Cost: the trigger opens on the colony test, which is the same held-title pass
+# wilderness_yearly_presence_refresh already makes of every ruler once a year.
+wilderness_yearly_colonist_entry = {
+	trigger = {
+		is_colonist_trigger = no
+		colony_government_valid_trigger = yes
+		NOR = {
+			government_has_flag = government_is_wilderness
+			government_has_flag = government_is_nomadic
+			government_has_flag = government_is_herder
+		}
+	}
+
+	effect = {
+		colonization_make_colonist_effect = yes
+
+		# A governor living in his own capital was carrying "The Lord Is Here"; a colonist never does.
+		# Refreshed here rather than left to wilderness_yearly_presence_refresh, which may already
+		# have run this year.
+		colony_refresh_presence_effect = yes
+	}
+}
+
+# The backstop for wilderness_government being worn by the wrong character, in either direction.
+#
+# Same shape and same reason as the two colonist sweeps above: the state is reachable through the
+# engine with nothing in this file set being asked, and a save already carrying it needs repairing
+# once a year. The 1469 save of seed 994228 carries all three kinds. The wilderness dummy has been
+# feudal since 1210, one of its courtiers holds c_gen_kleworth on wilderness_government for his
+# seven days, and the head of faith of gen_faith_9 has been on it since his accession. See
+# wilderness_government_repair_effect for how each got there.
+#
+# Two halves:
+#
+#   * GROUND. A real ruler holding wild ground gives it back, and so does anybody under a dummy.
+#     This is the yearly form of wilderness_colonization.0099. 0099 fires only on a title changing
+#     hands, and only from the tick it shipped in, so a leak it never saw, or one from a save that
+#     predates it, sat there for good. It also covers a flipped dummy's grantees, who became its
+#     vassals: wilderness_yearly_cleanup would release them, and releasing is wrong for a county
+#     that is still wild. Neither half touches a dummy's own titles; see
+#     wilderness_government_reclaim_effect.
+#   * GOVERNMENT, after the land, so a real ruler with nothing left but wild ground ends it
+#     landless rather than being converted first and dispossessed second.
+#
+# Cost: the trigger opens on two lookups per ruler. The held-title arm is the pass
+# wilderness_yearly_presence_refresh already makes of every ruler once a year, and it is reached
+# only by rulers who are not dummies.
+wilderness_yearly_government_repair = {
+	trigger = {
+		OR = {
+			wilderness_government_out_of_place_trigger = yes
+			AND = {
+				NOT = { has_trait = wilderness }
+				any_held_title = {
+					tier = tier_county
+					county_is_wild_ground_trigger = yes
+				}
+			}
+		}
+	}
+
+	effect = {
+		if = {
+			limit = { has_trait = wilderness }
+
+			# Back on the government before the land comes home. The ground being handed to it
+			# is the same ground the engine was reading when it flipped the dummy.
+			wilderness_government_repair_effect = yes
+
+			every_vassal_or_below = {
+				limit = {
+					any_held_title = {
+						tier = tier_county
+						county_is_wild_ground_trigger = yes
+					}
+				}
+				wilderness_government_reclaim_effect = yes
+			}
+		}
+		else = {
+			wilderness_government_reclaim_effect = yes
+
+			if = {
+				limit = {
+					is_landed = yes
+					government_has_flag = government_is_wilderness
+				}
+				wilderness_government_repair_effect = yes
+			}
+		}
+	}
+}
+
+# The ceiling on colony development. See colony_development_ceiling for why it is a clamp and not a
+# growth modifier.
+#
+# Held titles, not the holder's capital: a lord can hold several colonies in his domain, and every
+# one of them is capped. change_development_level with `value = N subtract = development_level` is
+# vanilla's own "set to N" (01_dlc_fp1_scripted_effects.txt, the Rus capital).
+wilderness_yearly_colony_development_ceiling = {
+	trigger = {
+		any_held_title = {
+			tier = tier_county
+			is_colony_county_trigger = yes
+			development_level > colony_development_ceiling
+		}
+	}
+
+	effect = {
+		every_held_title = {
+			limit = {
+				tier = tier_county
+				is_colony_county_trigger = yes
+				development_level > colony_development_ceiling
+			}
+			change_development_level = {
+				value = colony_development_ceiling
+				subtract = development_level
+			}
+		}
 	}
 }
 
@@ -658,12 +813,25 @@ wilderness_on_title_gain = {
 		# counties, and the AI already uses it to shed surplus holdings — so hooking here means the
 		# player's grant, the AI's own housekeeping, an inheritance and a war all arrive at the same
 		# place, and none of them needed to know this system exists.
+		#
+		# ---- Every transfer type, not just grant and inheritance ----
+		#
+		# The gate was `granted OR inheritance`, and a bureaucracy moves counties by neither. A
+		# celestial realm appoints its counties (min_appointment_tier = county), so a colony changes
+		# hands by `appointment` and `appointment_succession`, and the appointee — usually a landless
+		# noble-family head who already HAS a government, so the engine never re-picks one — kept the
+		# liege's celestial government on a settlement_holding. In the 1469 save that found this,
+		# every one of the 23 colonies was held that way, and had been since the 1200s: never a
+		# colonist, so never the colonist's build priorities, and "The Lord Is Here" for life because
+		# a governor lives in his own capital. `stepped_down`, `faction_demand`, `conquest_claim` and
+		# `returned` reach the same state by other doors.
+		#
+		# Nothing below needed the gate. colonization_make_colonist_effect asks
+		# colony_government_valid_trigger for itself, so a conqueror with settled land of his own is
+		# left as he is; the grant reaction keeps its own `granted` test; and clearing the old
+		# overseer's modifier is right whoever took the county.
 		if = {
 			limit = {
-				OR = {
-					scope:transfer_type = flag:granted
-					scope:transfer_type = flag:inheritance
-				}
 				scope:title ?= { tier = tier_county }
 				scope:title ?= { is_colony_county_trigger = yes }
 				NOT = { has_trait = wilderness }
@@ -700,6 +868,40 @@ wilderness_on_title_gain = {
 			# And the new holder may well be standing in it — a colonist always is.
 			colony_refresh_presence_effect = yes
 		}
+	}
+}
+
+
+# --- The wilderness government belongs to the dummies ----------------------------------------------
+#
+# The same-tick guard for wilderness_government_out_of_place_trigger. on_government_change runs in
+# the scope of the character whose government changed, which is exactly the moment a dummy leaves
+# wilderness_government or somebody else arrives on it.
+#
+# Government only. This can fire in the middle of a title transfer: colonize_county_effect moves the
+# county before it converts the holding, so any land pass here would unfound every colony as it is
+# founded. Land waits for wilderness_yearly_government_repair, as it waits seven days for 0099.
+#
+# Not re-entrant in practice: the repair's change_government fires this hook again, and by then the
+# trigger is false.
+#
+# Whether the ENGINE's own government re-pick, the one that flipped the dummy in 1210, comes through
+# here is not confirmed. Vanilla's own uses of the hook (nomad titles, confederations) do not settle
+# it. If it does not, the yearly sweep repairs the same state within the year, and
+# abandon_county_effect no longer creates it.
+on_government_change = {
+	on_actions = {
+		wilderness_on_government_change
+	}
+}
+
+wilderness_on_government_change = {
+	trigger = {
+		wilderness_government_out_of_place_trigger = yes
+	}
+
+	effect = {
+		wilderness_government_repair_effect = yes
 	}
 }
 

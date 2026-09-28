@@ -76,6 +76,10 @@ public static partial class ContentWriter
         // The render-time enforcement of those ethnicities' races — same table, other end.
         Core.Stage.Time("race morph modifiers", () => RaceMorphWriter.WriteAll(modDir, cfg, ethnicities));
 
+        // The head shapes those modifiers force — the elves' pointed ears — built from the
+        // installed game's head so they always match it.
+        Core.Stage.Time("race head shapes", () => RaceHeadWriter.WriteAll(modDir, gameDir, cfg));
+
         Core.Stage.Time("government overrides",
             () => GovernmentWriter.WriteNomadNaming(modDir, gameDir, counties.Any(governments.IsNomad)));
 

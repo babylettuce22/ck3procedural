@@ -25,7 +25,7 @@ public sealed record AutoCutDiagnostics(
 /// 3192 px at every map size, so on a 4096 map it spans twice the terrain it does at 8192. Cutting
 /// first puts the wall's edge on the terrain instead.
 ///
-/// Six steps, all per pixel on the province raster:
+/// Seven steps, all per pixel on the province raster:
 /// <list type="number">
 /// <item>Mountain ground: land above the gate line (the mountain line capped at
 /// <see cref="MapConfig.ImpassableGateHeight"/>), plus steep ground within a short reach of it.</item>
@@ -41,8 +41,12 @@ public sealed record AutoCutDiagnostics(
 /// The core height cut is searched so the walls, flanks included, cover
 /// <see cref="MapConfig.ImpassableShareOfLand"/> of land area — or less, where the scored pass's
 /// floor says the map's mountains run out sooner.</item>
-/// <item>Clean: close small gaps, open hairlines, fill enclosed holes smaller than a barony, and
-/// drop pieces smaller than half a barony.</item>
+/// <item>Clean: close small gaps, open hairlines, fill enclosed holes smaller than a barony and
+/// ledges cut off against the water smaller than half a barony, and drop pieces smaller than half
+/// a barony.</item>
+/// <item>Crests: each wall may run on along its own ridge
+/// (<see cref="MapConfig.ImpassableCrestFollow"/>), then walls still smaller than
+/// <see cref="MapConfig.ImpassableMinWallBaronies"/> are dropped and the rest cleaned again.</item>
 /// <item>Passes: at most one corridor per wall, through a thin neck the land route goes a long way
 /// round; see <see cref="MountainPasses"/>.</item>
 /// </list>
@@ -193,17 +197,18 @@ public static class ImpassableAutoCut
         // past the share, and leaves a map whose mountains stay under the ceiling untouched.
         float cutHeight;
         bool capped = false;
+        bool[]? footAnywhere = null;
         if (foot > 0)
         {
             // Walls run from their height-ranked cores down to their own foot; the cores shrink to
             // leave the quota's room for the flanks. See FootGround.
             var footGround = FootGround(smooth, landNear, gateNear, land, gateMin, width, height,
-                (int)Math.Round(3.0 * radius), (float)foot);
+                (int)Math.Round(3.0 * radius), (float)foot, out footAnywhere);
             if (flat is not null)
                 Parallel.For(0, height, y =>
                 {
                     for (int i = y * width, end = i + width; i < end; i++)
-                        if (flat[i]) footGround[i] = false;
+                        if (flat[i]) footGround[i] = footAnywhere[i] = false;
                 });
             cutHeight = FootCut(raw, candidate, smooth, footGround, candidates,
                 target * landTotal + plateauPixels, width, height);
@@ -261,9 +266,46 @@ public static class ImpassableAutoCut
             return count;
         });
 
+        // 5. Crests, on the cleaned walls: before the clean, a wall is still hundreds of fragments
+        // that the closing is about to fuse, so a size rule there drops pieces of real walls, and
+        // each fragment's crest spreads on its own (on the inland-sea world that walled 12–14% of
+        // land instead of 8%). The extension leaves ragged edges, so it is cleaned the same way.
+        double minWall = Math.Max(0.5, cfg.ImpassableMinWallBaronies);
+        string crests = "";
+        if (masked > 0 && (cfg.ImpassableCrestFollow > 0 || minWall > 0.5))
+        {
+            var (followed, added, dropped) = FollowCrests(mask, smooth, footAnywhere, land, width, height,
+                radius, barony, cfg.Limits.SeaLevelUpper, cfg.ImpassableCrestFollow,
+                cfg.ImpassableCrestReachBaronies, minWall);
+            mask = Erode(Dilate(followed, width, height, close), width, height, close);
+            Parallel.For(0, height, y =>
+            {
+                for (int i = y * width, end = i + width; i < end; i++) mask[i] &= land[i] == 1;
+            });
+            mask = Dilate(Erode(mask, width, height, open), width, height, open);
+            FillHoles(mask, land, width, height, (int)Math.Ceiling(barony));
+
+            (parts, partSizes) = Label(mask, width, height);
+            pieces = 0;
+            foreach (int size in partSizes) if (size >= barony / 2) pieces++;
+            masked = SumRows(height, y =>
+            {
+                long count = 0;
+                for (int i = y * width, end = i + width; i < end; i++)
+                {
+                    int p = parts[i];
+                    if (p == 0) continue;
+                    if (partSizes[p - 1] < barony / 2) mask[i] = false;
+                    else count++;
+                }
+                return count;
+            });
+            crests = $"; crests +{(double)added / landTotal:P1} of land, {dropped} wall(s) under {minWall:0.#} baronies dropped";
+        }
+
         if (masked == 0) return null;
 
-        // 5. Passes, on the finished walls: any earlier and the closing would seal them again.
+        // 6. Passes, on the finished walls: any earlier and the closing would seal them again.
         var passes = MountainPasses.Carve(mask, land, elevation, parts, partSizes, width, height, radius, barony,
             cfg, out long opened);
         masked -= opened;
@@ -281,7 +323,7 @@ public static class ImpassableAutoCut
             : $"share {share:P0}";
         Console.WriteLine($"  impassable auto-cut: {diagnostics.MaskShare:P1} of land in {pieces} wall piece(s) " +
                           $"({quota} + plateaus {diagnostics.PlateauShare:P1}; mountain ground above " +
-                          $"{gateLine:F0}, mountain line {mountainLine:F0}, steep line {steepLine:F2}/px; {cut})");
+                          $"{gateLine:F0}, mountain line {mountainLine:F0}, steep line {steepLine:F2}/px; {cut}{crests})");
         if (cfg.MountainPasses) MountainPasses.Report(passes);
         return (mask, diagnostics);
     }
@@ -390,8 +432,12 @@ public static class ImpassableAutoCut
     /// The cores are not replaced, only extended: ranking by relative height alone leaves a broad
     /// plateau passable (it is low against its own floor) inside a ring of walled flanks.
     /// </summary>
+    /// <param name="anywhere">
+    /// The same relief test without the window gate: where a wall's flank may run once something
+    /// other than a core has put the wall there. See <see cref="FollowCrests"/>.
+    /// </param>
     private static bool[] FootGround(float[] smooth, int[] landNear, int[] gateNear, byte[] land, double gateMin,
-        int width, int height, int reach, float foot)
+        int width, int height, int reach, float foot, out bool[] anywhere)
     {
         // Floor and peak are fields three baronies across, blurred by half that, so they are found
         // on a grid a few pixels to the cell and read back bilinearly: the blur alone was over five
@@ -408,16 +454,147 @@ public static class ImpassableAutoCut
             cw, ch, q, width, height);
 
         var ground = new bool[smooth.Length];
+        var any = new bool[smooth.Length];
         Parallel.For(0, height, y =>
         {
             for (int i = y * width, end = i + width; i < end; i++)
             {
-                if (land[i] == 0 || landNear[i] == 0 || gateNear[i] < gateMin * landNear[i]) continue;
+                if (land[i] == 0) continue;
                 float relief = Math.Clamp((smooth[i] - floor[i]) / Math.Max(peak[i] - floor[i], 1f), 0f, 1f);
-                ground[i] = relief >= foot;
+                any[i] = relief >= foot;
+                if (landNear[i] == 0 || gateNear[i] < gateMin * landNear[i]) continue;
+                ground[i] = any[i];
             }
         });
+        anywhere = any;
         return ground;
+    }
+
+    /// <summary>
+    /// Runs each wall on along its own ridge, then drops the walls that are still too small to
+    /// block anything. Returns the new mask, the pixels the ridges added, and the walls dropped.
+    ///
+    /// The foot grows a wall only where enough mountain ground lies within a barony's square
+    /// window, so around a lone peak just over the gate line, on a ridge whose crest sits just
+    /// under it, a wall is the window's footprint: one square province on the summit, with the
+    /// rest of the range passable. Such a wall either belongs to its range or is nothing. From
+    /// every wall at once, breadth first so the nearer wall takes contested ground, it extends over
+    /// connected land whose smoothed height stays above sea + <paramref name="fraction"/> × (the
+    /// wall's peak − sea), at most <paramref name="reachBaronies"/> barony widths out. The new
+    /// crest then takes flanks down to the wall's foot (<paramref name="footAnywhere"/>, the relief
+    /// test without the window gate) within a barony's radius. Walls under
+    /// <paramref name="minBaronies"/> afterwards are dropped.
+    ///
+    /// Line relative to each wall's own peak, not a map-wide line: a lower line everywhere fuses
+    /// ranges into systems (at 200 on the inland-sea world, the largest connected mountain ground
+    /// grew from 66 baronies to 149), and a lone spike on a low ridge would decide whether the
+    /// whole ridge is walled. The reach bounds it for the same reason.
+    /// </summary>
+    private static (bool[] Mask, long Added, int Dropped) FollowCrests(bool[] mask, float[] smooth,
+        bool[]? footAnywhere, byte[] land, int width, int height, int radius, double barony, float sea,
+        double fraction, double reachBaronies, double minBaronies)
+    {
+        int n = width * height;
+        var owner = new int[n];
+        var queue = new List<int>();
+
+        // Walls, eight-connected, each with its peak.
+        var peaks = new List<float> { 0f };
+        var stack = new Stack<int>();
+        for (int start = 0; start < n; start++)
+        {
+            if (!mask[start] || owner[start] != 0) continue;
+            int id = peaks.Count;
+            float top = float.MinValue;
+            owner[start] = id;
+            stack.Push(start);
+            while (stack.Count > 0)
+            {
+                int p = stack.Pop();
+                queue.Add(p);
+                top = MathF.Max(top, smooth[p]);
+                int x = p % width, y = p / width;
+                for (int dy = -1; dy <= 1; dy++)
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    int nx = x + dx, ny = y + dy;
+                    if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+                    int q = ny * width + nx;
+                    if (mask[q] && owner[q] == 0) { owner[q] = id; stack.Push(q); }
+                }
+            }
+            peaks.Add(top);
+        }
+
+        long added = 0;
+        if (fraction > 0)
+        {
+            var steps = new int[n];
+            int reach = (int)Math.Round(reachBaronies * 2 * radius);
+
+            // The crest, from every wall at once.
+            var crest = new List<int>();
+            for (int head = 0; head < queue.Count; head++)
+            {
+                int p = queue[head];
+                if (steps[p] >= reach) continue;
+                int id = owner[p];
+                float line = sea + (float)fraction * (peaks[id] - sea);
+                int x = p % width, y = p / width;
+                for (int dy = -1; dy <= 1; dy++)
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    int nx = x + dx, ny = y + dy;
+                    if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+                    int q = ny * width + nx;
+                    if (owner[q] != 0 || land[q] == 0 || smooth[q] < line) continue;
+                    owner[q] = id;
+                    steps[q] = steps[p] + 1;
+                    queue.Add(q);
+                    crest.Add(q);
+                }
+            }
+            added += crest.Count;
+
+            // Its flanks, down the foot ground, a barony's radius out.
+            if (footAnywhere is not null)
+            {
+                foreach (int p in crest) steps[p] = 0;
+                for (int head = 0; head < crest.Count; head++)
+                {
+                    int p = crest[head];
+                    if (steps[p] >= radius) continue;
+                    int id = owner[p];
+                    int x = p % width, y = p / width;
+                    for (int dy = -1; dy <= 1; dy++)
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        int nx = x + dx, ny = y + dy;
+                        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+                        int q = ny * width + nx;
+                        if (owner[q] != 0 || land[q] == 0 || !footAnywhere[q]) continue;
+                        owner[q] = id;
+                        steps[q] = steps[p] + 1;
+                        crest.Add(q);
+                        added++;
+                    }
+                }
+            }
+        }
+
+        var area = new long[peaks.Count];
+        for (int i = 0; i < n; i++) area[owner[i]]++;
+        long least = (long)(minBaronies * barony);
+        int dropped = 0;
+        for (int id = 1; id < peaks.Count; id++) if (area[id] < least) dropped++;
+
+        var result = new bool[n];
+        Parallel.For(0, height, y =>
+        {
+            for (int i = y * width, end = i + width; i < end; i++)
+                result[i] = owner[i] != 0 && area[owner[i]] >= least;
+        });
+        return (result, added, dropped);
     }
 
     /// <summary>
@@ -881,18 +1058,30 @@ public static class ImpassableAutoCut
     }
 
     /// <summary>
-    /// Turns into wall every four-connected pocket of passable land smaller than
-    /// <paramref name="limit"/> pixels that the mask encloses. A pocket touching the sea is open
-    /// ground, not a hole. Floods start only beside the mask and stop the moment they reach the
-    /// sea, ground already known to be open, or the limit, so the open country the mask borders is
-    /// walked no further than a barony from any wall.
+    /// Turns into wall every four-connected pocket of passable land the mask cuts off: one smaller
+    /// than <paramref name="limit"/> pixels that the mask encloses, or one smaller than half that
+    /// which the mask pins against the water. Floods start only beside the mask and stop the moment
+    /// they reach ground already known to be open or the limit, so the open country the mask borders
+    /// is walked no further than a barony from any wall.
+    ///
+    /// The pocket against the water is the ledge a wall leaves where its range falls into the sea.
+    /// The foot of a coastal range is often a low, flat apron a few pixels wide, which is not
+    /// mountain ground, so the wall stops short of the shore; each ledge it cuts off at both ends
+    /// is a region of its own, and the partition gives every region a barony. On an inland-sea
+    /// world that was 18 baronies of 42 to 361 px against a barony of 3192, most a few pixels
+    /// wide, each with a holding on a strip of beach under a cliff. The limit there is half the
+    /// enclosed one because a pocket by the water may be the last passable ground of a small
+    /// coast or island rather than a hole; half a barony is also where the cut drops a wall
+    /// piece as too small to stand.
     /// </summary>
     private static void FillHoles(bool[] mask, byte[] land, int width, int height, int limit)
     {
         const byte Open = 1, Seen = 2;
+        int wetLimit = (limit + 1) / 2;
         var state = new byte[mask.Length];
         var visited = new List<int>();
         var stack = new Stack<int>();
+        bool wet = false;
 
         bool Passable(int i) => land[i] != 0 && !mask[i];
 
@@ -916,19 +1105,21 @@ public static class ImpassableAutoCut
             state[seed] = Seen;
             stack.Push(seed);
             bool open = false;
+            wet = false;
             while (stack.Count > 0 && !open)
             {
                 int i = stack.Pop();
                 visited.Add(i);
-                if (visited.Count >= limit) { open = true; break; }
+                if (visited.Count >= (wet ? wetLimit : limit)) { open = true; break; }
                 int x = i % width;
                 open |= Step(x > 0, i - 1) | Step(x + 1 < width, i + 1)
                       | Step(i >= width, i - width) | Step(i + width < mask.Length, i + width);
             }
 
             // Whatever the flood reached is one pocket, so it is all open or all hole. Pixels still
-            // on the stack were reached too.
+            // on the stack were reached too, and may be what takes a wet pocket past its limit.
             while (stack.Count > 0) visited.Add(stack.Pop());
+            if (wet && visited.Count >= wetLimit) open = true;
             foreach (int i in visited)
             {
                 if (open) state[i] = Open;
@@ -939,7 +1130,7 @@ public static class ImpassableAutoCut
         bool Step(bool inside, int k)
         {
             if (!inside) return false;
-            if (land[k] == 0) return true;       // the sea
+            if (land[k] == 0) { wet = true; return false; }   // the sea, a lake or a river channel
             if (mask[k]) return false;
             if (state[k] == Open) return true;
             if (state[k] == Seen) return false;

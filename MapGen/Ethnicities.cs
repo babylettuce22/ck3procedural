@@ -120,8 +120,13 @@ internal static class RaceMorphs
             new("gene_height", "normal_height", 0.60f, 0.70f),
             new("gene_bs_body_type", "body_fat_head_fat_low", 0.46f, 0.56f),
             new("gene_bs_body_shape", "body_shape_hourglass_half", 0.14f, 0.30f, Tiered: false),
-            new("gene_bs_ear_angle", "ear_angle_pos", 0.62f, 0.80f),
-            new("gene_bs_ear_bend", "ear_both_bend_pos", 0.85f, 1.00f),
+            // The real pointed ear (Emit/RaceHeadWriter.cs). It replaced ear_angle and ear_bend,
+            // which were the stock-geometry approximation of one: stacked on the point, the bend
+            // curled the tip forward into a crease (rendered 2026-09-28). Bend is now forced to
+            // zero so no inherited human fold can do the same; size and outward stay, giving a
+            // bolder ear that sits a little off the skull.
+            new(PointedEars.Gene, PointedEars.HighTemplate, 0.80f, 1.00f),
+            new("gene_bs_ear_bend", "ear_both_bend_pos", 0.00f, 0.00f, Tiered: false),
             new("gene_bs_ear_outward", "ear_outward_pos", 0.20f, 0.40f),
             new("gene_bs_ear_size", "ear_size_pos", 0.30f, 0.50f),
             new("gene_jaw_width", "jaw_width_neg", 0.34f, 0.44f),
@@ -131,8 +136,10 @@ internal static class RaceMorphs
             new("gene_height", "normal_height", 0.46f, 0.56f),
             new("gene_bs_body_type", "body_fat_head_fat_low", 0.47f, 0.57f),
             new("gene_bs_body_shape", "body_shape_triangle_half", 0.35f, 0.55f, Tiered: false),
-            new("gene_bs_ear_angle", "ear_angle_pos", 0.58f, 0.76f),
-            new("gene_bs_ear_bend", "ear_both_bend_pos", 0.75f, 0.95f),
+            // All three elves share the pointed ear; see the high elf above for why angle and
+            // bend gave way to it.
+            new(PointedEars.Gene, PointedEars.HighTemplate, 0.80f, 1.00f),
+            new("gene_bs_ear_bend", "ear_both_bend_pos", 0.00f, 0.00f, Tiered: false),
             new("gene_bs_ear_outward", "ear_outward_pos", 0.20f, 0.40f),
             new("gene_bs_ear_size", "ear_size_pos", 0.25f, 0.45f),
             new("gene_jaw_width", "jaw_width_neg", 0.25f, 0.45f),
@@ -151,6 +158,9 @@ internal static class RaceMorphs
             new("gene_height", "normal_height", 0.58f, 0.72f),
             new("gene_bs_body_type", "body_fat_head_fat_medium", 0.52f, 0.64f),
             new("gene_bs_body_shape", "body_shape_triangle_full", 0.80f, 1.00f, Tiered: false),
+            // Lower tusks (Emit/RaceHeadWriter.cs), pinned to the lower lip so they line up on
+            // every face. Tiered: a low-fantasy orc shows half-grown ones.
+            new(OrcTusks.Gene, OrcTusks.LowerTemplate, 0.80f, 1.00f),
             new("gene_jaw_width", "jaw_width_pos", 0.88f, 1.00f),
             new("gene_bs_forehead_brow_forward", "forehead_brow_forward_pos", 0.80f, 1.00f),
         ],
@@ -177,8 +187,9 @@ internal static class RaceMorphs
             new("gene_height", "normal_height", 0.46f, 0.58f),
             new("gene_bs_body_type", "body_fat_head_fat_low", 0.45f, 0.55f),
             new("gene_bs_body_shape", "body_shape_hourglass_half", 0.08f, 0.26f, Tiered: false),
-            new("gene_bs_ear_angle", "ear_angle_pos", 0.60f, 0.78f),
-            new("gene_bs_ear_bend", "ear_both_bend_pos", 0.80f, 1.00f),
+            // Elves too: the shared pointed ear, as for the high elf.
+            new(PointedEars.Gene, PointedEars.HighTemplate, 0.80f, 1.00f),
+            new("gene_bs_ear_bend", "ear_both_bend_pos", 0.00f, 0.00f, Tiered: false),
             new("gene_bs_ear_outward", "ear_outward_pos", 0.25f, 0.45f),
             new("gene_jaw_width", "jaw_width_neg", 0.32f, 0.42f),
         ],
@@ -249,14 +260,26 @@ public sealed class EthnicityDef
 }
 
 /// <summary>
-/// One colouring of a base look: a hair palette, an eye palette, and nothing else. Emitted as
-/// `template = &lt;base key&gt;` plus those two blocks, exactly as vanilla's `caucasian_blond` is.
+/// One colouring of a base look. A fantasy variant is a hair palette and nothing else, emitted as
+/// `template = &lt;base key&gt;` plus that block, exactly as vanilla's `caucasian_blond` is.
+///
+/// A human variant is one culture's dress over one vanilla ethnicity (see <see cref="HumanLooks"/>):
+/// <see cref="Template"/> names that vanilla key, and it carries the culture's skin window, the
+/// template's own hair and eyes, and its gene leans.
 /// </summary>
 public sealed class EthnicityVariant
 {
     public required string Key { get; init; }
     public required string LocalizedName { get; init; }
+
+    /// <summary>The key this variant is templated on, or null for its base.</summary>
+    public string? Template { get; init; }
+
+    /// <summary>Its weight in its culture's list, for variants built per culture.</summary>
+    public int Weight { get; init; }
+
     public Dictionary<string, List<ColorPaletteRange>> ColorGenes { get; } = [];
+    public Dictionary<string, List<GeneMorphEntry>> MorphGenes { get; } = [];
 }
 
 public sealed class EthnicityMap
@@ -279,9 +302,38 @@ public sealed class EthnicityMap
     /// Races the mode's land ratio could not give a realm, seated instead as ~13% minorities in
     /// the listed human host culture. They count as delivered for GuaranteedRaceCount. History
     /// writes them phenotype_human (traits are stamped per culture); the Fantasy script set swaps
-    /// in their own race's trait at game start by reading their gen_race_skin gene.
+    /// in their own race's trait at game start by reading their ethnicity (RaceMorphWriter's
+    /// generated gen_is_&lt;race&gt;_ethnicity_trigger).
     /// </summary>
     public required List<(RaceArchetype Race, Culture Host)> MinorityPlacements { get; init; }
+
+    /// <summary>What the human looks were placed with, so the editor can dress a culture the same
+    /// way. Null on the quiet race pass.</summary>
+    public HumanLooks.Context? Looks { get; init; }
+
+    /// <summary>
+    /// The colour and gene blocks one member of this culture is drawn from — one weighted pick of
+    /// its own per-culture variants laid over its base, or the base alone when it has none (every
+    /// fantasy people). For the bookmark DNA writer, which must paint a character the way the game
+    /// would have rolled them.
+    /// </summary>
+    public (Dictionary<string, List<ColorPaletteRange>> Colors, Dictionary<string, List<GeneMorphEntry>> Genes)
+        GenesFor(Culture culture, Rng rng)
+    {
+        var def = For(culture);
+        var own = def.Variants.Where(v => v.Template is not null).ToDictionary(v => v.Key);
+        var picks = VariantsFor(culture).Where(p => own.ContainsKey(p.Key)).ToList();
+        if (picks.Count == 0) return (def.ColorGenes, def.MorphGenes);
+
+        int i = rng.WeightedIndex(picks, p => p.Weight);
+        var variant = own[picks[i < 0 ? 0 : i].Key];
+
+        var colors = new Dictionary<string, List<ColorPaletteRange>>(def.ColorGenes);
+        foreach (var (k, v) in variant.ColorGenes) colors[k] = v;
+        var genes = new Dictionary<string, List<GeneMorphEntry>>(def.MorphGenes);
+        foreach (var (k, v) in variant.MorphGenes) genes[k] = v;
+        return (colors, genes);
+    }
 
     /// <summary>The list a culture should emit, falling back to its base when it has no selection.</summary>
     public List<(string Key, int Weight)> VariantsFor(Culture culture) =>
@@ -320,7 +372,8 @@ public static class Ethnicities
         MapConfig cfg,
         Rng rng,
         WildernessMap? wilderness = null,
-        bool quiet = false)
+        bool quiet = false,
+        HumanLooks.Inputs? humanLooks = null)
     {
         // quiet: the preliminary pass the culture stage runs to learn each people's race before
         // naming (see Cultures.SpeakAsRace). The real pass follows with the same seed and inputs and
@@ -523,6 +576,88 @@ public static class Ethnicities
             byCultureVariants[culture] = PickCultureVariants(cultureEth, rng);
         }
 
+        // 4b. The humans' faces. Everything above settles who is human; this decides what they look
+        // like, placing each human heritage on a vanilla look that suits its climate with the four
+        // families kept in an even split, and dressing each culture over vanilla's own ethnicities.
+        // A pass of its own, on its own random streams, so the race rolls above and every fantasy
+        // people's draws are exactly what they were. See HumanLooks.
+        HumanLooks.Context? looksContext = null;
+        if (humanLooks is not null)
+        {
+            looksContext = new HumanLooks.Context
+            {
+                Data = humanLooks.Data,
+                ProvinceClimate = humanLooks.ProvinceClimate,
+                Seed = cfg.Seed
+            };
+
+            var humanCultures = cultures.Where(c => byCulture[c].Archetype == RaceArchetype.Human).ToList();
+            if (humanCultures.Count > 0)
+            {
+                var placed = HumanLooks.Place(heritages, humanCultures, ghosts, LandCount, cfg.DominantLook,
+                    LookTemplates(cfg.DominantLook), humanLooks, cfg.Seed, Say);
+
+                // The definitions the loop made for humans are replaced wholesale; any a heritage
+                // with no human culture still points at is put back below.
+                foreach (var old in ethnicities.Values.Where(e => e.Archetype == RaceArchetype.Human).ToList())
+                    ethnicities.Remove(old.Key);
+
+                // One base per heritage and template: a culture refitted onto a sibling template
+                // gets its own, so the base always names the look its cultures actually wear.
+                var bases = new Dictionary<(Heritage, string), EthnicityDef>();
+                var leans = new Dictionary<Heritage, List<HumanLooks.Lean>>();
+
+                foreach (var culture in humanCultures)
+                {
+                    var heritage = culture.Heritage;
+                    string template = placed.TryGetValue(culture, out var t) ? t : byCulture[culture].BaseTemplate;
+
+                    if (!bases.TryGetValue((heritage, template), out var baseDef))
+                    {
+                        baseDef = new EthnicityDef
+                        {
+                            Key = $"gen_ethnicity_{ethIndex++}",
+                            LocalizedName = heritage.Name,
+                            Archetype = RaceArchetype.Human,
+                            LookFamily = HumanLooks.FamilyOf(template),
+                            BaseTemplate = template
+                        };
+                        bases[(heritage, template)] = baseDef;
+                        ethnicities[baseDef.Key] = baseDef;
+                    }
+
+                    if (!leans.TryGetValue(heritage, out var heritageLeans))
+                        leans[heritage] = heritageLeans = HumanLooks.HeritageLeans(cfg.Seed, heritage);
+
+                    var variants = HumanLooks.Dress(culture, template,
+                        $"{baseDef.Key}_{culture.Key.Replace("gen_culture_", "c")}", humanLooks.Data,
+                        ClothingClimate.Of(culture.Counties, humanLooks.ProvinceClimate), heritageLeans, cfg.Seed);
+
+                    baseDef.Variants.AddRange(variants);
+                    byCulture[culture] = baseDef;
+                    byCultureKey[culture.Key] = baseDef;
+                    byCultureVariants[culture] = variants.Select(v => (v.Key, v.Weight)).ToList();
+                }
+
+                foreach (var heritage in heritages)
+                {
+                    if (!byHeritage.TryGetValue(heritage, out var heritageEth)
+                        || heritageEth.Archetype != RaceArchetype.Human) continue;
+
+                    var first = bases.Where(kv => kv.Key.Item1 == heritage).Select(kv => kv.Value).FirstOrDefault();
+                    if (first is not null)
+                    {
+                        byHeritage[heritage] = first;
+                        byHeritageKey[heritage.Key] = first;
+                    }
+                    else
+                    {
+                        ethnicities[heritageEth.Key] = heritageEth;
+                    }
+                }
+            }
+        }
+
         // 5. Seat the minorities. Each race the land budget could not give a realm gets a small
         // presence (~13% of generated characters, weight 15 against a 70/30 variant list) inside
         // the human culture whose terrain suits it best — the dwarves live among the humans of
@@ -645,7 +780,8 @@ public static class Ethnicities
             ByCultureKey = byCultureKey,
             ByHeritageKey = byHeritageKey,
             VariantsByCulture = byCultureVariants,
-            MinorityPlacements = minorityPlaced
+            MinorityPlacements = minorityPlaced,
+            Looks = looksContext
         };
     }
 
@@ -1307,7 +1443,13 @@ public static class Ethnicities
     /// dominant looks, with the rest as a minority presence, that makes a world feel like one
     /// place.
     /// </summary>
-    private static IReadOnlyList<(string Template, int Weight)> LookTemplates(HumanLook look) => look switch
+    /// <remarks>
+    /// Since HumanLooks these weights are a world's proportions rather than per-heritage odds: a
+    /// preset's heritages are dealt the templates in exactly these shares (to the nearest heritage)
+    /// and then placed by climate. The main loop still draws from them once per human so the race
+    /// stream is unchanged, but that draw is replaced.
+    /// </remarks>
+    internal static IReadOnlyList<(string Template, int Weight)> LookTemplates(HumanLook look) => look switch
     {
         HumanLook.WesternEuropean => [("caucasian", 65), ("circumpolar", 35)],
 
@@ -1316,7 +1458,9 @@ public static class Ethnicities
 
         HumanLook.SubSaharan => [("african", 60), ("east_african", 40)],
 
-        HumanLook.EastAsian => [("asian_han_chinese", 45), ("asian", 30), ("asian_mongol", 25)],
+        HumanLook.EastAsian =>
+            [("asian_han_chinese", 35), ("asian", 15), ("asian_mongol", 15), ("asian_manchu_korean", 15),
+             ("asian_japanese", 15), ("asian_tibetan", 5)],
 
         HumanLook.SoutheastAsian =>
             [("asian_malay", 40), ("asian_austronesian", 35), ("papuan", 25)],
@@ -1328,32 +1472,18 @@ public static class Ethnicities
             [("mediterranean", 30), ("arab", 20), ("african", 20), ("byzantine", 15), ("east_african", 15)],
 
         HumanLook.MixedAsian =>
-            [("asian", 20), ("asian_han_chinese", 20), ("asian_mongol", 15), ("asian_malay", 15),
-             ("indian", 15), ("south_indian", 15)],
+            [("asian", 10), ("asian_han_chinese", 20), ("asian_mongol", 10), ("asian_manchu_korean", 5),
+             ("asian_japanese", 5), ("asian_tibetan", 5), ("asian_malay", 15), ("indian", 15), ("south_indian", 15)],
 
         _ => []
     };
 
     /// <summary>
-    /// Which of the four colouring families a vanilla template belongs to.
-    ///
-    /// The family decides nothing but the hair and eye palettes in <see cref="ApplyColorGenes"/> —
-    /// complexion rides on the template itself, which humans inherit untouched — so this only has
-    /// to be right about colouring, not about geography.
-    ///
-    /// <c>papuan</c> sits with the Asian templates here while <see cref="PickVanillaTemplate"/>
-    /// still lists it under african: that function serves only the Varied draw, family first, and
-    /// the South East Asian preset needs papuan to colour like its neighbours. The two blocks
-    /// differ by five percentage points on one hair band regardless.
+    /// Which of the four look families a vanilla template belongs to — the families the even split
+    /// in <see cref="HumanLooks"/> is kept over. One table, there, so the split and the label a
+    /// culture's inspector shows cannot disagree.
     /// </summary>
-    private static string FamilyOf(string template) => template switch
-    {
-        "african" or "east_african" => "african",
-        "asian" or "asian_han_chinese" or "asian_mongol" or "asian_malay"
-            or "asian_austronesian" or "papuan" => "asian",
-        "arab" or "turkic" or "turkic_west" or "indian" or "south_indian" => "mena",
-        _ => "caucasian"
-    };
+    private static string FamilyOf(string template) => HumanLooks.FamilyOf(template);
 
     /// <summary>
     /// A human's vanilla template and the colouring family that follows from it.
@@ -1391,18 +1521,13 @@ public static class Ethnicities
     /// <summary>
     /// Every vanilla template a human culture may be moved onto in the editor.
     ///
-    /// The same eighteen keys the generator draws from, in family order, because the same reason
-    /// applies: a template CK3 does not know is not rejected, it is ignored, and the culture
-    /// quietly keeps the look it had. Offering a key the install lacks would therefore produce a
-    /// dropdown entry that silently does nothing.
+    /// The same keys placement draws from (<see cref="HumanLooks.Roots"/>), in family order, because
+    /// the same reason applies: a template CK3 does not know is not rejected, it is ignored, and the
+    /// culture quietly keeps the look it had. Offering a key the install lacks would therefore
+    /// produce a dropdown entry that silently does nothing.
     /// </summary>
     public static IReadOnlyList<string> HumanTemplates { get; } =
-    [
-        "caucasian", "slavic", "byzantine", "mediterranean", "circumpolar",
-        "arab", "turkic", "turkic_west", "indian", "south_indian",
-        "african", "east_african",
-        "asian", "asian_han_chinese", "asian_mongol", "asian_malay", "asian_austronesian", "papuan"
-    ];
+        HumanLooks.Roots.Select(r => r.Key).ToList();
 
     /// <summary>
     /// Moves one culture onto a different vanilla look, leaving every other culture alone.
@@ -1439,7 +1564,16 @@ public static class Ethnicities
         var def = CreateEthnicity($"gen_ethnicity_{culture.Key}_edit", RaceArchetype.Human,
             culture.Name, mode, HumanLook.Varied, rng, forcedTemplate: match);
 
-        Assign(map, culture, def, PickCultureVariants(def, rng));
+        // Dressed by the rules generation used — a vanilla people's mix, a skin window for the
+        // culture's climate, its heritage's leans — with a fresh draw for the rest, so a second
+        // pick of the same template visibly re-rolls. Without the context (a map built before it
+        // existed) the culture simply wears the vanilla template as it stands.
+        var ctx = map.Looks;
+        var variants = HumanLooks.Dress(culture, match, def.Key, ctx?.Data, ctx?.ClimateOf(culture),
+            ctx is null ? [] : HumanLooks.HeritageLeans(ctx.Seed, culture.Heritage), rng.Int(1, int.MaxValue - 1));
+        def.Variants.AddRange(variants);
+
+        Assign(map, culture, def, variants.Select(v => (v.Key, v.Weight)).ToList());
         return true;
     }
 
@@ -1532,10 +1666,9 @@ public static class Ethnicities
                     Shape(def, rng, m.Tiered ? f : Untiered, m.Gene, m.Template, m.Min, m.Max);
                 Shape(def, rng, f, "gene_neck_length", "neck_length_pos", 0.58f, 0.74f);
                 Shape(def, rng, f, "gene_neck_width", "neck_width_neg", 0.34f, 0.44f);
-                // Ears swept up and back, NOT enlarged and NOT pushed off the skull. Vanilla's ear
-                // genes make a round ear bigger and splay it outward; pushing all four toward 1.0
-                // gets a comic ear rather than an elegant one, so size and outward stay low while
-                // angle and bend — the two that sweep it — carry the shape.
+                // The ear itself is a real pointed blendshape now (gen_bs_elf_ears, in the table
+                // above). Vanilla's size and outward stay low beside it: pushed toward 1.0 they give
+                // a comic ear rather than an elegant one.
                 // Upswept eyes are the strongest elf cue stock geometry has after height, so the
                 // high elf takes it harder than the wood elf does.
                 Shape(def, rng, f, "gene_eye_angle", "eye_angle_pos", 0.58f, 0.70f);
@@ -1774,7 +1907,9 @@ public static class Ethnicities
     /// two families differ and why <c>gene_bs_body_type</c> is not one of the blend-shape ones.
     /// </summary>
     internal static float NeutralOf(string geneKey) =>
-        geneKey.StartsWith("gene_bs_", StringComparison.Ordinal) && geneKey != "gene_bs_body_type"
+        (geneKey.StartsWith("gene_bs_", StringComparison.Ordinal) && geneKey != "gene_bs_body_type")
+        // Our own blendshape genes (gen_bs_elf_ears) are 0-neutral for the same reason.
+        || geneKey.StartsWith("gen_bs_", StringComparison.Ordinal)
             ? 0.0f
             : 0.5f;
 
@@ -2017,51 +2152,14 @@ public static class Ethnicities
 
             case RaceArchetype.Human:
             default:
-                // No skin_color here on purpose. Leaving the block out entirely makes CK3 fall
-                // through to the vanilla template's own skin, so generated humans come out with
-                // stock complexions and never touch the repainted part of the palette. Hair and
-                // eyes still vary per culture — those palettes are untouched.
-                switch (family)
-                {
-                    case "african":
-                        AddColor(def, "hair_color", Hair.Black, weight: 70);
-                        AddColor(def, "hair_color", Hair.BlueBlack, weight: 20);
-                        AddColor(def, "hair_color", Hair.DarkBrown, weight: 10);
-                        AddColor(def, "eye_color", Eye.DarkBrown, weight: 70);
-                        AddColor(def, "eye_color", Eye.Brown, weight: 30);
-                        break;
-                    case "asian":
-                        AddColor(def, "hair_color", Hair.Black, weight: 75);
-                        AddColor(def, "hair_color", Hair.BlueBlack, weight: 15);
-                        AddColor(def, "hair_color", Hair.DarkBrown, weight: 10);
-                        AddColor(def, "eye_color", Eye.DarkBrown, weight: 65);
-                        AddColor(def, "eye_color", Eye.Brown, weight: 35);
-                        break;
-                    case "mena":
-                        AddColor(def, "hair_color", Hair.Black, weight: 55);
-                        AddColor(def, "hair_color", Hair.DarkBrown, weight: 35);
-                        AddColor(def, "hair_color", Hair.Brown, weight: 10);
-                        AddColor(def, "eye_color", Eye.DarkBrown, weight: 45);
-                        AddColor(def, "eye_color", Eye.Brown, weight: 35);
-                        AddColor(def, "eye_color", Eye.Hazel, weight: 12);
-                        AddColor(def, "eye_color", Eye.Green, weight: 8);
-                        break;
-                    case "caucasian":
-                    default:
-                        AddColor(def, "hair_color", Hair.Brown, weight: 30);
-                        AddColor(def, "hair_color", Hair.DarkBrown, weight: 20);
-                        AddColor(def, "hair_color", Hair.AshBlonde, weight: 15);
-                        AddColor(def, "hair_color", Hair.GoldBlonde, weight: 12);
-                        AddColor(def, "hair_color", Hair.Black, weight: 13);
-                        AddColor(def, "hair_color", Hair.Ginger, weight: 10);
-                        AddColor(def, "eye_color", Eye.Blue, weight: 25);
-                        AddColor(def, "eye_color", Eye.Brown, weight: 20);
-                        AddColor(def, "eye_color", Eye.GreyBlue, weight: 15);
-                        AddColor(def, "eye_color", Eye.Green, weight: 15);
-                        AddColor(def, "eye_color", Eye.Hazel, weight: 15);
-                        AddColor(def, "eye_color", Eye.DarkBrown, weight: 10);
-                        break;
-                }
+                // Nothing, as in ApplyMorphGenes. A human's colouring is vanilla's: skin, hair and
+                // eyes all come from the template, and per-culture variety is added by HumanLooks as
+                // variants over vanilla's own keys. This case used to write our own hair and eye
+                // palettes per family over the template's, and they were measurably off — the eye
+                // swatches 1.5–2x brighter than vanilla's (hazel/green luminance ~72 against
+                // vanilla's 48, the darkest brown 22 against vanilla African's 6), and a "Black" and
+                // a "BlueBlack" hair band 6 and 4 in luminance, which split into two variants that
+                // no one could tell apart.
                 break;
         }
     }

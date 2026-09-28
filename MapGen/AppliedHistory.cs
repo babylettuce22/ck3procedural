@@ -146,6 +146,7 @@ public sealed class AppliedHistory
             Feuds = Feuds?.Select(f => f with { Since = f.Since + delta, CauseYear = f.CauseYear != 0 ? f.CauseYear + delta : 0 }).ToList(),
             Standings = Standings,
             Chronicle = [.. Chronicle.Select(r => r with { Year = r.Year + delta })],
+            Headlines = [.. Headlines.Select(r => r with { Year = r.Year + delta })],
             ChronicleFrom = ChronicleFrom != 0 ? ChronicleFrom + delta : 0,
             Timeline = [.. Timeline.Select(f => new Frame(f.Year + delta,
                 [.. f.Realms.Select(r => r with { Founded = r.Founded + delta })]))],
@@ -307,7 +308,7 @@ public sealed class AppliedHistory
     /// </summary>
     public sealed record Remembered(string What, int Year, string Subject, int Actor = -1, string? ActorCulture = null,
         int Counterpart = -1, string? CounterpartCulture = null, string? Person = null, bool Female = false,
-        string? Other = null, string? Into = null, int[]? Counties = null);
+        string? Other = null, string? Into = null, int[]? Counties = null, int Scale = 0);
 
     /// <summary>
     /// What the chronicle remembers of the history — this one's and those it was run on from —
@@ -328,17 +329,48 @@ public sealed class AppliedHistory
     public const int MaxRememberedPerTitle = 3, MaxRemembered = 2000;
 
     /// <summary>
+    /// The world's headlines: the most notable things the history — this one and those it was run
+    /// on from — remembers, picked before <see cref="Chronicle"/> is cut per title, so a war between
+    /// empires is not lost because its duchy had three other things to say. What the world
+    /// chronicle's "before the bookmark" section is written from. Empty in a file saved before it
+    /// existed, which picks from <see cref="Chronicle"/> instead (see <see cref="HeadlinesOrChronicle"/>).
+    /// </summary>
+    public List<Remembered> Headlines { get; init; } = [];
+
+    /// <summary>How many headlines a history keeps.</summary>
+    public const int MaxHeadlines = 24;
+
+    /// <summary><see cref="Headlines"/>, or the best of <see cref="Chronicle"/> for a file saved without them.</summary>
+    public List<Remembered> HeadlinesOrChronicle
+        => Headlines.Count > 0 ? Headlines : HistoryChronicle.Headlines(Chronicle, MaxHeadlines);
+
+    /// <summary>
     /// The simulation's memory as the file keeps it: every recorded moment plus the homage,
     /// independence and collapse the event log already holds structured, and everything an earlier
     /// history remembered, cut to <see cref="MaxRememberedPerTitle"/> a title — most bad blood first,
     /// then most recent — and <see cref="MaxRemembered"/> in all.
     /// </summary>
-    private static List<Remembered> Memory(HistorySim sim, AppliedHistory? earlier)
+    private static List<Remembered> Memory(List<Remembered> now, AppliedHistory? earlier)
+        => [.. (earlier?.Chronicle ?? []).Concat(now)
+            .GroupBy(r => r.Subject)
+            .SelectMany(g => g.OrderByDescending(HistoryChronicle.TensionOf).ThenByDescending(r => r.Year)
+                              .Take(MaxRememberedPerTitle))
+            .OrderByDescending(r => r.Year)
+            .Take(MaxRemembered)
+            .OrderBy(r => r.Year).ThenBy(r => r.Subject, StringComparer.Ordinal)];
+
+    /// <summary>
+    /// Everything this history's simulation remembered, uncut: its recorded moments, plus the
+    /// homage, independence, secession, collapse and fall of realms the event log already holds
+    /// structured. A secession is only the overstretched kind — a realm cut in two by a conquest
+    /// splitting along the cut is bookkeeping, not news.
+    /// </summary>
+    private static List<Remembered> Remembrances(HistorySim sim)
     {
         static int Index(Title? t) => t?.Index ?? -1;
         var now = sim.Memory.Select(m => new Remembered(m.What, m.Year, m.Subject.Key, Index(m.Actor), m.ActorCulture?.Key,
             Index(m.Counterpart), m.CounterpartCulture?.Key, m.Person, m.Female, m.Other, m.Into?.Key,
-            m.Counties is { } counties ? [.. counties.Select(c => c.Index)] : null)).ToList();
+            m.Counties is { } counties ? [.. counties.Select(c => c.Index)] : null, m.Scale)).ToList();
 
         foreach (var e in sim.Events)
         {
@@ -347,20 +379,15 @@ public sealed class AppliedHistory
                 FormationKind.Vassalized => "swore",
                 FormationKind.Freed => "freed",
                 FormationKind.Collapsed => "collapsed",
+                FormationKind.Fragmented when e.Tension >= 2 => "brokeaway",
+                FormationKind.Absorbed => "fell",
                 _ => null,
             };
             if (what is null) continue;
             now.Add(new Remembered(what, e.Year, e.Subject.Key, Index(e.Actor ?? e.Subject), e.Culture?.Key,
-                Index(e.Counterpart), e.CounterpartCulture?.Key));
+                Index(e.Counterpart), e.CounterpartCulture?.Key, Scale: e.Scale));
         }
-
-        return [.. (earlier?.Chronicle ?? []).Concat(now)
-            .GroupBy(r => r.Subject)
-            .SelectMany(g => g.OrderByDescending(HistoryChronicle.TensionOf).ThenByDescending(r => r.Year)
-                              .Take(MaxRememberedPerTitle))
-            .OrderByDescending(r => r.Year)
-            .Take(MaxRemembered)
-            .OrderBy(r => r.Year).ThenBy(r => r.Subject, StringComparer.Ordinal)];
+        return now;
     }
 
     /// <summary>A truce between two realms, by id, and the year it ends.</summary>
@@ -633,6 +660,8 @@ public sealed class AppliedHistory
                 realmLineage[p.Id] = line;
         }
 
+        var now = Remembrances(sim);
+
         return new()
         {
             Year = sim.Year,
@@ -656,7 +685,10 @@ public sealed class AppliedHistory
             Claims = [.. sim.Claims.Select(c => new Claim(c.County.Index, c.Claimant.Id, c.Until))],
             Feuds = FeudsOf(sim),
             Standings = StandingsOf(sim),
-            Chronicle = Memory(sim, earlier),
+            Chronicle = Memory(now, earlier),
+            // The earlier history's headlines compete with this one's: a chain keeps the most
+            // notable of all of them, not the most recent.
+            Headlines = HistoryChronicle.Headlines([.. (earlier?.HeadlinesOrChronicle ?? []), .. now], MaxHeadlines),
             ChronicleFrom = earlier?.ChronicleSince ?? 0,
             Settled = [.. sim.Settled.Select(c => c.Index).Order()],
             SettlerCultures = sim.Settled.Where(c => sim.SettlerCulture(c) is not null)

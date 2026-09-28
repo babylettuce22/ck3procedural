@@ -330,6 +330,9 @@ internal static class LaunchUi
         string Title { get; }
         string Hint { get; }
         IEnumerable<ChoiceCard> Cards { get; }
+
+        /// <summary>Whether the group is on its step at all; a hidden one is laid out as if absent.</summary>
+        bool Shown { get; }
     }
 
     /// <summary>
@@ -371,6 +374,21 @@ internal static class LaunchUi
                 foreach (var (v, card) in _options) card.Selected = EqualityComparer<T>.Default.Equals(v, value);
             }
         }
+
+        /// <summary>
+        /// Shows or hides the whole group. Kept as a flag rather than read off the cards, because a
+        /// card on a step that is not showing reports Visible false whatever it was set to.
+        /// </summary>
+        public bool Shown
+        {
+            get => _shown;
+            set
+            {
+                _shown = value;
+                foreach (var (_, card) in _options) card.Visible = value;
+            }
+        }
+        private bool _shown = true;
 
         public void SetEnabled(T value, bool enabled)
         {

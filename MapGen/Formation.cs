@@ -184,6 +184,14 @@ public sealed class FormationEvent
     /// <summary>The people in it, for the events that are about people — who died, who succeeded.
     /// Null for everything the realm simulation logs.</summary>
     public string? Note { get; init; }
+
+    /// <summary>
+    /// How big the powers in it were: the counties of the larger bloc among its parties, before or
+    /// after the year it happened in, whichever was more. Set by the History workspace at the end of
+    /// each year (see <c>HistorySim.MeasureYear</c>) so the chronicle can tell a war between empires
+    /// from one between two counts; 0 in generation, which never measures.
+    /// </summary>
+    public int Scale { get; internal set; }
 }
 
 /// <summary>

@@ -24,6 +24,8 @@ using Pt = (double X, double Y);
 /// * <b>Flourishes</b> (<see cref="Config.MapConfig.FlatmapFlourishes"/>): a compass rose in the
 ///   widest open ocean with the thirty-two rhumb lines ruled from it across the open sea, hand
 ///   hatching over the unsettled wilderness, and a graduated border around the sheet.
+/// * <b>Hachures</b> (<see cref="Config.MapConfig.FlatmapHachures"/>): slope strokes
+///   over the impassable mountains and a ")(" mark on each pass through them.
 ///
 /// Everything is drawn as ink: a coverage layer is built up shape by shape, taking the maximum
 /// where shapes overlap so a crossing or a joint never prints darker than the line, and is then
@@ -56,7 +58,8 @@ public static class FlatmapInk
 
     /// <summary>Draws the enabled halves onto <paramref name="bgra"/> in place and returns a line for the log.</summary>
     public static string Draw(byte[] bgra, int w, int h, bool[] land, ProvinceMap provinces, int[] order,
-        RouteNetwork? routes, WildernessMap? wilderness, int seed, bool roads, bool flourishes, bool feather = false)
+        RouteNetwork? routes, WildernessMap? wilderness, int seed, bool roads, bool flourishes, bool feather = false,
+        float[]? elevation = null, bool hachures = false)
     {
         var cv = new Canvas(bgra, w, h);
         double k = Scale(w);
@@ -74,6 +77,13 @@ public static class FlatmapInk
             if (hatched > 0) notes.Add($"hatched {hatched} wilderness counties");
         }
 
+        // Under the roads, so a road through a pass reads over the shading.
+        if (hachures && elevation is not null)
+        {
+            var (strokes, pixels) = Hachure(cv, provinces, elevation, k, seed);
+            if (strokes > 0) notes.Add($"hachured the mountains ({strokes} strokes over {pixels} px)");
+        }
+
         // Under the sea lanes, so a lane reads over the chart's grid rather than tangled in it.
         if (rose is { } origin)
         {
@@ -83,6 +93,12 @@ public static class FlatmapInk
 
         if (roads && routes is not null && routes.Edges.Count > 0)
             notes.Add(InkRoads(cv, land, provinces, order, routes, k, Occluded));
+
+        if (hachures)
+        {
+            int passes = MarkPasses(cv, provinces, k);
+            if (passes > 0) notes.Add($"{passes} pass marks");
+        }
 
         if (rose is { } centre)
         {
@@ -273,43 +289,15 @@ public static class FlatmapInk
         double fade = 6.0 * k;
         int cap = Math.Min(250, (int)Math.Ceiling(fade) + 2);
 
-        // Distance inside the mask, counted in from its edge and capped at the fade width.
-        const byte Far = 255;
-        var inside = new byte[w * h];
-        for (int i = 0; i < inside.Length; i++)
+        var mask = new bool[w * h];
+        for (int i = 0; i < mask.Length; i++)
         {
             int label = provinces.Label[i];
             if (label < 0 || label >= order.Length) continue;
             int id = order[label];
-            if (id >= 1 && id < wildProvince.Length && wildProvince[id]) inside[i] = Far;
+            if (id >= 1 && id < wildProvince.Length && wildProvince[id]) mask[i] = true;
         }
-
-        var queue = new Queue<int>();
-        for (int y = 0; y < h; y++)
-        {
-            for (int x = 0; x < w; x++)
-            {
-                int i = y * w + x;
-                if (inside[i] == 0) continue;
-                if ((x > 0 && inside[i - 1] == 0) || (x < w - 1 && inside[i + 1] == 0) ||
-                    (y > 0 && inside[i - w] == 0) || (y < h - 1 && inside[i + w] == 0))
-                {
-                    inside[i] = 1;
-                    queue.Enqueue(i);
-                }
-            }
-        }
-        while (queue.Count > 0)
-        {
-            int i = queue.Dequeue();
-            int next = inside[i] + 1;
-            if (next >= cap) continue;
-            int x = i % w, y = i / w;
-            if (x > 0 && inside[i - 1] == Far) { inside[i - 1] = (byte)next; queue.Enqueue(i - 1); }
-            if (x < w - 1 && inside[i + 1] == Far) { inside[i + 1] = (byte)next; queue.Enqueue(i + 1); }
-            if (y > 0 && inside[i - w] == Far) { inside[i - w] = (byte)next; queue.Enqueue(i - w); }
-            if (y < h - 1 && inside[i + w] == Far) { inside[i + w] = (byte)next; queue.Enqueue(i + w); }
-        }
+        var inside = InsideDistance(mask, w, h, cap);
 
         double spacing = 7.0 * k, r = 0.5 * k, dash = 30.0 * k;
         Parallel.For(0, h, y =>
@@ -343,6 +331,313 @@ public static class FlatmapInk
         cv.TouchAll();
         cv.Ink(Sepia, 0.5);
         return counties;
+    }
+
+    /// <summary>Marks a pixel deep inside a mask in <see cref="InsideDistance"/>.</summary>
+    private const byte Far = 255;
+
+    /// <summary>
+    /// Distance inside <paramref name="mask"/>, counted in from its edge (1 on the edge pixel) and
+    /// stopped short of <paramref name="cap"/>: anything deeper stays <see cref="Far"/>, anything
+    /// outside is 0.
+    /// </summary>
+    private static byte[] InsideDistance(bool[] mask, int w, int h, int cap)
+    {
+        var inside = new byte[w * h];
+        for (int i = 0; i < inside.Length; i++)
+            if (mask[i]) inside[i] = Far;
+
+        var queue = new Queue<int>();
+        for (int y = 0; y < h; y++)
+        {
+            for (int x = 0; x < w; x++)
+            {
+                int i = y * w + x;
+                if (inside[i] == 0) continue;
+                if ((x > 0 && inside[i - 1] == 0) || (x < w - 1 && inside[i + 1] == 0) ||
+                    (y > 0 && inside[i - w] == 0) || (y < h - 1 && inside[i + w] == 0))
+                {
+                    inside[i] = 1;
+                    queue.Enqueue(i);
+                }
+            }
+        }
+        while (queue.Count > 0)
+        {
+            int i = queue.Dequeue();
+            int next = inside[i] + 1;
+            if (next >= cap) continue;
+            int x = i % w, y = i / w;
+            if (x > 0 && inside[i - 1] == Far) { inside[i - 1] = (byte)next; queue.Enqueue(i - 1); }
+            if (x < w - 1 && inside[i + 1] == Far) { inside[i + 1] = (byte)next; queue.Enqueue(i + 1); }
+            if (y > 0 && inside[i - w] == Far) { inside[i - w] = (byte)next; queue.Enqueue(i - w); }
+            if (y < h - 1 && inside[i + w] == Far) { inside[i + w] = (byte)next; queue.Enqueue(i + w); }
+        }
+
+        return inside;
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Mountains
+
+    /// <summary>
+    /// Hachures over the impassable mountains: short strokes that run straight down the slope,
+    /// the way an engraver drew relief before contour lines. Each stroke stays inside one band
+    /// of height, so the strokes stand in rows along the contours; they are laid as evenly spaced
+    /// streamlines (a stroke stops where it would crowd another), heavier where the slope is
+    /// steep and on the flanks turned away from a north-west light, tapering from the crest end
+    /// down. Level tops are left bare, and the strokes fade in over the last few pixels to the
+    /// wall's edge like the wilderness hatching does. Nothing crosses a pass: its corridor is
+    /// passable land, so it reads as a gap in the shading.
+    /// </summary>
+    private static (int Strokes, int Pixels) Hachure(Canvas cv, ProvinceMap provinces, float[] elevation, double k, int seed)
+    {
+        int w = cv.W, h = cv.H;
+        var mask = new bool[w * h];
+        int pixels = 0;
+        for (int i = 0; i < mask.Length; i++)
+        {
+            int label = provinces.Label[i];
+            if (label >= 0 && label < provinces.Seeds.Count && provinces.Seeds[label] is { IsLand: true, IsImpassable: true })
+            {
+                mask[i] = true;
+                pixels++;
+            }
+        }
+        if (pixels == 0) return (0, 0);
+
+        // The pen follows a softened copy of the heights at a coarser grid: on the raw heightmap
+        // its small-scale noise turns every stroke a different way and the walls read as fur.
+        int f = Math.Max(1, (int)Math.Round(2 * k));
+        int sw = (w + f - 1) / f, sh = (h + f - 1) / f;
+        var soft = new float[sw * sh];
+        Parallel.For(0, sh, sy =>
+        {
+            for (int sx = 0; sx < sw; sx++)
+            {
+                double sum = 0;
+                int n = 0;
+                for (int y = sy * f; y < Math.Min(h, sy * f + f); y++)
+                    for (int x = sx * f; x < Math.Min(w, sx * f + f); x++) { sum += elevation[y * w + x]; n++; }
+                soft[sy * sw + sx] = (float)(sum / n);
+            }
+        });
+        soft = BoxBlur(BoxBlur(soft, sw, sh, 3), sw, sh, 3);
+
+        float Elev(double fx, double fy)
+        {
+            fx = Math.Clamp(fx / f - 0.5, 0, sw - 1.001);
+            fy = Math.Clamp(fy / f - 0.5, 0, sh - 1.001);
+            int x = (int)fx, y = (int)fy;
+            float tx = (float)(fx - x), ty = (float)(fy - y);
+            int i = y * sw + x;
+            float top = soft[i] + (soft[i + 1] - soft[i]) * tx;
+            float bottom = soft[i + sw] + (soft[i + sw + 1] - soft[i + sw]) * tx;
+            return top + (bottom - top) * ty;
+        }
+
+        double reach = Math.Max(1.0, f);
+        Pt Grad(Pt p) => (
+            (Elev(p.X + reach, p.Y) - Elev(p.X - reach, p.Y)) / (2 * reach),
+            (Elev(p.X, p.Y + reach) - Elev(p.X, p.Y - reach)) / (2 * reach));
+        bool In(Pt p)
+        {
+            int x = (int)p.X, y = (int)p.Y;
+            return x >= 0 && y >= 0 && x < w && y < h && mask[y * w + x];
+        }
+
+        // The slopes this map's walls actually have, so the bands and weights suit any relief scale.
+        var slopes = new List<double>();
+        int sample = Math.Max(1, (int)Math.Sqrt(pixels / 20000.0));
+        for (int y = 0; y < h; y += sample)
+            for (int x = 0; x < w; x += sample)
+                if (mask[y * w + x])
+                {
+                    var g = Grad((x + 0.5, y + 0.5));
+                    slopes.Add(Math.Sqrt(g.X * g.X + g.Y * g.Y));
+                }
+        slopes.Sort();
+        double median = slopes[slopes.Count / 2], steep = slopes[(int)(slopes.Count * 0.9)];
+        if (!(median > 0)) return (0, pixels);
+
+        double bandPx = 11.0 * k;                    // a stroke's length on ground of median slope
+        double band = median * bandPx;               // the height each row of strokes spans
+        double flat = 0.3 * median;                  // gentler than this is a level top, left bare
+        double spacing = 3.4 * k;                    // between neighbouring strokes
+        double maxLength = 2.2 * bandPx, minLength = 0.4 * bandPx;
+        const double Step = 0.6;
+        Pt sun = (-0.70710678, -0.70710678);         // light from the north-west, as the hillshade
+
+        // Evenly spaced streamlines: every accepted stroke's points go into a grid, and a new
+        // stroke may not start within `spacing` of one nor run within half of it.
+        double cell = spacing;
+        int gw = (int)Math.Ceiling(w / cell) + 1, gh = (int)Math.Ceiling(h / cell) + 1;
+        var grid = new List<Pt>?[gw * gh];
+        bool Crowded(Pt p, double within)
+        {
+            int cx = (int)(p.X / cell), cy = (int)(p.Y / cell);
+            double w2 = within * within;
+            for (int y = Math.Max(0, cy - 1); y <= Math.Min(gh - 1, cy + 1); y++)
+                for (int x = Math.Max(0, cx - 1); x <= Math.Min(gw - 1, cx + 1); x++)
+                    if (grid[y * gw + x] is { } pts)
+                        foreach (var q in pts)
+                            if ((q.X - p.X) * (q.X - p.X) + (q.Y - p.Y) * (q.Y - p.Y) < w2) return true;
+            return false;
+        }
+        void Claim(List<Pt> stroke)
+        {
+            for (int i = 0; i < stroke.Count; i += 2)
+            {
+                var p = stroke[i];
+                int c = (int)(p.Y / cell) * gw + (int)(p.X / cell);
+                (grid[c] ??= new List<Pt>()).Add(p);
+            }
+        }
+
+        // One way along the fall line from `start`: +1 climbs, -1 descends. Stops at the band's
+        // edge, a level top, the wall's edge, a neighbouring stroke, or a turn back on itself.
+        List<Pt> Trace(Pt start, double sign, long row, double budget)
+        {
+            var pts = new List<Pt>();
+            Pt p = start, last = (0, 0);
+            for (double run = 0; run < budget; run += Step)
+            {
+                var g = Grad(p);
+                double mag = Math.Sqrt(g.X * g.X + g.Y * g.Y);
+                if (mag < flat) break;
+                Pt d = (sign * g.X / mag, sign * g.Y / mag);
+                if (pts.Count > 0 && d.X * last.X + d.Y * last.Y < 0.6) break;
+                Pt next = (p.X + d.X * Step, p.Y + d.Y * Step);
+                if (!In(next) || (long)Math.Floor(Elev(next.X, next.Y) / band) != row) break;
+                if (Crowded(next, spacing * 0.5)) break;
+                pts.Add(next);
+                p = next;
+                last = d;
+            }
+            return pts;
+        }
+
+        // Seeds on the contours first, so the rows start on a common line, then anywhere left.
+        var seeds = new List<(double Key, int I)>();
+        for (int y = 0; y < h - 1; y++)
+            for (int x = 0; x < w - 1; x++)
+            {
+                int i = y * w + x;
+                if (!mask[i]) continue;
+                long b0 = (long)Math.Floor(Elev(x + 0.5, y + 0.5) / band);
+                bool contour = (long)Math.Floor(Elev(x + 1.5, y + 0.5) / band) != b0 || (long)Math.Floor(Elev(x + 0.5, y + 1.5) / band) != b0;
+                if (contour) seeds.Add((Hash01(i, seed), i));
+                else if (x % 3 == 0 && y % 3 == 0) seeds.Add((1 + Hash01(i, seed), i));
+            }
+        seeds.Sort((a, b) => a.Key.CompareTo(b.Key));
+
+        int strokes = 0;
+        foreach (var (_, i) in seeds)
+        {
+            Pt start = (i % w + 0.5, i / w + 0.5);
+            if (Crowded(start, spacing)) continue;
+            var g0 = Grad(start);
+            if (Math.Sqrt(g0.X * g0.X + g0.Y * g0.Y) < flat) continue;
+
+            long row = (long)Math.Floor(Elev(start.X, start.Y) / band);
+            var up = Trace(start, +1, row, maxLength);
+            double used = up.Count * Step;
+            var down = Trace(start, -1, row, maxLength - used);
+
+            // Crest end first.
+            var stroke = new List<Pt>(up.Count + down.Count + 1);
+            for (int j = up.Count - 1; j >= 0; j--) stroke.Add(up[j]);
+            stroke.Add(start);
+            stroke.AddRange(down);
+            if ((stroke.Count - 1) * Step < minLength) continue;
+
+            Claim(stroke);
+            strokes++;
+
+            // Weight from the stroke's middle: steeper is heavier, lit flanks lighter.
+            var mid = stroke[stroke.Count / 2];
+            var g = Grad(mid);
+            double mag = Math.Sqrt(g.X * g.X + g.Y * g.Y);
+            double steepness = Math.Clamp((mag - flat) / (steep - flat), 0, 1);
+            double lit = (-g.X * sun.X - g.Y * sun.Y) / mag;            // downhill · toward the sun
+            double r = (0.3 + 0.45 * steepness) * k * (1 - 0.28 * lit);
+            double jitter = 0.85 + 0.3 * Hash01(i * 13 + 7, seed);
+            r *= jitter;
+
+            for (int j = 1; j < stroke.Count; j += 2)
+            {
+                int to = Math.Min(stroke.Count - 1, j + 1);
+                double t0 = (j - 1) / (double)(stroke.Count - 1), t1 = to / (double)(stroke.Count - 1);
+                cv.Capsule(stroke[j - 1], stroke[to], r * (1 - 0.55 * t0), r * (1 - 0.55 * t1));
+            }
+        }
+
+        // Fade in from the wall's edge, and nothing spills past it.
+        double fade = 5.0 * k;
+        var inside = InsideDistance(mask, w, h, Math.Min(250, (int)Math.Ceiling(fade) + 2));
+        cv.Scale(i => inside[i] == 0 ? 0 : inside[i] == Far ? 1 : Math.Min(1.0, (inside[i] - 0.5) / fade));
+        cv.Ink(Sepia, 0.62);
+        return (strokes, pixels);
+    }
+
+    /// <summary>
+    /// A pass mark on each pass cut through a wall: a pair of arcs, ")(", facing each other across
+    /// the corridor and bowing in to pinch it, drawn along the line of the crossing. Each arc
+    /// stands just outside the corridor on its side, where the hachures of the wall begin.
+    /// </summary>
+    private static int MarkPasses(Canvas cv, ProvinceMap provinces, double k)
+    {
+        if (provinces.AutoCut?.Passes is not { Count: > 0 } passes) return 0;
+        int w = cv.W, h = cv.H;
+
+        bool Wall(Pt p)
+        {
+            int x = (int)p.X, y = (int)p.Y;
+            if (x < 0 || y < 0 || x >= w || y >= h) return false;
+            int label = provinces.Label[y * w + x];
+            return label >= 0 && label < provinces.Seeds.Count && provinces.Seeds[label] is { IsLand: true, IsImpassable: true };
+        }
+
+        int marked = 0;
+        foreach (var pass in passes)
+        {
+            Pt m = (pass.Middle.X + 0.5, pass.Middle.Y + 0.5);
+            if (Wall(m)) continue;
+            double dx = pass.SideB.X - pass.SideA.X, dy = pass.SideB.Y - pass.SideA.Y;
+            double len = Math.Sqrt(dx * dx + dy * dy);
+            if (len < 1) continue;
+            Pt along = (dx / len, dy / len), perp = (-along.Y, along.X);
+
+            // How far out each side the wall starts, looking square across the corridor.
+            double limit = 14 * k;
+            double Gap(double side)
+            {
+                for (double s = 1; s < limit; s += 0.5)
+                    if (Wall((m.X + perp.X * side * s, m.Y + perp.Y * side * s))) return s;
+                return limit;
+            }
+
+            marked++;
+            foreach (double side in new[] { -1.0, 1.0 })
+            {
+                double gap = Math.Clamp(Gap(side) + 0.8 * k, 2.2 * k, limit);
+                double half = Math.Max(8.0 * k, gap * 1.4), sag = 0.35 * half;
+                var arc = new List<Pt>();
+                for (int s = -12; s <= 12; s++)
+                {
+                    double t = s / 12.0;
+                    double off = side * (gap + sag * t * t);
+                    arc.Add((m.X + along.X * t * half + perp.X * off, m.Y + along.Y * t * half + perp.Y * off));
+                }
+                for (int s = 1; s < arc.Count; s++)
+                {
+                    double t0 = Math.Abs((s - 1) / 12.0 - 1), t1 = Math.Abs(s / 12.0 - 1);
+                    cv.Capsule(arc[s - 1], arc[s], k * (1.25 - 0.85 * t0), k * (1.25 - 0.85 * t1));
+                }
+            }
+        }
+        cv.Ink(Sepia, 0.9);
+        return marked;
     }
 
     // ------------------------------------------------------------------------------------------
@@ -703,6 +998,33 @@ public static class FlatmapInk
         return result;
     }
 
+    /// <summary>A separable box blur of radius <paramref name="r"/>, edges clamped.</summary>
+    private static float[] BoxBlur(float[] src, int w, int h, int r)
+    {
+        var tmp = new float[src.Length];
+        var dst = new float[src.Length];
+        float norm = 1f / (2 * r + 1);
+        Parallel.For(0, h, y =>
+        {
+            for (int x = 0; x < w; x++)
+            {
+                float s = 0;
+                for (int d = -r; d <= r; d++) s += src[y * w + Math.Clamp(x + d, 0, w - 1)];
+                tmp[y * w + x] = s * norm;
+            }
+        });
+        Parallel.For(0, h, y =>
+        {
+            for (int x = 0; x < w; x++)
+            {
+                float s = 0;
+                for (int d = -r; d <= r; d++) s += tmp[Math.Clamp(y + d, 0, h - 1) * w + x];
+                dst[y * w + x] = s * norm;
+            }
+        });
+        return dst;
+    }
+
     private static double Hash01(long a, long b)
     {
         ulong z = unchecked((ulong)a * 0x9E3779B97F4A7C15UL + (ulong)b * 0xC2B2AE3D27D4EB4FUL + 0x165667B19E3779F9UL);
@@ -785,6 +1107,21 @@ public static class FlatmapInk
             int pieces = Math.Max(1, (int)Math.Ceiling(Dist(a, b) / 48));
             for (int i = 0; i < pieces; i++)
                 Capsule(Lerp(a, b, i / (double)pieces), Lerp(a, b, (i + 1) / (double)pieces), r, r);
+        }
+
+        /// <summary>Multiplies the layer by <paramref name="factor"/> of each pixel, in 0..1.</summary>
+        public void Scale(Func<int, double> factor)
+        {
+            if (x1 < 0) return;
+            int ax = x0, bx = x1;
+            Parallel.For(y0, y1 + 1, y =>
+            {
+                for (int x = ax; x <= bx; x++)
+                {
+                    int i = y * W + x;
+                    if (cover[i] != 0) cover[i] = (byte)(cover[i] * factor(i) + 0.5);
+                }
+            });
         }
 
         /// <summary>Clears the layer wherever <paramref name="keep"/> is false.</summary>

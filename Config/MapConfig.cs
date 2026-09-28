@@ -1331,6 +1331,55 @@ public sealed class MapConfig : CustomTypeDescriptor
     public double ImpassableCeilingHeight { get; set; } = 400;
 
     /// <summary>
+    /// The smallest auto-cut wall kept, in baronies. Only read with <see cref="ImpassableAutoCut"/>
+    /// on. Measured after <see cref="ImpassableCrestFollow"/> has had its chance to extend a wall
+    /// along its ridge.
+    ///
+    /// A wall grows from its core only where enough mountain ground lies within a barony's square
+    /// window. Around a lone peak poking just above the gate line on an otherwise passable ridge,
+    /// that leaves the window's own footprint: one square impassable province on the summit. It
+    /// blocks nothing, since the way round it is a province long. On an inland-sea world (seed
+    /// 835240), 15 of its 40 walls were under a barony and a half, most filling 80–94% of their
+    /// bounding box. At 1.5 with crest-following at 0.8, 10 of them went, 5 grew along their
+    /// ridges into walls of their own, and the share of land walled went from 8.0% to 8.1%.
+    /// 0.5 is the old floor, the half-barony below which a wall was always dropped.
+    /// Recommended: 1.5.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("03 Provinces")]
+    [Description("The smallest impassable wall kept, in baronies. A lone peak just over the mountain line otherwise becomes a single square impassable province on its summit. 0.5 is the old floor.")]
+    public double ImpassableMinWallBaronies { get; set; } = 1.5;
+
+    /// <summary>
+    /// Lets each auto-cut wall run on along its own ridge, over connected ground that stays above
+    /// this share of the wall's peak height (measured from sea level), up to
+    /// <see cref="ImpassableCrestReachBaronies"/> away, with flanks down to the wall's foot. Only
+    /// read with <see cref="ImpassableAutoCut"/> on.
+    ///
+    /// It is what turns a summit block into the high core of its range instead of dropping it:
+    /// on the inland-sea world above, a square of 0.7 baronies became a wall 2.7 baronies long
+    /// lying along the crest. 0.7 kept 10 of the 15 small walls rather than 5 and walled 8.8% of
+    /// land, but let the walls run down ridges that are not mountains (39% of wall area below the
+    /// gate line, against 32% before and 34% at 0.8). 0.85 barely extends anything. 0 turns it off.
+    /// Recommended: 0.8.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("03 Provinces")]
+    [Description("Lets an impassable wall run on along its ridge over ground above this share of its peak height. Turns a summit block into the high core of its range. 0 turns it off.")]
+    public double ImpassableCrestFollow { get; set; } = 0.8;
+
+    /// <summary>
+    /// How far <see cref="ImpassableCrestFollow"/> may carry a wall along its ridge, in barony
+    /// widths. Bounds the extension, so a wall cannot spread through a whole range system at the
+    /// lower line. Measured at 3.
+    /// Recommended: 3.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("03 Provinces")]
+    [Description("How far an impassable wall may run on along its ridge, in barony widths. Only read with ImpassableCrestFollow above 0.")]
+    public double ImpassableCrestReachBaronies { get; set; } = 3;
+
+    /// <summary>
     /// Cuts a pass through an auto-cut wall where it is thin and the way round is long: at most one
     /// per wall, through its thinnest, lowest neck, as a barony of its own named for the pass and
     /// holding a fort and a toll. See <see cref="MapGen.MountainPasses"/>. Only read with
@@ -1969,6 +2018,16 @@ public sealed class MapConfig : CustomTypeDescriptor
     [DisplayName("Paper Map Flourishes")]
     [Description("Decorate the flat (paper) map: a compass rose with rhumb lines across the open sea, hatching over the wilderness, and a graduated border.")]
     public bool FlatmapFlourishes { get; set; } = true;
+
+    /// <summary>
+    /// Hachures on the parchment flat map: short sepia strokes running down the slope of every
+    /// impassable mountain, heavier where it is steep, and a ")(" mark on each mountain pass.
+    /// Drawn by <see cref="Emit.FlatmapInk"/>.
+    /// </summary>
+    [Category("06 Map Objects")]
+    [DisplayName("Paper Map Mountain Hachures")]
+    [Description("Shade the impassable mountains on the flat (paper) map with engraver's slope strokes, and mark each mountain pass with a )( sign.")]
+    public bool FlatmapHachures { get; set; } = true;
 
     /// <summary>
     /// Feathers the flat map's edges into the table through the blue channel of
@@ -3188,8 +3247,8 @@ public sealed class MapConfig : CustomTypeDescriptor
     public enum HumanLook
     {
         /// <summary>
-        /// Every look family, uniformly. The original behaviour, and the default so that a seed
-        /// generated before this setting existed still generates the same world.
+        /// Every look family, in an even split, each placed by climate (see MapGen/HumanLooks.cs).
+        /// Seeds from before 2026-09-28 get different human looks under it; nothing else moves.
         /// </summary>
         Varied,
 
@@ -3219,7 +3278,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     }
 
     [Category("14 Fantasy/Ethnicities")]
-    [Description("Which real-world looks the world's humans are drawn from. Varied picks uniformly across every look family, which is what makes an unconfigured world read as ethnically scrambled; a preset narrows the draw to one region's vanilla templates, so a Historical Western Europe world is peopled by Norse, Irish, English and French looks throughout. Affects HUMANS only — fantasy races keep their own colouring either way. A single culture can be moved off the preset afterwards in the Cultures inspector without disturbing the rest of its heritage.")]
+    [Description("Which real-world looks the world's humans are drawn from. Varied deals the four look families (European, African, Asian, Middle Eastern & South Asian) out evenly across the heritages and places each where its climate fits — Sámi-like peoples in the taiga, Mediterranean ones on dry-summer coasts, African ones in the tropics; a preset narrows the world to one region's vanilla templates in fixed proportions, placed the same way. Colouring is vanilla's own, with each culture's skin tone shaded for its climate. Affects HUMANS only — fantasy races keep their own colouring either way. A single culture can be moved off its look afterwards in the Cultures inspector without disturbing the rest of its heritage.")]
     public HumanLook DominantLook { get; set; } = HumanLook.Varied;
 
     [Category("14 Fantasy/Ethnicities")]

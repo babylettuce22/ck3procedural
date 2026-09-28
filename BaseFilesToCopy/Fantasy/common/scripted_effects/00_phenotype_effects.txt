@@ -33,19 +33,13 @@
 # HistoryWriter already stamped. `liege` and `host` are fallbacks for a culture whose head has died
 # or was never established, and both are gated on same-culture for the reason above.
 #
-# **The genome is asked FIRST, and this is the correction to a long-standing claim.** An earlier
-# version of this comment said the genes could not be read, because the ethnicities distinguish
-# races by gene VALUE range while `has_gene` tests only the template. That is true of every shared
-# gene — `normal_height` is the same template at a gnome's 0.06 and a giant's 0.98 — and false of
-# exactly one: `gen_race_skin`, our own gene, has a uniquely named template per race and ships in
-# Core on every map. See gen_has_fantasy_race_gene_trigger.
-#
-# Asking it first is what fixes the minority-race member, who is the one population where culture
-# and genome genuinely disagree: they roll their race's ethnicity out of a HUMAN culture's weighted
-# ethnicity list (MapGen/Ethnicities.cs seats them at weight 15), so the culture head says human and
-# their own body says gnome. Culture remains the fallback, and remains the right answer for the
-# population this file was written for — a courtier the engine invented for a dwarven court whose
-# genome the ethnicity roll left ordinary still becomes a dwarf from the head.
+# **The character's own ethnicity is asked FIRST.** That is what fixes the minority-race member, who
+# is the one population where culture and body genuinely disagree: they roll their race's ethnicity
+# out of a HUMAN culture's weighted ethnicity list (MapGen/Ethnicities.cs seats them at weight 15),
+# so the culture head says human and their own body says gnome. Culture remains the fallback, and
+# remains the right answer for the population this file was written for — a courtier the engine
+# invented for a dwarven court rolled a dwarven ethnicity anyway. See
+# gen_has_fantasy_race_ethnicity_trigger, and there for why this is not a `has_gene` read any more.
 
 gen_assign_phenotype_effect = {
 	if = {
@@ -57,7 +51,7 @@ gen_assign_phenotype_effect = {
 		save_scope_as = gen_phenotype_target
 
 		if = {
-			limit = { gen_has_fantasy_race_gene_trigger = yes }
+			limit = { gen_has_fantasy_race_ethnicity_trigger = yes }
 			gen_assign_phenotype_from_genes_effect = yes
 		}
 		else_if = {
@@ -117,60 +111,58 @@ gen_assign_phenotype_effect = {
 	}
 }
 
-# Gives a character the race their own genome names.
+# Gives a character the race their own ethnicity names.
 #
-# The `gen_race_skin` template IS the race — one uniquely named template each, set by the ethnicity
-# the character rolled out of their culture's weighted list. This is the only place in the system
+# The ethnicity is the roll the character's body came from — the engine drew it out of their
+# culture's weighted list and painted their genome with it. This is the only place in the system
 # where a race is decided from the character rather than from the people around them, which is what
 # makes it the right answer for a minority: a gnome seated among the Rohand rolls the gnome
-# ethnicity, so the gene says gnome no matter what the culture says.
+# ethnicity no matter what the culture says. (The name still says "genes": it read the gen_race_skin
+# gene with has_gene until that turned out to be interface-only and dead in script.)
 #
 # The two elves are two traits — phenotype_gracile for the high elf, phenotype_sylvan for the wood
-# elf — so the genome answers which elf this is directly, and Emit/RaceMorphWriter.cs forces each
+# elf — so the ethnicity answers which elf this is directly, and Emit/RaceMorphWriter.cs forces each
 # one's own shape and skin with no culture test.
 #
-# There is deliberately NO gen_skin_human branch. Index 0 is the empty template every character
-# falls back to when their DNA does not mention the gene at all, so a human branch here would match
-# essentially everyone and make the culture route below dead code — including for the dwarven
-# courtier whose ethnicity roll left them ordinary, who should still take the culture's race. Absent
-# a fantasy gene, the genome has said nothing, not "human".
+# There is deliberately NO human branch: absent a fantasy ethnicity the character has said nothing,
+# and the culture route in gen_assign_phenotype_effect decides.
 #
 # gen_phenotype_from_gene records that this character's race came from their body rather than their
 # culture. Read by gen_assign_phenotype_effect to refuse a minority-race culture head as a source —
 # see the comment there for why that matters.
 gen_assign_phenotype_from_genes_effect = {
 	if = {
-		limit = { has_gene = { category = gen_race_skin template = gen_skin_high_elf } }
+		limit = { gen_is_high_elf_ethnicity_trigger = yes }
 		add_trait = phenotype_gracile
 		add_character_flag = gen_phenotype_from_gene
 	}
 	else_if = {
-		limit = { has_gene = { category = gen_race_skin template = gen_skin_wood_elf } }
+		limit = { gen_is_wood_elf_ethnicity_trigger = yes }
 		add_trait = phenotype_sylvan
 		add_character_flag = gen_phenotype_from_gene
 	}
 	else_if = {
-		limit = { has_gene = { category = gen_race_skin template = gen_skin_dwarf } }
+		limit = { gen_is_dwarf_ethnicity_trigger = yes }
 		add_trait = phenotype_stocky
 		add_character_flag = gen_phenotype_from_gene
 	}
 	else_if = {
-		limit = { has_gene = { category = gen_race_skin template = gen_skin_orc } }
+		limit = { gen_is_orc_ethnicity_trigger = yes }
 		add_trait = phenotype_rough_hewn
 		add_character_flag = gen_phenotype_from_gene
 	}
 	else_if = {
-		limit = { has_gene = { category = gen_race_skin template = gen_skin_giantkin } }
+		limit = { gen_is_giantkin_ethnicity_trigger = yes }
 		add_trait = phenotype_towering
 		add_character_flag = gen_phenotype_from_gene
 	}
 	else_if = {
-		limit = { has_gene = { category = gen_race_skin template = gen_skin_gnome } }
+		limit = { gen_is_gnome_ethnicity_trigger = yes }
 		add_trait = phenotype_diminutive
 		add_character_flag = gen_phenotype_from_gene
 	}
 	else_if = {
-		limit = { has_gene = { category = gen_race_skin template = gen_skin_deepkin } }
+		limit = { gen_is_deepkin_ethnicity_trigger = yes }
 		add_trait = phenotype_dusk_adapted
 		add_character_flag = gen_phenotype_from_gene
 	}

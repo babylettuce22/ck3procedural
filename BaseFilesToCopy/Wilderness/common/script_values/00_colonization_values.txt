@@ -181,6 +181,16 @@ promote_colony_cost = {
 	}
 }
 
+# The most development a colony may carry. A colony is a palisade and a few fields, and promotion
+# asks for 4 (can_promote_colony_trigger), so the ceiling sits one above the gate: room to qualify,
+# no room to become a city while still paying no tax.
+#
+# Enforced by wilderness_yearly_colony_development_ceiling rather than by a growth modifier, because
+# growth factors add: settlement_01's -0.95 is one line in a sum that a bureaucracy's governor
+# bonuses, the Dynastic Cycle's golden ages and settlement_overseen can outvote. Measured in a 1469
+# save where celestial governors held every colony: median development 19, peak 69.
+colony_development_ceiling = 5
+
 
 # --- Whether the settling actually takes -----------------------------------------------------
 

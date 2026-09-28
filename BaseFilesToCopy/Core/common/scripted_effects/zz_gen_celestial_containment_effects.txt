@@ -1,0 +1,56 @@
+﻿# Taking a ruler off celestial_government. Called by gen_yearly_celestial_containment
+# (common/on_action/zz_gen_celestial_containment_on_actions.txt); see that file for why.
+
+# Character scope. Moves a celestial ruler onto the bureaucracy that belongs to no hegemony, or off
+# bureaucracy altogether where vanilla would not let him keep one.
+#
+# ---- Why two branches ----
+#
+# administrative_government is the natural landing: the realm has been run by appointment for
+# generations, and admin is the same machinery without the Mandate. But vanilla forbids an
+# independent admin ruler below kingdom tier (administrative_tier_allows_independence, which only
+# celestial and Ritsuryo waive), and title_on_actions converts one on sight. So a count or duke who
+# stands alone, a vassal whose liege did not become admin, and every game without Roads to Power
+# take vanilla's own exit instead — admin_change_government_effect, which picks feudal or clan from
+# the liege and strikes the noble-family titles on the way.
+#
+# ---- Why the admin branch is spelled out ----
+#
+# It is vanilla's `else = { # Administrative }` arm of change_to_administrative_effect
+# (00_administrative_effects.txt), line for line. The effect itself cannot be called: its whole
+# government block is gated on the character NOT already allowing `administrative`, and celestial
+# does, so it would convert nobody. The byz_admin flag is what makes the domicile conversion issue a
+# duchy-tier noble-family title in place of the county-tier celestial one, as vanilla's admin does.
+gen_leave_celestial_effect = {
+	if = {
+		limit = {
+			has_dlc_feature = roads_to_power
+			OR = {
+				AND = {
+					is_independent_ruler = yes
+					highest_held_title_tier >= tier_kingdom
+				}
+				AND = {
+					is_independent_ruler = no
+					top_liege = { government_has_flag = government_is_administrative }
+				}
+			}
+		}
+		add_character_flag = new_government_is_byz_admin
+		# Landless noble-family heads are vassals too, and the holding effect reads capital_province
+		# without a `?=`.
+		if = {
+			limit = { is_landed = yes }
+			change_to_administrative_holding_effect = yes
+		}
+		tgp_domicile_conversion_when_changing_government_type = {
+			NEW_DOMICILE_TYPE = estate
+			NEW_GOVERNMENT_TYPE = administrative_government
+		}
+		change_government = administrative_government
+		remove_character_flag = new_government_is_byz_admin
+	}
+	else = {
+		admin_change_government_effect = yes
+	}
+}

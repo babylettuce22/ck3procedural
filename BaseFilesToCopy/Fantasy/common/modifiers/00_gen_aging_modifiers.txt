@@ -1,0 +1,10 @@
+# A late child's window, opened for one year by gen_late_child_conceive_effect.
+#
+# make_pregnant refuses any woman past MAX_FEMALE_REPRODUCTION_AGE (45) as "visibly infertile",
+# so the late-child event's yes had no effect without it. years_of_fertility moves that cutoff
+# (vanilla fecund uses +5). 60 covers every window gen_late_child_mother_trigger allows: dwarves
+# stop at 61, elves and deepkin at world_weary's first level, which comes around 90.
+gen_late_child_fertility_modifier = {
+	icon = fertility_positive
+	years_of_fertility = 60
+}

@@ -1,0 +1,45 @@
+﻿# Pointed ears, as a blendshape of the vanilla head rather than an attached model, so the ear is
+# drawn by the head's skin shader and takes the skin tone, ageing and the gen_race_skin shift with
+# it. Emit/RaceHeadWriter.cs builds the blendshapes from the installed game's heads and adds the
+# attribute -> blendshape mapping to the two head assets; MapGen/PointedEars.cs is the shape itself.
+#
+# One gene with a template per ear STYLE, rather than a gene per race: a character has one pair of
+# ears, and a template choice inherits as a unit, where two independent genes could stack a high
+# elf's ear on a wood elf's. Each style sets its own attribute, gen_bs_elf_ears_<style>.
+#
+# The value is the blendshape weight, 0 human to 1 full, so it tiers like vanilla's gene_bs_ genes
+# (MapGen/Ethnicities.cs NeutralOf) and half a value is a half-elf's ear.
+#
+# The gene DECLARATION stays in Core, beside gen_race_skin, because Emit/PortraitWriter.cs writes
+# it into every persistent DNA record on every map. Index 0 must stay the empty template: it is
+# what those records, and every character whose DNA does not mention the gene, fall back to.
+#
+# Tied to snug headgear the way vanilla's own upper-ear shape is, so a close helmet hides the tip
+# instead of the tip piercing the helmet.
+
+morph_genes = {
+	gen_bs_elf_ears = {
+		inheritable = yes
+		group = ears
+
+		gen_elf_ears_none = {
+			index = 0
+			visible = no
+			male = {}
+			female = male
+			boy = male
+			girl = male
+		}
+
+		gen_elf_ears_high = {
+			index = 1
+			visible = no
+			male = {
+				setting = { required_tags = "not(snug_headgear)" attribute = "gen_bs_elf_ears_high"  value = { min = 0.0 max = 1.0 }  age = age_preset_child_features_wide_range }
+			}
+			female = male
+			boy = male
+			girl = male
+		}
+	}
+}

@@ -38,6 +38,13 @@ public static class ChronicleWriter
     /// comment in <see cref="WriteAll"/> for why a cap is needed at all.</summary>
     private const int MaxPerKind = 2;
 
+    /// <summary>
+    /// The world's past as one paragraph per line, oldest first: the "before the bookmark" half of
+    /// the world chronicle window (<see cref="GuiWindows.ChronicleWindow"/>), which shows it when it
+    /// resolves to anything. See <see cref="ChronicleMap.WorldPast"/> for what goes in it.
+    /// </summary>
+    public const string WorldPastKey = "gen_chronicle_world_past";
+
     public static void WriteAll(
         string modDir, ChronicleMap chronicle, StruggleMap struggles, List<Title> empires)
     {
@@ -115,9 +122,16 @@ public static class ChronicleWriter
             written++;
         }
 
+        if (chronicle.WorldPast.Count > 0)
+        {
+            loc.Blank();
+            loc.AddBuilt(WorldPastKey, string.Join("\\n\\n", chronicle.WorldPast.Select(e => e.Text)));
+        }
+
         loc.Write(Path.Combine(modDir, "localization", "english", "gen_title_lore_l_english.yml"));
 
         Console.WriteLine($"  title lore: {written} titles given a chronicle"
-                        + (noted > 0 ? $", {noted} of them inside a struggle" : ""));
+                        + (noted > 0 ? $", {noted} of them inside a struggle" : "")
+                        + $"; the world's past, {chronicle.WorldPast.Count} lines");
     }
 }

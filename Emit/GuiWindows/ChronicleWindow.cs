@@ -23,7 +23,7 @@ namespace Ck3MapGen.Emit;
 ///
 /// Related generated files, written elsewhere:
 ///   Emit/ChronicleRuntimeWriter.cs   gen_chw_line_N and every string this window shows
-///   Emit/ChronicleWriter.cs          gen_lore_h_china, the opener when there is a hegemony
+///   Emit/ChronicleWriter.cs          gen_chronicle_world_past, the "before the bookmark" half
 ///   Emit/GuiWriter.cs                the tab, and the IsRightWindowOpen widening
 /// </code>
 /// </summary>
@@ -115,6 +115,10 @@ public static class ChronicleWindow
                         .Gap().Add(GuiBuilder.VBox()
                             .Using("Window_Margins")
                             .Spacing(6)
+                            // So a world with no past gives living memory the whole height, rather
+                            // than half of it beside an empty hole: boxes lay out hidden children
+                            // unless told not to.
+                            .IgnoreInvisible()
 
                             .Gap().Add(GuiBuilder.Of("header_standard")
                                 .ExpandingH()
@@ -131,7 +135,18 @@ public static class ChronicleWindow
                                 .Format("#weak")
                                 .Text("GEN_CHRONICLE_BLURB"))
 
-                            .Gap().Add(GuiBuilder.ScrollBox()
+                            // Two books, each scrolled on its own, so reading back through living
+                            // memory never loses your place in the past, nor the other way round.
+                            // Both expand, so they split the height between them.
+                            .Gap().Add(SectionHeading("GEN_CHRONICLE_BEFORE", HasPast))
+                            .Add(GuiBuilder.ScrollBox()
+                                .Expanding()
+                                .Visible(HasPast)
+                                .Gap().Add(GuiBuilder.BlockOverride("scrollbox_content")
+                                    .Add(Past())))
+
+                            .Gap().Add(SectionHeading("GEN_CHRONICLE_SINCE", HasPast))
+                            .Add(GuiBuilder.ScrollBox()
                                 .Expanding()
                                 .Gap().Add(GuiBuilder.BlockOverride("scrollbox_content")
                                     .Add(Book(world)))))))));
@@ -156,20 +171,6 @@ public static class ChronicleWindow
     }
 
     /// <summary>
-    /// The entries. A vbox whose datacontext is the world title, so every row below is exactly the
-    /// title panel's row: one <c>Custom</c> call for the text, and <c>StringIsEmpty</c> of the same
-    /// call for whether there is a row at all.
-    ///
-    /// Newest first — slot 0 is the newest — because the world window is consulted as a feed:
-    /// "what just happened" is the question it answers. The title panel reads the other way, as a
-    /// history continuing the static prehistory above it.
-    ///
-    /// The opener is the hegemony's own static lore, when there is one: on a map that supports a
-    /// hegemony <see cref="ChronicleWriter"/> files a summary under <c>gen_lore_h_china</c>, and
-    /// it is the nearest thing the world has to a preface. <c>Localize</c> of a key that does not
-    /// exist is empty, which is the same gate the lore button relies on.
-    /// </summary>
-    /// <summary>
     /// The width budget, and it is a budget because getting it wrong clips rather than wraps: a
     /// max_width larger than the space available does not wrap early, it overflows and the
     /// scrollbox crops it (seen on screen at 560, 2026-09-09). Window_Size_MainTab is 655; the
@@ -177,9 +178,44 @@ public static class ChronicleWindow
     /// </summary>
     private const int RowWidth = 500;
 
+    /// <summary>
+    /// The world's past, written at generation time by <see cref="ChronicleWriter"/> under
+    /// <see cref="ChronicleWriter.WorldPastKey"/>: one static paragraph per line, oldest first,
+    /// because it reads as a history leading up to the bookmark. <c>Localize</c> of a key that does
+    /// not exist is empty — a mod written before the key existed, or with nothing to say — and that
+    /// is the gate for the whole section, the same one the lore button relies on.
+    /// </summary>
+    private static GuiExpr PastText => GuiExpr.Localize(GuiExpr.Literal(ChronicleWriter.WorldPastKey));
+
+    private static GuiExpr HasPast => GuiExpr.Not(GuiExpr.StringIsEmpty(PastText));
+
+    private static GuiBuilder SectionHeading(string key, GuiExpr visible)
+        => GuiBuilder.TextSingle()
+            .ExpandingH()
+            .Format("#high")
+            .Visible(visible)
+            .Text(key);
+
+    private static GuiBuilder Past()
+        => GuiBuilder.VBox()
+            .ExpandingH()
+            .Gap().Add(GuiBuilder.TextMulti()
+                .ExpandingH()
+                .AutoResize()
+                .MaxWidth(RowWidth)
+                .Text(PastText));
+
+    /// <summary>
+    /// Living memory. A vbox whose datacontext is the world title, so every row below is exactly the
+    /// title panel's row: one <c>Custom</c> call for the text, and <c>StringIsEmpty</c> of the same
+    /// call for whether there is a row at all.
+    ///
+    /// Newest first — slot 0 is the newest — because this half of the window is consulted as a feed:
+    /// "what just happened" is the question it answers. The title panel reads the other way, as a
+    /// history continuing the static prehistory above it.
+    /// </summary>
     private static GuiBuilder Book(GuiExpr world)
     {
-        var opener = GuiExpr.Localize(GuiExpr.Literal($"gen_lore_{ChronicleRuntimeWriter.WorldTitleKey}"));
         var newest = Line(0);
 
         var box = GuiBuilder.VBox()
@@ -187,24 +223,6 @@ public static class ChronicleWindow
             .ExpandingH()
             .Spacing(10)
             .Gap().Add(
-                GuiBuilder.TextSingle()
-                    .ExpandingH()
-                    .Format("#weak")
-                    .Visible(GuiExpr.Not(GuiExpr.StringIsEmpty(opener)))
-                    .Text("GEN_CHRONICLE_BEFORE"),
-                GuiBuilder.TextMulti()
-                    .ExpandingH()
-                    .AutoResize()
-                    .MaxWidth(RowWidth)
-                    .Visible(GuiExpr.Not(GuiExpr.StringIsEmpty(opener)))
-                    .Text(opener),
-                GuiBuilder.TextSingle()
-                    .ExpandingH()
-                    .Format("#weak")
-                    .Visible(GuiExpr.And(
-                        GuiExpr.Not(GuiExpr.StringIsEmpty(opener)),
-                        GuiExpr.Not(GuiExpr.StringIsEmpty(newest))))
-                    .Text("GEN_CHRONICLE_SINCE"),
                 GuiBuilder.TextMulti()
                     .ExpandingH()
                     .AutoResize()

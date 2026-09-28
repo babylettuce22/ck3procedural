@@ -290,9 +290,16 @@ public static partial class ContentWriter
         int passesNamed = MapGen.MountainPasses.Name(empires, provinces, order, baronyCount, cfg);
         if (passesNamed > 0) Console.WriteLine($"  mountain passes: {passesNamed} barony(ies) named for their pass");
 
+        // Humans are placed by the same climate the cultures were dressed for, and dressed over
+        // vanilla's own ethnicities — see MapGen/HumanLooks.cs.
+        var humanLooks = new MapGen.HumanLooks.Inputs(
+            MapGen.ClothingClimate.ByProvince(classified.Field, provinces, order, landCount),
+            CountyPosition(provinces, order, landCount),
+            MapGen.HumanLooks.Read(gameDir, vocabulary));
+
         var ethnicities = Core.Stage.Time("ethnicities", () => MapGen.Ethnicities.Build(
             cultures.Heritages, cultures.Cultures, provinceTerrain, cfg, new Rng(cfg.Seed ^ 0x38F1),
-            wilderness));
+            wilderness, humanLooks: humanLooks));
 
         // The re-voicing above is only right if this pass agrees with the one it was based on. It
         // should by construction; a future change that let a name steer the race roll would break

@@ -139,7 +139,7 @@ public static class PortraitWriter
                 // Repaint the borrowed DNA in the character's own ethnicity before anything is
                 // written, so the bookmark screen and the in-game portrait agree and both match the
                 // realm.
-                body = ApplyEthnicity(body, ethnicities.For(req.Culture), rng);
+                body = ApplyEthnicity(body, ethnicities.GenesFor(req.Culture, rng), rng);
 
                 // After the ethnicity, not before: the ethnicity is what a character of this culture
                 // looks like, and albinism is what overrides it. Painting it first would have the
@@ -192,15 +192,15 @@ public static class PortraitWriter
     /// hardest, which is why it read as "some drow are still human coloured".
     ///
     /// Only genes the ethnicity actually defines are touched, and only lines the template already
-    /// carries are rewritten, so nothing invalid can be introduced. Generated humans define no
-    /// <c>skin_color</c> at all — they inherit complexion from their vanilla template ethnicity —
-    /// so their borrowed DNA keeps the skin it came with, which is the intended behaviour rather
-    /// than an omission.
+    /// carries are rewritten, so nothing invalid can be introduced. A human is painted from one of
+    /// its culture's variants (<see cref="EthnicityMap.GenesFor"/>) — the culture's skin window,
+    /// vanilla's hair and eyes for that template, and the culture's gene leans — so a bookmark ruler
+    /// has the complexion of the people it rules rather than of whichever vanilla ruler lent the DNA.
     /// </summary>
-    private static string ApplyEthnicity(string body, EthnicityDef? eth, Rng rng)
+    private static string ApplyEthnicity(string body,
+        (Dictionary<string, List<ColorPaletteRange>> ColorGenes, Dictionary<string, List<GeneMorphEntry>> MorphGenes) eth,
+        Rng rng)
     {
-        if (eth is null) return body;
-
         var genes = GenesRegex.Match(body);
         if (!genes.Success) return body;
 
@@ -253,6 +253,15 @@ public static class PortraitWriter
         // index-0 template written out explicitly.
         if (!seen.Contains("gen_race_skin"))
             added.Append($"\n{indent}gen_race_skin={{ \"gen_skin_human\" 0 \"gen_skin_human\" 0 }}");
+
+        // The pointed-ear gene, likewise ours and likewise registered on every map. Only the high
+        // elves' ethnicities name it; everyone else gets the empty template.
+        if (!seen.Contains(RaceHeadWriter.Gene))
+            added.Append($"\n{indent}{RaceHeadWriter.Gene}={{ \"{RaceHeadWriter.NoneTemplate}\" 0 \"{RaceHeadWriter.NoneTemplate}\" 0 }}");
+
+        // And the tusk gene, which only orc ethnicities name.
+        if (!seen.Contains(OrcTusks.Gene))
+            added.Append($"\n{indent}{OrcTusks.Gene}={{ \"{OrcTusks.NoneTemplate}\" 0 \"{OrcTusks.NoneTemplate}\" 0 }}");
 
         return string.Concat(
             body.AsSpan(0, content.Index),

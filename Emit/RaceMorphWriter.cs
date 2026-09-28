@@ -48,16 +48,26 @@ public static class RaceMorphWriter
         (RaceArchetype.Deepkin, "phenotype_dusk_adapted"),
     ];
 
+    /// <summary>
+    /// Whether this map has fantasy races at all. Shared with <see cref="RaceHeadWriter"/>, whose
+    /// head shapes must ship exactly when this file enforces them.
+    /// </summary>
+    public static bool RacesOn(MapConfig cfg)
+        => cfg.EnableFantasyEthnicities && cfg.RaceMode != FantasyRaceMode.HumanOnly;
+
     public static void WriteAll(string modDir, MapConfig cfg, EthnicityMap ethnicities)
     {
         string dir = Path.Combine(modDir, "gfx", "portraits", "portrait_modifiers");
         Directory.CreateDirectory(dir);
         string path = Path.Combine(dir, "99_gen_race_morphs.txt");
 
+        bool racesOn = cfg.EnableFantasyEthnicities && cfg.RaceMode != FantasyRaceMode.HumanOnly;
+        WriteEthnicityTriggers(modDir, racesOn ? ethnicities : null);
+
         // Written even when there is nothing to write, because a mod directory is reused between
         // runs: turning fantasy off must retire the previous run's file rather than leave it
         // enforcing races nobody carries.
-        if (!cfg.EnableFantasyEthnicities || cfg.RaceMode == FantasyRaceMode.HumanOnly)
+        if (!racesOn)
         {
             ParadoxText.WriteBom(path, "# Fantasy races are disabled for this map; nothing to enforce.\n");
             return;
@@ -131,6 +141,60 @@ public static class RaceMorphWriter
         ParadoxText.WriteBom(path, b.ToString());
         Console.WriteLine($"  race morphs written: {Races.Length} shape and {Races.Length + 1} skin enforcement entries to 99_gen_race_morphs.txt");
     }
+
+    /// <summary>
+    /// Emits <c>common/scripted_triggers/99_gen_race_ethnicity_triggers.txt</c>: one
+    /// <c>gen_is_&lt;race&gt;_ethnicity_trigger</c> per fantasy race, true when the character's
+    /// ethnicity is that race's base or any of its variants. The Fantasy script set's per-character
+    /// race probe (gen_has_fantasy_race_ethnicity_trigger) is built on these.
+    ///
+    /// **Ethnicity, not genes, because `has_gene` is an interface trigger.** The probe used to read the
+    /// <c>gen_race_skin</c> template; ck3-tiger accepts that, but the game refuses it at load
+    /// ("Reading an interface trigger 'has_gene' in forbidden area") and it answers no forever. So
+    /// every minority-race member stayed phenotype_human with their race's skin in their DNA — seen
+    /// in game as a lowborn human with deepkin violet skin. <c>has_ethnicity</c> is script-legal, and
+    /// an engine-generated character's ethnicity is exactly the roll that gave them their genome.
+    ///
+    /// Generated because ethnicity keys are, and BaseFilesToCopy may not name them. All seven triggers
+    /// are always written (<c>always = no</c> for an absent race) so the static callers always resolve.
+    /// </summary>
+    private static void WriteEthnicityTriggers(string modDir, EthnicityMap? ethnicities)
+    {
+        string dir = Path.Combine(modDir, "common", "scripted_triggers");
+        Directory.CreateDirectory(dir);
+        var b = new JominiBuilder();
+        b.Comment("Generated: which ethnicities belong to each fantasy race. See Emit/RaceMorphWriter.cs.");
+        b.Blank();
+
+        foreach (var (archetype, _) in Races)
+        {
+            var keys = ethnicities is null
+                ? []
+                : ethnicities.Ethnicities.Values
+                    .Where(e => e.Archetype == archetype)
+                    .OrderBy(e => e.Key, StringComparer.Ordinal)
+                    .SelectMany(e => e.Variants.Select(v => v.Key).Prepend(e.Key))
+                    .ToList();
+
+            using (b.Block($"{EthnicityTriggerOf(archetype)}"))
+            {
+                if (keys.Count == 0)
+                    b.Field("always", "no");
+                else
+                    using (b.Block("OR"))
+                        foreach (string key in keys)
+                            b.Field("has_ethnicity", key);
+            }
+
+            b.Blank();
+        }
+
+        ParadoxText.WriteBom(Path.Combine(dir, "99_gen_race_ethnicity_triggers.txt"), b.ToString());
+    }
+
+    /// <summary><c>gen_is_deepkin_ethnicity_trigger</c> and so on, named after the skin template.</summary>
+    private static string EthnicityTriggerOf(RaceArchetype archetype)
+        => $"gen_is_{RaceSkin.TemplateOf(archetype)!["gen_skin_".Length..]}_ethnicity_trigger";
 
     /// <summary>
     /// One shape entry: every gene the archetype forces, scaled by the world's morph intensity.

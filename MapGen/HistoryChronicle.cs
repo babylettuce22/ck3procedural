@@ -18,12 +18,64 @@ public static class HistoryChronicle
         bool foreign = r.ActorCulture is not null && r.CounterpartCulture is not null && r.ActorCulture != r.CounterpartCulture;
         return r.What switch
         {
-            "won" => foreign ? 3 : 2,
+            "won" or "fell" => foreign ? 3 : 2,
             "held" => foreign ? 2 : 1,
-            "seized" or "freed" => 2,
-            "divided" or "swore" or "collapsed" or "drifted" => 1,
+            "feud" => 3,
+            "seized" or "freed" or "brokeaway" or "rivals" => 2,
+            "divided" or "swore" or "collapsed" or "drifted" or "fallen" => 1,
             _ => 0,
         };
+    }
+
+    /// <summary>
+    /// How much a remembered thing belongs among the world's headlines: what kind of thing it was,
+    /// weighed by how big the powers in it were (<see cref="AppliedHistory.Remembered.Scale"/>, 0 in
+    /// a file saved before it was measured, which leaves the kind alone to decide). The end of a
+    /// realm outranks a war, a war outranks a settlement, and a war between empires outranks one
+    /// between counts. A drift is weighed by what it moved instead: a kingdom changing empire is
+    /// news, a duchy changing kingdom less so.
+    /// </summary>
+    public static double Notability(AppliedHistory.Remembered r)
+    {
+        double kind = r.What switch
+        {
+            "fell" or "collapsed" or "greatest" => 5,
+            "fallen" or "feud" => 4,
+            "seized" => 3.5,
+            "won" or "freed" => 3,
+            "brokeaway" => 2.5,
+            "swore" or "divided" or "rivals" => 2,
+            "held" => 1.5,
+            "chosen" or "settled" or "resettled" or "ruined" => 1,
+            "drifted" => r.Into?.StartsWith("e_") == true ? 4 : 2.5,
+            _ => 0,
+        };
+        if (kind == 0 || r.What == "drifted") return kind;
+
+        // Land taken counts for something of its own, and a seat taken with it more.
+        if (r.What == "won")
+            kind += Math.Min(2, 0.25 * (r.Counties?.Length ?? 0)) + (r.Counties?.Contains(r.Counterpart) == true ? 1 : 0);
+
+        return kind * (1 + Math.Log2(1 + r.Scale) / 2);
+    }
+
+    /// <summary>
+    /// The <paramref name="max"/> most notable remembered things, oldest first, as the world's
+    /// headlines. See <see cref="ChronicleMap.PickHeadlines{T}"/> for how a list of the most notable
+    /// is kept from being one kind of thing over and over; here, besides, a war that ended a realm
+    /// is told once, as the fall, and not again as the war won — and the vassals a collapse or a
+    /// fall set loose are that collapse or fall, not a string of risings of their own.
+    /// </summary>
+    public static List<AppliedHistory.Remembered> Headlines(IEnumerable<AppliedHistory.Remembered> remembered, int max)
+    {
+        var all = remembered.ToList();
+        var fell = all.Where(r => r.What == "fell").Select(r => (r.Year, r.Actor, r.Counterpart)).ToHashSet();
+        var ended = all.Where(r => r.What is "fell" or "collapsed").Select(r => (r.Year, r.Actor)).ToHashSet();
+        var pool = all.Where(r => !(r.What == "won" && fell.Contains((r.Year, r.Counterpart, r.Actor)))
+                               && !(r.What == "freed" && ended.Contains((r.Year, r.Counterpart))));
+
+        return ChronicleMap.PickHeadlines(pool, Notability, r => r.What, r => r.Subject, r => r.Year,
+            r => $"{r.What}|{r.Subject}|{r.Actor}|{r.Counterpart}|{r.Person}", max);
     }
 
     /// <summary>
@@ -50,7 +102,8 @@ public static class HistoryChronicle
             {
                 Kind = r.What switch
                 {
-                    "won" or "held" => ChronicleKind.War,
+                    "won" or "held" or "fell" => ChronicleKind.War,
+                    "feud" or "rivals" => ChronicleKind.Feud,
                     "drifted" => ChronicleKind.Frontier,
                     "settled" or "resettled" or "ruined" => ChronicleKind.Settlement,
                     _ => ChronicleKind.Seat,
@@ -118,6 +171,13 @@ public static class HistoryChronicle
             "swore" => $"In {r.Year} {Lords(r.Actor)} swore fealty to {Lords(r.Counterpart)}.",
             "freed" => $"In {r.Year} {Lords(r.Actor)} threw off the rule of {Lords(r.Counterpart)}.",
             "collapsed" => $"In {r.Year} the vassals of {Lords(r.Actor)} walked out, and the realm came apart.",
+            "brokeaway" => $"In {r.Year} {Lords(r.Actor)} broke away from {Lords(r.Counterpart)}, which had grown too wide to hold them.",
+            "fell" => $"In {r.Year} {Lords(r.Counterpart)} took the last lands of {Lords(r.Actor)}, and their realm was no more.",
+            "feud" when r.Person is { } a && r.Other is { } b => $"In {r.Year} the houses of {a} and {b} fell into open feud over {subject.Name}.",
+            "rivals" when r.Person is { } a && r.Other is { } b => $"In {r.Year} the houses of {a} and {b} became rivals over {subject.Name}.",
+            "greatest" when r.Person is { } house => $"By {r.Year} the house of {house}, ruling from {subject.Name}, was the greatest in the world.",
+            "fallen" when r.Person is { } house => $"In {r.Year} the house of {house}, once among the greatest, ruled nowhere any more. "
+                                                  + $"Its last seat had been {subject.Name}.",
             _ => null,
         };
         return text is null ? null : char.ToUpperInvariant(text[0]) + text[1..];

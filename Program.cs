@@ -371,6 +371,12 @@ public static class Program
                 case "--flatmap-feather":
                     cfg.FlatmapFeather = true;
                     break;
+                case "--flatmap-hachures":
+                    cfg.FlatmapHachures = true;
+                    break;
+                case "--no-flatmap-hachures":
+                    cfg.FlatmapHachures = false;
+                    break;
 
                 // Vanilla's surround shader, unpatched. See MapGraphicsWriter.WriteSurroundShader.
                 case "--no-surround-depth":

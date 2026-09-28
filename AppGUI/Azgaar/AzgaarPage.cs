@@ -189,7 +189,7 @@ internal sealed class AzgaarPage : Panel
     public RunScreen Run => _run;
 
     /// <summary>The same page size as Quick, so moving between launcher pages never resizes the window.</summary>
-    public Size PreferredPageSize => new(S(StepPanel.PreferredColumn) + 2 * S(32), S(60) + 1 + S(606) + 1 + S(68));
+    public Size PreferredPageSize => new(S(StepPanel.PreferredColumn) + 2 * S(32), S(60) + 1 + S(616) + 1 + S(68));
 
     /// <summary>
     /// Opens the page on its first step with the files used last time and every override on Azgaar.

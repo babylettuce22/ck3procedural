@@ -147,7 +147,10 @@ public sealed partial class HistorySim
         string text = tension == 3
             ? $"The houses of {now.A.Name} and {now.B.Name} are at feud{why}"
             : $"The houses of {now.A.Name} and {now.B.Name} are now rivals{why}";
-        _sim.Log(FormationKind.Feud, now.Where ?? SeatOf(offender) ?? SeatOf(victim)!, RealmOf(offender), RealmOf(victim), tension, text);
+        var at = now.Where ?? SeatOf(offender) ?? SeatOf(victim)!;
+        _sim.Log(FormationKind.Feud, at, RealmOf(offender), RealmOf(victim), tension, text);
+        Remember(tension == 3 ? "feud" : "rivals", at, RealmOf(offender), RealmOf(victim),
+            person: now.A.Name, other: now.B.Name);
     }
 
     /// <summary>
@@ -236,7 +239,10 @@ public sealed partial class HistorySim
         {
             if (held.ContainsKey(house)) continue;
             if (news && greatest.Contains(house) && _lastSeat.TryGetValue(house, out var seat))
+            {
                 _sim.Log(FormationKind.Standing, seat, null, null, 0, $"The house of {house.Name}, once among the greatest, rules no more");
+                Remember("fallen", seat, person: house.Name);
+            }
             _standing.Remove(house);
             _lastSeat.Remove(house);
             if (_greatest == house) _greatest = null;
@@ -253,8 +259,11 @@ public sealed partial class HistorySim
         {
             // Not news on the first year: the start date's greatest house is where the story begins.
             if (news && _greatestSeen && _lastSeat.TryGetValue(top, out var seat))
+            {
                 _sim.Log(FormationKind.Standing, seat, RealmOf(top), null, 1,
                     $"The house of {top.Name} is now the greatest of all, ruling from {seat.Name}");
+                Remember("greatest", seat, RealmOf(top), person: top.Name);
+            }
             _greatest = top;
         }
         _greatestSeen = true;

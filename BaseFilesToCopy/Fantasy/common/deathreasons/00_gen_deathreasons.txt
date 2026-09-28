@@ -8,6 +8,10 @@
 #     the engine claims before — or without — the trait still fades in the chronicle instead of
 #     "dying of old age" at 300.
 #
+# The catch-all only covers elders: age 80 is world_weary's onset. Without that floor, a 55-year-old
+# elf who died of pneumonia or wounds read as "faded", which looked like the fade killing early.
+# Younger long-lived characters fall through to vanilla's own reasons.
+#
 # Priority 15 beats every vanilla natural reason (old_age 10 … dungeon_passive 14). That means even
 # an imprisoned elder's passive death reads as fading, which is intended: they do not succumb to
 # the dungeon, they let go of it.
@@ -15,7 +19,10 @@ death_fading = {
 	natural_death_trigger = {
 		OR = {
 			has_trait = world_weary
-			gen_long_lived_race_trigger = yes
+			AND = {
+				gen_long_lived_race_trigger = yes
+				age >= 80
+			}
 		}
 	}
 	priority = 15

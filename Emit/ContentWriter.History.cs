@@ -14,10 +14,10 @@ public static partial class ContentWriter
         Dictionary<int, GovernmentMap>? EraGovernments);
 
     /// <summary>
-    /// What the chronicle remembers of an applied history, as events on the world being written, and
-    /// the year the invented past ends — see <see cref="ChronicleMap.Build"/>.
+    /// What the chronicle remembers of an applied history, as events on the world being written, the
+    /// year the invented past ends, and the world's headlines among them — see <see cref="ChronicleMap.Build"/>.
     /// </summary>
-    internal sealed record RememberedPast(List<ChronicleEvent> Events, int Since);
+    internal sealed record RememberedPast(List<ChronicleEvent> Events, int Since, List<ChronicleEvent> Headlines);
 
     /// <summary>
     /// The wilderness at the applied date and what follows from it: the wilds cut from it, and the
@@ -136,7 +136,8 @@ public static partial class ContentWriter
 
         return new AppliedRealms(realms, governments, hegemonShare, lineage, pastRulers, applied.ColoursFor(capitals),
             drifted, wilds, applied.DiplomacyFor(capitals, counties), seatParents,
-            new RememberedPast(HistoryChronicle.Events(applied.Chronicle, empires, cultures, wilderness), applied.ChronicleSince),
+            new RememberedPast(HistoryChronicle.Events(applied.Chronicle, empires, cultures, wilderness), applied.ChronicleSince,
+                HistoryChronicle.Events(applied.HeadlinesOrChronicle, empires, cultures, wilderness)),
             eraGovernments);
     }
 
@@ -625,7 +626,7 @@ public static partial class ContentWriter
         // at the player, and the GUI already treats a missing key as "no button".
         var chronicle = Core.Stage.Time("chronicle", () => ChronicleMap.Build(
             empires, realms, development, cultures, faiths, wilderness, prehistory,
-            artifacts, worldCenters, cfg, new Rng(cfg.Seed ^ 0x104E), past?.Since, past?.Events));
+            artifacts, worldCenters, cfg, new Rng(cfg.Seed ^ 0x104E), past?.Since, past?.Events, past?.Headlines));
 
         // The historical battlefields are the chronicle's wars, so after it. The --no-history
         // branch writes the grand cities alone.
