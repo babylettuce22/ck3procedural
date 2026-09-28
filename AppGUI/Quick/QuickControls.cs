@@ -32,6 +32,12 @@ internal static class LaunchUi
 
     public static int S(Control control, int logical) => logical * control.DeviceDpi / 96;
 
+    /// <summary>How tall <paramref name="text"/> is wrapped to <paramref name="width"/>, as the cards draw it.</summary>
+    public static int WrappedHeight(string? text, Font font, int width)
+        => string.IsNullOrEmpty(text) ? 0
+            : TextRenderer.MeasureText(text, font, new Size(Math.Max(1, width), 0),
+                TextFormatFlags.WordBreak | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix).Height;
+
     public static GraphicsPath Rounded(RectangleF r, float radius)
     {
         radius = Math.Max(0.5f, Math.Min(radius, Math.Min(r.Width, r.Height) / 2f));
@@ -241,6 +247,9 @@ internal static class LaunchUi
     /// <summary>
     /// One option in a choice: a title, a line under it, and a radio mark. The group it belongs to
     /// (<see cref="ChoiceGroup{T}"/>) decides which one is selected.
+    ///
+    /// Title and line both wrap rather than being cut short; <see cref="HeightFor"/> is how tall
+    /// the card has to be to show them, and a row of cards is laid out at the tallest.
     /// </summary>
     internal sealed class ChoiceCard : PaintedButton
     {
@@ -255,6 +264,24 @@ internal static class LaunchUi
         {
             get => _selected;
             set { if (_selected == value) return; _selected = value; AccessibleDescription = value ? "Selected" : null; Invalidate(); }
+        }
+
+        /// <summary>The height the card was designed at, which a one-line title and line fill.</summary>
+        public const int BaseHeight = 62;
+
+        /// <summary>How tall the card has to be at <paramref name="width"/> to show its title and line in full.</summary>
+        public int HeightFor(int width) => Math.Max(S(BaseHeight), Layout(width).Sub.Bottom + S(13));
+
+        /// <summary>Where the title and the line go at a width. One line of title keeps the original spacing.</summary>
+        private (Rectangle Title, bool TitleWraps, Rectangle Sub) Layout(int width)
+        {
+            int left = S(14);
+            int titleW = Math.Max(1, width - S(14) - S(18) - S(6) - left);
+            int titleH = WrappedHeight(Text, GroupTitle, titleW);
+            bool wraps = titleH > S(22);
+            var title = new Rectangle(left, S(11), titleW, Math.Max(S(22), titleH));
+            int subW = Math.Max(1, width - left - S(12));
+            return (title, wraps, new Rectangle(left, title.Bottom + S(1), subW, WrappedHeight(Subtitle, Small, subW)));
         }
 
         protected override void Draw(Graphics g)
@@ -285,14 +312,13 @@ internal static class LaunchUi
                 g.DrawEllipse(ring, mark);
             }
 
-            int left = S(14);
-            var titleRect = new Rectangle(left, S(11), mark.Left - left - S(6), S(22));
+            var (titleRect, titleWraps, subRect) = Layout(Width);
             TextRenderer.DrawText(g, Text, GroupTitle, titleRect, Enabled ? Theme.Text : Theme.TextDim,
-                TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter);
+                TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix
+                | (titleWraps ? TextFormatFlags.WordBreak : TextFormatFlags.SingleLine | TextFormatFlags.VerticalCenter));
 
-            var subRect = new Rectangle(left, S(34), Width - left - S(12), Height - S(38));
             TextRenderer.DrawText(g, Subtitle, Small, subRect, Theme.TextDim,
-                TextFormatFlags.NoPadding | TextFormatFlags.WordBreak | TextFormatFlags.EndEllipsis);
+                TextFormatFlags.NoPadding | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
 
             DrawFocus(g, box, radius);
         }
@@ -353,13 +379,33 @@ internal static class LaunchUi
         }
     }
 
-    /// <summary>An on/off card: title, a line of description, and a switch.</summary>
+    /// <summary>
+    /// An on/off card: title, a line of description, and a switch. Like <see cref="ChoiceCard"/>,
+    /// the text wraps and <see cref="HeightFor"/> says how tall the card has to be to hold it.
+    /// </summary>
     internal sealed class ToggleCard : PaintedButton
     {
         private bool _on;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string Description { get; set; } = "";
+
+        /// <summary>The height the card was designed at, which a one-line title and description fill.</summary>
+        public const int BaseHeight = 66;
+
+        /// <summary>How tall the card has to be at <paramref name="width"/> to show its title and description in full.</summary>
+        public int HeightFor(int width) => Math.Max(S(BaseHeight), Layout(width).Description.Bottom + S(15));
+
+        private (Rectangle Title, bool TitleWraps, Rectangle Description) Layout(int width)
+        {
+            int left = S(14);
+            int titleW = Math.Max(1, width - S(14) - S(36) - S(6) - left);
+            int titleH = WrappedHeight(Text, GroupTitle, titleW);
+            bool wraps = titleH > S(24);
+            var title = new Rectangle(left, S(11), titleW, Math.Max(S(24), titleH));
+            int descW = Math.Max(1, width - left - S(12));
+            return (title, wraps, new Rectangle(left, title.Bottom + S(1), descW, WrappedHeight(Description, Small, descW)));
+        }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool On
@@ -394,11 +440,12 @@ internal static class LaunchUi
             float kx = _on ? track.Right - S(3) - knob : track.X + S(3);
             using (var kb = new SolidBrush(Color.White)) g.FillEllipse(kb, kx, track.Y + S(3), knob, knob);
 
-            int left = S(14);
-            TextRenderer.DrawText(g, Text, GroupTitle, new Rectangle(left, S(11), (int)track.X - left - S(6), S(24)), Theme.Text,
-                TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter);
-            TextRenderer.DrawText(g, Description, Small, new Rectangle(left, S(36), Width - left - S(12), Height - S(40)), Theme.TextDim,
-                TextFormatFlags.NoPadding | TextFormatFlags.WordBreak | TextFormatFlags.EndEllipsis);
+            var (titleRect, titleWraps, descRect) = Layout(Width);
+            TextRenderer.DrawText(g, Text, GroupTitle, titleRect, Theme.Text,
+                TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix
+                | (titleWraps ? TextFormatFlags.WordBreak : TextFormatFlags.SingleLine | TextFormatFlags.VerticalCenter));
+            TextRenderer.DrawText(g, Description, Small, descRect, Theme.TextDim,
+                TextFormatFlags.NoPadding | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
 
             DrawFocus(g, box, radius);
         }
@@ -431,6 +478,17 @@ internal static class LaunchUi
             base.Dispose(disposing);
         }
 
+        /// <summary>
+        /// How tall the tile has to be at <paramref name="width"/>: the 2:1 picture, then the name,
+        /// in the bold it takes when chosen, on as many lines as it needs.
+        /// </summary>
+        public int HeightFor(int width)
+        {
+            int pad = S(6);
+            int imageBottom = pad + (width - 2 * pad) / 2;
+            return imageBottom + S(8) + Math.Max(S(26), WrappedHeight(Text, Strong, width - 2 * pad));
+        }
+
         protected override void Draw(Graphics g)
         {
             var box = new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
@@ -456,10 +514,13 @@ internal static class LaunchUi
                 }
             }
 
+            // A name too long for one line wraps, centred, rather than being cut short.
             var titleRect = new Rectangle(pad, (int)imageRect.Bottom + S(4), Width - 2 * pad, Height - (int)imageRect.Bottom - S(8));
-            TextRenderer.DrawText(g, Text, _selected ? Strong : Body, titleRect, _selected ? Theme.Accent : Theme.Text,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine
-                | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+            var font = _selected ? Strong : Body;
+            bool wraps = WrappedHeight(Text, font, titleRect.Width) > S(26);
+            TextRenderer.DrawText(g, Text, font, titleRect, _selected ? Theme.Accent : Theme.Text,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix
+                | (wraps ? TextFormatFlags.WordBreak : TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine));
 
             var edge = _selected ? Theme.Accent : Hover ? Color.FromArgb(150, Theme.Accent) : Theme.Border;
             using (var pen = new Pen(edge, _selected ? 2f : 1f)) g.DrawPath(pen, path);
@@ -748,9 +809,12 @@ internal static class LaunchUi
     /// <summary>
     /// One line of text shortened in the middle when it does not fit, the way Explorer shortens a
     /// path: the drive and the folder name stay readable, and the part cut is the part between.
+    /// Hovering it shows the whole path.
     /// </summary>
     internal sealed class PathText : Control
     {
+        private readonly WrappingToolTip _tip = new() { InitialDelay = 400 };
+
         public PathText()
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer
@@ -761,7 +825,18 @@ internal static class LaunchUi
             ForeColor = Theme.TextDim;
         }
 
-        protected override void OnTextChanged(EventArgs e) { base.OnTextChanged(e); Invalidate(); }
+        protected override void OnTextChanged(EventArgs e)
+        {
+            base.OnTextChanged(e);
+            _tip.SetToolTip(this, string.IsNullOrEmpty(Text) ? null : Text);
+            Invalidate();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _tip.Dispose();
+            base.Dispose(disposing);
+        }
 
         protected override void OnPaint(PaintEventArgs e)
             => TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle, ForeColor,

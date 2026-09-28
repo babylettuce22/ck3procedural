@@ -54,10 +54,34 @@ public static class LanguageProbe
         Line("empire", 3, () => lang.RealmName(rng, folk, 'e'));
         Line("words", 8, () => lang.Word(rng));
         Console.WriteLine($"   place-words: {string.Join(" ", lang.BaronyAffixes)} | {string.Join(" ", lang.CountyAffixes)} | {string.Join(" ", lang.DuchyAffixes)} | {string.Join(" ", lang.KingdomAffixes)}");
+        Ranks(lang, seed);
         Console.WriteLine();
 
         static void Line(string label, int count, Func<string> draw)
             => Console.WriteLine($"   {label,-8} {string.Join(" ", Enumerable.Range(0, count).Select(_ => draw()))}");
+    }
+
+    /// <summary>The language's native rank titles (<see cref="NativeTitles"/>), glossed.</summary>
+    private static void Ranks(Language lang, int seed)
+    {
+        var ranks = NativeTitles.Coin(lang, seed, holders: true, realms: true, homeReligion: null);
+
+        Row("crown", NativeTitles.FamilyById("crown").Holders, female: false);
+        Row("  fem.", NativeTitles.FamilyById("crown").Holders, female: true);
+        Row("variant", ["prince", "margrave", "palatine", "castellan", "grand_duke", "high_king"], female: false);
+        Row("others", ["governor", "chieftain", "high_chieftain", "patriarch", "archpriest", "grand_mayor"], female: false);
+
+        Console.WriteLine("   realms   " + string.Join("  ", new[]
+            { "county", "duchy", "kingdom", "empire", "principality", "march", "chiefdom", "republic" }
+            .Select(id => $"{NativeTitles.RealmRanks[id].English}={ranks.Realms[NativeTitles.RealmRanks[id].Word]}")));
+
+        void Row(string label, IEnumerable<string> ids, bool female)
+            => Console.WriteLine($"   {label,-8} " + string.Join("  ", ids.Select(id =>
+            {
+                var rank = NativeTitles.HolderRanks[id];
+                var word = ranks.Holders[rank.Word];
+                return female ? $"{rank.Female}={word.Female}" : $"{rank.Male}={word.Male}";
+            })));
     }
 
     private static int StableHash(string s)

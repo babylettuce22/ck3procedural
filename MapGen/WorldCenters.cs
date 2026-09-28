@@ -38,6 +38,22 @@ public sealed class GeneratedWonder
     /// it. Copied from <see cref="WonderAsset.ReplacesWalls"/>.</summary>
     public bool ReplacesWalls { get; init; }
 
+    /// <summary>One model per rung, or null for <see cref="Mesh"/> on every rung. Copied from
+    /// <see cref="WonderAsset.Ladder"/>.</summary>
+    public string[]? Ladder { get; init; }
+
+    /// <summary>The model names are entities, not pdxmeshes. Copied from
+    /// <see cref="WonderAsset.IsEntity"/>.</summary>
+    public bool IsEntity { get; init; }
+
+    /// <summary>The DLC flag the model needs, and the base-game pdxmesh drawn without it. Copied from
+    /// <see cref="WonderAsset.Dlc"/> and <see cref="WonderAsset.Fallback"/>.</summary>
+    public string? Dlc { get; init; }
+    public string? Fallback { get; init; }
+
+    /// <summary>The model one rung of the ladder draws.</summary>
+    public string MeshAt(int tier) => Ladder is null ? Mesh : Ladder[Math.Clamp(tier - 1, 0, Ladder.Length - 1)];
+
     /// <summary>
     /// The building key for one rung of the wonder's ladder, numbered as vanilla numbers its own —
     /// <c>hagia_sophia_01</c>, <c>_02</c>, <c>_03</c>.
@@ -202,9 +218,12 @@ public sealed class WorldCenterMap
             var culture = cultures.For(county);
             var centerRng = Rng.For(cfg.Seed, 0x5C07, county.Index, i);
 
-            var (coastal, mountainous) = Relief(county, provinceTerrain);
+            var (coastal, mountainous, arid) = Relief(county, provinceTerrain);
             var archetype = PickArchetype(coastal, mountainous, cfg, centerRng);
-            var wonder = GenerateWonder(county, barony, archetype, mountainous,
+            var site = (mountainous ? WonderSite.Relief : 0)
+                     | (coastal ? WonderSite.Coast : 0)
+                     | (arid ? WonderSite.Arid : 0);
+            var wonder = GenerateWonder(county, barony, archetype, site, culture.BuildingGfx,
                 culture.Language, centerRng, usedMeshes);
 
             var center = new WorldCenter
@@ -267,18 +286,25 @@ public sealed class WorldCenterMap
     /// Whether the county touches the sea and whether it has any relief. Both drive the archetype;
     /// relief additionally decides whether a sacred-peak model is on the table, since a mountain
     /// mesh dropped on flat ground reads as a glitch rather than a wonder.
+    ///
+    /// Arid is a majority rather than an "any": it only gates the models painted in sand and ochre,
+    /// and one dry barony does not make a county a desert. Desert mountains count as relief — they
+    /// are mountains, and leaving them out kept every arid range from its sacred peaks.
     /// </summary>
-    private static (bool Coastal, bool Mountainous) Relief(Title county, TerrainClass[] terrain)
+    private static (bool Coastal, bool Mountainous, bool Arid) Relief(Title county, TerrainClass[] terrain)
     {
         bool coastal = false, mountainous = false;
+        int counted = 0, dry = 0;
         foreach (var b in county.Children)
         {
             if (b.ProvinceId <= 0 || b.ProvinceId >= terrain.Length) continue;
             var t = terrain[b.ProvinceId];
+            counted++;
             if (t == TerrainClass.Beach) coastal = true;
-            if (t is TerrainClass.Hills or TerrainClass.Mountains) mountainous = true;
+            if (t is TerrainClass.Hills or TerrainClass.Mountains or TerrainClass.DesertMountains) mountainous = true;
+            if (t is TerrainClass.Desert or TerrainClass.Drylands or TerrainClass.DesertMountains or TerrainClass.Oasis) dry++;
         }
-        return (coastal, mountainous);
+        return (coastal, mountainous, counted > 0 && dry * 2 > counted);
     }
 
     private static WonderArchetype PickArchetype(bool coastal, bool mountainous, MapConfig cfg, Rng rng)
@@ -303,14 +329,16 @@ public sealed class WorldCenterMap
     }
 
     private static GeneratedWonder GenerateWonder(Title county, Title barony, WonderArchetype archetype,
-        bool mountainous, Language lang, Rng rng, HashSet<string> usedMeshes)
+        WonderSite site, string buildingGfx, Language lang, Rng rng, HashSet<string> usedMeshes)
     {
         string key = $"wonder_{county.Key}";
         string word = lang.Word(rng, 2, 3);
 
         // Model first. Everything the player reads is derived from it, so that the pyramids on the
         // map are never captioned as a lighthouse — the archetype now only supplies the modifiers.
-        var asset = WonderAssets.Pick(archetype, mountainous, rng, usedMeshes);
+        // The county's culture leans the draw toward its own building tradition. It stands in for
+        // the holder's: centres are chosen before any realm or ruler exists.
+        var asset = WonderAssets.Pick(archetype, site, buildingGfx, rng, usedMeshes);
         string name = string.Format(rng.Pick(asset.Names), county.Name, word);
         string desc = string.Format(asset.Blurb, county.Name);
         string icon = asset.Icon;
@@ -418,6 +446,10 @@ public sealed class WorldCenterMap
             Mesh = asset.Mesh,
             Encloses = asset.Encloses,
             ReplacesWalls = asset.ReplacesWalls,
+            Ladder = asset.Ladder,
+            IsEntity = asset.IsEntity,
+            Dlc = asset.Dlc,
+            Fallback = asset.Fallback,
             CharacterModifiers = charMod,
             CountyModifiers = countyMod,
             ProvinceModifiers = provMod

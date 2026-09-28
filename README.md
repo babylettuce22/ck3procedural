@@ -270,6 +270,27 @@ Choosing a vanilla icon in the Faith inspector replaces the generated one. Turn 
 with Generated Faith Icons in Cultures and faiths. The designs live in `MapGen/FaithIcons.cs`
 and the renderer in `Emit/Relief/`.
 
+### Native rank titles
+
+Optional, and off by default. With Native rank titles on (Cultures and faiths, or the Quick
+generator's People step), each generated culture styles its rulers in its own language. Its
+counts, dukes, kings and emperors, and its chieftains, governors and priest-rulers, get words
+built from its tongue's roots. A duke is war + lord and an emperor is great + king, so sister
+cultures end up with related words. Native realm names does the same for Barony, County,
+Duchy, Kingdom and Empire. The two options work independently.
+
+- **Variants follow the ruler's situation.** A sovereign duke is a prince. March, palatinate
+  and castellany contracts have their own titles. A ruler holding two or more duchies or
+  kingdoms is a grand duke or high king. A people ruled under another religion takes its
+  crown's words from that religion's holy tongue.
+- **A realm uses its top liege's words**, as the English vocabularies do.
+- **Hovering a native word in game shows its English equivalent** (King, Margrave, Duchy). Turn
+  this off with Native rank tooltips.
+
+To sample the words for a language, `--languages` prints them. The coining is in
+`MapGen/NativeTitles.cs` and the game files in `Emit/NativeRankWriter.cs`. From the command
+line: `--native-titles`, `--native-realms`, `--no-rank-tooltips`.
+
 ### Coats of arms
 
 Dynasty and house arms are rolled with vanilla's own heraldry rules, read from the installed

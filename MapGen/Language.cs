@@ -639,6 +639,102 @@ public sealed class Language
         }
     }
 
+    // --- Ranks ---------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Stands for the realm-making ending in a <see cref="RankWord"/> recipe: the way -dom makes a
+    /// kingdom of a king. Each language uses one of its own kingdom place-words for it.
+    /// </summary>
+    public const string RealmEnding = "@realm";
+
+    /// <summary>Roots coined on first use for an imported language, which has no lexicon.</summary>
+    private readonly Dictionary<string, string> _markovConcepts = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// A title of rank built from the language's roots, joined in order: ["great", "king"] for an
+    /// emperor, ["king", <see cref="RealmEnding"/>] for a kingdom. Null when the compound comes
+    /// out too long, blocked, or missing a root, so the caller can try its next recipe.
+    ///
+    /// Roots rather than draws, on purpose. A dialect carries its parent's roots through its own
+    /// sound shifts, so a sister culture's king comes out cognate with this one's — König beside
+    /// Koning — rather than as an unrelated word. <paramref name="rng"/> only settles the rare
+    /// seam where two vowels meet, and the caller seeds it per word and per language family so
+    /// sisters settle it the same way.
+    /// </summary>
+    public string? RankWord(IReadOnlyList<string> concepts, int realmEnding, Rng rng, int maxLength = 13,
+        int minLength = 3)
+    {
+        if (_markov is not null)
+        {
+            string text = "";
+            foreach (string concept in concepts)
+            {
+                string part = concept == RealmEnding
+                    ? (KingdomAffixes.Length == 0 ? "" : KingdomAffixes[realmEnding % KingdomAffixes.Length].ToLowerInvariant())
+                    : MarkovConcept(concept, rng);
+                if (part.Length == 0) return null;
+                text = JoinText(text, part);
+            }
+
+            string word = Orthography.Capitalise(text);
+            return word.Length >= minLength && word.Length <= maxLength && !Blocked(word) ? word : null;
+        }
+
+        var lex = Lexicon!;
+        List<string> ids = [];
+        foreach (string concept in concepts)
+        {
+            List<string>? part = concept == RealmEnding
+                ? (lex.Kingdom.Count == 0 ? null : lex.Kingdom[realmEnding % lex.Kingdom.Count])
+                : lex.Roots.GetValueOrDefault(concept);
+            if (part is null || part.Count == 0) return null;
+            ids = Phonology!.Join(ids, part, rng);
+        }
+
+        string spelled = Spell(ids);
+        return spelled.Length >= minLength && spelled.Length <= maxLength && Phonology.Syllables(ids) <= 5
+               && !Blocked(spelled)
+            ? spelled
+            : null;
+    }
+
+    /// <summary>
+    /// The feminine of a rank word: the word wearing this language's feminine mark, the way
+    /// Königin is König's. The language's preferred mark first, then its others, because a mark
+    /// can vanish into the word it meets ("Chla" + "a" is "Chla") or eat it ("Lei" + "a" is "La").
+    /// The masculine again when none sits cleanly — vanilla does the same wherever a language has
+    /// no feminine (<c>"$duke_nomad_male_turkish$"</c>). <paramref name="free"/> rules out a
+    /// spelling another rank already uses, so a duchess is never called what a duchy is.
+    /// </summary>
+    public string FeminineRank(string male, int marker, Rng rng, Func<string, bool> free, int maxLength = 15)
+    {
+        int count = _markov is not null ? FemaleEndings.Length : Lexicon!.FeminineMarkers.Count;
+        List<string>? ids = null;
+        if (_markov is null && !_phonemesOf.TryGetValue(male, out ids)) return male;
+
+        for (int k = 0; k < count; k++)
+        {
+            int m = (marker + k) % count;
+            string female = _markov is not null
+                ? Orthography.Capitalise(JoinText(male.ToLowerInvariant(), FemaleEndings[m].ToLowerInvariant()))
+                : Spell(Phonology!.Join(ids!, Lexicon!.FeminineMarkers[m], rng));
+
+            if (female.Length >= 3 && female.Length <= maxLength && female != male && !Blocked(female)
+                && free(female))
+                return female;
+        }
+
+        return male;
+    }
+
+    /// <summary>An imported language's root for a concept, coined once so every rank reuses it.</summary>
+    private string MarkovConcept(string concept, Rng rng)
+    {
+        if (!_markovConcepts.TryGetValue(concept, out string? root))
+            _markovConcepts[concept] = root = MarkovRoot(rng, 1, 2);
+        return root;
+    }
+
     // --- Plumbing ------------------------------------------------------------------------------
 
     private string Spell(List<string> ids)

@@ -96,10 +96,17 @@ public static partial class ContentWriter
             WriteLocalisation(modDir, empires, waterNames, provinces, baronyCount, landCount, riverCount);
         });
 
+        // Beside province_terrain's 00 file rather than inside the stage above, because it is
+        // climate, not titles: every province's winter, and the climate.txt that would otherwise
+        // load vanilla's ids onto this map. See WinterWriter.
+        Core.Stage.Time("winter", () => WinterWriter.WriteAll(modDir,
+            WinterWriter.Severity(classified.Field, provinces, order, landCount), baronyCount, landCount));
+
         Core.Stage.Time("wonders", () => WonderWriter.WriteAll(modDir, gameDir, worldCenters));
         Core.Stage.Time("wonder index", () => WonderIndex.Write(modDir, worldCenters));
 
-        Core.Stage.Time("title tiers", () => TitleTierWriter.WriteAll(modDir, cultures, empires));
+        Core.Stage.Time("title tiers", () => TitleTierWriter.WriteAll(modDir, cultures, empires, faiths,
+            cfg.NativeRankTooltips));
 
         // After the de jure tree and the wilderness pass, because the formation decisions read
         // both, and before nothing in particular: no other writer reads what this one produces.
@@ -185,6 +192,7 @@ public static partial class ContentWriter
 
         // After the regions it points at, and nothing reads what it writes.
         Core.Stage.Time("great steppe files", () => SteppeWriter.WriteAll(modDir, gameDir, steppe));
+        Core.Stage.Time("vanilla identity guard", () => VanillaIdentityWriter.WriteAll(modDir, gameDir, cfg));
         Core.Stage.Time("the wilds files", () => FrontierWriter.WriteAll(modDir, cfg, frontier));
         Core.Stage.Time("silk road files", () => SilkRoadWriter.WriteAll(modDir, gameDir, cfg, silkRoad));
         // The situation is started from one history entry and nothing else (see the writer), so
@@ -206,6 +214,9 @@ public static partial class ContentWriter
 
         Core.Stage.Time("route files", () => RouteWriter.WriteAll(modDir, routes, crossings, silkRoad,
             provinces, order, baronyCount, provinceTerrain));
+
+        Core.Stage.Time("mountain passes",
+            () => PassWriter.WriteAll(modDir, MapGen.MountainPasses.ProvinceIds(provinces, order, baronyCount).ToList()));
 
         Core.Stage.Time("religion files", () => ReligionWriter.WriteAll(modDir, generatedFaiths.Declared(), cfg.Seed));
 
@@ -267,13 +278,14 @@ public static partial class ContentWriter
         // flatmap.dds back off disk for the bookmark background, and neither can be racing the
         // writer that produces them. Neither takes the shared Rng, so hoisting them past the
         // terrain textures leaves that stream's order untouched.
-        Core.Stage.Time("map graphics", () => MapGraphicsWriter.WriteAll(modDir, cfg, provinces, order, landCount));
+        Core.Stage.Time("map graphics", () => MapGraphicsWriter.WriteAll(modDir, gameDir, cfg, provinces, order, landCount,
+            classified.Field));
 
         // Kept rather than dropped: StruggleArt cuts each struggle's window background out of this
         // same buffer further down, and re-rendering or re-reading it there would be the same
         // parchment twice.
         var flatmap = Core.Stage.Time("flatmap", () => FlatmapWriter.WriteAll(
-            modDir, cfg, provinces, order, landCount, provinceElevation));
+            modDir, cfg, provinces, order, landCount, provinceElevation, routes, generatedWilderness));
 
         // The launcher and Workshop picture, cut from the same buffer while it is still in memory.
         Core.Stage.Time("thumbnail", () => ThumbnailWriter.Write(modDir, gameDir, flatmap));
@@ -360,7 +372,7 @@ public static partial class ContentWriter
         // any: the same list, in the same order, as walking the tree gives a generated world.
         Core.Stage.Time("city scatter", () => CityScatterWriter.WriteAll(modDir, cfg, counties,
             scatterHoldings, development, generatedCultures, provinces, order, anchors, renderedElevation));
-        Core.Stage.Time("map table", () => MapTableWriter.WriteAll(modDir, cfg));
+        Core.Stage.Time("map table", () => MapTableWriter.WriteAll(modDir, cfg, gameDir));
         Core.Stage.Time("holding models", () => HoldingModelWriter.WriteAll(modDir, gameDir, cfg));
         });
 
@@ -417,6 +429,10 @@ public static partial class ContentWriter
             // struggles it narrates ruin and the frontier only.
             Core.Stage.Time("chronicle (runtime)",
                 () => ChronicleRuntimeWriter.WriteAll(modDir, cfg, null, frontier));
+
+            // No chronicle, so no historical battlefields; the grand cities need only the map.
+            Core.Stage.Time("points of interest",
+                () => PoiWriter.WriteAll(modDir, empires, development, wilderness, null, cfg.StartYear));
         }
         });
         }

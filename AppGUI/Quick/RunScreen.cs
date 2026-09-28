@@ -71,7 +71,7 @@ internal sealed class RunScreen : Panel
         EmptyText = "Wars won, realms divided, thrones seized: the chronicle fills as the years pass.",
     };
     private readonly PillButton _continueHistory = new() { Text = "Continue its history", Glyph = "" };
-    private readonly ToolTip _tips = new() { InitialDelay = 500 };
+    private readonly WrappingToolTip _tips = new() { InitialDelay = 500 };
 
     // run view
     private readonly MapPreview _runMap = new();
@@ -348,28 +348,39 @@ internal sealed class RunScreen : Panel
             int y = S(18);
             _runTitle.Location = new Point(x - S(2), y);
             y += _runTitle.PreferredHeight + S(2);
-            _runSubtitle.Location = new Point(x, y);
-            y += _runSubtitle.PreferredHeight + S(18);
+            y += StepPanel.Place(_runSubtitle, x, y, w) + S(18);
 
             // The map on the left, the discoveries in a column on the right.
             int feedW = SideColumn(w), gap = S(24);
             int left = w - feedW - gap;
             PlaceFeed(panel, x + left + gap, y, feedW);
 
-            int mapH = Math.Min(left / 2, panel.ClientSize.Height - y - S(100));
-            int mapW = mapH * 2;
+            // The map leaves room under it for the progress and the milestones, which take its
+            // width; a narrower map can need more rows of milestones, so it is measured twice.
+            int Under(int mapWidth) => S(20) + S(8) + S(12) + _percent.PreferredHeight + S(2) + _phase.PreferredHeight + S(16)
+                                       + _milestones.GridHeight(mapWidth) + S(12);
+            var map = StepPanel.Map(x, y, left, panel.ClientSize.Height - y - Under(left), S(StepPanel.MinMapHeight));
+            if (Under(map.Width) > Under(left))
+                map = StepPanel.Map(x, y, left, panel.ClientSize.Height - y - Under(map.Width), S(StepPanel.MinMapHeight));
+            int mapW = map.Width;
             int mx = x;
-            _runMap.Bounds = new Rectangle(mx, y, mapW, mapH);
-            y += mapH + S(20);
+            _runMap.Bounds = map;
+            y += map.Height + S(20);
             _bar.Bounds = new Rectangle(mx, y, mapW, S(8));
             y += S(8) + S(12);
             _percent.Location = new Point(mx, y);
-            _eta.Location = new Point(_percent.Right + S(12), y + (_percent.PreferredHeight - _eta.PreferredHeight) / 2);
             _cancel.Location = new Point(mx + mapW - _cancel.Width, y - S(2));
-            y += _percent.PreferredHeight + S(2);
-            _phase.Location = new Point(mx, y);
-            y += _phase.PreferredHeight + S(16);
-            _milestones.Bounds = new Rectangle(mx, y, mapW, _milestones.PreferredGridHeight);
+
+            // The estimate beside the percentage, wrapping short of Cancel rather than running under it.
+            int ex = _percent.Right + S(12);
+            int etaY = y + (_percent.PreferredHeight - _eta.GetPreferredSize(Size.Empty).Height) / 2;
+            int etaH = StepPanel.Place(_eta, ex, etaY, _cancel.Left - S(8) - ex);
+            y = Math.Max(y + _percent.PreferredHeight, etaY + etaH) + S(2);
+            // A line kept for the phase even before it has one, so the milestones do not jump when
+            // it arrives; beside Cancel it wraps short of the button.
+            int phaseW = y < _cancel.Bottom ? _cancel.Left - S(8) - mx : mapW;
+            y += Math.Max(_phase.PreferredHeight, StepPanel.Place(_phase, mx, y, phaseW)) + S(16);
+            _milestones.Bounds = new Rectangle(mx, y, mapW, _milestones.GridHeight(mapW));
         };
     }
 
@@ -401,17 +412,26 @@ internal sealed class RunScreen : Panel
             int top = y + _chronicleTitle.PreferredHeight + S(8);
             _chronicle.Bounds = new Rectangle(cx, top, columnW, Math.Max(S(60), panel.ClientSize.Height - top - S(10)));
 
-            int mapH = Math.Min(left / 2, panel.ClientSize.Height - y - S(100));
-            int mapW = mapH * 2;
-            _historyMap.Bounds = new Rectangle(x, y, mapW, mapH);
-            y += mapH + S(16);
-
+            // The map leaves room under it for its controls and the line on how the world stands.
+            // Begin keeps to the right of Pause and the pace switch while it fits beside them, and
+            // takes a row of its own under a map too narrow for all three.
             foreach (var b in (PillButton[])[_playPause, _pace, _accept]) b.FitWidth();
+            bool OneRow(int mapWidth) => _playPause.Width + S(8) + _pace.Width + S(16) + _accept.Width <= mapWidth;
+            int Under(int mapWidth) => S(16) + (OneRow(mapWidth) ? S(36) : 2 * S(36) + S(8)) + S(10)
+                                       + StepPanel.Wrapped(_standing, mapWidth) + S(12);
+            var map = StepPanel.Map(x, y, left, panel.ClientSize.Height - y - Under(left), S(StepPanel.MinMapHeight));
+            if (Under(map.Width) > Under(left))
+                map = StepPanel.Map(x, y, left, panel.ClientSize.Height - y - Under(map.Width), S(StepPanel.MinMapHeight));
+            int mapW = map.Width;
+            _historyMap.Bounds = map;
+            y += map.Height + S(16);
+
             _playPause.Location = new Point(x, y);
             _pace.Location = new Point(_playPause.Right + S(8), y);
-            _accept.Location = new Point(x + mapW - _accept.Width, y);
+            if (!OneRow(mapW)) y += S(36) + S(8);
+            _accept.Location = new Point(Math.Max(x, x + mapW - _accept.Width), y);
             y += S(36) + S(10);
-            _standing.Location = new Point(x, y);
+            StepPanel.Place(_standing, x, y, mapW);
         };
     }
 
@@ -521,12 +541,12 @@ internal sealed class RunScreen : Panel
             }
 
             int buttonsH = rows.Count * S(36) + (rows.Count - 1) * S(10);
-            bool tallies = _tallies.PreferredGridHeight > 0;
-            int talliesH = tallies ? _talliesTitle.PreferredHeight + S(8) + _tallies.PreferredGridHeight + S(18) : 0;
-            int mapH = Math.Min(left / 2, panel.ClientSize.Height - y - buttonsH - talliesH - S(34));
-            int mapW = mapH * 2;
-            _doneMap.Bounds = new Rectangle(x, y, mapW, mapH);
-            y += mapH + S(18);
+            bool tallies = _tallies.GridHeight(left) > 0;
+            int talliesH = tallies ? _talliesTitle.PreferredHeight + S(8) + _tallies.GridHeight(left) + S(18) : 0;
+            var map = StepPanel.Map(x, y, left, panel.ClientSize.Height - y - buttonsH - talliesH - S(34), S(StepPanel.MinMapHeight));
+            int mapW = map.Width;
+            _doneMap.Bounds = map;
+            y += map.Height + S(18);
 
             foreach (var row in rows)
             {
@@ -545,7 +565,7 @@ internal sealed class RunScreen : Panel
                 y += S(8);
                 _talliesTitle.Location = new Point(x, y);
                 y += _talliesTitle.PreferredHeight + S(8);
-                _tallies.Bounds = new Rectangle(x, y, mapW, _tallies.PreferredGridHeight);
+                _tallies.Bounds = new Rectangle(x, y, mapW, _tallies.GridHeight(mapW));
             }
         };
     }

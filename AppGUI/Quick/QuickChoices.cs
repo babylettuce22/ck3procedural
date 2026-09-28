@@ -50,6 +50,12 @@ public sealed class QuickChoices
     public bool Wilderness { get; set; } = true;
     public bool Wars { get; set; } = true;
 
+    /// <summary>Rulers styled in their own people's language; see <see cref="MapConfig.NativeRankTitles"/>.</summary>
+    public bool NativeTitles { get; set; }
+
+    /// <summary>Realms named in it too; see <see cref="MapConfig.NativeRealmNames"/>.</summary>
+    public bool NativeRealms { get; set; }
+
     public QuickChoices Clone() => (QuickChoices)MemberwiseClone();
 
     /// <summary>The heightmap's pixel size, which becomes the map's.</summary>
@@ -140,6 +146,12 @@ public sealed class QuickChoices
         cfg.EnableMagic = false;
         cfg.EnableWilderness = Wilderness;
         cfg.EnableStartingWars = Wars;
+
+        // Only for invented peoples. Real CK3 cultures already have vanilla's words for their
+        // ranks and no generated language to coin new ones from; the page hides both switches then.
+        bool invented = People == QuickPeople.Invented;
+        cfg.NativeRankTitles = invented && NativeTitles;
+        cfg.NativeRealmNames = invented && NativeRealms;
 
         // Three start dates, as vanilla has. They follow the world's history when the player
         // accepts it later than it began — see MapGen.HistoryEras — and a world of real CK3 people

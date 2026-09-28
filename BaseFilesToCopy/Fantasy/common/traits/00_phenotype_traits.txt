@@ -73,6 +73,8 @@ phenotype_gracile = {
     # Slow-breeding, not sterile. At -0.5 this matched vanilla's Infertile trait: base fertility is
     # 0.5, so a pure-elf couple sat on the engine's minimum conception chance, and the extra
     # life_expectancy bought nothing because female fertility is keyed to age, not lifespan.
+    # Past vanilla's 45-year cutoff, gen_late_child_pulse_effect offers a rare, chosen late child
+    # (gen_aging.0010).
     fertility = -0.35
 
 	opposite_opinion = -2

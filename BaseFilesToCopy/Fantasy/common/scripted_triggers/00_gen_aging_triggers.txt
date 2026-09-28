@@ -58,3 +58,69 @@ gen_dwarf_ailment_eligible_trigger = {
 		}
 	}
 }
+
+# May this woman be offered a late child this year? Scope: the would-be mother.
+#
+# Vanilla stops female conception at MAX_FEMALE_REPRODUCTION_AGE = 45 for every race, so a
+# long-lived woman's extra decades bought her no extra children. gen_late_child_pulse_effect puts
+# a rare, chosen pregnancy back in the years past 45 (the offer is gen_aging.0010).
+#
+# Windows follow each race's aging, not a flat number:
+#   - Elves and deepkin: from 45 until world_weary reaches its first level (25 XP, usually a few
+#     years after onset at ~85). The fading is the end of the fertile life too.
+#   - Dwarves: from 45 to 61. life_expectancy = 20 moves their ailments to 65, and the window
+#     closes just ahead of that.
+# Explicit trait exclusions rather than a `fertility` threshold: that trigger's relation to the
+# engine's age multiplier is unmeasured, and one that folds age in would read zero past 45 and
+# silently switch the whole feature off.
+gen_late_child_mother_trigger = {
+	is_female = yes
+	age >= 45
+	OR = {
+		AND = {
+			gen_long_lived_race_trigger = yes
+			gen_late_child_not_fading_trigger = yes
+		}
+		AND = {
+			has_trait = phenotype_stocky
+			age < 62
+		}
+	}
+	is_pregnant = no
+	is_imprisoned = no
+	is_incapable = no
+	NOT = { has_trait = infertile }
+	NOT = { has_trait = celibate }
+	NOT = { has_character_flag = gen_late_child_cooldown }
+	is_married = yes
+	primary_spouse = { gen_late_child_father_trigger = yes }
+}
+
+# The primary spouse, checked from the mother's primary_spouse scope (so `prev` is the mother).
+# Any race: a mixed couple's child is settled by the on_birth_child race roll like any other.
+# Must share her court or her location, so a wife ruling one realm and a husband ruling another
+# are not offered a child they could not have.
+gen_late_child_father_trigger = {
+	is_alive = yes
+	is_male = yes
+	is_imprisoned = no
+	is_incapable = no
+	NOT = { has_trait = infertile }
+	NOT = { has_trait = eunuch }
+	NOT = { has_trait = celibate }
+	# A fading elf father is past it too, the same rule as the mother's.
+	gen_late_child_not_fading_trigger = yes
+	OR = {
+		is_in_the_same_court_as = prev
+		location = prev.location
+	}
+}
+
+# Not yet at world_weary's first level. The trait test comes first so the XP is only ever read on
+# someone who has the track.
+gen_late_child_not_fading_trigger = {
+	OR = {
+		NOT = { has_trait = world_weary }
+		NOT = { has_trait_xp = { trait = world_weary track = world_weary value >= 25 } }
+	}
+}

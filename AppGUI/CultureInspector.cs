@@ -308,6 +308,32 @@ public sealed class CultureInspector : InspectorForm
              : culture.RealmWords.Count == 0 ? "Emperor · King · Duke (vanilla)"
              : "(varies by government)";
 
+        // The native words, when the world was generated with them. Read-only: they are coined
+        // from the culture's language, and an edit would have to re-coin every variant with them.
+
+        [Category("Realm titles")]
+        [DisplayName("Native rulers")]
+        [Description("This people's own words for its feudal ranks, coined from its language when "
+                     + "'Native rank titles' is on — count, duke, king, emperor, then the prince, "
+                     + "margrave and high king variants. They sit above the vocabularies below.")]
+        [ReadOnly(true)]
+        public string NativeRulers => culture.NativeRanks is { Holders.Count: > 0 } native
+            ? string.Join(" · ", new[] { "count", "duke", "king", "emperor", "prince", "margrave", "high_king" }
+                .Select(id => MapGen.NativeTitles.HolderRanks[id])
+                .Select(rank => $"{rank.Male} {native.Holders[rank.Word].Male}"))
+            : "(off)";
+
+        [Category("Realm titles")]
+        [DisplayName("Native realms")]
+        [Description("This people's own words for its realms, coined from its language when "
+                     + "'Native realm names' is on.")]
+        [ReadOnly(true)]
+        public string NativeRealms => culture.NativeRanks is { Realms.Count: > 0 } native
+            ? string.Join(" · ", new[] { "county", "duchy", "kingdom", "empire", "principality", "march" }
+                .Select(id => MapGen.NativeTitles.RealmRanks[id])
+                .Select(rank => $"{rank.English} {native.Realms[rank.Word]}"))
+            : "(off)";
+
         [Category("Realm titles")] [TypeConverter(typeof(RealmWordsConverter))]
         public string Feudal { get => Summary("feudal"); set => SetWords("feudal", value); }
 

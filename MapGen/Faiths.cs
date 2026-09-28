@@ -164,6 +164,13 @@ public sealed class Religion
     /// localisation keeps only the name; the epithet is what names the god's symbol.
     /// </summary>
     public string? SourceDeity { get; set; }
+
+    /// <summary>
+    /// The crown's words in this religion's holy tongue — king, emperor, hegemon and their realms —
+    /// which a people that converts to it borrows, the way Sultan and Emir travelled with Islam.
+    /// Null unless native rank titles or realm names are on. See <see cref="NativeTitles"/>.
+    /// </summary>
+    public NativeRanks? SacredRanks { get; set; }
 }
 
 public sealed class FaithMap

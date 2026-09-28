@@ -50,6 +50,13 @@ public sealed class ProvinceSeed
     /// instead and get the old answer plus the border constraint.
     /// </summary>
     public int Domain;
+
+    /// <summary>
+    /// Relaxation leaves this seed where it was put. A mountain pass's seed stands on the saddle
+    /// of a corridor a fraction of a barony wide, and the centroid it would be moved toward can lie
+    /// out on the land at either end, taking the province off the pass it was placed to hold.
+    /// </summary>
+    public bool Pinned;
 }
 
 public enum ImpassableCause : byte { None, Score, Trapped, Mask, Height, Cut }
@@ -210,6 +217,9 @@ public static class Provinces
             Core.Stage.Detail("  · azgaar town seeding",
                 () => AzgaarSeeding.Reseed(seeds, domain, width, height, azgaar, cfg));
 
+        // After any reseeding, which would otherwise scatter them.
+        if (autoCut?.Passes is { Count: > 0 } passes) PlacePassSeeds(seeds, passes, domain, width);
+
         Core.Stage.Detail("  · seed coverage", () => EnsureSeedsCoverComponents(domain, width, height, seeds));
 
         // For anyone watching the run: the provinces forming, sketched at each step below. Null,
@@ -249,6 +259,25 @@ public static class Provinces
         Core.Stage.Detail("  · province report", () => Report(map, elevation, cfg));
         if (azgaar is not null || snap) VerifyDomains(map, domain);
         return map;
+    }
+
+    /// <summary>
+    /// One pinned land seed on each pass's middle, and none else in its corridor, so each pass is a
+    /// barony of its own rather than the tails of the provinces at either end. A seed already in a
+    /// corridor was placed on the wall before the pass was cut through it.
+    /// </summary>
+    private static void PlacePassSeeds(List<ProvinceSeed> seeds, IReadOnlyList<MountainPass> passes, int[] domain,
+        int width)
+    {
+        var corridor = new HashSet<int>(passes.SelectMany(p => p.Corridor));
+        int displaced = seeds.RemoveAll(s => corridor.Contains(s.Y * width + s.X));
+        foreach (var pass in passes)
+        {
+            var (x, y) = pass.Middle;
+            seeds.Add(new ProvinceSeed { X = x, Y = y, IsLand = true, Pinned = true, Domain = domain[y * width + x] });
+        }
+        Console.WriteLine($"  seeded {passes.Count} mountain pass(es)" +
+                          (displaced > 0 ? $", displacing {displaced} seed(s) the corridors ran through" : ""));
     }
 
     private static void Report(ProvinceMap map, float[] elevation, MapConfig cfg)
@@ -506,6 +535,7 @@ public static class Provinces
                 if (double.IsPositiveInfinity(best[label])) continue;
 
                 var seed = map.Seeds[label];
+                if (seed.Pinned) continue;
                 moved += Math.Sqrt((double)(target[label].X - seed.X) * (target[label].X - seed.X)
                                    + (double)(target[label].Y - seed.Y) * (target[label].Y - seed.Y));
                 seed.X = target[label].X;
@@ -1282,6 +1312,18 @@ public static class Provinces
         if (!(cfg.ImpassableGateHeight > 0)) return 0;
         double sea = cfg.Limits.SeaLevelUpper;
         return sea + Math.Max(0, cfg.ImpassableGateHeight - sea) * cfg.ReliefScale;
+    }
+
+    /// <summary>
+    /// <see cref="MapConfig.ImpassableCeilingHeight"/> on this map, its height above sea scaled with
+    /// <see cref="MapConfig.ReliefScale"/> as the gate's is; <see cref="float.MaxValue"/> when it is
+    /// off, so nothing is ever above it.
+    /// </summary>
+    internal static float CeilingLine(MapConfig cfg)
+    {
+        if (!(cfg.ImpassableCeilingHeight > 0)) return float.MaxValue;
+        double sea = cfg.Limits.SeaLevelUpper;
+        return (float)(sea + Math.Max(0, cfg.ImpassableCeilingHeight - sea) * cfg.ReliefScale);
     }
 
     /// <summary>

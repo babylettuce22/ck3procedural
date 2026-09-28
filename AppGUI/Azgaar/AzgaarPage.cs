@@ -100,7 +100,7 @@ internal sealed class AzgaarPage : Panel
     private readonly ChoiceCard _advancementAzgaar;
     private readonly ChoiceCard _densityAzgaar;
     private readonly ChoiceCard _racesAzgaar;
-    private readonly ToolTip _tips = new() { InitialDelay = 400, AutoPopDelay = 15000 };
+    private readonly WrappingToolTip _tips = new() { InitialDelay = 400, AutoPopDelay = 15000 };
 
     // review step
     private readonly List<(Label Key, Label Value, TextLink Change)> _summary = [];
@@ -491,8 +491,7 @@ internal sealed class AzgaarPage : Panel
             int y = S(18);
             title.Location = new Point(x - S(2), y);
             y += title.PreferredHeight + S(2);
-            subtitle.Location = new Point(x, y);
-            y += subtitle.PreferredHeight + S(18);
+            y += StepPanel.Place(subtitle, x, y, w) + S(18);
 
             // The files on the left, the world as it will be imported on the right.
             int leftW = Math.Clamp(w * 35 / 100, S(330), S(440)), gap = S(24);
@@ -501,14 +500,16 @@ internal sealed class AzgaarPage : Panel
 
             // The preview as large as the column allows, but short enough to leave the counts and
             // the world line under it on screen; they take the preview's width.
-            int countsH = _counts.PreferredGridHeight;
+            int countsH = _counts.GridHeight(rightW);
             int worldH = StepPanel.Wrapped(_worldLine, rightW);
             var map = StepPanel.Map(rightX, top, rightW,
                 Math.Max(S(120), panel.ClientSize.Height - top - (countsH > 0 ? countsH + S(24) : S(12)) - worldH - S(12)));
             int previewH = map.Height;
             rightW = map.Width;
+            countsH = _counts.GridHeight(rightW);
 
-            int slotH = S(92);
+            // Each slot as tall as what it has to say: a long error is shown whole.
+            int slotH = Math.Max(_imageSlot.HeightFor(leftW), _exportSlot.HeightFor(leftW));
             _imageSlot.Bounds = new Rectangle(x, y, leftW, slotH);
             y += slotH + S(12);
             _exportSlot.Bounds = new Rectangle(x, y, leftW, slotH);
@@ -701,6 +702,10 @@ internal sealed class AzgaarPage : Panel
         else
             _exportSlot.Set(FileSlot.State.Empty, null, "Menu ▸ Export ▸ Full, in Azgaar. Choose it, or drop it here.");
 
+        // A long file name is shortened in the middle on its card; the whole path is a hover away.
+        _tips.SetToolTip(_imageSlot, string.IsNullOrEmpty(_choices.HeightmapPath) ? null : _choices.HeightmapPath);
+        _tips.SetToolTip(_exportSlot, string.IsNullOrEmpty(_choices.ExportPath) ? null : _choices.ExportPath);
+
         // Whether the pair agrees.
         if (_image is null || _export is null)
         {
@@ -832,32 +837,41 @@ internal sealed class AzgaarPage : Panel
             int y = S(18);
             titleLabel.Location = new Point(x - S(2), y);
             y += titleLabel.PreferredHeight + S(2);
-            subtitleLabel.Location = new Point(x, y);
-            y += subtitleLabel.PreferredHeight + S(18);
+            y += StepPanel.Place(subtitleLabel, x, y, w) + S(18);
 
-            int cardH = S(62), gap = S(12);
+            int gap = S(12);
+
+            // A group's cards across a span of the column, all as tall as the one with the most to say.
+            int CardWidth(List<ChoiceCard> cards, int gw) => (gw - gap * (Math.Max(1, cards.Count) - 1)) / Math.Max(1, cards.Count);
+            int CardsHeight(List<ChoiceCard> cards, int gw) => cards.Count == 0 ? 0 : cards.Max(c => c.HeightFor(CardWidth(cards, gw)));
+            void Cards(List<ChoiceCard> cards, int gx, int gw, int cy, int cardH)
+            {
+                int n = Math.Max(1, cards.Count), cw = CardWidth(cards, gw);
+                for (int i = 0; i < cards.Count; i++)
+                    cards[i].Bounds = new Rectangle(gx + i * (cw + gap), cy, i == n - 1 ? gw - i * (cw + gap) : cw, cardH);
+            }
 
             // One group across a span of the column; returns the height it took.
             int Place((Label Title, Label Hint, List<ChoiceCard> Cards) g, int gx, int gw, int gy)
             {
-                g.Title.Location = new Point(gx, gy);
-                g.Hint.Location = new Point(gx + g.Title.PreferredWidth + S(10), gy + (g.Title.PreferredHeight - g.Hint.PreferredHeight) / 2 + S(1));
-                g.Hint.MaximumSize = new Size(Math.Max(1, gx + gw - g.Hint.Left), 0);
-                int cy = gy + g.Title.PreferredHeight + S(6);
-                int n = Math.Max(1, g.Cards.Count);
-                int cw = (gw - gap * (n - 1)) / n;
-                for (int i = 0; i < g.Cards.Count; i++)
-                    g.Cards[i].Bounds = new Rectangle(gx + i * (cw + gap), cy, i == n - 1 ? gw - i * (cw + gap) : cw, cardH);
+                int cy = StepPanel.TitleAndHint(g.Title, g.Hint, gx, gy, gw) + S(6);
+                int cardH = CardsHeight(g.Cards, gw);
+                Cards(g.Cards, gx, gw, cy, cardH);
                 return cy - gy + cardH;
             }
 
             y += Place(advancement, x, w, y) + S(18);
             y += Place(density, x, w, y) + S(18);
 
-            // The two two-way choices share a row, each in half the column.
+            // The two two-way choices share a row, each in half the column, their cards level
+            // even when one hint has to wrap under its title and the other does not.
             int half = (w - S(24)) / 2;
-            Place(wilderness, x, half, y);
-            Place(races, x + half + S(24), w - half - S(24), y);
+            int rightX = x + half + S(24), rightW = w - half - S(24);
+            int rowY = Math.Max(StepPanel.TitleAndHint(wilderness.Title, wilderness.Hint, x, y, half),
+                                StepPanel.TitleAndHint(races.Title, races.Hint, rightX, y, rightW)) + S(6);
+            int rowH = Math.Max(CardsHeight(wilderness.Cards, half), CardsHeight(races.Cards, rightW));
+            Cards(wilderness.Cards, x, half, rowY, rowH);
+            Cards(races.Cards, rightX, rightW, rowY, rowH);
         };
     }
 
@@ -925,29 +939,15 @@ internal sealed class AzgaarPage : Panel
             int y = S(18);
             title.Location = new Point(x - S(2), y);
             y += title.PreferredHeight + S(2);
-            subtitle.Location = new Point(x, y);
-            y += subtitle.PreferredHeight + S(18);
+            y += StepPanel.Place(subtitle, x, y, w) + S(18);
 
             int gap = S(28);
             int leftW = (w - gap) * 52 / 100;
             int rightX = x + leftW + gap, rightW = x + w - rightX;
 
-            int rowH = S(38);
             int cardPad = S(16);
-            panel.Cards.Add(new Rectangle(x, y, leftW, cardPad * 2 + rowH * _summary.Count));
-            int ry = y + cardPad;
-            for (int i = 0; i < _summary.Count; i++)
-            {
-                var (k, v, change) = _summary[i];
-                int cy = ry + i * rowH;
-                k.Location = new Point(x + cardPad, cy + (rowH - k.PreferredHeight) / 2);
-                change.Location = new Point(x + leftW - cardPad - change.Width, cy + (rowH - change.Height) / 2);
-                int vx = x + cardPad + S(110);
-                v.AutoSize = false;
-                v.AutoEllipsis = true;
-                v.Bounds = new Rectangle(vx, cy + (rowH - v.PreferredHeight) / 2, change.Left - vx - S(8), v.PreferredHeight);
-                if (i > 0) panel.Rules.Add(new Rectangle(x + cardPad, cy, leftW - 2 * cardPad, 1));
-            }
+            int cardH = StepPanel.Summary(panel, _summary, x, y, leftW, cardPad, S(110));
+            panel.Cards.Add(new Rectangle(x, y, leftW, cardH));
 
             int ty = y;
             var map = StepPanel.Map(rightX, ty, rightW, Math.Max(S(120), panel.ClientSize.Height - ty - ReviewFootHeight(rightW)));
@@ -1075,6 +1075,17 @@ internal sealed class AzgaarPage : Panel
             Invalidate();
         }
 
+        /// <summary>
+        /// How tall the slot has to be at <paramref name="width"/> to show its detail line whole —
+        /// a long error message wraps onto as many lines as it needs.
+        /// </summary>
+        public int HeightFor(int width)
+        {
+            int pad = S(16), tx = pad + S(40) + S(14);
+            int top = S(14) + S(22) + (_state != State.Empty && _file is not null ? S(19) : 0);
+            return Math.Max(S(92), top + WrappedHeight(_detail, Small, width - pad - tx) + S(14));
+        }
+
         protected override void Draw(Graphics g)
         {
             var box = new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
@@ -1125,7 +1136,7 @@ internal sealed class AzgaarPage : Panel
 
             var detailColor = _state == State.Error ? Theme.Danger : Theme.TextDim;
             TextRenderer.DrawText(g, _detail, Small, new Rectangle(tx, ty, Width - pad - tx, Height - ty - S(8)), detailColor,
-                TextFormatFlags.NoPadding | TextFormatFlags.WordBreak | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+                TextFormatFlags.NoPadding | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
 
             DrawFocus(g, box, radius);
         }

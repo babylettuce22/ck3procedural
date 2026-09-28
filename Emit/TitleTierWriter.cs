@@ -293,9 +293,15 @@ public static class TitleTierWriter
     /// Pure: no draw happens here, which is what makes it safe for <see cref="WorldOverwrite"/> to
     /// call again after an inspector has changed a word. With nothing to say the files are removed
     /// rather than left over, so a culture put back to vanilla's words actually gets them.
+    ///
+    /// Also writes the native rank titles (<see cref="NativeRankWriter"/>), which sit above these
+    /// ladders, so every caller that re-emits a culture's words re-emits both.
     /// </summary>
-    public static void WriteAll(string modDir, CultureMap cultures, List<Title> empires)
+    public static void WriteAll(string modDir, CultureMap cultures, List<Title> empires, FaithMap faiths,
+        bool rankTooltips)
     {
+        NativeRankWriter.WriteAll(modDir, cultures, faiths, rankTooltips);
+
         var entries = new List<Flavor>();
 
         foreach (var culture in cultures.Cultures)
@@ -366,9 +372,26 @@ public static class TitleTierWriter
             return (title.Form.Trim(), female ? (fem.Length > 0 ? fem : male) : (male.Length > 0 ? male : fem));
         }
 
+        // Native words sit above the ladders, and either half can be on without the other. Only
+        // the government's own word: the variants (prince, margrave, high king) depend on the
+        // ruler's situation in play, which a preview cannot know.
+        string? nativeRealm = null, nativeHolder = null;
+        if (liegeCulture.NativeRanks is { } native
+            && NativeTitles.Families.FirstOrDefault(f => f.Governments.Contains(government)) is { } family
+            && Array.IndexOf(NativeTitles.Tiers, title.Tier) is var i and >= 0)
+        {
+            if (native.Holders.TryGetValue(NativeTitles.HolderRanks[family.Holders[i]].Word, out var style))
+                nativeHolder = female ? style.Female : style.Male;
+            native.Realms.TryGetValue(NativeTitles.RealmRanks[family.Realms[i]].Word, out nativeRealm);
+        }
+
         if (liegeCulture.RealmWords.TryGetValue(Token(government), out var words)
             && words.Realm(title.Tier) is { Length: > 0 } realm)
-            return (realm, words.Holder(title.Tier, female));
+            return (nativeRealm ?? realm, nativeHolder ?? words.Holder(title.Tier, female));
+
+        if (nativeRealm is not null || nativeHolder is not null)
+            return (nativeRealm ?? TitleVocabulary.Plain.Realm(title.Tier),
+                    nativeHolder ?? TitleVocabulary.Plain.Holder(title.Tier, female));
 
         return null;
     }

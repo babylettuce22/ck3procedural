@@ -62,7 +62,12 @@ public sealed class VanillaPatch
             return null;
         }
 
-        return new VanillaPatch(label, relativePath, File.ReadAllText(source));
+        // Line endings normalised on the way in, so an anchor that spans a line break can be
+        // written with "\n" and still match. Paradox mixes the two — 15 of vanilla's 41 gfx/FX
+        // files are CRLF, the rest LF — and a file can flip between patches, which would miss
+        // every such anchor and skip the override. The write normalises to LF anyway
+        // (ParadoxText), so nothing that ships changes.
+        return new VanillaPatch(label, relativePath, File.ReadAllText(source).Replace("\r\n", "\n"));
     }
 
     /// <summary>
@@ -133,9 +138,62 @@ public sealed class VanillaPatch
     }
 
     /// <summary>
-    /// Writes the override, or explains why it is not writing one. Returns whether it shipped.
+    /// Replaces the whole block that opens at <paramref name="header"/> — which must end in its
+    /// <c>{</c> — through its matching <c>}</c>, with <paramref name="replacement"/>.
+    ///
+    /// For the shape the other two cannot express: a definition whose body is wrong throughout, so
+    /// guarding one place in it or rewriting one token would leave the rest still doing the wrong
+    /// thing. The header is matched once and must be unique in the file; the close is found with
+    /// <see cref="ScriptScan.BlockEnd"/>, so braces in comments and strings do not move it.
     /// </summary>
-    public bool Ship(string modDir)
+    public void ReplaceBlock(string name, string header, string replacement)
+    {
+        int start = text.IndexOf(header, StringComparison.Ordinal);
+        int end = start < 0 ? -1 : ScriptScan.BlockEnd(text, start);
+
+        if (end < 0 || text.IndexOf(header, start + header.Length, StringComparison.Ordinal) >= 0)
+        {
+            missed.Add(name);
+            return;
+        }
+
+        text = text.Remove(start, end - start).Insert(start, replacement);
+        landed.Add(name);
+    }
+
+    /// <summary>
+    /// Splices <paramref name="body"/> in immediately after the block that opens at
+    /// <paramref name="header"/>, past its matching <c>}</c>.
+    ///
+    /// For adding a sibling next to a definition rather than anything inside it. The close is found
+    /// with <see cref="ScriptScan.BlockEnd"/>, as in <see cref="ReplaceBlock"/>, so a nested block
+    /// Paradox adds later cannot pull the insert inside the definition — which a probe for "the
+    /// next <c>}</c>" would do, and ship a broken file. The header must be unique in the file for
+    /// the same reason ReplaceBlock's must.
+    /// </summary>
+    public void InsertAfterBlock(string name, string body, string header)
+    {
+        int start = text.IndexOf(header, StringComparison.Ordinal);
+        int end = start < 0 ? -1 : ScriptScan.BlockEnd(text, start);
+
+        if (end < 0 || text.IndexOf(header, start + header.Length, StringComparison.Ordinal) >= 0)
+        {
+            missed.Add(name);
+            return;
+        }
+
+        text = text.Insert(end, body);
+        landed.Add(name);
+    }
+
+    /// <summary>
+    /// Writes the override, or explains why it is not writing one. Returns whether it shipped.
+    ///
+    /// <paramref name="bom"/> is on for script and gui, which CK3 wants with a BOM. Pass false for a
+    /// file vanilla ships without one, which is every shader: none of the 41 files in gfx/FX
+    /// starts ef bb bf.
+    /// </summary>
+    public bool Ship(string modDir, bool bom = true)
     {
         if (missed.Count > 0)
         {
@@ -147,7 +205,8 @@ public sealed class VanillaPatch
 
         string destination = Path.Combine(modDir, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-        ParadoxText.WriteBom(destination, text);
+        if (bom) ParadoxText.WriteBom(destination, text);
+        else ParadoxText.WriteNoBom(destination, text);
 
         Console.WriteLine($"  {label}: {relativePath} — patched {string.Join(", ", landed)}");
         return true;

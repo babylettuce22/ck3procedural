@@ -24,7 +24,8 @@ public static class FlatmapWriter
 {
     public static Flatmap WriteAll(
         string modDir, MapConfig cfg, ProvinceMap provinces,
-        int[] order, int landCount, float[] elevation)
+        int[] order, int landCount, float[] elevation,
+        RouteNetwork? routes = null, WildernessMap? wilderness = null)
     {
         int w = cfg.ProvinceWidth;
         int h = cfg.ProvinceHeight;
@@ -139,6 +140,15 @@ public static class FlatmapWriter
                 pixels[o + 3] = 255;
             }
         });
+
+        // Pen work over the finished parchment, before it is encoded — so the thumbnail and the
+        // struggle art cut from the returned buffer carry it too.
+        if (cfg.FlatmapRoads || cfg.FlatmapFlourishes)
+        {
+            string inked = FlatmapInk.Draw(pixels, w, h, landMask, provinces, order, routes, wilderness,
+                cfg.Seed, cfg.FlatmapRoads, cfg.FlatmapFlourishes, cfg.FlatmapFeather);
+            Console.WriteLine($"  flatmap: {inked}");
+        }
 
         string flatMapDir = Path.Combine(modDir, "gfx", "map", "terrain", "flat_maps");
         Directory.CreateDirectory(flatMapDir);

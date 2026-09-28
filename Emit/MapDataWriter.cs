@@ -452,7 +452,30 @@ public static class MapDataWriter
         }
     }
 
-    private static void ShapeCoastline(ushort[] full, MapConfig cfg)
+    /// <summary>
+    /// Bevels the land side of every shore and gives every water pixel its depth by distance from
+    /// land: a shelf that plunges to the floor over <c>shelfReach</c> pixels, or over
+    /// <c>riverReach</c> inside a major river.
+    ///
+    /// The river case exists because this pass rewrites *every* water pixel, so it undoes the
+    /// sheer drop to the floor that MajorRivers carves. On the sea's seven-pixel shelf a channel 9-13
+    /// pixels wide never reaches the floor: it shipped as a shallow V, 1.4 world units deep at the
+    /// median against the 3.0 the water plane is set at. CK3 draws distant terrain from vertices
+    /// several texels apart and interpolates between them, so a shallow channel is the first thing
+    /// lost between two bank vertices — seen in game as river water breaking into rectangular
+    /// patches of dry bed at mid zoom. Measured on a 4096 world by resampling the shipped heightmap
+    /// on sparser grids, the two-pixel plunge takes the median bed from 1.4 to 3.0 units deep and
+    /// keeps 73% of the river's water at a 16-unit vertex spacing where the shelf kept 65% (99% and
+    /// 97% at 8). Past that the channel is narrower than the spacing and no depth helps. It moves
+    /// no shoreline, but scatter placement reads relief near the banks and draws from long random
+    /// sequences, so a change here reshuffles trees and animals map-wide — counts within 0.3%.
+    ///
+    /// The first ring, the pixels touching land, stays at the shelf's top on both profiles. That
+    /// ring sits above the water plane and is what the rendered riverbank is, so the river keeps its
+    /// visible width; only the depth under the water changes. Bridges ride
+    /// <c>clamp_to_water_level</c> and never see the bed.
+    /// </summary>
+    private static void ShapeCoastline(ushort[] full, MapConfig cfg, ProvinceMap provinces)
     {
         int width = cfg.Width, height = cfg.Height;
 
@@ -462,6 +485,17 @@ public static class MapDataWriter
 
         // Fast plunge curve matching vanilla 3-4 pixel shelf
         const int shelfReach = 7;
+
+        // Major river channels: the same curve over two pixels, so d=1 is a quarter of the shelf's
+        // top (2.2 world units under the plane) and d=2 is the floor. See the summary.
+        const int riverReach = 2;
+
+        int pw = provinces.Width, ph = provinces.Height;
+        int scaleX = Math.Max(1, width / pw), scaleY = Math.Max(1, height / ph);
+
+        bool InMajorRiver(int x, int y)
+            => provinces.Seeds[provinces.Label[Math.Min(y / scaleY, ph - 1) * pw
+                                               + Math.Min(x / scaleX, pw - 1)]].IsMajorRiver;
 
         var (landDistance, waterDistance) = Core.Stage.Detail("        · coast distances",
             () => MeasureCoastDistances(full, width, height, Math.Max(shelfReach, landReach)));
@@ -499,9 +533,10 @@ public static class MapDataWriter
                     // 2. WATER-SIDE FAST PLUNGE (3-4 pixels down to deep black bed)
                     // Plunges: d=1 (~16/255), d=2 (~9/255), d=3 (~3/255), d>=4 (0)
                     int d = waterDistance[i];
-                    if (d <= shelfReach)
+                    int reach = d > 0 && d <= shelfReach && InMajorRiver(x, y) ? riverReach : shelfReach;
+                    if (d <= reach)
                     {
-                        float t = (float)d / shelfReach;
+                        float t = (float)d / reach;
                         float plunge = (1.0f - t) * (1.0f - t); // Quadratic rapid drop
                         int shelfHeight = (int)Math.Round((WaterLevel16 - Step255 * 3) * plunge);
                         full[i] = (ushort)Math.Clamp(shelfHeight, 0, WaterLevel16);
@@ -515,8 +550,8 @@ public static class MapDataWriter
             }
         });
 
-        Console.WriteLine($"  coastline shaping: underwater shelf plunged to deep bed over {shelfReach} px, " +
-                          $"land coast smoothed over {landReach} px");
+        Console.WriteLine($"  coastline shaping: underwater shelf plunged to deep bed over {shelfReach} px " +
+                          $"({riverReach} px in major river channels), land coast smoothed over {landReach} px");
     }
 
     /// <summary>
@@ -607,7 +642,7 @@ public static class MapDataWriter
         var full = Core.Stage.Detail("      · to 16-bit", () => ElevationTo16(terra.Elevation, cfg));
         Core.Stage.Detail("      · match provinces",
             () => ForceCoastlineToMatchProvinces(full, cfg, provinces));
-        Core.Stage.Detail("      · shape coastline", () => ShapeCoastline(full, cfg));
+        Core.Stage.Detail("      · shape coastline", () => ShapeCoastline(full, cfg, provinces));
         return full;
     }
 

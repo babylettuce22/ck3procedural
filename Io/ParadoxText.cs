@@ -20,7 +20,7 @@ public static class ParadoxText
     private static readonly UTF8Encoding NoBomEncoding = new(encoderShouldEmitUTF8Identifier: false);
     private static readonly UTF8Encoding BomEncoding = new(encoderShouldEmitUTF8Identifier: true);
 
-    /// <summary>For map_data core files.</summary>
+    /// <summary>For map_data core files, and for shaders, none of which vanilla ships with a BOM.</summary>
     public static void WriteNoBom(string path, string text)
         => File.WriteAllText(path, Normalize(text), NoBomEncoding);
 

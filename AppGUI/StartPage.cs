@@ -55,7 +55,7 @@ internal sealed class StartPage : Panel
     private readonly LinkButton _gameChange;
     private readonly RememberSwitch _remember = new() { Name = "startRemember" };
     private readonly ThemeGlyph _theme = new() { Name = "startTheme" };
-    private readonly ToolTip _tips = new() { InitialDelay = 400 };
+    private readonly WrappingToolTip _tips = new() { InitialDelay = 400 };
 
     public StartPage()
     {
@@ -73,13 +73,13 @@ internal sealed class StartPage : Panel
             BackColor = Color.Transparent,
         };
 
+        // Wraps onto a second line on a narrow window rather than being cut short.
         _subtitle = new Label
         {
             Text = "Generate a new Crusader Kings III map — terrain, realms, cultures and faiths — as a playable mod.",
             Font = SubtitleFont,
             ForeColor = Theme.TextDim,
             AutoSize = false,
-            AutoEllipsis = true,
             BackColor = Color.Transparent,
         };
 
@@ -140,8 +140,16 @@ internal sealed class StartPage : Panel
             + "The Start link on the Quick page, or File ▸ Start page, brings this page back.");
         _theme.Click += (_, _) => DarkModeToggled?.Invoke();
 
+        // A window too short for the page scrolls it; see OnLayout.
+        WheelFollowsMouse.Install();
         Controls.AddRange([_banner, _title, _subtitle, _azgaar, _quick, _complex, _openWorld, _guide, _remember,
                            _rule, _gameGlyph, _gameText, _gameChange, _theme]);
+    }
+
+    protected override void OnControlAdded(ControlEventArgs e)
+    {
+        base.OnControlAdded(e);
+        StepPanel.Unanchor(e.Control);
     }
 
     /// <summary>
@@ -181,9 +189,11 @@ internal sealed class StartPage : Panel
     {
         _gameGlyph.Ok = found;
         _gameText.ForeColor = found ? Theme.TextDim : Theme.Danger;
-        _gameText.Text = found
-            ? $"Crusader Kings III found at {gameDir}     ·     Mods are written to {modRoot}"
-            : "Crusader Kings III was not found. Set the game folder before writing a mod.";
+        _gameText.Parts = found
+            ? [$"Crusader Kings III found at {gameDir}", $"Mods are written to {modRoot}"]
+            : ["Crusader Kings III was not found. Set the game folder before writing a mod."];
+        _gameText.Text = string.Join("     ·     ", _gameText.Parts);
+        _tips.SetToolTip(_gameText, found ? string.Join("\n", _gameText.Parts) : null);
         _gameChange.Text = found ? "Change…" : "Set game folder…";
         PerformLayout();
     }
@@ -206,14 +216,30 @@ internal sealed class StartPage : Panel
     private int BannerGap => S(26);
     private int FullBannerHeight(int width) => Math.Min(S(230), width * 30 / 100);
 
-    /// <summary>Everything in the column below the banner, top of the title to foot of the footer.</summary>
-    private int BodyHeight
-        => _title.PreferredHeight + S(4) + TextRenderer.MeasureText("Ag", SubtitleFont).Height + S(24)
-           + CardHeight + S(16) + LinkRowHeight + S(18) + S(1) + S(10) + FooterHeight;
+    /// <summary>Everything in the column below the banner, top of the title to foot of the footer, at a column width.</summary>
+    private int BodyHeight(int width)
+        => _title.PreferredHeight + S(4) + StepPanel.Wrapped(_subtitle, width) + S(24)
+           + CardHeight(width) + S(16) + LinkRowHeight + S(18) + S(1) + S(10) + FooterHeight(width);
 
-    private int CardHeight => S(226);
+    private ModeCard[] Cards => [_azgaar, _quick, _complex];
+    private int CardGap => S(16);
+    private int CardWidth(int width) => (width - 2 * CardGap) / 3;
+
+    /// <summary>
+    /// Each card's tagline block: as tall as the longest tagline wraps to, so the chips under the
+    /// taglines stay level across the three cards.
+    /// </summary>
+    private int TaglineBlock(int width) => Math.Max(S(44), Cards.Max(c => c.TaglineHeight(CardWidth(width))));
+
+    /// <summary>The cards' height: as designed, or taller when a narrow window wraps what one says onto more lines.</summary>
+    private int CardHeight(int width)
+        => Math.Max(S(226), Cards.Max(c => c.HeightFor(CardWidth(width), TaglineBlock(width))));
+
     private int LinkRowHeight => S(30);
-    private int FooterHeight => S(28);
+
+    /// <summary>One line of footer, or two when the game's folder and the mod folder do not fit on one.</summary>
+    private int FooterHeight(int width) => _gameText.HeightFor(FooterTextWidth(width));
+    private int FooterTextWidth(int width) => width - S(18) - S(8) - S(12) - _gameChange.Width;
 
     /// <summary>
     /// The size the page wants to be shown at: the full column, the full banner and the margins,
@@ -221,28 +247,36 @@ internal sealed class StartPage : Panel
     /// </summary>
     public Size PreferredPageSize
         => new(ColumnWidth + 2 * SideMargin,
-               TopPad + FullBannerHeight(ColumnWidth) + BannerGap + BodyHeight + BottomPad);
+               TopPad + FullBannerHeight(ColumnWidth) + BannerGap + BodyHeight(ColumnWidth) + BottomPad);
 
+    /// <summary>
+    /// Lays the column out, centred in the window when it fits; when it does not even without the
+    /// banner, the page scrolls (<see cref="StepPanel.ArrangeScrolling"/>) rather than cutting off the foot.
+    /// </summary>
     protected override void OnLayout(LayoutEventArgs e)
     {
         base.OnLayout(e);
         if (_title is null) return;
+        StepPanel.ArrangeScrolling(this, Arrange, () => AdjustFormScrollbars(AutoScroll));
+    }
 
+    /// <summary>Places everything in content coordinates and returns how tall the content is.</summary>
+    private int Arrange()
+    {
         int margin = Math.Max(SideMargin, ClientSize.Width * 3 / 100);
         int width = Math.Min(ClientSize.Width - 2 * margin, S(StepPanel.MaxColumn));
-        if (width <= 0) return;
+        if (width <= 0) return 0;
         int x = (ClientSize.Width - width) / 2;
 
         // Out of the column altogether, tucked in the page's corner above where the banner starts.
         _theme.Bounds = new Rectangle(ClientSize.Width - S(6) - S(24), S(2), S(24), S(24));
 
         int titleH = _title.PreferredHeight;
-        int subtitleH = TextRenderer.MeasureText("Ag", SubtitleFont).Height;
-        int cardH = CardHeight;
+        int cardH = CardHeight(width);
         int linkH = LinkRowHeight;
-        int footerH = FooterHeight;
+        int footerH = FooterHeight(width);
 
-        int rest = BodyHeight;
+        int rest = BodyHeight(width);
         int topPad = TopPad;
         int bottomPad = BottomPad;
         int spare = ClientSize.Height - topPad - bottomPad - rest - BannerGap;
@@ -261,13 +295,14 @@ internal sealed class StartPage : Panel
 
         _title.Location = new Point(x - S(3), y);
         y += titleH + S(4);
-        _subtitle.Bounds = new Rectangle(x, y, width, subtitleH);
-        y += subtitleH + S(24);
+        y += StepPanel.Place(_subtitle, x, y, width) + S(24);
 
         // Three ways in, left to right from the most given to the most made: a map brought from
         // Azgaar, a Quick world, the full generator.
-        int gap = S(16);
-        int cardW = (width - 2 * gap) / 3;
+        int gap = CardGap;
+        int cardW = CardWidth(width);
+        int block = TaglineBlock(width);
+        foreach (var card in Cards) card.TaglineBlock = block;
         _azgaar.Bounds = new Rectangle(x, y, cardW, cardH);
         _quick.Bounds = new Rectangle(x + cardW + gap, y, cardW, cardH);
         _complex.Bounds = new Rectangle(x + 2 * (cardW + gap), y, width - 2 * (cardW + gap), cardH);
@@ -286,6 +321,7 @@ internal sealed class StartPage : Panel
         _gameGlyph.Bounds = new Rectangle(x, y + (footerH - glyph) / 2, glyph, glyph);
         _gameChange.Location = new Point(x + width - _gameChange.Width, y + (footerH - _gameChange.Height) / 2);
         _gameText.Bounds = Rectangle.FromLTRB(_gameGlyph.Right + S(8), y, _gameChange.Left - S(12), y + footerH);
+        return y + footerH + bottomPad;
     }
 
     private static GraphicsPath Rounded(RectangleF r, float radius)
@@ -332,7 +368,7 @@ internal sealed class StartPage : Panel
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer
                      | ControlStyles.UserPaint | ControlStyles.ResizeRedraw | ControlStyles.SupportsTransparentBackColor, true);
             BackColor = Color.Transparent;
-            new ToolTip { InitialDelay = 400 }.SetToolTip(this, "An example of what the generator's map types look like. Click for another.");
+            new WrappingToolTip { InitialDelay = 400 }.SetToolTip(this, "An example of what the generator's map types look like. Click for another.");
         }
 
         private int S(int logical) => logical * DeviceDpi / 96;
@@ -507,7 +543,69 @@ internal sealed class StartPage : Panel
         [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
         public bool Available { get; init; } = true;
 
+        /// <summary>
+        /// How tall the tagline's block is: the page sets it to the longest of the three cards'
+        /// taglines, so the chips under them line up. Never less than two lines.
+        /// </summary>
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public int TaglineBlock { get; set; }
+
         private int S(int logical) => logical * DeviceDpi / 96;
+
+        private const TextFormatFlags Wrap = TextFormatFlags.WordBreak | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
+
+        /// <summary>The width inside the card's padding, at a width for the whole control.</summary>
+        private int Inner(int width) => width - S(8) - 1 - 2 * S(22);
+
+        /// <summary>How tall the tagline wraps to at a width for the whole control.</summary>
+        public int TaglineHeight(int width)
+            => TextRenderer.MeasureText(Tagline, Body, new Size(Math.Max(1, Inner(width)), 0), Wrap).Height;
+
+        /// <summary>
+        /// How tall the card has to be at <paramref name="width"/> to show everything it says, with
+        /// the tagline in a block <paramref name="taglineBlock"/> tall: the chips wrap onto more rows
+        /// and the action onto more lines rather than running off the card.
+        /// </summary>
+        public int HeightFor(int width, int taglineBlock)
+        {
+            int inner = Inner(width);
+            return S(4) + S(22) + S(44) + S(14) + Math.Max(S(44), taglineBlock) + S(4)
+                   + ChipsHeight(inner) + S(24) + ActionHeight(inner) + S(22) + S(6) + 1;
+        }
+
+        private int ChipHeight => TextRenderer.MeasureText("Ag", ChipFont, Size.Empty, TextFormatFlags.NoPadding).Height + S(8);
+
+        /// <summary>The feature chips, row by row, each as wide as its text and no wider than the card.</summary>
+        private List<List<(string Text, int Width)>> ChipRows(int inner)
+        {
+            var rows = new List<List<(string Text, int Width)>> { new() };
+            int cx = 0;
+            foreach (string feature in Features)
+            {
+                int w = Math.Min(inner, TextRenderer.MeasureText(feature, ChipFont, Size.Empty, TextFormatFlags.NoPadding).Width + S(16));
+                if (cx > 0 && cx + w > inner)
+                {
+                    rows.Add([]);
+                    cx = 0;
+                }
+                rows[^1].Add((feature, w));
+                cx += w + S(6);
+            }
+            return rows;
+        }
+
+        private int ChipsHeight(int inner)
+        {
+            int rows = Features.Length == 0 ? 0 : ChipRows(inner).Count;
+            return rows == 0 ? 0 : rows * ChipHeight + (rows - 1) * S(6);
+        }
+
+        /// <summary>Whether the action and its arrow fit on one line.</summary>
+        private bool ActionOnOneLine(int inner)
+            => TextRenderer.MeasureText(Action, ActionFont, Size.Empty, TextFormatFlags.NoPadding).Width + S(8) + S(16) + S(4) <= inner;
+
+        private int ActionHeight(int inner)
+            => ActionOnOneLine(inner) ? S(18) : TextRenderer.MeasureText(Action, ActionFont, new Size(Math.Max(1, inner), 0), Wrap).Height;
 
         protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { _hover = false; _pressed = false; Invalidate(); base.OnMouseLeave(e); }
@@ -555,18 +653,23 @@ internal sealed class StartPage : Panel
             TextRenderer.DrawText(g, Glyph, GlyphFont, discRect, Available ? Theme.Accent : Theme.TextDim,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
 
-            // Title, and the badge beside it.
+            // Title, and the badge beside it — or, on a card too narrow for both, under it, the pair
+            // centred on the disc together.
             const TextFormatFlags single = TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.VerticalCenter;
             int titleX = discRect.Right + S(14);
             var titleSize = TextRenderer.MeasureText(Text, CardTitle, Size.Empty, TextFormatFlags.NoPadding);
-            var titleRect = new Rectangle(titleX, top + (disc - titleSize.Height) / 2 - S(1), titleSize.Width, titleSize.Height);
+            var badgeSize = Badge is null ? Size.Empty : TextRenderer.MeasureText(Badge, BadgeFont, Size.Empty, TextFormatFlags.NoPadding);
+            var pillSize = new Size(badgeSize.Width + S(12), badgeSize.Height + S(4));
+            bool badgeBeside = Badge is null || titleX + titleSize.Width + S(10) + pillSize.Width <= right;
+            int block = badgeBeside ? titleSize.Height : titleSize.Height + S(4) + pillSize.Height;
+            var titleRect = new Rectangle(titleX, top + (disc - block) / 2 - S(1), titleSize.Width, titleSize.Height);
             TextRenderer.DrawText(g, Text, CardTitle, titleRect, Theme.Text, single);
 
             if (Badge is not null)
             {
-                var bs = TextRenderer.MeasureText(Badge, BadgeFont, Size.Empty, TextFormatFlags.NoPadding);
-                var pill = new Rectangle(titleRect.Right + S(10), titleRect.Top + (titleRect.Height - bs.Height - S(4)) / 2,
-                                         bs.Width + S(12), bs.Height + S(4));
+                var pill = badgeBeside
+                    ? new Rectangle(new Point(titleRect.Right + S(10), titleRect.Top + (titleRect.Height - pillSize.Height) / 2), pillSize)
+                    : new Rectangle(new Point(titleX, titleRect.Bottom + S(4)), pillSize);
                 using var pp = Rounded(pill, pill.Height / 2f);
                 using var pb = new SolidBrush(Theme.Notice);
                 g.FillPath(pb, pp);
@@ -574,36 +677,41 @@ internal sealed class StartPage : Panel
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
             }
 
-            // Tagline, wrapped.
+            // Tagline, wrapped, in a block as tall as the longest of the three.
             int y = top + disc + S(14);
-            var tagRect = new Rectangle(left, y, right - left, S(44));
-            TextRenderer.DrawText(g, Tagline, Body, tagRect, Theme.TextDim,
-                TextFormatFlags.WordBreak | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
-            y += S(48);
+            int tagBlock = Math.Max(S(44), TaglineBlock);
+            TextRenderer.DrawText(g, Tagline, Body, new Rectangle(left, y, right - left, tagBlock), Theme.TextDim, Wrap);
+            y += tagBlock + S(4);
 
-            // Feature chips.
-            int cx = left;
-            foreach (string feature in Features)
+            // Feature chips, onto another row when a narrow card has no room left on this one.
+            foreach (var row in ChipRows(right - left))
             {
-                var fs = TextRenderer.MeasureText(feature, ChipFont, Size.Empty, TextFormatFlags.NoPadding);
-                var chip = new Rectangle(cx, y, fs.Width + S(16), fs.Height + S(8));
-                if (chip.Right > right) break;
-                using var cp = Rounded(chip, S(6));
-                using var cb = new SolidBrush(Theme.Background);
-                g.FillPath(cb, cp);
-                using var cpen = new Pen(Theme.Rule);
-                g.DrawPath(cpen, cp);
-                TextRenderer.DrawText(g, feature, ChipFont, chip, Theme.Text,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
-                cx = chip.Right + S(6);
+                int cx = left;
+                foreach (var (feature, width) in row)
+                {
+                    var chip = new Rectangle(cx, y, width, ChipHeight);
+                    using var cp = Rounded(chip, S(6));
+                    using var cb = new SolidBrush(Theme.Background);
+                    g.FillPath(cb, cp);
+                    using var cpen = new Pen(Theme.Rule);
+                    g.DrawPath(cpen, cp);
+                    TextRenderer.DrawText(g, feature, ChipFont, chip, Theme.Text,
+                        TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+                    cx = chip.Right + S(6);
+                }
+                y += ChipHeight + S(6);
             }
 
-            // The action line along the foot of the card.
-            int actionY = (int)card.Bottom - pad - S(18);
+            // The action line along the foot of the card, with its arrow when both fit on one
+            // line; on a narrow card the words wrap and the arrow is left off.
+            int inner = right - left;
+            bool oneLine = ActionOnOneLine(inner);
+            int actionH = ActionHeight(inner);
+            int actionY = (int)card.Bottom - pad - actionH;
             var aSize = TextRenderer.MeasureText(Action, ActionFont, Size.Empty, TextFormatFlags.NoPadding);
-            var actionRect = new Rectangle(left, actionY, aSize.Width, S(18));
-            TextRenderer.DrawText(g, Action, ActionFont, actionRect, Available ? Theme.Accent : Theme.TextDim, single);
-            if (Available)
+            var actionRect = oneLine ? new Rectangle(left, actionY, aSize.Width, S(18)) : new Rectangle(left, actionY, inner, actionH);
+            TextRenderer.DrawText(g, Action, ActionFont, actionRect, Available ? Theme.Accent : Theme.TextDim, oneLine ? single : Wrap);
+            if (Available && oneLine)
             {
                 int shift = lit ? S(4) : 0;
                 TextRenderer.DrawText(g, "", ArrowFont,
@@ -686,12 +794,19 @@ internal sealed class StartPage : Panel
     }
 
     /// <summary>
-    /// One line of footer text, centred on the row and cut with an ellipsis. Drawn here because a
-    /// Label with AutoEllipsis lays its text out a few pixels high of its own middle, which put
-    /// the words visibly above the tick and the link on either side of them.
+    /// The footer's text, centred on the row. Drawn here because a Label with AutoEllipsis lays its
+    /// text out a few pixels high of its own middle, which put the words visibly above the tick and
+    /// the link on either side of them.
+    ///
+    /// It is one line when that fits. When it does not — the game's folder and the mod folder are
+    /// both long paths — each of <see cref="Parts"/> takes a line of its own, and a path still too
+    /// long for its line is shortened in the middle, the way Explorer does, rather than losing its
+    /// end. The page's tooltip has both in full.
     /// </summary>
     private sealed class FooterText : Control
     {
+        private const TextFormatFlags Line = TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix;
+
         public FooterText()
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer
@@ -701,12 +816,39 @@ internal sealed class StartPage : Panel
             ForeColor = Theme.TextDim;
         }
 
+        /// <summary>The lines the text breaks into when it does not fit on one.</summary>
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public string[] Parts { get; set; } = [];
+
+        private int S(int logical) => logical * DeviceDpi / 96;
+
+        private int LineHeight => TextRenderer.MeasureText("Ag", Font, Size.Empty, TextFormatFlags.NoPadding).Height;
+
+        private bool OneLine(int width) => Parts.Length <= 1 || TextRenderer.MeasureText(Text, Font, Size.Empty, Line).Width <= width;
+
+        /// <summary>The row's height at <paramref name="width"/>: as designed for one line, a line more for each more.</summary>
+        public int HeightFor(int width) => S(28) + (OneLine(width) ? 0 : (Parts.Length - 1) * (LineHeight + S(2)));
+
         protected override void OnTextChanged(EventArgs e) { base.OnTextChanged(e); Invalidate(); }
 
         protected override void OnPaint(PaintEventArgs e)
-            => TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle, ForeColor,
-                TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis
-                | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
+        {
+            if (OneLine(Width))
+            {
+                TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle, ForeColor,
+                    Line | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                return;
+            }
+
+            int lineH = LineHeight + S(2);
+            int y = (Height - Parts.Length * lineH + S(2)) / 2;
+            foreach (string part in Parts)
+            {
+                TextRenderer.DrawText(e.Graphics, part, Font, new Rectangle(0, y, Width, LineHeight), ForeColor,
+                    Line | TextFormatFlags.PathEllipsis);
+                y += lineH;
+            }
+        }
     }
 
     /// <summary>

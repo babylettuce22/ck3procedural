@@ -15,6 +15,7 @@ gen_aging_yearly_on_action = {
 	effect = {
 		gen_world_weary_pulse_effect = yes
 		gen_dwarf_ailment_pulse_effect = yes
+		gen_late_child_pulse_effect = yes
 	}
 }
 

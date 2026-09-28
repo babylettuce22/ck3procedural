@@ -70,9 +70,10 @@ public static class LocatorWriter
 
     /// <summary>
     /// Layer files that declare structure rather than per-province data. They are copied
-    /// verbatim from vanilla because replace_path removes the originals.
+    /// verbatim from vanilla because replace_path removes the originals, and then have their fade
+    /// steps moved onto this map's zoom ladder by <see cref="MapTableWriter"/>.
     /// </summary>
-    private static readonly string[] LayerFiles =
+    internal static readonly string[] LayerFiles =
         ["layers.txt", "game_object_layers.txt", "effect_layers.txt"];
 
     /// <param name="anchors">

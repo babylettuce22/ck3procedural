@@ -301,7 +301,7 @@ public static partial class ContentWriter
                 WriteLocalisation(modDir, empires, world.WaterNames, provinces, result.BaronyCount,
                     result.LandCount, result.RiverCount);
                 WriteFormationDecisions(modDir, empires, wilderness);
-                TitleTierWriter.WriteAll(modDir, cultures, empires);
+                TitleTierWriter.WriteAll(modDir, cultures, empires, faiths, cfg.NativeRankTooltips);
                 HegemonyFlavourWriter.WriteAll(modDir, gameDir, empires);
                 CoronationWriter.WriteAll(modDir, gameDir, empires, faiths.Declared());
                 CompatibilityWriter.WriteVanillaTitulars(modDir, gameDir, empires,
@@ -626,6 +626,11 @@ public static partial class ContentWriter
         var chronicle = Core.Stage.Time("chronicle", () => ChronicleMap.Build(
             empires, realms, development, cultures, faiths, wilderness, prehistory,
             artifacts, worldCenters, cfg, new Rng(cfg.Seed ^ 0x104E), past?.Since, past?.Events));
+
+        // The historical battlefields are the chronicle's wars, so after it. The --no-history
+        // branch writes the grand cities alone.
+        Core.Stage.Time("points of interest",
+            () => PoiWriter.WriteAll(modDir, empires, development, wilderness, chronicle, cfg.StartYear));
 
         // After the chronicle, which is the thing that decides where a struggle is. Reads
         // the counties for its membership and the chronicle only for its tension, so it

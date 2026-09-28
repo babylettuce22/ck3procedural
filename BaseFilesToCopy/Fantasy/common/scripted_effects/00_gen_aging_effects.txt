@@ -183,6 +183,72 @@ gen_dwarf_ailment_onset_effect = {
 	}
 }
 
+# A late child for the long-lived races: the yearly roll that may offer one.
+#
+# Called from gen_aging_yearly_on_action, which rides random_yearly_everyone_pulse. So that it adds
+# almost nothing to the pulse, the outer limit is just `is_female` and `age >= 45`. Everyone else
+# stops at those two checks, and the full eligibility trigger only runs for women past 45.
+#
+# Rare on purpose. About 3% a year from 45, 2% from 60, 1% from 80; dwarves 4% then 2% from 55.
+# The AI accepts about half the offers, so a married elf woman averages under one late child in
+# her life and a dwarf about a third of one. A few dozen offers a year across a crowded elven
+# map, most of them resolved silently by the AI.
+#
+# The offer goes to whichever parent is a player; with neither (or both), it goes to the mother.
+gen_late_child_pulse_effect = {
+	if = {
+		limit = {
+			is_female = yes
+			age >= 45
+			gen_late_child_mother_trigger = yes
+		}
+		random = {
+			chance = 3
+			modifier = {
+				add = -1
+				age >= 60
+			}
+			modifier = {
+				add = -1
+				age >= 80
+			}
+			modifier = { # Dwarves: shorter window, a little likelier inside it.
+				add = 1
+				has_trait = phenotype_stocky
+				age < 55
+			}
+			modifier = {
+				factor = 1.5
+				OR = {
+					has_trait = fecund
+					has_trait = lustful
+				}
+			}
+			modifier = {
+				factor = 0.5
+				has_trait = chaste
+			}
+			modifier = { # A full house is less likely to want another.
+				factor = 0.5
+				any_child = { count >= 5 }
+			}
+
+			save_scope_as = mother
+			primary_spouse = { save_scope_as = father }
+			if = {
+				limit = {
+					is_ai = yes
+					scope:father = { is_ai = no }
+				}
+				scope:father = { trigger_event = gen_aging.0010 }
+			}
+			else = {
+				trigger_event = gen_aging.0010
+			}
+		}
+	}
+}
+
 # Day-one seeding, called from the game-start sweep in 00_gen_aging_on_actions.txt for every
 # living long-lived character. Elders already past onset start mid-fade instead of fresh —
 # gen_world_weary_seed_value gives 3 XP per year past 80, capped short of the killing threshold.

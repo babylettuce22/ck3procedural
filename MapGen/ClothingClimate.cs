@@ -20,9 +20,12 @@ namespace Ck3MapGen.MapGen;
 ///
 /// Two grains. A heritage's whole look (coat of arms, buildings, units, dress) is picked for the
 /// heritage's mean climate, which keeps a people's look coherent; a culture of that heritage whose
-/// own ground the heritage's dress does not suit is then re-dressed alone — only its clothing, the
-/// rest stays its kin's. That second pass is the one the feedback asked for: a heritage that runs
-/// from a warm coast up into the taiga should have its northern cousins in furs.
+/// own ground the heritage's dress does not suit is then re-dressed alone. That second pass is the
+/// one the feedback asked for: a heritage that runs from a warm coast up into the taiga should have
+/// its northern cousins in furs. The same pass then asks the same of the culture's buildings and
+/// its army models (<see cref="BuildingsFor"/>, <see cref="UnitsFor"/>), each judged by where vanilla
+/// itself puts the peoples who build and arm that way; the coat of arms is never touched, since
+/// heraldry has no weather.
 ///
 /// The theme filter (<see cref="Config.MapConfig.CultureAestheticsTheme"/>) still decides the
 /// pool; climate only chooses within it. A player who asked for a Norse world gets Norse dress in
@@ -237,23 +240,112 @@ public static class ClothingClimate
     /// </summary>
     public static string ClothingFor(string heritageChain, Climate? at,
         IReadOnlyList<VanillaVocabulary.Look> pool, Rng rng)
-    {
-        if (at is not { } climate) return heritageChain;
+        => at is { } climate
+            ? Refit(heritageChain, pool, l => l.ClothingGfx, chain => Fit(climate, HomeOf(chain)),
+                companionOf: null, rng)
+            : heritageChain;
 
-        double kept = Fit(climate, HomeOf(heritageChain));
+    /// <summary>
+    /// The building chain for one culture, by the same rule as its dress: its heritage's unless the
+    /// culture's ground is wrong for it, and then kin first. <paramref name="clothingChain"/> is what
+    /// the culture now wears — after <see cref="ClothingFor"/> — and looks dressed like it count as
+    /// kin too, so a people re-dressed in furs is housed by the vanilla peoples that wear the furs
+    /// rather than by an unrelated one that merely suits. Draws from <paramref name="rng"/> only when
+    /// it re-houses.
+    ///
+    /// Where a building style belongs is not written down here but read off vanilla (<see
+    /// cref="EvidenceFit"/>): a style suits a climate as well as the vanilla peoples who build in it
+    /// are dressed for that climate, on two witnesses. So western towns suit the taiga, because vanilla's
+    /// Sámi, Komi and Samoyeds live in them, and felt yurts suit only where its steppe peoples ride.
+    /// A first version gave each style a single home climate of its own, and re-housed subarctic
+    /// peoples in Tibetan stone, which vanilla never does. <paramref name="evidence"/> is every
+    /// vanilla look, not the theme-filtered pool: the theme narrows what a culture may be given, not
+    /// the game's testimony about where a style is at home.
+    /// </summary>
+    public static string BuildingsFor(string heritageChain, string clothingChain, Climate? at,
+        IReadOnlyList<VanillaVocabulary.Look> pool, IReadOnlyList<VanillaVocabulary.Look> evidence, Rng rng)
+        => at is { } climate
+            ? Refit(heritageChain, pool, l => l.BuildingGfx, EvidenceFit(climate, evidence, l => l.BuildingGfx),
+                clothingChain, rng)
+            : heritageChain;
+
+    /// <summary>
+    /// The army models for one culture — the men on the map, armoured and dressed for somewhere —
+    /// by the same rule and the same evidence as <see cref="BuildingsFor"/>.
+    /// </summary>
+    public static string UnitsFor(string heritageChain, string clothingChain, Climate? at,
+        IReadOnlyList<VanillaVocabulary.Look> pool, IReadOnlyList<VanillaVocabulary.Look> evidence, Rng rng)
+        => at is { } climate
+            ? Refit(heritageChain, pool, l => l.UnitGfx, EvidenceFit(climate, evidence, l => l.UnitGfx),
+                clothingChain, rng)
+            : heritageChain;
+
+    /// <summary>
+    /// How well a building or unit chain suits <paramref name="at"/>, from vanilla's own usage: how
+    /// well the vanilla peoples who build or arm that way are dressed for it. Keyed on the chain's
+    /// head, because that is the gfx the engine draws when it has it. A style no vanilla people uses
+    /// scores as unplaced dress does (<see cref="Fit"/> with no home).
+    ///
+    /// Two witnesses, not one: the fit is the second-best among the looks sharing the style. Vanilla
+    /// has oddities — its Radhanites wear mongol dress over mena troops — and the best alone let that
+    /// one people carry mena units to the taiga on the first test world. A style only one vanilla
+    /// people uses (Norse halls, Andalusi troops) has only that testimony, and it stands.
+    /// </summary>
+    private static Func<string, double> EvidenceFit(Climate at, IReadOnlyList<VanillaVocabulary.Look> evidence,
+        Func<VanillaVocabulary.Look, string> part)
+    {
+        var top = new Dictionary<string, (double First, double Second, int Count)>(StringComparer.Ordinal);
+        foreach (var look in evidence)
+        {
+            string head = Head(part(look));
+            double fit = Fit(at, HomeOf(look.ClothingGfx));
+            var (first, second, count) = top.GetValueOrDefault(head);
+            top[head] = fit > first ? (fit, first, count + 1)
+                      : fit > second ? (first, fit, count + 1)
+                      : (first, second, count + 1);
+        }
+
+        return chain => top.TryGetValue(Head(chain), out var t)
+            ? (t.Count >= 2 ? t.Second : t.First)
+            : Fit(at, null);
+    }
+
+    /// <summary>The first gfx of a chain, or empty.</summary>
+    private static string Head(string chain)
+        => chain.Trim().Trim('{', '}').Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+                .FirstOrDefault() ?? "";
+
+    /// <summary>
+    /// One part of a look — dress, buildings or units — kept or replaced for the culture's ground.
+    /// The rule <see cref="ClothingFor"/> documents; <paramref name="companionOf"/>, when given, is
+    /// the clothing chain the culture wears, and any look whose dress shares a gfx with it counts as
+    /// kin beside the token-sharing chains — <c>{ sami northern }</c> dress makes the Norse looks'
+    /// buildings kin. Null leaves the clothing rule exactly as it was written. <paramref
+    /// name="fitOf"/> scores a chain of this part for the culture's climate.
+    /// </summary>
+    private static string Refit(string heritageChain,
+        IReadOnlyList<VanillaVocabulary.Look> pool, Func<VanillaVocabulary.Look, string> part,
+        Func<string, double> fitOf, string? companionOf, Rng rng)
+    {
+        double kept = fitOf(heritageChain);
         if (kept >= KeepFit) return heritageChain;
 
         var kin = Tokens(heritageChain);
-        var better = pool.Select(l => (Look: l, Fit: Fit(climate, HomeOf(l.ClothingGfx))))
+        var dressedLike = companionOf is null ? null : Tokens(companionOf);
+        bool IsKin(VanillaVocabulary.Look l)
+            => Tokens(part(l)).Overlaps(kin)
+               || (dressedLike is not null && Tokens(l.ClothingGfx).Overlaps(dressedLike));
+
+        var better = pool.Select(l => (Look: l, Fit: fitOf(part(l))))
                          .Where(e => e.Fit > kept).ToList();
 
-        var candidates = better.Where(e => e.Fit >= KeepFit && Tokens(e.Look.ClothingGfx).Overlaps(kin)).ToList();
+        var candidates = better.Where(e => e.Fit >= KeepFit && IsKin(e.Look)).ToList();
         if (candidates.Count == 0) candidates = better.Where(e => e.Fit >= KeepFit).ToList();
         if (candidates.Count == 0) candidates = better;
         if (candidates.Count == 0) return heritageChain;
 
-        return Weighted([.. candidates.Select(e => e.Look)], l => Fit(climate, HomeOf(l.ClothingGfx)),
-            rng.NextDouble()).ClothingGfx;
+        return part(Weighted([.. candidates.Select(e => e.Look)], l => fitOf(part(l)),
+            rng.NextDouble()));
     }
 
     /// <summary>The gfx names in a chain, braces and whitespace dropped.</summary>

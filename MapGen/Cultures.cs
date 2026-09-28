@@ -92,6 +92,13 @@ public sealed class Culture
     /// </summary>
     public Dictionary<string, Emit.TitleVocabulary> RealmWords { get; set; } = [];
 
+    /// <summary>
+    /// This people's own words for its ranks, coined from its <see cref="Tongue"/> when native rank
+    /// titles or realm names are on; null otherwise. Written above <see cref="RealmWords"/>, and
+    /// like them applied by the top liege's culture. See <see cref="NativeTitles"/>.
+    /// </summary>
+    public NativeRanks? NativeRanks { get; set; }
+
     public string NameListKey => $"name_list_{Key}";
 
     /// <summary>
@@ -333,6 +340,10 @@ public static class Cultures
         // every name and tradition below comes out of.
         var dress = new Rng(cfg.Seed ^ 0xC107);
 
+        // And its buildings and army models, on a stream of their own again, so re-housing one
+        // culture moves nobody's dress.
+        var house = new Rng(cfg.Seed ^ 0xB0D5);
+
         // An export decides its own peoples, exactly as it decides its own borders.
         //
         // The density knobs below are how a *generated* world is given a plausible number of
@@ -341,7 +352,7 @@ public static class Cultures
         // heard of. Where the export has cultures, they are the cultures.
         if (azgaar is not null
             && ImportedCultures(counties, graph, provinceTerrain, development, vocab, cfg, rng, azgaar,
-                   provinceClimate, dress)
+                   provinceClimate, dress, house)
                is { } importedMap)
         {
             Report(importedMap.Heritages, importedMap.Cultures, counties.Count, sw.ElapsedMilliseconds);
@@ -478,8 +489,7 @@ public static class Cultures
 
                 var culture = Create(heritage, owned, provinceTerrain, development, vocab,
                     allowedTraditions, usedNames, usedDynasties, cultures.Count, rng);
-                culture.ClothingGfx = ClothingClimate.ClothingFor(culture.ClothingGfx,
-                    ClothingClimate.Of(owned, provinceClimate), lookPool, dress);
+                FitToClimate(culture, ClothingClimate.Of(owned, provinceClimate), lookPool, vocab, dress, house);
 
                 heritage.Cultures.Add(culture);
                 cultures.Add(culture);
@@ -733,7 +743,7 @@ public static class Cultures
     private static CultureMap? ImportedCultures(List<Title> counties, RegionGrowth.Graph graph,
         TerrainClass[] provinceTerrain, Dictionary<Title, int> development,
         VanillaVocabulary vocab, MapConfig cfg, Rng rng, AzgaarImport azgaar,
-        ClothingClimate.Climate[]? provinceClimate, Rng dress)
+        ClothingClimate.Climate[]? provinceClimate, Rng dress, Rng house)
     {
         var live = azgaar.World.RealCultures.ToDictionary(c => c.I);
         if (live.Count == 0) return null;
@@ -842,8 +852,7 @@ public static class Cultures
                 var source = live[id];
                 var culture = Create(heritage, owned, provinceTerrain, development, vocab,
                                      allowedTraditions, usedCultureNames, usedDynasties, cultures.Count, rng);
-                culture.ClothingGfx = ClothingClimate.ClothingFor(culture.ClothingGfx,
-                    ClothingClimate.Of(owned, provinceClimate), lookPool, dress);
+                FitToClimate(culture, ClothingClimate.Of(owned, provinceClimate), lookPool, vocab, dress, house);
 
                 // The export's word for this people, and its own colour, over the generated ones.
                 // Written after Create rather than threaded through it so the character the ground
@@ -1404,6 +1413,21 @@ public static class Cultures
         }
     }
 
+    /// <summary>
+    /// A new culture's dress, then its buildings and army models, kept or replaced for its own
+    /// ground (<see cref="ClothingClimate"/>). Dress first, because the buildings and units treat the
+    /// look that lent the dress as kin.
+    /// </summary>
+    private static void FitToClimate(Culture culture, ClothingClimate.Climate? at,
+        IReadOnlyList<VanillaVocabulary.Look> lookPool, VanillaVocabulary vocab, Rng dress, Rng house)
+    {
+        culture.ClothingGfx = ClothingClimate.ClothingFor(culture.ClothingGfx, at, lookPool, dress);
+        culture.BuildingGfx = ClothingClimate.BuildingsFor(culture.BuildingGfx, culture.ClothingGfx, at,
+            lookPool, vocab.Looks, house);
+        culture.UnitGfx = ClothingClimate.UnitsFor(culture.UnitGfx, culture.ClothingGfx, at,
+            lookPool, vocab.Looks, house);
+    }
+
     /// <summary>How many peoples are dressed for their weather, and how many had to leave their kin's dress to be.</summary>
     private static void ReportDress(List<Culture> cultures, ClothingClimate.Climate[]? provinceClimate)
     {
@@ -1416,8 +1440,12 @@ public static class Cultures
             if (ClothingClimate.Of(culture.Counties, provinceClimate) is { } at
                 && ClothingClimate.Suits(at, culture.ClothingGfx)) suited++;        }
 
+        int rehoused = cultures.Count(c => c.BuildingGfx != c.Heritage.Look.BuildingGfx);
+        int rearmed = cultures.Count(c => c.UnitGfx != c.Heritage.Look.UnitGfx);
+
         Console.WriteLine($"    dress: {suited} of {cultures.Count} cultures wear clothing made for " +
-                          $"their climate, {redressed} re-dressed away from their heritage's");
+                          $"their climate, {redressed} re-dressed away from their heritage's; " +
+                          $"{rehoused} re-housed, {rearmed} re-equipped");
     }
 
     private static void Report(List<Heritage> heritages, List<Culture> cultures, int counties,

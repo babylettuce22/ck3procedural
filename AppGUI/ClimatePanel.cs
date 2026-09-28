@@ -88,7 +88,7 @@ public sealed class ClimatePanel : UserControl
     private readonly Label _readout;
     private readonly Label _viewNote;
     private readonly Dictionary<View, Button> _viewButtons = [];
-    private readonly ToolTip _tips = new() { AutoPopDelay = 20000, InitialDelay = 400 };
+    private readonly WrappingToolTip _tips = new() { AutoPopDelay = 20000, InitialDelay = 400 };
     private readonly SplitContainer _split;
     private bool _splitPlaced;
 

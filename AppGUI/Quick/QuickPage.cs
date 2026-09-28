@@ -90,7 +90,7 @@ internal sealed class QuickPage : Panel
         [QuickRelief.Highlands] = new() { Text = "Highlands", Name = "quickReliefHighlands" },
     };
     private FlowLayoutPanel? _reliefTrack;
-    private readonly ToolTip _reliefTips = new() { InitialDelay = 400 };
+    private readonly WrappingToolTip _reliefTips = new() { InitialDelay = 400 };
     private readonly Label _mapHint = MakeLabel(
         "Every seed is a different world. This is the bare terrain: rivers, climate and erosion are added when the world is made.",
         Small, Theme.TextDim, wrap: true);
@@ -107,6 +107,8 @@ internal sealed class QuickPage : Panel
     private readonly ChoiceGroup<GenderPreference> _rulers;
     private readonly ToggleCard _wilderness = new() { Name = "quickWilderness", Text = "Wilderness", Description = "Unsettled lands to clear, claim and colonise." };
     private readonly ToggleCard _wars = new() { Name = "quickWars", Text = "Wars at the start", Description = "Rivals already at war on the first day." };
+    private readonly ToggleCard _nativeTitles = new() { Name = "quickNativeTitles", Text = "Native titles", Description = "Kings and dukes titled in their people's own language." };
+    private readonly ToggleCard _nativeRealms = new() { Name = "quickNativeRealms", Text = "Native realm names", Description = "Kingdoms and duchies named in it too." };
 
     // review step
     private readonly List<(Label Key, Label Value, TextLink Change)> _summary = [];
@@ -164,18 +166,24 @@ internal sealed class QuickPage : Panel
         _era.Changed += v => _choices.Era = v;
         _climate.Changed += v => _choices.Climate = v;
         _density.Changed += v => _choices.Density = v;
-        _peopleGroup.Changed += v => _choices.People = v;
+        _peopleGroup.Changed += v =>
+        {
+            _choices.People = v;
+            ShowNativeToggles();
+        };
         _politics.Changed += v => _choices.Politics = v;
         _rulers.Changed += v => _choices.Rulers = v;
         _wilderness.Toggled += on => _choices.Wilderness = on;
         _wars.Toggled += on => _choices.Wars = on;
+        _nativeTitles.Toggled += on => _choices.NativeTitles = on;
+        _nativeRealms.Toggled += on => _choices.NativeRealms = on;
 
         BuildChrome();
         BuildMapStep();
         BuildGroupsStep(_worldPanel, "Shape the world", "Size, era and climate. The defaults make a good first world.",
             [_size, _era, _climate, _density], toggles: null);
         BuildGroupsStep(_peoplePanel, "People and politics", "Who lives here, who rules, and what else the world holds.",
-            [_peopleGroup, _politics, _rulers], toggles: [_wilderness, _wars]);
+            [_peopleGroup, _politics, _rulers], toggles: [_wilderness, _wars, _nativeTitles, _nativeRealms]);
         BuildReviewStep();
         WireRunScreen();
 
@@ -422,11 +430,26 @@ internal sealed class QuickPage : Panel
         _choices.Size = kept.Size;
         _choices.Density = kept.Density;
         _choices.People = kept.People;
+        // A matter of taste rather than of the world, so a surprise keeps what the player chose.
+        _choices.NativeTitles = kept.NativeTitles;
+        _choices.NativeRealms = kept.NativeRealms;
         _previousSeeds.Push(kept.Seed);
         SyncControls();
         RenderPreview();
         if (_step == ReviewStep) RefreshReview();
         UpdateChrome();
+    }
+
+    /// <summary>
+    /// Native titles only mean something for invented peoples — real CK3 cultures already have
+    /// vanilla's words and no generated language — so the two switches are shown only then.
+    /// Hiding a card re-lays the step, whose Extras row spreads over the visible cards only.
+    /// </summary>
+    private void ShowNativeToggles()
+    {
+        bool invented = _choices.People == QuickPeople.Invented;
+        _nativeTitles.Visible = invented;
+        _nativeRealms.Visible = invented;
     }
 
     /// <summary>Puts every control in step with <see cref="_choices"/>.</summary>
@@ -442,6 +465,9 @@ internal sealed class QuickPage : Panel
         _rulers.Value = _choices.Rulers;
         _wilderness.On = _choices.Wilderness;
         _wars.On = _choices.Wars;
+        _nativeTitles.On = _choices.NativeTitles;
+        _nativeRealms.On = _choices.NativeRealms;
+        ShowNativeToggles();
         _seedBox.Text = _choices.Seed.ToString();
         foreach (var (relief, button) in _reliefButtons) Theme.StyleSegment(button, relief == _choices.Relief);
         var type2 = CurrentType;
@@ -478,7 +504,7 @@ internal sealed class QuickPage : Panel
         {
             var tile = new MapTile { Text = type.Title, Name = "quickType-" + type.Key, AccessibleName = type.Title };
             tile.Click += (_, _) => PickType(type);
-            new ToolTip { InitialDelay = 400 }.SetToolTip(tile, type.Blurb);
+            new WrappingToolTip { InitialDelay = 400 }.SetToolTip(tile, type.Blurb);
             _tiles.Add((type, tile));
             _mapPanel.Controls.Add(tile);
         }
@@ -494,13 +520,13 @@ internal sealed class QuickPage : Panel
             int y = S(18);
             title.Location = new Point(x - S(2), y);
             y += title.PreferredHeight + S(2);
-            subtitle.Location = new Point(x, y);
-            y += subtitle.PreferredHeight + S(16);
+            y += StepPanel.Place(subtitle, x, y, w) + S(16);
 
             // The tiles span the column; a tile's picture is as tall as half its width, so past a
             // point they stop growing and spread apart instead, and the preview keeps its height.
+            // A name too long for one line takes two, on every tile, so the row stays even.
             var (tileW, gap) = StepPanel.Spread(w, _tiles.Count, S(10), S(210));
-            int tileH = (tileW - S(12)) / 2 + S(12) + S(28);
+            int tileH = _tiles.Count == 0 ? 0 : _tiles.Max(t => t.Tile.HeightFor(tileW));
             for (int i = 0; i < _tiles.Count; i++)
                 _tiles[i].Tile.Bounds = new Rectangle(x + i * (tileW + gap), y, tileW, tileH);
             y += tileH + S(18);
@@ -510,10 +536,9 @@ internal sealed class QuickPage : Panel
             int sw = Math.Clamp(w * 21 / 100, S(200), S(280));
             int sx = x + w - sw;
             int area = sx - S(24) - x;
-            var map = StepPanel.Map(x, y, area, panel.ClientSize.Height - y - S(12));
+            var map = StepPanel.Map(x, y, area, panel.ClientSize.Height - y - S(12), S(StepPanel.MinMapHeight));
             map.X = x + (area - map.Width) / 2;
             _preview.Bounds = map;
-            int previewH = map.Height;
             int sy = y;
             _typeName.Location = new Point(sx - S(1), sy);
             sy += _typeName.PreferredHeight + S(4);
@@ -546,7 +571,8 @@ internal sealed class QuickPage : Panel
                 sy += track.Height + S(14);
             }
 
-            _mapHint.Bounds = new Rectangle(sx, sy, sw, Math.Min(Wrapped(_mapHint, sw), y + previewH - sy));
+            // In full, even when that runs below the preview: on a short window the view scrolls.
+            StepPanel.Place(_mapHint, sx, sy, sw);
         };
     }
 
@@ -673,7 +699,7 @@ internal sealed class QuickPage : Panel
         if (toggles is not null)
         {
             extrasTitle = MakeLabel("Extras", GroupTitle, Theme.Text);
-            extrasHint = MakeLabel("Switch off anything you would rather play without.", Small, Theme.TextDim);
+            extrasHint = MakeLabel("Switch each on or off to suit the game you want.", Small, Theme.TextDim);
             panel.Controls.Add(extrasTitle);
             panel.Controls.Add(extrasHint);
             foreach (var toggle in toggles) panel.Controls.Add(toggle);
@@ -685,26 +711,34 @@ internal sealed class QuickPage : Panel
             int y = S(18);
             titleLabel.Location = new Point(x - S(2), y);
             y += titleLabel.PreferredHeight + S(2);
-            subtitleLabel.Location = new Point(x, y);
-            y += subtitleLabel.PreferredHeight + S(18);
+            y += StepPanel.Place(subtitleLabel, x, y, w) + S(18);
 
-            void Row(Label t, Label h, IReadOnlyList<Control> cards, int cardH)
+            // Every card in a row is as tall as the one with the most to say, so none is cut short.
+            void Row(Label t, Label h, IReadOnlyList<Control> cards)
             {
-                t.Location = new Point(x, y);
-                h.Location = new Point(x + t.PreferredWidth + S(10), y + (t.PreferredHeight - h.PreferredHeight) / 2 + S(1));
-                y += t.PreferredHeight + S(6);
+                y = StepPanel.TitleAndHint(t, h, x, y, w) + S(6);
                 int gap = S(12);
                 int n = Math.Max(1, cards.Count);
                 int cw = (w - gap * (n - 1)) / n;
+                int cardH = cards.Count == 0 ? 0 : cards.Max(c => CardHeight(c, cw));
                 for (int i = 0; i < cards.Count; i++)
                     cards[i].Bounds = new Rectangle(x + i * (cw + gap), y, i == n - 1 ? w - i * (cw + gap) : cw, cardH);
                 y += cardH + S(16);
             }
 
-            foreach (var (t, h, cards) in headers) Row(t, h, cards, S(62));
-            if (toggles is not null && extrasTitle is not null && extrasHint is not null) Row(extrasTitle, extrasHint, toggles, S(66));
+            foreach (var (t, h, cards) in headers) Row(t, h, cards);
+            if (toggles is not null && extrasTitle is not null && extrasHint is not null)
+                Row(extrasTitle, extrasHint, [.. toggles.Where(c => c.Visible)]);
         };
     }
+
+    /// <summary>How tall a choice or toggle card needs to be at a width to show all it says.</summary>
+    internal static int CardHeight(Control card, int width) => card switch
+    {
+        ChoiceCard choice => choice.HeightFor(width),
+        ToggleCard toggle => toggle.HeightFor(width),
+        _ => card.Height,
+    };
 
     // ================================================================ review
 
@@ -735,6 +769,8 @@ internal sealed class QuickPage : Panel
         var extras = new List<string>();
         if (_choices.Wilderness) extras.Add("Wilderness");
         if (_choices.Wars) extras.Add("Wars at the start");
+        if (_choices.People == QuickPeople.Invented && _choices.NativeTitles) extras.Add("Native titles");
+        if (_choices.People == QuickPeople.Invented && _choices.NativeRealms) extras.Add("Native realm names");
         return
         [
             $"{CurrentType?.Title ?? _choices.MapType}  ·  seed {_choices.Seed}",
@@ -791,31 +827,16 @@ internal sealed class QuickPage : Panel
             int y = S(18);
             title.Location = new Point(x - S(2), y);
             y += title.PreferredHeight + S(2);
-            subtitle.Location = new Point(x, y);
-            y += subtitle.PreferredHeight + S(18);
+            y += StepPanel.Place(subtitle, x, y, w) + S(18);
 
             int gap = S(28);
             int leftW = (w - gap) * 52 / 100;
             int rightX = x + leftW + gap, rightW = x + w - rightX;
 
             // The summary, on a white card.
-            int rowH = S(38);
             int cardPad = S(16);
-            var card = new Rectangle(x, y, leftW, cardPad * 2 + rowH * _summary.Count);
-            panel.Cards.Add(card);
-            int ry = y + cardPad;
-            for (int i = 0; i < _summary.Count; i++)
-            {
-                var (k, v, change) = _summary[i];
-                int cy = ry + i * rowH;
-                k.Location = new Point(x + cardPad, cy + (rowH - k.PreferredHeight) / 2);
-                change.Location = new Point(x + leftW - cardPad - change.Width, cy + (rowH - change.Height) / 2);
-                int vx = x + cardPad + S(130);
-                v.AutoSize = false;
-                v.AutoEllipsis = true;
-                v.Bounds = new Rectangle(vx, cy + (rowH - v.PreferredHeight) / 2, change.Left - vx - S(8), v.PreferredHeight);
-                if (i > 0) panel.Rules.Add(new Rectangle(x + cardPad, cy, leftW - 2 * cardPad, 1));
-            }
+            int cardH = StepPanel.Summary(panel, _summary, x, y, leftW, cardPad, S(130));
+            panel.Cards.Add(new Rectangle(x, y, leftW, cardH));
 
             // The map, the name, and what the write will touch.
             int ty = y;

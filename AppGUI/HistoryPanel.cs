@@ -243,7 +243,7 @@ internal sealed class HistoryPanel : Panel
         _timer.Tick += (_, _) => OnFrame();
         _view.ViewChanged += (_, pixel) => ShowReadout(pixel);
 
-        var tips = new ToolTip { InitialDelay = 500 };
+        var tips = new WrappingToolTip { InitialDelay = 500 };
         tips.SetToolTip(_play, "Run history forward, or stop it (Space)");
         tips.SetToolTip(_step, "Advance one year (→)");
         tips.SetToolTip(_reset, "Go back to the start date. The same history plays out again unless something is changed.");
@@ -746,7 +746,7 @@ internal sealed class HistoryPanel : Panel
     /// switches and its dials as sliders. New systems add a section by adding rows to
     /// <see cref="RuleChoices"/> and <see cref="Dials"/>.
     /// </summary>
-    private void BuildSettingsPanel(ToolTip tips)
+    private void BuildSettingsPanel(WrappingToolTip tips)
     {
         var list = new FlowLayoutPanel
         {

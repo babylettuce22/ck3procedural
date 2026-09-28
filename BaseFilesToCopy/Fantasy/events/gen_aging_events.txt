@@ -83,6 +83,197 @@ gen_aging.0002 = {
 }
 
 # =====================================================================================
+#  A Late Child
+# =====================================================================================
+# Fired by gen_late_child_pulse_effect on a long-lived woman past vanilla's 45-year cutoff, or on
+# her husband instead when he is the player and she is not. scope:mother and scope:father are
+# always both saved; root is whichever of them decides.
+#
+# The choice comes BEFORE conception, so nothing here ends a pregnancy. That fits the races:
+# elves and deepkin are written as having children when they choose to, and a late dwarven child
+# is a thing a house decides on, not an accident. The three options are yes, leave it to chance,
+# and no.
+#
+# The cooldown is set in `immediate`, so declining also buys five quiet years. Without it, a
+# couple who said no would be asked again within a few years.
+gen_aging.0010 = {
+	type = character_event
+	title = gen_aging.0010.t
+	desc = {
+		# What the race is like past 45.
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					scope:mother = {
+						OR = {
+							has_trait = phenotype_gracile
+							has_trait = phenotype_sylvan
+						}
+					}
+				}
+				desc = gen_aging.0010.desc.elf
+			}
+			triggered_desc = {
+				trigger = { scope:mother = { has_trait = phenotype_dusk_adapted } }
+				desc = gen_aging.0010.desc.deepkin
+			}
+			desc = gen_aging.0010.desc.dwarf
+		}
+		# Who is asking whom.
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:mother = root }
+				desc = gen_aging.0010.desc.mother
+			}
+			desc = gen_aging.0010.desc.father
+		}
+		# What the house already has.
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					scope:mother = {
+						NOT = { any_child = { is_alive = yes } }
+					}
+				}
+				desc = gen_aging.0010.desc.no_children
+			}
+			triggered_desc = {
+				trigger = {
+					scope:mother = {
+						any_child = {
+							is_alive = yes
+							count >= 5
+						}
+					}
+				}
+				desc = gen_aging.0010.desc.many_children
+			}
+			desc = gen_aging.0010.desc.some_children
+		}
+	}
+	theme = pregnancy
+
+	left_portrait = {
+		character = scope:mother
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:father
+		animation = happiness
+	}
+
+	trigger = {
+		exists = scope:mother
+		exists = scope:father
+		scope:mother = { gen_late_child_mother_trigger = yes }
+		scope:mother.primary_spouse = scope:father
+	}
+
+	immediate = {
+		scope:mother = {
+			add_character_flag = {
+				flag = gen_late_child_cooldown
+				years = 5
+			}
+		}
+	}
+
+	# Yes.
+	option = {
+		name = gen_aging.0010.a
+		scope:mother = {
+			make_pregnant = { father = scope:father }
+		}
+		stress_impact = {
+			lazy = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 50
+			modifier = { # No children yet: this may be the last good chance.
+				factor = 3
+				scope:mother = {
+					NOT = { any_child = { is_alive = yes } }
+				}
+			}
+			modifier = {
+				factor = 0.4
+				scope:mother = {
+					any_child = {
+						is_alive = yes
+						count >= 4
+					}
+				}
+			}
+			modifier = {
+				factor = 0.3
+				has_trait = world_weary
+			}
+			modifier = {
+				factor = 0.5
+				has_trait = lazy
+			}
+		}
+	}
+
+	# Leave it to chance. Both rolls report, per the house rule on odds.
+	option = {
+		name = gen_aging.0010.b
+		random_list = {
+			50 = {
+				send_interface_message = {
+					type = event_toast_effect_good
+					title = gen_aging.0010.b.success
+					left_icon = scope:mother
+					right_icon = scope:father
+					scope:mother = {
+						make_pregnant = { father = scope:father }
+					}
+				}
+			}
+			50 = {
+				send_interface_message = {
+					type = event_toast_effect_neutral
+					title = gen_aging.0010.b.failure
+					desc = gen_aging.0010.b.failure.desc
+					left_icon = scope:mother
+				}
+			}
+		}
+		ai_chance = {
+			base = 25
+		}
+	}
+
+	# No.
+	option = {
+		name = gen_aging.0010.c
+		add_stress = minor_stress_loss
+		ai_chance = {
+			base = 50
+			modifier = {
+				factor = 2
+				has_trait = world_weary
+			}
+			modifier = {
+				factor = 2
+				scope:mother = {
+					any_child = {
+						is_alive = yes
+						count >= 4
+					}
+				}
+			}
+			modifier = {
+				factor = 0.3
+				scope:mother = {
+					NOT = { any_child = { is_alive = yes } }
+				}
+			}
+		}
+	}
+}
+
+# =====================================================================================
 #  Core debug inspector — console only: `event gen_aging.0090` (optionally with a character id)
 # =====================================================================================
 # The Core counterpart of the Wilderness debug tooling (wilderness_colonization.0099's watchdog
@@ -199,6 +390,15 @@ gen_aging.0090 = {
 		name = gen_aging.0090.fade
 		trigger = { has_trait = world_weary }
 		trigger_event = gen_aging.0002
+	}
+
+	# Skip the yearly roll and offer the late child now (still needs a woman the trigger accepts).
+	option = {
+		name = gen_aging.0090.late_child
+		trigger = { gen_late_child_mother_trigger = yes }
+		save_scope_as = mother
+		primary_spouse = { save_scope_as = father }
+		trigger_event = gen_aging.0010
 	}
 
 	# The same repairs the pulses run, on demand: doubled-race cleanup, culture-based assignment,

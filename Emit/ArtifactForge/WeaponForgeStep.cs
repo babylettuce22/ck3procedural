@@ -462,10 +462,17 @@ public static class WeaponForgeStep
         }
 
         // ---- icons --------------------------------------------------------------------------
-        var drawn = new Dictionary<string, string>(StringComparer.Ordinal);
+        // Drawn side by side, as the pool path draws its own. Each render works in buffers of its
+        // own and writes a file named for its own weapon; what they share is read-only here — the
+        // meshes, the colour tables — or guarded where it is filled lazily: the renderer's texture
+        // cache and ForgedWeaponTextures' colour cache. Each result lands in its weapon's slot and
+        // is gathered afterwards on this thread, because `drawn` is a plain dictionary.
+        var files = new string?[built.Count];
 
-        foreach (var (key, look, weapon, baseBuilt) in built)
+        Parallel.For(0, built.Count, IconParallel, i =>
         {
+            var (key, look, weapon, baseBuilt) = built[i];
+
             // A hero's colours cover every part including the blade, which is the whole point of
             // merging it. Anything else falls back to the base's finish plus a sampled lead.
             var colours = heroColour is not null
@@ -475,12 +482,15 @@ public static class WeaponForgeStep
                     BaseLookName(look.BaseFamily, tierOf.GetValueOrDefault(key, ArtifactRarity.Common)),
                     gameDir);
 
-            if (ForgedWeaponRender.Write(
-                    modDir, gameDir, weapon, WeaponSchema.For(look.Kind), look.Kind, colours)
-                is { } file)
-            {
-                drawn[key] = file;
-            }
+            files[i] = ForgedWeaponRender.Write(
+                modDir, gameDir, weapon, WeaponSchema.For(look.Kind), look.Kind, colours);
+        });
+
+        var drawn = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        for (int i = 0; i < built.Count; i++)
+        {
+            if (files[i] is { } file) drawn[built[i].Key] = file;
         }
 
         Console.WriteLine($"  composed weapons: {entity.Count} merged and fully recoloured at "

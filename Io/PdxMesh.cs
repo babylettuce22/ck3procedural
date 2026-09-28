@@ -183,6 +183,16 @@ public static class PdxMesh
 
     public static void Write(string path, PdxNode root)
     {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllBytes(path, ToBytes(root));
+    }
+
+    /// <summary>
+    /// The file <see cref="Write"/> would produce, in memory. Lets a caller prove a round trip —
+    /// read a vanilla file, write it back, compare bytes — before trusting an edit to it.
+    /// </summary>
+    public static byte[] ToBytes(PdxNode root)
+    {
         var ms = new MemoryStream();
         ms.Write(Encoding.ASCII.GetBytes(Header));
 
@@ -190,8 +200,7 @@ public static class PdxMesh
         foreach (var kv in root.Props) WriteProp(ms, kv.Key, kv.Value);
         foreach (var child in root.Children) WriteNode(ms, child, 1);
 
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllBytes(path, ms.ToArray());
+        return ms.ToArray();
     }
 
     private static void WriteNode(Stream s, PdxNode node, int depth)

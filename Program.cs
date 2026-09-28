@@ -355,6 +355,36 @@ public static class Program
                     cfg.CalendarEnabled = false;
                     break;
 
+                // Pen work on the parchment flat map, on by default. See Emit/FlatmapInk.cs.
+                case "--flatmap-roads":
+                    cfg.FlatmapRoads = true;
+                    break;
+                case "--flatmap-flourishes":
+                    cfg.FlatmapFlourishes = true;
+                    break;
+                case "--no-flatmap-roads":
+                    cfg.FlatmapRoads = false;
+                    break;
+                case "--no-flatmap-flourishes":
+                    cfg.FlatmapFlourishes = false;
+                    break;
+                case "--flatmap-feather":
+                    cfg.FlatmapFeather = true;
+                    break;
+
+                // Vanilla's surround shader, unpatched. See MapGraphicsWriter.WriteSurroundShader.
+                case "--no-surround-depth":
+                    cfg.SurroundDepthTest = false;
+                    break;
+
+                // Tucks table props under the paper map, on by default. See Emit/TablePropTucker.cs.
+                case "--table-props-off-map":
+                    cfg.MapTablePropsOffMap = true;
+                    break;
+                case "--no-table-props-off-map":
+                    cfg.MapTablePropsOffMap = false;
+                    break;
+
                 // The Calendar tab's fields: "Talvek Reckoning" or "Talvek Reckoning,TR", and up
                 // to twelve comma-separated months, January first. An empty slot is generated.
                 case "--calendar-era" when i + 1 < args.Length:
@@ -441,6 +471,19 @@ public static class Program
                     cfg.EnableSocieties = true;
                     break;
 
+                // Native rank titles and realm names (MapGen/NativeTitles.cs), both off by default.
+                case "--native-titles":
+                    cfg.NativeRankTitles = true;
+                    break;
+
+                case "--native-realms":
+                    cfg.NativeRealmNames = true;
+                    break;
+
+                case "--no-rank-tooltips":
+                    cfg.NativeRankTooltips = false;
+                    break;
+
                 // The Chronicle's off switch, so the stubbed build can be run through tiger.
                 case "--no-chronicle":
                     cfg.EnableChronicle = false;
@@ -493,6 +536,13 @@ public static class Program
                 // MapConfig.FlatMapHandoffBias; 0 is vanilla's own handoff.
                 case "--flat-map-bias" when i + 1 < args.Length:
                     cfg.FlatMapHandoffBias = int.Parse(args[++i],
+                        System.Globalization.CultureInfo.InvariantCulture);
+                    break;
+
+                // Extra zoom steps before trees and map objects fade and the realm colours fill in.
+                // See MapConfig.DetailFadeBias; 0 is vanilla's own distance.
+                case "--detail-fade-bias" when i + 1 < args.Length:
+                    cfg.DetailFadeBias = int.Parse(args[++i],
                         System.Globalization.CultureInfo.InvariantCulture);
                     break;
 

@@ -1286,7 +1286,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// </summary>
     [AdvancedSetting]
     [Category("03 Provinces")]
-    [Description("How rugged ground below the mountain line must be to become impassable, as a multiple of the map's median. Keeps flat tablelands and benches passable however high they stand. 0 turns it off.")]
+    [Description("How rugged ground below the mountain line must be to become impassable, as a multiple of the map's median. Keeps flat tablelands and benches passable up to ImpassableCeilingHeight. 0 turns it off.")]
     public double ImpassableMinRuggedness { get; set; } = 1;
 
     /// <summary>
@@ -1307,6 +1307,68 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Category("03 Provinces")]
     [Description("The highest the mountain-ground gate's line may sit, in elevation units (sea 36, max 520). 238 is where vanilla's top 3.5% of land begins. Stops high, saturated maps reading real ranges as foothills. 0 removes the cap.")]
     public double ImpassableGateHeight { get; set; } = 238;
+
+    /// <summary>
+    /// The height above which the auto-cut leaves no mountain ground passable, in the generator's
+    /// elevation units (sea level 36, heightmap maximum 520). The default, 400, is about the top of
+    /// vanilla's whole map: none of its land stands higher, and none of its passable provinces
+    /// stands above about 320. Only read with <see cref="ImpassableAutoCut"/> on.
+    ///
+    /// <see cref="ImpassableShareOfLand"/> ranks wall cores by height and grows each one down its
+    /// own slopes, and on a map whose mountains run far above vanilla's the share runs out first.
+    /// On a Standard continents world whose top 3.5% of land began at 475, the cores began at 510,
+    /// the tallest ranges spent the share running down their flanks to 230–300, and eleven
+    /// highlands peaking at 480–520 were left passable with baronies on their tops, some of them
+    /// flat enough for <see cref="ImpassableMinRuggedness"/> to exempt. With the core cut capped
+    /// here, and flat ground above it no longer exempt, walls went from 11.6% to 19.3% of land and
+    /// passable ground above 400 from 4.4% to 0.1%. A map whose mountains stay below it is
+    /// untouched. The height above sea scales with <see cref="ReliefScale"/>. 0 turns it off.
+    /// Recommended: 400.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("03 Provinces")]
+    [Description("No mountain ground above this height is left passable, in elevation units (sea 36, max 520), whatever the target share. 400 is about the top of vanilla's whole map. Stops tall maps spending the share on their highest ranges and leaving other high peaks and plateaus passable. 0 turns it off.")]
+    public double ImpassableCeilingHeight { get; set; } = 400;
+
+    /// <summary>
+    /// Cuts a pass through an auto-cut wall where it is thin and the way round is long: at most one
+    /// per wall, through its thinnest, lowest neck, as a barony of its own named for the pass and
+    /// holding a fort and a toll. See <see cref="MapGen.MountainPasses"/>. Only read with
+    /// <see cref="ImpassableAutoCut"/> on.
+    ///
+    /// Vanilla's ranges are broken into chunks with passable mountain provinces between them; the
+    /// cut draws a range as one piece, so a long range is a wall its whole length. Surveyed on a
+    /// continents world, 7 necks on 6 of its 32 walls were under a barony and a half thick with a
+    /// way round at least three times longer — about as many as vanilla's own mountain walls have
+    /// (11 on 9), so the walls were no worse than vanilla's; the passes are there to give a range
+    /// a door worth holding.
+    /// Recommended: on.
+    /// </summary>
+    [Category("03 Provinces")]
+    [Description("Cut one narrow pass through an impassable wall where the wall is thin and the way round is long, at most one per wall. The pass is a barony of its own, named for it, with a fort and a toll.")]
+    public bool MountainPasses { get; set; } = true;
+
+    /// <summary>
+    /// The thickest a wall may be where a pass is cut, in barony widths. The survey's necks ran
+    /// 0.45 to 1.44. Only read with <see cref="MountainPasses"/> on.
+    /// Recommended: 1.5.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("03 Provinces")]
+    [Description("The thickest a wall may be where a pass is cut through it, in barony widths.")]
+    public double MountainPassMaxThickness { get; set; } = 1.5;
+
+    /// <summary>
+    /// How far round a wall the land route between a pass's two ends must be before the pass is
+    /// cut, in barony widths — and at least four times the wall's thickness there. Lower gives more
+    /// passes, including through walls a short walk already goes round. Only read with
+    /// <see cref="MountainPasses"/> on.
+    /// Recommended: 8.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("03 Provinces")]
+    [Description("How long the way round a wall must be, in barony widths, before a pass is cut through it. Lower gives more passes.")]
+    public double MountainPassMinDetour { get; set; } = 8;
 
     /// <summary>
     /// Makes a land province with more than half its ground above the mountain line impassable
@@ -1820,6 +1882,19 @@ public sealed class MapConfig : CustomTypeDescriptor
     public bool MapTableProps { get; set; } = true;
 
     /// <summary>
+    /// Tucks map-table props under the paper map: the parts of them that would stand on top of
+    /// the map are cut from copies of vanilla's tabletop meshes, so props at the edge read as
+    /// sliding under the paper. Vanilla's props reach into the strip its torn-paper map edge cuts
+    /// away; ours is a full rectangle, so tall props there drew over the map. Nothing moves, so the
+    /// props stay on the shadows painted into the tabletop textures. Objects with locators (the
+    /// candle flames, ep3's lamps) are left vanilla. See <see cref="Emit.TablePropTucker"/>.
+    /// </summary>
+    [Category("06 Map Objects")]
+    [DisplayName("Map Table Props Off Map")]
+    [Description("Tuck map-table props under the paper map: the parts that would sit on top of the map are cut away, so props at the edge look like they slide under it. Candles and lamps are left as they are.")]
+    public bool MapTablePropsOffMap { get; set; } = true;
+
+    /// <summary>
     /// Extra world units the whole map-table tableau is pushed down, away from the map.
     ///
     /// Vanilla's tabletops are not entirely below the paper map. Measured from the shipped meshes
@@ -1874,6 +1949,50 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Category("06 Map Objects")]
     [Description("Global scale multiplier for environmental VFX billboards. 1.0 is vanilla size, which they are drawn at on every map size.")]
     public double EnvEffectScale { get; set; } = 0.9;
+
+    /// <summary>
+    /// Inks the route network onto the parchment flat map: trunk routes heavier, roads into
+    /// wilderness dashed, water crossings dotted, sea lanes as faint dots, markets marked.
+    /// Drawn by <see cref="Emit.FlatmapInk"/>.
+    /// </summary>
+    [Category("06 Map Objects")]
+    [DisplayName("Paper Map Roads")]
+    [Description("Draw the road and sea-lane network onto the flat (paper) map, with trunk roads in a heavier line.")]
+    public bool FlatmapRoads { get; set; } = true;
+
+    /// <summary>
+    /// A compass rose in the open ocean with rhumb lines ruled from it across the sea, hatching
+    /// over unsettled wilderness, and a graduated border around the sheet, on the parchment flat
+    /// map. Drawn by <see cref="Emit.FlatmapInk"/>.
+    /// </summary>
+    [Category("06 Map Objects")]
+    [DisplayName("Paper Map Flourishes")]
+    [Description("Decorate the flat (paper) map: a compass rose with rhumb lines across the open sea, hatching over the wilderness, and a graduated border.")]
+    public bool FlatmapFlourishes { get; set; } = true;
+
+    /// <summary>
+    /// Feathers the flat map's edges into the table through the blue channel of
+    /// <c>gfx/map/surround_map/surround_mask.dds</c>, which vanilla's terrain shader reads as the
+    /// flat map's transparency. Only open sea near the edge fades — land and a buffer round every
+    /// coast stay opaque — and the flat map's ink frame moves in to stand just inside the fade.
+    /// Written by <see cref="Emit.MapGraphicsWriter"/>. Off while it is a prototype.
+    /// </summary>
+    [Category("06 Map Objects")]
+    [DisplayName("Paper Map Edge Feather")]
+    [Description("Softly fade the flat (paper) map's outer edge into the table, over open sea only. Land and coasts are never faded.")]
+    public bool FlatmapFeather { get; set; } = false;
+
+    /// <summary>
+    /// Ships vanilla's <c>gfx/FX/surroundmap.shader</c> with a depth test on its 3D layers, so the
+    /// dark clouds and shadow beyond the map's edge no longer cut off terrain that runs up to it.
+    /// Patched from the installed game at each generation by <see cref="Emit.MapGraphicsWriter"/>;
+    /// off leaves vanilla's shader in place. The switch exists for a CK3 update that breaks the
+    /// patch in a way its anchors cannot detect.
+    /// </summary>
+    [Category("06 Map Objects")]
+    [DisplayName("Map Edge Depth Test")]
+    [Description("Stop the dark clouds beyond the map's edge from cutting off hills and mountains that run right up to it. Patches one of the game's shaders from your installed copy of CK3 each time a map is generated. Turn it off if a game update ever makes the map's edge look wrong.")]
+    public bool SurroundDepthTest { get; set; } = true;
 
 
     // =========================================================================
@@ -2012,6 +2131,33 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Category("7 Height scale")]
     [Description("Extra zoom steps of 3D terrain before the map goes flat to the paper map, past vanilla's own handoff. The zoom ladder is about 15% a step, so 5 is roughly 1.7x vanilla's share of the world visible as terrain — worth having because vanilla's framing was authored for a map twice as wide. The map-table fades move with it automatically. Lower it if terrain at far zoom looks mushy or costs frames; 0 is vanilla's own handoff.")]
     public int FlatMapHandoffBias { get; set; } = 5;
+
+    /// <summary>
+    /// Extra zoom steps before the close-up map gives way to the political one: trees, city
+    /// scatter, animals and weather effects fade out, and the realm colours start filling in.
+    ///
+    /// Vanilla does all of that together at step 9 — the tree layers' <c>fade_out=9</c> and
+    /// <c>REALM_COLOR_MAP_START_ZOOM_STEP = 9</c> — and this moves the pair together too, in
+    /// <see cref="Emit.CompatibilityWriter.DetailFadeStep"/>. Counted from the camera height vanilla
+    /// does it at, not from the step index, so it means the same on every map size: a tree is the
+    /// same tree on a small map, and the scaled zoom ladder would otherwise fade it at
+    /// <see cref="MapScale"/> times vanilla's height.
+    ///
+    /// Held under the flat-map handoff, so it cannot draw trees onto the paper map. On a small map
+    /// the realm colour then finishes filling on the handoff frame rather than six steps before it.
+    ///
+    /// Grass is deliberately left at vanilla's height. Its meshes are flat ground patches, and
+    /// <see cref="Emit.TreeWriter"/> records that seen from any further off they read as debris
+    /// strewn over the map.
+    ///
+    /// The cost is instances drawn at far zoom. The ladder climbs about 12% a step between 9 and
+    /// 14, so 5 is 1.8x vanilla's camera height and about 3x the ground in view at the cutoff —
+    /// still a small corner of the map, but walk this back first if far zoom costs frames.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("7 Height scale")]
+    [Description("Extra zoom steps before trees, city scatter, animals and weather effects fade out and the realm colours start filling in, past the camera height vanilla does it at. 5 matches the default Flat Map Handoff Bias, so vanilla's whole zoom-out sequence is stretched out by the same amount. Held under the flat-map handoff. Grass stays at vanilla's distance. 0 is vanilla's own distance.")]
+    public int DetailFadeBias { get; set; } = 5;
 
     /// <summary>
     /// Whether the flat-map handoff is pulled in on maps below vanilla's size by the terrain
@@ -2583,6 +2729,34 @@ public sealed class MapConfig : CustomTypeDescriptor
     [DisplayName("Generated Faith Icons")]
     [Description("Draw each generated faith its own relief icon. Faiths of one religion share a symbol (suns, crescents, a tree) chosen from their tenets; material follows standing, from carved wood for unreformed faiths to gold and enamel for organised ones, and the inlay takes the faith's map colour. Unreformed faiths also get the icon they will wear once reformed. Off picks vanilla icons at random.")]
     public bool GenerateFaithIcons { get; set; } = true;
+
+    /// <summary>
+    /// Rulers styled in their own people's language: every generated culture's words for its ranks,
+    /// coined from its tongue, with variants for sovereigns, special contracts, titles held and
+    /// converts. Off by default — the English vocabularies of <see cref="Emit.TitleTierWriter"/>
+    /// are what most players read fastest. See <see cref="MapGen.NativeTitles"/>.
+    /// </summary>
+    [Category("10 Cultures and faiths")]
+    [DisplayName("Native rank titles")]
+    [Description("Style rulers in their own people's language: each culture's counts, dukes, kings and emperors get words built from its tongue, and sister cultures get related words. Variants follow the ruler's situation: a sovereign duke is a prince; march, palatinate and castellany contracts have their own titles; holding two or more duchies or kingdoms makes a grand duke or high king; a people that converts takes its kings' titles from the holy tongue of its new religion. A realm uses its top liege's culture's words. Off keeps the usual English titles.")]
+    public bool NativeRankTitles { get; set; } = false;
+
+    /// <summary>The realm half of <see cref="NativeRankTitles"/>; either works without the other.</summary>
+    [Category("10 Cultures and faiths")]
+    [DisplayName("Native realm names")]
+    [Description("Name realms in their people's language too: Barony, County, Duchy, Kingdom and Empire become words of the top liege's tongue, with the same variants as the titles (principality, march, palatinate, castellany). Works with or without native rank titles.")]
+    public bool NativeRealmNames { get; set; } = false;
+
+    /// <summary>
+    /// Wraps every native word in a hidden game concept whose tooltip names its English
+    /// equivalent. Its own switch because the words then render in the link colour, which is a
+    /// matter of taste, and because a concept link nested inside a character's name link is the one
+    /// part of this that could only be judged in game.
+    /// </summary>
+    [Category("10 Cultures and faiths")]
+    [DisplayName("Native rank tooltips")]
+    [Description("With native titles or realm names on, hovering one of those words in game shows its real-world equivalent (King, Margrave, Duchy...). The words then show in link colour. Turn off to show them as plain text.")]
+    public bool NativeRankTooltips { get; set; } = true;
 
     // Can be way too many nude characters lol
     // Need to extend this to cover "Nudism" cultural pillar

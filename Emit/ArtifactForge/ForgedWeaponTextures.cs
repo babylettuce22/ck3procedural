@@ -1,6 +1,7 @@
 ﻿namespace Ck3MapGen.Emit;
 
 using Ck3MapGen.MapGen;
+using System.Collections.Concurrent;
 using System.IO;
 
 /// <summary>
@@ -174,17 +175,55 @@ public static class ForgedWeaponTextures
     }
 
     /// <summary>
+    /// <see cref="AverageColour"/>'s answers, by game folder and texture name.
+    ///
+    /// Worth keeping because each answer costs a walk of the game's whole model tree — twenty
+    /// thousand files, a quarter of a second when the name is not there — and a full DDS decode,
+    /// and the icons ask about the same few lead textures over and over.
+    ///
+    /// A <see cref="Lazy{T}"/> per texture rather than a lock around the whole cache, because the
+    /// icons are drawn in parallel: the lazy makes one caller measure a texture while any other
+    /// asking for that texture waits for its answer, and callers asking about different textures
+    /// never wait on each other. A bare <c>GetOrAdd</c> would let two threads decode the same file.
+    /// </summary>
+    private static readonly ConcurrentDictionary<(string GameDir, string Diffuse), Lazy<(byte R, byte G, byte B)?>>
+        AverageCache = new();
+
+    /// <summary>
     /// The average colour of a texture's opaque texels, or null when it cannot be found or read.
     ///
     /// Used to colour a part the recolour never touched — an attached lead keeps the textures it was
     /// cut with, so the honest colour for it in an icon is whatever those textures actually are.
     /// Transparent texels are skipped because a weapon atlas is mostly empty space, and averaging
     /// that in washes every part toward the background.
+    ///
+    /// Safe to call from several threads at once; see <see cref="AverageCache"/>.
     /// </summary>
     public static (byte R, byte G, byte B)? AverageColour(string gameDir, string diffuse)
     {
         if (string.IsNullOrWhiteSpace(diffuse)) return null;
 
+        var key = (gameDir, diffuse);
+        var entry = AverageCache.GetOrAdd(key, k => new Lazy<(byte R, byte G, byte B)?>(
+            () => Measure(k.GameDir, k.Diffuse), LazyThreadSafetyMode.ExecutionAndPublication));
+
+        try
+        {
+            return entry.Value;
+        }
+        catch
+        {
+            // A failed read is not an answer. The lazy would keep the exception and throw it at
+            // every later caller, including the next run in the same GUI session after the file
+            // has become readable, so the entry goes and the next caller tries again. Removed only
+            // if it is still this entry, so a retry another thread has already started is kept.
+            AverageCache.TryRemove(new KeyValuePair<(string, string), Lazy<(byte R, byte G, byte B)?>>(key, entry));
+            throw;
+        }
+    }
+
+    private static (byte R, byte G, byte B)? Measure(string gameDir, string diffuse)
+    {
         string? path = Find(gameDir, diffuse);
         if (path is null) return null;
 

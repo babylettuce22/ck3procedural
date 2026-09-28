@@ -100,6 +100,8 @@ internal sealed class ChronicleFeed : Control
         base.OnMouseWheel(e);
         int max = Math.Max(0, _contentHeight - Height);
         _scroll = Math.Clamp(_scroll - e.Delta / 2, 0, max);
+        // A column with more than it shows keeps the wheel; one that fits lets it scroll the page.
+        if (max > 0 && e is HandledMouseEventArgs handled) handled.Handled = true;
         Invalidate();
     }
 

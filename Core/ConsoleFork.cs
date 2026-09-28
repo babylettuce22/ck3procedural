@@ -25,19 +25,43 @@ namespace Ck3MapGen.Core;
 public static class ConsoleFork
 {
     private static readonly AsyncLocal<StringWriter?> Diverted = new();
-    private static bool _installed;
+
+    /// <summary><see cref="Console.Out"/> as <see cref="Install"/> left it — the router, as Console wrapped it.</summary>
+    private static TextWriter? _installed;
+
+    /// <summary>The writer the installed router forwards to.</summary>
+    private static TextWriter? _routed;
 
     /// <summary>
     /// Puts the router in front of whatever <see cref="Console.Out"/> currently is. Call after
     /// <see cref="RunLog.Begin"/>, so the router sits outside the tee and a replayed buffer still
     /// reaches the run log — in replay order, not in the order the threads produced it.
+    ///
+    /// Called once per run by the GUI, so it has to be a no-op when the router is already in
+    /// front — and to put a fresh one in front when something has replaced Console.Out since,
+    /// which a flag remembering the first install could not tell apart.
     /// </summary>
     public static void Install()
     {
-        if (_installed) return;
-        Console.SetOut(new Router(Console.Out));
-        _installed = true;
+        if (_installed is not null && ReferenceEquals(Console.Out, _installed)) return;
+
+        var inner = Console.Out;
+        Console.SetOut(new Router(inner));
+        _routed = inner;
+        _installed = Console.Out;
     }
+
+    /// <summary>
+    /// Whether the router is what Console.Out is, and it forwards to <paramref name="writer"/>.
+    ///
+    /// For <see cref="RunLog.Begin"/>, whose tee this router sits in front of: from the second run
+    /// in a session Console.Out is the router rather than the tee, and a tee that took that to mean
+    /// it had been replaced would wrap a second one outside the router. Both then kept a copy —
+    /// every line twice in proctool.txt, and a branch's lines three times, one of them in whatever
+    /// order the threads happened to write them.
+    /// </summary>
+    public static bool RoutesTo(TextWriter writer)
+        => _installed is not null && ReferenceEquals(Console.Out, _installed) && ReferenceEquals(_routed, writer);
 
     /// <summary>A branch that is running, and the output it has collected so far.</summary>
     public sealed class Branch(Task work, StringWriter buffer)

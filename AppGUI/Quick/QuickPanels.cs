@@ -54,8 +54,27 @@ internal sealed class MilestoneStrip : Control
 
     public const int Columns = 6;
 
-    /// <summary>Height wanted for the grid at the current DPI.</summary>
-    public int PreferredGridHeight => 2 * S(40) + S(8);
+    /// <summary>
+    /// Columns at <paramref name="width"/>: six, or fewer when a cell would be too narrow for its
+    /// name (in the bold the current step takes), so no name is ever cut short.
+    /// </summary>
+    public int ColumnsFor(int width)
+    {
+        foreach (int columns in (int[])[Columns, 4, 3, 2])
+        {
+            int label = (width - S(8) * (columns - 1)) / columns - S(38);
+            if (Milestones.All(m => TextRenderer.MeasureText(m.Label, LabelBold, Size.Empty, TextFormatFlags.NoPadding).Width <= label))
+                return columns;
+        }
+        return 1;
+    }
+
+    /// <summary>Height wanted for the grid at <paramref name="width"/> and the current DPI.</summary>
+    public int GridHeight(int width)
+    {
+        int rows = (Milestones.Length + ColumnsFor(width) - 1) / ColumnsFor(width);
+        return rows * S(40) + (rows - 1) * S(8);
+    }
 
     public void Reset()
     {
@@ -100,12 +119,13 @@ internal sealed class MilestoneStrip : Control
         g.SmoothingMode = SmoothingMode.AntiAlias;
 
         int gap = S(8);
-        int cellW = (Width - gap * (Columns - 1)) / Columns;
+        int columns = ColumnsFor(Width);
+        int cellW = (Width - gap * (columns - 1)) / columns;
         int cellH = S(40);
 
         for (int i = 0; i < Milestones.Length; i++)
         {
-            int col = i % Columns, row = i / Columns;
+            int col = i % columns, row = i / columns;
             var cell = new Rectangle(col * (cellW + gap), row * (cellH + gap), cellW, cellH);
             bool done = _finished || i < _current;
             bool current = !_finished && i == _current;
@@ -183,8 +203,35 @@ internal sealed class TallyRow : Control
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public int ColumnCount { get; set; } = Columns;
 
-    public int PreferredGridHeight
-        => _tallies.Count == 0 ? 0 : ((_tallies.Count + ColumnCount - 1) / ColumnCount) * (S(58) + S(8)) - S(8);
+    /// <summary>
+    /// Tiles per row at <paramref name="width"/>: <see cref="ColumnCount"/>, or fewer when a tile
+    /// would be too narrow for its number or its name — spread evenly over the rows that takes, so
+    /// six tiles fall to two rows of three rather than four and two.
+    /// </summary>
+    public int ColumnsFor(int width)
+    {
+        int n = Math.Max(1, _tallies.Count);
+        for (int columns = Math.Max(1, ColumnCount); columns > 1; columns--)
+        {
+            int room = (width - S(8) * (columns - 1)) / columns - S(16);
+            if (_tallies.All(t => TextRenderer.MeasureText(t.Label, LabelFont, Size.Empty, TextFormatFlags.NoPadding).Width <= room
+                                  && TextRenderer.MeasureText(t.Count.ToString("N0"), NumberFont, Size.Empty, TextFormatFlags.NoPadding).Width <= room))
+            {
+                if (columns == ColumnCount) return columns;
+                int rows = (n + columns - 1) / columns;
+                return (n + rows - 1) / rows;
+            }
+        }
+        return 1;
+    }
+
+    /// <summary>Height wanted for the tiles at <paramref name="width"/>; nothing when there are none.</summary>
+    public int GridHeight(int width)
+    {
+        if (_tallies.Count == 0) return 0;
+        int columns = ColumnsFor(width);
+        return ((_tallies.Count + columns - 1) / columns) * (S(58) + S(8)) - S(8);
+    }
 
     public void Set(IReadOnlyList<(string Label, int Count)> tallies)
     {
@@ -199,7 +246,7 @@ internal sealed class TallyRow : Control
         g.SmoothingMode = SmoothingMode.AntiAlias;
 
         int gap = S(8);
-        int columns = Math.Max(1, ColumnCount);
+        int columns = ColumnsFor(Width);
         int cellW = (Width - gap * (columns - 1)) / columns;
         int cellH = S(58);
 

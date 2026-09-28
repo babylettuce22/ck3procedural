@@ -97,7 +97,7 @@ internal sealed class WorkspaceBar : Panel
     {
         var item = new Item(step, label, badge);
         item.Click += (_, _) => { if (workspace != Current) Picked?.Invoke(workspace); };
-        new ToolTip { InitialDelay = 500 }.SetToolTip(item, tip);
+        new WrappingToolTip { InitialDelay = 500 }.SetToolTip(item, tip);
         _items[workspace] = item;
         _leading.Controls.Add(item);
     }

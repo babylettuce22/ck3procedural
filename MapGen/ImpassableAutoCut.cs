@@ -6,11 +6,13 @@ namespace Ck3MapGen.MapGen;
 /// <summary>
 /// What <see cref="ImpassableAutoCut"/> decided, for the log and the preview's hover text.
 /// <c>CutHeight</c> is the smoothed elevation the quota stopped at; mountain ground below it is
-/// passable unless the plateau rule took it. Shares are of land area.
+/// passable unless the plateau rule took it. Shares are of land area. <c>Passes</c> are the
+/// corridors cut through the walls, empty with <see cref="MapConfig.MountainPasses"/> off.
 /// </summary>
 public sealed record AutoCutDiagnostics(
     float MountainLine, float SteepLine, float GateLine, float CutHeight,
-    double TargetShare, double PlateauShare, double MaskShare, int Pieces);
+    double TargetShare, double PlateauShare, double MaskShare, int Pieces,
+    IReadOnlyList<MountainPass>? Passes = null);
 
 /// <summary>
 /// The impassable mask drawn from the terrain before any province exists, so the partition can be
@@ -23,7 +25,7 @@ public sealed record AutoCutDiagnostics(
 /// 3192 px at every map size, so on a 4096 map it spans twice the terrain it does at 8192. Cutting
 /// first puts the wall's edge on the terrain instead.
 ///
-/// Five steps, all per pixel on the province raster:
+/// Six steps, all per pixel on the province raster:
 /// <list type="number">
 /// <item>Mountain ground: land above the gate line (the mountain line capped at
 /// <see cref="MapConfig.ImpassableGateHeight"/>), plus steep ground within a short reach of it.</item>
@@ -32,7 +34,8 @@ public sealed record AutoCutDiagnostics(
 /// does for provinces.</item>
 /// <item>Cores: the rest of the mountain ground, ranked by its lightly smoothed height — less
 /// flat ground below the mountain line, which <see cref="MapConfig.ImpassableMinRuggedness"/>
-/// keeps passable however high it stands.</item>
+/// keeps passable up to <see cref="MapConfig.ImpassableCeilingHeight"/>. Mountain ground above
+/// the ceiling is always a core, whatever the share.</item>
 /// <item>Foot: each core runs down its own slopes to where the ground stands
 /// <see cref="MapConfig.ImpassableFootRelief"/> of the way from its local floor to its local peak.
 /// The core height cut is searched so the walls, flanks included, cover
@@ -40,6 +43,8 @@ public sealed record AutoCutDiagnostics(
 /// floor says the map's mountains run out sooner.</item>
 /// <item>Clean: close small gaps, open hairlines, fill enclosed holes smaller than a barony, and
 /// drop pieces smaller than half a barony.</item>
+/// <item>Passes: at most one corridor per wall, through a thin neck the land route goes a long way
+/// round; see <see cref="MountainPasses"/>.</item>
 /// </list>
 /// A wall therefore ends where its range's slopes give out, at whatever height that is for that
 /// range; with the foot turned off, every wall ends on one height line.
@@ -75,6 +80,7 @@ public static class ImpassableAutoCut
         var slope = Provinces.Slopes(elevation, width, height);
         float steepLine = Provinces.SteepLine(slope, landMask, cfg);
         float gateLine = Provinces.GateLine(mountainLine, cfg);
+        float ceiling = Provinces.CeilingLine(cfg);
         double gateMin = Math.Clamp(cfg.ImpassableMinMountainGround, 0, 1);
 
         // Neighbourhoods are province-sized, because they stand in for a province; reaches that
@@ -150,9 +156,12 @@ public static class ImpassableAutoCut
         // a bench partway up a range is somewhere people live and armies march. Height alone let
         // it in — on an inland-sea map 14.6% of the walls were flat ground under the mountain line,
         // long smooth shelves lower than the peaks beside them. The plateau rule still takes flat
-        // ground mostly above the mountain line; nothing here touches it.
+        // ground mostly above the mountain line; nothing here touches it. Nor is anything above the
+        // ceiling flat for this purpose, however smooth: on a map whose mountain line stood at 475,
+        // tablelands at 400–478 were exempt, and higher than anything vanilla stands on.
         var flat = rugged > 0
-            ? FlatGround(smooth, elevation, mountainLine, land, width, height, Math.Max(1, radius / 2), rugged)
+            ? FlatGround(smooth, elevation, MathF.Min(mountainLine, ceiling), land, width, height,
+                Math.Max(1, radius / 2), rugged)
             : null;
         if (flat is not null)
             Parallel.For(0, height, y =>
@@ -175,7 +184,15 @@ public static class ImpassableAutoCut
         double qualifying = QualifyingShare(landNear, highNear, steepNear, land, landTotal, cfg, out double floor);
         double target = Math.Min(share, qualifying);
         long room = (long)(target * landTotal);
+
+        // The share decides how far down the walls reach; it may not leave mountain ground above the
+        // ceiling passable. Ranked by height, the share is spent on the tallest ranges first, and
+        // each grows down its own flanks: on a continents world whose top 3.5% of land began at 475,
+        // the cores began at 510, those ranges' walls ran down to 230–300, and eleven highlands
+        // peaking at 480–520 were left passable. Capping the cut there walls every one of them,
+        // past the share, and leaves a map whose mountains stay under the ceiling untouched.
         float cutHeight;
+        bool capped = false;
         if (foot > 0)
         {
             // Walls run from their height-ranked cores down to their own foot; the cores shrink to
@@ -190,6 +207,8 @@ public static class ImpassableAutoCut
                 });
             cutHeight = FootCut(raw, candidate, smooth, footGround, candidates,
                 target * landTotal + plateauPixels, width, height);
+            capped = cutHeight > ceiling;
+            if (capped) cutHeight = ceiling;
             raw = Grow(raw, candidate, smooth, cutHeight, footGround, width, height, out _);
         }
         else
@@ -202,6 +221,8 @@ public static class ImpassableAutoCut
                 for (int i = 0, k = 0; i < n; i++) if (candidate[i]) values[k++] = smooth[i];
                 cutHeight = Provinces.Select(values, candidates - (int)room);
             }
+            capped = cutHeight > ceiling;
+            if (capped) cutHeight = ceiling;
             Parallel.For(0, height, y =>
             {
                 for (int i = y * width, end = i + width; i < end; i++)
@@ -242,11 +263,18 @@ public static class ImpassableAutoCut
 
         if (masked == 0) return null;
 
+        // 5. Passes, on the finished walls: any earlier and the closing would seal them again.
+        var passes = MountainPasses.Carve(mask, land, elevation, parts, partSizes, width, height, radius, barony,
+            cfg, out long opened);
+        masked -= opened;
+
         var diagnostics = new AutoCutDiagnostics(mountainLine, steepLine, gateLine, cutHeight,
-            target, (double)plateauPixels / landTotal, (double)masked / landTotal, pieces);
+            target, (double)plateauPixels / landTotal, (double)masked / landTotal, pieces, passes);
         string cut = float.IsNegativeInfinity(cutHeight)
             ? "all mountain ground fit the share"
-            : $"quota stopped at smoothed height {cutHeight:F0}";
+            : capped
+                ? $"quota stopped above the ceiling, so cores start at the ceiling ({cutHeight:F0}), past the share"
+                : $"quota stopped at smoothed height {cutHeight:F0}";
         if (foot > 0) cut += $", walls taken down to {foot:P0} of their local relief";
         string quota = qualifying < share
             ? $"share {target:P1}, capped by the floor {floor:F2} (setting {share:P0})"
@@ -254,6 +282,7 @@ public static class ImpassableAutoCut
         Console.WriteLine($"  impassable auto-cut: {diagnostics.MaskShare:P1} of land in {pieces} wall piece(s) " +
                           $"({quota} + plateaus {diagnostics.PlateauShare:P1}; mountain ground above " +
                           $"{gateLine:F0}, mountain line {mountainLine:F0}, steep line {steepLine:F2}/px; {cut})");
+        if (cfg.MountainPasses) MountainPasses.Report(passes);
         return (mask, diagnostics);
     }
 

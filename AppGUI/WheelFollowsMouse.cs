@@ -14,7 +14,8 @@ namespace Ck3MapGen.AppGUI;
 /// Two halves. <see cref="IsOver"/> is the test the map now uses: the window actually under the
 /// cursor, not the rectangle. And the filter installed here sends a wheel that arrived anywhere
 /// to the inspector window under the cursor, so an inspector scrolls whether or not it has focus
-/// and whether or not Windows' "scroll inactive windows" setting is on.
+/// and whether or not Windows' "scroll inactive windows" setting is on. The launcher pages get the
+/// same treatment, so a view taller than the window scrolls under the cursor.
 /// </summary>
 internal static class WheelFollowsMouse
 {
@@ -56,13 +57,27 @@ internal static class WheelFollowsMouse
             IntPtr hit = WindowFromPoint(ScreenPoint(m.LParam));
             if (hit == IntPtr.Zero || hit == m.HWnd) return false;
 
-            // Only into an inspector: everywhere else keeps WinForms' own routing.
-            if (Control.FromChildHandle(hit)?.FindForm() is not InspectorForm) return false;
+            // Only into an inspector, or a launcher page (whose focus is usually on the footer's
+            // Next button, outside the view that scrolls): everywhere else keeps WinForms' own routing.
+            var target = Control.FromChildHandle(hit);
+            if (target?.FindForm() is not InspectorForm && !InLauncherPage(target)) return false;
 
             // Sent, not posted: a sent message skips the message loop, so this filter never sees
             // its own forward. A control that does not scroll passes it on to its parent itself.
             SendMessage(hit, m.Msg, m.WParam, m.LParam);
             return true;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="control"/> is on a launcher view that scrolls by itself when it
+        /// runs taller than the window (<see cref="StepPanel.ArrangeScrolling"/>). A control there
+        /// that does not scroll passes the wheel up to the view; one that does (a feed) keeps it.
+        /// </summary>
+        private static bool InLauncherPage(Control? control)
+        {
+            for (var c = control; c is not null; c = c.Parent)
+                if (c is StepPanel or StartPage) return true;
+            return false;
         }
     }
 

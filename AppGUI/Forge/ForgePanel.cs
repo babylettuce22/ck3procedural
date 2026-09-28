@@ -37,7 +37,7 @@ public sealed class ForgePanel : UserControl
     private readonly ImageView _canvas = new() { Dock = DockStyle.Fill, ViewName = "heightmap" };
     private readonly Label _statusLine;
     private readonly Label _banner;
-    private readonly ToolTip _tips = new() { AutoPopDelay = 15000, InitialDelay = 400 };
+    private readonly WrappingToolTip _tips = new() { AutoPopDelay = 15000, InitialDelay = 400 };
 
     private readonly ComboBox _resPreset = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 190 };
     private readonly NumericUpDown _baseWidth = new();

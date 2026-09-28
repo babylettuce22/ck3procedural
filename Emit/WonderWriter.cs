@@ -191,11 +191,26 @@ public static class WonderWriter
                 // graphical_regions/cultures/faiths only narrow *when* an asset is eligible, and a
                 // generated world has no guarantee that any particular one of them matches, so an
                 // unfiltered block is the one that always resolves. Meshes are chosen in WonderAssets
-                // and are all reachable without DLC.
+                // and are all reachable without DLC, bar the Holy Buildings and East Asian Wonders
+                // packs': those carry the pack's flag and are followed by an unflagged model, the pair
+                // vanilla writes for holy_site_cathedral_01, so a player without the pack still sees
+                // a building.
+                //
+                // Each rung names its own model, so a laddered wonder visibly grows as it is built.
                 using (b.Block("asset"))
                 {
-                    b.Field("type", "pdxmesh");
-                    b.Quoted("name", wonder.Mesh);
+                    b.Field("type", wonder.IsEntity ? "entity" : "pdxmesh");
+                    b.Quoted("name", wonder.MeshAt(tier));
+                    if (wonder.Dlc is not null) b.Field("requires_dlc_flag", wonder.Dlc);
+                }
+
+                if (wonder.Fallback is not null)
+                {
+                    using (b.Block("asset"))
+                    {
+                        b.Field("type", "pdxmesh");
+                        b.Quoted("name", wonder.Fallback);
+                    }
                 }
 
                 b.Blank();

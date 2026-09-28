@@ -59,7 +59,7 @@ public sealed partial class MainForm : ChromeForm
 
     private readonly Button _gameFolder = Theme.MakeButton("Game folder…", 104);
 
-    private readonly ToolTip _tips = new() { AutoPopDelay = 20000, InitialDelay = 400 };
+    private readonly WrappingToolTip _tips = new() { AutoPopDelay = 20000, InitialDelay = 400 };
     private readonly Button _savePreset = Theme.MakeButton("Save preset…", 110);
     private readonly Button _loadPreset = Theme.MakeButton("Load preset…", 110);
 

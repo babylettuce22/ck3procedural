@@ -23,7 +23,7 @@ public sealed class PaintToolStrip : Panel
     private readonly Button _undo = Theme.MakeButton("Undo", 54);
     private readonly Button _redo = Theme.MakeButton("Redo", 54);
     private readonly Button _clear = Theme.MakeButton("Clear layer", 82);
-    private readonly ToolTip _tips = new() { AutoPopDelay = 15000, InitialDelay = 400 };
+    private readonly WrappingToolTip _tips = new() { AutoPopDelay = 15000, InitialDelay = 400 };
 
     private readonly Panel _controls = new();
     private readonly Label _idle = new()

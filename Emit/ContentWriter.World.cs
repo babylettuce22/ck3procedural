@@ -285,6 +285,11 @@ public static partial class ContentWriter
             return map;
         });
 
+        // A pass barony is named for its pass. After the names above and the real-world overlay,
+        // so it carries its final name and a vanilla title keeps its own. See MapGen/MountainPasses.cs.
+        int passesNamed = MapGen.MountainPasses.Name(empires, provinces, order, baronyCount, cfg);
+        if (passesNamed > 0) Console.WriteLine($"  mountain passes: {passesNamed} barony(ies) named for their pass");
+
         var ethnicities = Core.Stage.Time("ethnicities", () => MapGen.Ethnicities.Build(
             cultures.Heritages, cultures.Cultures, provinceTerrain, cfg, new Rng(cfg.Seed ^ 0x38F1),
             wilderness));
@@ -444,6 +449,11 @@ public static partial class ContentWriter
         // has to be the same one its people's religion gives. See MapGen/Cultures.AlignGender.
         Core.Stage.Time("gender", () => MapGen.Cultures.AlignGender(cultures.Declared(), faiths, vocabulary,
             new Rng(cfg.Seed ^ 0x6E1D)));
+
+        // Each people's own words for its ranks, when asked for. Here because a people's home
+        // religion is part of the decision and this is the first point every faith exists; off
+        // every stream the rest of the world draws from, so it moves no other name.
+        Core.Stage.Time("native ranks", () => MapGen.NativeTitles.Assign(cultures, faiths, cfg));
 
         // Farmland and oases, placed from settlement and drainage rather than from climate. Runs
         // here, after every social layer has been decided, so nothing reads a terrain that only

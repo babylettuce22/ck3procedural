@@ -55,7 +55,7 @@ public static class MapTableWriter
     /// </summary>
     private const double VanillaTableSurfaceY = -21.84;
 
-    public static void WriteAll(string modDir, Config.MapConfig cfg)
+    public static void WriteAll(string modDir, Config.MapConfig cfg, string? gameDir = null)
     {
         string relative = Path.Combine("gfx", "map", "map_object_data");
         string sourceDir = Path.Combine(StaticFileWriter.SetDirectory(StaticFileWriter.Core), relative);
@@ -63,6 +63,9 @@ public static class MapTableWriter
         if (!Directory.Exists(sourceDir))
         {
             Console.WriteLine("  map tables: SKIPPED (no map_table_*.txt to rescale)");
+
+            // The tree and object fades do not depend on there being a table to move.
+            RescaleLayerFades(Path.Combine(modDir, relative), cfg);
             return;
         }
 
@@ -92,6 +95,7 @@ public static class MapTableWriter
         double drop = Drop(cfg, meshScale);
 
         int written = 0, objects = 0, dropped = 0;
+        var propReport = new List<string>();
 
         foreach (string source in Directory.GetFiles(sourceDir, "map_table_*.txt"))
         {
@@ -106,6 +110,15 @@ public static class MapTableWriter
                 return $"transform=\"{scaled}\"";
             });
 
+            // After the rescale, because what it measures is where each prop now stands against
+            // this map. See TablePropTucker.
+            if (cfg.MapTableProps && cfg.MapTablePropsOffMap && gameDir is not null)
+            {
+                string style = Path.GetFileNameWithoutExtension(source)["map_table_".Length..];
+                rescaled = TablePropTucker.Apply(style, rescaled, modDir, gameDir,
+                    cfg.ProvinceWidth, cfg.ProvinceHeight, propReport);
+            }
+
             // BOM: vanilla's map_table files carry one, and these are gfx script rather than
             // map_data — see the BOM table in the file-formats notes.
             ParadoxText.WriteBom(Path.Combine(targetDir, Path.GetFileName(source)), rescaled);
@@ -116,6 +129,7 @@ public static class MapTableWriter
                           $"{scale:F3}x / {heightScale:F3}x vanilla's world, mesh {meshScale:F3}x, " +
                           $"dropped {-drop:F1} below the map " +
                           (cfg.MapTableProps ? "(props kept)" : $"({dropped} prop objects dropped)"));
+        foreach (string line in propReport) Console.WriteLine($"  map table props: {line}");
 
         RescaleLayerFades(targetDir, cfg);
     }
@@ -250,6 +264,62 @@ public static class MapTableWriter
     private static readonly Regex FadeStep =
         new(@"(fade_in|fade_out)=(\d+)", RegexOptions.Compiled);
 
+    private static readonly Regex LayerName =
+        new("name=\"([^\"]+)\"", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Moves every layer's fade thresholds onto this map's zoom ladder: the map-table layers here,
+    /// and the rest — trees, grass, city scatter, animals, weather — through
+    /// <see cref="CompatibilityWriter.DetailFadeStep"/>.
+    ///
+    /// The map-table half is <see cref="TableFadeStep"/>. The rest was left alone on the reasoning that foliage is shipped
+    /// at vanilla's absolute size so its thresholds were already right, which held only while the
+    /// ladder kept vanilla's absolute heights. Once <see cref="CompatibilityWriter"/> scaled the
+    /// ladder, an unmoved index meant MapScale times vanilla's height, and on a 4096-wide map trees
+    /// were gone at 176 world units instead of 396. See DetailFadeStep for where they go now.
+    ///
+    /// Only rewrites a file whose fades moved, so at vanilla size with no bias the copies stay
+    /// byte-identical to the game's.
+    /// </summary>
+    private static void RescaleLayerFades(string dir, Config.MapConfig cfg)
+    {
+        int table = 0, detail = 0;
+
+        foreach (string file in LocatorWriter.LayerFiles)
+        {
+            // Copied out of the game folder by LocatorWriter, which runs earlier; there is nothing
+            // to do for a file that has not been.
+            string path = Path.Combine(dir, file);
+            if (!File.Exists(path)) continue;
+
+            string original = File.ReadAllText(path);
+            string text = LayerBlock.Replace(original, block =>
+            {
+                string name = LayerName.Match(block.Value) is { Success: true } m ? m.Groups[1].Value : "";
+                bool isTable = name.StartsWith("map_table_layer_", StringComparison.Ordinal);
+
+                return FadeStep.Replace(block.Value, fade =>
+                {
+                    int step = int.Parse(fade.Groups[2].Value, CultureInfo.InvariantCulture);
+                    int moved = isTable
+                        ? TableFadeStep(step, cfg)
+                        : CompatibilityWriter.DetailFadeStep(step, cfg, name);
+                    if (moved != step)
+                    {
+                        if (isTable) table++;
+                        else detail++;
+                    }
+                    return $"{fade.Groups[1].Value}={moved}";
+                });
+            });
+
+            if (text != original) ParadoxText.WriteBom(path, text);
+        }
+
+        Console.WriteLine($"  layer fades: {table} map-table and {detail} map-object thresholds "
+                          + "moved onto this map's zoom ladder");
+    }
+
     /// <summary>
     /// Moves the map-table layers' fade thresholds onto this map's zoom ladder.
     ///
@@ -270,39 +340,17 @@ public static class MapTableWriter
     /// the same call in <see cref="CompatibilityWriter.WriteCameraDefines"/>. Change one and the
     /// other has to follow, or the tabletop is drawn under a map that has not gone flat yet.
     ///
-    /// Only the map-table layers are touched. Foliage and the rest are objects we ship at vanilla's
-    /// absolute size — a tree is the same tree on every map — so their thresholds are already right
-    /// and scaling them would fade the trees out too early.
+    /// Foliage and the rest are objects we ship at vanilla's absolute size — a tree is the same tree
+    /// on every map — so they are *not* moved this way, which would fade them with the framing.
+    /// They are matched back onto vanilla's camera height instead, in
+    /// <see cref="CompatibilityWriter.DetailFadeStep"/>.
     ///
     /// The units are inferred rather than documented: step 21 matching FLAT_MAP_ZOOM_STEP exactly,
     /// and foliage sitting at 0-9 where it is only ever seen up close, are what pin it. Strong, but
     /// if the tabletop behaves oddly this is the first thing to revert.
     /// </summary>
-    private static void RescaleLayerFades(string dir, Config.MapConfig cfg)
-    {
-        // Copied out of the game folder by LocatorWriter, which runs earlier; there is nothing to
-        // do if that has not happened.
-        string path = Path.Combine(dir, "layers.txt");
-        if (!File.Exists(path)) return;
-
-        int changed = 0;
-        string text = LayerBlock.Replace(File.ReadAllText(path), block =>
-        {
-            if (!block.Value.Contains("\"map_table_layer_", StringComparison.Ordinal))
-                return block.Value;
-
-            return FadeStep.Replace(block.Value, fade =>
-            {
-                int step = int.Parse(fade.Groups[2].Value, CultureInfo.InvariantCulture);
-                int scaled = CompatibilityWriter.ScaleZoomStep(step, cfg);
-                if (scaled != step) changed++;
-                return $"{fade.Groups[1].Value}={scaled}";
-            });
-        });
-
-        ParadoxText.WriteBom(path, text);
-        Console.WriteLine($"  map table layers: {changed} fade thresholds moved onto this map's zoom ladder");
-    }
+    private static int TableFadeStep(int step, Config.MapConfig cfg)
+        => CompatibilityWriter.ScaleZoomStep(step, cfg);
 
     /// <summary>
     /// One transform onto this map. Null if it is not the ten floats expected, which leaves the

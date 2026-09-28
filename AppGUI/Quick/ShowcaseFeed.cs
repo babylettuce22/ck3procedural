@@ -134,6 +134,8 @@ internal sealed class ShowcaseFeed : Control
         base.OnMouseWheel(e);
         int max = Math.Max(0, _contentHeight - Height);
         _scroll = Math.Clamp(_scroll - e.Delta / 2, 0, max);
+        // A column with more than it shows keeps the wheel; one that fits lets it scroll the page.
+        if (max > 0 && e is HandledMouseEventArgs handled) handled.Handled = true;
         Invalidate();
     }
 
@@ -328,35 +330,35 @@ internal sealed class ShowcaseFeed : Control
         const TextFormatFlags wrap = TextFormatFlags.WordBreak | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
         const TextFormatFlags line = TextFormatFlags.SingleLine | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
 
+        // maxLines 0 is every line: the column scrolls, so a card is as tall as its text.
         int Text(string text, Font font, Color color, int maxLines, TextFormatFlags flags, int x, int w, int yy)
         {
             int lineH = TextRenderer.MeasureText("Ag", font, Size.Empty, TextFormatFlags.NoPadding).Height;
-            int h = Math.Min(maxLines * lineH, TextRenderer.MeasureText(text, font, new Size(w, 0), wrap).Height);
+            int h = TextRenderer.MeasureText(text, font, new Size(w, 0), wrap).Height;
+            if (maxLines > 0) h = Math.Min(maxLines * lineH, h);
             if (g is not null) TextRenderer.DrawText(g, text, font, new Rectangle(x, yy, w, h), color, flags);
             return h;
         }
 
         y += Text(item.Kind.ToUpperInvariant(), KindFont, Theme.Accent, 1, line, textX, textW, y) + S(2);
-        y += Text(item.Title, TitleFont, Theme.Text, 2, wrap, textX, textW, y) + S(1);
+        y += Text(item.Title, TitleFont, Theme.Text, 0, wrap, textX, textW, y) + S(1);
         if (!string.IsNullOrEmpty(item.Subtitle))
-            y += Text(item.Subtitle, SubtitleFont, Theme.TextDim, 2, wrap, textX, textW, y) + S(4);
+            y += Text(item.Subtitle, SubtitleFont, Theme.TextDim, 0, wrap, textX, textW, y) + S(4);
         if (hasBadge) y = Math.Max(y, badgeY + badge + S(8));
 
         if (!string.IsNullOrEmpty(item.Body))
-            y += Text(item.Body, BodyFont, Theme.Text, 4, wrap, x0 + pad, inner, y) + S(8);
+            y += Text(item.Body, BodyFont, Theme.Text, 0, wrap, x0 + pad, inner, y) + S(8);
 
-        // Chips, wrapping onto at most two rows.
+        // Chips, wrapping onto as many rows as they need.
         if (item.Chips.Count > 0)
         {
-            int cx = x0 + pad, rows = 1;
+            int cx = x0 + pad;
             int chipH = TextRenderer.MeasureText("Ag", ChipFont, Size.Empty, TextFormatFlags.NoPadding).Height + S(6);
             foreach (string chip in item.Chips)
             {
                 int cw = Math.Min(TextRenderer.MeasureText(chip, ChipFont, Size.Empty, TextFormatFlags.NoPadding).Width + S(14), inner);
                 if (cx + cw > x0 + pad + inner)
                 {
-                    if (rows == 2) break;
-                    rows++;
                     cx = x0 + pad;
                     y += chipH + S(5);
                 }

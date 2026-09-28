@@ -1,7 +1,7 @@
 namespace Ck3MapGen.Io;
 
 /// <summary>
-/// Minimal DDS writer: uncompressed 32-bit BGRA, single mip level.
+/// Minimal DDS writer: uncompressed 32-bit BGRA with one mip level, or DXT5 with one or a chain.
 ///
 /// Vanilla's colormap is DXT5 with 14 mips and its flatmap is DXT1, but block compression is a
 /// lot of machinery for no benefit here — CK3 loads uncompressed DDS perfectly well, which
@@ -62,7 +62,7 @@ public static class DdsWriter
     private const uint FourCcDxt5 = 0x35545844;      // "DXT5"
 
     /// <summary>
-    /// Writes BGRA as DXT5: a quarter of the size, single mip level.
+    /// Writes BGRA as DXT5: a quarter of the size, one mip level unless asked for a chain.
     ///
     /// Worth it where a texture is large and drawn small. Artifact icons are the case that pays:
     /// each is a 960x240 strip weighing 922 KB uncompressed, and CK3 draws it at <b>30-60 pixels</b>,
@@ -75,13 +75,29 @@ public static class DdsWriter
     ///
     /// **Both dimensions must be multiples of four.** 960x240 is; the method throws rather than
     /// silently writing a texture with a torn last row or column.
+    ///
+    /// With <paramref name="mips"/>, each level below the first is the one above averaged 2x2,
+    /// for as long as both sides stay multiples of four; the chain stops there rather than
+    /// padding, which DDS allows. A texture the engine tiles and draws far smaller than its own
+    /// size needs them — the snow mask's noise is sampled five times across the map, and without
+    /// a smaller level to read it shimmers at any zoom out.
     /// </summary>
-    public static void WriteDxt5(string path, int width, int height, byte[] bgra)
+    public static void WriteDxt5(string path, int width, int height, byte[] bgra, bool mips = false)
     {
         if (width % 4 != 0 || height % 4 != 0)
             throw new ArgumentException($"DXT5 needs dimensions that are multiples of 4, got {width}x{height}");
 
-        byte[] blocks = CompressDxt5(width, height, bgra);
+        var levels = new List<byte[]> { CompressDxt5(width, height, bgra) };
+        if (mips)
+        {
+            var (lw, lh, level) = (width, height, bgra);
+            while (lw / 2 % 4 == 0 && lh / 2 % 4 == 0 && lw >= 8 && lh >= 8)
+            {
+                level = HalveBgra(lw, lh, level);
+                (lw, lh) = (lw / 2, lh / 2);
+                levels.Add(CompressDxt5(lw, lh, level));
+            }
+        }
 
         using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None,
             1 << 20);
@@ -89,12 +105,12 @@ public static class DdsWriter
 
         w.Write(Magic);
         w.Write(124u);
-        w.Write(HeaderFlagsCompressed);
+        w.Write(levels.Count > 1 ? HeaderFlagsCompressed | MipMapCount : HeaderFlagsCompressed);
         w.Write((uint)height);
         w.Write((uint)width);
-        w.Write((uint)blocks.Length);     // linear size: the whole (single-level) surface
+        w.Write((uint)levels[0].Length);  // linear size: the top level's surface
         w.Write(0u);                      // depth
-        w.Write(1u);                      // mip count
+        w.Write((uint)levels.Count);      // mip count
         for (int i = 0; i < 11; i++) w.Write(0u);
 
         w.Write(32u);
@@ -106,27 +122,54 @@ public static class DdsWriter
         w.Write(0u);
         w.Write(0u);
 
-        w.Write(CapsTexture);
+        w.Write(levels.Count > 1 ? CapsTexture | CapsComplex | CapsMipMap : CapsTexture);
         w.Write(0u);
         w.Write(0u);
         w.Write(0u);
         w.Write(0u);
 
-        w.Write(blocks);
+        foreach (var level in levels) w.Write(level);
     }
 
-    /// <summary>One 16-byte block per 4x4 texels: 8 bytes of alpha, then 8 of colour.</summary>
+    private const uint MipMapCount = 0x20000;        // DDSD_MIPMAPCOUNT
+    private const uint CapsComplex = 0x8;            // DDSCAPS_COMPLEX
+    private const uint CapsMipMap = 0x400000;        // DDSCAPS_MIPMAP
+
+    /// <summary>The next mip level down: each texel the mean of the 2x2 above it, channel by channel.</summary>
+    private static byte[] HalveBgra(int width, int height, byte[] bgra)
+    {
+        int hw = width / 2, hh = height / 2;
+        var half = new byte[hw * hh * 4];
+        Parallel.For(0, hh, y =>
+        {
+            int top = 2 * y * width * 4, bottom = top + width * 4;
+            for (int x = 0; x < hw; x++)
+            {
+                int i = 2 * x * 4, o = (y * hw + x) * 4;
+                for (int c = 0; c < 4; c++)
+                    half[o + c] = (byte)((bgra[top + i + c] + bgra[top + i + 4 + c]
+                                        + bgra[bottom + i + c] + bgra[bottom + i + 4 + c] + 2) / 4);
+            }
+        });
+        return half;
+    }
+
+    /// <summary>One 16-byte block per 4x4 texels: 8 bytes of alpha, then 8 of colour. Each row of
+    /// blocks is independent and lands at a fixed offset, so the rows run in parallel and the
+    /// bytes come out the same as a serial pass.</summary>
     private static byte[] CompressDxt5(int width, int height, byte[] bgra)
     {
-        var outBytes = new byte[width / 4 * (height / 4) * 16];
-        var b = new byte[16];
-        var g = new byte[16];
-        var r = new byte[16];
-        var a = new byte[16];
-        int at = 0;
+        int blocksWide = width / 4;
+        var outBytes = new byte[blocksWide * (height / 4) * 16];
 
-        for (int by = 0; by < height; by += 4)
+        Parallel.For(0, height / 4, row =>
         {
+            var b = new byte[16];
+            var g = new byte[16];
+            var r = new byte[16];
+            var a = new byte[16];
+            int by = row * 4, at = row * blocksWide * 16;
+
             for (int bx = 0; bx < width; bx += 4)
             {
                 for (int y = 0; y < 4; y++)
@@ -146,7 +189,7 @@ public static class DdsWriter
                 WriteColourBlock(outBytes, at + 8, r, g, b);
                 at += 16;
             }
-        }
+        });
 
         return outBytes;
     }

@@ -51,8 +51,12 @@ public static class RunLog
 
             // Console.SetOut wraps what it is given in a synchronised writer, so Console.Out is
             // never our instance itself; what it returns afterwards is what to compare against.
-            // If something replaced Console.Out since, wrap that instead of stacking tees.
-            if (_installed is null || !ReferenceEquals(Console.Out, _installed))
+            // If something replaced Console.Out since, wrap that instead of stacking tees. The
+            // ConsoleFork router in front of the tee is not a replacement — see RoutesTo.
+            bool teed = _installed is not null
+                        && (ReferenceEquals(Console.Out, _installed) || ConsoleFork.RoutesTo(_installed));
+
+            if (!teed)
             {
                 Console.SetOut(new TeeWriter(Console.Out));
                 _installed = Console.Out;

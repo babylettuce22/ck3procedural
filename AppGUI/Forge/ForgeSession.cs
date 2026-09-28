@@ -99,6 +99,10 @@ public sealed class ForgeSession : IDisposable
 
     private readonly System.Windows.Forms.Timer _debounce = new() { Interval = 160 };
     private CancellationTokenSource? _previewCts;
+
+    /// <summary>The pipeline run of the latest preview, which a bake waits on — see <see cref="PreviewStopped"/>.</summary>
+    private Task? _previewWork;
+
     private CancellationTokenSource? _redrawCts;
     private bool _baking;
     private bool _exporting;
@@ -261,13 +265,19 @@ public sealed class ForgeSession : IDisposable
 
     public void QueuePreview()
     {
-        if (_loading || !AutoPreview) return;
+        // Not while baking: the bake has the pipeline, and it previews the latest settings itself
+        // when it finishes.
+        if (_loading || !AutoPreview || _baking) return;
         _debounce.Stop();
         _debounce.Start();
     }
 
     public async Task RunPreviewAsync()
     {
+        // The panel's own buttons come straight here rather than through QueuePreview; the same
+        // rule holds for them.
+        if (_baking) return;
+
         _debounce.Stop();
         _previewCts?.Cancel();
         var cts = new CancellationTokenSource();
@@ -279,7 +289,9 @@ public sealed class ForgeSession : IDisposable
 
         try
         {
-            var result = await Task.Run(() => Pipeline.Run(w, h, isPreview: true, cts.Token), cts.Token);
+            var work = Task.Run(() => Pipeline.Run(w, h, isPreview: true, cts.Token), cts.Token);
+            _previewWork = work;
+            var result = await work;
             if (cts.IsCancellationRequested) return;
 
             var field = result.Field;
@@ -376,6 +388,8 @@ public sealed class ForgeSession : IDisposable
         var (w, h) = Pipeline.ResolutionLeaving(stage);
         var cts = new CancellationTokenSource();
         var progress = new Progress<string>(s => Status?.Invoke($"Baking {stage.DisplayName} at {w} × {h} — {s}", true));
+
+        await PreviewStopped();
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
         Status?.Invoke($"Baking {stage.DisplayName} at {w} × {h}…", true);
@@ -403,6 +417,20 @@ public sealed class ForgeSession : IDisposable
         }
 
         await RunPreviewAsync();
+    }
+
+    /// <summary>
+    /// Waits for a cancelled preview to actually stop. Cancelling only asks: the run carries on to
+    /// the end of the stage it is in and writes that stage's caches, so a bake started straight
+    /// after the cancel would share the pipeline with it after all.
+    /// </summary>
+    private async Task PreviewStopped()
+    {
+        if (_previewWork is not { IsCompleted: false } running) return;
+
+        // Cancelled or failed, it is the preview's own to report; here it only has to be over.
+        try { await running; }
+        catch (Exception) { }
     }
 
     // ------------------------------------------------------------------- export

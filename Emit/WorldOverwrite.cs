@@ -276,7 +276,8 @@ public static class WorldOverwrite
         // Both files whole, from the words now on the cultures and titles. The writer is pure —
         // the draw happened in Assign at generation — so this cannot reshuffle anyone's vocabulary.
         if (aspects.HasFlag(WorldAspect.TitleWords))
-            TitleTierWriter.WriteAll(modDir, written.Cultures, result.Titles);
+            TitleTierWriter.WriteAll(modDir, written.Cultures, result.Titles, written.Faiths,
+                result.Config.NativeRankTooltips);
 
         // Both from the prehistory the write built: the names are its localisation file whole, and
         // the arms are rolled again from the same seeds with the edited ones laid over.

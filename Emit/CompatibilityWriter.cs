@@ -407,9 +407,10 @@ public static partial class CompatibilityWriter
                 	# vanilla's absolute heights on a smaller map, all of them frame the wrong share of the
                 	# zoom. The near end is floored so the camera cannot end up inside the ground.
                 	#
-                	# The *_VISIBLE_ZOOM_STEPS ranges are the exception and are rewritten further down
-                	# instead: what they gate is fixed-size objects on fixed-size provinces, which want the
-                	# camera height held rather than the share of the map.
+                	# The *_VISIBLE_ZOOM_STEPS ranges, the realm colour fill and the map-object layer fades
+                	# are the exception and are rewritten instead: what they gate is fixed-size objects on
+                	# fixed-size provinces, which want the camera height held rather than the share of the
+                	# map.
                 	ZOOM_STEPS = { {{string.Join(" ", ladder)}} }
                 	ZOOM_AUDIO_PARAMETER_SCALE = {{(VanillaZoomAudioScale / cfg.MapScale).ToString("F4", Invariant)}}
                 """;
@@ -434,6 +435,21 @@ public static partial class CompatibilityWriter
         // nothing stands on. Empty under VanillaCamera.
         string entityBlocks = EntityVisibilityDefines(cfg, flatStep);
 
+        // The realm colour fill, moved out with the tree fades it starts on. NTerrainCulling is its
+        // own block; the other keys in it are left to vanilla.
+        var (colorStart, colorFull) = RealmColorSteps(cfg, flatStep);
+        string realmColorBlock = cfg.VanillaCamera
+            ? ""
+            : $$"""
+
+                # Realm colours start filling on the step the tree layers finish fading, as in vanilla,
+                # both moved to vanilla's camera height and then {{cfg.DetailFadeBias:+0;-0;0}} steps out.
+                NTerrainCulling = {
+                	REALM_COLOR_MAP_START_ZOOM_STEP = {{colorStart}}
+                	REALM_COLOR_MAP_FULLY_ZOOM_STEP = {{colorFull}}
+                }
+                """;
+
         ParadoxText.WriteBom(Path.Combine(dir, "zz_generated_graphics.txt"),
             $$"""
               # Map geometry and camera extents must match map_data/provinces.png, not vanilla's map.
@@ -454,6 +470,7 @@ public static partial class CompatibilityWriter
               	ZOOM_STEPS_MIN_TILT = { {{minTilt}} }
               	ZOOM_STEPS_MAX_TILT = { {{maxTilt}} }
               }
+              {{realmColorBlock}}
               {{entityBlocks}}
               """);
 
@@ -504,6 +521,12 @@ public static partial class CompatibilityWriter
                               + $"{ShiftEntityStep(VanillaUnitIconStep, cfg, flatStep)} (vanilla 16), "
                               + $"holdings to {ShiftEntityStep(VanillaHoldingCullStep, cfg, flatStep)} "
                               + $"(vanilla 8), flat map at {flatStep} (vanilla 21)");
+
+            int treeFade = DetailFadeStep(VanillaRealmColorStartStep, cfg);
+            Console.WriteLine($"  detail: trees and map objects fade by step {treeFade} "
+                              + $"({ladder[treeFade]} world units, vanilla 9/{ZoomSteps[9]}), "
+                              + $"{cfg.DetailFadeBias:+0;-0;0} past vanilla's height; realm colour fills "
+                              + $"{colorStart}-{colorFull} (vanilla 9-15)");
         }
 
         Console.WriteLine($"  surround: inner rect {innerRect} (vanilla 500.0 1000.0 500.0 3700.0)");
@@ -857,6 +880,68 @@ public static partial class CompatibilityWriter
         int shifted = NearestByHeight(ScaledZoomSteps(cfg), ZoomSteps[step]) + cfg.FlatMapHandoffBias;
 
         return Math.Clamp(Math.Min(shifted, flatStep), 0, ZoomSteps.Length - 1);
+    }
+
+    /// <summary>
+    /// Vanilla's <c>NTerrainCulling.REALM_COLOR_MAP_START_ZOOM_STEP</c> and
+    /// <c>REALM_COLOR_MAP_FULLY_ZOOM_STEP</c>. The colour overlay starts filling the map at 9 — the
+    /// same step the tree layers finish fading — and is solid by 15, six steps before the flat map.
+    /// </summary>
+    private const int VanillaRealmColorStartStep = 9;
+    private const int VanillaRealmColorFullStep = 15;
+
+    /// <summary>
+    /// Layers held at vanilla's camera height without <see cref="MapConfig.DetailFadeBias"/>.
+    /// grass_layer carries the reeds and the steppe scrub, which are flat ground patches authored to
+    /// be seen from close up; <see cref="TreeWriter"/> records what they look like from further off.
+    /// </summary>
+    private static readonly HashSet<string> CloseUpLayers = ["grass_layer"];
+
+    /// <summary>
+    /// One map-object layer fade, moved onto this map's ladder: to the rung at the camera height
+    /// vanilla means by it, then out by <see cref="MapConfig.DetailFadeBias"/>, held at or under the
+    /// flat-map handoff.
+    ///
+    /// The same observation as <see cref="ShiftEntityStep"/>, for the half it missed. layers.txt,
+    /// game_object_layers.txt and effect_layers.txt fade on ladder *indices*, and once
+    /// <see cref="ScaledZoomSteps"/> pulled the ladder in, vanilla's <c>fade_out=9</c> stopped meaning
+    /// 396 world units and started meaning 396 * MapScale. Trees are the same trees on every map,
+    /// so on a 4096-wide map they vanished at 176 — less than half the height vanilla keeps them to.
+    ///
+    /// Its own bias rather than <see cref="MapConfig.FlatMapHandoffBias"/>, because what it spends
+    /// is instances on screen rather than terrain LOD, and the two want walking back separately.
+    ///
+    /// Zero and out-of-ladder indices come back untouched, as in <see cref="ScaleZoomStep"/>: a zero
+    /// <c>fade_in</c> means "from as close as the camera goes". Never returns 0 for a real fade, so a
+    /// large negative bias thins the layer to the nearest rung rather than switching it off.
+    /// </summary>
+    internal static int DetailFadeStep(int step, Config.MapConfig cfg, string? layer = null)
+    {
+        if (cfg.VanillaCamera || step <= 0 || step >= ZoomSteps.Length) return step;
+
+        int flatStep = ScaleZoomStep(VanillaFlatMapZoomStep, cfg);
+        int bias = layer is not null && CloseUpLayers.Contains(layer) ? 0 : cfg.DetailFadeBias;
+        int shifted = NearestByHeight(ScaledZoomSteps(cfg), ZoomSteps[step]) + bias;
+
+        return Math.Clamp(Math.Min(shifted, flatStep), 1, ZoomSteps.Length - 1);
+    }
+
+    /// <summary>
+    /// The realm colour overlay's two steps, moved with the trees. Vanilla starts filling colour on
+    /// the step the tree layers finish fading, so the start rides <see cref="DetailFadeStep"/> and
+    /// the fill keeps vanilla's six-step length behind it.
+    ///
+    /// Both are held under the flat map, with the start at least one step short of the finish:
+    /// the engine blends between the two, and equal steps leave it nothing to blend across. On a
+    /// map small enough the fill therefore completes on the handoff frame rather than six steps
+    /// before it, which is the same saturation <see cref="ShiftEntityStep"/> accepts for icons.
+    /// </summary>
+    private static (int Start, int Full) RealmColorSteps(Config.MapConfig cfg, int flatStep)
+    {
+        int start = Math.Min(DetailFadeStep(VanillaRealmColorStartStep, cfg), flatStep - 1);
+        int full = Math.Clamp(start + VanillaRealmColorFullStep - VanillaRealmColorStartStep,
+            start + 1, flatStep);
+        return (start, full);
     }
 
     /// <summary>
